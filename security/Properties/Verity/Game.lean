@@ -15,6 +15,7 @@ public import Flock.Hash
 public import Flock.Hm96
 public import Lms.Verify
 public import Properties.Verity.Sha512
+public import Properties.Verity.WindowFiles
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -58,7 +59,9 @@ The statement's form is the causal game, the committed files, one fixed extracto
   files the parameters name by their digests (`programDigest`, `publicDigest`, `namedFile`, as v2 looks them up). The
   circuit, its units and its constants are what the verifier reads from the two (`Flock.Bridge.circuitOfFile`,
   `unitsOfFile`, `partsOfFile` at v2's reading of the files, `read`), so the units are the public file's population,
-  and the positions are the files' and the commitment's (`place`), never the prover's world. Committed files without a
+  and the positions are the files' and the commitment's (`place`), never the prover's world. The reading is a
+  window's (`WindowFiles`): one statement's files are a window of one member, and at a window of several members the
+  circuit is the members' side by side, their units in the members' order. Committed files without a
   file of each digest are refused (`Registered`, conjoined beside the composite's acceptance).
 * **Sampled proofs' claim reads one fixed extractor's transcript.** The extractor (`extract`, the one
   `SampledKSLive*` is stated with, `XplurZC`) is a construction applied to the strategy, never chosen per strategy.
@@ -550,45 +553,6 @@ def lmsVerify (pub m sig : Hash.Msg) : Bool :=
   | .ok b => b
   | .error _ => false
 
-/-- **How v2 reads the committed files**: its statement's tags (derived from the circuit file), the circuit file, its
-lookup tables and the public file. -/
-structure FileRead where
-  tags : Flock.Tags
-  circuitFile : ByteArray
-  tables : List (String × ByteArray)
-  publicFile : ByteArray
-
-namespace FileRead
-
-/-- The committed files as core's circuit, as the verifier reads them (`Flock.Bridge.circuitOfFile`). -/
-noncomputable def circuit (r : FileRead) : Verity.Circuit :=
-  Flock.Bridge.circuitOfFile r.tags r.circuitFile r.tables r.publicFile
-
-/-- The committed files' number of units, the public file's population. -/
-noncomputable def units (r : FileRead) : ℕ := Flock.Bridge.unitsOfFile r.tags r.circuitFile r.tables r.publicFile
-
-/-- The committed files' units, as core's partition of `circuit`. -/
-noncomputable def parts (r : FileRead) : Verity.Partition r.circuit r.units :=
-  Flock.Bridge.partsOfFile r.tags r.circuitFile r.tables r.publicFile
-
-end FileRead
-
-/-- **A parse's constants**: the key program's constant input gate holds `1` and its zero gate `0`
-(`FlockSoundness.Discharge.Placed.oneGate`, `zeroGate`), public circuit structure that no proof block opens. -/
-noncomputable def parsedConsts : (o : Option Flock.Bridge.Parsed) → Fin (Flock.Bridge.Parsed.circuit o).N → Option Bool
-  | some r, g =>
-    if g.val = (FlockSoundness.Discharge.Placed.oneGate r.n (FlockSoundness.Discharge.Layout.keyB r.D.unroll r.hU)).val
-    then some true
-    else if g.val =
-        (FlockSoundness.Discharge.Placed.zeroGate r.n (FlockSoundness.Discharge.Layout.keyB r.D.unroll r.hU)).val
-    then some false
-    else none
-  | none, _ => none
-
-/-- The committed files' constants. -/
-noncomputable def FileRead.consts (r : FileRead) : Fin r.circuit.N → Option Bool :=
-  parsedConsts (Flock.Bridge.parsedOf r.tags r.circuitFile r.tables r.publicFile)
-
 /-- A value's registered position: the row-leaf verifier (the frame-v3 domain, the hm96 key and the row format), the
 commitment's root it opens against, the leaf's rank, and the value's first bit in the row. -/
 structure Place where
@@ -650,8 +614,9 @@ composite publishes, from the parameters and the strategy's SHA-512 calls alone.
 `cost θ F c σ` is the strategy's SHA-512 calls in one run (`t' τ`): `Verity.Game` has no call model of
 strategies, so it is declared, as `Claims.Finder.cost` is. -/
 structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
-  /-- v2's reading of the committed files at the parameters: the circuit file and the public file their digests name -/
-  read : ByteArray → Array ByteArray → FileRead
+  /-- v2's reading of the committed files at the parameters: each member's circuit file and public file, the ones their
+  digests name; one statement's files are a window of one member (`WindowFiles.one`) -/
+  read : ByteArray → Array ByteArray → WindowFiles
   /-- the circuit file's digest the parameters hold -/
   programDigest : ByteArray → Option Hash.Digest
   /-- the public file's digest the parameters hold -/

@@ -31,8 +31,9 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 * `Instance.opensAt_of`: **`OpensAt`**, wherever each session v2 sets up is `OpensReady` and the base places each
   non-constant gate at the session's `placeAt` of its claims position. The committed files' circuit is Boolean
   (`Circuit.ofAudit`), so the opened bit is the gate's whole value. `Instance.opensAt_of_ready`: the same, for a base
-  whose place is `placeOfRead` at its reading of the files, at sessions `OpensReady` alone; `Instance.opensAt_of_sessions`
-  at every instance, whose base's place is `placeOfRead` by construction (`Instance.place`).
+  whose place is `placeOfFiles` at its reading of the files, at sessions `OpensReady` alone;
+  `Instance.opensAt_of_sessions` at every instance, whose base's place is `placeOfFiles` by construction
+  (`Instance.place`).
 * `Instance.SessionsReady`: every session v2 sets up is `OpensReady`.
 * `remote_soundness_deployedReady_honest`, `remote_soundness_deployedReady_nontrivial`: its premises hold at the idle
   deployment's instance that runs no session, and its conclusion fails for a verifier that accepts everything.
@@ -105,6 +106,14 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
   simp only [hD, hpub, dite_eq_left A.hU]
   rw [A.hn, dite_eq_left (show g.val < A.Cc.N from hN ▸ g.isLt)]
   rfl
+
+/-- **The window's committed files' place for a gate is the session's at its claims position**, wherever v2 reads
+the session's files as a window of one member (`placeOfFiles`, there the member's `placeOfRead`). -/
+theorem placeOfFiles_eq {R : Verity.WindowFiles} (hr : R = Verity.WindowFiles.one A.fileRead)
+    (hN : R.circuit.N = A.Cc.N) (g : Fin R.circuit.N) :
+    placeOfFiles R g = A.placeAt (Flock.Bridge.posOf A.Cc (Fin.cast hN g)) := by
+  subst hr
+  exact A.placeOfRead_eq rfl hN g
 
 /-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: `sha512/row/v2` or
 `sha512/row-seg/v1` rows, files that pass `verify --zk`'s ports and roots check (`Flock.PortRoots.checkOf` at the
@@ -236,7 +245,7 @@ theorem opensAt_of (I : Instance d α)
   obtain ⟨hready, hplace⟩ := h θ F A hs hsu
   obtain ⟨p, hp, o, hacc, hrow⟩ := Live.opens_rowLeaf hready hop
   have hw : (I.base.read θ F).circuit.w g = 1 :=
-    w_ofAudit ((congrArg Verity.FileRead.circuit hsu.read).trans
+    w_ofAudit ((congrArg Verity.WindowFiles.circuit hsu.read).trans
       (A.circuit_eq.trans (Flock.Bridge.circuitOf_eq A.D A.hU A.n))) g
   unfold Vocab.Opens
   rw [hconst]
@@ -249,12 +258,12 @@ theorem opensAt_of (I : Instance d α)
   exact congrArg some hv.symm
 
 /-- **`OpensAt` at the committed files' places**: wherever the base places each gate at the committed files' place
-(`placeOfRead`, by definition at the deployment) and each session v2 sets up is `OpensReady`. -/
+(`placeOfFiles`, by definition at the deployment) and each session v2 sets up is `OpensReady`. -/
 theorem opensAt_of_ready (I : Instance d α)
-    (hplace : ∀ θ F c g, I.base.place θ F c g = placeOfRead (I.base.read θ F) g)
+    (hplace : ∀ θ F c g, I.base.place θ F c g = placeOfFiles (I.base.read θ F) g)
     (h : I.SessionsReady) : I.OpensAt :=
   I.opensAt_of fun θ F A hs hsu => ⟨h θ F A hs hsu, fun c hN g _ =>
-    (hplace θ F c g).trans (A.placeOfRead_eq hsu.read hN g)⟩
+    (hplace θ F c g).trans (A.placeOfFiles_eq hsu.read hN g)⟩
 
 /-- **`OpensAt` at sessions `OpensReady`**: an instance's base places each gate at the committed files' place by its
 construction (`Instance.place`), so `OpensAt` needs only that each session v2 sets up is `OpensReady`. -/

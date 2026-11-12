@@ -154,7 +154,7 @@ def CostsRead (V : Vocab d α) (dev : Exchange → Properties.Challenger.History
 /-- **The deployment, before SPOT's names**: the other subprotocols' vocabulary over the deployed device
 (`base`), whose signer is the deployed device's (`deployment`, `signer`), whose reading of the committed files and
 digests are v2's (`read`, `programDigest`, `publicDigest`), whose place for each gate is the committed files' (`place`,
-`placeOfRead`) and whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); and
+`placeOfFiles`) and whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); and
 the session the deployment runs at each parameters (`session`), whose bound's parameters `θ` fixes; each coin family
 the base names samples the deployed device's `MAX_COINS` coins (`coins`, its one-stage rounds). A deployed instance fills
 `signer`, `place` and `coins` at its construction, by `rfl` or a lemma, as the honest instance does; no theorem takes
@@ -164,10 +164,10 @@ structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
-  read : ∀ θ F, base.read θ F = readOf θ F
+  read : ∀ θ F, base.read θ F = Verity.WindowFiles.one (readOf θ F)
   programDigest : ∀ θ, base.programDigest θ = programDigestOf θ
   publicDigest : ∀ θ, base.publicDigest θ = publicDigestOf θ
-  place : ∀ θ F c g, base.place θ F c g = placeOfRead (base.read θ F) g
+  place : ∀ θ F c g, base.place θ F c g = placeOfFiles (base.read θ F) g
   costs : CostsRead base (Device.dev (deployment.setupOf base.families))
   coins : ∀ θ l m, (l, m) ∈ base.families θ → m = _root_.Spot.Challenger.MAX_COINS
   session : ByteArray → Option Live
@@ -404,7 +404,7 @@ open Classical in
 noncomputable def extractOf (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy ((I.stage K).game θ F c)) : (I.base.read θ F).circuit.Trace :=
   if h : ∃ A, I.sessions θ F = some A then
-    cast (congrArg (fun r : Verity.FileRead => r.circuit.Trace) (I.sessions_some h.choose_spec).2.read.symm)
+    cast (congrArg (fun r : Verity.WindowFiles => r.circuit.Trace) (I.sessions_some h.choose_spec).2.read.symm)
       ((K.live h.choose θ F c σ).extract (K.project h.choose θ F c σ))
   else I.base.extract θ F c σ
 
@@ -754,11 +754,11 @@ reads the committed circuit or a strategy of the play at them. -/
 noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab δ 1 with
     signer := signer
-    read := readOf
+    read := fun θ F => .one (readOf θ F)
     programDigest := programDigestOf
     publicDigest := publicDigestOf
     registered := registeredOf
-    place := fun θ F _ g => placeOfRead (readOf θ F) g
+    place := fun θ F _ g => placeOfFiles (.one (readOf θ F)) g
     extract := fun _ _ _ _ _ => 0
     finder := fun _ _ _ _ _ => Verity.Idle.finder
     cost := cost

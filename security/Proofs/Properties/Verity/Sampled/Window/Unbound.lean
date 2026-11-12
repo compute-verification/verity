@@ -148,7 +148,7 @@ structure ReadAt (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r
   checked : m.Checked
   read : r = m.fileRead
   opens : m.OpensUnder r op
-  consts : Verity.Sampled.ConstsOpen r op
+  consts : Verity.Sampled.ConstsOpen (.one r) op
   trace : HEq tr (m.transcript Xv)
 
 /-- **The units a member's transcript doesn't bind are faulty**: wherever the member is read at the claim, every
@@ -180,11 +180,11 @@ def ReadsWith {Reg : Type} {nJ : ℕ} : (r : Verity.FileRead) → (rs : List Ver
   | r, r' :: rs, op, tr, ss => ∃ s ss', ss = s :: ss' ∧
       s.m.ReadAt r
         (fun i v => op (Fin.castAdd (Verity.FileRead.circuitWith r' rs).N i)
-          (v.cast (Verity.Circuit.besideW_left r.circuit (Verity.FileRead.circuitWith r' rs) i).symm))
+          (v.cast (Fin.append_left r.circuit.w (Verity.FileRead.circuitWith r' rs).w i).symm))
         (Verity.Circuit.traceLeft tr) s.Xv ∧
       ReadsWith r' rs
         (fun j v => op (Fin.natAdd r.circuit.N j)
-          (v.cast (Verity.Circuit.besideW_right r.circuit (Verity.FileRead.circuitWith r' rs) j).symm))
+          (v.cast (Fin.append_right r.circuit.w (Verity.FileRead.circuitWith r' rs).w j).symm))
         (Verity.Circuit.traceRight tr) ss'
 
 namespace JointAuditV5

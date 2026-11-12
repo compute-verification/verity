@@ -1,31 +1,39 @@
 module
 
-public import Properties.Verity.Game
+public import Definitions.Core.Compiler
+public import Properties.Flock.Circuit.CircuitOf
 
 /-!
-# A window's committed files as one circuit
+# The committed files as one circuit: one statement's, and a window's members side by side
 
-How the committed files are read at a window of several members: each member's files as v2 reads one statement's
-(`FileRead`: its tags, circuit file, lookup tables and public file), and the window's circuit the members' circuits
-side by side, in the members' order, with no wire between two members: what a member takes from another is an input
-of its own circuit.
+How the committed files are read. One statement's files are read as v2 reads them (`FileRead`: its tags, circuit
+file, lookup tables and public file). A window of several members is read a member at a time, and the window's
+circuit is the members' circuits side by side, in the members' order, with no wire between two members: what a member
+takes from another is an input of its own circuit, and what holds it to that member's gate is the same registered
+value at the same root, never a wire.
 
-* **Two circuits side by side** (`Circuit.beside C D`, over core's `Verity.Circuit`): `C`'s gates, then `D`'s
-  (`Fin.castAdd`, `Fin.natAdd`), each gate with its own circuit's width, input flag, wires and operation, and both
-  circuits' outputs. `Partition.beside P Q` is `P`'s units, then `Q`'s, each gate in its own circuit's unit, and
-  `Circuit.traceLeft X`, `Circuit.traceRight X` are a trace of the two at `C`'s gates and at `D`'s.
+* **One statement's read** (`FileRead`, `circuit`, `units`, `parts`, `consts`): the committed files as core's circuit,
+  as the verifier reads them (`Flock.Bridge.circuitOfFile`), the public file's population, its units, and the key
+  program's constants (`parsedConsts`).
+* **A circuit as an execution block over another** (`Circuit.Extension.ofCircuit C D`): `D`'s gates after `C`'s, each
+  with `D`'s width and input flag, reading `D`'s gates at their places after `C`'s (`Fin.natAddEmb`) and applying
+  `D`'s operation to the values there.
+* **Two circuits side by side** (`Circuit.beside C D`): `C` with `D` appended as an execution block
+  (`Circuit.append`), so `C`'s gates come first (`Fin.castAdd`), then `D`'s (`Fin.natAdd`), each gate with its own
+  circuit's width, input flag, wires and operation, and both circuits' outputs. `Partition.beside P Q` is `P`'s
+  units, then `Q`'s, each gate in its own circuit's unit.
 * **The window's read** (`WindowFiles`): its first member's files and the later members'. A window has a member, so a
   window of one member is that member's read and nothing else (`WindowFiles.one`).
 * **Its circuit** (`WindowFiles.circuit`, `units`, `parts`, `consts`): the members' circuits side by side, their units
   summed, each member's units after the earlier members' (`Partition.beside`), and each member's constants at its own
-  gates. At a window of one member each is that member's, by definition (`FileRead.circuitWith`, `unitsWith`,
-  `partsWith` and `constsWith` at no later member).
+  gates. At a window of one member each is that member's, by definition (`WindowFiles.one_circuit`, `one_units`;
+  `FileRead.circuitWith`, `unitsWith`, `partsWith` and `constsWith` at no later member).
 * **A member's place** (`WindowFiles.base k`): where the member at place `k` starts in the window's units, the earlier
   members' units summed.
 
-`Vocab.read` reads one statement's files (`FileRead`). At a window it is to read `WindowFiles`, with `circuitOf`,
-`units`, `partsOf`, `Opens` and `extract` over `WindowFiles.circuit`, `units`, `parts` and `consts`: the claim at a
-window is then the claim at one statement, over the members' circuits side by side. The lemmas about `beside` are
+`Vocab.read` (`Properties.Verity.Game`) reads `WindowFiles`, and `circuitOf`, `units`, `partsOf`, `Opens` and
+`extract` are over `WindowFiles.circuit`, `units`, `parts` and `consts`: the claim at a window is the claim at one
+statement, over the members' circuits side by side. The lemmas about `beside` are
 `Proofs.Properties.Verity.WindowFiles`'s.
 -/
 
@@ -33,91 +41,69 @@ window is then the claim at one statement, over the members' circuits side by si
 
 namespace Verity
 
+/-- **How v2 reads the committed files**: its statement's tags (derived from the circuit file), the circuit file, its
+lookup tables and the public file. -/
+structure FileRead where
+  tags : Flock.Tags
+  circuitFile : ByteArray
+  tables : List (String × ByteArray)
+  publicFile : ByteArray
+
+namespace FileRead
+
+/-- The committed files as core's circuit, as the verifier reads them (`Flock.Bridge.circuitOfFile`). -/
+noncomputable def circuit (r : FileRead) : Verity.Circuit :=
+  Flock.Bridge.circuitOfFile r.tags r.circuitFile r.tables r.publicFile
+
+/-- The committed files' number of units, the public file's population. -/
+noncomputable def units (r : FileRead) : ℕ := Flock.Bridge.unitsOfFile r.tags r.circuitFile r.tables r.publicFile
+
+/-- The committed files' units, as core's partition of `circuit`. -/
+noncomputable def parts (r : FileRead) : Verity.Partition r.circuit r.units :=
+  Flock.Bridge.partsOfFile r.tags r.circuitFile r.tables r.publicFile
+
+end FileRead
+
+/-- **A parse's constants**: the key program's constant input gate holds `1` and its zero gate `0`
+(`FlockSoundness.Discharge.Placed.oneGate`, `zeroGate`), public circuit structure that no proof block opens. -/
+noncomputable def parsedConsts : (o : Option Flock.Bridge.Parsed) → Fin (Flock.Bridge.Parsed.circuit o).N → Option Bool
+  | some r, g =>
+    if g.val = (FlockSoundness.Discharge.Placed.oneGate r.n (FlockSoundness.Discharge.Layout.keyB r.D.unroll r.hU)).val
+    then some true
+    else if g.val =
+        (FlockSoundness.Discharge.Placed.zeroGate r.n (FlockSoundness.Discharge.Layout.keyB r.D.unroll r.hU)).val
+    then some false
+    else none
+  | none, _ => none
+
+/-- The committed files' constants. -/
+noncomputable def FileRead.consts (r : FileRead) : Fin r.circuit.N → Option Bool :=
+  parsedConsts (Flock.Bridge.parsedOf r.tags r.circuitFile r.tables r.publicFile)
+
 namespace Circuit
 
 variable (C D : Circuit)
 
-/-- The gates' widths of two circuits side by side: `C`'s, then `D`'s. -/
-def besideW : Fin (C.N + D.N) → ℕ := Fin.addCases C.w D.w
+/-- **`D` as an execution block over `C`**: `D`'s gates after `C`'s, each with `D`'s width and input flag, reading
+`D`'s gates at their places after `C`'s and applying `D`'s operation to the values there. It reads no gate of `C`. -/
+@[reducible] def Extension.ofCircuit : C.Extension where
+  n := D.N
+  w := D.w
+  isInput := D.isInput
+  reads j := (D.reads j).map (Fin.natAddEmb C.N)
+  reads_lt j a ha := by
+    obtain ⟨b, hb, rfl⟩ := Finset.mem_map.1 ha
+    exact Nat.add_lt_add_left (Fin.lt_def.1 (D.reads_lt j b hb)) C.N
+  input_reads j h := by rw [D.input_reads j h, Finset.map_empty]
+  op j v := D.op j fun a => (v (Fin.natAdd C.N a)).cast (Fin.append_right C.w D.w a)
+  op_congr j v v' h := D.op_congr j _ _ fun a ha => by
+    rw [h (Fin.natAdd C.N a) (Finset.mem_map_of_mem (Fin.natAddEmb C.N) ha)]
+  outputs := D.outputs.map (Fin.natAddEmb C.N)
 
-theorem besideW_left (i : Fin C.N) : besideW C D (Fin.castAdd D.N i) = C.w i := Fin.addCases_left i
-
-theorem besideW_right (j : Fin D.N) : besideW C D (Fin.natAdd C.N j) = D.w j := Fin.addCases_right j
-
-/-- The gates each gate reads, of two circuits side by side: a gate reads only gates of its own circuit. -/
-def besideReads : Fin (C.N + D.N) → Finset (Fin (C.N + D.N)) :=
-  Fin.addCases (fun g => (C.reads g).map (Fin.castAddEmb D.N)) fun g => (D.reads g).map (Fin.natAddEmb C.N)
-
-/-- The gates' operations of two circuits side by side: a gate of `C` applies `C`'s to the values of `C`'s gates, a
-gate of `D` applies `D`'s to the values of `D`'s. -/
-def besideOp : (g : Fin (C.N + D.N)) → ((a : Fin (C.N + D.N)) → BitVec (besideW C D a)) → BitVec (besideW C D g) :=
-  Fin.addCases
-    (fun i v => (C.op i fun a => (v (Fin.castAdd D.N a)).cast (besideW_left C D a)).cast (besideW_left C D i).symm)
-    fun j v => (D.op j fun a => (v (Fin.natAdd C.N a)).cast (besideW_right C D a)).cast (besideW_right C D j).symm
-
-theorem besideOp_left (i : Fin C.N) (v : (a : Fin (C.N + D.N)) → BitVec (besideW C D a)) :
-    besideOp C D (Fin.castAdd D.N i) v =
-      (C.op i fun a => (v (Fin.castAdd D.N a)).cast (besideW_left C D a)).cast (besideW_left C D i).symm := by
-  rw [besideOp, Fin.addCases_left]
-
-theorem besideOp_right (j : Fin D.N) (v : (a : Fin (C.N + D.N)) → BitVec (besideW C D a)) :
-    besideOp C D (Fin.natAdd C.N j) v =
-      (D.op j fun a => (v (Fin.natAdd C.N a)).cast (besideW_right C D a)).cast (besideW_right C D j).symm := by
-  rw [besideOp, Fin.addCases_right]
-
-/-- **Two circuits side by side**: `C`'s gates, then `D`'s, each gate with its own circuit's width, input flag, wires
-and operation, no wire between the two, and both circuits' outputs. -/
-@[reducible] def beside : Circuit where
-  N := C.N + D.N
-  w := besideW C D
-  isInput := Fin.addCases C.isInput D.isInput
-  reads := besideReads C D
-  reads_lt g := by
-    induction g using Fin.addCases with
-    | left i =>
-      intro a ha
-      rw [besideReads, Fin.addCases_left, Finset.mem_map] at ha
-      obtain ⟨b, hb, rfl⟩ := ha
-      exact C.reads_lt i b hb
-    | right j =>
-      intro a ha
-      rw [besideReads, Fin.addCases_right, Finset.mem_map] at ha
-      obtain ⟨b, hb, rfl⟩ := ha
-      exact Nat.add_lt_add_left (D.reads_lt j b hb) C.N
-  input_reads g := by
-    induction g using Fin.addCases with
-    | left i =>
-      intro h
-      rw [Fin.addCases_left] at h
-      rw [besideReads, Fin.addCases_left, C.input_reads i h, Finset.map_empty]
-    | right j =>
-      intro h
-      rw [Fin.addCases_right] at h
-      rw [besideReads, Fin.addCases_right, D.input_reads j h, Finset.map_empty]
-  op := besideOp C D
-  op_congr g := by
-    induction g using Fin.addCases with
-    | left i =>
-      intro v v' h
-      rw [besideOp_left, besideOp_left]
-      congr 1
-      exact C.op_congr i _ _ fun a ha => by
-        rw [h (Fin.castAdd D.N a) (by rw [besideReads, Fin.addCases_left]; exact Finset.mem_map_of_mem _ ha)]
-    | right j =>
-      intro v v' h
-      rw [besideOp_right, besideOp_right]
-      congr 1
-      exact D.op_congr j _ _ fun a ha => by
-        rw [h (Fin.natAdd C.N a) (by rw [besideReads, Fin.addCases_right]; exact Finset.mem_map_of_mem _ ha)]
-  outputs := C.outputs.map (Fin.castAddEmb D.N) ∪ D.outputs.map (Fin.natAddEmb C.N)
-
-variable {C D}
-
-/-- **A trace of two circuits side by side, at `C`'s gates.** -/
-def traceLeft (X : (C.beside D).Trace) : C.Trace := fun i => (X (Fin.castAdd D.N i)).cast (besideW_left C D i)
-
-/-- **A trace of two circuits side by side, at `D`'s gates.** -/
-def traceRight (X : (C.beside D).Trace) : D.Trace := fun j => (X (Fin.natAdd C.N j)).cast (besideW_right C D j)
+/-- **Two circuits side by side**: `C` with `D` appended as an execution block (`Circuit.append`,
+`Extension.ofCircuit`): `C`'s gates, then `D`'s, each gate with its own circuit's width, input flag, wires and
+operation, no wire between the two, and both circuits' outputs. -/
+@[reducible] def beside : Circuit := C.append (.ofCircuit C D)
 
 end Circuit
 
@@ -193,6 +179,12 @@ noncomputable def consts : Fin w.circuit.N → Option Bool := w.first.constsWith
 /-- **A window of one member**: that member's read. Its circuit, units, partition and constants are the member's, by
 definition. -/
 def one (r : FileRead) : WindowFiles := ⟨r, []⟩
+
+/-- A window of one member has that member's circuit, by definition. -/
+theorem one_circuit (r : FileRead) : (one r).circuit = r.circuit := rfl
+
+/-- A window of one member has that member's units, by definition. -/
+theorem one_units (r : FileRead) : (one r).units = r.units := rfl
 
 /-- **Where the member at place `k` starts in the window's units**: the earlier members' units summed. -/
 noncomputable def base (k : ℕ) : ℕ := ((w.members.take k).map FileRead.units).sum

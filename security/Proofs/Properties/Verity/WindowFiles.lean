@@ -11,8 +11,11 @@ public import Definitions.Accounting.JointLive
 (`Circuit.beside`, `Partition.beside`). Here a unit of the two side by side is correct, and bound, exactly when it is
 in its own circuit at that circuit's part of the trace, so the units a trace doesn't bind are each circuit's own:
 
-* **The whole at a gate of either** (`Circuit.beside_isInput_left`, `beside_reads_left`, `mem_beside_outputs_left`,
-  `Partition.beside_unit_left` and their `right` forms): its own circuit's input flag, wires, outputs and unit.
+* **A trace of the whole at either's gates** (`Circuit.traceLeft X`, `Circuit.traceRight X`): its values at `C`'s
+  gates and at `D`'s.
+* **The whole at a gate of either** (`Circuit.beside_isInput_left`, `beside_reads_left`, `beside_op_left`,
+  `mem_beside_outputs_left`, `Partition.beside_unit_left` and their `right` forms): its own circuit's input flag,
+  wires, operation, outputs and unit.
 * **Evaluation** (`Circuit.run_beside_left`, `run_beside_right`): evaluating the two side by side with some gates
   fixed is, at a gate of either, evaluating that circuit with its own fixed gates.
 * **A unit's recomputation, committed gates and correctness** (`Partition.localEval_beside_left`,
@@ -33,25 +36,52 @@ theorem natAdd_ne_castAdd {n m : ℕ} (j : Fin m) (i : Fin n) : Fin.natAdd n j �
   simp only [Fin.val_natAdd, Fin.val_castAdd] at h
   omega
 
+/- `Circuit.beside` is `Circuit.append` at the second circuit as a block; the lemmas below rewrite at its gates, whose
+count and widths are `append`'s fields, so `append` unfolds as `beside` does, in this file only. The option is the
+elaborator's guard on changing an imported definition's reducibility; the kernel reads neither. -/
+set_option allowUnsafeReducibility true
+attribute [local reducible] Circuit.append
+set_option allowUnsafeReducibility false
+
 namespace Circuit
 
 variable {C D : Circuit}
 
+/-- **A trace of two circuits side by side, at `C`'s gates.** -/
+def traceLeft (X : (C.beside D).Trace) : C.Trace := fun i => (X (Fin.castAdd D.N i)).cast (Fin.append_left C.w D.w i)
+
+/-- **A trace of two circuits side by side, at `D`'s gates.** -/
+def traceRight (X : (C.beside D).Trace) : D.Trace := fun j => (X (Fin.natAdd C.N j)).cast (Fin.append_right C.w D.w j)
+
 theorem beside_isInput_left (i : Fin C.N) : (C.beside D).isInput (Fin.castAdd D.N i) = C.isInput i :=
-  Fin.addCases_left (motive := fun _ => Bool) i
+  Fin.append_left C.isInput D.isInput i
 
 theorem beside_isInput_right (j : Fin D.N) : (C.beside D).isInput (Fin.natAdd C.N j) = D.isInput j :=
-  Fin.addCases_right (motive := fun _ => Bool) j
+  Fin.append_right C.isInput D.isInput j
 
 theorem beside_reads_left (i : Fin C.N) :
-    (C.beside D).reads (Fin.castAdd D.N i) = (C.reads i).map (Fin.castAddEmb D.N) := by
-  show besideReads C D (Fin.castAdd D.N i) = _
-  rw [besideReads, Fin.addCases_left]
+    (C.beside D).reads (Fin.castAdd D.N i) = (C.reads i).map (Fin.castAddEmb D.N) :=
+  Fin.append_left (fun g => (C.reads g).map (Fin.castAddEmb D.N)) (fun j => (D.reads j).map (Fin.natAddEmb C.N)) i
 
 theorem beside_reads_right (j : Fin D.N) :
-    (C.beside D).reads (Fin.natAdd C.N j) = (D.reads j).map (Fin.natAddEmb C.N) := by
-  show besideReads C D (Fin.natAdd C.N j) = _
-  rw [besideReads, Fin.addCases_right]
+    (C.beside D).reads (Fin.natAdd C.N j) = (D.reads j).map (Fin.natAddEmb C.N) :=
+  Fin.append_right (fun g => (C.reads g).map (Fin.castAddEmb D.N)) (fun j => (D.reads j).map (Fin.natAddEmb C.N)) j
+
+/-- **The operation of two circuits side by side, at a gate of `C`**: `C`'s, on the values at `C`'s gates. -/
+theorem beside_op_left (i : Fin C.N) (v : (a : Fin (C.beside D).N) → BitVec ((C.beside D).w a)) :
+    (C.beside D).op (Fin.castAdd D.N i) v =
+      (C.op i fun a => (v (Fin.castAdd D.N a)).cast (Fin.append_left C.w D.w a)).cast
+        (Fin.append_left C.w D.w i).symm := by
+  show C.appendOp (.ofCircuit C D) (Fin.castAdd D.N i) v = _
+  exact Fin.addCases_left (motive := fun g => BitVec (Fin.append C.w D.w g)) i
+
+/-- **The operation of two circuits side by side, at a gate of `D`**: `D`'s, on the values at `D`'s gates. -/
+theorem beside_op_right (j : Fin D.N) (v : (a : Fin (C.beside D).N) → BitVec ((C.beside D).w a)) :
+    (C.beside D).op (Fin.natAdd C.N j) v =
+      (D.op j fun a => (v (Fin.natAdd C.N a)).cast (Fin.append_right C.w D.w a)).cast
+        (Fin.append_right C.w D.w j).symm := by
+  show C.appendOp (.ofCircuit C D) (Fin.natAdd C.N j) v = _
+  exact Fin.addCases_right (motive := fun g => BitVec (Fin.append C.w D.w g)) j
 
 theorem mem_beside_outputs_left (i : Fin C.N) : Fin.castAdd D.N i ∈ (C.beside D).outputs ↔ i ∈ C.outputs := by
   show Fin.castAdd D.N i ∈ C.outputs.map (Fin.castAddEmb D.N) ∪ D.outputs.map (Fin.natAddEmb C.N) ↔ _
@@ -77,18 +107,17 @@ theorem mem_beside_outputs_right (j : Fin D.N) : Fin.natAdd C.N j ∈ (C.beside 
 are. -/
 theorem run_beside_left (fix : (g : Fin (C.beside D).N) → Option (BitVec ((C.beside D).w g))) (i : Fin C.N) :
     (C.beside D).run fix (Fin.castAdd D.N i) =
-      (C.run (fun a => (fix (Fin.castAdd D.N a)).map fun b => b.cast (besideW_left C D a)) i).cast
-        (besideW_left C D i).symm := by
+      (C.run (fun a => (fix (Fin.castAdd D.N a)).map fun b => b.cast (Fin.append_left C.w D.w a)) i).cast
+        (Fin.append_left C.w D.w i).symm := by
   induction i using WellFoundedLT.induction with
   | _ i ih => ?_
   cases h : fix (Fin.castAdd D.N i) with
   | some b =>
-    rw [(C.beside D).run_fixed h, C.run_fixed (b := b.cast (besideW_left C D i)) (by rw [h]; rfl), BitVec.cast_cast,
-      BitVec.cast_eq]
+    rw [(C.beside D).run_fixed h, C.run_fixed (b := b.cast (Fin.append_left C.w D.w i)) (by rw [h]; rfl),
+      BitVec.cast_cast, BitVec.cast_eq]
   | none =>
     rw [(C.beside D).run_free h, C.run_free (by rw [h]; rfl)]
-    show besideOp C D (Fin.castAdd D.N i) _ = _
-    rw [besideOp_left]
+    rw [beside_op_left]
     congr 1
     exact C.op_congr i _ _ fun a ha => by rw [ih a (C.reads_lt i a ha), BitVec.cast_cast, BitVec.cast_eq]
 
@@ -96,18 +125,17 @@ theorem run_beside_left (fix : (g : Fin (C.beside D).N) → Option (BitVec ((C.b
 are. -/
 theorem run_beside_right (fix : (g : Fin (C.beside D).N) → Option (BitVec ((C.beside D).w g))) (j : Fin D.N) :
     (C.beside D).run fix (Fin.natAdd C.N j) =
-      (D.run (fun a => (fix (Fin.natAdd C.N a)).map fun b => b.cast (besideW_right C D a)) j).cast
-        (besideW_right C D j).symm := by
+      (D.run (fun a => (fix (Fin.natAdd C.N a)).map fun b => b.cast (Fin.append_right C.w D.w a)) j).cast
+        (Fin.append_right C.w D.w j).symm := by
   induction j using WellFoundedLT.induction with
   | _ j ih => ?_
   cases h : fix (Fin.natAdd C.N j) with
   | some b =>
-    rw [(C.beside D).run_fixed h, D.run_fixed (b := b.cast (besideW_right C D j)) (by rw [h]; rfl), BitVec.cast_cast,
-      BitVec.cast_eq]
+    rw [(C.beside D).run_fixed h, D.run_fixed (b := b.cast (Fin.append_right C.w D.w j)) (by rw [h]; rfl),
+      BitVec.cast_cast, BitVec.cast_eq]
   | none =>
     rw [(C.beside D).run_free h, D.run_free (by rw [h]; rfl)]
-    show besideOp C D (Fin.natAdd C.N j) _ = _
-    rw [besideOp_right]
+    rw [beside_op_right]
     congr 1
     exact D.op_congr j _ _ fun a ha => by rw [ih a (D.reads_lt j a ha), BitVec.cast_cast, BitVec.cast_eq]
 
@@ -225,7 +253,7 @@ theorem mem_committed_beside_right (j : Fin D.N) :
 of the trace. -/
 theorem localEval_beside_left (X : (C.beside D).Trace) (u : Fin n) (i : Fin C.N) :
     (P.beside Q).localEval X (Fin.castAdd m u) (Fin.castAdd D.N i) =
-      (P.localEval (Circuit.traceLeft X) u i).cast (Circuit.besideW_left C D i).symm := by
+      (P.localEval (Circuit.traceLeft X) u i).cast (Fin.append_left C.w D.w i).symm := by
   unfold localEval
   rw [Circuit.run_beside_left]
   congr 2
@@ -240,7 +268,7 @@ theorem localEval_beside_left (X : (C.beside D).Trace) (u : Fin n) (i : Fin C.N)
 of the trace. -/
 theorem localEval_beside_right (X : (C.beside D).Trace) (u : Fin m) (j : Fin D.N) :
     (P.beside Q).localEval X (Fin.natAdd n u) (Fin.natAdd C.N j) =
-      (Q.localEval (Circuit.traceRight X) u j).cast (Circuit.besideW_right C D j).symm := by
+      (Q.localEval (Circuit.traceRight X) u j).cast (Fin.append_right C.w D.w j).symm := by
   unfold localEval
   rw [Circuit.run_beside_right]
   congr 2
@@ -382,15 +410,15 @@ under the openings at `C`'s gates, then `Q`'s that `D`'s part doesn't under the 
 theorem unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Partition D m)
     (opens : (g : Fin (C.beside D).N) → BitVec ((C.beside D).w g) → Prop) (X : (C.beside D).Trace) :
     Accounting.unbound (P.beside Q) opens X =
-      (Accounting.unbound P (fun i v => opens (Fin.castAdd D.N i) (v.cast (Circuit.besideW_left C D i).symm))
+      (Accounting.unbound P (fun i v => opens (Fin.castAdd D.N i) (v.cast (Fin.append_left C.w D.w i).symm))
         (Circuit.traceLeft X)).map (Fin.castAddEmb m) ∪
-      (Accounting.unbound Q (fun j v => opens (Fin.natAdd C.N j) (v.cast (Circuit.besideW_right C D j).symm))
+      (Accounting.unbound Q (fun j v => opens (Fin.natAdd C.N j) (v.cast (Fin.append_right C.w D.w j).symm))
         (Circuit.traceRight X)).map (Fin.natAddEmb n) := by
-  have hL : ∀ i : Fin C.N, ((Circuit.traceLeft X) i).cast (Circuit.besideW_left C D i).symm =
+  have hL : ∀ i : Fin C.N, ((Circuit.traceLeft X) i).cast (Fin.append_left C.w D.w i).symm =
       X (Fin.castAdd D.N i) := fun i => by
     show ((X (Fin.castAdd D.N i)).cast _).cast _ = _
     rw [BitVec.cast_cast, BitVec.cast_eq]
-  have hR : ∀ j : Fin D.N, ((Circuit.traceRight X) j).cast (Circuit.besideW_right C D j).symm =
+  have hR : ∀ j : Fin D.N, ((Circuit.traceRight X) j).cast (Fin.append_right C.w D.w j).symm =
       X (Fin.natAdd C.N j) := fun j => by
     show ((X (Fin.natAdd C.N j)).cast _).cast _ = _
     rw [BitVec.cast_cast, BitVec.cast_eq]
@@ -399,13 +427,13 @@ theorem unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Part
   refine Fin.addCases (motive := fun w =>
     (¬ (P.beside Q).Correct X w ∨ ∃ g ∈ (P.beside Q).io w, ¬ opens g (X g)) ↔
       w ∈ (Finset.univ.filter fun u => ¬ P.Correct (Circuit.traceLeft X) u ∨ ∃ g ∈ P.io u,
-          ¬ opens (Fin.castAdd D.N g) (((Circuit.traceLeft X) g).cast (Circuit.besideW_left C D g).symm)).map
+          ¬ opens (Fin.castAdd D.N g) (((Circuit.traceLeft X) g).cast (Fin.append_left C.w D.w g).symm)).map
             (Fin.castAddEmb m) ∨
         w ∈ (Finset.univ.filter fun u => ¬ Q.Correct (Circuit.traceRight X) u ∨ ∃ g ∈ Q.io u,
-          ¬ opens (Fin.natAdd C.N g) (((Circuit.traceRight X) g).cast (Circuit.besideW_right C D g).symm)).map
+          ¬ opens (Fin.natAdd C.N g) (((Circuit.traceRight X) g).cast (Fin.append_right C.w D.w g).symm)).map
             (Fin.natAddEmb n)) (fun u => ?_) (fun u => ?_) w
   · have hmem : (¬ P.Correct (Circuit.traceLeft X) u ∨ ∃ g ∈ P.io u,
-        ¬ opens (Fin.castAdd D.N g) (((Circuit.traceLeft X) g).cast (Circuit.besideW_left C D g).symm)) ↔
+        ¬ opens (Fin.castAdd D.N g) (((Circuit.traceLeft X) g).cast (Fin.append_left C.w D.w g).symm)) ↔
         (¬ (P.beside Q).Correct X (Fin.castAdd m u) ∨
           ∃ g ∈ (P.beside Q).io (Fin.castAdd m u), ¬ opens g (X g)) := by
       rw [P.correct_beside_left Q]
@@ -426,7 +454,7 @@ theorem unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Part
       · obtain ⟨b, -, hb⟩ := Finset.mem_map.1 h
         exact absurd hb (natAdd_ne_castAdd b u)
   · have hmem : (¬ Q.Correct (Circuit.traceRight X) u ∨ ∃ g ∈ Q.io u,
-        ¬ opens (Fin.natAdd C.N g) (((Circuit.traceRight X) g).cast (Circuit.besideW_right C D g).symm)) ↔
+        ¬ opens (Fin.natAdd C.N g) (((Circuit.traceRight X) g).cast (Fin.append_right C.w D.w g).symm)) ↔
         (¬ (P.beside Q).Correct X (Fin.natAdd n u) ∨
           ∃ g ∈ (P.beside Q).io (Fin.natAdd n u), ¬ opens g (X g)) := by
       rw [P.correct_beside_right Q]
@@ -452,9 +480,9 @@ open Classical in
 theorem card_unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Partition D m)
     (opens : (g : Fin (C.beside D).N) → BitVec ((C.beside D).w g) → Prop) (X : (C.beside D).Trace) :
     (Accounting.unbound (P.beside Q) opens X).card =
-      (Accounting.unbound P (fun i v => opens (Fin.castAdd D.N i) (v.cast (Circuit.besideW_left C D i).symm))
+      (Accounting.unbound P (fun i v => opens (Fin.castAdd D.N i) (v.cast (Fin.append_left C.w D.w i).symm))
         (Circuit.traceLeft X)).card +
-      (Accounting.unbound Q (fun j v => opens (Fin.natAdd C.N j) (v.cast (Circuit.besideW_right C D j).symm))
+      (Accounting.unbound Q (fun j v => opens (Fin.natAdd C.N j) (v.cast (Fin.append_right C.w D.w j).symm))
         (Circuit.traceRight X)).card := by
   rw [unbound_beside, Finset.card_union_of_disjoint, Finset.card_map, Finset.card_map]
   refine Finset.disjoint_left.2 fun w hl hr => ?_
@@ -481,11 +509,11 @@ noncomputable def unboundWith : (r : FileRead) → (rs : List FileRead) →
   | r, s :: rs, opens, X =>
     (Accounting.unbound r.parts
         (fun i v => opens (Fin.castAdd (circuitWith s rs).N i)
-          (v.cast (Circuit.besideW_left r.circuit (circuitWith s rs) i).symm))
+          (v.cast (Fin.append_left r.circuit.w (circuitWith s rs).w i).symm))
         (Circuit.traceLeft X)).card +
       unboundWith s rs
         (fun j v => opens (Fin.natAdd r.circuit.N j)
-          (v.cast (Circuit.besideW_right r.circuit (circuitWith s rs) j).symm))
+          (v.cast (Fin.append_right r.circuit.w (circuitWith s rs).w j).symm))
         (Circuit.traceRight X)
 
 open Classical in
