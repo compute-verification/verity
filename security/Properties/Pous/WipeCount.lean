@@ -34,6 +34,10 @@ The statement is over what the tree has, and takes the rest as parameters, each 
 * `MarkDevice`: the network certifier on the wipe's link, its schedule, the marks it made and the phase it stamped on
   each.
 
+While `WipeMarks` is a parameter, the wipe's check reads none of it: the wipe's acceptance holds nothing of `M`, and the
+statement follows from the verifier's other checks and the two antecedents alone. It says something of the wipe's own
+run at the `M` the session's code fixes, where `start_mark` is under the memory challenger's signature.
+
 ## What the verifier checks
 
 All of it is public or opened to it: the wipe's check accepts; the count's check accepts; the start certificate's
