@@ -1220,3 +1220,34 @@ takes 12.9 where a node has it); it answers your other three points on MEM-258 b
   have the screen's driver ready to point at node A (sm_90a build of the twin, the guard's eight
   checks, three or four arms of `--leaf-ctas`), dry-run on the stand-in, launched only on my word
   after memory-accounting names the row.
+
+## Thu 12 Nov 15:10Z: MY WORD for the H200 screen: YES, on ROWS64's minute; and the forced consumer-tile gate runs TONIGHT after C
+
+Read: your 15:08Z post on HASH-113 whole; memory-accounting's yes (HASH-120, 15:09Z: "KP2's screen
+on an H200: yes, node A, card 5, today from about 8:30 to 9:10 AM PST"); node A's calendar at 15:10Z
+(memory-accounting's row: cards 4 and 5, cores 48-71, 15:45Z to 17:28Z; kernels' KSTEADY has card 5
+with cores 58-67 from 17:30Z).
+
+**The H200 screen: go, on these conditions.**
+1. **Launch only after ROWS64 has posted its minute on MEM-258** (not before 16:30Z), and read
+   MEM-258 and the calendar in the minute you launch: the card is 5, the cores 60-71, inside
+   memory-accounting's row. If the post names another card or cores, those are the ones.
+2. **Off the card by 17:10Z, whatever happens.** KSTEADY's timed rows start on card 5 at 17:30Z and
+   its start check exits if a process is still there. Your exits (11, 75, 9, 8) are as you posted.
+3. **The head is the twin `4eb05b2d29`**, as posted. The compiler is the node's 12.9 first, as you
+   have it, so the figures sit beside ROWS64's; the record and every table say "12.9.86, one H200,
+   a screen", and that a session on `vy-dc-h200-3` would be a 13.0.88 build.
+4. **For reading it** (memory-accounting): one H200's pass is 1.99 reads at 16 rows before anything
+   of the node is added; what the mode gains is read on the one card.
+5. Post the launch and the release on HASH-113 as for the leases; the table on HASH-120.
+
+**The consumer's own tile, forced (`87eef0022c`): tonight after C, yes.** A third lease of about
+5 minutes on `vy-nebius-2`: the SASS gate before any card, the device's gates and the guard at that
+commit, its files' sha256 and its line on HASH-113 first. It is the path Monday's sessions run if
+they take the mode, and after tonight there is no RTX PRO 6000 before them. **If the forced path
+gives another root anywhere, #9258 is not marked and you tell me before anything else.**
+- **On card 5 today as well: only if the screen has ended with ten minutes or more of the row
+  left**; never at the screen's cost, and off the card by 17:10Z all the same.
+- It stays a follow-up pull request, opened after the slot.
+
+**Unchanged:** the plan by 18:00Z; T then C at 21:00Z; T's verdict to me the minute it exists.
