@@ -559,15 +559,15 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
     for figure, least in (("48,906,024", 5), ("48,920,264", 2), ("24,344", 2), ("14,240 GB with the lengths held", 1)):
         under = [under for under, cell in shown if figure in cell]
         assert len(under) >= least and all(label in u for u in under), figure
-    assert "- the network certifier's part with a set-time card (not yet tested): 0 GB with the lengths held by a stop block" in text
-    assert ("- together, with a set-time card (not yet tested): 14,240 GB with the lengths held by a stop block, the timing "
+    assert "- the network certifier's part with a simulated set-time card: 0 GB with the lengths held by a stop block" in text
+    assert ("- together, with a simulated set-time card: 14,240 GB with the lengths held by a stop block, the timing "
             "taken once and the entries charged through the compute audit; and at D_j = 1, 48,920,264 GB as the scan's "
             "check charges it today; 24,344 GB as N2 charges it today; 24,467,252 GB by the design no run has behind it, "
             "before a served audit has sampled a stop block; 14,240 GB by the design no run has behind it, once a served "
             "audit has sampled a stop block; error 0.01.\n") in text
-    assert ("| all three, with a set-time card (not yet tested) | 0 | 0 | 0 | 0 | 0 | the compute side's | 8.259e-20 | "
+    assert ("| all three, with a simulated set-time card | 0 | 0 | 0 | 0 | 0 | the compute side's | 8.259e-20 | "
             "9.537e-07 |") in text
-    assert "\n## Each monitoring period over all compute, with a set-time card (not yet tested): in GB\n" in text
+    assert "\n## Each monitoring period over all compute, with a simulated set-time card: in GB\n" in text
     assert ("| world | year | 0 | 14,240 | 48,906,024 | 10,104 | 24,453,012 | 0 | 48,920,264 | 24,344 | 24,467,252 | 14,240 | "
             "8.259e-20 | 9.537e-07 | 0.01 |") in text
     # no figure of record is under the label: the headline's and the table of record's lines don't carry it
@@ -665,7 +665,7 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
             "link's execution phases, 1.155e+13 of them: 9.537e-07 (2^-20). The two together fail with at most the sum of "
             "both, 0.01. A figure whose error, summed over everything it covers, is 1 or more is printed as \"no bound at "
             "this period\", with that error and no amount.\n") in text
-    assert ("- the network certifier's part with a set-time card (not yet tested): 0 GB with the lengths held by a stop "
+    assert ("- the network certifier's part with a simulated set-time card: 0 GB with the lengths held by a stop "
             "block, the timing taken once and the entries charged through the compute audit; and at D_j = 1, ") in text
     assert "once a served audit has sampled a stop block; ε = 9.537e-07 (2^-20).\n" in text
     assert ("| compute | period | GPU-seconds | requests | compute audit | bits a request | compute audit's δ | certifier, scan | "
@@ -792,7 +792,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
         E.build(store=recorded(tmp_path / "two").fresh(), root=REPO)
 
 
-def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_path):
+def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_source(tmp_path):
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     by = {i["input"]: i for i in doc["inputs"]}
     assert all(i["mark"] in E.MARKS and i["source"] and i["part"] in ("compute audit", "network certifier", "both")
@@ -831,7 +831,7 @@ def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_p
     assert "the audit budget is β = 5.243% and the compute audit's part 15,054 GB." in text
     assert f"- compute-audit: {PLAN}, {ROWS} (`{E.RECORD}`): the planner's rows, 18 of row `(ii) honest`" in text
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
-    assert f"of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled and {marks['assumed']} assumed" in text
+    assert f"of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled, 1 simulated and {marks['assumed']} assumed" in text
     assert "| world year | " + ROWS + " | 5.542% | 13,562 | 14,240 | 37.81 | 1.778e+16 | 4.339% | 2.293% | 5.372% |" in text
     assert "| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 1,857,720 | " in text
     assert "| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | " in text

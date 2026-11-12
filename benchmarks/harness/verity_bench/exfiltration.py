@@ -1,6 +1,6 @@
 """`verity bench exfiltration`: GLM-5.3's exfiltration capacity over a monitoring period at a share of total compute
-(10% by default), in GB, as two parts side by side with every input labelled measured, modeled or assumed. It
-computes neither part itself: it composes the two calculators that do, and runs on any machine that reaches the
+(10% by default), in GB, as two parts side by side with every input labelled measured, modeled, simulated or assumed.
+It computes neither part itself: it composes the two calculators that do, and runs on any machine that reaches the
 store, with no GPU and no node.
 
 * **The compute audit's part** is the break-even planner's bound, read from its rows of record. A record is named in
@@ -148,7 +148,7 @@ TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
-MARKS = ("measured", "modeled", "assumed")
+MARKS = ("measured", "modeled", "simulated", "assumed")
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights
 SHARED = ("world_machines", "datacenter_machines", "machine_gpus", "mfu_serve", "peak_flops", "request_tokens",
           "token_macs", "world_requests", "request_count", "weights")
@@ -824,7 +824,7 @@ def render(doc: Mapping[str, Any]) -> str:
         f"don't count (assumed, no run), the audit budget is β = {_part(net['beta'])} and the compute audit's part "
         f"{_n(net['GB'])} GB.",
         f"- of {len(doc['inputs'])} inputs, {marks['measured']} {'is' if marks['measured'] == 1 else 'are'} measured, "
-        f"{marks['modeled']} modeled and {marks['assumed']} assumed.", "",
+        f"{marks['modeled']} modeled, {marks['simulated']} simulated and {marks['assumed']} assumed.", "",
         f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", "",
         f"- compute-audit: {', '.join(doc['runs'])} (`{doc['record']}`): the planner's rows, "
         f"{sum(len(p['pinned']) for p in doc['compute_audit'])} of row `{doc['row']}` at step `{head['step']}` over "
@@ -920,9 +920,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=f"{MODEL}'s exfiltration capacity in GB over a week, a month and a year of the world's and a "
                     "datacenter's compute, at a share of total compute: the compute audit's part, from the break-even "
                     "planner's rows of record in the evidence store, beside the network certifier's part, with every "
-                    "input labelled measured, modeled or assumed. Every figure carries the error summed over "
-                    f"everything it covers, and one whose error is 1 or more is printed as \"{NO_BOUND}\", with no "
-                    "amount.")
+                    "input labelled measured, modeled, simulated or assumed. Every figure carries the error summed "
+                    f"over everything it covers, and one whose error is 1 or more is printed as \"{NO_BOUND}\", "
+                    "with no amount.")
     ap.add_argument("--json", action="store_true", help="print the document (value, unit, inputs, parts, periods)")
     ap.add_argument("--share", type=float, default=SHARE, metavar="S",
                     help=f"the share of total compute the figure is read at (default {SHARE})")
