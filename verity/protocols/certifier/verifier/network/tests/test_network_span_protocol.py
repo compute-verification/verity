@@ -25,7 +25,6 @@ from span_case import ACCEPT, EXPECT, MUTATIONS, REASONS, REJECT, _Leaves, build
 from verity.protocols.certifier.verifier import service, span
 from verity.protocols.certifier.verifier.certificate import Certificate, CertifiedMark, Direction, Issuer
 from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Record
-from verity.protocols.certifier.verifier.warden import WardenParams as Schedule
 
 LEAN = Path(__file__).resolve().parents[2] / "lean"
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -37,8 +36,8 @@ SEEN: Counter = Counter()
 WEIGHTS = {"honest": 6, "far": 2}
 
 #: The schedule of the Lean's `#guard`s (`guardSchedule`): D = 8, r = 2, T = 16 and 17 egress cells a response.
-GUARD = Schedule(cell_bytes=256, slots=2, bucket_ms=100, delay=8, lanes=16, queue=64, window=16, ingress_cells=64,
-                 ingress_buckets=50, egress_cells=17, every=1)
+GUARD = span.Schedule(cell_bytes=256, slots=2, bucket_ms=100, delay=8, lanes=16, queue=64, window=16,
+                      ingress_cells=64, ingress_buckets=50, egress_cells=17, every=1)
 #: The parameters of the Lean's `#guard`s (`guardParams`): the link `eth0` under `GUARD`, a zero key and session.
 GUARD_PARAMS = {"key": "00" * 24, "link": "eth0", "lms": {"H": 1, "N": 8, "W": 8, "toy": True},
                 "schedule": schedule_json(GUARD), "session": "00" * 32}
@@ -132,7 +131,7 @@ def test_the_tail_is_the_execution_phases_a_held_response_leaves_in():
     """⌈(D + ⌈egress_cells / r⌉) / T⌉ at the `#guard`s' schedules, and on sampled schedules the least n with
     n · T ≥ D + b, b the least with b · r ≥ egress_cells."""
     def held(**fields: int) -> int:
-        return span.tail(Schedule(**{k: getattr(GUARD, k) for k in schedule_json(GUARD)} | fields))
+        return span.tail(span.Schedule(**{k: getattr(GUARD, k) for k in schedule_json(GUARD)} | fields))
     assert held() == 2 and held(egress_cells=16) == 1
     assert held(delay=1, egress_cells=1, slots=1, window=1) == 2
     assert held(delay=10, egress_cells=4096, slots=4, window=600) == 2
@@ -150,8 +149,8 @@ def test_an_execution_phase_counts_every_cell_of_both_egress_records():
     assert span.capacity_bits(GUARD) == 16 * (16 * 2 + 16) * 256 * 8 == 1572864
     responses = GUARD.grid.buckets * GUARD.grid.allocation * GUARD.grid.frame_bytes * 8
     assert span.capacity_bits(GUARD) - responses == 16 * 16 * 256 * 8
-    assert span.capacity_bits(Schedule(**{k: getattr(GUARD, k) for k in schedule_json(GUARD)}
-                                       | {"slots": 4, "window": 600})) == 98304000
+    assert span.capacity_bits(span.Schedule(**{k: getattr(GUARD, k) for k in schedule_json(GUARD)}
+                                            | {"slots": 4, "window": 600})) == 98304000
 
 
 def test_a_marks_certificate_is_in_a_certified_records_bytes():

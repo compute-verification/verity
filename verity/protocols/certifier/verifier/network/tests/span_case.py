@@ -36,9 +36,9 @@ from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, SALT_BYTES, Certificate, CertifiedMark,
                                                             Direction, Issuer, certificate_digest, mark_digest,
                                                             marks_link)
-from verity.protocols.certifier.verifier.warden import WardenParams as Schedule
 
 ACCEPT, REJECT = "accept", "reject"
+Schedule = span.Schedule
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 #: the longest tail of a generated schedule, in execution phases
 TAIL = 3
