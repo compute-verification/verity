@@ -1188,7 +1188,8 @@ def test_the_red_team_hands_the_check_fourteen_cases_of_one_change_each_and_need
 
     monkeypatch.setattr(RH, "check", check)
     weights, table = "22" * 64, "33" * 64
-    record = {"commitment": {"session": {"session": "s1", "root": "11" * 64}, "weights_root": weights,
+    session = {"session": "s1", "root": "11" * 64}
+    record = {"commitment": {"session": session, "weights_root": weights,
                              "requests_root": table, "draw_session": {"session": "s2"},
                              "rounds": [{"root": "44" * 64}, {"root": "55" * 64}]},
               "calls": [{"k": 0}, {"k": 1, "tables": {"a": "66" * 64, "b": "77" * 64}}]}
@@ -1251,7 +1252,7 @@ def test_the_red_team_hands_the_check_fourteen_cases_of_one_change_each_and_need
     assert got["cases"] == {**dict.fromkeys(changed, refused), "pins_cut": {**refused, "ok": True, "refused": False}}
     assert got["all_refused"] is False and got["must_refuse"] == list(changed) and len(asked) == 14
 
-    del record["commitment"]["session"]["root"]
+    del session["root"]
     record_path.write_text(json.dumps(record))
     with pytest.raises(KeyError, match="root"):
         red_team()
