@@ -52,3 +52,11 @@ def test_the_verdict_judges_clean_arms_on_the_build_step_and_the_tools_own_cpu_a
     assert not slow["B_build_s_within_1.1_A"] and slow["B_tool_cpu_s_within_1.1_A"]
     _, over = G.summarize([*arms, _arm("C", 130, 61, peak=81.0, gb="86")])
     assert not over["C_peak_within_reservation"], "86 GB is 80.1 GiB"
+
+
+def test_the_guard_swaps_every_file_of_the_plan_and_reads_reservations_by_its_units():
+    """An arm runs one version of the plan whole, its rules and its figures, so `TOOLS` holds both; a reservation is read
+    in the unit the plan gives its variable."""
+    assert {"check.py", "reserve.py", G.RESERVE.DATA.name} <= set(G.TOOLS)
+    assert G.gib_of({"CHECK_SLOT_MEM_GB": "80"}) == 80
+    assert G.gib_of({"CHECK_RUN_MEM_GB": "86", "CHECK_SLOT_MEM_GB": "90"}) == G.RESERVE.gib(86)

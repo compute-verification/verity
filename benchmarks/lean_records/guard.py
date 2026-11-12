@@ -3,7 +3,7 @@
 its requirers) on one kept records tree of a node, a warm-up and then rounds of three arms, each on a one-line lemma of
 its own added to a `security/Proofs` module, so that no arm reuses another's build:
 
-  A  the base tools (``--base``: `check.py`, `lean_changed.py` and `lean_audit.py` as base-check.py, ...) at the job's
+  A  the base tools (``--base``: each of `TOOLS` as base-check.py, ...; one the base hasn't is absent) at the job's
      reservation
   B  this tree's tools at the job's reservation
   C  this tree's tools at ``--low-gb`` (RESEARCH_RUN_MEM_GB = CHECK_RUN_MEM_GB)
@@ -42,12 +42,11 @@ from pathlib import Path
 
 ROOT = Path.cwd()
 LEAN = ROOT / "tools/verity/lean"
-TOOLS = ("check.py", "lean_changed.py", "lean_audit.py")
+#: the files of the tools an arm runs, the plan's rules and figures among them
+TOOLS = ("check.py", "lean_changed.py", "lean_audit.py", "reserve.py", "reserve.json")
 MODULE = ROOT / "security/Proofs/Flock/SamplingGeneric/TwoAt.lean"
 END = "end SamplingDeploy"
 PKG = "security/Proofs"
-RESERVATIONS = ("CHECK_SLOT_MEM_GB", "CHECK_RUN_MEM_GB", "RESEARCH_RUN_MEM_GB")
-UNITS = {"CHECK_SLOT_MEM_GB": 2**30, "CHECK_RUN_MEM_GB": 10**9, "RESEARCH_RUN_MEM_GB": 10**9}
 EVERY_S = 1.0
 #: the largest file of an arm's reports kept in $OUT
 KEEP_BYTES = 256 * 1024
@@ -67,6 +66,10 @@ def load(name: str, path: Path):
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
+
+
+#: this tree's plan: what says a run reserved, in which unit, and the figures
+RESERVE = load("guard_reserve", Path(__file__).resolve().parents[2] / "tools/verity/lean/reserve.py")
 
 
 def say(s: str) -> None:
@@ -169,9 +172,13 @@ def sample(pid: int, t0: float, series: Path, done: threading.Event, most: dict)
             done.wait(EVERY_S)
 
 
-def arm(n: int, kind: str, k: int, tree: Path, tools: dict[str, bytes], original: str, out_dir: Path, low_gb: int) -> dict:
+def arm(n: int, kind: str, k: int, tree: Path, tools: dict[str, bytes | None], original: str, out_dir: Path,
+        low_gb: int) -> dict:
     for f in TOOLS:
-        (LEAN / f).write_bytes(tools[f])
+        if tools[f] is None:
+            (LEAN / f).unlink(missing_ok=True)
+        else:
+            (LEAN / f).write_bytes(tools[f])
     head, sep, tail = original.rpartition(END)
     MODULE.write_text(f"{head}theorem guardLeanRecords_{k} : ({k} : Nat) + 0 = {k} := rfl\n\n{sep}{tail}")
     env = {x: v for x, v in os.environ.items() if x not in ("CHECK_SLOT_MEM_GB", "LEAN_NUM_THREADS", "LEAN_SLOT")}
@@ -179,7 +186,7 @@ def arm(n: int, kind: str, k: int, tree: Path, tools: dict[str, bytes], original
     if kind == "C":
         env |= {"RESEARCH_RUN_MEM_GB": str(low_gb), "CHECK_RUN_MEM_GB": str(low_gb)}
     out, log, series = out_dir / f"arm{n}-{kind}", out_dir / f"arm{n}-{kind}.log", out_dir / f"arm{n}-{kind}.mem.tsv"
-    reserved = {v: env[v] for v in RESERVATIONS if v in env}
+    reserved = {v: env[v] for v, _ in RESERVE.RESERVATIONS if v in env}
     say(f"arm {n} ({kind}, lemma {k}) starts; reservation {reserved}")
     t0 = time.monotonic()
     p = subprocess.Popen([sys.executable, str(LEAN / "lean_changed.py"), "--records", PKG, "--tree", str(tree), "--out",
@@ -205,7 +212,7 @@ def arm(n: int, kind: str, k: int, tree: Path, tools: dict[str, bytes], original
             reps.append({"at": str(r.relative_to(out)), "unread": f"{type(e).__name__}: {e}"})
             continue
         reps.append({"at": str(r.relative_to(out)), **{x: d.get(x) for x in
-                     ("package", "status", "build_threads", "seconds", "peak_gib", "warnings")}})
+                     ("package", "status", "build_threads", "seconds", "peak_gib")}})
     for f in [f for f in out.rglob("*") if f.is_file() and f.stat().st_size > KEEP_BYTES]:
         f.unlink()
     got = read_log(log.read_text(errors="replace"))
@@ -226,7 +233,8 @@ def arm(n: int, kind: str, k: int, tree: Path, tools: dict[str, bytes], original
 
 
 def gib_of(reserved: dict[str, str]) -> float | None:
-    vals = [float(v) * UNITS[k] / 2**30 for k, v in reserved.items()]
+    unit = dict(RESERVE.RESERVATIONS)
+    vals = [float(v) if unit[k] == "GiB" else RESERVE.gib(float(v)) for k, v in reserved.items()]
     return min(vals) if vals else None
 
 
@@ -263,9 +271,11 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--rounds", type=int, default=3, help="rounds of the three arms after the warm-up")
     ap.add_argument("--first-lemma", type=int, default=0, help="the first arm's lemma, past those the node has built")
-    ap.add_argument("--low-gb", type=int, default=86, help="arm C's reservation, in GB")
-    ap.add_argument("--base", type=Path, required=True, help="the directory holding arm A's base-check.py, "
-                    "base-lean_changed.py and base-lean_audit.py (in a run, its inputs)")
+    ap.add_argument("--low-gb", type=int, default=RESERVE.BUILD_HEAVY_GIB,
+                    help="arm C's reservation, in GB: by default a heavy build's figure read as GB, less than its GiB, so "
+                    "C's build runs fewer jobs")
+    ap.add_argument("--base", type=Path, required=True, help="the directory holding arm A's tools, each of TOOLS the base "
+                    "has as base-FILE (in a run, its inputs)")
     ap.add_argument("--out", type=Path, required=True, help="where guard.json and each arm's log and series go (in a run, "
                     "$OUT)")
     a = ap.parse_args(argv)
@@ -281,7 +291,7 @@ def main(argv: list[str]) -> int:
     tree = common.cache_dir() / "lean-records" / f"{name}-{i}"
     say(f"holding a `build` slot; its tree is lean-records/{name}-{i} (kept: {tree.is_dir()})")
     here = {f: (LEAN / f).read_bytes() for f in TOOLS}
-    based = {f: (base / f"base-{f}").read_bytes() for f in TOOLS}
+    based = {f: (base / f"base-{f}").read_bytes() if (base / f"base-{f}").is_file() else None for f in TOOLS}
     original = MODULE.read_text()
     if not original.rstrip().endswith(END):
         say(f"{MODULE} doesn't end in {END!r}")

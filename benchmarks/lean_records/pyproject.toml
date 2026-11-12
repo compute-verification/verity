@@ -2,3 +2,7 @@
 # reading and verdict run here as a suite (`uv run tools/verity/check/suites.py benchmarks/lean_records`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.verity.tests]
+# guard.py loads this tree's plan, whose reservation variables and units it reads and whose files an arm swaps
+inputs = ["tools/verity/lean/reserve.py", "tools/verity/lean/reserve.json"]

@@ -6,7 +6,8 @@ lower one. A warm-up, then rounds of three arms on one kept records tree of a no
 
 - **A**: the base tools, at the job's reservation;
 - **B**: this tree's tools, at the job's reservation;
-- **C**: this tree's tools, at `--low-gb` (default 86 GB).
+- **C**: this tree's tools, at `--low-gb` (by default a heavy build's figure, `BUILD_HEAVY_GIB`, read as GB, so its build
+  runs fewer jobs).
 
 Each arm reads, every second, what its process tree holds, its `lean` processes at once, and the user and system CPU of
 the tools' own Python processes; at its end, the tree's CPU and each `security/Proofs` audit's build step and spot-check
@@ -26,12 +27,13 @@ from its log.
 
 ## Run
 
-On a node with a `build` Lean pool, three rounds (the warm-up and nine arms), from the base `REF`. Each arm writes its
-tools and its lemma into the checkout, which the guard restores at its end, so it runs in a clone (`--cwd clone`):
+On a node with a `build` Lean pool, three rounds (the warm-up and nine arms), from the base `REF`, sending each of the
+guard's `TOOLS` that `REF` has; arm A runs without the others. Each arm writes its tools and its lemma into the checkout,
+which the guard restores at its end, so it runs in a clone (`--cwd clone`):
 
 ~~~text
-mkdir -p /tmp/base && for f in check.py lean_changed.py lean_audit.py; do git show REF:tools/verity/lean/$f > /tmp/base/base-$f; done
-research run --on NODE --pool research --as lean --project verity --mem-gb 93 --timeout 8h --source . --cwd clone --send /tmp/base/base-check.py --send /tmp/base/base-lean_changed.py --send /tmp/base/base-lean_audit.py -- bash -lc 'python3 benchmarks/lean_records/guard.py --rounds 3 --first-lemma 0 --base "$RESEARCH_RUN_DIR/inputs" --out "$OUT"'
+mkdir -p /tmp/base && for f in check.py lean_changed.py lean_audit.py reserve.py reserve.json; do git cat-file -e REF:tools/verity/lean/$f 2>/dev/null && git show REF:tools/verity/lean/$f > /tmp/base/base-$f; done
+research run --on NODE --pool research --as lean --project verity --mem-gb "$(python3 tools/verity/lean/lean_changed.py --ask security/Proofs)" --timeout 8h --source . --cwd clone $(for f in /tmp/base/base-*; do printf -- '--send %s ' "$f"; done) -- bash -lc 'python3 benchmarks/lean_records/guard.py --rounds 3 --first-lemma 0 --base "$RESEARCH_RUN_DIR/inputs" --out "$OUT"'
 ~~~
 
 It writes `$OUT/guard.json` (each arm, the summary and the verdict) and per arm its log and memory series. The tests
