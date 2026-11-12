@@ -1,7 +1,8 @@
 """`wipe_monitoring`: one accepted wipe over a week, a month and a year of a deployment. The pooled count is the least M
 with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and device, every wipe
-meeting its bound except with T·eps; the cadence is a parameter; an uncounted wipe is vacuous until a covered egress
-record counts it; a rejected wipe pools nothing; the periods are the reporting grid's `PERIODS`."""
+meeting its bound except with T·eps; the cadence is a parameter; an uncounted wipe stays vacuous, since every egress
+record is refused, a covered one over the session's own real-time window too; a rejected wipe pools nothing; the periods
+are the reporting grid's `PERIODS`."""
 
 from __future__ import annotations
 
@@ -99,27 +100,37 @@ def test_the_table_pools_at_the_answers_eps(counted):
     assert week["1/100"]["failing_at_most"] == 3 and week["per_wipe"]["except_with"] == "T·eps = 0.7"
 
 
-def test_an_uncounted_wipe_is_vacuous_until_an_egress_record_counts_it(uncounted):
+RECORD = {"format": WM.EGRESS, "covered": True, "egress_mib": 5, "egress_bits": 5 * sw.EGRESS_UNIT_BITS,
+          "link": "uplink", "delta": "0", "why": []}
+"""A covered `wipe-egress/v1` record: its writer's verdict, its count and its link."""
+WINDOW = {"t0_unix_ns": 1_793_088_000_123_456_789, "t1_unix_ns": 1_793_088_183_000_001_000, "pad_ns": 10 ** 9}
+"""The wipe's own session in real time, as its challenger's side reports it beside the signed session
+(`wipe_party.report`), in the fields a record's writer gives its window."""
+
+
+def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(counted, uncounted):
     vacuous = WM.table(uncounted, 1)
     assert vacuous["periods"] is None and "outside 0 to 32766" in vacuous["why"]
-    record = {"format": WM.EGRESS, "covered": True, "egress_mib": 5, "egress_bits": 5 * sw.EGRESS_UNIT_BITS,
-              "link": "warden", "delta": "0", "why": []}
-    r = WM.table(uncounted, 1, egress=record)
-    assert r["each"]["foreign_bits"] == W.certify(HBM, 5)["foreign_bits"] and r["each"]["certified"]
-    assert r["egress"] == {"link": "warden", "egress_bits": 5 * sw.EGRESS_UNIT_BITS, "egress_mib": 5, "delta": "0",
-                           "covered": True}
-    assert r["periods"]["year"]["1/1000000"]["meeting_at_least"] == 365
-    with pytest.raises(ValueError, match="not a covered"):
-        WM.counted(uncounted, record | {"covered": False, "why": ["a window lacks its certificate"]})
+    with pytest.raises(ValueError) as refusal:
+        WM.counted(uncounted, RECORD)
+    said = str(refusal.value)
+    assert said == WM.REFUSED and said.startswith(f"the {WM.EGRESS} record is refused")
+    assert "its monotonic clock (CLOCK_MONOTONIC ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
+    assert "until what the memory challenger signs ties its session to the span the record counts" in said
+    assert "no --egress" in said
+    for accepted in (uncounted, counted):
+        with pytest.raises(ValueError, match="nothing signed says the record covers this wipe's session"):
+            WM.table(accepted, 1, egress=RECORD)
 
 
-def test_an_egress_record_replaces_only_an_uncounted_egress(counted, uncounted):
-    record = {"format": WM.EGRESS, "covered": True, "egress_mib": 5}
-    with pytest.raises(ValueError, match="counted when it was signed"):
-        WM.counted(counted, record)
-    other = uncounted | {"profile": uncounted["profile"] | {"k": W.READS - 1}}
-    with pytest.raises(ValueError, match="profile doesn't give its outputs"):
-        WM.counted(other, record)
+def test_a_record_over_the_sessions_own_real_time_window_is_refused_too(uncounted):
+    """The challenger signs the session's times on its monotonic clock, and the window that says when they were in real
+    time is under no signature. So a record over exactly that window is refused as any other is: holding a record's
+    `t0_unix_ns` and `t1_unix_ns` against the signed times would compare two clocks."""
+    with pytest.raises(ValueError, match="comparing the two would compare two clocks"):
+        WM.counted(uncounted, RECORD | WINDOW)
+    with pytest.raises(ValueError, match="comparing the two would compare two clocks"):
+        WM.table(uncounted, 1, egress=RECORD | WINDOW)
 
 
 def test_a_rejected_wipe_pools_nothing():
@@ -127,11 +138,15 @@ def test_a_rejected_wipe_pools_nothing():
     assert r["periods"] is None and "a late read" in r["why"]
 
 
-def test_the_cli_reads_a_legs_wipe_json(tmp_path, capsys, uncounted):
-    (tmp_path / "wipe.json").write_text(json.dumps({"answer": uncounted, "uncertified": []}))
-    (tmp_path / "egress.json").write_text(json.dumps({"format": WM.EGRESS, "covered": True, "egress_mib": 1}))
-    assert WM.main([str(tmp_path / "wipe.json"), "--machines", "2", "--egress", str(tmp_path / "egress.json"),
-                    "--out", str(tmp_path / "m.json")]) == 0
-    got = json.loads((tmp_path / "m.json").read_text())
-    assert got == json.loads(capsys.readouterr().out)
-    assert got["periods"]["month"]["wipes"] == 60 and got["each"]["egress_mib"] == 1
+def test_the_cli_reads_a_runs_wipe_json_and_refuses_an_egress_record(tmp_path, capsys, counted):
+    (tmp_path / "wipe.json").write_text(json.dumps({"answer": counted, "uncertified": []}))
+    argv = [str(tmp_path / "wipe.json"), "--machines", "2", "--out", str(tmp_path / "m.json")]
+    assert WM.main(argv) == 0
+    written = (tmp_path / "m.json").read_text()
+    got = json.loads(written)
+    assert capsys.readouterr().out == written
+    assert got["periods"]["month"]["wipes"] == 60 and got["each"]["egress_mib"] == 2 and got["egress"] is None
+    (tmp_path / "egress.json").write_text(json.dumps(RECORD | WINDOW))
+    with pytest.raises(ValueError, match="record is refused"):
+        WM.main([*argv, "--egress", str(tmp_path / "egress.json")])
+    assert (tmp_path / "m.json").read_text() == written and capsys.readouterr().out == ""
