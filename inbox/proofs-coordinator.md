@@ -99753,3 +99753,63 @@ With #9375 on `main` at hour T. Every figure here is a [guess] from today's wait
 - `r20261112-195233-6ab1`: the pins regenerated on the staged tip. Waiting since 19:52Z; an end by about 21:30Z [guess: its Lean build is untimed, its cap is 90 min from taking a slot].
 - Branches of mine on the remote: #9455's; `cursor/proofs-world-map-3b9d`; `cursor/proofs-one-stage-package-paths-b7e4`; and five scratch branches kept under your ruling until the move is staged on `main`: `cursor/proofs-scratch-maps-on-remote-merge-9d2b`, `cursor/proofs-scratch-maps-mover-on-main-6b1f`, `cursor/proofs-scratch-carve-on-remote-main-5e2a`, `cursor/proofs-scratch-carve-on-remote-main-b81c`, `cursor/proofs-scratch-carve-staged-b81c` [read: `git ls-remote`].
 - Nothing is marked; nothing went to Linear or Slack; I pushed only to branches I created.
+
+## WIDELEAF, Thu 12 Nov 20:19Z: #9339's condition is written at `f31e7d81d46e`; build and quick relaunched there; `zk_worker_inner` FAILED at `e82bcc797a49` and its control at main's commit is out; the body is not on the PR yet
+
+**Answer.** The sentence is in `Salts.lean`'s header and PROTOCOL.md §10.2, committed and pushed: head `f31e7d81d46e`, one commit over `93e3682cad88`, two files, no declaration changed [run]. Both places say on the head what my 14:38Z entry took them to say [read], so I wrote it and did not stop. Three things you did not ask for, each below: the selftest run ended with one of its six cases failed, #9339's body is written but GitHub refuses the edit until 20:37Z, and a retired term in text this change wrote (WRONG, mine). Unmarked. Nothing merged in. Nothing on Linear or Slack.
+
+### The sentence, word for word
+
+`verity/protocols/flock/verifier/Flock/Firewall/Salts.lean`, lines 76 to 86 of the header comment, a paragraph of its own after "...the stack chooses neither which trees pass so nor a bit of them." [run: `sed` on the head]:
+
+> The list is the verifier's word only where the answer to `Register` is the auditor's. That holds under two things the texts state of the deployment. The first is that the ZK server is the only exit: nothing of the workers', which run the serving stack, reaches the verifier except in the ZK server's release (the reference deployment's element of that name in `verity/protocols/recursion/verifier/firewall/README.md`, which says none of its elements is in place yet, and ARCHITECTURE.md's "The reference deployment"). The second is the salt key's limit: the release side checks a statement's value commitments only where it is given the key, and nothing yet requires the key of a deployment's loop (live PROTOCOL.md §10.2, the first of its three limits). With both, a stack that answered `Register` in the auditor's place would have no auditor to hand the session to. This is a condition on the deployment: those texts state it, no Lean statement proves it, and no named assumption carries it. This rule is the first text to read the only exit for a claim of its own: elsewhere it is the shape of the auditor's view in the zero-knowledge guarantees, as that README says.
+
+PROTOCOL.md §10.2 (from line 771) has the same paragraph, word for word but for one citation: "(the first of the three limits below)" where the header says "(live PROTOCOL.md §10.2, the first of its three limits)" [run: the diff]. Neither file says "placeholder", "open" or "waits on a decision" of the condition [run: `rg`].
+
+Your four points are sentences 1, 2 to 4, 6 and 7 of it. What is in it that you did not dictate, each yours to strike:
+
+- "which says none of its elements is in place yet": the README's own words under the reference deployment, "None of them is in place today" (`:26`) and "None yet physically: the ZK server runs on the workers' machines" (`:60`) [read]. Without it the paragraph reads as if the only exit held today.
+- "and nothing yet requires the key of a deployment's loop": the limit's own words [read].
+- "elsewhere it is the shape of the auditor's view in the zero-knowledge guarantees, as that README says": the README's "*Realizes:* the auditor's view in `Flock.Guarantees.RecursiveZK` and `Flock.zk_server_blind`" (`:59`) [read]. It says what "first" is first against.
+- Sentence 5, "With both, a stack that answered `Register` in the auditor's place would have no auditor to hand the session to", is kept from the sentence it replaces [derived].
+- I name the condition "the ZK server is the only exit", the cited texts' name for it, not "the firewall's condition": that word is retired in prose [read: `tests/test_retired_terms.py`].
+- Not written, by your ruling: that who names `--verifier` does not matter, and a signed list. The body says the list carries no signature.
+
+### What the two places say on the head
+
+- `verity/protocols/recursion/verifier/firewall/README.md:58`, under "## The reference deployment": "**The ZK server is the only exit.** Nothing of the workers' reaches the verifier except in the ZK server's release." [run: `rg` on the head]
+- `ARCHITECTURE.md:97`, under "### The reference deployment": "...to the ZK server, which runs on CPU servers of its own and is the only exit to the auditor." [run]
+- PROTOCOL.md §10.2, now `:782` (your `:752` is an older line): "Three limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing yet requires the key of a deployment's loop." [run]
+- For point (3): `security/lean-audit.json`'s `assumptions` hold no name for the only exit, and `security/Properties` none [read]. One thing for your eye: the claims registry's text of `flock-relay-serves` ends "and each answer the relay reads on the auditor's connection is the auditor's to everything the relay sent it", which a reader could take to cover `Register`'s answer. Its Lean form does not: `AudReads` (`security/Proofs/Flock/ZkAny/RelayServes.lean:94-102`) holds the answers at the `Hello`, the `Commit` and each frame round, for any auditor function, and says nothing of `Register`'s answer or of who is at the far end [read]. So it does not carry the condition.
+- For point (4): the texts that state the only exit are ARCHITECTURE.md `:97` and `:145`, the README `:3` and `:58`, and the header comment of `Flock/Firewall/Contract.lean:4` [run: `rg`]. None is a Lean statement [read]. That none of them rests another claim on it is my reading of those five places, not a search of the whole tree [derived].
+
+### The runs, read at 20:17Z
+
+- **Records** `r20261112-192648-5007`, at `93e3682cad88`: running, in its Lean slot since 19:36Z [run]. It had started, so I let it run. What carries [derived, from reading `check.py` and `Facts.lean`, not from a run]: the head differs from its commit by the comment before `Salts.lean`'s `module` line (the hunk is lines 71 to 89, `module` is line 101) and PROTOCOL.md §10.2, so no compiled statement, definition or docstring differs; a record hashes a statement's and a definition's terms (`Facts.lean`'s canonical text), a `compile_time` entry hashes a file's bytes, and no lock in the tree names `Flock.Firewall.Salts` [run: `rg`]; the commit touches no lock file [run]. So its list of moved records and the records it keeps apply to the head as they are, and its build and replay cover every declaration of the head. What does not carry: it is not a run at the head. By your rule a records run is owed at the head you mark, and the merge with #9375 moves the head again; I launch none now. Say if you want one at `f31e7d81d46e` once this one has its verdict.
+- **Lean build**: `r20261112-192552-b8b4` was waiting, cancelled by id at 19:52Z ("its check never started") [run]. Relaunched once at the head: `r20261112-195554-4fbb`, running, in its Lean slot since 20:05Z [run]. 27 files, `Flock/KnownTrees.lean` among them.
+- **Quick tier**: `r20261112-192614-f221` was waiting, cancelled by id at 19:52Z [run]. Relaunched at the head as `r20261112-195627-82e0` at 19:56Z in the research line, where it waited 21 minutes without starting. By your 20:11Z message I cancelled it by id at 20:17Z and launched it again in our pool: `r20261112-201719-1258`, `--on vy-nebius-cpu-12 --pool proofs --mem-gb 16`, running at once [run]. So the quick tier was launched twice at the head; the first never took a slot.
+- **Flock's Rust** `r20261112-191353-37c0`, at `e82bcc797a49`: done, `RUST_RC check=0 test=0`, 854 tests passed, 0 failed, 105 ignored, in 46 test binaries [run]. `e82bcc797a49..f31e7d81d46e` changes no `.rs`, Cargo or patch file [run], so it stands for the head.
+- **Selftest** `r20261112-191745-6aa4`, at `e82bcc797a49`: done rc 0 [run]. `zk_value_salts` ran, not skipped, and passed: the stack's own commitments are refused at the auditor's answer to `Register` with `Register` alone seen, the server's salts admitted and accepted, the kept salts rejected at the opening, and the service's three refusals [run]. Of what its binaries are built from, the head differs in `Salts.lean`'s comment alone [derived].
+
+### `zk_worker_inner` failed in that run, and the run still reads as passed
+
+I ran five cases beside `zk_value_salts`. Four ran and passed (`zk_worker_wire`, `zk_worker_finish`, `zk_worker_level0`, `zk_worker_pads`). **`zk_worker_inner` ran and failed** [run]. The run's exit status is 0 because my job script counts `zk_value_salts` alone; that is my script's choice and it hides this.
+
+- What holds: the honest session is accepted (209 requests), and in each of the five doctored sessions the verifier does not accept and no proof leaves [run].
+- What fails: in the four sessions with a doctored inner round the prover reports a refusal of Rust's own, "the proof's exposed value 0 is not the one the firewall passed", where the case requires none. In the `final-c` session the verifier receives the first 202 of the honest session's 207 requests other than its proofs, and the stop reads "table 0 rep 1's inner round 0, which the loop's finish has not computed" [run].
+- Whether this change caused it: not known. It edits none of the case, that refusal, `Frames.lean` or `Finish.lean` [run: the diff's file list], and the one place in the tree that runs the case by name is `benchmarks/pouw/h1_prove/job.sh` under `H1_WIRE=1` [run: `rg`]; I have not traced whether `check` runs a whole `selftest --zk`. So `main` could be failing it unseen [guess].
+- The control: `r20261112-200935-fe59`, the same job with that one case, at `4a90174415b7`, which is `main` without this change; nothing under `verity/protocols/flock`, `verity/protocols/recursion`, `verity/circuits` or `verity/commitments` differs between it and the merge base of the tested commit [run]. Launched 20:10Z with `--on auto`, before your 20:11Z message reached me; waiting in the research line at 20:17Z [run]. If it still waits at 20:30Z I cancel it by id and launch it in our pool, once.
+- If the control fails the same way, it is `main`'s and not this change's, and wants an owner. If it passes, #9339 is not ready until I have found why.
+
+### WRONG, mine: "the draw" in PROTOCOL.md
+
+Text this change wrote says "the draw" four times (`:759`, `:763` twice, `:1276`), where the Glossary's term is the sample. `tests/test_retired_terms.py` warns on each as bookkeeping; the three doc test files, run by file on the head's sources, give 29 passed [run]. They are from earlier commits of this branch, not this one [run]. I did not fix them now, so that the head does not move under the runs. I fix them in the next commit this branch takes (the merge with #9375, or the records commit), unless you want them sooner.
+
+### #9339's body
+
+Written, with the condition as a section that states it, the head, the runs and the `zk_worker_inner` failure. Not on the PR: `research queue edit 9339` fails with GitHub's GraphQL rate limit for our app, which reads 0 remaining, reset at 20:37Z [run]. One line for infra: the app's GraphQL budget was spent by 20:03Z. Until the edit goes through the PR's body is the 19:37Z one, with its old section on the condition [run: REST read]. I retry at the reset, in this turn. The text is in notes at `tools/wideleaf_knownlist_body.md.txt`.
+
+### Also
+
+- `git merge-tree` of the head against `origin/main` at `5f0c008aa040` and against #9375's head, now `bafae2eaec2e`: both exit 0 [run]. That is the texts, not a build.
+- Guesses of when [guess]: the Lean build by 20:30Z (the last one took 16 minutes in its slot); the quick tier by 21:00Z; the records run by 21:30Z (I have no measured time for it at this size); the control ten minutes after it takes a slot.
