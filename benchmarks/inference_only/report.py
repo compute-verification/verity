@@ -4,8 +4,10 @@ training run inside the policy's inference blocks (README.md).
 It prints two policies. First the served one, priced from its stated numbers (`served.toml`, or `--policy FILE`): this
 tree builds no circuit of the served class, so no check runs on it, and its number is the command's. Then the class this
 tree builds, which is not served (`built.py`): its policy by the integration's code, the Lean count's verdict and cost,
-its number, and the record's three divisions. Then both over monitoring periods, and one JSON object, printed last and
-written to `--out`.
+its number, and the record's three divisions. Then both over monitoring periods. Then the served class under the value
+tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
+no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
+rests on no PoUW verdict. Then one JSON object, printed last and written to `--out`.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from typing import Any
 
 import built as B
 import policy as P
+import tied as T
 from rho import lean, min_cut
 from verity_config.settings import SHARED
 
@@ -27,6 +30,11 @@ UNIT = ("the least slowdown of training run inside one inference block of the po
         "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
 #: rho's command for a deployment's slowdown per monitoring period
 CALCULATOR = "uv run python verity/protocols/inference_only/rho/periods.py"
+#: the tied policy's label: what its figures are and what they rest on
+TIED_LABEL = "The served class under the value tie: NOT SERVED, and every figure of it RESTS ON NO PoUW VERDICT"
+#: `lean.status` as what the lock says of a statement
+STANDING = {"proved": "proved in the lock", "assumption": "assumption", "draft": "no Lean statement",
+            "absent": "no lock lists a proof of it"}
 
 
 def _class(text: str) -> tuple[int, int, int]:
@@ -35,6 +43,17 @@ def _class(text: str) -> tuple[int, int, int]:
     except ValueError:
         raise argparse.ArgumentTypeError(f"{text!r}: a class is SLOTS,PROMPT,OUTPUTS, three integers") from None
     return slots, prompt, outputs
+
+
+def _share(text: str) -> float:
+    try:
+        s = float(text.removesuffix("%")) / (100 if text.endswith("%") else 1)
+    except ValueError:
+        s = -1.0
+    if not 0 <= s <= 1:
+        raise argparse.ArgumentTypeError(f"{text!r}: a share of a block's work is a number from 0 to 1, or a percentage "
+                                         "written with %")
+    return s
 
 
 def _n(x: float) -> str:
@@ -140,8 +159,7 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         f"{bd['b']:g} bits a value",
         f"            {bd['statement']}, β_w = {bd['beta_w']:g}, β_x = " + (_g(bd["beta_x"]) if bd["beta_x"] else "none")
         + f", F = {bd['F']:g}: limit {_n(limit)} MACs of training a block, N / limit = {_g(w['N'] / limit)}",
-        "            the work is taken as training of the model's own matmul shapes, its weights outside θ, at most two "
-        "of its three kinds of product charged (F = 1)",
+        f"            the work is {P.WORK_IS}; at most two of its three kinds of product are charged (F = 1)",
         "            size = c, so c cancels, and the count reads no n: the number is the blocks the count needs for one "
         "block's work",
         f"  number    {_n(row['value'])} = max(1, N / limit)",
@@ -165,6 +183,83 @@ def division_rows(built: P.Policy, div: dict[str, dict[str, Any]], sh: P.Shape) 
     return rows
 
 
+def _table(head: Sequence[str], rows: Sequence[Sequence[str]], left: int, indent: str = "  ") -> list[str]:
+    """A table's lines: the first ``left`` columns flush left, the rest flush right."""
+    table = [tuple(head), *map(tuple, rows)]
+    widths = [max(len(r[i]) for r in table) for i in range(len(head))]
+    return [indent + "  ".join(x.ljust(w) if i < left else x.rjust(w) for i, (x, w) in enumerate(zip(r, widths))).rstrip()
+            for r in table]
+
+
+def tied_lines(d: dict[str, Any], file: str) -> list[str]:
+    """The tied policy's section (`tied.priced`): the label, what the policy and its work are, the untied words and the
+    uncredited share, one block's figures, and each fleet and monitoring period under each reading."""
+    u, un, block = d["uncredited"], d["untied"], d["block"]
+    s, N, k = u["share"], d["work"]["N"], d["k"]
+    width = max(len(f"{x['bits']:,}") for x in d["k_by_kind"])
+    words = block["with_words"]
+    out = [
+        TIED_LABEL,
+        f"  The uncredited share s = {_g(100 * s)}% of a block's work was typed on the command line (--uncredited-share). No "
+        "PoUW verdict of a run states it here, so each figure holds only where PoUW's checks credit all but that share of "
+        "every block's work.",
+        f"  {d['model']}, class {','.join(map(str, d['class']))}, with every tied value right ({file}). Nothing serves it, "
+        "and this tree builds no circuit of it.",
+        f"  work      the figures are for {P.WORK_IS}",
+        f"  source    {d['source']}",
+        f"  c         {d['c']:,} {P.UNITS['c']}",
+        f"  k         {k:,} {P.UNITS['k']}, made of",
+        *(f"              {x['bits']:>{width},}  {x['kind']}{': ' + x['how'] if x['how'] else ''}" for x in d["k_by_kind"]),
+        f"  N         {_n(N)} MACs a block, in the policy's unit",
+        f"  untied    at most {un['words']:,} untied words in a node's accepted execution phases for each {un['blocks']} "
+        f"blocks of one {un['phase_seconds']:,} s phase, each at most {un['word_bits']} fresh bits in the one block that "
+        f"reads it and fed by at most {un['macs_a_word']:,} MACs; one block reads at most its {un['most_a_block']:,} output "
+        "words of the linears",
+        f"  uncredited  s N = {_n(round(u['macs_a_block']))} MACs a block, which feed at most {_n(round(u['words_a_block']))} "
+        f"output words of the linears, a word being fed by at least {u['least_fan_in']:,} MACs (the least fan-in): with "
+        f"those words as fresh input a block reads k + {un['word_bits']} × {_n(round(u['words_a_block']))} = "
+        f"{_n(round(u['k_with_words']))} bits",
+        "",
+        "  One block (min_cut.bound), each cut number with its limit at s, 1 / (s + 1 / cut number) (min_cut.capped): a "
+        "developer gets the uncredited share whole",
+        f"    every word tied, k = {k:,}: cut number {block['cut_number']:,.1f}, limit at s {block['limit']:,.1f}",
+        f"    {T.IN_K}, k = {_n(round(words['k']))}: cut number {words['cut_number']:,.1f}, limit at s "
+        f"{words['limit']:,.1f}",
+        "",
+        "  Over a monitoring period, all of a fleet's compute in the policy's blocks at capacity (min_cut.bound_charged; "
+        "the slowdown calculator's fleets and periods)",
+    ]
+    seen = {(r["where"], r["period"]): r for r in d["periods"]}
+    out += _table(("where", "period", "blocks", "the blocks' gates", "untied words at most", "a block"),
+                  [(r["where"], r["period"], _g(r["blocks"]), _g(r["gates"]["blocks"]), _g(r["untied"]),
+                    _g(r["untied_a_block"])) for r in seen.values()], 2, "    ")
+    out += ["", f"  Each figure under its reading's name, which holds its threshold, with its limit at s = {_g(100 * s)}% "
+            "and the pooled total in gates (the gates c counts): the training the period's blocks hold at most, at the "
+            "limit"]
+    out += _table(("where", "period", "reading", "blocks charged at most", "cut number", "limit at s",
+                   "training's gates at most", "of the blocks' gates"),
+                  [(r["where"], r["period"], r["reading"], _g(r["charged"]), f"{r['cut_number']:,.1f}",
+                    f"{r['limit']:,.1f}", _g(r["gates"]["training_at_the_limit"]), _g(100 * r["share"]) + "%")
+                   for r in d["periods"]], 3, "    ")
+    charged, rows = (STANDING[lean.status(x)] for x in (min_cut.HE_CHARGED, min_cut.HE_ROWS))
+    out += [
+        f"  proved    {min_cut.HE} ({STANDING[lean.status(min_cut.HE)]}), the count one block's cut number is solved "
+        f"from. A period's count is {min_cut.HE_CHARGED} ({charged}), and with a β_x a block {min_cut.HE_ROWS} ({rows}). "
+        "No limit is proved: it is arithmetic on the typed share",
+        f"  premise   the share s, typed; that PoUW ties every word it credits, which no verdict of a run from this tree "
+        f"shows; the bound on a period's untied words ({min_cut.UNTIED_WORDS}) and an untied word's bits "
+        f"({min_cut.WORD_BITS}), neither a Lean statement; (H) {min_cut.HARDNESS} and (E) {min_cut.EXPORTS}, conjectures, "
+        "at the circuit with the untied words as inputs; a threshold fixed before the period, with so few blocks over "
+        "it in the partition the period's audit reads; and the work's structure, as above",
+        "  scaled    every row: the blocks are a fleet's at its data sheet's rate, the fleets' sizes the census's; a "
+        "node's bound on its untied words is one execution phase's, scaled by the blocks the node serves in a phase; "
+        "the uncredited share is taken as every block's; and one block may be untied whole",
+        "  not in any figure: a dropped execution phase, a voluntary row or a version the verdict doesn't cover, which "
+        "nothing here bounds",
+    ]
+    return out
+
+
 def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]] = B.lean_count, circuit: Any = None,
          commit: Callable[[], str | None] = _commit) -> dict[str, Any]:
     """Print the report and return its JSON object. ``check`` and ``circuit`` are `built.build`'s."""
@@ -177,6 +272,10 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     ap.add_argument("--division", choices=B.DIVISIONS, default="session",
                     help="which of the built class's blocks its number is of")
     ap.add_argument("--stated-only", action="store_true", help="price the stated policy and build nothing")
+    ap.add_argument("--uncredited-share", type=_share, metavar="S",
+                    help="the share of a block's work that no PoUW check credits, from 0 to 1 or as a percentage with "
+                         "%% (no default): print the served class under the value tie (tied.toml) at it, under a "
+                         "label saying its figures rest on no PoUW verdict")
     ap.add_argument("--out", type=Path, default=SHARED.OUT, metavar="DIR",
                     help="write inference_only.json here (default: $OUT; unset: only printed)")
     args = ap.parse_args(argv)
@@ -185,6 +284,9 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         print(f"[inference_only] {line}", file=sys.stderr, flush=True)
 
     stated = P.stated(args.policy)
+    if stated.label == "tied":
+        ap.error(f"{args.policy.name} is the served class under the value tie, whose number is never printed alone: "
+                 "leave --policy out and state --uncredited-share S, which prints it beside its limit at that share")
     served = priced(stated, P.shape(stated.model))
     print("Inference-only: the least slowdown of training run inside the policy's inference blocks\n")
     print(f"AS SERVED: {_n(served['value'])}" if stated.label == "served" else f"AS STATED: {_n(served['value'])}")
@@ -252,9 +354,20 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
           "as two, the card's dense int8 rate against its BF16 rate; N is not converted to either")
     print(f"A deployment's slowdown, over what it registers and what it leaves free, is the calculator's: {CALCULATOR}")
 
+    tied = None
+    if args.uncredited_share is None:
+        print(f"\nThe served class under the value tie ({P.TIED.name}): no figure printed. Its figures hold only beside "
+              "the share of a block's work that no PoUW check credits, and that share has no default: no PoUW verdict of "
+              "a run states one here. --uncredited-share S prints them at a typed share, under a label saying they rest "
+              "on no PoUW verdict.")
+    else:
+        policy = P.tied()
+        tied = T.priced(policy, P.shape(policy.policy.model), args.uncredited_share)
+        print("\n" + "\n".join(tied_lines(tied, P.TIED.name)))
+
     doc = {"benchmark": "inference_only", "value": served["value"], "unit": UNIT, "check": served["check"],
-           "rests_on": served["rests_on"], "policies": policies, "divisions": divisions, "periods": periods,
-           "commit": commit()}
+           "rests_on": served["rests_on"], "work_is": P.WORK_IS, "policies": policies, "divisions": divisions,
+           "periods": periods, "tied": tied, "commit": commit()}
     if run := SHARED.RESEARCH_RUN_ID:
         doc["run"] = run
     text = json.dumps(doc, sort_keys=True)
