@@ -102,7 +102,7 @@ def test_collector_row_boundary_off_by_one_observer_unchanged_fails_named(tmp_pa
     bmap = _map(layouts, {0: [("r1", 0, 2), ("r0", 2, 8)]})
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res["result"] is False
-    by_req = {}
+    by_req: dict[str, set[str]] = {}
     for m in res["mismatch"]:
         by_req.setdefault(m["identity"]["request_id"], set()).add(m["identity"]["op_path"])
     assert set(by_req) == {"r0", "r1"}

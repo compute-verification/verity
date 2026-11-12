@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import logging
 import threading
 
 import pytest
@@ -211,6 +212,41 @@ def test_a_kernel_without_populate_write_leaves_the_faults_to_the_registration(f
     assert [e[2:4] for e in _of(events, "register")] == [(3 * MiB, 0), (2 * MiB, 0)], "both blocks still registered"
 
 
+def test_a_collected_pool_unregisters_its_blocks(fake_cuda, monkeypatch, caplog):
+    unregistered: list[int] = []
+
+    def unregister(self, ptr: int) -> int:
+        unregistered.append(ptr)
+        return 0
+
+    monkeypatch.setattr(_FakeCudart, "cudaHostUnregister", unregister)
+    caplog.set_level(logging.WARNING, logger="verity_vllm")
+    pool = PinnedPool(block_bytes=MiB, exact=True, populate_threads=0)
+    ptr = pool.take(MiB).data_ptr()
+    pool.__del__()
+    assert unregistered == [ptr] and pool.mode is None and pool.bytes_total == 0
+    assert not caplog.records
+
+
+def test_a_release_that_fails_at_collection_is_logged_with_its_traceback(fake_cuda, monkeypatch, caplog):
+    _events, pools = fake_cuda
+    pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=0))
+    pool.take(MiB)
+
+    def refuse(self, ptr: int) -> int:
+        raise RuntimeError("cudaHostUnregister failed: 1")
+
+    caplog.set_level(logging.WARNING, logger="verity_vllm")
+    with monkeypatch.context() as broken:
+        broken.setattr(_FakeCudart, "cudaHostUnregister", refuse)
+        pool.__del__()
+    (record,) = caplog.records
+    assert record.name == "verity_vllm.commit.committer.pinned_pool" and record.levelname == "WARNING"
+    assert record.getMessage() == "pinned pool: the release at collection failed; its blocks stay registered"
+    assert record.exc_info is not None and record.exc_info[0] is RuntimeError
+    assert pool.mode == "exact-registered-shared" and pool.bytes_total == MiB, "the pool still holds its block: the fixture releases it"
+
+
 def _warm(pool: PinnedPool) -> None:
     """The state a priming finds: free blocks of mixed sizes and a partly used current block."""
     for n in (3 * MiB, MiB, 5 * MiB):
@@ -243,7 +279,12 @@ def test_reserve_makes_exactly_the_blocks_the_takes_after_it_allocate(fake_cuda,
 
     calls: list[int] = []
     real = pp._pinned_block
-    monkeypatch.setattr(pp, "_pinned_block", lambda *a, **k: calls.append(a[0]) or real(*a, **k))
+
+    def counted(*a, **k):
+        calls.append(a[0])
+        return real(*a, **k)
+
+    monkeypatch.setattr(pp, "_pinned_block", counted)
     views = [reserved.take(n) for n in SIZES]
     assert calls == [], "the takes find every block ready"
     assert [int(b.numel()) for b in reserved.in_use] == [int(b.numel()) for b in plain.in_use]

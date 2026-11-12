@@ -24,6 +24,7 @@ import hashlib
 import json
 import struct
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -98,25 +99,11 @@ class StreamLayout:
         o = self.offsets
         if not (0 <= slab < self.HB and 0 <= row < self.M):
             raise ValueError("position outside the layout")
-        if cls in ("S", "P"):
-            assert col is not None and 0 <= col < self.N
-            return o[cls] + (slab * self.M + row) * self.N + col
-        if cls == "RP":
-            assert col is not None and 0 <= col < self.N
-            return o["RP"] + (slab * self.M + row) * (self.N // 2) + col // 2   # word holds cols (c, c+1); bf16 halves
-        if cls == "ROW":
-            assert block is not None and 0 <= block < self.NB
-            f = field if field is not None else 4 + lane
-            return o["ROW"] + ((slab * self.M + row) * self.NB + block) * 8 + f
-        if cls == "O":
-            assert block is not None and d is not None and 0 <= d < self.D
-            return o["O"] + ((slab * self.M + row) * self.NB + block) * self.D + d
-        if cls == "FIN":
-            return o["FIN"] + (slab * self.M + row) * 4 + field
-        if cls == "MS" and self.ms:
-            assert block is not None and 0 <= block < self.NB
-            return o["MS"] + (slab * self.M + row) * self.NB + block
-        raise ValueError(cls)
+        place = _PLACE_IN_ROW.get(cls)
+        if place is None or cls not in o:                # an unknown class, or MS on a layout without it
+            raise ValueError(cls)
+        words, at = place(self, col, block, lane, d, field)
+        return o[cls] + (slab * self.M + row) * words + at
 
     def unrank(self, word: int) -> dict[str, Any]:
         o = self.offsets
@@ -165,6 +152,47 @@ class StreamLayout:
         if self.ms:
             d["ms"] = True
         return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).digest()
+
+
+# One function a class: (the words one (slab, row) takes in the class, the position's word among them).
+def _col(L: StreamLayout, col: int | None, *_: int | None) -> tuple[int, int]:
+    assert col is not None and 0 <= col < L.N
+    return L.N, col
+
+
+def _col_pair(L: StreamLayout, col: int | None, *_: int | None) -> tuple[int, int]:
+    assert col is not None and 0 <= col < L.N
+    return L.N // 2, col // 2                            # word holds cols (c, c+1); bf16 halves
+
+
+def _row_field(L: StreamLayout, _col: int | None, block: int | None, lane: int | None, _d: int | None,
+               field: int | None) -> tuple[int, int]:
+    assert block is not None and 0 <= block < L.NB
+    if field is None:
+        assert lane is not None
+        field = 4 + lane
+    return L.NB * 8, block * 8 + field
+
+
+def _output(L: StreamLayout, _col: int | None, block: int | None, _lane: int | None, d: int | None,
+            *_: int | None) -> tuple[int, int]:
+    assert block is not None and d is not None and 0 <= d < L.D
+    return L.NB * L.D, block * L.D + d
+
+
+def _final(L: StreamLayout, _col: int | None, _block: int | None, _lane: int | None, _d: int | None,
+           field: int | None) -> tuple[int, int]:
+    assert field is not None
+    return 4, field
+
+
+def _block(L: StreamLayout, _col: int | None, block: int | None, *_: int | None) -> tuple[int, int]:
+    assert block is not None and 0 <= block < L.NB
+    return L.NB, block
+
+
+_PLACE_IN_ROW: dict[str, Callable[..., tuple[int, int]]] = {
+    "S": _col, "P": _col, "RP": _col_pair, "ROW": _row_field, "O": _output, "FIN": _final, "MS": _block}
 
 
 # ------------------------------------------------------------------ leaf framing (shared with the kernel's H1 leaf)

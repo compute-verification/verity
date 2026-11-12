@@ -4,6 +4,7 @@ digest, or names a Program that is not of record, and a manifest that records no
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 import pytest
@@ -82,6 +83,18 @@ def test_the_commit_takes_a_q_word_manifest_that_records_a_passing_word_check_fo
     assert word_check_refusal(_with_partitions(dict(q), "by_rank", {"0": q, "1": q})) is None
     body = _man(query=Q_MODULE_BODY_ID)                                  # A/B only: no partition, and no word check is required
     assert require_partition(body, None, None) is body
+
+
+def test_the_commit_logs_the_partition_it_checked_and_prints_nothing(caplog, capsys):
+    one = _man(partition_of(SHA_A))
+    one["query"]["word_check"] = _checked()
+    caplog.set_level(logging.INFO, logger="verity_vllm")
+    require_partition(one, None, None)
+    require_partition(_man(query=Q_MODULE_BODY_ID), None, None)
+    said = [r.getMessage() for r in caplog.records if r.name == "verity_vllm.commit.partition"]
+    assert len(said) == 2 and all(m.startswith("[delta] partition of record: {") for m in said)
+    assert said[0].endswith("} (word check recorded and passed)") and said[1].endswith("}")
+    assert capsys.readouterr().out == ""
 
 
 @pytest.mark.parametrize("check, why", [
