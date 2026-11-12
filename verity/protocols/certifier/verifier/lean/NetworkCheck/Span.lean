@@ -71,12 +71,12 @@ phases are not public, and a reason is part of an answer.
    is signed under the key in the session (the row registration's check, `check_registration` in Python). No
    certificate binds the schedule; this head is the signed thing that does.
 
-**Public** (`publicJson`, the one place that says what of the count is public): `{"egress_bits", "phases", "tail"}`:
-the count of execution phases `phases = w_e + tail − w_s + 1`, the tail, and `egress_bits`, `phases` times the bits one
-execution phase can carry on the link (`capacityBits`). A certificate hides its record, so each execution phase counts
-at capacity: every cell of both its egress records, the responses' and the fails', since both leave on the link. No
-rounding is applied. The two marks' execution phases are not public: they say when the span ran, which a mark's salt
-hides. **Profile**: `{"link", "phases"}`.
+**Public** (`publicJson`, the one place that says what of the count is public): `{"egress_bits", "tail"}`: the tail,
+and `egress_bits`, the count of execution phases `phases = w_e + tail − w_s + 1` times the bits one execution phase can
+carry on the link (`capacityBits`). A certificate hides its record, so each execution phase counts at capacity: every
+cell of both its egress records, the responses' and the fails', since both leave on the link. No rounding is applied.
+The two marks' execution phases are not public: they say when the span ran, which a mark's salt hides.
+**Profile**: `{"link", "phases"}`, the link and the count of execution phases.
 
 The check walks the two marks and the evidence's entries once, never the span's length.
 -/
@@ -344,10 +344,10 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Count Prof
           { link := p.link, phases }
 
 /-- What of the count is public, the one place that says so (`span.public`): the bits that can have left over the
-span and its tail, the count of execution phases and the tail. The two marks' execution phases are not: they say when
-the span ran, which a mark's salt hides, and they stay in the commitment. -/
+span and its tail, and the tail. The two marks' execution phases are not: they say when the span ran, which a mark's
+salt hides, and they stay in the commitment. -/
 def publicJson (x : Count) : Json :=
-  Json.mkObj [("egress_bits", toJson (x.phases * x.capacityBits)), ("phases", toJson x.phases), ("tail", toJson x.tail)]
+  Json.mkObj [("egress_bits", toJson (x.phases * x.capacityBits)), ("tail", toJson x.tail)]
 
 def profileJson (pr : Profile) : Json := Json.mkObj [("link", .str pr.link), ("phases", toJson pr.phases)]
 

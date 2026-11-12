@@ -252,10 +252,9 @@ def tail(s: Schedule) -> int:
 
 def public(start: int, end: int, t: int, capacity: int) -> dict[str, int]:
     """What of the count is public, the one place that says so: the bits that can have left over the span and its
-    tail, the count of execution phases and the tail. The two marks' execution phases, `start` and `end`, are not:
-    they say when the span ran, which a mark's salt hides, and they stay in the commitment."""
-    phases = end + t - start + 1
-    return {"egress_bits": phases * capacity, "phases": phases, "tail": t}
+    tail, and the tail. The two marks' execution phases, `start` and `end`, are not: they say when the span ran, which
+    a mark's salt hides, and they stay in the commitment."""
+    return {"egress_bits": (end + t - start + 1) * capacity, "tail": t}
 
 
 def capacity_bits(s: Schedule) -> int:

@@ -136,8 +136,8 @@ def test_the_tail_at_its_edge_is_one_execution_phase(server, monkeypatch):
         verdict, out = D.replay(PORT, case, server)
         answer, c = json.loads(out), span.commitment(bytes.fromhex(case["commitment"]))
         phases = c.marks[1].window - c.marks[0].window + 2
-        public = {"egress_bits": phases * span.capacity_bits(EDGE), "phases": phases, "tail": 1}
-        assert verdict == ACCEPT and answer["public"] == public, answer
+        assert verdict == ACCEPT and answer["public"] == {"egress_bits": phases * span.capacity_bits(EDGE), "tail": 1}
+        assert answer["profile"] == {"link": case["params"]["link"], "phases": phases}, answer
     built = [build("edge-tail", n) for n in range(2)]
     monkeypatch.setattr(span, "tail", lambda s: -(-(s.delay + -(-s.egress_cells // s.slots)) // s.window))
     for case in built:
@@ -208,8 +208,8 @@ def test_a_commitment_reads_back_its_two_marks():
 def test_what_a_tie_reads_off_a_case():
     """`named`: the SHA-512 of the start certificate's bytes, the two marks' messages and the bits over the span and
     its tail, at the vector the Lean's `#guard` holds; no bits when the marks are out of order; and on a generated
-    span the count's own `egress_bits`, public beside the count of execution phases and the tail and nothing else:
-    the two marks' execution phases stay in the commitment."""
+    span the count's own `egress_bits`, public beside the tail and nothing else: the two marks' execution phases stay
+    in the commitment."""
     p = span.params(GUARD_PARAMS)
     start, end = guard_mark(5, 1), guard_mark(7, 4)
     n = span.named(p, span.commitment(span.mark_bytes(start) + span.mark_bytes(end)))
@@ -222,4 +222,4 @@ def test_what_a_tie_reads_off_a_case():
         case = build("honest", seed)
         got = span.named(span.params(case["params"]), span.commitment(bytes.fromhex(case["commitment"])))
         public = reference(case)["public"]
-        assert sorted(public) == ["egress_bits", "phases", "tail"] and got["egress_bits"] == public["egress_bits"]
+        assert sorted(public) == ["egress_bits", "tail"] and got["egress_bits"] == public["egress_bits"]
