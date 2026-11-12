@@ -69,7 +69,7 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert sz._bits(st, 0) == sz.IS.encode(sz.CLASS, sz.IS.empty(sz.CLASS)) and len(st.rows) == T
     assert first.ports["o1"]["reads"] == [1] and "sin" not in first.ports
     assert ing.ports["sin"]["reads"] == list(range(1, T - 1)) and ing.ports["o1"]["reads"] == list(range(2, T))
-    assert last.ports["sin"]["reads"] == [T - 1] and last.ports["o1"]["value"] == sz.value("frame")
+    assert last.ports["sin"]["reads"] == [T - 1] and last.ports["o1"]["value"] == f"{last.name}/o1"
     assert last.ports["o1"]["root"] != st.root.hex() and last.ports["o1"]["reads"] == [0]
     assert last.made["o1"] == [at.chain.states[T]] and last.buckets == [T - 1] and last.framed == ["o0", "o1"]
     assert first.ports["o1"]["root"] == ing.ports["sin"]["root"] == last.ports["sin"]["root"] == st.root.hex()
@@ -89,7 +89,8 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
         assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports[f"prog{j}"]["root"] == first.ports[
             f"prog{j}"]["root"]
         assert blk.ports["o0"]["reads"] == list(range(nb)) and sorted(blk.ports) == sorted(blk.framed) == ["o0", "x"]
-        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.REG.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
+        assert blk.ports["x"]["value"] == f"{sz.port_prefix(sz._defs(cls)['block'], blk)}/x"
+        assert blk.ports["o0"]["value"] == f"scan/prog{j}" and blk.ports["x"][sz.REG.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
         assert blk.made["o0"] == [sz._bits(tr, b) for b in range(nb)] == [u[0] for u in blk.units]
         assert blk.set_name == at.block_sets[j] and tr.binding == sz.block_binding(at.block_sets[j], nb)
     assert len(set(at.block_sets)) == len({tr.root for tr in trs}) == cls.NR
@@ -193,7 +194,7 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
         range(T + 1, G * T))
     assert (last.window, last.ports["row"]["reads"], last.ports["row"]["root"]) == (
         1, [T - 1], ing1.ports["row"]["root"])
-    assert last.ports["sin"]["reads"] == [G * T - 1] and last.ports["o1"]["value"] == sz.value("frame")
+    assert last.ports["sin"]["reads"] == [G * T - 1] and last.ports["o1"]["value"] == f"{last.name}/o1"
     assert eg1.ports["o1"]["root"] == at.sides["egress"][1].head.root.hex() and eg1.ports["o1"][sz.REG.READS_FROM] == 3 * T
     assert [m.name for m in h.rounds["chain"] if m.refused] == sz.targets(at, "chain") == ["ingress-0"]
     assert [m.name for m in h.rounds["tampered"] if m.refused] == sz.targets(at, "tampered")
@@ -206,18 +207,26 @@ def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_
     """The verifier's registered reads name every port of every member's circuit, inputs and output rows, as Lean's
     `Flock.Registered.checkComplete` asks of every statement of a ``--registered`` file. A port no scan tree or network
     certifier row registration holds (each proof block's public o0, the last proof block's o1, a block member's row-seg
-    ``x``) is the member's own rows (`scan_zk.Frame`, value ``frame``): its domain the member's frame domain of the port
+    ``x``) is the member's own rows (`scan_zk.Frame`): its domain the member's frame domain of the port
     (`frame_binding` over its input set, its n proof blocks and the port's schema), each proof block's b‖c its own row
     under the salt the stager is given, which opens the root at its position as core's mirror of Lean's read opens it
-    (`registered.verify_read`). Unread's o0 row is its 0, which the verifier opens as before."""
+    (`registered.verify_read`). Unread's o0 row is its 0, which the verifier opens as before. Every read is named as
+    the round's registration names what holds its root (`scan_zk.read_as`): the member's own rows the member's port
+    (``<member>/<port>``, a block member's under its lane's prefix, `port_prefix`), a tree's ``scan/<kind>``, and a
+    network certifier port's its row registration's value."""
     h = sz.host(tmp_path, setup=sz.TEST)
     key, own = sz.ADV.INST.default_key, {}
+    trees = {f"scan/{k}" for k in ("state", "view", *sz.lane_kinds(sz.TEST.cls))}
     for name, members in h.rounds.items():
         for m in members:
             ins, outs = sz.ports_of(sz.TEST.cls)[m.template]
             sig = [p for p, _b in (*ins, *(() if m.template in sz.ROWS_O0 else (("o0", 16),)), *outs)]
             assert sorted(m.ports) == sorted(m.entries) == sorted(m.salts) == sorted(sig), (name, m.name)
-            own[name, m.name] = [p for p in m.framed if m.ports[p]["value"] == sz.value("frame")]
+            prefix = sz.port_prefix(sz._defs(sz.TEST.cls)[m.template] if m.template in sz.ROWS_O0 else None, m)
+            own[name, m.name] = [p for p in m.framed if m.ports[p]["value"] == f"{prefix}/{p}"]
+            assert all(e["value"] == m.entries[p]["value"] and (
+                p in own[name, m.name] or e["value"] in trees | {d["value"] for d in m.warden.values()})
+                for p, e in m.ports.items()), (name, m.name)
             for p in own[name, m.name]:
                 port = m.ports[p]
                 schema = port.get(sz.REG.SCHEMA_KEY, sz.REG.SCHEMA)

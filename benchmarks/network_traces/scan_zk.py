@@ -292,10 +292,19 @@ FRAME_BINDING = "verity/flock-circuit/binding/v2"
 
 
 def value(kind: str) -> str:
-    """A scan registration's value: a tree's, ``state``'s, ``view``'s or lane j's slot entries' (``prog<j>``), or
-    ``frame``, a member's own rows of a port no tree or network certifier row registration holds (`Frame`), registered
-    as the member's frame root of the port."""
+    """A scan registration's value, the tag its tree is bound under (`_bound`): ``state``'s, ``view``'s or lane j's
+    slot entries' (``prog<j>``)."""
     return f"verity/certifier/scan-{kind}/v1"
+
+
+def read_as(kind: str, own: str | None = None) -> str:
+    """The value a ``--registered`` port and its statement's entry name a read of `kind`'s registration by: the port
+    the round's registration holds its root at (`audit`). A tree's is ``scan/<kind>``; ``frame``'s, a member's own rows
+    of a port no tree or network certifier row registration holds (`Frame`), is ``own``, that port under the member's
+    prefix (`port_prefix`), at the member's frame root of it."""
+    if kind == "frame" and own is None:
+        raise ValueError("a member's own rows are read as the member's port")
+    return own if kind == "frame" else f"scan/{kind}"
 
 
 def lane_kinds(cls: IS.Class) -> tuple[str, ...]:
@@ -515,16 +524,17 @@ def tree_bc(reg: ADV.Committed, i: int, bits: list[int] | None = None) -> bytes:
     return ADV.INST.commit_string(reg.key, digest, reg.salts[i])
 
 
-def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) -> dict:
-    """The verifier's own ``--registered`` port of `kind`'s registration: unit ``reads_from + i`` reads leaf reads[i]."""
+def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int, own: str | None = None) -> dict:
+    """The verifier's own ``--registered`` port of `kind`'s registration: unit ``reads_from + i`` reads leaf reads[i],
+    under the registration's name for it (`read_as`)."""
     n = len(reg.rows)
     e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": tree_domain(reg).domain_id.hex()}
-    port = produced.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
+    port = produced.port(read_as(kind, own), e, reg.root.hex(), reads, _schema(reg))
     return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})
 
 
-def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
-    return {"value": value(kind), "positions": [int(p) for p in positions],
+def tree_entry(kind: str, reg: ADV.Committed, positions, own: str | None = None) -> dict:
+    return {"value": read_as(kind, own), "positions": [int(p) for p in positions],
             "paths": [b"".join(reg.open(p).path).hex() for p in positions]}
 
 
@@ -911,9 +921,11 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     unit's none. Lane j's block member's unit j·nb + b reads ``x``, slot entry b of the lane, its free input, and its o0,
     that entry, is a registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or
     network certifier row registration holds (each proof block's public o0, the last proof block's o1, a block member's
-    x) is the member's own rows of it (`Frame`, value ``frame``), registered as its frame root in its statement's input
-    set ``set_name`` (a block member's its lane's `block_set`), which the round's registration names before any coin;
-    ``framed`` names the ports `stage` holds to their frame roots (those, and a block member's o0)."""
+    x) is the member's own rows of it (`Frame`), registered as its frame root in its statement's input set
+    ``set_name`` (a block member's its lane's `block_set`), which the round's registration names before any coin;
+    ``framed`` names the ports `stage` holds to their frame roots (those, and a block member's o0). Each read of a tree
+    or of the member's own rows is named as the round's registration names the port that holds its root (`read_as`:
+    ``scan/<kind>``, ``<member>/<port>``)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
     rows = [b - w * T for b in bs]
@@ -969,10 +981,11 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         _w, salts[p], entries[p] = side.cells.statement(rows)
         ports[p] = {**WR.bucket_port(side.head, at.params, mb.base), "reads": rows}
         bcs[p] = [WR.bc(made[p][k] if p in made else side.cells.rows[r], side.cells.salts[r]) for k, r in enumerate(rows)]
+    prefix = port_prefix(_defs(cls)[tp] if tp in ROWS_O0 else None, mb)
     for p, (kind, reg, ps) in reads.items():
         table, refs[p] = REG.table(ps) if p.startswith("prog") else (ps, list(range(len(ps))))
-        salts[p], entries[p] = [reg.salts[i] for i in table], tree_entry(kind, reg, table)
-        ports[p] = tree_port(kind, reg, ps, mb.base)
+        salts[p], entries[p] = [reg.salts[i] for i in table], tree_entry(kind, reg, table, f"{prefix}/{p}")
+        ports[p] = tree_port(kind, reg, ps, mb.base, f"{prefix}/{p}")
         bcs[p] = [None if p in made and made[p][k] is None else tree_bc(reg, i, made[p][k] if p in made else None)
                   for k, i in enumerate(ps)]
     refused = header_refusal(ports, entries)
