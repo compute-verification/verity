@@ -194,17 +194,18 @@ def test_every_step_the_engine_scheduled_has_its_record_when_the_runner_stops(dr
     """Under a draft the scheduler schedules a request's next row before the output that ends it is back. vLLM's own loop
     steps while its batch queue holds a step, so that row's output is processed and the trace records the step; a runner that
     stops when no request is unfinished leaves the last such step scheduled and without its record."""
-    after_the_end = 0
+    after_the_end = []
     for limit in range(2, 14):
-        limits = {"first": limit, "next": 5}
+        limits = {"first": limit, "next": 15 - limit}
         serve = _queued(Queued(drafts, limits), "serve", TWO)
         replay = _queued(Queued(drafts, limits), "replay", X.arrivals(serve["records"]))
         for doc in (serve, replay):
             assert [s["step"] for s in doc["steps"]] == sorted(map(int, doc["drafted"])), (limit, doc["drafted"])
         assert {rid: len(ids) for rid, ids in serve["tokens"].items()} == limits
         assert X.compare(serve, replay)["equal"], limit
-        after_the_end += not serve["steps"][-1]["emitted"]
-    assert bool(after_the_end) == bool(drafts), "only under a draft does a serve end on a row scheduled before its request's last output"
+        after_the_end.append(not serve["steps"][-1]["emitted"])
+    # only under a draft does a serve end on a row scheduled before its request's last output, and not every one does
+    assert (any(after_the_end), all(after_the_end)) == (bool(drafts), False), after_the_end
 
 
 def test_a_scheduled_step_whose_output_the_engine_does_not_hold_stops_the_runner_by_name():
