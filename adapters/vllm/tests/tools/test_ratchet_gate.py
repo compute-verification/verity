@@ -38,6 +38,7 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "ratchet_gate.py"
 _spec = importlib.util.spec_from_file_location("ratchet_gate", SCRIPT)
+assert _spec is not None and _spec.loader is not None, SCRIPT
 G = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("ratchet_gate", G)
 _spec.loader.exec_module(G)
@@ -91,6 +92,14 @@ def _entry(file: str, symbol: str, count: int = 1) -> dict:
 def _allowlist(*entries: dict) -> str:
     """one entry a line, as the lints' allowlists are kept"""
     return '{"rule": "p01", "entries": [\n' + ",\n".join(json.dumps(e) for e in entries) + "\n]}\n"
+
+
+def _noting(seen: list, note, call):
+    """``call``, with ``note`` of each call's arguments appended to ``seen`` before it runs"""
+    def noted(*args, **kwargs):
+        seen.append(note(*args, **kwargs))
+        return call(*args, **kwargs)
+    return noted
 
 
 class Repo:
@@ -289,8 +298,8 @@ def test_a_counted_kind_keyed_anew_at_its_total_is_compared_in_the_bases_form(re
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"]) == ("passed", ["typed_records"]), c["why"]
     assert c["pooled"] == [f"{TYPED} or-empty 4 -> 4 in total over 5 moved key(s)",
-                           f"{TYPED} or-empty keeps its total of 4 under other keys, so the base's lint is held to the "
-                           f"base's entries for it"]
+                           (f"{TYPED} or-empty keeps its total of 4 under other keys, so the base's lint is held to the "
+                            f"base's entries for it")]
     repo.git("checkout", "-q", "-b", "adds", "main")
     repo.commit("per file, a read more in commit and gates.py's left out", {
         **per_file, z: "D = d.get('d') or []\nE = d.get('e') or []\n", TYPED: _allowlist(_or_empty(CHECK, 2), _or_empty(COMMIT, 2))})
@@ -476,8 +485,8 @@ def test_runs_over_a_growing_train_judge_each_change_once_and_a_cached_verdict_i
     monkeypatch.setenv("RATCHET_GATE_CACHE", "")
     fresh = [G.gate("main", t) for t in tops]
     monkeypatch.setenv("RATCHET_GATE_CACHE", str(verdict_cache))
-    judged, judge = [], G.judge
-    monkeypatch.setattr(G, "judge", lambda c, b: (judged.append(c.hi), judge(c, b))[1])
+    judged: list[str] = []
+    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, b: c.hi, G.judge))
     assert [G.gate("main", t) for t in tops] == fresh
     assert judged == tops
     assert [G.gate("main", t) for t in tops] == fresh and judged == tops
@@ -502,8 +511,8 @@ def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted
         head = linted.commit(f"pr {pr}", files)
         linted.git("checkout", "-q", "next")
         linted.queue(pr, f"pr {pr}", head)
-    pools, pool = [], G.ProcessPoolExecutor
-    monkeypatch.setattr(G, "ProcessPoolExecutor", lambda n, **k: (pools.append(n), pool(n, **k))[1])
+    pools: list[int] = []
+    monkeypatch.setattr(G, "ProcessPoolExecutor", _noting(pools, lambda n, **k: n, G.ProcessPoolExecutor))
 
     def report(jobs: str, cache: str = "") -> list[tuple[int, str]]:
         monkeypatch.setenv("RATCHET_GATE_JOBS", jobs)
@@ -589,8 +598,8 @@ def test_once_the_base_moves_a_passed_change_is_not_judged_again_and_a_failed_on
     bad = repo.commit("grows P01", {"adapters/vllm/verity_vllm/c.py": "C = 1\n",
                                     P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
                                                     _entry("verity_vllm/c.py", "C"))})
-    judged, judge = [], G.judge
-    monkeypatch.setattr(G, "judge", lambda c, b: (judged.append(c.hi), judge(c, b))[1])
+    judged: list[str] = []
+    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, b: c.hi, G.judge))
     first = [G.gate("main", t) for t in ("ok", "bad")]
     repo.git("checkout", "-q", "main")
     repo.commit("main moves on", {"adapters/vllm/verity_vllm/d.py": "D = 1\n"})
@@ -862,8 +871,9 @@ def test_ruff_runs_on_this_python_with_the_pin_else_from_uvs_cache_else_the_inde
     monkeypatch.setattr(G.shutil, "which", lambda name: f"/opt/{name}")
     for has in (cached, fetched):
         G.ruff_python.cache_clear()
-        tried = []
-        monkeypatch.setattr(G, "has_ruff", lambda python, pin, exact: tried.append(list(python)) or list(python) == has)
+        tried: list[list[str]] = []
+        monkeypatch.setattr(G, "has_ruff", _noting(tried, lambda python, pin, exact: list(python),
+                                                   lambda python, pin, exact, has=has: list(python) == has))
         assert G.python_for("ruff==0.0.1", None) == has
         assert tried == [here, cached, fetched][:tried.index(has) + 1]
     G.ruff_python.cache_clear()
@@ -974,8 +984,8 @@ def test_a_ruff_finding_in_a_lint_module_a_change_edits_is_judged_on_its_own_cop
 
 def _repo_lint(repo: Repo) -> str | None:
     """the repository's ruff lint, as the root suite runs it after landing, on ``repo``'s checkout: its failure, or None"""
-    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); import test_repo_ruff as T; "
-                        "T.test_no_new_findings()"], cwd=repo.root, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-c", ("import sys; sys.path.insert(0, 'tests/lint'); import test_repo_ruff as T; "
+                         "T.test_no_new_findings()")], cwd=repo.root, capture_output=True, text=True)
     return None if r.returncode == 0 else r.stderr
 
 
@@ -1025,8 +1035,8 @@ def test_a_rename_that_leaves_its_entry_behind_fails_naming_the_entry_to_move_ev
     assert c["verdict"] == "failed", c["why"]
     assert c["why"].startswith(f"renames Python whose findings {REPO_RUFF_JSON} allows at the old path, and leaves 1 entry "
                                f"behind"), c["why"]
-    assert c["fix"] == [f'{REPO_RUFF_JSON}: move {{"file": "tools/a.py", "rule": "F401", "count": 1}} to "tools/sub/a.py", as '
-                        f"the change moves the file (`python3 {REPO_RUFF_LINT} --move tools/a.py tools/sub/a.py`)"]
+    assert c["fix"] == [(f'{REPO_RUFF_JSON}: move {{"file": "tools/a.py", "rule": "F401", "count": 1}} to "tools/sub/a.py", as '
+                         f"the change moves the file (`python3 {REPO_RUFF_LINT} --move tools/a.py tools/sub/a.py`)")]
     assert "tools/sub/a.py [F401]: 1 found, 0 allowed" in (_repo_lint(both_ruffed) or "")
     both_ruffed.commit("its entry", {REPO_RUFF_JSON: _move_entries(both_ruffed, "tools/a.py", "tools/sub/a.py")})
     [c] = G.gate("main", "pr")["changes"]
@@ -1036,8 +1046,8 @@ def test_a_rename_that_leaves_its_entry_behind_fails_naming_the_entry_to_move_ev
 
 def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypatch):
     """a.py's finding is untouched; the integration's files and a deleted one are left to others."""
-    seen, real = [], G.ruff_findings
-    monkeypatch.setattr(G, "ruff_findings", lambda ruff, config, files: seen.append(sorted(files)) or real(ruff, config, files))
+    seen: list[list[str]] = []
+    monkeypatch.setattr(G, "ruff_findings", _noting(seen, lambda ruff, config, files: sorted(files), G.ruff_findings))
     both_ruffed.git("checkout", "-q", "main")
     both_ruffed.commit("definitions", {"verity/definitions/word.py": "X = 1\n"})
     both_ruffed.git("checkout", "-q", "-B", "pr")
@@ -1099,6 +1109,7 @@ def env_linted(repo) -> Repo:
 def _repo_env_fix() -> str:
     """the fix the repository's environment-read lint names, which the gate quotes from the base's copy"""
     spec = importlib.util.spec_from_file_location("repo_env_reads", SCRIPT.parents[3] / REPO_ENV_LINT)
+    assert spec is not None and spec.loader is not None, REPO_ENV_LINT
     lint = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(lint)
     return lint.FIX
@@ -1106,8 +1117,8 @@ def _repo_env_fix() -> str:
 
 def _env_lint(repo: Repo) -> str | None:
     """the repository's environment-read lint, as the root suite runs it after landing, on ``repo``'s checkout"""
-    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); import test_repo_env_reads as T; "
-                        "T.test_no_new_reads()"], cwd=repo.root, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-c", ("import sys; sys.path.insert(0, 'tests/lint'); import test_repo_env_reads as T; "
+                         "T.test_no_new_reads()")], cwd=repo.root, capture_output=True, text=True)
     return None if r.returncode == 0 else r.stderr
 
 
@@ -1128,8 +1139,8 @@ def test_a_new_direct_environment_read_fails_naming_it_and_the_settings_registry
         "tools/settings.py": "import os\nB = os.environ['B']\nC = 'C' in os.environ\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["counted"].get("repo_env_reads"), c["why"]) == ("passed", ["tools/c.py", "tools/settings.py"],
-                                                       "no direct environment read is new in the 2 Python file(s) it "
-                                                       "changes"), c["why"]
+                                                       ("no direct environment read is new in the 2 Python file(s) it "
+                                                        "changes")), c["why"]
     assert _env_lint(env_linted) is None
 
 
@@ -1146,8 +1157,8 @@ def test_a_rename_must_move_its_entry_which_passes_both_and_fails_naming_the_ent
     assert c["verdict"] == "failed" and c["why"].startswith(
         f"renames Python whose direct environment reads {REPO_ENV_JSON} allows at the old path, and leaves 1 entry behind: "
         f"{REPO_ENV_LINT} counts a file's direct environment reads under its path, so it would fail after landing"), c["why"]
-    assert c["fix"] == [f'{REPO_ENV_JSON}: move {{"file": "tools/a.py", "count": 1}} to "tools/sub/a.py", as the change '
-                        f"moves the file (`python3 {REPO_ENV_LINT} --move tools/a.py tools/sub/a.py`)"]
+    assert c["fix"] == [(f'{REPO_ENV_JSON}: move {{"file": "tools/a.py", "count": 1}} to "tools/sub/a.py", as the change '
+                         f"moves the file (`python3 {REPO_ENV_LINT} --move tools/a.py tools/sub/a.py`)")]
     assert "tools/sub/a.py: 1 found, 0 allowed" in (_env_lint(env_linted) or "")
     subprocess.run([sys.executable, REPO_ENV_LINT, "--move", "tools/a.py", "tools/sub/a.py"], cwd=env_linted.root, check=True,
                    capture_output=True)
@@ -1238,8 +1249,8 @@ def silent_linted(repo) -> Repo:
 
 def _silent_lint(repo: Repo) -> str | None:
     """the repository's silent-except lint, as the root suite runs it after landing, on ``repo``'s checkout"""
-    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); "
-                        "import test_repo_silent_excepts as T; T.test_no_new_silent_excepts()"],
+    r = subprocess.run([sys.executable, "-c", ("import sys; sys.path.insert(0, 'tests/lint'); "
+                         "import test_repo_silent_excepts as T; T.test_no_new_silent_excepts()")],
                        cwd=repo.root, capture_output=True, text=True)
     return None if r.returncode == 0 else r.stderr
 
@@ -1278,8 +1289,8 @@ def test_a_renamed_file_must_move_its_silent_except_entry_and_fails_naming_it_wh
     assert c["verdict"] == "failed" and c["why"].startswith(
         f"renames Python whose silent except handlers {REPO_SILENT_JSON} allows at the old path, and leaves 1 entry behind: "
         f"{REPO_SILENT_LINT} counts a file's silent except handlers under its path, so it would fail after landing"), c["why"]
-    assert c["fix"] == [f'{REPO_SILENT_JSON}: move {{"file": "tools/s.py", "count": 1}} to "tools/sub/s.py", as the change '
-                        f"moves the file (`python3 {REPO_SILENT_LINT} --move tools/s.py tools/sub/s.py`)"]
+    assert c["fix"] == [(f'{REPO_SILENT_JSON}: move {{"file": "tools/s.py", "count": 1}} to "tools/sub/s.py", as the change '
+                         f"moves the file (`python3 {REPO_SILENT_LINT} --move tools/s.py tools/sub/s.py`)")]
     assert "tools/sub/s.py: 1 found, 0 allowed" in (_silent_lint(silent_linted) or "")
     subprocess.run([sys.executable, REPO_SILENT_LINT, "--move", "tools/s.py", "tools/sub/s.py"], cwd=silent_linted.root,
                    check=True, capture_output=True)
@@ -1478,7 +1489,9 @@ def test_the_command_line(repo):
     repo.commit("feature", {"adapters/vllm/verity_vllm/c.py": "C = 1\n",
                             P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
                                             _entry("verity_vllm/c.py", "C"))})
-    run = lambda *a: subprocess.run([sys.executable, str(SCRIPT), *a], cwd=repo.root, capture_output=True, text=True)  # noqa: E731
+    def run(*a):
+        return subprocess.run([sys.executable, str(SCRIPT), *a], cwd=repo.root, capture_output=True, text=True)
+
     r = run("main", "pr")
     assert r.returncode == 1 and f"failed: grows {P01} 2 -> 3 entries" in r.stdout and "verity_vllm/c.py" in r.stdout, r.stdout
     r = run("main", "pr", "--json")
@@ -1504,8 +1517,8 @@ def lane_linted(repo) -> Repo:
 
 def _lane_lint(repo: Repo) -> str | None:
     """the repository's lane-text lint, as the root suite runs it after landing, on ``repo``'s checkout"""
-    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); "
-                        "import test_repo_lane_text as T; T.test_no_new_lane_text()"],
+    r = subprocess.run([sys.executable, "-c", ("import sys; sys.path.insert(0, 'tests/lint'); "
+                         "import test_repo_lane_text as T; T.test_no_new_lane_text()")],
                        cwd=repo.root, capture_output=True, text=True)
     return None if r.returncode == 0 else r.stderr
 
@@ -1576,8 +1589,8 @@ def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves
     lane_linted.commit("counts TOY ids, and records them", {REPO_LANE_LINT: wider, REPO_LANE_JSON: _allowlist(DOCS_A, b)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"], c["pooled"]) == ("passed", ["repo_lane_text"], [
-        f"{REPO_LANE_JSON} 1 -> 3 in total, 2 of it in 1 key(s) at files the change leaves untouched, recorded as the lint "
-        "it edits counts them"]), c["why"]
+        (f"{REPO_LANE_JSON} 1 -> 3 in total, 2 of it in 1 key(s) at files the change leaves untouched, recorded as the lint "
+         "it edits counts them")]), c["why"]
     assert _lane_lint(lane_linted) is None
     lane_linted.commit("and one more in the file", {"docs/b.md": "# B\n\nTOY1, TOY2 and TOY3.\n",
                                                     REPO_LANE_JSON: _allowlist(DOCS_A, {**b, "count": 3})})

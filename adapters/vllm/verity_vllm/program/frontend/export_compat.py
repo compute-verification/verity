@@ -27,7 +27,6 @@ from contextlib import contextmanager
 
 import torch
 
-from verity_vllm import settings
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_moe_leaf
@@ -220,6 +219,7 @@ def read_back_applied() -> dict:
 
 def host_facts() -> dict:
     """The construction HOST (informational; not part of any identity): hostname, CUDA visibility, the host GPU's name."""
+    from verity_vllm import settings
     h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": settings.raw("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
          "host_gpu": None}
     if h["cuda_available"]:

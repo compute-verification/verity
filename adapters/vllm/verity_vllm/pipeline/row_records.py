@@ -20,6 +20,12 @@ from verity_vllm.pipeline.row_json import load_json, read_json, write_json
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.target_family import declared_profile
 
+__all__ = ["COMPOSE_PEAK_RATIO", "FOLD_PART_MIN_S", "applicable_taps", "build_jobs_auto", "compose_bytes", "composed_ok", "declared_target", "decomp_rc",
+           "derived_ok", "fold_phase_s", "fold_plan", "load_json", "longest_first", "manifest_timeout", "missing_tap_build", "model_layers",
+           "tap_policy_flags", "tap_source_args", "tp_build_digests", "tp_build_summary", "tp_check_line", "tp_commit_line", "tp_commit_passed",
+           "tp_fold_line", "tp_manifest_complete", "tp_manifest_line", "tp_manifest_not_of_record", "tp_match_summary", "tp_passed", "tp_rank_workload_digest",
+           "tp_served_shapes", "tp_shape"]
+
 
 def tail(path: str, n: int = 300) -> str:
     """The last line of the log at ``path``, at most ``n`` characters ("" when it is absent or empty)."""
@@ -131,8 +137,10 @@ MANIFEST_COMPONENT_S = 1200
 #: limit is 350 s a GiB (3x that), at least 7200 s
 FOLD_GM_SUM_RATIO = 5.5
 FOLD_SUM_RATIO = 0.6
-FOLD_LEG_S_PER_GIB = 350
-FOLD_LEG_MIN_S = 7200
+FOLD_PART_S_PER_GIB = 350
+FOLD_PART_MIN_S = 7200
+#: the older name of `FOLD_PART_MIN_S`, which `pipeline/row_tp.py` reads
+FOLD_LEG_MIN_S = FOLD_PART_MIN_S
 
 
 def derive_bytes(lp: int, t: int, layers: int) -> int:
@@ -163,7 +171,7 @@ def fold_plan(shapes: list[tuple[int, ...]], layers: int, world: int, mem_bytes:
     rw = max(1, min(world, (mem - max(1, folds) * fold) // gm))
     return {"gm_bytes": gm, "fold_bytes": fold, "mem_bytes": mem, "rank_workers": rw,
             "fold_workers": folds or max(1, min(world, (mem - rw * gm) // fold)), "fits": mem >= gm + fold,
-            "leg_s": max(FOLD_LEG_MIN_S, int(FOLD_LEG_S_PER_GIB * s / 2**30))}
+            "leg_s": max(FOLD_PART_MIN_S, int(FOLD_PART_S_PER_GIB * s / 2**30))}
 
 
 def fold_phase_s(leg_s: int, world: int, rank_workers: int, fold_workers: int) -> int:
