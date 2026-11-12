@@ -107890,3 +107890,49 @@ Nothing.
 - `LawAt` and `CoinMapHolds` are unproved. Owed in a run by 03:00Z for the definitions and the first clause.
 - The numeric bound on `gapOf` is unproved.
 - The earlier-period signature hole (`Sampled/Device.lean:468-475`, soundness's finding) stands. I do not work around it.
+
+## SESSIONOF, Thu 23:04Z: the session's Prop and sessionOf compile; AcceptedChecks elaborating
+
+Branch `cursor/proofs-sessionof-5c1e` at `36a0f1e70a`, on the base at `871ab913c3` (merged, not rebased) [run: git].
+
+**Compiled** in run `r20261112-224310-72d4` on cpu-8, at `36a0f1e70a` on the merged base [run]:
+- `Properties/Verity/Sampled/SessionOf.lean`: lean exit 0 in 413 s. The axiom probe finds none of its 17 theorems
+  using anything beyond `propext`, `Classical.choice` and `Quot.sound`. One warning: a deprecated `dif_pos`.
+- The probed theorems include `designAt_of_lawAt`, `ChecksWitness.law`, `ChecksWitness.live_setsUp`,
+  `ChecksWitness.live_opensReady`, `sessionOf_some`, `sessionOf_isSome`, `sessionOf_setsUp`, `sessionOf_opensReady`
+  and `sessionChecks_files`. `ChecksAt`, `ChecksWitness`, `SessionChecks`, `SessionBound`, `ChecksWitness.live` and
+  `sessionOf` elaborate with them [run].
+- The Prop's text is the one in my 22:28Z entry, with one rename: the form check's facts are
+  `ChecksWitness.scope`, since `scoped` is a keyword [run].
+- `ZkHiddenM1P.lean` (A12) is in the same run's build of SessionOf's imports, now on the merged base. Its axiom probe
+  ran at `b6f74329cc` (`r20261112-221059-0a7f`) [run].
+
+**So `SetsUp` and `OpensReady` of the built session are proved**, at a vocabulary meeting `sessionOf_setsUp`'s four
+premises: v2's digests (`hc`, `hp`), v2's reads (`hr`), the challenger's family (`hfam`), and `ε` [run].
+
+**Left: `AcceptedChecks.lean`**, 325 lines, elaborating now in the same run (its imports are built) [run].
+- Not yet compiled, 8 theorems and 1 definition: `ksCheck_parsed`, `parse_empty`, `noInputs_of_accepts` (A13),
+  `pinnedTables_eq`, `inputsOf_eq`, `statement_circuit`, `setupZHJP`, `Accepted.checksWitness`,
+  `sessionChecks_of_verdict`.
+- [guess] the first verdict by 23:25Z; compiled by 01:00Z, counting two fix rounds of about 25 min each, now that the
+  imports are built on cpu-8's slot.
+
+**Size** [read]: 792 lines in 3 new files (SessionOf 357, AcceptedChecks 325, ZkHiddenM1P 110), plus 3 root lines in
+`security/Proofs/lakefile.toml`.
+
+**`hdesc` stays a stated hypothesis** on `sessionChecks_of_verdict`: `Spot.Program.parse ⟨desc.toArray⟩ =
+.ok p₀.base.verifier.program`.
+- The route to drop it [read]: `OneStageZk.paramsOfJson` sets `own.program := (canon (getD rest "program")).toUTF8`.
+  `OneStage.paramsParsed` on the same `rest` sets `verifier.program := Program.parse (canon (obj (getD rest
+  "program"))).toUTF8`. So `desc := own.program` parses to it.
+- Proving that walks `paramsParsed`'s whole do-block, about 170 lines, and no lemma reads it today. I am not starting
+  that before AcceptedChecks compiles.
+- If soundness's `Instance` carries the registration's descriptor, as `SetsUp.params` already does, it can supply
+  `hdesc` directly [derived].
+
+**Soundness's branches** [run: `git ls-remote` 22:44Z]: `cursor/soundness-prf579-rest-8fb2` and
+`cursor/soundness-live-deployment-8fb2` are still not on the remote. Mailbox: nothing new since 21:54Z.
+**NEEDS**: none. **STOP RULE**: nothing.
+
+**Not established**: AcceptedChecks compiling, and so A13 and the `hset` derivation, which are still only written.
+Nothing yet imports these files, so they are not on any guarantee's path.
