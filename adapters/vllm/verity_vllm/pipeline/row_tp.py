@@ -449,7 +449,7 @@ class TpRow(Row):
             miss = "".join(" " + sh for sh in missing)
             self.verdict("eos-truncated", f"served=[{' '.join(need)}]", f"declared=[{declared}]: request(s) stopped before the cap; deriving the served-shape "
                          f"Program(s) [{miss}] per rank and recomposing GP-01 (MOE-05)", quiet=True)
-            served = R.longest_first({tuple(map(int, sh.split(","))) for sh in missing})
+            served = [(lp, t) for lp, t in R.longest_first({tuple(map(int, sh.split(","))) for sh in missing})]
             todo = [self.request(r, lp, t) for lp, t in served for r in range(self.W)
                     if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}")]
             self.derive_all(todo, self.derive_jobs(served, len(todo)))
