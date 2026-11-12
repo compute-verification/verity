@@ -376,7 +376,7 @@ The disk floor: `research run` and `research fetch --all` refuse (exit 3) while 
 names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly unit) also deletes each
 shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 2 h; any doubt
 keeps them all (`store/evict.py`). It also removes what nothing else does (`store/leftovers.py`): requests whose run
-dir is gone, clones of runs that are over, free store lock files, idle uv shards.
+dir is gone, clones of runs over or without a run dir, free store lock files, idle uv shards.
 
 ### research data
 

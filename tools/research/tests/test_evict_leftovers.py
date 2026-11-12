@@ -1,8 +1,8 @@
 """`research data evict`'s passes over what nothing else removes (`store/leftovers.py`): a uv cache's idle editable shards and
-build directories, the store's lock files, request directories whose run dir is gone, and the clones of runs that are over.
-Each group shows the removal and everything that must stay: in use by a live process, too young, a lock held, a run that has not
-ended, a name or layout the pass does not know, a `research keep` record.  Every path is under `tmp_path`, /proc is a directory
-there, and time is the `now` and `clock` each pass is given."""
+build directories, the store's lock files, request directories whose run dir is gone, and the clones of runs that are over or
+whose run dir is gone.  Each group shows the removal and everything that must stay: in use by a live process, too young, a
+lock held, a run that has not ended, a name or layout the pass does not know, a `research keep` record.  Every path is under
+`tmp_path`, /proc is a directory there, and time is the `now` and `clock` each pass is given."""
 import fcntl
 import inspect
 import json
@@ -533,17 +533,21 @@ def test_a_request_pass_fails_closed(root, proc, tmp_path):
     assert rep["deleted_first"] == [str(d)] and rep["kept_by"] == {"budget": 1} and more.is_dir()
 
 
-# ---- the clones of runs that are over --------------------------------------------------------------------------------------------------
+# ---- the clones of runs that are over, or whose run directory is gone ------------------------------------------------------------------
 
-def a_clone(root: Path, rid: str, *, runner: int | None = 50, status: dict | None = None, refused: bool = False) -> Path:
-    """A run's clone under scratch/ (4 inodes) and, with a runner, its run dir: launch.json and status.json or refused.json."""
+def a_clone(root: Path, rid: str, *, runner: int | None = 50, status: dict | None = None, refused: bool = False,
+            runs: str | None = "runs", hours: float = 1) -> Path:
+    """A run's clone under scratch/ (4 inodes), last written `hours` ago, and its run dir under `runs` (None: no run dir): with a
+    runner its launch.json, and status.json or refused.json."""
     c = root / "scratch" / rid
     (c / "tree" / "pkg").mkdir(parents=True)
     (c / "tree" / "pkg" / "m.py").write_text("x = 1\n")
-    if runner is not None:
-        rd = root / "runs" / rid
+    age(c, hours)
+    if runs is not None:
+        rd = root / runs / rid
         rd.mkdir(parents=True)
-        (rd / "launch.json").write_text(json.dumps({"runner_pid": runner}))
+        if runner is not None:
+            (rd / "launch.json").write_text(json.dumps({"runner_pid": runner}))
         if refused:
             (rd / "refused.json").write_text(json.dumps({"fault": "CloneRefused"}))
         if status is not None:
@@ -552,7 +556,7 @@ def a_clone(root: Path, rid: str, *, runner: int | None = 50, status: dict | Non
 
 
 def clones(root: Path, proc: Path, **kw):
-    return L.evict_clones(root / "scratch", proc=proc, clock=kw.pop("clock", lambda: 0.0), **kw)
+    return L.evict_clones(root / "scratch", proc=proc, now=kw.pop("now", NOW), clock=kw.pop("clock", lambda: 0.0), **kw)
 
 
 RUNNING = {"state": "running", "pgid": 60, "pid": 70, "starttime_ticks": 777}
@@ -638,6 +642,78 @@ def test_a_clone_dry_run_a_failed_removal_and_the_time_limit(root, proc, monkeyp
         {"path": str(b), "why": "error: OSError: [Errno 39] Directory not empty after 3 attempts"}]
     assert clones(root, root / "no-proc")["error"].startswith("2: cannot list"), "a /proc it cannot read removes nothing"
     assert b.is_dir()
+
+
+def orphan(root: Path, rid: str, hours: float) -> Path:
+    """The clone a deleted run dir left, last written `hours` ago: no run dir anywhere, and a requests directory without its
+    request."""
+    (root / "requests").mkdir(exist_ok=True)
+    return a_clone(root, rid, runs=None, hours=hours)
+
+
+def test_a_clone_whose_run_dir_is_gone_goes_once_nothing_wrote_it_for_two_days(root, proc):
+    """A deleted run dir takes with it the records that say a run is over, so `not_over` can only say it does not know.  With no
+    run dir in any runs directory, no request left, no process of the run and no write anywhere in it for 48 hours, the clone
+    goes; the newest write counts, however deep."""
+    gone, young, deep = orphan(root, RIDS[0], 49), orphan(root, RIDS[1], 47), orphan(root, RIDS[2], 100)
+    os.utime(deep / "tree" / "pkg" / "m.py", (NOW - H, NOW - H))
+    assert clone.not_over(root / "runs" / RIDS[0], proc) == "unknown: no launch.json names its runner" and L.CLONE_KEEP_S == 48 * H
+    rep = clones(root, proc)
+    assert rep["error"] is None and rep["found"] == 3 and rep["deleted_first"] == [str(gone)] and rep["deleted_inodes"] == 4
+    assert not gone.exists() and rep["kept_by"] == {"recent": 2}
+    assert (young / "tree" / "pkg" / "m.py").exists() and (deep / "tree" / "pkg" / "m.py").exists()
+    rep = clones(root, proc, now=NOW + 48 * H)
+    assert sorted(rep["deleted_first"]) == sorted([str(young), str(deep)]) and not young.exists() and not deep.exists()
+
+
+def test_a_clone_whose_run_dir_is_gone_stays_while_anything_can_still_be_its_runs(root, proc):
+    """Each of these alone keeps a clone with no run dir under runs/, last written a hundred hours ago: a run dir set aside (even
+    one whose records say the run is over: its clone stays while it is there), a request still in requests/ however old, a
+    live process that names the run or works in the clone, a process in the run's job unit.  The request goes with the requests
+    pass, and the clone at the pass after."""
+    aside = a_clone(root, RIDS[0], runs="runs-aside", status={"state": "done", "pgid": 60}, hours=100)
+    asked, named, inside, unit = (orphan(root, r, 100) for r in RIDS[1:5])
+    req = request(root, RIDS[1], 100)
+    process(proc, 9, environ=f"HOME=/x\0RESEARCH_RUN_ID={RIDS[2]}\0")
+    process(proc, 10, cwd=str(inside / "tree"))
+    process(proc, 11, unit=f"research-job-{RIDS[4]}.service")
+    assert clone.not_over(root / "runs-aside" / RIDS[0], proc) is None
+    before = snapshot(root)
+    rep = clones(root, proc)
+    assert rep["error"] is None and rep["found"] == 5 and rep["deleted"] == 0 and snapshot(root) == before
+    assert rep["kept_by"] == {"run": 1, "request": 1, "2": 3}
+    assert rep["kept_first"] == [
+        {"path": str(named), "why": "2: process 9 (p9) names its run"},
+        {"path": str(inside), "why": "2: process 10 (p10) names its run"},
+        {"path": str(unit), "why": f"2: its run dir is gone and 1 process(es) of its job unit research-job-{RIDS[4]} run"}]
+    assert requests(root, proc)["deleted_first"] == [str(req)]
+    rep = clones(root, proc)
+    assert rep["deleted_first"] == [str(asked)] and rep["kept_by"] == {"run": 1, "2": 3} and aside.is_dir() and not asked.exists()
+
+
+def test_a_run_dir_is_not_taken_for_gone_where_the_pass_cannot_look_for_it(root, proc, tmp_path):
+    """No requests directory, no runs directory, a /proc that cannot be read: a clone without a run dir stays.  A run dir in a
+    runs directory the pass is given keeps it too.  A dry run says it would go and removes nothing."""
+    c = a_clone(root, RID, runs=None, hours=100)
+    rep = clones(root, proc)
+    assert rep["deleted"] == 0 and rep["kept_first"] == [
+        {"path": str(c), "why": f"unknown: its run dir is gone and {root / 'requests'}, where its request would be, is not a directory"}]
+    (root / "requests").mkdir()
+    (root / "runs").rmdir()
+    rep = clones(root, proc)
+    assert rep["deleted"] == 0 and rep["kept_first"] == [
+        {"path": str(c), "why": f"unknown: {root / 'runs'}, where its run dir would be, is not a directory"}]
+    (root / "runs").mkdir()
+    rep = clones(root, tmp_path / "no-proc")
+    assert rep["error"].startswith("2: cannot list") and rep["deleted"] == 0 and rep["kept_by"] == {"unestablished": 1}
+    (tmp_path / "other-runs" / RID).mkdir(parents=True)
+    assert clones(root, proc, runs_dirs=[root / "runs", tmp_path / "other-runs"])["kept_by"] == {"run": 1}
+    (tmp_path / "other-requests" / RID).mkdir(parents=True)
+    assert clones(root, proc, requests_dir=tmp_path / "other-requests")["kept_by"] == {"request": 1}
+    before, lines = snapshot(root), []
+    rep = clones(root, proc, dry_run=True, log=lines.append)
+    assert snapshot(root) == before and rep["deleted_first"] == [str(c)] and f"clones: would delete {c} (4 inodes, 0.0 MB)" in lines
+    assert clones(root, proc)["deleted_first"] == [str(c)] and not c.exists()
 
 
 # ---- every pass: `research keep` records, and how much it says -------------------------------------------------------------------------

@@ -27,8 +27,9 @@
                                                    --keep-registry keeps every blob of the registry's artifacts (fixtures/artifacts.json)
                                                    what nothing else removes, whatever the target (leftovers.py; each its own report in the JSON):
                                                    --requests-dir the request directories whose run dir is gone, --scratch-dir the clones of
-                                                   runs that are over, --locks the store's free lock files, --uv-cache the uv cache's editable
-                                                   shards and temporary build directories nothing wrote for H hours (default 48)
+                                                   runs that are over or whose run dir is gone, --locks the store's free lock files, --uv-cache
+                                                   the uv cache's editable shards and temporary build directories nothing wrote for H hours
+                                                   (default 48)
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
@@ -368,8 +369,8 @@ def cmd_evict(argv: list[str]) -> int:
     `run_files` artifact is verified (oldest first).  Stops when the free space reaches `--target-free-gb`.  Never touches pending
     objects, manifests, attempts, labels or the catalog.  `--dry-run` reports without removing anything.  Whatever the target, it
     also removes what it is pointed at that nothing else removes (`leftovers.py`): request directories whose run dir is gone, the
-    clones of runs that are over, the store's free lock files and a uv cache's idle editable shards and build directories.  One
-    of these passes that fails is its report's `error` and stops no other."""
+    clones of runs that are over or whose run dir is gone, the store's free lock files and a uv cache's idle editable shards and
+    build directories.  One of these passes that fails is its report's `error` and stops no other."""
     from . import evict as EV  # noqa: PLC0415
     from . import leftovers as LO
 
@@ -398,8 +399,9 @@ def cmd_evict(argv: list[str]) -> int:
                     help="also remove each request directory under DIR (<root>/requests) whose run dir is gone, an hour or its "
                          "launch's time limit after its last write (leftovers.py `evict_requests`; reads /proc as --src-dir does)")
     ap.add_argument("--scratch-dir", default=None, metavar="DIR",
-                    help="also remove each clone under DIR (<root>/scratch) whose run is over: its runner and its workload have "
-                         "exited (leftovers.py `evict_clones`; reads /proc as --src-dir does)")
+                    help="also remove each clone under DIR (<root>/scratch) whose run is over (its runner and its workload have "
+                         "exited), or whose run dir is in no runs directory beside DIR, with no request left, no process naming its "
+                         "run and no write for 48 hours (leftovers.py `evict_clones`; reads /proc as --src-dir does)")
     ap.add_argument("--locks", action="store_true",
                     help="also unlink the store's lock files (locks/*.lock) over an hour old, each while holding its lock "
                          "(leftovers.py `evict_locks`)")

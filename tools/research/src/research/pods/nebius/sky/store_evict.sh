@@ -23,7 +23,8 @@
 # Four more passes remove what nothing else does (store/leftovers.py), each only where its variable points it (research's unit,
 # store_evict_src.conf) and each switched off by leaving that variable empty:
 #   VY_EVICT_REQUESTS  the request directories there (/workspace/research/requests) whose run dir is gone (`--requests-dir`)
-#   VY_EVICT_SCRATCH   the clones there (/workspace/research/scratch) of runs that are over (`--scratch-dir`)
+#   VY_EVICT_SCRATCH   the clones there (/workspace/research/scratch) of runs that are over, or whose run dir is gone with no
+#                      request left, no process naming the run and no write for 48 hours (`--scratch-dir`)
 #   VY_EVICT_LOCKS=1   $VY_EVICT_STORE's lock files that are free and over an hour old (`--locks`)
 #   VY_EVICT_UV        the editable shards and temporary build directories of the uv cache there (/workspace/cache/uv) that nothing
 #                      wrote for $VY_EVICT_UV_KEEP_H hours (48) and no live process names (`--uv-cache`)

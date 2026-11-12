@@ -7,8 +7,9 @@ source's objects and so costs one checkout (about a second for the repository), 
 that must be the commit the run was shipped for.  The clone lives outside the run dir, so custody never reads it:
 <root>/scratch/<run id>/tree beside src/ on a machine, a temporary directory locally.  The runner removes it once the workload has
 exited, however it ended; on a machine, one it could not remove, or was killed before removing, goes when the next clone is made
-there (`sweep`) or at the node's next eviction pass (`store.leftovers.evict_clones`), once its run is over (`not_over`).  A source
-root that is not a git checkout's top level (a tree the archive stream shipped has no .git) is refused, never guessed at.
+there (`sweep`) or at the node's next eviction pass (`store.leftovers.evict_clones`), once its run is over (`not_over`); one whose
+run dir was deleted, which `not_over` cannot decide, only that pass removes.  A source root that is not a git checkout's top level
+(a tree the archive stream shipped has no .git) is refused, never guessed at.
 """
 from __future__ import annotations
 

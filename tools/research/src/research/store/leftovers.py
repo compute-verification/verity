@@ -4,13 +4,13 @@ Each pass is in `evict_src`'s idiom.  It fails closed: a condition it cannot est
 report's `error`.  It starts no removal after its time limit (`budget_s`); the next pass goes on.  A dry run removes nothing
 and says what it would.  The report counts what went (`deleted`, `deleted_inodes`, `deleted_bytes`, as removing it freed them:
 a file with another link frees nothing) and what stayed by the kind its reason starts with (`kept_by`): `2:` in use (a live
-process names it, a lock is held, a run has not ended), `recent:`, `run:` (a request's run dir exists), `retired:`,
-`record:` (a `research keep` record), `unknown:` (a record, a name or a layout the pass does not know), `budget:`, `error:`,
-`unestablished:`.  A path kept because it is in use, recorded, unknown or failed is named with its reason, in `kept_first` and
-in the log, which names the first `LISTED` of each kind.  What a live process names (cwd, root, exe, open files, maps, command
-line, environment: `evict.live_texts`) is read when a pass first needs it and again once `SCAN_S` old.  Nothing a
-`research keep` record covers goes (`retention.py`): a path with a record of its own, under a directory that has one, or
-holding one stays whole, for `research retention` to decide.
+process names it, a lock is held, a run has not ended), `recent:`, `run:` (a run dir of its run exists), `request:` (a clone's
+run dir is gone and its request is not), `retired:`, `record:` (a `research keep` record), `unknown:` (a record, a name or a
+layout the pass does not know), `budget:`, `error:`, `unestablished:`.  A path kept because it is in use, recorded, unknown or
+failed is named with its reason, in `kept_first` and in the log, which names the first `LISTED` of each kind.  What a live
+process names (cwd, root, exe, open files, maps, command line, environment: `evict.live_texts`) is read when a pass first
+needs it and again once `SCAN_S` old.  Nothing a `research keep` record covers goes (`retention.py`): a path with a record of
+its own, under a directory that has one, or holding one stays whole, for `research retention` to decide.
 
 * **uv's editable shards and temporary build directories** (`evict_uv`).  uv keys an editable wheel by its source path
   (`<cache>/sdists-v<N>/editable/<digest>`), so every shipped source tree and every run clone leaves a shard per workspace
@@ -38,9 +38,19 @@ holding one stays whole, for `research retention` to decide.
   under that lock, request.json first (a delivery that arrives later finds no request and claims nothing), once nothing in it
   was written for `REQUEST_KEEP_S`, or for as long as its launch may still deliver it (`remote.launch_limit`) when that is
   longer, with no run dir under the runs roots or the `runs_root` it names, and no live process naming its run.
-* **the clones of runs that are over** (`evict_clones`): `<root>/scratch/<run id>`, which its runner removes and
-  `clone.sweep` removes when the next clone is made there.  This pass removes the same clones (`clone.not_over`) on a node
-  where none is, and keeps one whose run a live process still names.
+* **the clones of runs that are over, or whose run directory is gone** (`evict_clones`): `<root>/scratch/<run id>`, which
+  its runner removes and `clone.sweep` removes when the next clone is made there.  This pass removes the same clones
+  (`clone.not_over`, asked of the run dir under `runs/`) on a node where none is, and keeps one whose run a live process still
+  names.  A deleted run dir takes with it the records that say a run is over (its runner, its workload's processes), so
+  `not_over` can only answer "unknown" and the clone would stay for good; and a run dir that is missing says nothing by
+  itself, so the pass takes it for over only when nothing else can still be the run's.  The runs directory is a directory (a
+  run dir missing from a disk that is not mounted is not gone) and no runs directory has the run dir: one set aside in
+  `runs-aside/` still holds the run's records, and its clone stays while it does.  No request of the run is left in
+  `requests/`: a launch claims a run dir from its request, and the requests pass removes a request first, under the launch's
+  lock, once no launch may deliver it.  No live process names the run and none is in its job unit (`jobuser.unit_name`): a run
+  whose run dir was deleted under it still runs.  And nothing under the clone was written for `CLONE_KEEP_S`, which speaks
+  for a process that names its run nowhere the pass reads.  A clone is made only once its run dir is claimed (`clone.home`),
+  so one without a run dir is never one a launch is still on its way to.
 
 A request or clone is a directory named like a run id (`ids.is_run_id`); any other entry stays, and is said.
 """
@@ -62,6 +72,7 @@ from .evict import Unestablished
 UV_KEEP_S = 48 * 3600        # a shard or build directory written this recently may belong to a build under way or a tree in use
 LOCK_KEEP_S = 3600           # a lock file made this recently belongs to fetches of one tree that are still taking it in turn
 REQUEST_KEEP_S = 3600        # a request written this recently may be on its way to its launch
+CLONE_KEEP_S = 48 * 3600     # a clone whose run dir is gone, written this recently, may be one a process the pass cannot see still uses
 BUDGET_S = 4 * 60            # no removal of a pass starts after this long: with evict_src's, they stay inside the unit's `timeout 3000`
 SCAN_S = 60                  # what live processes name is read again before a removal once the last reading is this old
 LISTED = 20                  # how many paths a report names of those deleted, and of those kept with a reason to act on
@@ -458,28 +469,61 @@ def evict_requests(requests_dir: Path, *, runs_dirs: list[Path] | None = None, d
     return p.end(error)
 
 
-# ---- the clones of runs that are over --------------------------------------------------------------------------------------------------
+# ---- the clones of runs that are over, or whose run directory is gone ------------------------------------------------------------------
 
-def evict_clones(scratch: Path, *, runs_root: Path | None = None, dry_run: bool = False, budget_s: float = BUDGET_S,
+def evict_clones(scratch: Path, *, runs_dirs: list[Path] | None = None, requests_dir: Path | None = None, dry_run: bool = False,
+                 keep_s: float = CLONE_KEEP_S, budget_s: float = BUDGET_S, now: float | None = None,
                  clock: Callable[[], float] = time.monotonic, proc: Path = Path("/proc"),
                  log: Callable[[str], None] | None = None, nginx_conf: Path = EV.NGINX_CONF) -> dict[str, Any]:
-    """Remove each `<scratch>/<run id>` whose run, under `runs_root` (`runs/` beside `scratch`), is over (`clone.not_over`) and
-    which no live process names, with `clone.remove`."""
+    """Remove, with `clone.remove`, each `<scratch>/<run id>` that no live process names and whose run is over (`clone.not_over`,
+    asked of its run dir in the first of `runs_dirs`) or whose run dir is gone (module docstring): in none of `runs_dirs`, with
+    no request in `requests_dir`, no process in its job unit and nothing written for `keep_s`.  `runs_dirs` and `requests_dir`
+    are by default `runs/` and `runs-aside/`, and `requests/`, beside `scratch`; the first of `runs_dirs` and `requests_dir`
+    must be directories for a run dir or a request to be missing from them."""
     from .. import clone as CL
+    from ..jobuser import unit_name
+    from ..telemetry.procs import unit_pids
 
     scratch = Path(scratch)
-    runs_root = scratch.parent / "runs" if runs_root is None else Path(runs_root)
-    p = _Pass("clones", scratch, dry_run, budget_s, 0.0, clock, log)
+    root = scratch.parent
+    runs_dirs = [root / "runs", root / "runs-aside"] if runs_dirs is None else [Path(d) for d in runs_dirs]
+    requests_dir = root / "requests" if requests_dir is None else Path(requests_dir)
+    p = _Pass("clones", scratch, dry_run, budget_s, now, clock, log)
     named = _Named(_RUN_NAMED, "its run", scratch, proc, nginx_conf, clock)
     try:
         paths, others = _run_entries(scratch)
     except Unestablished as e:
         return p.end(str(e))
 
+    def left(name: str) -> str | None:
+        """Why the clone of run `name`, whose run dir is in no runs directory, may still be its run's, apart from its last write."""
+        if _mtime(requests_dir) is None:
+            return f"unknown: its run dir is gone and {requests_dir}, where its request would be, is not a directory"
+        if _run_dir([requests_dir], name):
+            return (f"request: its run dir is gone and its request {requests_dir / name} is not: a launch may deliver it, and the "
+                    "requests pass removes it first")
+        if why := named(name):
+            return why
+        if pids := unit_pids(f"{unit_name(name)}.service", proc):
+            return f"2: its run dir is gone and {len(pids)} process(es) of its job unit {unit_name(name)} run"
+        return None
+
     def one(path: Path) -> None:
-        if why := CL.not_over(runs_root / path.name, proc) or named(path.name):
+        if _mtime(runs_dirs[0]) is None:
+            return p.stay(path, f"unknown: {runs_dirs[0]}, where its run dir would be, is not a directory")
+        run = _run_dir(runs_dirs, path.name)
+        if run is None:
+            why = left(path.name)
+        elif run.parent == runs_dirs[0]:
+            why = CL.not_over(run, proc) or named(path.name)
+        else:
+            why = f"run: its run dir is set aside ({run}); its clone stays while that is there"
+        if why:
             return p.stay(path, why)
-        size = _walk(path)[1:]
+        newest, *size = _walk(path)
+        if run is None and (age := p.now() - newest) < keep_s:
+            return p.stay(path, f"recent: its run dir is gone and it was written {_age(age)} ago; it goes once nothing has "
+                                f"written it for {keep_s / 3600:g} h")
         if not dry_run and (why := CL.remove(path)):
             return p.stay(path, f"error: {why}")
         p.gone(path, *size)
