@@ -1,8 +1,8 @@
 """`stop_audit.py`'s verifier's half on a stop class's hand-off, sampled on a test's own challenger
 (`fake_challenger`): the stop stream built again from ``stage1.json`` alone, the verifier's own ``--registered`` file,
 the audit record's entries and what each refuses, and Lean's verdicts on the read across the class's two streams
-(`Record.across`) held to the Python's on each of its cases, and on a list of reads (`Record.acrossAll`) on a chain
-of three records. No proof runs here: a session's verdicts are stand-ins of
+(`Record.across`) held to the Python's on twelve written cases, and on a list of reads (`Record.acrossAll`) on a chain
+of three records. No input is drawn. No proof runs here: a session's verdicts are stand-ins of
 the form `a0.lean_verify` reports, and ``stop_audit_small.sh`` is the run that proves. The class is the two-stage
 driver's tests' (`test_two_stage_driver._stop_class`)."""
 
@@ -229,8 +229,10 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     """`Record.across` (the Lean verifier's piece, as `stop_audit.across` calls it) against the Python on one
     hand-off, verdict by verdict: ``logged`` against the boundary stream's log's digests (`resume`'s test), ``order``
     against `two_stage.stop_order`, reason for reason, ``audit``, its ``accepted`` and its ``complete``, against
-    `boundary_audit` on the outcome record, and ``case`` against the four. Case 1: the hand-off with a boundary outcome
-    that accepted and is complete. Case 2: a stop record on a
+    `boundary_audit` on the outcome record, and ``case`` against the four. Twelve written cases: no input is drawn,
+    and none is one the Lean refuses, so the two sides are held to each other on these and no further. Case 1: the
+    hand-off with a boundary outcome that accepted and is complete, on the first stage's session and on one made by
+    hand. Case 2: a stop record on a
     boundary record never logged; an empty log; and, on sessions of the test's challenger that received the two
     registrations by hand, the stop registration's coins released first, no receipt of the boundary registration, a
     coin opened and not read, and no evidence. Case 3: the boundary stream's audit record missing, refused, and
@@ -260,6 +262,7 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
         "another registration's audit record": (3, {}, None, others, None),
         "an audit record that accepted and is not complete": (4, {}, None, SMALL.incomplete(stage1), None),
     }
+    assert len(cases) == 12 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 6 + [3] * 3 + [4]
     for name, (case, stop, log, outcome, why) in cases.items():
         mine = {**stage1, "stop": {**s, **stop}}
         log = list(r.first.stream.log) if log is None else log
