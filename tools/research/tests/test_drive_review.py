@@ -883,7 +883,7 @@ def _red_landing(world, monkeypatch, tmp_path, before=lambda h: None) -> tuple[R
     return h, tip
 
 
-def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_two_hours_on_with_no_fix(
+def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_once_its_window_passed_unfixed(
         world, monkeypatch, tmp_path):
     """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to ci alone.
     Drive names the one landing whose change touches the failing test and rings its lane with the suite's owner in one post
@@ -901,8 +901,8 @@ def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_a
                          "`fixes suite pkg`, or one whose change touches what failed), or drive reverts #2 then."), ring
     r = h.postland()["red"]["suite pkg"]
     assert r["culprit"][0] == 2 and r["named_at"] == h.clock and not r.get("reverted"), r
-    assert any(f"suite pkg's culprit #2 isn't reverted: 120 min are left to fix it forward, until {due} UTC" in x
-               for x in world.logs), world.logs
+    assert any(f"suite pkg's culprit #2 isn't reverted: {D.FIX_FORWARD_S // 60} min are left to fix it forward, until {due} UTC"
+               in x for x in world.logs), world.logs
     h.clock += D.FIX_FORWARD_S - 1
     h.tick()
     assert _main(world) == tip and not [p for p in h.posts if "reverted" in p] and len(h.posted) == 1, world.logs
@@ -913,8 +913,8 @@ def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_a
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
     (post,) = [p for p in h.posts if "reverted" in p]
     assert post.startswith("@lane-2 @pkg-owner queue: #2 reverted on `main`: suite pkg is red on `main`"), post
-    assert post.endswith("#2 is its culprit (its change touches pkg/tests/test_x.py), and 2 h after it was named no fix of "
-                         "it is marked. Fix and re-mark"), post
+    assert post.endswith(f"#2 is its culprit (its change touches pkg/tests/test_x.py), and {D.FIX_FORWARD_S // 60} min after it "
+                         "was named no fix of it is marked. Fix and re-mark"), post
     assert "@ci" not in post and "@top" not in post, post
     assert h.posted[-1][0] == main and h.launched == []                                  # the next run checks the new tip
     h.tick()

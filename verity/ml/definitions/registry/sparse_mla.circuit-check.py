@@ -17,5 +17,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                            **{k: sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")})),
         ("SparseMlaHead_v1", lambda: bind(sparse_mla.SparseMlaHead, T=65,
                                           **{k: v for k, v in sparse_mla.SPARSE_MLA_GLM53.items() if k != "NH"})),
+        # a unit of SparseMla_v1's cut (`CUTS`) at the served statics: a full block after the first
+        ("SparseMlaHeadBlock_v1", lambda: bind(sparse_mla.SparseMlaHeadBlock, NVIS=64, FIRST=False,
+                                               **{k: sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")})),
+        ("SparseMlaHeadEnd_v1", lambda: bind(sparse_mla.SparseMlaHeadEnd, DV=sparse_mla.SPARSE_MLA_GLM53["DV"],
+                                             INV=sparse_mla.SPARSE_MLA_GLM53["INV"])),
         ("SparseMla_v1", lambda: bind(sparse_mla.SparseMla, T=65, **sparse_mla.SPARSE_MLA_GLM53)),
     ]

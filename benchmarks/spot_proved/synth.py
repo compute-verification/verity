@@ -25,7 +25,7 @@ def blocks():
         "SparseMlaSplitPart_T64": 'SparseMlaSplitPart_v1{T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
                                   'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}',
         "AllReduceMultimem_W8": f"AllReduceMultimem_v1{{WORLD=8,SIZE=3072,TREES={trees},FTZ=false}}",
-        "RMSNormFusedCudaVector8_N6144_B256": 'RMSNormFusedCudaVector8_v1{N=6144,EPS={"f64":"0x1.4f8b588e368f1p-17"},BLOCK=256}',
+        "RMSNormFusedCudaVector8_N6144_B256": 'RMSNormFusedCudaVector8_v3{N=6144,EPS={"f64":"0x1.4f8b588e368f1p-17"},BLOCK=256}',
         "Fp8GroupQuantUe8m0_K1536": "Fp8GroupQuantUe8m0_v1{K=1536,G=128}",
         "MoeExpertFp8GemmW_K256_SWAP": 'MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v1"}}',
         "MoeExpertFp8GemmW_K256_MMA": 'MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}',

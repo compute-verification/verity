@@ -324,7 +324,7 @@ pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result
 mod tests {
     use super::*;
     use crate::circuit::Wire;
-    use crate::ir_block::{FlatCache, Group};
+    use crate::ir_block::{Group, PassCache, Rows};
     use crate::lookup::LookupNet;
 
     fn net(groups: Vec<Group>, in_words: usize, rows: Vec<(Vec<usize>, Vec<usize>)>) -> IrUnitNet {
@@ -337,7 +337,8 @@ mod tests {
         a.push(vec![const_pos]);
         b.push(vec![const_pos]);
         IrUnitNet { name: "unit".into(), useful: const_pos + 1, const_pos, in_groups: groups, out_groups: vec![], in_words, out_cols: vec![],
-                    a, b, unit_log: 9, sha256: [0; 32], leaves: None, cut: None, order: None, flat: FlatCache::default() }
+                    a: Rows::from_vecs(&a), b: Rows::from_vecs(&b), unit_log: 9, sha256: [0; 32], leaves: None, cut: None, order: None,
+                    pass: PassCache::default() }
     }
 
     #[test]

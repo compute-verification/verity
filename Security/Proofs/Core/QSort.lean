@@ -16,6 +16,8 @@ changing only its range, to elements it held (`ByKey.Within`).
 
 @[expose] public section
 
+set_option Elab.async false
+
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
 namespace Verity.QSort
@@ -134,6 +136,13 @@ theorem qsort_sorted (as : Array α) (lt : α → α → Bool)
   · simp only
     rw [sort_sorted lt _ as.toVector _ _ _ _ _ (Nat.lt_succ_self _)
       (fun i j hi hj _ _ _ _ => by simpa using hs i hi j hj)]
+
+/-- `qsort` keeps its array's size. -/
+theorem size_qsort {α : Type} (xs : Array α) (lt : α → α → Bool) : (xs.qsort lt).size = xs.size := by
+  unfold Array.qsort
+  split
+  · rfl
+  · simp
 
 end Verity.QSort
 

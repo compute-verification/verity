@@ -21,6 +21,7 @@ public import Spot.Select
 public import Spot.Slots
 public import Spot.FilePart
 public import Spot.Service
+public import Spot.SecondStage
 public import Spot.Run
 public import Spot.Stream
 public import Spot.Fleet
@@ -35,6 +36,7 @@ public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
 public import Spot.Wires
 public import Spot.WiresSpan
+public import Spot.WiresOrder
 public import Spot.WiresSound
 public import Spot.WiresComplete
 public import Spot.WiresDrawn

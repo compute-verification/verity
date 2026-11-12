@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Recursive.ClashFree
 public import Proofs.Flock.Recursive.Target
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!

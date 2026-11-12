@@ -280,7 +280,7 @@ def test_gp01_composes_a_rank_program_past_index_topk_beside_one_within_it(phi):
 def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_path):
     """Class G (about 15 s): a prompt of 10 tokens prefilled in two chunks beside a short request, then decoded, its rows past
     INDEX_TOPK from position 4.  The step compiler builds each request's Program at its launch context (R1, R2 and R3 hold), the
-    long one selecting its rows past INDEX_TOPK, and that Program is `build_program`'s at the unit's launch batch and chunks.
+    long one selecting its rows past INDEX_TOPK, and that Program is `build_program`'s at the unit's launch batch and chunks, batched.
     The fast tests build each Program alone; this one holds the batch rules to a Program that selects past INDEX_TOPK."""
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     from verity_vllm.program.predict.steps import Registered, compile_steps
@@ -296,7 +296,7 @@ def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_pat
     assert sigs == [(0, str(TupleT(Array(2, I32), rule))), (3 * 8, str(TupleT(Array(3, I32), rule)))], \
         "rows 4..11 of the long one, at each indexer layer; each Program's length rule last"
     alone = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": long.policy}), "request", LP=10, T=2, dead_free=True,
-                          batch=long.batch(), chunks=long.chunks, stop=long.stop)
+                          batched=True, batch=long.batch(), chunks=long.chunks, stop=long.stop)
     assert alone.digest in c.programs
 
 

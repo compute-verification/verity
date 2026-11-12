@@ -103,7 +103,7 @@ theorem CountingSum : Guarantees.CountingSum := by
   exact Finset.sum_le_sum fun u _ => h u
 
 theorem Counting : Guarantees.Counting := by
-  intro d B c k P _ V ω q hV hq h
+  intro d B c P V ω q hV hq h
   have hsum : ∑ v ∈ V, ω v ≤ B * q := by
     simpa using CountingSum d.D B P V ω (fun _ => q) hV h
   have h1 : (c : ℝ) / q * ∑ v ∈ V, ω v ≤ (c * B : ℕ) := by

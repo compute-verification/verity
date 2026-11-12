@@ -35,7 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Range
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Every masked table's bound from the live sessions, off the table on a witness lane

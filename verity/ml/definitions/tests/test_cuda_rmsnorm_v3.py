@@ -93,8 +93,8 @@ def _sums_of_squares(spec, x, res, w) -> list[int]:
 
 
 def _same(N: int, EPS: float, BLOCK: int) -> None:
-    v1 = bind(C.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK)
-    v3 = bind(C.RMSNormFusedCudaVector8V3, N=N, EPS=EPS, BLOCK=BLOCK)
+    v1 = bind(C.RMSNormFusedCudaVector8V1, N=N, EPS=EPS, BLOCK=BLOCK)
+    v3 = bind(C.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK)
     x, res, w = _rows(np.random.default_rng(N * 4099 + BLOCK), N, BLOCK)
     assert _sums_of_squares(v3, x, res, w) == _sums_of_squares(v1, x, res, w)
     want, got = evaluate_batch(v1, x, res, w, kernel="reference"), evaluate_batch(v3, x, res, w, kernel="reference")
@@ -120,7 +120,7 @@ def test_each_order_rows_sum_of_squares_is_its_levels_sum(N, EPS, BLOCK):
     meet each other first."""
     rows = _orders(N, BLOCK)
     zero = np.zeros((len(rows), N), np.uint64)
-    got = _sums_of_squares(bind(C.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK), np.stack(list(rows.values())), zero, zero)
+    got = _sums_of_squares(bind(C.RMSNormFusedCudaVector8V1, N=N, EPS=EPS, BLOCK=BLOCK), np.stack(list(rows.values())), zero, zero)
     two_24, two_24_plus_2 = 0x4B800000, 0x4B800001
     assert dict(zip(rows, got)) == {level: two_24_plus_2 if level == "lanes" else two_24 for level in rows}
     assert {"pairs", "lanes"} <= set(rows)
@@ -141,7 +141,7 @@ def _gates(fn) -> Counter:
 
 @pytest.mark.parametrize("N,EPS,BLOCK", SMALL + SERVED)
 def test_v3_has_v1s_gates_in_a_body_that_does_not_grow_with_N(N, EPS, BLOCK):
-    v1 = bind(C.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK)
-    v3 = bind(C.RMSNormFusedCudaVector8V3, N=N, EPS=EPS, BLOCK=BLOCK)
+    v1 = bind(C.RMSNormFusedCudaVector8V1, N=N, EPS=EPS, BLOCK=BLOCK)
+    v3 = bind(C.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK)
     assert _gates(v3) == _gates(v1)
     assert len(v3.body.nodes) <= 24 + C.WARP

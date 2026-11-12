@@ -4324,6 +4324,23 @@ def _texts(section: str, entries: dict, g: str) -> list[str]:
 LOCK_NAME = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
 
 
+def _held_to_form(lock: dict) -> set[str]:
+    """The theorems a lock's `claims.witnesses` (`fails`, `meets`), `witnesses` (`nontrivial`, `honest`) and `claims.generic`
+    name, which `check.py` holds to their form instead of `shape` (its `claim_witnesses` and `generic_claims`): it reads no
+    `shape.frozen` entry of theirs."""
+    claims = lock.get("claims") if isinstance(lock.get("claims"), dict) else {}
+    ws, gs, generic = (d if isinstance(d, dict) else {}
+                       for d in (claims.get("witnesses"), lock.get("witnesses"), claims.get("generic")))
+    names = [n for w in ws.values() if isinstance(w, dict)
+             for n in [w.get("fails"), *(w.get("meets") if isinstance(w.get("meets"), list) else [])]]
+    for w in gs.values():
+        if isinstance(w, dict):
+            n = w.get("nontrivial")
+            names += [n] if isinstance(n, str) else n if isinstance(n, list) else []
+            names += w.get("honest") if isinstance(w.get("honest"), list) else []
+    return {n for n in [*names, *generic.values()] if isinstance(n, str)}
+
+
 def _read_hashes(lock: dict) -> dict[str, str]:
     """{definition: its hash} over the lock's `reads`."""
     out: dict[str, str] = {}
@@ -4342,10 +4359,12 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
     definition is restated there; `check.py --update` keeps a premise only while the statement prints it, and the head's
     records run, or the lock run after its landing, checks its lock).  It may drop an entry whose text (a premise, a frozen
     entry's reason) it holds under a key of the section ``base`` lacks (renamed), a guarantee's premises while it adds as
-    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them), and a frozen
-    entry's reason while it keeps the key (reworded: `check.py` reads the key and the reason's category, not its wording)."""
+    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them), a frozen
+    entry's reason while it keeps the key (reworded: `check.py` reads the key and the reason's category, not its wording),
+    and the frozen entry of a theorem ``merged`` holds to its form (`_held_to_form`), which `check.py` never reads."""
     listed, was = merged.get("guarantees") or {}, base.get("guarantees") or {}
     old, new = _read_hashes(base), _read_hashes(merged)
+    inert = _held_to_form(merged)
 
     def restated(g: str) -> bool:
         names = LOCK_NAME.findall(" ".join((listed[g] if isinstance(listed[g], dict) else {}).get("signature") or []))
@@ -4364,7 +4383,7 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
             had, kept = _texts(section, b, g), _texts(section, m, g)
             gone = [t for t in had if t not in kept and t not in moved]
             if section == "frozen":
-                out += [f"shape.frozen[{g}]" for _ in gone if g not in m]
+                out += [f"shape.frozen[{g}]" for _ in gone if g not in m and g not in inert]
             elif len(gone) > len([t for t in kept if t not in had]):
                 out += [f"shape.inline[{g}]: " + (t if len(t) <= LOCK_DROP_SHOWN else t[:LOCK_DROP_SHOWN] + "…") for t in gone]
     return out

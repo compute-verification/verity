@@ -208,7 +208,7 @@ def test_the_replay_samples_interior_registers_after_its_boundary_and_the_second
     ireg = IR.register(stream, first, it)
     assert ireg.record["population"] == Q * N_RHO and ireg.record["previous"] == reg.digest and stream.log[-1] == ireg.record
     assert ireg.record["window"] == {"kind": "served", "run": IR.interior_run(reg.digest, [0, 2]), "row": ROW,
-                                     "interior": True, "replay": "replay-test"}
+                                     "interior": True, "replay_sample": [0, 2], "replay": "replay-test"}
     second = stream.select(ireg)
     assert second.replay_sample == first and [u // N_RHO for u in second.units] == [0, 1]
 

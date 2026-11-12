@@ -4,8 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
 public import Proofs.Flock.Soundness.Audit.FlockBatched
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The Flock audit at the compiled layer, several tables per session

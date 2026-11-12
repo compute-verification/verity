@@ -2,7 +2,7 @@ module
 
 public import Definitions.WeightSecurity.Served
 public import Proofs.Flock.EndToEnd.Period.Union
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A period of served windows: the lead and the incorrect proof blocks left undetected

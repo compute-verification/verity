@@ -22,7 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
 import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # One hidden-output `--zk` sampled session of `J` tables with registered reads

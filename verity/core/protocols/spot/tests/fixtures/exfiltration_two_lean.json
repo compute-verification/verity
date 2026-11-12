@@ -3,7 +3,7 @@
  "statement": "Claims.Sampling.card_influenceTwo_le_uniform",
  "inputs": {
   "verity/core/protocols/spot/tests/lean/ExfiltrationTwoVectors.lean": "5b999556d13d95540bede66a7a9f5334bd2db0b410b616be791366b23398a236",
-  "Security/Definitions/Claims/SamplingTwo.lean": "59460446753e8f260243f94e9a43033c9dba110ee725a6c2c4fd1639dd5e25c1",
+  "Security/Definitions/Claims/SamplingTwo.lean": "ffdc2ea0b9ebcf4570b5afab5230f87a7374edf534913b648bb8efb0eaed7860",
   "Security/Proofs/Flock/SamplingGeneric/TwoCount.lean": "bc2b0e35ccede6d8a63f8d914f4852a90df7bc2cbe834e5c81eb947194829f6a",
   "Security/Proofs/Flock/SamplingGeneric/TwoTable.lean": "69a83bac804c09746b5c5705f00c404bf37e52068dc9e7aa7953712df93d3395",
   "Security/Proofs/lake-manifest.json": "25d287dba45f5ba9eb2cd9cd9902b50e68045c5fb7dbbeec5a00f37f97fe534a",

@@ -23,6 +23,8 @@ EVALUATORS = {
                              "f32 FMA square chain over its width-8 vectors, CUB BlockReduce, rsqrt.approx, two f32 products, RNE to bf16)",
     "RMSNormFusedCudaVector8_v1": "verity.ml.definitions.numerics.cuda_rmsnorm_rows.fused_add_rms_norm_rows (RMSNormFusedCudaVector8_v1{N,EPS,"
                                   "BLOCK}: the bf16 residual add, four square-pair sums per vector, CUB BlockReduce, rsqrt.approx) -> out, residual",
+    "RMSNormFusedCudaVector8_v3": "verity.ml.definitions.numerics.cuda_rmsnorm_rows.fused_add_rms_norm_rows (RMSNormFusedCudaVector8_v3{N,EPS,"
+                                  "BLOCK}: v1's words, its sum of squares as batches in v1's f32 order) -> out, residual",
     "LlBf16DotprodGemm_v1": "verity.ml.definitions.registry.bf16_gemm_check.dotprod_rows (LlBf16DotprodGemm_v1{N,K,BS,VEC,FMA}: BS thread "
                             "chains from +0, the VEC/2 tail, the FMA or FMUL+FADD rounds, each warp's butterfly, the warp sums in order) -> f32",
     "LlBf16SplitKGemm_v1": "verity.ml.definitions.registry.bf16_gemm_check.splitk_rows (LlBf16SplitKGemm_v1{N,K,SPLIT_K,TILE_K,WARPS,DOT} at "
@@ -107,7 +109,8 @@ def rmsnorm_cuda_vector8(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> 
 
 
 def rmsnorm_fused_cuda_vector8(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    """`RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}(x, res, w)` -> ports 0 (out) and 1 (the residual), N bf16 words each."""
+    """`RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}(x, res, w)`, and v3 (the same words) -> ports 0 (out) and 1 (the residual), N
+    bf16 words each."""
     from verity.ml.definitions.numerics.cuda_rmsnorm_rows import fused_add_rms_norm_rows
     N = int(statics["N"])
     got = fused_add_rms_norm_rows(_bf16(ops[0], N).reshape(1, N), _bf16(ops[1], N).reshape(1, N), _bf16(ops[2], N),
@@ -264,6 +267,7 @@ def moe_router_sigmoid_bias(statics: dict[str, Any], ops: Sequence[np.ndarray]) 
 ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = {
     "RMSNormCudaVector8_v1": (rmsnorm_cuda_vector8, ("0",)),
     "RMSNormFusedCudaVector8_v1": (rmsnorm_fused_cuda_vector8, ("0", "1")),
+    "RMSNormFusedCudaVector8_v3": (rmsnorm_fused_cuda_vector8, ("0", "1")),
     "LlBf16DotprodGemm_v1": (ll_dotprod_gemm, ("0",)),
     "LlBf16SplitKGemm_v1": (ll_splitk_gemm, ("0",)),
     "Fp8GroupQuantUe8m0_v1": (fp8_group_quant_ue8m0, ("0", "1")),
@@ -294,8 +298,10 @@ def check_targets(family: str) -> list:
     mla = dict(DR=16, DV=16, BN=16, SCALE=0.0625, DOT=hop, INV=hopper.Fa3InvSum)
     return {
         "RMSNormCudaVector8_v1": [bind(cuda_rmsnorm.RMSNormCudaVector8, N=n, EPS=e, BLOCK=b) for n, e, b in ((16, 1e-6, 2), (64, 1e-5, 3), (64, 1e-5, 8))],
-        "RMSNormFusedCudaVector8_v1": [bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=n, EPS=e, BLOCK=b)
+        "RMSNormFusedCudaVector8_v1": [bind(cuda_rmsnorm.RMSNormFusedCudaVector8V1, N=n, EPS=e, BLOCK=b)
                                        for n, e, b in ((16, 1e-6, 2), (64, 1e-5, 3), (64, 1e-5, 16))],
+        "RMSNormFusedCudaVector8_v3": [bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=n, EPS=e, BLOCK=b)
+                                       for n, e, b in ((16, 1e-6, 2), (64, 1e-5, 3), (64, 1e-5, 16), (536, 1e-5, 33))],
         "LlBf16DotprodGemm_v1": [bind(ll_bf16.LlBf16DotprodGemmWord, N=3, K=k, BS=bs, VEC=v, FMA=f)
                                  for k, bs, v, f in ((128, 64, 2, 1), (128, 64, 2, 0), (160, 32, 4, 1))],
         "LlBf16SplitKGemm_v1": [bind(ll_bf16.LlBf16SplitKGemmWord, N=n, K=k, SPLIT_K=s, TILE_K=t, WARPS=w, DOT=hop)

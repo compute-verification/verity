@@ -4,7 +4,7 @@ once from the exact rational (`test_dsa`'s helpers), `shfl.sync.bfly` simulated 
 `RsqrtApprox_v1`.  Its twin (`kernels.dsa_norm_rows`) against the reference evaluator on edge rows; the statics it refuses; and that
 its scale is not `RMSNormTriton_v1`'s on served-like rows.  `TritonBlockRMSNorm_v1` (`_fused_q_kv_rmsnorm_kernel`) against the same
 kind of model from its PTX and SASS, every masked lane's +0 summed, and `DsaRMSNorm_v1`'s words as its 4-warp unmasked case's (the
-contracted eps is the same word at a power-of-two N).  The Boolean versions'
+contracted eps is the same word at a power-of-two N).  `DsaLatentRow_v1` is program 1's norm and k_pe rope as one row.  The Boolean versions'
 agreement with these word views is circuit-check's (`boolean_dsa_norm.circuit-check.py`)."""
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics import dsa_norm_rows as NR
 from verity.ml.definitions.numerics import rows as RK
 from verity.ml.definitions.registry import boolean_dsa_norm as BN
+from verity.ml.definitions.registry import boolean_rope as BR
 from verity.ml.definitions.registry import dsa_norm as DN
 from verity.ml.definitions.registry import prims as P
 from tests.program.test_dsa import _butterfly, _fadd
@@ -214,3 +215,17 @@ def test_block_registrations() -> None:
     word = bind(DN.TritonBlockRMSNorm, N=512, BLOCK=1024, WARPS=4, EPS=EPS)
     assert SW.boolean_version(word).id == "TritonBlockRMSNorm_v2{N=512,BLOCK=1024,WARPS=4,EPS=1e-05}"
     assert TR.word_of(bind(BN.TritonBlockRMSNormV2, N=512, BLOCK=1024, WARPS=4, EPS=EPS)).id == word.id
+
+
+def test_the_latent_row_is_the_norm_then_the_rope() -> None:
+    """`DsaLatentRow_v1` at GLM-5.3's row, on the edge rows: `DsaRMSNorm_v1{512}` of kv_a's first 512 words, then
+    `RoPEHeadGptJ_v2{64}` of its last 64."""
+    word = bind(DN.DsaLatentRow, KVL=512, R=64, EPS=EPS)
+    norm, rope = bind(DN.DsaRMSNorm, N=512, EPS=EPS), bind(BR.RoPEHeadGptJV2, D=64)
+    rng = np.random.default_rng(11)
+    for i, x in enumerate(_edge_rows(rng, 576)):
+        w, cs = _w(rng, 512), _bf16_row(rng, 64, 1.0)
+        want = list(evaluate(norm, x[:512].tolist(), w.tolist())) + list(evaluate(rope, x[512:].tolist(), cs.tolist()))
+        assert list(evaluate(word, x.tolist(), w.tolist(), cs.tolist())) == want, i
+    assert SW.boolean_version(word).id == "DsaLatentRow_v2{KVL=512,R=64,EPS=1e-05}"
+    assert TR.word_of(bind(BN.DsaLatentRowV2, KVL=512, R=64, EPS=EPS)).id == word.id

@@ -47,8 +47,8 @@ where it can, building no body (`make`).
 A ``--catalog-units`` run that forks its targets' processes (`cli.run` with ``--jobs``) builds its bindings so too: each
 binding whose record doesn't count, and every one when none does or there are none, is built in a process forked for it alone
 (``apart`` in `plan`), which returns what its roots reach with each one's descriptor, what its build read (its record's reads,
-`cache.unit_reads`) and its share of the task list's reads (`cache.task_list_reads` of its roots).  This process builds no
-body.  A target that misses, through such a binding or one whose record counted, is made where it is checked (`cli._made`,
+`cache.unit_reads`) and the in-tree modules it imported (`cache.modules_since`), which with its record's reads are its share
+of the task list's reads.  This process builds no body.  A target that misses, through such a binding or one whose record counted, is made where it is checked (`cli._made`,
 `make`): by the zygote that forks the checks of that binding's targets, each under a recording its check then holds
 (`cli._prepare`), so the bodies they share are built once, as a full build builds them, and no target is built or described
 here one after another; the target is held to the descriptor its binding's build gave or its record holds, and one that
@@ -83,8 +83,7 @@ what changed; the shared part only where what a binding registers or imports, th
 
 A run from the records, forked or not, has no process that imported every module a full build has imported before its
 checks, and `sidecars.owner` reads those: a Definition a factory makes is owned by the module that binds it at its top level,
-which only another binding's body may import, and the block check (`checks.UNIT_OWNERS`) and a by-calls root's callees go by
-that owner.  So each Definition's owner is handed down as a full build has it (`owners`, `sidecars.HANDED`).
+which only another binding's body may import, and a by-calls root's callees go by that owner.  So each Definition's owner is handed down as a full build has it (`owners`, `sidecars.HANDED`).
 """
 from __future__ import annotations
 
@@ -120,8 +119,9 @@ class Stale(Exception):
 class Entry:
     """One binding as this run has it: its units, kind and label (`targets.catalog_units`), its key, the roots it made now,
     what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted, with that record's
-    reads.  Built in a process of its own (``apart``, `built_apart`), with what that process read: its record's reads and its
-    share of the task list's (``listed``), and the CPU seconds it took (``seconds``, kept beside its record).  ``words``: the
+    reads.  Built in a process of its own (``apart``, `built_apart`), with what that process read: its record's reads and the
+    in-tree modules it imported (``listed``, `cache.modules_since`), and the CPU seconds it took (``seconds``, kept beside its
+    record).  ``words``: the
     Boolean Definitions its build registered (`_words`), where a process built it apart.  ``made`` None: its roots are the ids
     the catalog's roots record lists (``ids``, `plan`'s ``binding``), made by ``make`` when first read and held to those ids.
     ``effects``: what making its roots did beyond them (`_noting`), or doing that in their place (`_replay`).  ``n``: which of
@@ -622,7 +622,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         effects["raised"].update((e.label, e.effects) for e in todo if id(e) in gone)
         entries = [e for e in entries if id(e) not in gone]
         if side is not None and len(kept) == len(entries):
-            listed = merged(e.listed for e in kept)
+            listed = merged([*(e.reads for e in kept), *(e.listed for e in kept)])
     made: list[dict[str, Any]] = []
     for e in entries:
         made.append({fn.id: fn for fn in e.made or () if _kind(fn) is not None})
@@ -1151,10 +1151,10 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
            pinned: frozenset[str] | None = None) -> None:
     """In a process forked for ``e``: its nodes or its error put in ``out`` (`_put`), and out through `os._exit`, so nothing of
     the parent's (its atexit, its buffers) runs twice.  With ``side`` (traced: the units of the bindings that make no root):
-    what its build read (`cache.unit_reads`), its share of the task list's reads (`cache.task_list_reads` of its roots) and
-    what it did that the tracer cannot see (`cache.untraced`, past the parent's ``untraced``); and the Boolean Definitions its
-    build registered (`_words`).  ``pinned``: the parent's (`targets.pinned`), so the pins are no read of the binding's
-    build."""
+    what its build read (`cache.unit_reads`), the in-tree modules it imported (`cache.modules_since`), which with those are
+    its share of the task list's reads, and what it did that the tracer cannot see (`cache.untraced`, past the parent's
+    ``untraced``); and the Boolean Definitions its build registered (`_words`).  ``pinned``: the parent's (`targets.pinned`),
+    so the pins are no read of the binding's build."""
     from verity.ml.circuits.defs import REGISTRY
 
     from . import cli
@@ -1163,12 +1163,12 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
     code = 0
     try:
         start = cli._rss_gb()
-        before = set(REGISTRY.defs)
+        before, loaded = set(REGISTRY.defs), set(sys.modules)
         try:
             got = {"nodes": _reach_one(e, described, pinned), "start": start, "words": _words(before)}
             if side is not None:
                 got.update(reads=CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots),
-                           listed=CC.task_list_reads(e.roots), untraced=CC.untraced()[untraced:])
+                           listed=CC.modules_since(loaded), untraced=CC.untraced()[untraced:])
         except BaseException as ex:  # noqa: BLE001  (a model's is named, as the catalog names it; any other fails the build)
             got = {"error": f"{type(ex).__name__}: {str(ex)[:200]}", "start": start}
         _put(out, got)

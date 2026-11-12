@@ -63,7 +63,7 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "max_position_embeddings": 64, "hidden_act": "silu", "eos_token_id": 255}
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
 STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": 11, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
-COIN = bytes(range(64))
+SALT = bytes(range(64))
 STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188)}
 SERVED = "served-model"
 GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
@@ -175,28 +175,28 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
         policy_of(0, STOCH, None)
 
 
-def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_window_coin_or_refused_by_name():
-    """A seed is its certified body's or derived from the request's id and the window's verifier coin, never one serving fills in
-    or draws: with no coin, or for a request the window carries in (whose admitting window's coin this compile doesn't read), an
-    unseeded stochastic request is refused by name. The derived seed is the request's alone and in its batch."""
+def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_window_seed_salt_or_refused_by_name():
+    """A seed is its certified body's or derived from the request's id and the window's seed salt, never one serving fills in
+    or draws: with no seed salt, or for a request the window carries in (whose admitting window's seed salt this compile doesn't
+    read), an unseeded stochastic request is refused by name. The derived seed is the request's alone and in its batch."""
     unseeded = {**STOCH, "seed": None}
-    assert policy_of(0, unseeded, 188, request_id="q1", coin=COIN) == (STOCH_POLICY, derived(COIN, "q1"))
-    assert derived(COIN, "q1") != derived(COIN, "q2") and derived(COIN, "q1") != derived(COIN[::-1], "q1")
-    assert policy_of(0, {**unseeded, "seed": 5}, 188, request_id="q1", coin=COIN) == (STOCH_POLICY, 5)
+    assert policy_of(0, unseeded, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, derived(SALT, "q1"))
+    assert derived(SALT, "q1") != derived(SALT, "q2") and derived(SALT, "q1") != derived(SALT[::-1], "q1")
+    assert policy_of(0, {**unseeded, "seed": 5}, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, 5)
     with pytest.raises(Unexpressible, match=r"request 0 \('q1'\): stochastic with no seed in its certified body, and the compile has "
-                                            r"no window coin to derive one from: a seed serving fills in \(`served_seed.DEFAULT_SEED`\) "
+                                            r"no window seed salt to derive one from: a seed serving fills in \(`served_seed.DEFAULT_SEED`\) "
                                             r"or draws"):
         policy_of(0, unseeded, 188, request_id="q1")
     with pytest.raises(Unexpressible, match="request 0 \\('a'\\): stochastic with no seed in its certified body, and the window carries "
-                                            "it in, so its seed derives from its admitting window's coin"):
-        plan_steps(_registered(), A_IN, {"a": {**unseeded, "max_tokens": 4, "prompt": [1, 2, 3]}}, coin=COIN)
+                                            "it in, so its seed derives from its admitting window's seed salt"):
+        plan_steps(_registered(), A_IN, {"a": {**unseeded, "max_tokens": 4, "prompt": [1, 2, 3]}}, salt=SALT)
     reg, (advice, ingress) = _registered(), _mixed()
     ingress = {**ingress, "q1": {**ingress["q1"], "seed": None}}
     with pytest.raises(Unexpressible, match=r"request 1 \('q1'\): stochastic with no seed in its certified body"):
         compile_steps(reg, advice, ingress)
-    assert compile_steps(reg, advice, ingress, coin=COIN).requests[1].seed == derived(COIN, "q1")
-    with pytest.raises(Unexpressible, match=r"request 1 \('q1'\): .* the window's verifier coin isn't non-empty bytes \(bytes b''\)"):
-        compile_steps(reg, advice, ingress, coin=b"")
+    assert compile_steps(reg, advice, ingress, salt=SALT).requests[1].seed == derived(SALT, "q1")
+    with pytest.raises(Unexpressible, match=r"request 1 \('q1'\): .* the window's seed salt isn't non-empty bytes \(bytes b''\)"):
+        compile_steps(reg, advice, ingress, salt=b"")
 
 
 @pytest.mark.parametrize("sampling,fact", [
@@ -678,7 +678,7 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
 def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
     """A request Program holding a node no output reads is refused, with the fix (in the lowering, never the advice) in the message."""
     import verity_vllm.program.predict.build as PB
-    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     with pytest.raises(Unexpressible, match=r"request 0's Program [0-9a-f]{16} holds 56 dead units, node 104 \(RoPE_v1\{NHEADS=4,D=16\}\) first, which no "
                                             r"output reads: drop them in the lowering"):
         compile_steps(_registered(), *_mixed())

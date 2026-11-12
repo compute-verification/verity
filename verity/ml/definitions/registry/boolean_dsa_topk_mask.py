@@ -6,6 +6,8 @@ circuit-check and integrations/vllm/tests/program/test_dsa_topk_mask.py hold equ
                                    Definition (RB = TOPK's bit length)
     DsaRadixTies_v1{N,TOPK}        (eq, gt: N bits, r: RB bits) -> N bits; traced, no word Definition
     DsaTopKMask_v2{N,TOPK}         (scores: N x 32 bits) -> N bits; word view DsaTopKMask_v1
+    DsaRowValid_v1{N}              (n: 32 bits) -> N bits, bit j n > j; traced, no word Definition
+    DsaTopKMaskCounted_v2{N,TOPK}  (scores: N x 32 bits, n: 32 bits) -> N bits; word view DsaTopKMaskCounted_v1
     DsaButterflyTagBits_v1{N,K}    (mask: N bits) -> N x (1 + kb) bits; traced, no word Definition
     DsaButterflyCtl_v1{T,KB,TWO}   (lo, hi: 1 + KB bits) -> (bit, 1 + KB bits[, 1 + KB bits]); traced, no word Definition
     DsaButterflySettings_v2{N,K}   (mask: N bits) -> butterfly_switches(N, K) bits; word view DsaButterflySettings_v1
@@ -38,7 +40,7 @@ ANDs (`verity_flock.ir_lower.definition_ands`) at TOPK = 2,048:
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ZERO, add, compress_columns, mux, sub
+from verity.ml.circuits.boolean.forms import NOT, ZERO, add, compress_columns, mux, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import elementwise as EW
@@ -124,14 +126,38 @@ DsaRadixTies = EW.specialized(
     doc=_radix_ties.__doc__)
 
 
-def _mask(B, S, scores):
-    """`DsaTopKMask_v1` on bits: the keys (`DsaTopKKey_v2`), 32 `DsaRadixPass_v1` from eq all 1, gt all 0 and r = TOPK, and
-    `DsaRadixTies_v1`."""
+def _row_valid(S):
+    """`DsaRowValid_v1{N}`: bit j is n > j (n u32), for a row's first n of N keys.  A binary trie over n's low L = ceil(log2 N)
+    bits from the top, each node of a prefix p holding (E, G): n's bits so far are p, or exceed it; a node's children cost one AND,
+    t = E AND n_i: the 0 child (E XOR t, G XOR t), the 1 child (t, G).  The root's G is n >= 2^L; a node past N is dropped."""
+    L = (S.N - 1).bit_length()
+
+    def build(C, n):
+        g = or_reduce(C, n[L:])
+        level = [(NOT(g), g)]
+        for i in reversed(range(L)):
+            nxt = []
+            for e, x in level:
+                t = C.AND(e, n[i])
+                nxt += [(e ^ t, x ^ t), (t, x)]
+            level = nxt[:-(-S.N >> i)]
+        return [[x for _, x in level]]
+    return build
+
+
+DsaRowValid = EW.specialized("DsaRowValid", 1, ["N"], _row_valid, lambda S: ((("n", I32),), Array(S.N, BIT)),
+                             doc=_row_valid.__doc__)
+
+
+def _select(B, S, scores, n=None):
+    """The radix select over ``scores``' keys (`DsaTopKKey_v2`): 32 `DsaRadixPass_v1` from eq all 1 (with ``n``, `DsaRowValid_v1`),
+    gt all 0 and r = TOPK, and `DsaRadixTies_v1`."""
     check_statics(S.N, S.TOPK)
     N, RB = S.N, _rb(S)
     keys = B.batch(DsaTopKKeyV2, scores, axes=(0,))
     one, zero = B.call(BL.constant(1)), B.call(BL.constant(0))
-    eq, gt = Coll(Array(N, BIT), _rep(one, N)), Coll(Array(N, BIT), _rep(zero, N))
+    eq = Coll(Array(N, BIT), _rep(one, N)) if n is None else B.call(bind(DsaRowValid, N=N), n)
+    gt = Coll(Array(N, BIT), _rep(zero, N))
     r = Coll(Array(RB, BIT), concat([(one if S.TOPK >> i & 1 else zero).refs for i in range(RB)]))
     step = bind(DsaRadixPass, N=N, TOPK=S.TOPK)
     for i in reversed(range(32)):
@@ -140,8 +166,26 @@ def _mask(B, S, scores):
     return B.call(bind(DsaRadixTies, N=N, TOPK=S.TOPK), eq, gt, r)
 
 
+def _mask(B, S, scores):
+    """`DsaTopKMask_v1` on bits: the keys (`DsaTopKKey_v2`), 32 `DsaRadixPass_v1` from eq all 1, gt all 0 and r = TOPK, and
+    `DsaRadixTies_v1`."""
+    return _select(B, S, scores)
+
+
 DsaTopKMaskV2 = EW.on_bits("DsaTopKMask", 2, ["N", "TOPK"], lambda S: ((("scores", Array(S.N, F32)),), Array(S.N, BIT)), _mask,
                            M.DsaTopKMask)
+
+
+def _counted_mask(B, S, scores, n):
+    """`DsaTopKMaskCounted_v1` on bits: `DsaTopKMask_v2`'s radix select with eq starting at `DsaRowValid_v1{N}`(n), so a key from n
+    on is never counted, never above the threshold and never a tie: the passes select among the first n keys, all of them when
+    n <= TOPK (each pass's count then below r)."""
+    return _select(B, S, scores, n)
+
+
+DsaTopKMaskCountedV2 = EW.on_bits("DsaTopKMaskCounted", 2, ["N", "TOPK"],
+                                  lambda S: ((("scores", Array(S.N, F32)), ("n", I32)), Array(S.N, BIT)), _counted_mask,
+                                  M.DsaTopKMaskCounted)
 
 
 def _tag(K: int):
@@ -243,5 +287,6 @@ def _row_check(B, S, scores):
 DsaTopKRowV2 = EW.on_bits("DsaTopKRow", 2, ["N", "TOPK"], lambda S: ((("scores", Array(S.N, F32)),), Array(S.TOPK, I32)),
                           _row_check, M.DsaTopKRow)
 
-BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaTopKMaskV2, DsaButterflyTagBits, DsaButterflyCtl,
-                         DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2, DsaTopKRowV2]
+BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaTopKMaskV2, DsaRowValid, DsaTopKMaskCountedV2,
+                         DsaButterflyTagBits, DsaButterflyCtl, DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2,
+                         DsaTopKRowV2]

@@ -39,7 +39,7 @@ pub struct Template {
 impl Template {
     /// A `flock-ir-unit/v2` netlist as a template: its input words' rows are the inputs.
     pub fn from_net(net: &crate::ir_block::IrUnitNet) -> Self {
-        Template { k_log: net.unit_log, n_in: net.in_words * 128, const_pos: net.const_pos, useful: net.useful, a: net.a.clone(), b: net.b.clone() }
+        Template { k_log: net.unit_log, n_in: net.in_words * 128, const_pos: net.const_pos, useful: net.useful, a: net.a.to_vecs(), b: net.b.to_vecs() }
     }
 
     /// `c = a · b` in GF(2^128) mod `x^128 + x^7 + x^2 + x + 1`, schoolbook: inputs `a` (rows 0..127) and `b` (128..255), the

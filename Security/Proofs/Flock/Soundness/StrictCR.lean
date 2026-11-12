@@ -2,12 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Assumptions
 public import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
-public import Definitions.Flock.Game.Seq
+public import Definitions.Flock.Game
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The compiled and knowledge terms, and `δ_tree`, under strict-time collision resistance

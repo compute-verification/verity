@@ -2,7 +2,7 @@
 
 * FlashInfer's fused all-reduce + residual + RMSNorm is one collective Compute (`AllReduceRmsNormMnnvl_v1`), its new residual written
   back into the partial's buffer; another pattern code, quantisation or world is refused;
-* vLLM's CUDA rms_norm / fused_add_rms_norm off batch invariance fold to `RMSNormCudaVector8_v1` / `RMSNormFusedCudaVector8_v1`;
+* vLLM's CUDA rms_norm / fused_add_rms_norm off batch invariance fold to `RMSNormCudaVector8_v1` / `RMSNormFusedCudaVector8_v3`;
 * an unbiased bf16 `aten.linear` folds to cuBLAS's captured route, and a shape without one is refused;
 * MLA's absorb `bmm` folds to `BatchedGemmWord_v1` per token over permuted views, the `out=` variant included, named by the Root
   (W_UK_T or W_UV of kv_b's one allocation) its weight view lies in;
@@ -106,7 +106,7 @@ def test_the_cuda_rms_norms_fold_to_the_vector8_definitions():
                "_C::fused_add_rms_norm(Tensor($0! -> ) input, Tensor($1! -> ) residual, Tensor? weight, float epsilon) -> ()",
                [view(2315, (256, H)), view(2284, (256, H)), view(23, (H,)), 1e-05], module="model.layers.0.post_attention_layernorm")
     r = CudaFusedAddRmsNorm().match(fa, _ctx(256))
-    assert isinstance(r, Compute) and spec_label(r.spec).startswith("RMSNormFusedCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=")
+    assert isinstance(r, Compute) and spec_label(r.spec).startswith("RMSNormFusedCudaVector8_v3{N=6144,EPS=1e-05,BLOCK=")
     assert [o.view.alloc for o in r.outputs] == [2315, 2284]
     assert CudaRmsNorm().match(fa, _ctx(256)) is None and CudaFusedAddRmsNorm().match(rn, _ctx(256)) is None
 

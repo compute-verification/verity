@@ -41,7 +41,7 @@ import Proofs.Flock.SoundAtBridge.ServedProof
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Pouw.RelativeSecurity
 
 /-!

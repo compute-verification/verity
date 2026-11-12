@@ -15,7 +15,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 import fake_challenger as FC
 
@@ -170,8 +170,10 @@ def test_the_run_of_record_reads_the_output_values(monkeypatch):
 def test_an_interior_registration_reads_a_port_of_its_boundary():
     """Under a two-stage design the interior registration's registered `state` is the boundary registration's port
     `carry`, the state its replay blocks leave: R7 takes it in the interior registration, the interior's copies carry
-    it to the run of record, and the outcome binding both registrations is accepted. Registered with no output named,
-    it is refused under its own domain."""
+    it to the run of record, which agrees on the outcome binding both registrations. Its one failure is round 2's
+    (`second-read`): the replay block's Definition links CARRY's `x`, `state` and output to the boundary's ports of
+    them, which this boundary doesn't register, and its session reads `state` from the registered value instead.
+    Registered with no output named, it is refused under its own domain."""
     stream = _stream(_two_stage_spec(), replay=BLOCK)
     assert stream.n_rho == N_RHO
     m = Q * N_RHO
@@ -181,11 +183,14 @@ def test_an_interior_registration_reads_a_port_of_its_boundary():
     first = stream.select(reg)
     out = {"state": {"record": reg.digest, "port": "carry"}}
     interior, iports = _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
-                               0, reg.digest, [_left(boundary, "carry")], interior=True)
+                               0, reg.digest, [_left(boundary, "carry")], interior=True,
+                               replay_sample=D.proved(first.draw))
     assert "R7-domain" in _refused(lambda: stream.register_interiors(first, interior, iports, registered={"state": 2}))
     ireg = stream.register_interiors(first, interior, iports, registered={"state": 2}, outputs=out)
     assert stream._entries[reg.order].interior_copies[-1] == out
     second = stream.select(ireg)
     assert stream.deliver(second, [SESSION]) is None
     outcome = stream.outcome(second, _lean({"state": _left(boundary, "carry")["root"]}), {"statement": "stub"})
-    assert outcome.accepted and outcome.verdict.codes == ()
+    checks = stream.records[-1]["audit"]["checks"]
+    assert not outcome.accepted and outcome.verdict.detail["reject"]["checks"] == ["statements"]
+    assert checks["statements"]["codes"] == ["second-read"] and "run" not in checks

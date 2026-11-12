@@ -4915,6 +4915,29 @@ def test_dropped_entries_reads_a_frozen_reason_reworded_at_its_key_as_kept_and_a
     assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].pop(f))) == [f"shape.frozen[{f}]"]
 
 
+@pytest.mark.parametrize("names", [
+    {"witnesses": {"W": {"nontrivial": "F"}}},
+    {"witnesses": {"W": {"nontrivial": ["E", "F"], "honest": ["H"]}}},
+    {"witnesses": {"W": {"nontrivial": "E", "honest": ["F"]}}},
+    {"claims": {"witnesses": {"C": {"fails": "F"}}}},
+    {"claims": {"witnesses": {"C": {"fails": "E", "meets": ["F"]}}}},
+    {"claims": {"generic": {"C": "F"}}},
+])
+def test_dropped_entries_lets_a_head_drop_the_frozen_entry_of_a_theorem_held_to_its_form(names):
+    """`check.py` holds a theorem `witnesses`, `claims.witnesses` or `claims.generic` names to its form instead of `shape`,
+    and reads no frozen entry of its: a head may drop it while the theorem stays listed, and the same drop of a guarantee
+    none of them names still drops it."""
+    from research.queue import dropped_entries
+
+    def lock(edit: Callable[[dict], object]) -> dict:
+        return json.loads(_lock_text(edit))
+
+    base = lock(lambda d: d.update(json.loads(json.dumps(names))))
+    assert dropped_entries(base, lock(lambda d: (d.update(json.loads(json.dumps(names))),
+                                                 d["shape"]["frozen"].pop("F")))) == []
+    assert dropped_entries(lock(lambda d: None), lock(lambda d: d["shape"]["frozen"].pop("F"))) == ["shape.frozen[F]"]
+
+
 def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():
     """A premise `next` lists under G that the merged lock lists under a key it adds is renamed, and a guarantee whose record
     (its owner aside) differs, or a definition its signature names has another hash, was restated; a new owner alone, or

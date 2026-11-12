@@ -26,7 +26,9 @@ operand of at least eps >= 2^-126 (`dsa.check_eps`'s reason).  kv_cache_dtype "a
 
 Registered: `DsaRMSNorm_v1{N, EPS}` (x: N bf16, w: N bf16) -> N bf16, one token's row; `boolean_dsa_norm.DsaRMSNorm_v2` on bits.  N is
 a power of two from 256: at N = 128 a thread holds one element and the compiler contracts the first butterfly level instead (as
-`dsa.DsaIndexerKRow_v1`'s variance), which this body does not state.
+`dsa.DsaIndexerKRow_v1`'s variance), which this body does not state.  `DsaLatentRow_v1{KVL, R, EPS}` (kv: KVL + R bf16, w: KVL bf16,
+cs: R bf16) -> KVL + R bf16 is program 1's whole row, the cache's [kv_c | k_pe]: `DsaRMSNorm_v1{KVL, EPS}` of kv's first KVL words,
+then `boolean_rope.RoPEHeadGptJ_v2{R}` of its last R; `boolean_dsa_norm.DsaLatentRow_v2` on bits.
 
 `TritonBlockRMSNorm_v1{N, BLOCK, WARPS, EPS}` is the same lowering of a `tl.sum` RMSNorm over a masked block: a row of N live elements
 in a power-of-two BLOCK on 32 WARPS threads, the rest loaded as +0 (`tl.load(..., mask=block < SIZE, other=0.0)`), the mean
@@ -50,12 +52,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.defs import composite
+from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
 from verity.ml.definitions.registry.prims import BF16
 
 THREADS, WARP = 128, 32
@@ -65,6 +68,7 @@ _BLOCK_CONF = ("model-untested: read from vLLM d9105ea80's _fused_q_kv_rmsnorm_k
                f"from it (the module docstring); the q rows (N 1536) a cc 9.0 Commit committed "
                f"({EVIDENCE['dsv4_q_norm_commit']['run_record']}) are its words "
                "(tests/properties/test_dsv4_q_norm_commit.py), with no probe launch yet")
+_LATENT_CONF = "model-untested: DsaRMSNorm_v1's (above) and RoPEHeadGptJ_v2's, the row's two parts, each its own Definition's words"
 
 
 def check_eps(name: str, EPS: float) -> None:
@@ -159,4 +163,18 @@ def TritonBlockRMSNorm(B, S, x, w):
     return block_rms_norm(D.word_ops(B), S, x, w, P.F2fpBf16)
 
 
-DSA_NORM_COMPOSITES = [DsaRMSNorm, TritonBlockRMSNorm]
+def _sig_latent(S):
+    return (("kv", Array(S.KVL + S.R, BF16)), ("w", Array(S.KVL, BF16)), ("cs", Array(S.R, BF16))), Array(S.KVL + S.R, BF16)
+
+
+@composite("DsaLatentRow", 1, ["KVL", "R", "EPS"], _sig_latent, conformance=_LATENT_CONF)
+def DsaLatentRow(B, S, kv, w, cs):
+    """One token's latent row as program 1 writes it to the MLA cache, [kv_c | k_pe]: kv_a's first KVL words normed
+    (`DsaRMSNorm_v1{KVL, EPS}`, kv_a_layernorm's weight ``w``), then its last R roped (`RoPEHeadGptJ_v2{R}`, the cache row ``cs``).
+    One Definition, so that a launch's rows batched are one run of the history."""
+    kvc = B.call(bind(DsaRMSNorm, N=S.KVL, EPS=S.EPS), kv[0:S.KVL], w)
+    kpe = B.call(bind(RoPEHeadGptJV2, D=S.R), kv[S.KVL:S.KVL + S.R], cs)
+    return Coll(Array(S.KVL + S.R, BF16), concat([kvc.refs, kpe.refs]))
+
+
+DSA_NORM_COMPOSITES = [DsaRMSNorm, TritonBlockRMSNorm, DsaLatentRow]

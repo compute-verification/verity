@@ -7,8 +7,7 @@ import Mathlib.Combinatorics.Enumerative.DoubleCounting
 import Mathlib.Data.Nat.Bitwise
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Rewinding
 import Proofs.Flock.Soundness.ZK.Adaptivity
 import Proofs.Flock.Soundness.ZK.Blocks

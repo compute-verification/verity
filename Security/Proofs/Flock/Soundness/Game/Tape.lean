@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Flock.Game.Tape
-public import Definitions.Flock.Game.Seq
-public import Proofs.Flock.Soundness.Game.Prob
+public import Definitions.Flock.Game
+public import Proofs.Flock.Soundness.Game
 
 /-!
 # Sampling a strategy's coins ahead

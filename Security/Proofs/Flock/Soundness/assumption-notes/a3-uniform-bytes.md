@@ -24,7 +24,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   not on A3.
 - **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
   `execOS_escape_le` and `execOS_subset_escape_le` (`ExecDrawOS.lean`). They hold for every number of
-  bytes `L` the model reads. The live sample reads as many as its reruns need, and its acceptance probability is the
+  bytes `L` the model reads. The live sample reads as many as its reruns need, and its miss probability is the
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
   it: their sampling design is the full sample, which samples every unit at every byte string (`execOS_subset_full_mem`,

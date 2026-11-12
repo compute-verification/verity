@@ -7,6 +7,9 @@ array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.m
 loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
 and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
 a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`). Outside the tests it
+also refuses a template query's units' gates asked one by one under a map over the units (`(Array.range pop).mapM fun u
+=> … TemplateQuery.gates d rs u`), each of which walks every earlier root node: they are read a range at a time
+(`TemplateQuery.unitGates`). Outside the tests it
 also refuses the recursive inner's two: the comb (`.folded`) in a file that sets the inner statement up from its flat
 file (`Stmt.setupTables innerTags …`), which `partialRangesT` folds row by row since a flat file carries no template, and
 V*'s circuit text emitted outside V*'s namespace (`VStar.emitCircuitOf`), the whole unit laid out again. The fix is in the
@@ -50,6 +53,10 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/spot/Spot/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
+    "verity/core/service/flock/Flock/TemplateQuery.lean":
+        "TemplateQuery.unitGatesRef, every unit's gates unit by unit, the walk unitGates replaced: the reference the "
+        "unit_gates difftest piece holds it to, and unitGates' answer on ranges evaluate never gives (not contiguous "
+        "from unit 0, or a root that isn't a definition)",
     "verity/core/service/flock/Flock/RecCoins.lean":
         "open (PRF-283 Decision 1): Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
         "file, folds every row of the unrolled inner unit, until PR 8 folds a templated inner once per Definition "
@@ -102,6 +109,13 @@ INNER = re.compile(r"\bStmt\.setup\w*\s+(?:\w+\.)*innerTags\b")
 COMB = re.compile(r"\.(?:folded|foldedPartial)\b(?![\w'])")
 #: V*'s circuit text emitted from outside V*'s namespace: the unit laid out and written again
 EMIT = re.compile(r"(?<![\w'.])VStar\.emitCircuit(?:Of|Holo)?\b(?![\w'])")
+#: a range mapped unit by unit (`(Array.range pop).mapM fun u =>`), and the body it maps: the rest of its line and two more
+UNIT_MAP = re.compile(r"\b(?:List|Array)\.range\b[^\n]*?\bfun\s+(\w+)\s*=>([^\n]*(?:\n[^\n]*){0,2})")
+
+
+def _unit_gates(unit: str) -> re.Pattern:
+    """A template query's gates of one unit, `TemplateQuery.gates d rs unit`."""
+    return re.compile(rf"(?<![\w'.])(?:(?:Flock\.)?TemplateQuery\.)?gates\s+[\w.]+\s+\w+\s+{re.escape(unit)}\b(?![\w'.])")
 
 
 def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
@@ -113,6 +127,8 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
         if INNER.search(src):
             hits += [(m.start(), "the comb over the flat inner circuit") for m in COMB.finditer(src)]
         hits += [(m.start(), "V*'s unrolled circuit text regenerated") for m in EMIT.finditer(src)]
+        hits += [(m.start(), "a template query's units' gates asked one by one (TemplateQuery.unitGates reads them a "
+                  "range at a time)") for m in UNIT_MAP.finditer(src) if _unit_gates(m.group(1)).search(m.group(2))]
     hits += [(m.start(), "a range over a gate count") for m in RANGE.finditer(src)]
     hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)]
     for b in BOUND.finditer(src):
@@ -158,10 +174,15 @@ def test_the_scan_sees_each_form():
     def o (s : VStar.Stmt) := VStar.emitCircuitOf holo put u l s.sub b
     def p (t : Tmpl) := Tmpl.foldUnit t lays sl a lw rho rr
     """
-    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 12, 13, 15, 16, 19, 20]
+    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 11, 12, 13, 15, 16, 19, 20]
     assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16]
     plain = """
     def lincheck (c : CircuitFold) := c.folded alpha beta lw rho ts
     def stage := emitCircuitOf holo put u l sub b
+    def one (u : Nat) := TemplateQuery.gates d rs u
+    def laid := (Array.range pop).map fun i => match TemplateQuery.locate rs i, gatesOf i with
+      | some l, some g => (l, g)
+      | _, _ => none
+    def other := (Array.range pop).mapM fun u => gates d rs v
     """
     assert offenses(plain) == []

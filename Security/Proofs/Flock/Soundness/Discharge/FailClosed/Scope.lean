@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ParseStmt
 
 /-!

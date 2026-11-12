@@ -151,7 +151,7 @@ class CudaRmsNorm:
 @dataclass
 class CudaFusedAddRmsNorm:
     """`_C.fused_add_rms_norm(x! [M,N], residual! [M,N], weight [N], eps)` off batch invariance (`fused_add_rms_norm_kernel<bf16, 8>`) ->
-    `Compute(RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}, rows=M, (PerRow(x), PerRow(residual), Shared(weight)), (PerRow(x),
+    `Compute(RMSNormFusedCudaVector8_v3{N,EPS,BLOCK}, rows=M, (PerRow(x), PerRow(residual), Shared(weight)), (PerRow(x),
     PerRow(residual)))` in place, BLOCK `cuda_rmsnorm.launch_block(M, N, fused=True)`: the Build's `CudaFusedAddRmsNormRule`."""
 
     name: str = "norm.fused_add_rms_norm_cuda"

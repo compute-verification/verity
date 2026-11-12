@@ -12,8 +12,8 @@ import Mathlib.RingTheory.Henselian
 import Mathlib.RingTheory.RegularLocalRing.Defs
 import Mathlib.RingTheory.SimpleRing.Principal
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 
@@ -465,7 +465,7 @@ theorem prCoin_regionClaim_le (A : Arith F K) (hA : A.Correct) (S : Statement)
         rw [eval_regionPoly, sub_eq_zero]
         rfl
     _ ≤ ((regionPoly (F := F) S R ptLocal mPts z).totalDegree : ℝ≥0∞) / Fintype.card F :=
-        prCoin_mvEval_eq_zero_le _ hQ
+        Verity.Game.prCoin_mvEval_eq_zero_le _ hQ
     _ ≤ (mPts : ℝ≥0∞) / Fintype.card F := by
         have := totalDegree_regionPoly_le (F := F) S R ptLocal mPts z
         gcongr

@@ -72,11 +72,10 @@ import numpy as np
 
 from verity.ml.circuits import partition_object as PO
 from verity.ml.commitments import hm96, row_table as RT
-from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.hm96 import batch as HB
 from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
-from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
+from verity.ml.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            row_leaf, sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
@@ -403,8 +402,7 @@ class Binding:
         return template_partition(self.program, self.query).population
 
     def binding(self, port: str, schema: str, leaves: int) -> bytes:
-        return identity_digest_sha512(DOMAIN_TAG, {"program": self.partition["program"], "partition": self.partition_digest,
-                                                   "port": port, "schema": schema, "leaves": int(leaves), "run": self.run})
+        return window_binding(self.partition["program"], self.partition_digest, port, schema, leaves, self.run)
 
     def domain(self, port: str, schema: str, leaves: int) -> CommitmentDomain:
         return CommitmentDomain(self.binding(port, schema, leaves), OWNER, RangeIndexedDomain(0, leaves), hash="sha512")

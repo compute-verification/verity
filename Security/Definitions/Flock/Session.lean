@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Flock.Ligerito
-public import Definitions.Flock.Game.Interleave
+public import Definitions.Flock.Game
 public import Definitions.Flock.Piop
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset

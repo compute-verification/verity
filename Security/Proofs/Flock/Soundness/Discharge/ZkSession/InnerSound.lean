@@ -5,7 +5,7 @@ public import ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.AffineLines.UniqueDe
 public import ArkLib.Data.CodingTheory.ReedSolomon
 public import Definitions.Core.Game
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LigeritoQueries
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase

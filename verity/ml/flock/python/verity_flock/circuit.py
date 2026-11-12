@@ -604,6 +604,70 @@ def past_range(w: dict) -> str | None:
             f"lanes form, verity/core/protocols/pouw/leaf_lanes.py) or extend the proved range (proofs)")
 
 
+def _block_ranges(n_sha: int, n_hm: int, unit_log: int, units: int, unit_packed: bool = False,
+                  extra: tuple | list = ()) -> tuple[list[dict], int]:
+    """A Flock block's ranges and its ``k_log`` (`_ranges`): ``n_sha`` sha512x3 slots, ``n_hm`` hm96 slots, ``units`` unit slots
+    of 2^``unit_log`` bits, the ``extra`` ranges (a tail's stages, lookup slots), then the mask. A range no region reads is
+    packed: the compressions, the lookups, and the units when the tail returns the outputs (``unit_packed``)."""
+    return _ranges([("unit", SHA_LOG, n_sha, {"net": SHA_NET, "packed": True}), ("unit", HM_LOG, n_hm, {"net": HM_NET}),
+                    ("unit", unit_log, units, {"net": "unit", **({"packed": True} if unit_packed else {})}), *extra,
+                    ("mask", MASK_LOG, 1, {"net": "mask"})])
+
+
+def _unit_ports(definition, cuts: dict | None = None) -> tuple[list[Port], list[Port]]:
+    """``definition``'s rows as `UnitStager` takes them (`verity.ml.windows.interface.unit_rows`), ``(ins, outs)``: a bit row
+    per parameter, or ``k`` of a parameter ``cuts`` cuts ``k`` ways, and one per return field, each whole u16 words."""
+    from verity.ml.circuits.evaluation.reference import resolve
+
+    params, ret = resolve(definition).signature()
+    fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
+    ins = [(name if k == 1 else f"{name}#{j}", _type_bits(t) // k)
+           for name, t in params for k in [int((cuts or {}).get(name, 1))] for j in range(k)]
+    outs = [(f"o{j}", _type_bits(f)) for j, f in enumerate(fields)]
+    return tuple([Port(p, -(-b // 16), 16 * -(-b // 16)) for p, b in rows] for rows in (ins, outs))
+
+
+def _flat_useful(ands: int, in_bits: int, out_bits: int) -> int:
+    """The cells `ir_lower.layout` lays a flat unit (`class_statement.unit_lowering`) out in: its input ports as one group of
+    a power of two of `ir_lower.WORD`-bit words, its ANDs, its output ports as one such group aligned to its size, then the
+    constant column."""
+    def group(bits: int) -> int:
+        return IL.WORD * _pow2(-(-bits // IL.WORD))
+
+    o = group(out_bits)
+    return -(-(group(in_bits) + ands) // o) * o + o + 1
+
+
+def unit_block(definition, cuts: dict | None = None) -> dict:
+    """`unit_witness`, and the Flock block `compose` places the unit in at one unit a block, read off its Definition before any
+    lowering: its rows (`_unit_ports`, under ``cuts``), their ``sha512x3`` and ``hm96`` slots and the mask beside the unit's own
+    slot of 2^``unit_log`` bits for its ``useful`` cells laid out flat (`_flat_useful`), placed as `compose` places them
+    (`_block_ranges`); ``bits`` where its last range ends and ``k_log`` its block's log, which `compose` refuses past `K_MAX`
+    once the unit is lowered. `compose` packs more units into a block only while it stays within 2^max(``k_log``, 22)."""
+    w = unit_witness(definition)
+    ins, outs = _unit_ports(definition, cuts)
+    useful = _flat_useful(w["ands"], sum(p.n_bits for p in ins), sum(p.n_bits for p in outs))
+    n_sha, n_hm = _row_slots(ins + outs)[0], _pow2(len(ins) + len(outs))
+    # compose refuses a unit that fills its slot
+    unit_log = _slot_log(useful + 1)
+    ranges, k_log = _block_ranges(n_sha, n_hm, unit_log, 1)
+    bits = max((r["pos0"] + r["count"]) << r["slot_log"] for r in ranges)
+    return {**w, "useful": useful, "rows": len(ins) + len(outs), "sha512x3": n_sha, "hm96": n_hm, "unit_log": unit_log,
+            "bits": bits, "k_log": k_log}
+
+
+def past_block(b: dict) -> str | None:
+    """Why a unit whose block is `unit_block`'s ``b`` is past Flock's proved range of 2^`K_MAX` bits, or None."""
+    if b["k_log"] <= K_MAX:
+        return None
+    return (f"the unit needs a block of 2^{b['k_log']} bits ({b['bits']:,}): its slot of 2^{b['unit_log']} ({b['useful']:,} cells "
+            f"for {b['ands']:,} ANDs and its ports, read off its Definition), its {b['rows']} rows' {b['sha512x3']} sha512x3 and "
+            f"{b['hm96']} hm96 slots of 2^{SLOT_LOG}, and the mask; C-Flock's proved range is 2^{K_MAX} (Flock/Statement.lean "
+            f"Stmt.InRange): cut it into narrower units that each read fewer row bytes (a served row's column blocks or slices, "
+            f"integrations/vllm/verity_vllm/pipeline/serving_templates.py), split the unit (e.g. PoUW's lanes form, "
+            f"verity/core/protocols/pouw/leaf_lanes.py), or extend the proved range (proofs)")
+
+
 def refuse_past_range(definition, name: str) -> dict:
     """`unit_witness`, or ValueError (`past_range`), before any lowering, for a unit whose Definition alone needs more than
     Flock's proved range of 2^`K_MAX` witness bits: `compose` refuses its block only once the whole unit is lowered (the
@@ -746,16 +810,11 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     n_hm = _pow2(len(ports))
 
     def fits(G: int):
-        # a range no region reads is packed (the compressions, the lookups, and the units when the tail returns the outputs)
-        items = [("unit", SHA_LOG, G * n_sha, {"net": SHA_NET, "packed": True}), ("unit", HM_LOG, G * n_hm, {"net": HM_NET}),
-                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets and not pins else {})})]
-        for i, lay in enumerate(stages):
-            items.append(("unit", _slot_log(lay.useful), G * tail.stages[i].count, {"net": f"stage{i}"}))
+        extra = [("unit", _slot_log(lay.useful), G * tail.stages[i].count, {"net": f"stage{i}"}) for i, lay in enumerate(stages)]
         for t, c in lookups.items():
             L = lk[t]
-            items.append(("unit", _slot_log(lookup_rows(L["in_bits"], L["lo_bits"], L["out_bits"])), G * c, {"net": f"lookup:{t}", "packed": True}))
-        items.append(("mask", MASK_LOG, 1, {"net": "mask"}))
-        return _ranges(items)
+            extra.append(("unit", _slot_log(lookup_rows(L["in_bits"], L["lo_bits"], L["out_bits"])), G * c, {"net": f"lookup:{t}", "packed": True}))
+        return _block_ranges(G * n_sha, G * n_hm, ul, G * U.n, bool(U.tail_rets and not pins), extra)
 
     if vus_per_block is None:
         G, k1 = 1, fits(1)[1]

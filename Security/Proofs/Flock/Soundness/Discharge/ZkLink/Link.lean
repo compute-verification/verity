@@ -2,12 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Batch
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `δ_link` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
@@ -286,7 +281,8 @@ theorem trialZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : 
     split_ifs with h1 h2 h2 <;> first | rfl | exact absurd h1 h2 | exact absurd h2 h1
   have heq : (∑ w : ΩcZ A P planZ tab vb L c, psiZ A P planZ tab vb R τ c w.1) /
       Fintype.card (ΩcZ A P planZ tab vb L c) = sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) := by
-    rw [← expect_draw (ΩcZ A P planZ tab vb L c) (fun w => psiZ A P planZ tab vb R τ c w.1), hpsi, expect_sub]
+    rw [← Verity.Game.expect_draw (ΩcZ A P planZ tab vb L c) (fun w => psiZ A P planZ tab vb R τ c w.1), hpsi,
+      expect_sub]
     have := rRd_eq T sT rd
     unfold rRd at this
     rw [this]

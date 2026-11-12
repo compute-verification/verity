@@ -36,8 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # One table's masked session after `Commit`, under a live strategy

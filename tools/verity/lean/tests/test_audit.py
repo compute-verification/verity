@@ -1196,6 +1196,162 @@ def test_facts_from_applies_the_reflexive_witness_exemption_as_the_full_audit_do
     assert [f.entry for f in sb["failures"] if (f.code or "").startswith("witnesses")] == ["Control.same"]
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_only_writes_the_document_facts_from_judges_under_its_build_s_key(tmp_path):
+    """Stage A (`--facts-only`, `audit(facts_cache=)`) writes the package's facts document under its content address
+    (`facts_key`), so `--facts-from` judges from it with no build and gives the full audit's verdict. The key names the
+    build the facts were read from: a second read of the same `.olean` files writes the identical document under the same
+    key, and a change to the lock slice `Facts.lean` reads moves it. A lock failure does not fail stage A, which has
+    still written the document for `--facts-from` to judge."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
+    recorded = A.load(pkg)
+
+    cache = tmp_path / "facts-cache"
+    a = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    key = a["facts_key"]
+    doc = cache / f"{key}.json.gz"
+    assert a["failures"] == [] and a["facts_document"] == str(doc) and doc.is_file(), a["failures"]
+    body = json.loads(gzip.decompress(doc.read_bytes()))
+    assert body["schema"] == A.FACTS_SCHEMA and "oleans" not in body["facts"] and "proved_keys" not in body["facts"]
+
+    assert A.audit_from_facts(pkg, tmp_path / "sb", doc, log=noop)["failures"] == [], "stage B on stage A's document"
+    assert A.main([str(pkg), "--facts-from", str(doc), "--out", str(tmp_path / "cli")]) == 0
+
+    # the key names the build: a second read of the same .olean files is the identical document under the same key
+    b = A.audit(pkg, tmp_path / "b", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    assert b["facts_key"] == key and (cache / f"{key}.json.gz").read_bytes() == doc.read_bytes()
+    assert [p.name for p in cache.iterdir()] == [f"{key}.json.gz"], "one document, not one per read"
+
+    # a change to the lock slice Facts.lean reads (a guarantee name) moves the key to a different address
+    grown = json.loads(json.dumps(recorded))
+    grown["guarantees"]["Control.unused"] = {"owner": "@lean"}
+    A.dump(pkg, grown)
+    c = A.audit(pkg, tmp_path / "c", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    assert c["facts_key"] != key
+    A.dump(pkg, recorded)
+
+    # stage A writes the document even when the lock fails; the CLI passes, and --facts-from reports the failure the
+    # full audit does, from that very document
+    bad = json.loads(json.dumps(recorded))
+    bad["guarantees"]["Control.main_thm"]["type_hash"] = "0" * 64
+    A.dump(pkg, bad)
+    fresh = tmp_path / "fresh-cache"
+    assert A.main([str(pkg), "--facts-only", str(fresh), "--out", str(tmp_path / "fo")]) == 0, \
+        "stage A passes once it has written the document, whatever the lock says"
+    (stored,) = list(fresh.glob("*.json.gz"))
+    sb = A.audit_from_facts(pkg, tmp_path / "sbx", stored, log=noop)["failures"]
+    fb = A.audit(pkg, tmp_path / "fb", build=False, replay=False, runs=False, log=noop)["failures"]
+    assert sb and list(map(str, sb)) == list(map(str, fb)), "stage B on the stored document is the full audit's verdict"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_key_folds_source_digests_so_a_scanned_source_edit_with_the_same_olean_misses(tmp_path):
+    """`facts_key` folds the digest of every source file the document records and of the lakefile, so an edit the source
+    scans read changes the key even when it leaves the `.olean` bytes unchanged. Lean's own example is a `set_option
+    maxHeartbeats`, which `heartbeats` reads into a finding the document carries: without the fold the key would match and
+    the stored finding would be reused against a source it no longer describes. The edit here is not rebuilt, so the facts
+    (the `.olean` files) are identical and only the source digest moves, giving a different key and a cache miss."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
+
+    cache = tmp_path / "facts-cache"
+    key = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, log=noop)["facts_key"]
+
+    # a top-level line the heartbeats scan reads, appended without a rebuild: the .olean is untouched
+    rel = sorted(A.lean_modules(pkg).values())[0]
+    (pkg / rel).write_text((pkg / rel).read_text() + "\nset_option maxHeartbeats 400000\n")
+
+    after = A.audit(pkg, tmp_path / "b", build=False, replay=False, runs=False, facts_cache=cache, log=noop)
+    assert after["facts_key"] != key, "a scanned source edit with the same .olean must change the key"
+    assert {p.name for p in cache.iterdir()} == {f"{key}.json.gz", f"{after['facts_key']}.json.gz"}, "a new address: a cache miss"
+    # the finding the edit changes is in the new document, so reusing the old one would have been stale
+    body = json.loads(gzip.decompress((cache / f"{after['facts_key']}.json.gz").read_bytes()))
+    assert any(h["option"] == "maxHeartbeats" and h["value"] == 400000 for h in body["findings"]["heartbeats"])
+
+
+def test_the_facts_cache_reads_a_document_only_by_its_key_and_refuses_a_tampered_or_stale_one(tmp_path):
+    """The facts cache (`store_cached_facts`, `read_cached_facts`) a reuse reads looks a document up only by the `facts_key`
+    the current tree recomputes, never a caller's path, and judges it only when its sidecar vouches for it: a document whose
+    bytes don't match the sidecar's SHA-256 is refused, so is a sidecar recording another key, and a missing sidecar (a
+    crash between the two writes) is a miss, never a hit. The body carries no key, so it stays the bytes `--facts-only`
+    writes and the graph's content cutoff compares."""
+    cache = tmp_path / "facts"
+    doc = {"schema": A.FACTS_SCHEMA, "toolchain": "t", "files": {"M": "M.lean"}, "facts": {"x": 1}, "findings": {}}
+    key, other = "a" * 64, "b" * 64
+
+    A.store_cached_facts(cache, key, doc)
+    assert sorted(p.name for p in cache.iterdir()) == [f"{key}.json", f"{key}.json.gz"], "the pair, and no temporary file"
+    assert A.read_cached_facts(cache, key) == doc, "a hit by the recomputed key"
+    stored = (cache / f"{key}.json.gz").read_bytes()
+    assert stored == A.facts_bytes(doc) and "key" not in json.loads(gzip.decompress(stored)), "the --facts-only bytes"
+    assert A.read_cached_facts(cache, other) is None, "a key no run stored is a miss"
+
+    A.write_facts_document(cache / f"{key}.json.gz", doc | {"facts": {"x": 2}})
+    with pytest.raises(RuntimeError, match="SHA-256: tampered"):
+        A.read_cached_facts(cache, key)
+
+    A.store_cached_facts(cache, other, doc)
+    A.store_cached_facts(cache, key, doc)
+    (cache / f"{key}.json").write_text((cache / f"{other}.json").read_text())
+    with pytest.raises(RuntimeError, match="stale or misfiled"):
+        A.read_cached_facts(cache, key)
+
+    A.store_cached_facts(cache, key, doc)
+    side = json.loads((cache / f"{key}.json").read_text())
+    (cache / f"{key}.json").write_text(json.dumps(side | {"schema": "lean-facts/v0"}))
+    with pytest.raises(RuntimeError, match="refused"):
+        A.read_cached_facts(cache, key)
+    for garbage in ("[]", "{not json"):
+        (cache / f"{key}.json").write_text(garbage)
+        with pytest.raises(RuntimeError, match="refused"):
+            A.read_cached_facts(cache, key)
+
+    A.store_cached_facts(cache, key, doc)
+    (cache / f"{key}.json").unlink()
+    assert A.read_cached_facts(cache, key) is None, "a document without its sidecar is a miss, never a hit"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges_as_usual(tmp_path):
+    """`--facts-cache` (`audit(facts_cache=, facts_reuse=True)`, what lean_changed's records step passes) judges as a plain
+    audit does and also stores the sealed document with its sidecar under the build's `facts_key`; a second audit of the
+    same tree recomputes that key and reads the document back as a hit. `--facts-only` (the graph's stage A) still writes
+    the document alone, so its output stays the bytes the graph's cutoff compares, and the two flags exclude each other."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
+    plain = A.audit(pkg, tmp_path / "plain", build=False, replay=False, runs=False, log=noop)
+
+    cache = tmp_path / "facts"
+    a = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, facts_reuse=True, log=noop)
+    key = a["facts_key"]
+    assert list(map(str, a["failures"])) == list(map(str, plain["failures"])) == [], "it judges as a plain audit does"
+    assert sorted(p.name for p in cache.iterdir()) == [f"{key}.json", f"{key}.json.gz"]
+    b = A.audit(pkg, tmp_path / "b", build=False, replay=False, runs=False, facts_cache=cache, facts_reuse=True, log=noop)
+    assert b["facts_key"] == key and A.read_cached_facts(cache, key) is not None, "the recomputed key is a hit"
+
+    only = tmp_path / "only"
+    c = A.audit(pkg, tmp_path / "c", build=False, replay=False, runs=False, facts_cache=only, log=noop)
+    assert c["facts_key"] == key and [p.name for p in only.iterdir()] == [f"{key}.json.gz"], "--facts-only: no sidecar"
+    assert (only / f"{key}.json.gz").read_bytes() == (cache / f"{key}.json.gz").read_bytes(), "one document, two caches"
+
+    cli = tmp_path / "cli"
+    assert A.main([str(pkg), "--facts-cache", str(cli), "--no-replay", "--no-runs", "--out", str(tmp_path / "cli-out")]) == 0
+    (side,) = cli.glob("*.json")
+    assert A.read_cached_facts(cli, side.stem) is not None, "the CLI stores a pair a reuse reads back"
+    with pytest.raises(SystemExit):
+        A.main([str(pkg), "--facts-cache", str(tmp_path / "x"), "--facts-only", str(tmp_path / "y")])
+
+
 def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, monkeypatch):
     """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `Security`: it is
     kept there only as `facts.json.gz`, its bytes gzipped with no timestamp (equal facts are equal bytes, which the store
@@ -1296,7 +1452,7 @@ def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(t
         seen.append(keep)
         return {"modules": [], "oleans": [], "pins": {}}
 
-    def proved(q, policy, facts, work, moved=None, ready=None, keep=True, seals=None):
+    def proved(q, policy, facts, work, moved=None, ready=None, keep=True, seals=None, keys=False):
         seen.append(keep)
         raise RuntimeError("stop after the provers' facts")
 
@@ -4884,7 +5040,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                 order.append(getattr(args[0], "__name__", str(args[0])))
             return super().submit(fn, *args, **kw)
 
-    def proved(pkg, policy, facts, work, moved, ready, keep=True, seals=None):
+    def proved(pkg, policy, facts, work, moved, ready, keep=True, seals=None, keys=False):
         order.append("proved")
         return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 

@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ZkLiveSched
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The masked simulated fork's alignment at the pads

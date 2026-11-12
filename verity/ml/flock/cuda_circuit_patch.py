@@ -5,7 +5,7 @@ Run from the flock checkout after verity/ml/flock/cuda_chunk_patch.py, which ins
 flock_cuda_prove_circuit is flock_cuda_prove_chunk's body with four parts replaced (each anchor must occur once): the shape
 check (fc_bad_shape), the arena's size (fc_arena_of: verity/ml/flock/cuda/arena_bytes.h, which it installs beside it), the
 witness (fc_witness: device compressions and units, or the host's witness) and the lincheck fold (fc_fold: every slot range of
-every type). Everything else (commit, zerocheck, lincheck rounds, ring switch, Ligerito, the live coins) is the chunk
+every type, whose CSC a GPU's provers share: csc_share.cuh, installed beside it too). Everything else (commit, zerocheck, lincheck rounds, ring switch, Ligerito, the live coins) is the chunk
 prover's, so no second copy of it is kept in the repository. Its buffer lifetimes change so that rep 1 can prove from rep 0's
 level-0 commitment (rep_reuse, FcKept).
 
@@ -111,6 +111,7 @@ text = (here / "cuda" / "prove_circuit.cuh").read_text() + "\nextern \"C\" {\n\n
 # M1: the F256 ladder's hiding step (ligerito_zk.cuh) and its five call points in run_ligerito_f256
 (g / "ligerito_zk.cuh").write_text((here / "cuda" / "ligerito_zk.cuh").read_text())
 (g / "arena_bytes.h").write_text((here / "cuda" / "arena_bytes.h").read_text())
+(g / "csc_share.cuh").write_text((here / "cuda" / "csc_share.cuh").read_text())
 lg = g / "ligerito_f256.cuh"
 t = lg.read_text()
 if '#include "ligerito_zk.cuh"' not in t:
@@ -239,4 +240,63 @@ if "launch_glue_split" not in t:
         }
         for (F128* q : {d_eq, d_eq_hi, d_eq_lo})
             if (q) LFCK(A.release(q));""")
+    lg.write_text(t)
+# level 0's folds with the messages that follow them, the first with level 0's last OOD glue (ligerito_folds.cuh)
+(g / "ligerito_folds.cuh").write_text((here / "cuda" / "ligerito_folds.cuh").read_text())
+t = lg.read_text()
+if "lf_fold_base_pair_msg" not in t:
+    t = put(t, "#define LF_MAX_BLOCKS 2048\n#endif\n", '#define LF_MAX_BLOCKS 2048\n#endif\n\n#include "ligerito_folds.cuh"\n')
+    t = put(t, "    // ---- L0 OOD loop (β-batched into target / round-0 message / basis) ----\n",
+            "    // ---- L0 OOD loop (β-batched into target / round-0 message / basis) ----\n"
+            "    LfGlue glue0;   // the last sample's glue on the split tables, which the first fold adds\n")
+    t = put(t, "            else launch_glue_split(d_b, d_eq_lo, d_eq_hi, eq_k, beta, len);\n",
+            "            else if (o + 1 < C.ood_samples[0] || initial_k < 2) launch_glue_split(d_b, d_eq_lo, d_eq_hi, eq_k, beta, len);\n"
+            "            else glue0 = LfGlue{d_eq_lo, d_eq_hi, eq_k, beta};\n")
+    t = put(t, "            if (q) LFCK(A.release(q));\n", "            if (q && !glue0.lo) LFCK(A.release(q));\n")
+    t = put(t, "        if (zk) zk->challenges.push_back(r256);\n",
+            "        if (zk) zk->challenges.push_back(r256);\n"
+            "        int fused = 0;   // the fold's blocks of its message's partials, when it adds them (lf_fold_*_pair_msg)\n")
+    t = put(t, """            lf_fold_base_pair<<<(unsigned)((half + LF_TPB - 1) / LF_TPB), LF_TPB>>>(
+                d_f, d_b, (F256Ext*)regions[oa], (F256Ext*)regions[ob], half, r256);
+""", """            if (j + 1 < initial_k && half % 2 == 0) {
+                fused = lf_blocks(half / 2);
+                lf_fold_base_pair_msg<<<fused, LF_TPB>>>(d_f, d_b, glue0, (F256Ext*)regions[oa], (F256Ext*)regions[ob], half / 2,
+                                                         r256, d_p256_0, d_p256_2);
+            } else {
+                if (glue0.lo) launch_glue_split(d_b, glue0.lo, glue0.hi, glue0.k, glue0.beta, len);
+                lf_fold_base_pair<<<(unsigned)((half + LF_TPB - 1) / LF_TPB), LF_TPB>>>(
+                    d_f, d_b, (F256Ext*)regions[oa], (F256Ext*)regions[ob], half, r256);
+            }
+            if (glue0.lo) {
+                LFCK(A.release(glue0.hi));
+                LFCK(A.release(glue0.lo));
+                glue0 = LfGlue{};
+            }
+""")
+    t = put(t, """
+            long long half = n256 / 2;
+            lf_fold_ext_pair<<<(unsigned)((half + LF_TPB - 1) / LF_TPB), LF_TPB>>>(
+                (const F256Ext*)regions[cur_f], (const F256Ext*)regions[cur_b],
+                (F256Ext*)regions[oa], (F256Ext*)regions[ob], half, r256);
+""", """
+            long long half = n256 / 2;
+            if (j + 1 < initial_k && half % 2 == 0) {
+                fused = lf_blocks(half / 2);
+                lf_fold_ext_pair_msg<<<fused, LF_TPB>>>((const F256Ext*)regions[cur_f], (const F256Ext*)regions[cur_b],
+                                                        (F256Ext*)regions[oa], (F256Ext*)regions[ob], half / 2, r256, d_p256_0,
+                                                        d_p256_2);
+            } else {
+                lf_fold_ext_pair<<<(unsigned)((half + LF_TPB - 1) / LF_TPB), LF_TPB>>>(
+                    (const F256Ext*)regions[cur_f], (const F256Ext*)regions[cur_b],
+                    (F256Ext*)regions[oa], (F256Ext*)regions[ob], half, r256);
+            }
+""")
+    t = put(t, "        } else {\n            msg = msg256((const F256Ext*)regions[cur_f], (const F256Ext*)regions[cur_b], n256);\n",
+            "        } else if (fused) {\n"
+            "            lf_msg_combine<<<1, LF_TPB>>>(d_p256_0, d_p256_2, fused, d_out256);\n"
+            "            F256Ext h[2];\n"
+            "            (void)hc_get(h, d_out256, sizeof(h));\n"
+            "            (void)hc_wait();\n"
+            "            msg = LigMsg256{h[0], h[1]};\n"
+            "        } else {\n            msg = msg256((const F256Ext*)regions[cur_f], (const F256Ext*)regions[cur_b], n256);\n")
     lg.write_text(t)

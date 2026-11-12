@@ -57,8 +57,9 @@ theorem κ_pos (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) : 0 <
   have hs : 0 < Sampling.slack := by unfold Sampling.slack; positivity
   have h1 : 0 ≤ Sampling.slack ^ 2 * (δ + L.κs x) :=
     mul_nonneg (pow_nonneg hs.le 2) (add_nonneg hδ (maxBelow_nonneg _ _))
-  have h2 : 0 < (1 + Sampling.slack) * (2 * L.k x / L.cap x + Real.exp (-(L.k x : ℝ) / 8)) :=
-    mul_pos (by linarith) (by positivity)
+  have h2 : 0 < 2 * (L.kOut x : ℝ) / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8) := by positivity
+  have h3 : 0 ≤ Sampling.slack * (2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8)) :=
+    mul_nonneg hs.le (by positivity)
   unfold Compiled.κ
   linarith
 
@@ -70,16 +71,16 @@ theorem γ_nonneg (L : Compiled Coin A) (x : Msg) : 0 ≤ L.γ x := by
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem work_pos (L : Compiled Coin A) (x : Msg) : 0 < L.work x := by
-  have h1 : 0 ≤ (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es x) :=
-    mul_nonneg (sq_nonneg _) (add_nonneg zero_le_one (mul_nonneg (Nat.cast_nonneg _) (maxBelow_nonneg _ _)))
-  have h2 : 0 ≤ (L.k x : ℝ) ^ 2 * L.nPU x * L.openCalls x := by positivity
-  have h3 : (0 : ℝ) ≤ L.k x := Nat.cast_nonneg _
+  have h1 : 0 ≤ (L.kOut x : ℝ) * L.kIn x * (1 + L.nPU x * L.es x) :=
+    mul_nonneg (by positivity) (add_nonneg zero_le_one (mul_nonneg (Nat.cast_nonneg _) (maxBelow_nonneg _ _)))
+  have h2 : 0 ≤ (L.kOut x : ℝ) * L.kIn x * L.nPU x * L.openCalls x := by positivity
+  have h3 : (0 : ℝ) ≤ L.kOut x := Nat.cast_nonneg _
   unfold Compiled.work
   linarith
 
 theorem bits_of_ks {H : Msg → Msg} {L : Compiled Coin A} (hks : L.KS H)
-    (hruns : ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es x)))
-    (hown : Sampling.ExtractOwnLe H L.E (fun x => L.k x ^ 2 * L.nPU x * L.openCalls x)) :
+    (hruns : ExtractRunsExpLe H L.E (fun x => 1 + L.kOut x + (L.kOut x : ℝ) * L.kIn x * (1 + L.nPU x * L.es x)))
+    (hown : Sampling.ExtractOwnLe H L.E (fun x => L.kOut x * L.kIn x * L.nPU x * L.openCalls x)) :
     L.Bits H := fun δ hδ =>
   Sampling.Bits_of_KSLin (hks δ hδ) hruns hown (fun x => L.κ_pos hδ x) L.γ_nonneg L.work_pos
     fun x => le_of_eq (by unfold Compiled.work; push_cast; ring)

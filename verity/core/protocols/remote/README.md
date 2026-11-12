@@ -143,7 +143,7 @@ else is a theorem or a named gap.
 | Kind | Assumption | Lean | How it's tested, or why it's believed |
 |---|---|---|---|
 | Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`SHA512CRStrict`, `SHA512CRExpected`, at the finders `TableCRZAt`, `LinkCRZCAt`); the hiding commitments' gap | Standard; no attack known. |
-| The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedHost`, `RecordCustodyZKJPLaw`, `UniformRandomBytes`; `CoinsConfidential` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
+| The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedHost`, `RecordCustodyZKJPLaw`, `UniformRandomBytes`; `CoinsAfterCommitment` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
@@ -195,7 +195,7 @@ links between proof blocks.
 
 **Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedHost`, which `SampledKSLiveV3`
 doesn't read); its coins
-reach the developer only after the commitment (`CoinsConfidential`, in prose only).
+reach the developer only after the commitment (`CoinsAfterCommitment`, in prose only).
 
 **Lean.** `Flock.Guarantees.SampledKSLiveV3`, **proved**. It states its own sampling relation; it doesn't take part 1's
 theorem as a hypothesis. It takes that the session's files parse and the public file has no shared rows; it reads
@@ -412,10 +412,10 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `ServiceSound` and `PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
-- **The verifier's verdicts.** Sampled proofs' one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
-  the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and the recursive form runs V*'s
-  compiled check; v1, which takes the verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance
-  to `SampledKSLiveV3`'s event.
+- **The verifier's verdicts.** One-stage v2 (`verity/sampled-proofs/one-stage/v2`) runs the proof
+  check (`verity verify proof`, today's `flock-verify --zk`) itself, as the recursive form runs V*'s compiled check; v1,
+  which takes verdicts as evidence, is refused. Where v2 accepts, its session is in V3's and V5's events
+  (`Verity.Sampled.checkBlobs_event`); only V5's is coupled to it (`Verity.Sampled.CouplingTarget`).
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
@@ -447,7 +447,7 @@ frontier"); how the execution's boundaries fix what a block's c and k count is i
 ## Assumptions, by name
 
 Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, and `Security/Properties/lean-audit.json`
-for the `Properties.*` ones), one line in plain words, except `CoinsConfidential` (prose only). These are the named `Prop`s the statements above
+for the `Properties.*` ones), one line in plain words, except `CoinsAfterCommitment` (prose only). These are the named `Prop`s the statements above
 read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Built`, `StrictCR.Finder.CR`,
 `SampledLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
 hypotheses `HeldPriceAtMost`, `OverlapWeights` and `RequiresState`.
@@ -461,14 +461,13 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `FlockSoundness.Assumptions.SHA512CRStrict` (`cr/sha-512`) and `FlockSoundness.Assumptions.SHA512CRExpected`
   (`ecr/sha-512`), in `Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
-- `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
+- `trusted-host` (`Verity.Assumptions.TrustedHost`, `Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
-  on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.
-- `CoinsConfidential`: the challenger's coins reach the developer's machine only over paths the auditor's hosts
-  control, and only after the commitment. A premise about where the challenger runs, stated in prose in
-  `verity/core/protocols/spot/README.md` and not yet in Lean: no `.lean` file defines it, and no guarantee takes
-  it as a hypothesis. (Its companion `OneClock` ties the challenger's clock to onsite's network certifiers; remote has
-  none.)
+  on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost`.
+- `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's hosts
+  control, and only after the commitment. Prose only: no guarantee takes it. Onsite's `CoinsConfidential`
+  (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another premise: a
+  replica's coins reach no machine outside its certifier's boundary before it has them.
 
 PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/PeriodJ10R.lean`):
 

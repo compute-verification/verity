@@ -75,6 +75,23 @@ def test_a_call_is_evaluated_on_bits_by_its_boolean_version_and_equals_its_word_
     assert ev(_Index({}), r, {}, [gu]).keys() == {"out"}                     # an interior row: keyed by its port
 
 
+def test_a_batch_row_is_its_members_each_on_its_slice_of_a_mapped_operand(tmp_path) -> None:
+    """A batch over three rows of `silu_and_mul` (class G's batched form, `prune.batched_form`): each member is evaluated on its
+    row by the Boolean version of the member's Definition, the outputs in member order, and its peak counts the members' outputs."""
+    rng = np.random.default_rng(7)
+    word = bind(b1.SiluMul, I=8)
+    B = Builder((("gu", Array(48, W16)),), Value(1))
+    B.batch(word, Coll(Array(3, Array(16, W16)), Affine("p", 0, 0, 48)), axes=(0,))
+    r = {"i": 0, "spec": f"batch:{descriptor_id(B.nodes[0].fn)}"}
+    ev = BR.BooleanRows(B.nodes, 0, tmp_path / "rows.jsonl")
+    gu = rng.integers(0, 1 << 16, 48).astype(np.uint16)
+    got = ev(_Index({}), r, {}, [gu])["out"]
+    want = np.concatenate([np.asarray(evaluate_batch(word, gu[16 * m:16 * m + 16][None].astype(np.uint64))).reshape(-1) for m in range(3)])
+    assert got.tolist() == want.tolist() and ev.sigma == {r["spec"]: bind(BSL.SiluMul, I=8).id}
+    nodes, one = _row(word, Array(16, W16))
+    assert ev.peak_bytes(r) > BR.BooleanRows(nodes, 0).peak_bytes(one)
+
+
 @composite("WordOnlyFixture", 1, ["K"], lambda S: ((("x", Array(S.K, W16)),), W16), conformance="protocol-defined")
 def WordOnlyFixture(B, S, x):
     """A word Definition no registered Boolean Definition names as its word."""

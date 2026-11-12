@@ -1,9 +1,9 @@
 diff --git a/crates/flock-core/src/lincheck.rs b/crates/flock-core/src/lincheck.rs
-index 0030fd7..bb86644 100644
+index e0ee027..3ce5dd2 100644
 --- a/crates/flock-core/src/lincheck.rs
 +++ b/crates/flock-core/src/lincheck.rs
-@@ -376,20 +376,22 @@ impl<'a> LincheckCircuit for SparseMatrixCircuit<'a> {
- #[derive(Clone)]
+@@ -376,17 +376,19 @@ impl<'a> LincheckCircuit for SparseMatrixCircuit<'a> {
+ #[derive(Clone, PartialEq, Eq)]
  pub struct CscCircuit {
      n_cols: usize,
 -    a_col_ptr: Vec<u32>,
@@ -24,13 +24,22 @@ index 0030fd7..bb86644 100644
 +/// nonzeros.
 +fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u64>, Vec<u32>) {
      assert!(m.num_rows <= u32::MAX as usize);
-     assert!(m.num_cols <= u32::MAX as usize);
--    let mut col_ptr = vec![0u32; m.num_cols + 1];
-+    let mut col_ptr = vec![0u64; m.num_cols + 1];
-     for row in m.rows.iter() {
-         for &c in row {
+     csc_of_rows(m.rows.len(), m.num_cols, |r| m.rows[r].iter().copied())
+ }
+@@ -397,10 +399,10 @@ fn csc_of_rows<I: IntoIterator<Item = usize>>(
+     n_rows: usize,
+     n_cols: usize,
+     row: impl Fn(usize) -> I,
+-) -> (Vec<u32>, Vec<u32>) {
++) -> (Vec<u64>, Vec<u32>) {
+     assert!(n_rows <= u32::MAX as usize);
+     assert!(n_cols <= u32::MAX as usize);
+-    let mut col_ptr = vec![0u32; n_cols + 1];
++    let mut col_ptr = vec![0u64; n_cols + 1];
+     for r in 0..n_rows {
+         for c in row(r) {
              col_ptr[c + 1] += 1;
-@@ -567,6 +569,10 @@ pub struct LincheckProof {
+@@ -600,6 +602,10 @@ pub struct LincheckProof {
      /// [`LincheckGrinding::disabled`].
      #[serde(default)]
      pub grinding_nonces: Vec<u64>,
@@ -41,7 +50,7 @@ index 0030fd7..bb86644 100644
  }
  
  /// Fiat--Shamir grinding policy for the Boolean lincheck.
-@@ -1974,6 +1980,7 @@ fn column_sumcheck_prove<Ch: Challenger>(
+@@ -2007,6 +2013,7 @@ fn column_sumcheck_prove<Ch: Challenger>(
          z_partial,
          matrix_evals: Vec::new(),
          grinding_nonces: take(grinding_nonces),
@@ -49,7 +58,7 @@ index 0030fd7..bb86644 100644
      };
      let claim = LincheckClaim {
          r_inner_skip,
-@@ -3016,4 +3023,23 @@ mod tests {
+@@ -3079,4 +3086,23 @@ mod tests {
              Err(LincheckError::KSkipExceedsKLog { .. })
          ));
      }

@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
 public import Proofs.Flock.Soundness.StrictCR
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The salted compiled and knowledge terms under strict-time collision resistance

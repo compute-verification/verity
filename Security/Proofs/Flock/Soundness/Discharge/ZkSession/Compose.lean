@@ -5,8 +5,7 @@ public import Definitions.Core.Game
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
 public import Proofs.Flock.Soundness.Discharge.ZkSession.InnerSound
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
 /-!

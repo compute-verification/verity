@@ -21,6 +21,10 @@ soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file)
 (`Flock.KsScope.filesWhy`, which `flock-verify ks-form` runs alone). A session Lean accepts whose files it refuses is a
 ``form`` refusal, so the mirror can only refuse more.
 
+`fits_why` and `draw_fits_why` mirror v2's refusal of a length a session's statement can't hold, since it writes each in
+an 8-byte word (`OneStageZk.fitsWhy`, `drawFitsWhy`, at `WORD`): a file, a lookup table, the program, or the partition
+object, the registered reads or a session's draw as `printed` prints them, at ``2^64`` bytes or more.
+
 `population_why` mirrors the v2 audit's check that the public file's units are the registration's population in order
 (`Spot.FilePart.why`), which `verify` applies to the one-stage audit's statement when handed its strata.
 
@@ -42,6 +46,7 @@ import fcntl
 import functools
 import hashlib
 import json
+import math
 import re
 import subprocess
 import tempfile
@@ -205,6 +210,99 @@ def reads_registered(program: bytes) -> bool:
     return not isinstance(defs, dict) or any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
 
 
+#: `OneStageZk.WORD`: the bound on each length a session's statement holds, which writes every length in an 8-byte word
+WORD = 1 << 64
+#: `OneStageZk.FITS`, v2's refusal of a length at `WORD` or more
+FITS = "2^64 bytes or more, past the 8-byte word a session's statement holds each length in"
+
+
+def _printed_number(text: str) -> str:
+    """``JsonNumber.toString`` of the number Lean's parser reads from the JSON number ``text``."""
+    sign = -1 if text.startswith("-") else 1
+    body, _, exp = text.lstrip("-").lower().partition("e")
+    whole, _, frac = body.partition(".")
+    m, e = sign * int(whole + frac), len(frac)
+    if exp:
+        k = int(exp)
+        if k >= 0:
+            m, e = m * 10 ** max(0, k - e), max(0, e - k)
+        else:
+            e -= k
+    if e == 0:
+        return str(m)
+    sg, m = ("" if m >= 0 else "-"), abs(m)
+    x = 9 + len(str(m)) - e
+    x = x if x < 0 else 0
+    ep = 10 ** (e + x)
+    left = str(m // ep)
+    if m % ep == 0 and x == 0:
+        return sg + left
+    right = str(ep + m % ep)[1:].rstrip("0")
+    return f"{sg}{left}.{right}" + (f"e{x}" if x else "")
+
+
+def _printed_string(s: str) -> str:
+    escapes = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r"}
+    return '"' + "".join(escapes.get(c) or (f"\\u{ord(c):04x}" if ord(c) < 0x20 else c) for c in s) + '"'
+
+
+def printed(v: Any) -> str:
+    """`Flock.RecordText.printT` of ``v`` (what ``json.loads`` returns), the text ``Json.compress`` prints: keys in
+    code-point order and no whitespace; ``"``, ``\\``, newline and carriage return escaped and every other character
+    below U+0020 as ``\\u00xx``; a number as ``JsonNumber.toString`` prints it. It is ``verity_flock.record_text``'s
+    ``session_text``, which core doesn't import."""
+    if v is None:
+        return "null"
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        if not math.isfinite(v):
+            raise ValueError(f"printed: {v} is not a JSON number")
+        return _printed_number(repr(v))
+    if isinstance(v, str):
+        return _printed_string(v)
+    if isinstance(v, (list, tuple)):
+        return "[" + ",".join(printed(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ",".join(f"{_printed_string(k)}:{printed(v[k])}" for k in sorted(v)) + "}"
+    raise ValueError(f"printed: a {type(v).__name__} is not JSON")
+
+
+def printed_size(v: Any) -> int:
+    """`OneStageZk.printedSize`: a JSON value's length as a session's statement holds it, `printed`'s in UTF-8."""
+    return len(printed(v).encode())
+
+
+def fits_why(limit: int, circuit: bytes, public: bytes, tables: Sequence[tuple[str, bytes]], program: bytes | None,
+             partition: Any, registered: Any) -> str | None:
+    """`OneStageZk.fitsWhy`: what a session's statement would hold at ``limit`` bytes or more, the first of the circuit
+    and public files, the number of lookup tables, a lookup table's name (in UTF-8) or bytes, the program, the partition
+    object and the registered reads (`printed_size`, each None for none); None when every length is under ``limit``."""
+    if limit <= len(circuit):
+        return "the circuit file"
+    if limit <= len(public):
+        return "the public file"
+    if limit <= len(tables):
+        return "the number of lookup tables"
+    if any(limit <= len(name.encode()) or limit <= len(b) for name, b in tables):
+        return "a lookup table"
+    if program is not None and limit <= len(program):
+        return "the program"
+    if partition is not None and limit <= printed_size(partition):
+        return "the partition object"
+    if registered is not None and limit <= printed_size(registered):
+        return "the registered reads"
+    return None
+
+
+def draw_fits_why(limit: int, draw: Any) -> str | None:
+    """`OneStageZk.drawFitsWhy`: ``"the draw"`` when a session's statement would hold its record's draw ``draw`` (None
+    for none) at ``limit`` bytes or more."""
+    return "the draw" if draw is not None and limit <= printed_size(draw) else None
+
+
 def population_why(indices: Sequence[int], strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> str | None:
     """`Spot.FilePart.why`: why the registration's population is not the public file's units in order, None
     when it is. `strata` is the registration's over the verifier's program and query (`partition.strata`), read stratum
@@ -365,11 +463,13 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
 
 
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
-                registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, str | None]:
+                registered: Mapping[str, Any] | None = None, tables: Sequence[Path] = ()) -> tuple[list[Finding] | None, str | None]:
     """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
     (`sampled-proofs-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
-    or None and Lean's refusal. `program` is the descriptor as JSON."""
+    or None and Lean's refusal. `program` is the descriptor as JSON; `tables`, the MUFU tables a statement with lookups
+    reads, blobs beside the files (`OneStageZk.tablesOf` finds them by SHA-512)."""
     pr, blobs = evidence_v2(proof)
+    blobs += list(tables)
     own = {"circuit": circuit_sha512, "partition": dict(partition), "program": dict(program),
            "public": file_sha512(proof.public), "registered": None if registered is None else dict(registered)}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
@@ -417,7 +517,8 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "NO_ROW_WHY", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "UNIT_CLASS_MAX", "V2", "V2_EXE",
-           "WIDE_WHY", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2", "executable", "file_sha512",
-           "ks_form_why", "order_why", "population_why", "proved_units", "reads_registered", "template_why",
+__all__ = ["EXE", "FITS", "NO_ROW_WHY", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "UNIT_CLASS_MAX", "V2",
+           "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2", "draw_fits_why", "evidence_v2",
+           "executable", "file_sha512", "fits_why", "ks_form_why", "order_why", "population_why", "printed",
+           "printed_size", "proved_units", "reads_registered", "template_why",
            "v2_executable", "verdicts_v2", "verify"]

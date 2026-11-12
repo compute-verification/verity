@@ -16,6 +16,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                            DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)),
         ("SparseMlaHead_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadV2, T=5, DR=16, DV=16, BN=16, SCALE=0.0625,
                                           DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"])),
+        ("SparseMlaHeadBlock_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadBlockV2, DR=16, DV=16, NVIS=5, FIRST=True, BN=16,
+                                               DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)),
+        ("SparseMlaHeadEnd_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadEndV2, DV=16,
+                                             INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"])),
         ("SparseMla_v2", lambda: bind(boolean_sparse_mla.SparseMlaV2, T=5, NH=2, DR=16, DV=16, BN=16, SCALE=0.0625,
                                       DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"])),
     ]

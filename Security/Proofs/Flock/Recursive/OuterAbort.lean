@@ -18,8 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.Headline
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.Refusal
 import Proofs.Flock.Soundness.ZK.Session

@@ -56,6 +56,15 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean  trusted: the leak through the network certifier over a
                                monitoring period of sampled audits, conditional on two per-window inputs
                                (PooledLeakAccepted)
+../../Definitions/NetworkCertifier/Checked.lean  trusted: the sequences accepted with a run a check passes
+                               (AcceptedChecked, AccSeqsChecked, LeakAtChecked, RLeakChecked), a check that pins its
+                               inputs (CheckedUnique) and misses at most εchk (CheckedWitness), and the monitoring
+                               period's good event and named inputs (PooledGoodChecked, PeriodChannel, PeriodAdaptive,
+                               PeriodEscapes, PeriodLeaksChecked)
+../../Definitions/NetworkCertifier/Guarantees/Checked.lean  trusted: the leak bounds with checked inputs
+                               (SampledLeakChecked, PooledLeakChecked)
+../../Definitions/NetworkCertifier/Witness.lean  trusted: the audit the leak bounds' nontrivial lemmas fail at
+                               (notProg, notStmt, notPart, notLay; atNot, a deployment at it)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -102,12 +111,20 @@ PooledLeak.lean  the leak through the network certifier over a monitoring period
                                          Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
                                          under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
                                          decode to at each draw, read back from the certifier's record
-                                         (encard_pooledGood_le, pooledLeak)
+                                         (encard_pooledGood_le, pooledLeak), each over any per-window event
+                                         (encard_pooledFam_le, pr_pooled_le)
+Checked.lean    the leak bounds with checked inputs: a sequence accepted with a valid run is fixed by its
+                                         inputs off the registered and checked ones, the held bits and its jitter
+                                         (encard_acceptedChecked_le, through rows_full), and RAcc gives the leak
+                                         relation with a valid run except where the check misses
+                                         (ksLinOn_rLeakChecked); sampledLeakChecked, pooledLeakChecked
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
                                          record, and `G_nontrivial`, its conclusion false at a verifier
                                          that accepts everything
+WitnessesChecked.lean  the nontrivial lemmas of SampledLeakChecked and PooledLeakChecked; their honest
+                                         lemmas wait on a deployed check
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
@@ -280,8 +297,8 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
 - **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
   the count `K_pooled`, conditional on two per-window inputs taken as plain hypotheses, at the incorrect set `W_i` of the
-  witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
-  `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `1 − q` the design's per-window acceptance probability
+  witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional miss bound
+  `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `1 − q` the design's per-window miss probability
   (no sample's form: a uniform `kd_i`-of-`n_i` sample meets it at `q = kd_i/n_i`), and the leak relation at that set
   `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record. From them every window accepts
   outside the monitoring period's good event (`PooledGood`: the incorrect sets hold under `Fmax ≥ ln(1/δ)/q` units and
@@ -294,6 +311,14 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   assumption is `trusted-host`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
   history and the live `SampledLeakAccepted` (P2), neither discharged, so it is not the deployed system's bound over a
   monitoring period until they are.
+- **The leak bounds with checked inputs** (`Checked.lean`): inputs a check pins cost no advice bits. A check `valid`
+  over a run's values pins the inputs `chk` where a valid run's values there are a function of the ingress, the other
+  inputs and the incorrect proof blocks' held values (`CheckedUnique`), and misses an invalid accepted run with
+  probability at most `εchk` (`CheckedWitness`, a scope). `SampledLeakChecked` is `SampledLeakAccepted` with the
+  leak relation and the count taken over valid runs only, at `κ + εchk`: the count charges `freeInputs \ (reg ∪ chk)`.
+  `PooledLeakChecked` is `PooledLeakAccepted` with each window's leak relation so taken (`LeakAtChecked`), one pool per
+  window, its period inputs named (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`, `PeriodLeaksChecked`), and the
+  escape at `(1 − q)^Fmax`. Their honest lemmas need a deployed check proved to pin its inputs and bound its miss.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

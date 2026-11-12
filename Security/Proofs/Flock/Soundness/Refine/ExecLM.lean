@@ -206,7 +206,7 @@ theorem range_size (n : ℕ) : [:n].size = n := by simp [Std.Legacy.Range.size]
 def consE (rows : Array (Array F128)) (q : ℕ) (alpha : Array F128) (fold : Array F256) : F256 :=
   (List.range q).foldl (fun e j =>
     e + F256.smul ((List.range rows[j]!.size).foldl
-      (fun acc l => acc + F256.smul (eqTableK fold)[l]! rows[j]![l]!) 0) (eqTable alpha)[j]!) 0
+      (fun acc l => acc + F256.smul (eqTableK fold)[l]! (rows[j]!)[l]!) 0) (eqTable alpha)[j]!) 0
 
 /-- `queryLevel`: the query coins (round `t.k`, `q` coins) give the positions, the consistency coins (round `t.k + 1`)
 the batching vector; the Merkle check passes, and the consistency value is `consE`. -/

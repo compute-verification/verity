@@ -21,6 +21,7 @@ public import Proofs.Flock.SamplingGeneric.TwoCount
 public import Proofs.Flock.SamplingGeneric.TwoServed
 public import Proofs.Flock.SamplingGeneric.TwoTable
 public import Proofs.Flock.SamplingGeneric.TwoBernoulli
+public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
 
@@ -84,6 +85,9 @@ at most the product a Bernoulli(Q/N) replay level gives, `∏_{ρ<N} (1 − Q/N 
 `Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance. At a first stage below independent catches at
 rates `q_ρ`, the admissible sets' count and their patterns' count are at most `δ^{−θ}` times a product over the replay
 blocks (`SamplingGeneric/TwoRankin.lean`: **`AdmissibleTwoRankin`** and **`AdmissibleTwoRankinPatterns`** are proved).
+At a first stage that catches each replay block at rate `r₁` and a second stage that samples each cell at rate `r₂`,
+`P̄_a ≤ (1 − r₁·r₂)^m`, `m` the replay blocks the footprint marks incorrect, so a footprint in `M̄_δ` marks fewer than
+every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved).
 -/
 
 @[expose] public section

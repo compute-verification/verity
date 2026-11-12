@@ -112,7 +112,7 @@ theorem errOf_toTrials (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (c
   · rw [errAt_eq_expect]
     refine (expect_bind _ (Game.draw (J.ReadsAt L c)) (fun w => (J.G (L.draw w.1) R).map fun o => (w.1, o))
       (drawStrat _) (fun w => Strategy.map _ _ (J.strat (L.draw w.1) R (τ w.1)))).trans
-      ((expect_draw _ _).trans (congrArg (· / (Fintype.card (J.ReadsAt L c) : ℝ))
+      ((Verity.Game.expect_draw _ _).trans (congrArg (· / (Fintype.card (J.ReadsAt L c) : ℝ))
         (Finset.sum_congr rfl fun w _ => ?_)))
     exact expect_map _ _ _ _
   · exact absurd h h'

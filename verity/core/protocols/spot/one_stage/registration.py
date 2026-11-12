@@ -86,6 +86,19 @@
   record, the log's last, which R6 holds `previous` to (`last_digest`): the verifier names the record itself, so a
   window's history, the earlier windows' outputs it reads, is held to the previous window's root and domain for P, and
   with no previous record it is `R7-output`.
+* **Pool chain** (`pool`: `{"pin", "pout", "genesis", "accepted"}`): a program whose window opens a pool from a
+  registered value `pin` and leaves it in a registered value `pout` (PoolWindow's rows, each the pool's root). The
+  window carries the previous window's pool (`pool_chains`) when the verifier accepted the window of the log's last
+  record, the previous window of record (`accepted`), and that record registered its program: `pin` is then a reused
+  value, the previous record's `pout` in `pout`'s row format (`pool_values`), so its entry takes that entry's domain and
+  root. Otherwise, at a registration's first window, after a failed or refused window, or at a registration boundary,
+  the chain restarts from the empty pool: `pin` is a supplied value filled from `genesis`, the empty pool's root, so
+  its root is fixed.
+  R7 refuses a record whose entry for `pin` is not the pool its window opens (`pool_open`) by name (`R7-pool-chain`),
+  beside the R7 codes the reuse or the fill gives it. The pool's root is all the chain carries. What a window takes up
+  that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
+  network certifier signed for the window, so a root the certifier didn't sign is `R7-held`, whether the window
+  carries the pool or restarts it.
 """
 from __future__ import annotations
 
@@ -176,7 +189,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
           held: Sequence[str] | None = None, day: int | None = None,
-          declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None) -> Verdict:
+          declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
+          pool: Mapping[str, Any] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -204,17 +218,22 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
     window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
     to the day's one declaration (`_declared`).  `seed_salt`: the window's seed salt the verifier read from its
-    challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.  R3
+    challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.
+    `pool`: the values a window opens and leaves its pool in, the empty pool's root and whether the verifier accepted
+    the window of the log's last record (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied`
+    (`pool_values`) and R7 holds to the chain (`R7-pool-chain`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
+    log = list(log)
+    pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
+    supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not v2:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     pins = _pins(pinned, registered or {}, sup)
-    log = list(log)
     outs = _outputs(outputs, registered or {}, sup, pins, log)
     formats = _schemas(schemas, registered or {}, sup)
     bound = _binding(binding)
@@ -301,6 +320,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if v2:
         _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
                           fixed)
+        if pool is not None:
+            _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
+                                                bound))
     return c.verdict()
 
 
@@ -495,6 +517,100 @@ def _seed_salt(seed_salt: str | None, window: str | None) -> str | None:
     return seed_salt
 
 
+#: a pool's fields (Pool chain)
+POOL_KEYS = ("accepted", "genesis", "pin", "pout")
+
+
+def _pool(pool: Mapping[str, Any] | None, registered: Mapping[str, int], supplied: Any, pinned: Any,
+          outputs: Any, schemas: Any) -> dict[str, Any] | None:
+    """The verifier's pool (Pool chain): None, or exactly `pin` and `pout`, two registered values it neither fills,
+    pinned nor gives as outputs, `pin` with no row format of its own (it takes `pout`'s, `pool_values`), `genesis`,
+    lowercase hex of 64 bytes, and `accepted`, a bool; ValueError otherwise, which the Lean verifier refuses too
+    (`OneStage.paramsOfJson`)."""
+    if pool is None:
+        return None
+    if not (isinstance(pool, Mapping) and set(pool) == set(POOL_KEYS)):
+        raise ValueError(f"a pool is exactly {list(POOL_KEYS)}: {pool!r}")
+    given = [m for m in (supplied, pinned, outputs) if isinstance(m, Mapping)]
+    for v in (pool["pin"], pool["pout"]):
+        if not (isinstance(v, str) and v in registered and not any(v in m for m in given)):
+            raise ValueError(f"the pool's {v!r}: not a registered value it neither fills, pinned nor gives as an output")
+    if pool["pin"] == pool["pout"]:
+        raise ValueError(f"a pool opens and closes in two values, not {pool['pin']!r} alone")
+    if isinstance(schemas, Mapping) and pool["pin"] in schemas:
+        raise ValueError(f"the pool's {pool['pin']!r} takes the row format of {pool['pout']!r}, which it reuses")
+    g = pool["genesis"]
+    if not (isinstance(g, str) and len(g) == 128 and _HEX.fullmatch(g)):
+        raise ValueError(f"the pool's genesis is lowercase hex of 64 bytes: {g!r}")
+    if type(pool["accepted"]) is not bool:
+        raise ValueError(f"the pool's accepted is a bool: {pool['accepted']!r}")
+    return dict(pool)
+
+
+def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program) -> bool:
+    """Whether the window carries the previous window's pool (Pool chain): the verifier accepted the window of the log's
+    last record, the previous window of record (`accepted`), and that record registered its program. Otherwise the chain
+    restarts from the empty pool, as a registration's first window opens it (`Registration.Pool.chains`)."""
+    last = log[-1] if log else None
+    return pool["accepted"] and isinstance(last, Mapping) and last.get("program") == P.program_digest(program)
+
+
+def pool_values(pool: Mapping[str, Any] | None, program: Program, supplied: Any, outputs: Any, schemas: Any,
+                log: Sequence[Mapping[str, Any]]) -> tuple[Any, Any, Any]:
+    """The verifier's supplied values, output values and row formats with its pool's `pin` among them (Pool chain): the
+    previous record's `pout`, reused (`{"record": last_digest(log), "value": pout}`) in `pout`'s row format, when the
+    window carries the previous window's pool (`pool_chains`), else filled from the empty pool's root (`[[{"bytes":
+    genesis}]]`) in the default one. What reads the verifier's values (the reads file's domains, formats and fixed
+    values) takes these. A malformed object is left as it is, for its own check to refuse."""
+    if pool is None:
+        return supplied, outputs, schemas
+    pin, pout = pool["pin"], pool["pout"]
+    if not pool_chains(pool, log, program):
+        if supplied is not None and not isinstance(supplied, Mapping):
+            return supplied, outputs, schemas
+        return {**(supplied or {}), pin: [[{"bytes": pool["genesis"]}]]}, outputs, schemas
+    if isinstance(schemas, Mapping) and pout in schemas:
+        schemas = {**schemas, pin: schemas[pout]}
+    if outputs is not None and not isinstance(outputs, Mapping):
+        return supplied, outputs, schemas
+    return supplied, {**(outputs or {}), pin: {"record": last_digest(log), "value": pout}}, schemas
+
+
+def pool_open(pool: Mapping[str, Any], rec: Mapping[str, Any], program: Program, values: Mapping[str, int],
+              schemas: Mapping[str, str] | None, window: str | None, fixed: Sequence[str],
+              supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
+              binding: Mapping[str, str] | None) -> tuple[str, str] | str:
+    """The domain and root of the pool the record's window opens (Pool chain): the previous record's entry for `pout` (its
+    last naming it) when the window carries the previous window's pool (`pool_chains`), else the empty pool's: the domain
+    the verifier gives `pin` (`registered_entries`) and the root R7 recomputes for it filled from `genesis`
+    (`registered.supplied_root`); where there is none, why (`Registration.poolOpen`, none there)."""
+    if pool_chains(pool, log, program):
+        es = log[-1].get("registered")
+        hits = [e for e in es if isinstance(e, Mapping) and e.get("value") == pool["pout"]] if isinstance(es, list) else []
+        d, r = (hits[-1].get("domain"), hits[-1].get("root")) if hits else (None, None)
+        if isinstance(d, str) and isinstance(r, str):
+            return d, r
+        return f"the previous record registers no {pool['pout']!r} with a domain and root"
+    try:
+        want = G.registered_entries(program, values, schemas, window, fixed).get(pool["pin"])
+        if want is None:
+            return f"the verifier gives {pool['pin']!r} no entry"
+        return want["domain"], G.supplied_root(program, pool["pin"], [[("bytes", pool["genesis"])]], rec, want,
+                                               sorted(supplied), log, None, binding)
+    except ValueError as e:
+        return f"the empty pool fills no {pool['pin']!r}: {e}"
+
+
+def _pool_chain(c: _Collect, rec: Mapping[str, Any], pool: Mapping[str, Any], want: tuple[str, str] | str) -> None:
+    """R7's pool chain: the record's entry for `pin` (its last naming it) has the domain and root of the pool its window
+    opens (`want`, `pool_open`, or why there is none), else `R7-pool-chain`."""
+    got = rec["registered"]
+    hits = [e for e in got if isinstance(e, Mapping) and e.get("value") == pool["pin"]] if isinstance(got, list) else []
+    mine = (hits[-1].get("domain"), hits[-1].get("root")) if hits else None
+    if mine != want:
+        c.fail("R7-pool-chain", {"value": pool["pin"], "registered": mine, "verifier": want})
+
+
 def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], pinned: Mapping[str, str],
                       rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
                       binding: Mapping[str, str] | None = None,
@@ -576,6 +692,6 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest", "held_roots",
-           "matches_public", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
-           "registered_entries", "unwindowed", "window_domain"]
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "POOL_KEYS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest",
+           "held_roots", "matches_public", "pool_chains", "pool_open", "pool_values", "query_digest", "receipt", "record",
+           "record_digest", "refuse_unwindowed", "registered_entries", "unwindowed", "window_domain"]

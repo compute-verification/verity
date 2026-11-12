@@ -87,6 +87,12 @@ def test_start_seeds_the_clones_before_its_push_check():
     assert start.index("fast_clones") < start.index("gh_app_token.sh")
 
 
+def test_research_writes_unbuffered_so_a_running_tick_shows_in_the_log():
+    """drive's log is a pipe, where Python would hold a tick's lines until it ended."""
+    export = re.search(r"^export PATH=.*?(?<!\\)\n", DRIVE.read_text(), re.M | re.S).group(0)
+    assert "PYTHONUNBUFFERED=1" in export.split()
+
+
 def test_locked_calls_checkout_with_its_verb_and_runs_merge_in_the_queues_clone():
     """`research merge` runs in the queue's clone, a full one: in $REPO, a blob:none partial clone, its sweep fetched each open
     PR's head it lacked, a pack each, until the pod's disk filled."""

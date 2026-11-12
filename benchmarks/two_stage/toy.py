@@ -18,6 +18,9 @@ proves them (`audit.py`).
   the leaves S and each one's path to the boundary root; every other port at the interior record, unit i reading its own
   leaf i.
 * **The verifier's reads** (`reads`): each member's ``--registered`` file from the two registration records and S alone.
+* **The auditor's params** (`references`), fixed before the run: each template's circuit file and its reference
+  statement's header, which round 2 holds the template's statements to once it places it in the run
+  (`second_stage.at_run`).
 * **The challenger's design** (`spec`): `service.TwoStage` over REPLAY's instances, the boundary ports committed while
   serving and the interior's after the first stage, each sampled proof block checked as an instance of its template, for a
   `service.Stream` over `TEMPLATES` with ``replay=REPLAY``, whose cells are `N_T` and whose interior program is the
@@ -48,6 +51,8 @@ WORD = 16
 #: the toy's boundary run, and the tag the interior's run is taken under
 RUN = hashlib.sha512(b"verity/two-stage/toy/v1").hexdigest()
 RUN_TAG = b"verity/two-stage/toy/interior-run/v1\x00"
+#: the salts' key of each reference statement's stand-in rows, so the params are one file for every run of the design
+REFERENCE_KEY = hashlib.sha512(b"verity/two-stage/toy/reference/v1").digest()
 
 
 def _identity_signature(S):
@@ -273,6 +278,30 @@ def reads(boundary_record: Mapping, interior_record: Mapping, window: CS.Binding
             LK.reads(interior_record, m.port(p), words, m.schema(p), range(m.n), m.base, registered=REG)
             for p, words in m.all_rows}, registered=REG)
     return out
+
+
+def references(q: int, out: Path) -> dict:
+    """The auditor's params (`service.template_circuits`' ``proofs``), fixed before the run: by template, in the check's
+    order, its circuit file's SHA-512 and its reference statement's header. The reference is `member_stager`'s statement
+    of the template's member in the interior window of ``q`` replay blocks (`interior_window`, under a run of its own,
+    whose fields round 2 places or blanks), bound to that window's partition and program as the sessions' circuits are,
+    on zero rows at the member's slots, one table row a unit a port as `interior` lays them out, salted under
+    `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt`` beside it, and its prover file is
+    deleted. Both files are a function of ``q`` and the design alone, byte for byte."""
+    from verity_flock.class_statement import member_stager
+
+    window = interior_window("00" * 64, range(q))
+    bind = {"partition": window.partition_digest, "program": window.partition["program"]}
+    named = []
+    for k, (m, defn) in enumerate(zip(window.members, TEMPLATES)):
+        d, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
+        member_stager(defn, m, bind).stage(rows, d, REFERENCE_KEY, indices=range(m.base, m.base + m.n), tables=rows,
+                                           refs={r: np.arange(m.n) for r in rows})
+        (d / "inst.bin").unlink()
+        with open(d / "pub.bin", "rb") as f:
+            header = json.loads(f.readline())
+        named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header})
+    return {"templates": named}
 
 
 def write(c: CS.Committed, out, provenance: Mapping, *, previous: str | None = None,

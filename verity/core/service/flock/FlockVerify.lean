@@ -264,6 +264,20 @@ theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins
   unfold buildSession
   simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
 
+/-- The SHA-512 of a JSON value's canonical JSON (`canon`), as `Spot.canonSha512` digests one. -/
+def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
+
+/-- The digest a verdict names a public file's header by (`sha512Of`), none where `canon` refuses it. -/
+def headerDigest (header : Lean.Json) : Option String := (sha512Of header).toOption
+
+/-- A public file's header: the JSON of its first line, which every public-file loader parses (`Public.load`,
+`HmRow.loadPublic`) and sets the statement up from, and a sampled statement's is drawn from (`HmRow.drawn`, which adds the
+sample). A verdict names the file by its `headerDigest`. -/
+def publicHeader (file : ByteArray) : Option Lean.Json := do
+  let nl ← findByte file 10
+  let text ← String.fromUTF8? (file.extract 0 nl)
+  (Flock.JsonParse.parse text).toOption
+
 /-- The deployed hashes (`With.std`) with the SHA-512 of `file` known to be `sha`; `b == file` is one pointer comparison
 when `b` is `file` itself. -/
 def stdKnowing (file sha : ByteArray) : Hashes V :=
@@ -360,10 +374,10 @@ the root of that content (`Registered.checkKnownAll`). Beside the ports, the row
 statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
 the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
-reads to). -/
+reads to), and the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) ×
-      Array String))) := do
+      Array String × String))) := do
   let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
     | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"{ctx}: {e}"))
@@ -376,11 +390,11 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-        let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
+        let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String × String) := do
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j)
+          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j, ← sha512Of j)
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -840,6 +854,9 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
 sample; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
+the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
+file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
+session up as (`session_tables`, `--session-tables J`, else 1),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
 `recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
 SHA-512 of the shared rows file it checked (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file
@@ -974,8 +991,8 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-  let (registered, known, params) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2)).getD #[])
+  let (registered, known, params, registeredSha) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.1)).getD #[], r.map (·.2.2.2))
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -1069,6 +1086,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
+  let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -1141,6 +1159,12 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     let ok ← emit dir (checked.map refusals) (
       (if part.isNull then [] else [("partition", part)]) ++
       (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
+      -- the public file's header and the registered reads it checked the session against, by their digests, the
+      -- sample it drew the session's statement at and the tables it split it into, which a caller holds a statement of
+      -- the session to
+      (match header with | some h => [("public_header_sha512", Lean.Json.str h)] | none => []) ++
+      (match registeredSha with | some h => [("registered_sha512", Lean.Json.str h)] | none => []) ++
+      (match draw with | some d => [("unit_draw", d)] | none => []) ++ [("session_tables", Lean.toJson count)] ++
       (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
       (if opened.isNull then [] else [("openings", opened)]) ++
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
@@ -1744,8 +1768,6 @@ def graphJson (gr : Extract.Graph) : Lean.Json :=
     ("external", Lean.toJson (gr.external.map fun b => if b then 1 else 0)), ("input_ids", Lean.toJson gr.inputIds),
     ("src", Lean.toJson (g.reads.map (·.1))), ("dst", Lean.toJson (g.reads.map (·.2))), ("input_reads", pairs g.inputReads),
     ("outputs", Lean.toJson g.outputs), ("returned_inputs", Lean.toJson g.returnedInputs), ("recomputed", pairs g.recomputed)]
-
-private def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
 
 /-- `qword-program DESCRIPTOR [X [W]] [--digests] [--cuts] [--query-version N]`: `Q_word` v1 (or vN, 1 or 2) on the program
 (`Flock.Program`, `Flock.Extract`, `Flock.Qword`): the program's SHA-512, the population and per Call its units. In full: per

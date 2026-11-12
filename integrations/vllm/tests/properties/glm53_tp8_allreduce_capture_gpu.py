@@ -1325,7 +1325,7 @@ def nccl_analysis(doc_cases: list[dict[str, Any]]) -> dict[str, Any]:
             parts = np.load(c["ops"]["parts"]).reshape(WORLD, -1)
             dec = decode_runs(out, out.size)
             fit = nccl_fit(out, parts, dec) if dec["undecoded"] == 0 else {"fit": {}, "first_mismatch": {}, "model": None}
-        except Exception as e:  # noqa: BLE001
+        except (OSError, ValueError, KeyError, IndexError) as e:
             per[c["key"]] = {"model": None, "error": _error(e)}
             continue
         per[c["key"]] = {"runs": len(dec["runs"]), "trees": dec["trees"], "chains": dec["chains"], "undecoded": dec["undecoded"],

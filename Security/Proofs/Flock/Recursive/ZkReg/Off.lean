@@ -3,8 +3,7 @@ module
 public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Registered.Binding
 
 /-!

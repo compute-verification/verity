@@ -9,6 +9,7 @@ public import Proofs.Flock.Bridge.V5.KSLive
 public import Proofs.Flock.Bridge.V5.Honest
 public import Proofs.Flock.Bridge.V5.Refused
 public import Proofs.Flock.Bridge.V5.Accepted
+public import Proofs.Flock.Bridge.V5.Session
 
 /-! `Statement`: `Flock.Guarantees.SampledKSLiveV5`, V2 at the verifier's public inputs with or without shared rows, and
 the targets its assembly takes (stated). `EndToEndHidden`: `endToEndHiddenV5_of`, from `OpeningsCanonTargetV5`.
@@ -21,6 +22,8 @@ file hypotheses `HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` at the ci
 (`v5Files_of_check`). `Accepted`: `Flock.Bridge.sampledKSLiveV5Accepted`, `SampledKSLiveV5R` on the event that
 `verify --zk` accepts the files, flat or templated, and the run
 passes the registration's population, without its hypotheses on the files' rows, names and roots or on the population
-order. -/
+order. `Session`: the openings a witness of a sampled proof block's table reveals (`revealV5`, from the message packing
+it, `packZ`), which make the unit's proof block correct (`correct_of_revealV5`), and the sampled table at one table
+(`tabOfZHJP_one`). -/
 
 @[expose] public section

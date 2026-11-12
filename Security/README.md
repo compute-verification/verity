@@ -549,10 +549,10 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
 
 - **Guarantees:** the table's sampled-proofs row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. Neither is stated yet as its target in
-  `Verity.remote_soundness_of_subprotocols` (above), so the two compose by hand. Remote's sampled-proofs subprotocol's
-  one-stage form is v2, which runs `flock-verify --zk` on the sessions' files itself and reads the challenger's signed
-  coins; one-stage v1, which takes the sessions' verdicts as evidence, is refused. No Lean statement yet carries v2's
-  acceptance to `SampledKSLiveV3`'s event.
+  `Verity.remote_soundness_of_subprotocols`, so the two compose by hand. Remote's sampled proofs' one-stage form is
+  v2, which runs `flock-verify --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
+  verdicts as evidence, is refused); where v2 accepts, its session is in V3's and V5's events
+  (`Verity.Sampled.checkBlobs_event`), and only V5's has a coupling.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,

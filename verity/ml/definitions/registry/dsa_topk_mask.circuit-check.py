@@ -48,15 +48,16 @@ RANGES = {
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """The mask and the long row over 20 keys selecting 16 (reaching the threshold, slot and key accelerators), and the
-    concentrator at small statics shaped as GLM-5.3's (an odd N, K = N - 1; reaching `DsaButterflyRoute_v1` and the tags' scan),
-    with picks (N 33, K 8) and in the rows' read (N 7, K 3); the rows' read of 6 rows padded to 9, and of 9 padded to 16, a long
-    row's shape (T >= K, N = 2K)."""
+    """The mask, the counted mask and the long row over 20 keys selecting 16 (reaching the thresholds, slot and key
+    accelerators), and the concentrator at small statics shaped as GLM-5.3's (an odd N, K = N - 1; reaching `DsaButterflyRoute_v1`
+    and the tags' scan), with picks (N 33, K 8) and in the rows' read (N 7, K 3); the rows' read of 6 rows padded to 9, and of 9
+    padded to 16, a long row's shape (T >= K, N = 2K)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dsa_topk_mask
 
     return [
         ("DsaTopKMask_v1", lambda: bind(dsa_topk_mask.DsaTopKMask, N=20, TOPK=16)),
+        ("DsaTopKMaskCounted_v1", lambda: bind(dsa_topk_mask.DsaTopKMaskCounted, N=20, TOPK=16)),
         ("DsaTopKRow_v1", lambda: bind(dsa_topk_mask.DsaTopKRow, N=20, TOPK=16)),
         ("DsaButterflySettings_v1", lambda: bind(dsa_topk_mask.DsaButterflySettings, N=9, K=8)),
         ("DsaButterflySettings_v1-pick", lambda: bind(dsa_topk_mask.DsaButterflySettings, N=33, K=8)),

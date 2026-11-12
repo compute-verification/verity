@@ -39,7 +39,7 @@ chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the
 from __future__ import annotations
 
 import re
-from typing import Mapping, Sequence
+from typing import Mapping, NamedTuple, Sequence
 
 from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
@@ -210,6 +210,78 @@ class Net:
 
     def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
         return _Model(self, B, W, peers)
+
+    def dense_plan(self, k, M: int, pos0: int, context: int, dense: list[tuple[int, int]]) -> "DensePlan":
+        """The selections of a dense-MHA prefill of M rows at pos0.. after `context` history rows (`_Model._dense_prefill`), each
+        kind `k(role, **statics)`'s, or the refusal."""
+        import numpy as np
+        from verity.ml.definitions.numerics import fa3_model
+        from verity.ml.definitions.registry import fa3_split
+        from verity.ml.definitions.registry.merge_attn_states import NEG_INF
+        from verity_vllm.program.frontend import targets as TG
+        C, tp = self.C, self.tp
+        R, NOPE, VH, NH = (int(C[k]) for k in ("QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
+        D = NOPE + R
+        if VH != D:
+            _refuse(f"a dense-MHA prefill at v head {VH} vs qk head {D}: Attention_v4 states one head dim for q, k and v")
+        if np.float32(C["ATTN_SCALE"]) != np.float32(D ** -0.5):
+            _refuse(f"a dense-MHA prefill at scale {C['ATTN_SCALE']!r}, not f32(D^-0.5) at D={D}, the word Attention_v4 folds in")
+        if not TG.fa3_check_inf(tp):
+            _refuse(f"a dense-MHA prefill on FA{tp.effective_flash_attn_version()} without FA3's check-inf-per-iteration construction")
+        if context != pos0:
+            _refuse(f"a dense-MHA prefill at position {pos0} over a layer history of {context} rows")
+        extends = [s for s in dense if s[1] > 0]
+        longest, held = max(n + p for n, p in dense), sum(p for _, p in extends)
+        if held > min(8 * longest, 65536):
+            _refuse(f"a dense-MHA step's context of {held} rows, past the {min(8 * longest, 65536)} rows of the smallest workspace "
+                    f"`plan_mla_context_chunks` may cut it at (several context chunks)")
+        max_q, rows, me = max(n for n, _ in dense), [n for n, _ in dense], dense.index((M, pos0))
+        try:
+            geom = TG.attention_geometry(tp, D, max_q, NH, NH)
+            BM = TG.fa3_tile_m(D, max_q, 1)
+        except TG.UnregisteredTarget as e:
+            _refuse(str(e))
+        BN, st = geom["BN"], {"BN": geom["BN"], "DOT": geom["DOT"], "INV": geom["INV"]}
+
+        def splits(keys=None, at=me, q=rows) -> int:
+            if tp.batch_invariant:
+                return 1
+            try:
+                static, dyn = fa3_model.split_plan(q, NH, NH, D, num_sms=int(tp.num_sms), Dv=D, seqlens_k=keys)
+                if dyn[at] > 1:
+                    fa3_split.check_combine_bound(static)
+            except ValueError as e:
+                _refuse(f"FA3's split count of a dense-MHA launch of {q} query rows over {keys or q} keys: {e}")
+            return dyn[at]
+
+        def row(role: str, i: int, **kw):
+            split = {} if ns == 1 else {"PER": fa3_split.split_per(M, i, BM, BN, ns)}
+            return k(role, T=i + 1, **kw, D=D, MASKED_FROM=TG.fa3_masked_from(tp, i + 1, NH, NH, D, max_q, i), **st, **split)
+
+        ns = splits()
+        if not extends:
+            return DensePlan(sum(rows), held, [row("attention_dot", i, NH=1, KVH=1) for i in range(M)])
+        cfn = empty = None
+        if context:
+            nc = splits([p for _, p in extends], extends.index((M, pos0)), [n for n, _ in extends])
+            nb = -(-context // BN)
+            cfn = k("attention_head_lse", T=context, D=D, MASKED_FROM=nb - 1, **st, **({} if nc == 1 else {"PER": -(-nb // nc)}))
+        else:
+            empty = (k("const", W=16, BITS=0), k("const", W=32, BITS=NEG_INF))
+        merge = k("merge_attn_states", NH=NH, D=D)
+        return DensePlan(sum(rows), held, [row("attention_head_lse", i) for i in range(M)], cfn, merge, empty)
+
+
+class DensePlan(NamedTuple):
+    """A dense-MHA prefill's selections (`Net.dense_plan`): kv_b_proj's rows (the step's prefills'), the context's rows `held`, each
+    row's head kind, and where some prefill of the step extends, MergeAttnStates, with the context's head kind where this request
+    has context, else the zero output and lse -inf consts."""
+    rows: int
+    held: int
+    heads: list
+    context: object = None
+    merge: object = None
+    empty: tuple | None = None
 
 
 class _Model:
@@ -467,49 +539,13 @@ class _Model:
         non-causal attention over its gathered history (`_compute_prefill_context`: kv_b_proj over the context rows of the chunk, the
         prefills with context, `run_prefill_context_chunk`) or, without context, the zero output with lse -inf vLLM neutralizes it to,
         and `MergeAttnStates_v1` merges the two per token.  More context than one chunk is sure to hold is refused."""
-        import numpy as np
-        from verity.ml.definitions.numerics import fa3_model
-        from verity.ml.definitions.registry import fa3_split
-        from verity.ml.definitions.registry.merge_attn_states import NEG_INF
-        from verity_vllm.program.frontend import targets as TG
-        C, tp, M = self.C, self.net.tp, len(qb)
+        C, M = self.C, len(qb)
         KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         D, KW = NOPE + R, NOPE + VH
+        plan = self.net.dense_plan(self.k, M, pos0, context, dense)
 
         def w(f: str):
             return self.w[(L, f)]
-
-        if VH != D:
-            _refuse(f"a dense-MHA prefill at v head {VH} vs qk head {D}: Attention_v4 states one head dim for q, k and v")
-        if np.float32(C["ATTN_SCALE"]) != np.float32(D ** -0.5):
-            _refuse(f"a dense-MHA prefill at scale {C['ATTN_SCALE']!r}, not f32(D^-0.5) at D={D}, the word Attention_v4 folds in")
-        if not TG.fa3_check_inf(tp):
-            _refuse(f"a dense-MHA prefill on FA{tp.effective_flash_attn_version()} without FA3's check-inf-per-iteration construction")
-        if context != pos0:
-            _refuse(f"a dense-MHA prefill at position {pos0} over a layer history of {context} rows")
-        extends = [s for s in dense if s[1] > 0]
-        longest, held = max(n + p for n, p in dense), sum(p for _, p in extends)
-        if held > min(8 * longest, 65536):
-            _refuse(f"a dense-MHA step's context of {held} rows, past the {min(8 * longest, 65536)} rows of the smallest workspace "
-                    f"`plan_mla_context_chunks` may cut it at (several context chunks)")
-        max_q, rows, me = max(n for n, _ in dense), [n for n, _ in dense], dense.index((M, pos0))
-        try:
-            geom = TG.attention_geometry(tp, D, max_q, NH, NH)
-            BM = TG.fa3_tile_m(D, max_q, 1)
-        except TG.UnregisteredTarget as e:
-            _refuse(str(e))
-        BN, st = geom["BN"], {"BN": geom["BN"], "DOT": geom["DOT"], "INV": geom["INV"]}
-
-        def splits(keys=None, at=me, q=rows) -> int:
-            if tp.batch_invariant:
-                return 1
-            try:
-                static, dyn = fa3_model.split_plan(q, NH, NH, D, num_sms=int(tp.num_sms), Dv=D, seqlens_k=keys)
-                if dyn[at] > 1:
-                    fa3_split.check_combine_bound(static)
-            except ValueError as e:
-                _refuse(f"FA3's split count of a dense-MHA launch of {q} query rows over {keys or q} keys: {e}")
-            return dyn[at]
 
         def head_logs(rows: list[Refs], pe: list[Refs]) -> tuple[list[tuple[PartLog, PartLog]], list[int]]:
             """Per head the key rows [k_nope | k_pe] and the value rows, kv_b_proj's `rows` split per head ([k_nope | v] each), and
@@ -528,36 +564,24 @@ class _Model:
             (pairs, ends) = logs
             return [self.call(fn, q[h], klog.cut(ends[T]), vlog.cut(T)) for h, (klog, vlog) in enumerate(pairs)]
 
-        kvb = self.fp8_linear(kvc, w("kv_b_w"), w("kv_b_ws"), rows=sum(rows))
-        sfx, ns = head_logs(kvb, kpe), splits()
+        kvb = self.fp8_linear(kvc, w("kv_b_w"), w("kv_b_ws"), rows=plan.rows)
+        sfx = head_logs(kvb, kpe)
         qs = [[concat([q.slice(h * D, h * D + NOPE), pe.slice(h * R, (h + 1) * R)]) for h in range(NH)] for q, pe in zip(qb, qpe)]
-        if not extends:
-            out = []
-            for i in range(M):
-                split = {} if ns == 1 else {"PER": fa3_split.split_per(M, i, BM, BN, ns)}
-                fn = self.k("attention_dot", T=i + 1, NH=1, KVH=1, D=D, MASKED_FROM=TG.fa3_masked_from(tp, i + 1, NH, NH, D, max_q, i),
-                            **st, **split)
-                out.append(concat([o.refs for o in heads(fn, qs[i], i + 1, sfx)]))
-            return out
+        if plan.merge is None:
+            return [concat([o.refs for o in heads(fn, qs[i], i + 1, sfx)]) for i, fn in enumerate(plan.heads)]
         if context:
             hist = self.logs[L]["latent"].parts[:context]
-            ckvb = self.fp8_linear([r.slice(0, KVL) for r in hist], w("kv_b_w"), w("kv_b_ws"), rows=held)
+            ckvb = self.fp8_linear([r.slice(0, KVL) for r in hist], w("kv_b_w"), w("kv_b_ws"), rows=plan.held)
             pre = head_logs(ckvb, [r.slice(KVL, KVL + R) for r in hist])
-            nc = splits([p for _, p in extends], extends.index((M, pos0)), [n for n, _ in extends])
-            nb = -(-context // BN)
-            cfn = self.k("attention_head_lse", T=context, D=D, MASKED_FROM=nb - 1, **st, **({} if nc == 1 else {"PER": -(-nb // nc)}))
         else:
-            zero = self.call(self.k("const", W=16, BITS=0)).refs
-            ninf = self.call(self.k("const", W=32, BITS=NEG_INF)).refs
+            zero, ninf = (self.call(fn).refs for fn in plan.empty)
             empty = (concat([zero] * (NH * D)), concat([ninf] * NH))
-        merge, out = self.k("merge_attn_states", NH=NH, D=D), []
-        for i in range(M):
-            split = {} if ns == 1 else {"PER": fa3_split.split_per(M, i, BM, BN, ns)}
-            fn = self.k("attention_head_lse", T=i + 1, D=D, MASKED_FROM=TG.fa3_masked_from(tp, i + 1, NH, NH, D, max_q, i), **st, **split)
+        out = []
+        for i, fn in enumerate(plan.heads):
             s = heads(fn, qs[i], i + 1, sfx)
-            p = heads(cfn, qs[i], context, pre) if context else None
+            p = heads(plan.context, qs[i], context, pre) if context else None
             po, pl = (concat([o[0].refs for o in p]), concat([o[1].refs for o in p])) if p else empty
-            out.append(self.call(merge, po, pl, concat([o[0].refs for o in s]), concat([o[1].refs for o in s])).refs)
+            out.append(self.call(plan.merge, po, pl, concat([o[0].refs for o in s]), concat([o[1].refs for o in s])).refs)
         return out
 
     def mlp(self, L: int, x: list[Refs]) -> list[Refs]:

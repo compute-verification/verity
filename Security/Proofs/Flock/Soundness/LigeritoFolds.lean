@@ -2,8 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.LigeritoOOD
 public import Proofs.Flock.Soundness.ZerocheckPhase
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.LigeritoMCA
 import Proofs.Flock.Soundness.Rounds

@@ -59,11 +59,12 @@ inner run are one `Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`),
   accepts and the proof block at the picked slot is not found at the slot's coins by `κ_s + √(k(x)·γ_s·β)`.
 * `inner_bad_le`: at first-stage coins where the sample misses `B` with probability at most `esc`, the union bound at
   the picked slot, the first holding a block of `B` (the sample's slots at most `n_PU`, `Sessions.slots`), gives
-  `Pr[acc]·Pr[bad for B] ≤ 2k/K + e^{−k/8} + c·(esc + κ)`.
-* `outer_bad_le`: over the refused sets (at most `2^{n_PU}`, against the waits' slack), with the sampling design's weights
-  averaging at most `P_a(B) ≤ δ`.
+  `Pr[acc]·Pr[bad for B] ≤ 2k_in/K_in + e^{−k_in/8} + c·(esc + κ)` (`rpow_kIn_le_slack`: one set).
+* `outer_bad_le`: over the refused sets (at most `2^{n_PU}`, `n_PU ≤ n_out` by `Sessions.unions`, against the outer
+  wait's slack, `rpow_kOut_le_slack`), with the sampling design's weights averaging at most `P_a(B) ≤ δ`.
 * `pr_fails_le_of`, `pr_fails_le`: **the composition**, `Pr[acc ∧ fails] ≤ κ_δ + √(γ·Pr[B])` with
-  `κ_δ = c²·(δ + κ_s) + (1 + c)·(2k/K + e^{−k/8})`: independent of the judged coins, the outer bound at each tape, and
+  `κ_δ = c²·(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`: independent of the judged coins,
+  the outer bound at each tape, and
   the average of `√(k(x)·γ_s·β)` at most `√(k(x)·γ_s·Pr[B])` (Jensen).
 * `KS_of_split`, `KS_of_sessionKS`: **`Compiled.KS`** from the split (an accepted run whose extraction fails is in
   `Fails` or its extraction's own calls collide) and the sessions' bound, which at `Found` is `SessionKS`, so `KSOf`
@@ -77,7 +78,7 @@ namespace Claims.SamplingGeneric
 
 open Claims Finset
 open Claims.Sampling (AuditStatement Partition InScope forkOn forkOn_forkOn' accList AllBad wait_bad_le S₁ card_S₁_le
-  card_rpow_le_slack Pr_or_le slack slack_pos Pr_acc_forkOn)
+  rpow_le_slack Pr_or_le slack slack_pos Pr_acc_forkOn)
 open Claims.Recursion (serve viewing)
 
 theorem foldr_max_nonneg (l : List ℝ) : 0 ≤ l.foldr max 0 := by
@@ -105,14 +106,14 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 /-! ## The extractor's coins, per outer run -/
 
 /-- The extractor's coins for one outer run: its inner wait's, and at each of its accepted runs every slot's. -/
-abbrev E1 (L : Compiled Coin A) (x : Msg) := (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → L.SlotEC x)
+abbrev E1 (L : Compiled Coin A) (x : Msg) := (Fin (L.capIn x) → Fin (L.V.k x) → Coin) × (Fin (L.kIn x) → L.SlotEC x)
 
-def toE1 (L : Compiled Coin A) (x : Msg) (c : L.ECoins x) (j : Fin (L.k x)) : L.E1 x :=
+def toE1 (L : Compiled Coin A) (x : Msg) (c : L.ECoins x) (j : Fin (L.kOut x)) : L.E1 x :=
   (c.2.1 j, fun l u => c.2.2 (j, l, u))
 
 /-- The extractor's coins as the outer wait's and one `E1` per outer run. -/
 def ecoinsEquiv (L : Compiled Coin A) (x : Msg) :
-    L.ECoins x ≃ (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → L.E1 x) where
+    L.ECoins x ≃ (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) where
   toFun c := (c.1, L.toE1 x c)
   invFun p := (p.1, fun j => (p.2 j).1, fun t => (p.2 t.1).2 t.2.1 t.2.2)
   left_inv _ := rfl
@@ -141,18 +142,18 @@ proof block of `B` good. -/
 def BadOuter (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (B : Finset ℕ)
     (g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin) (e : L.E1 x) : Prop :=
-  (accList (fun d => (run' (g d)).out = .acc) (L.k x) ((List.finRange (L.cap x)).map e.1)).length < L.k x ∨
-    AllBad (fun d => (run' (g d)).out = .acc) (L.k x)
-      (fun d uc => ∀ v ∈ B, ¬ L.GoodAt x found (g d) v uc) ((List.finRange (L.cap x)).map e.1) e.2
+  (accList (fun d => (run' (g d)).out = .acc) (L.kIn x) ((List.finRange (L.capIn x)).map e.1)).length < L.kIn x ∨
+    AllBad (fun d => (run' (g d)).out = .acc) (L.kIn x)
+      (fun d uc => ∀ v ∈ B, ¬ L.GoodAt x found (g d) v uc) ((List.finRange (L.capIn x)).map e.1) e.2
 
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some set
 `B` of acceptance probability at most `δ`, every kept outer run is bad for `B`. -/
 def Fails (L : Compiled Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (c : L.ECoins x) : Prop :=
   ∃ s Pt, L.parse x = some s ∧ L.partition s = some Pt ∧ InScope Pt s ∧
-    ((accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
-      ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.k x)
-        (fun r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) ((List.finRange (L.cap x)).map c.1)
+    ((accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
+      ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.kOut x)
+        (fun r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) ((List.finRange (L.capOut x)).map c.1)
         (L.toE1 x c))
 
 /-- **The sessions' knowledge soundness** at the sample's slots: on every prover, a nonnegative weight `β` of each tape
@@ -178,11 +179,17 @@ section Numbers
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-theorem k_pos (L : Compiled Coin A) (x : Msg) : 0 < L.k x := by
-  unfold Compiled.k; positivity
+theorem kOut_pos (L : Compiled Coin A) (x : Msg) : 0 < L.kOut x := by
+  unfold Compiled.kOut; positivity
 
-theorem cap_pos (L : Compiled Coin A) (x : Msg) : 0 < L.cap x := by
-  unfold Compiled.cap; exact Nat.mul_pos (by positivity) (L.k_pos x)
+theorem kIn_pos (L : Compiled Coin A) (x : Msg) : 0 < L.kIn x := by
+  unfold Compiled.kIn; positivity
+
+theorem capOut_pos (L : Compiled Coin A) (x : Msg) : 0 < L.capOut x := by
+  unfold Compiled.capOut; exact Nat.mul_pos (by positivity) (L.kOut_pos x)
+
+theorem capIn_pos (L : Compiled Coin A) (x : Msg) : 0 < L.capIn x := by
+  unfold Compiled.capIn; exact Nat.mul_pos (by positivity) (L.kIn_pos x)
 
 theorem nPU_eq {L : Compiled Coin A} {x : Msg} {s : AuditStatement} {Pt : Partition} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) : L.nPU x = Pt.blocks.length := by
@@ -204,14 +211,18 @@ theorem γ_le_γs (L : Compiled Coin A) (x : Msg) {u : ℕ} (hu : u < L.nPU x) :
 theorem κ_nonneg (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) : 0 ≤ L.κ δ x := by
   have hc := slack_pos
   unfold Compiled.κ
-  exact add_nonneg (mul_nonneg (by positivity) (add_nonneg hδ (L.κs_nonneg x)))
-    (mul_nonneg (by linarith) (by positivity))
+  exact add_nonneg (add_nonneg (mul_nonneg (by positivity) (add_nonneg hδ (L.κs_nonneg x))) (by positivity))
+    (mul_nonneg hc.le (by positivity))
 
-/-- The slack bound at the waits' `k`. -/
-theorem rpow_k_le_slack (L : Compiled Coin A) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m) (hm : m ≤ 2 * L.nPU x + 1) :
-    (N : ℝ) ^ (1 / (L.k x : ℝ)) ≤ slack := by
-  unfold Compiled.k
-  exact card_rpow_le_slack hN hm
+/-- The slack bound at the outer wait's `k_out`, over at most `2^m` sets, `m ≤ 2·n_out + 1`. -/
+theorem rpow_kOut_le_slack (L : Compiled Coin A) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m)
+    (hm : m ≤ 2 * L.nOut x + 1) : (N : ℝ) ^ (1 / (L.kOut x : ℝ)) ≤ slack :=
+  rpow_le_slack hN (Nat.mul_le_mul_left _ hm)
+
+/-- The slack bound at the inner wait's `k_in`, over at most `2^m` sets, `m ≤ 2·n_in + 1`. -/
+theorem rpow_kIn_le_slack (L : Compiled Coin A) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m)
+    (hm : m ≤ 2 * L.nIn x + 1) : (N : ℝ) ^ (1 / (L.kIn x : ℝ)) ≤ slack :=
+  rpow_le_slack hN (Nat.mul_le_mul_left _ hm)
 
 end Numbers
 
@@ -221,8 +232,8 @@ omit [Inhabited Coin] in
 /-- **One outer run's inner wait**: at first-stage coins `r` where the sample misses every proof block of `B` (each
 below `n_PU`) with probability at most `esc`, the sample has at most `n_PU` slots, and the block at the slot any
 selection picks is not found with probability at most `κr`, the inner wait (times its acceptance) comes up short or
-keeps only runs at which no block of `B` is good with probability at most `2k/K + e^{−k/8} + c·(esc + κr)`: the union
-bound at the picked slot, the first holding a block of `B`. -/
+keeps only runs at which no block of `B` is good with probability at most `2k_in/K_in + e^{−k_in/8} + c·(esc + κr)`:
+the union bound at the picked slot, the first holding a block of `B`. -/
 theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
     (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
@@ -236,7 +247,7 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
               ¬ found u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤ κr) :
     Pr (fun d : Fin (L.V.k x) → Coin => (run' (forkOn (L.stage2 x) r d)).out = .acc) *
         Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) ≤
-      2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (esc + κr) := by
+      2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (esc + κr) := by
   have hy : ∀ _u ∈ ({()} : Finset Unit),
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
         (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
@@ -264,19 +275,19 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
       obtain ⟨i, hi, v', hv'B, hv'⟩ := hsel _ (hslots _) v hvl hvB
       exact Or.inr ⟨hp.1, i, hi, ⟨v', hB v' hv'B⟩, hv', fun hf => hp.2 v' hv'B ⟨i, hB v' hv'B, hv', hf⟩⟩
     · exact Or.inl fun v hvl hvB => hm ⟨v, hvl, hvB⟩
-  have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x) (L.cap x) (L.cap_pos x)
-    (L.k_pos x) ({()} : Finset Unit)
+  have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x) (L.capIn x)
+    (L.capIn_pos x) (L.kIn_pos x) ({()} : Finset Unit)
     (fun _ d uc => ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)
     (add_nonneg hesc0 hκr0) hy
-  have hcard : (({()} : Finset Unit).card : ℝ) ^ (1 / (L.k x : ℝ)) ≤ slack :=
-    L.rpow_k_le_slack x (m := 0) (by simp) (by omega)
+  have hcard : (({()} : Finset Unit).card : ℝ) ^ (1 / (L.kIn x : ℝ)) ≤ slack :=
+    L.rpow_kIn_le_slack x (m := 0) (by simp) (by omega)
   have hE : Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) =
       Pr (fun c : L.E1 x =>
-        (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
-          ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
-        ∃ _u ∈ ({()} : Finset Unit), AllBad (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
+        (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
+          ((List.finRange (L.capIn x)).map c.1)).length < L.kIn x ∨
+        ∃ _u ∈ ({()} : Finset Unit), AllBad (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
           (fun d uc => ∀ v ∈ B, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)
-          ((List.finRange (L.cap x)).map c.1) c.2) :=
+          ((List.finRange (L.capIn x)).map c.1) c.2) :=
     Pr_congr fun e => by simp [BadOuter]
   rw [hE]
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard (add_nonneg hesc0 hκr0)))
@@ -284,12 +295,14 @@ theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → 
 set_option synthInstance.maxSize 1024 in
 omit [Inhabited Coin] in
 /-- **One tape's outer wait**: on a statement in scope at `(s, Pt)`, where the sampling design holds, the sample has at most
-`n_PU` slots, and the block at the slot any selection picks at first-stage coins `r` is not found with probability at
-most `κr(r)`, the outer wait (times its acceptance) comes up short or, for some refused `B`, keeps only runs bad for
-`B`, with probability at most `T + c·(T + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}`. -/
+`n_PU ≤ n_out` slots, and the block at the slot any selection picks at first-stage coins `r` is not found with
+probability at most `κr(r)`, the outer wait (times its acceptance) comes up short or, for some refused `B`, keeps only
+runs bad for `B`, with probability at most `T_out + c·(T_in + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}` at each wait's
+count. -/
 theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (s : AuditStatement)
-    (Pt : Partition) (hPU : L.nPU x = Pt.blocks.length) (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)
+    (Pt : Partition) (hPU : L.nPU x = Pt.blocks.length) (hun : L.nPU x ≤ L.nOut x)
+    (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)
     (hdraw : ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (L.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa Pt B)
@@ -302,19 +315,20 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
               ¬ found u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
         κr r) :
     Pr (fun r : Fin (L.V.k x) → Coin => (run' r).out = .acc) *
-        Pr (fun c : (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → L.E1 x) =>
-          (accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
-            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.k x)
+        Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
+          (accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length <
+              L.kOut x ∨
+            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.kOut x)
               (fun r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e)
-              ((List.finRange (L.cap x)).map c.1) c.2) ≤
-      2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) +
-        slack * (2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (δ + Ex κr)) := by
+              ((List.finRange (L.capOut x)).map c.1) c.2) ≤
+      2 * (L.kOut x : ℝ) / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8) +
+        slack * (2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr)) := by
   have hc := slack_pos
   have hEκ : 0 ≤ Ex κr := Ex_nonneg hκr0
   have hy : ∀ B ∈ S₁ s.design Pt δ,
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.E1 x =>
         (run' p.1).out = .acc ∧ L.BadOuter x run' found B (forkOn (L.stage2 x) p.1) p.2) ≤
-      2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (δ + Ex κr) := by
+      2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
     intro B hB
     obtain ⟨hBsub, hBδ⟩ := mem_filter.1 hB
     have hBsub' : B ⊆ range Pt.blocks.length := mem_powerset.1 hBsub
@@ -327,19 +341,19 @@ theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
       fun r d e => by rw [forkOn_forkOn']).trans_le ?_
     calc Ex (fun r => Pr (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) *
           Pr (fun e : L.E1 x => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e))
-        ≤ Ex (fun r => 2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (esc r + κr r)) :=
+        ≤ Ex (fun r => 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (esc r + κr r)) :=
           Ex_mono fun r => L.inner_bad_le x run' found hBlt hslots r (hesc0 r) (hκr0 r) (hesc r) (hsess r)
-      _ = 2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (Ex esc + Ex κr) := by
+      _ = 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (Ex esc + Ex κr) := by
           rw [Ex_add, Ex_const, Ex_mul_left, Ex_add]
-      _ ≤ 2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (δ + Ex κr) := by
+      _ ≤ 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
           have := hEesc.trans hBδ
           gcongr
-  have hy0 : 0 ≤ 2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (δ + Ex κr) := by
+  have hy0 : 0 ≤ 2 * (L.kIn x : ℝ) / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8) + slack * (δ + Ex κr) := by
     positivity
-  have hw := wait_bad_le (fun r => (run' r).out = .acc) (L.k x) (L.cap x) (L.cap_pos x) (L.k_pos x)
+  have hw := wait_bad_le (fun r => (run' r).out = .acc) (L.kOut x) (L.capOut x) (L.capOut_pos x) (L.kOut_pos x)
     (S₁ s.design Pt δ) (fun B r e => L.BadOuter x run' found B (forkOn (L.stage2 x) r) e) hy0 hy
-  have hcard : ((S₁ s.design Pt δ).card : ℝ) ^ (1 / (L.k x : ℝ)) ≤ slack :=
-    L.rpow_k_le_slack x (card_S₁_le _ _ _) (by rw [← hPU]; omega)
+  have hcard : ((S₁ s.design Pt δ).card : ℝ) ^ (1 / (L.kOut x : ℝ)) ≤ slack :=
+    L.rpow_kOut_le_slack x (card_S₁_le _ _ _) (by rw [← hPU]; omega)
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard hy0))
 
 set_option synthInstance.maxSize 1024 in
@@ -381,12 +395,12 @@ theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ :
       L.κ δ x + slack ^ 2 * Ex (fun r => Real.sqrt (L.V.k x * L.γs x * β ω r)) := by
     intro ω
     have hF : Pr (fun c : L.ECoins x => L.Fails δ x (run H P L.V x ω) (found ω) c) =
-        Pr (fun c : (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → L.E1 x) =>
-          (accList (fun r => (run H P L.V x ω r).out = .acc) (L.k x)
-            ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
-            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run H P L.V x ω r).out = .acc) (L.k x)
+        Pr (fun c : (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.E1 x) =>
+          (accList (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
+            ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
+            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run H P L.V x ω r).out = .acc) (L.kOut x)
               (fun r e => L.BadOuter x (run H P L.V x ω) (found ω) B (forkOn (L.stage2 x) r) e)
-              ((List.finRange (L.cap x)).map c.1) c.2) := by
+              ((List.finRange (L.capOut x)).map c.1) c.2) := by
       refine Eq.trans ?_ (Claims.Sampling.Pr_equiv (L.ecoinsEquiv x) _)
       refine Pr_congr fun c => ⟨fun ⟨s', Pt', hs', hPt', _, h⟩ => ?_, fun h => ⟨s, Pt, hs, hPt, hin, h⟩⟩
       rw [hs, Option.some.injEq] at hs'
@@ -395,7 +409,7 @@ theorem pr_fails_le_of (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ :
       subst hPt'
       exact h
     rw [hF]
-    refine (L.outer_bad_le hδ x (run H P L.V x ω) (found ω) s Pt (nPU_eq hs hPt)
+    refine (L.outer_bad_le hδ x (run H P L.V x ω) (found ω) s Pt (nPU_eq hs hPt) (hS.unions x)
       (fun r => L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
       (fun r => add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _))
       (hS.draws x s Pt hs hPt hin) (hS.slots x) (hsess ω)).trans (le_of_eq ?_)
@@ -424,7 +438,8 @@ set_option synthInstance.maxSize 1024 in
 /-- **The acceptance-probability composition**: from the sessions' knowledge soundness (`SessionKS`) and the sampling design
 (`Sessions.draws`), over tapes, judged coins and the extractor's coins, the judged run accepts and the extraction fails
 (for some set of proof blocks of acceptance probability at most `δ`, no kept run finds a block of it) with probability
-at most `κ(δ) + √(γ·Pr[B])`, `κ(δ) = c²·(δ + κ_s) + (1 + c)·(2k/K + e^{−k/8})`. -/
+at most `κ(δ) + √(γ·Pr[B])`, `κ(δ) = c²·(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`.
+-/
 theorem pr_fails_le (H : Msg → Msg) (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (hsess : L.SessionKS H)
     (hS : L.Sessions H) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun s : Ω × (Fin (L.V.k x) → Coin) × L.ECoins x =>

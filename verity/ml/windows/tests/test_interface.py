@@ -314,12 +314,13 @@ REQUESTS, STEPS, LAYERS = 2, 2, 2
 def chain() -> I.Circuit:
     """Two requests' two decode steps through two layers, a ``Gemm_v2{K=16, N=16}`` unit each, in (layer, step, request)
     order: layer 1 reads layer 0's output at its step and request, layer 0 at step s + 1 reads layer 1's output at step s,
-    and layer 0's input at step 0 (the embedding) is external."""
+    and layer 0's input at step 0 (the embedding) is external. The template reads itself, so the circuit states an order,
+    a range each layer and step (`ordered`)."""
     layer = REQUESTS * STEPS
-    return I.Circuit("chain", ((GEMM, LAYERS * layer),), external=(f"{GID}/x",),
-                     wires=(I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
-                            I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer,
-                                   step=(REQUESTS, 1))))
+    wires = (I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
+             I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer, step=(REQUESTS, 1)))
+    return I.Circuit("chain", ((GEMM, LAYERS * layer),), external=(f"{GID}/x",), wires=wires,
+                     order=I.ordered({GID: LAYERS * layer}, wires, {GID: range(0, LAYERS * layer, REQUESTS)}))
 
 
 def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[np.ndarray], list[np.ndarray]]:
@@ -381,8 +382,10 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     assert "members" not in doc and doc["cap"] == 2 and tuple(I.Wire.of(w) for w in doc["wires"]) == chain().wires
     mine = I.window_of_record(doc, LAW, by_id)
     assert mine.members == win.window.members and mine.partition_digest == win.window.partition_digest
-    assert I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 1}, doc["wires"][1]]}, LAW, by_id).members \
+    assert I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [2, 0]}, *doc["wires"][1:]]}, LAW, by_id).members \
         != win.window.members
+    with pytest.raises(ValueError, match="order: wire 0"):
+        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 1}, *doc["wires"][1:]]}, LAW, by_id)
     for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),
                      ({**doc, "wires": [{**doc["wires"][0], "radix": 2}]}, "radix and step lists"),
                      ({**doc, "wires": [{**doc["wires"][0], "extra": 0}]}, "a wire's record"),
@@ -506,9 +509,14 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
 def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once():
     """A wire's checks are per wire: its ends are its templates' ports, its reader and writer units are among theirs, it reads
     a row of its writer's words (a gathered row is refused), and no reader unit's port is wired twice. A step of 0 is a
-    fan-out."""
+    fan-out. A template's wire to its own later instances passes with no order too, and one reading the same instances
+    or later ones is refused (``order``)."""
     w = {"reader": GID, "port": "x", "writer": GID, "out": "o0", "at": 4, "radix": (2, 2), "base": 0, "step": (2, 1)}
-    I.Circuit("ok", ((GEMM, 8),), wires=(I.Wire(**w),))
+    I.Circuit("ok", ((GEMM, 8),), wires=(I.Wire(**w),), order=((GID, 0, 4), (GID, 4, 4)))
+    I.Circuit("unordered", ((GEMM, 8),), wires=(I.Wire(**w),))
+    for edit in ({"base": 4}, {"at": 0, "base": 4}, {"base": 5, "step": (0, 0)}):
+        with pytest.raises(ValueError, match="order: wire 0 "):
+            I.Circuit("self", ((GEMM, 8),), wires=(I.Wire(**{**w, **edit}),))
     for edit, why in [({"writer": TID}, "templates of the circuit"), ({"port": "o0"}, "parameters"), ({"out": "x"}, "outputs"),
                       ({"port": "w"}, "gathered from several writers"), ({"at": 5}, "reader units"),
                       ({"base": 5}, "writer units"), ({"step": (-2, 1)}, "writer units"), ({"radix": ()}, "at least one digit"),
@@ -519,6 +527,47 @@ def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once
         I.Circuit("twice", ((GEMM, 8),), wires=(I.Wire(**w), I.Wire(**{**w, "at": 5, "radix": (1, 2)})))
     fan = I.Wire(GID, "x", GID, "o0", at=4, radix=(2, 2), base=1, step=(0, 2))
     assert fan.writers(4, 4).tolist() == [1, 3, 1, 3] and fan.span() == (1, 3)
+
+
+def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
+    """`Wire.box` bounds the writers of reader indices ``lo`` to ``hi`` digit by digit (`Spot.Wires.Wire.box`,
+    `writerAt_mem_box`): every writer between them lies in it, and over a run of whole values of a digit, such as a range
+    of whole steps, its bounds are writers."""
+    rng = np.random.default_rng(1)
+    for _ in range(500):
+        nd = int(rng.integers(1, 4))
+        w = I.Wire(GID, "x", GID, "o0", at=0, radix=tuple(int(x) for x in rng.integers(1, 4, nd)), base=int(rng.integers(0, 9)),
+                   step=tuple(int(x) for x in rng.integers(-3, 4, nd)))
+        lo = int(rng.integers(0, w.units))
+        hi = int(rng.integers(lo, w.units))
+        got = w.source(np.arange(lo, hi + 1))
+        a, b = w.box(lo, hi)
+        assert a <= got.min() and got.max() <= b, (w, lo, hi)
+    w = I.Wire(GID, "x", GID, "o0", at=0, radix=(3, 2, 2), base=9, step=(4, -1, 2))
+    for d in range(3):
+        got = w.source(np.arange(4 * d, 4 * d + 4))
+        assert w.box(4 * d, 4 * d + 3) == (got.min(), got.max())
+
+
+def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
+    """`chain`'s template reads itself, and with no order its units in unit order don't fit its wires (layer 1's step 0,
+    units 2 and 3, reads layer 0's step 1, units 4 and 5); its order, a range each layer and step (`ordered`), puts every
+    range a wire reads in a range below that range. An order where a range reads a later one is refused naming the first
+    such wire, an order that doesn't tile each template's units by name, and a cut into ranges no order can rank (layer
+    0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
+    c = chain()
+    assert c.order == ((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2))
+    with pytest.raises(ValueError, match="order: wire 1 "):
+        I.check_order(c.units, c.wires)
+    for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 1 "), (((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2)),
+                                                                        "order: wire 1 "),
+                       (((GID, 4, 2), (GID, 0, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
+                       (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2)), "don't tile"), (((GID, 0, 4), (GID, 3, 5)), "don't tile"),
+                       (((GID, 0, 8), (GID, 8, 0)), "don't tile"), ((("Z", 0, 8),), "order: range 0")]:
+        with pytest.raises(ValueError, match=why):
+            I.check_order(c.units, c.wires, order)
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(c.units, c.wires, {GID: (4,)})
 
 
 EMB = I.resolve("EmbeddingRead_v1{V=4,H=16}")
@@ -1023,7 +1072,7 @@ def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], l
     read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
     circuit = replace(chain(), templates=((SRC, REQUESTS), (GEMM, LAYERS * layer)), external=(f"{SID}/x", f"{SID}/w"),
                       wires=(I.Wire(GID, "x", SID, "o0", at=0, radix=(REQUESTS,), base=0, step=(1,)), *chain().wires),
-                      registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
+                      registered=I.Registered({"w": LAYERS * 256}, reads=(read,)), order=((SID, 0, REQUESTS), *chain().order))
     return circuit, w, [sx, sw], [sy], ins, outs
 
 
@@ -1074,7 +1123,8 @@ def _long_chain(layers: int, d: Path) -> None:
              for j in range(layers)]
     reads = tuple(I.Read(GID, "w", "w", at=2 * j, radix=(2,), base=256 * j, step=(0,)) for j in range(layers))
     circuit = I.Circuit("long", ((SRC, 2), (GEMM, 2 * layers)), external=(f"{SID}/x", f"{SID}/w"), wires=tuple(wires),
-                        registered=I.Registered({"w": 256 * layers}, reads=reads))
+                        registered=I.Registered({"w": 256 * layers}, reads=reads),
+                        order=I.ordered({SID: 2, GID: 2 * layers}, wires, {GID: range(0, 2 * layers, 2)}))
     win = I.Window(circuit, RUN, LAW, 1, registered={"w": Bound("w", w.reshape(layers, 256))})
     win.record(SRC, [sx, sw], ys[:1])
     win.record(GEMM, [None, None], [np.concatenate(ys[1:])])

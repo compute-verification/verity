@@ -35,7 +35,8 @@ MLA = dict(DR=16, DV=16, BN=16, DOT=HOP, INV=hopper.Fa3InvSum, SCALE=0.0625)
 #: (spec text as a Program spells it, the Definition bound at the same statics)
 CASES = [
     ('RMSNormCudaVector8_v1{N=64,EPS={"f64":"0x1.4f8b588e368f1p-17"},BLOCK=8}', bind(cuda_rmsnorm.RMSNormCudaVector8, N=64, EPS=1e-5, BLOCK=8)),
-    ('RMSNormFusedCudaVector8_v1{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=64, EPS=1e-5, BLOCK=3)),
+    ('RMSNormFusedCudaVector8_v1{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8V1, N=64, EPS=1e-5, BLOCK=3)),
+    ('RMSNormFusedCudaVector8_v3{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=64, EPS=1e-5, BLOCK=3)),
     ('LlBf16DotprodGemm_v1{N=3,K=128,BS=64,VEC=2,FMA=1}', bind(ll_bf16.LlBf16DotprodGemmWord, N=3, K=128, BS=64, VEC=2, FMA=1)),
     ('LlBf16SplitKGemm_v1{N=3,K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}',
      bind(ll_bf16.LlBf16SplitKGemmWord, N=3, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP)),

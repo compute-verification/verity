@@ -35,6 +35,10 @@ failure message carries its fix.
  `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule (below).
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
+- **vLLM's surface** (`test_vllm_surface.py`, list `vllm_surface.py`): every vLLM module the library imports whole, and
+ every name it imports from one, is listed with why the integration needs it. An unlisted import fails. An entry nothing
+ imports only warns, so the list may name an import that a change in flight adds. Where vLLM is installed, every entry
+ must resolve at the pin, so moving the pin starts from this list.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
  extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.

@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The compiled `--zk` count curve, "wrong" measured against the registration

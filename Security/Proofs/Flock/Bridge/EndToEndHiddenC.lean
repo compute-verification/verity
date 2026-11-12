@@ -35,7 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `EndToEndHiddenC`, from `OpeningsCanonTarget`

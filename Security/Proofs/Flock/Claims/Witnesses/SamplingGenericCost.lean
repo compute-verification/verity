@@ -96,9 +96,10 @@ theorem sksL_es (x : Msg) : (sksL Coin).es x = 1 := by
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem sksL_work (x : Msg) : (sksL Coin).work x ≤ 2 ^ 100 := by
   have he := sksL_es (Coin := Coin) x
-  have hk : (sksL Coin).k x = 2 ^ 40 * 3 := rfl
+  have hko : (sksL Coin).kOut x = 2 ^ 10 * 3 := rfl
+  have hki : (sksL Coin).kIn x = 2 ^ 10 * 3 := rfl
   unfold Compiled.work
-  rw [he, hk, show (sksL Coin).nPU x = 1 from rfl, show (sksL Coin).openCalls x = 0 from rfl]
+  rw [he, hko, hki, show (sksL Coin).nPU x = 1 from rfl, show (sksL Coin).openCalls x = 0 from rfl]
   norm_num
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -184,6 +185,8 @@ noncomputable def effL (Coin : Type) : Compiled Coin (findA Coin) where
   iroots _ _ _ := []
   reveal _ _ _ _ := [([], opening₀)]
   openCalls _ := 0
+  nOut _ := 1
+  nIn _ := 1
   Tape := Unit
   P _ := silentP
   δc _ _ := 0
@@ -212,27 +215,32 @@ theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Trace) {k : ℕ}
 extractions make one: its waits keep their first samples, so the first inner run's extractions are made. -/
 theorem ownLog_E_pos (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) {s : AuditStatement} (hs : L.parse x = some s)
-    (hacc : ∀ r, (run H P L.V x ω r).out = .acc) (hk : 0 < L.k x) (hcap : 0 < L.cap x)
+    (hacc : ∀ r, (run H P L.V x ω r).out = .acc)
     (hrun : ∀ r v c', 0 < (ownLog H (run H P L.V x ω) (L.runExt x s r v c')).length) :
     0 < (ownLog H (run H P L.V x ω) (L.E.ext x r₀ c)).length := by
   have h₀ : (run H P L.V x ω r₀).seen.out = .acc := hacc r₀
-  obtain ⟨a, as, ha⟩ := exists_cons_of_length_pos (l := List.finRange (L.k x)) (by rw [List.length_finRange]; exact hk)
+  obtain ⟨a, as, ha⟩ :=
+    exists_cons_of_length_pos (l := List.finRange (L.kOut x)) (by rw [List.length_finRange]; exact L.kOut_pos x)
+  obtain ⟨b, bs, hb⟩ :=
+    exists_cons_of_length_pos (l := List.finRange (L.kIn x)) (by rw [List.length_finRange]; exact L.kIn_pos x)
   obtain ⟨l₀, ls, hl⟩ :=
-    exists_cons_of_length_pos (l := List.finRange (L.cap x)) (by rw [List.length_finRange]; exact hcap)
+    exists_cons_of_length_pos (l := List.finRange (L.capOut x)) (by rw [List.length_finRange]; exact L.capOut_pos x)
+  obtain ⟨m₀, ms, hm⟩ :=
+    exists_cons_of_length_pos (l := List.finRange (L.capIn x)) (by rw [List.length_finRange]; exact L.capIn_pos x)
   simp only [Compiled.E, ownLog, hs, ite_eq_left h₀]
   rw [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog_of_noHash _ _ (Claims.Sampling.NoHash.waitAccC _ _ _),
     List.nil_append, Claims.Sampling.ownLog_bind, List.length_append]
   refine Nat.lt_of_lt_of_le ?_ (Nat.le_add_right _ _)
   rw [hl, List.map_cons]
-  obtain ⟨o, ho⟩ := waitAccC_head H (run H P L.V x ω) hk (c.1 l₀) (ls.map c.1) (hacc _)
+  obtain ⟨o, ho⟩ := waitAccC_head H (run H P L.V x ω) (L.kOut_pos x) (c.1 l₀) (ls.map c.1) (hacc _)
   rw [ho, ha, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   dsimp only
   rw [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog_of_noHash _ _ (Claims.Sampling.NoHash.waitAccC _ _ _),
-    List.nil_append, List.map_cons]
-  obtain ⟨o', ho'⟩ := waitAccC_head H (run H P L.V x ω) hk (forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l₀))
-    (ls.map fun l => forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l)) (hacc _)
-  rw [ho', List.zip_cons_cons]
+    List.nil_append, hm, List.map_cons]
+  obtain ⟨o', ho'⟩ := waitAccC_head H (run H P L.V x ω) (L.kIn_pos x) (forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a m₀))
+    (ms.map fun l => forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l)) (hacc _)
+  rw [ho', hb, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   exact hrun _ _ _
 
@@ -265,11 +273,10 @@ theorem compiledEfficient_fails (H : Msg → Msg) : ¬ (effL Coin).Efficient H :
   rintro ⟨-, -, h⟩
   have c : (effL Coin).E.C [] := Classical.arbitrary _
   have h1 := h [] Unit silentP () (fun _ => default) c
-  have h0 : (effL Coin).k [] ^ 2 * (effL Coin).nPU [] * (effL Coin).openCalls [] = 0 := by
+  have h0 : (effL Coin).kOut [] * (effL Coin).kIn [] * (effL Coin).nPU [] * (effL Coin).openCalls [] = 0 := by
     rw [show (effL Coin).openCalls [] = 0 from rfl, mul_zero]
   have hpos := ownLog_E_pos (effL Coin) H silentP [] () (fun _ => default) c (s := toyStmt) rfl
-    (fun r => run_accV_out _ _ _ _ r) (by unfold Compiled.k; positivity)
-    (by unfold Compiled.cap Compiled.k; positivity) fun r v c' => effL_runExt H [] _ r v c'
+    (fun r => run_accV_out _ _ _ _ r) fun r v c' => effL_runExt H [] _ r v c'
   exact Nat.lt_irrefl 0 (Nat.lt_of_lt_of_le hpos (h1.trans_eq h0))
 
 end Efficient

@@ -336,6 +336,24 @@ def test_the_corpus_table_charges_no_timing_under_the_tick(tmp_path, capsys, asy
         assert t["uniform"]["bits"] < p["uniform"]["bits"]
 
 
+def test_the_table_reads_a_tick_trace_on_its_own_buckets(tmp_path):
+    """A tick-served trace whose τ_b isn't 100 ms: v1's table (`_trace`) counts its releases on its own tick's buckets,
+    where its record at 100 ms buckets is refused."""
+    e, (ios, times) = engine(False), plan()
+    d = write_corpus(tmp_path / "tick", e, ios, times, serve(e, ios, times, seed=1), tick=True)
+    meta = json.loads((d / "meta.json").read_text())
+    meta["tick"]["bucket_us"] = 250_000
+    (d / "meta.json").write_text(json.dumps(meta))
+    a = [int(t * 1e6) // 250_000 for t in times]
+    reqs = [json.loads(x) for x in (d / "requests.jsonl").read_text().splitlines()]
+    (d / "requests.jsonl").write_text("".join(json.dumps({**r, "bucket": b}) + "\n" for r, b in zip(reqs, a)))
+    tr, rec, _ = V._trace(str(d), (EOS,))
+    assert tr.releases.tick.bucket_us == 250_000
+    assert [q.end for q in rec.requests] == [b - a[0] for b in a]
+    with pytest.raises(V.V1Error, match="250000 µs"):
+        V.record_of(tr, (EOS,))
+
+
 def test_what_the_tick_refuses():
     e, (ios, times) = engine(False), plan()
     a, tk = buckets(times), R.Tick(*TICK)

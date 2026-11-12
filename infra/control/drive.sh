@@ -51,8 +51,10 @@ TICK=/root/drive-tick.lock
 # change once no process runs in it, so a few an hour stay a few GB.
 # RESEARCH_EXECUTOR_ENQUEUE is the task executor's enqueue command (infra/executor, on this pod), which `research executor
 # enqueue` runs with drive's --graph, --priority and --check (research imports nothing from infra/).
+# PYTHONUNBUFFERED: research writes to the loop's log through a pipe, where Python buffers a whole tick's lines until it ends,
+# so a running tick showed nothing of where it was.
 HELPER='!/data/infra/gh_app_token.sh git'
-export PATH=$DIR/ghw:$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
+export PATH=$DIR/ghw:$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 PYTHONUNBUFFERED=1 \
   RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store TMPDIR=$DIR/tmp \
   TRAIN_TREES=$FAST/trains \
   RESEARCH_EXECUTOR_ENQUEUE="python3.12 /root/executor/infra/executor.py --db /root/executor/queue.db enqueue"

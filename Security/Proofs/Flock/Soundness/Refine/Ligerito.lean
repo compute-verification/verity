@@ -10,7 +10,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.List.GetD
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Level3.LookupRows
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LigeritoQueries
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Plays

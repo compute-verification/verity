@@ -16,7 +16,7 @@
 
 use sha2::{Digest, Sha256, Sha512};
 
-use crate::ir_block::{Group, IrUnitNet, RowRead};
+use crate::ir_block::{Group, IrUnitNet, RowRead, RowWrite, Rows};
 
 /// The library (core's `verity.ml.circuits.library`, the verifier's `Flock/Library.lean`): name, SHA-512 of the raw u32 LE words,
 /// index bits, value bits. A table is `library` exactly when its SHA-512 is listed, and `program` otherwise.
@@ -71,30 +71,50 @@ pub struct LookupNet {
 /// A linear form over committed columns: (columns, constant).
 type Form = (Vec<usize>, bool);
 
-struct Builder {
-    a: Vec<Vec<usize>>,
-    b: Vec<Vec<usize>>,
+/// The rows written so far, and the constant's column, the last row's: known before any row is written, since the forms read
+/// it.
+struct Builder<R> {
+    a: R,
+    b: R,
+    konst: usize,
 }
 
-impl Builder {
-    fn row(&mut self, x: &Form, y: &Form, konst: usize) -> usize {
-        let f = |f: &Form| { let mut v = f.0.clone(); if f.1 { v.push(konst); } v };
-        self.a.push(f(x));
-        self.b.push(f(y));
-        self.a.len() - 1
+/// The rows [`Builder::decode`] commits for `bits` index bits.
+fn decoder_rows(bits: usize) -> usize {
+    if bits == 1 { 0 } else { decoder_rows(bits / 2) + decoder_rows(bits - bits / 2) + (1 << bits) }
+}
+
+impl<R: RowWrite> Builder<R> {
+    fn push(&mut self, a: &[usize], b: &[usize]) -> usize {
+        self.a.push_row(a);
+        self.b.push_row(b);
+        self.a.n_rows() - 1
+    }
+
+    fn form(&self, f: &Form) -> Vec<usize> {
+        let mut v = f.0.clone();
+        if f.1 {
+            v.push(self.konst);
+        }
+        v
+    }
+
+    fn row(&mut self, x: &Form, y: &Form) -> usize {
+        let (a, b) = (self.form(x), self.form(y));
+        self.push(&a, &b)
     }
 
     /// Minterms of `bits` (index i = the assignment of value i): forms for one bit, committed rows above. Records each
     /// committed block's first row and size in `blocks` (the top one last).
-    fn decode(&mut self, bits: &[usize], konst: usize, blocks: &mut Vec<(usize, usize)>) -> Vec<Form> {
+    fn decode(&mut self, bits: &[usize], blocks: &mut Vec<(usize, usize)>) -> Vec<Form> {
         if bits.len() == 1 {
             return vec![(vec![bits[0]], true), (vec![bits[0]], false)];
         }
         let h = bits.len() / 2;
-        let lo = self.decode(&bits[..h], konst, blocks);
-        let hi = self.decode(&bits[h..], konst, blocks);
-        let first = self.a.len();
-        let out: Vec<Form> = (0..1usize << bits.len()).map(|i| (vec![self.row(&lo[i & ((1 << h) - 1)], &hi[i >> h], konst)], false)).collect();
+        let lo = self.decode(&bits[..h], blocks);
+        let hi = self.decode(&bits[h..], blocks);
+        let first = self.a.n_rows();
+        let out: Vec<Form> = (0..1usize << bits.len()).map(|i| (vec![self.row(&lo[i & ((1 << h) - 1)], &hi[i >> h])], false)).collect();
         blocks.push((first, bits.len()));
         out
     }
@@ -104,12 +124,22 @@ impl LookupNet {
     /// `name` names the slot type; `n` index bits; `lo` of them in the low decoder; `bits` output bits of each table word.
     pub fn build(name: &str, table: &'static [u32], n: usize, lo: usize, bits: usize) -> (IrUnitNet, Self) {
         assert!(table.len() == 1 << n && (2..n).contains(&lo) && bits <= 32 && n <= 128);
-        Self::rows(name, table, n, lo, bits, bits, format!("verity/flock-circuit/lookup {name} n={n} lo={lo} bits={bits}\n"))
+        Self::rows(name, table, n, lo, bits, bits, true, format!("verity/flock-circuit/lookup {name} n={n} lo={lo} bits={bits}\n"))
     }
 
     /// **`table/v2`** (`Lookup.buildV2`): `sha512` is the table's SHA-512 (hex), which the caller has checked names these
     /// words; it alone decides the label. A library table is read only in the library's shape.
     pub fn build_v2(name: &str, sha512: &str, table: &'static [u32], n: usize, lo: usize, bits: usize) -> Result<(IrUnitNet, Self), String> {
+        Self::v2(name, sha512, table, n, lo, bits, true)
+    }
+
+    /// [`LookupNet::build_v2`] with its product rows' B side left to the table, empty, as a generated read lists them (the
+    /// side [`LookupNet::rows_digest`] counts as empty): it never holds the table as rows.
+    pub fn read_v2(name: &str, sha512: &str, table: &'static [u32], n: usize, lo: usize, bits: usize) -> Result<(IrUnitNet, Self), String> {
+        Self::v2(name, sha512, table, n, lo, bits, false)
+    }
+
+    fn v2(name: &str, sha512: &str, table: &'static [u32], n: usize, lo: usize, bits: usize, products_b: bool) -> Result<(IrUnitNet, Self), String> {
         if n > 128 || table.len() != 1 << n || !(2..n).contains(&lo) || bits > 32 {
             return Err(format!("lookup {name}: not a table of 2^{n} words"));
         }
@@ -117,69 +147,74 @@ impl LookupNet {
             return Err(format!("lookup {name}: a library table read in a shape other than the library's"));
         }
         let k = width(sha512, table, bits);
-        Ok(Self::rows(name, table, n, lo, bits, k, format!("verity/flock-circuit/lookup {name} gen=table/v2 n={n} lo={lo} bits={bits} k={k}\n")))
+        let header = format!("verity/flock-circuit/lookup {name} gen=table/v2 n={n} lo={lo} bits={bits} k={k}\n");
+        Ok(Self::rows(name, table, n, lo, bits, k, products_b, header))
     }
 
-    /// The slot's rows, with product rows for the output bits below `k` (`header` starts the net's SHA-256 identity).
-    fn rows(name: &str, table: &'static [u32], n: usize, lo: usize, bits: usize, k: usize, header: String) -> (IrUnitNet, Self) {
-        // rows are placed after the fact: the constant's column is only known at the end, so build with a placeholder and patch
-        const K: usize = usize::MAX;
-        let mut bd = Builder { a: Vec::new(), b: Vec::new() };
-        for i in 0..128 {
-            if i < n { bd.a.push(vec![i]); bd.b.push(vec![i]); } else { bd.a.push(vec![]); bd.b.push(vec![]); }
-        }
-        let idx: Vec<usize> = (0..n).collect();
-        let (mut lo_rows, mut hi_rows) = (Vec::new(), Vec::new());
-        let lo_m = bd.decode(&idx[..lo], K, &mut lo_rows);
-        let hi_m = bd.decode(&idx[lo..], K, &mut hi_rows);
-        let nlo = 1usize << lo;
-        let prod0 = bd.a.len();
-        for j in 0..k {
-            for (h, hm) in hi_m.iter().enumerate() {
-                let base = h * nlo;
-                let g: Vec<usize> = (0..nlo).filter(|&l| (table[base + l] >> j) & 1 == 1).map(|l| lo_m[l].0[0]).collect();
-                bd.row(hm, &(g, false), K);
-            }
-        }
-        while bd.a.len() % 128 != 0 {
-            bd.a.push(vec![]);
-            bd.b.push(vec![]);
-        }
-        let out0 = bd.a.len();
-        let nh = hi_m.len();
-        for j in 0..128 {
-            if j < k {
-                bd.a.push((0..nh).map(|h| prod0 + j * nh + h).collect());
-                bd.b.push(vec![K]);
-            } else if j < bits && (table[0] >> j) & 1 == 1 {
-                bd.a.push(vec![K]);
-                bd.b.push(vec![K]);
-            } else {
-                bd.a.push(vec![]);
-                bd.b.push(vec![]);
-            }
-        }
-        let konst = bd.a.len();
-        bd.a.push(vec![konst]);
-        bd.b.push(vec![konst]);
-        let fix = |rows: &mut Vec<Vec<usize>>| for r in rows.iter_mut() { for c in r.iter_mut() { if *c == K { *c = konst; } } r.sort_unstable(); };
-        fix(&mut bd.a);
-        fix(&mut bd.b);
-        let useful = bd.a.len();
+    /// The slot's rows, with product rows for the output bits below `k` and their B side when `products_b` (`header` starts
+    /// the net's SHA-256 identity).
+    #[allow(clippy::too_many_arguments)]
+    fn rows(name: &str, table: &'static [u32], n: usize, lo: usize, bits: usize, k: usize, products_b: bool, header: String) -> (IrUnitNet, Self) {
+        let (a, b, ln) = Self::rows_of::<Rows>(table, n, lo, bits, k, products_b);
         let mut h = Sha256::new();
         h.update(header.as_bytes());
         for w in table {
             h.update(w.to_le_bytes());
         }
-        let unit_log = useful.next_power_of_two().trailing_zeros().max(7) as usize;
         let net = IrUnitNet {
-            name: name.to_string(), useful, const_pos: konst,
+            name: name.to_string(), useful: ln.const_pos + 1, const_pos: ln.const_pos,
             in_groups: vec![Group { col: 0, words: 1, bits: vec![n] }],
-            out_groups: vec![Group { col: out0 / 128, words: 1, bits: vec![bits] }],
-            in_words: 1, out_cols: vec![out0 / 128], a: bd.a, b: bd.b, unit_log, sha256: h.finalize().into(), leaves: None, cut: None,
-            order: None, flat: Default::default(),
+            out_groups: vec![Group { col: ln.out0 / 128, words: 1, bits: vec![bits] }],
+            in_words: 1, out_cols: vec![ln.out0 / 128], a, b, unit_log: ln.unit_log, sha256: h.finalize().into(), leaves: None,
+            cut: None, order: None, pass: Default::default(),
         };
-        (net, LookupNet { n, unit_log, const_pos: konst, lo, bits, k, table, lo_rows, hi_rows, prod0, out0 })
+        (net, ln)
+    }
+
+    /// [`LookupNet::rows`]' rows, written in order into `R`.
+    fn rows_of<R: RowWrite>(table: &'static [u32], n: usize, lo: usize, bits: usize, k: usize, products_b: bool) -> (R, R, Self) {
+        let (nlo, nh) = (1usize << lo, 1usize << (n - lo));
+        let prod0 = 128 + decoder_rows(lo) + decoder_rows(n - lo);
+        let out0 = (prod0 + k * nh).next_multiple_of(128);
+        let konst = out0 + 128;
+        let mut bd = Builder { a: R::with_rows(konst + 1), b: R::with_rows(konst + 1), konst };
+        for i in 0..128 {
+            if i < n { bd.push(&[i], &[i]) } else { bd.push(&[], &[]) };
+        }
+        let idx: Vec<usize> = (0..n).collect();
+        let (mut lo_rows, mut hi_rows) = (Vec::new(), Vec::new());
+        let lo_m = bd.decode(&idx[..lo], &mut lo_rows);
+        let hi_m = bd.decode(&idx[lo..], &mut hi_rows);
+        assert!(bd.a.n_rows() == prod0 && hi_m.len() == nh, "the decoders commit {} rows, not {}", bd.a.n_rows() - 128, prod0 - 128);
+        for j in 0..k {
+            for (h, hm) in hi_m.iter().enumerate() {
+                let base = h * nlo;
+                let g: Vec<usize> = if products_b {
+                    (0..nlo).filter(|&l| (table[base + l] >> j) & 1 == 1).map(|l| lo_m[l].0[0]).collect()
+                } else {
+                    Vec::new()
+                };
+                let a = bd.form(hm);
+                bd.push(&a, &g);
+            }
+        }
+        while bd.a.n_rows() < out0 {
+            bd.push(&[], &[]);
+        }
+        for j in 0..128 {
+            if j < k {
+                let a: Vec<usize> = (0..nh).map(|h| prod0 + j * nh + h).collect();
+                bd.push(&a, &[konst]);
+            } else if j < bits && (table[0] >> j) & 1 == 1 {
+                bd.push(&[konst], &[konst]);
+            } else {
+                bd.push(&[], &[]);
+            }
+        }
+        let last = bd.push(&[konst], &[konst]);
+        assert_eq!(last, konst, "the constant's row");
+        let unit_log = (konst + 1).next_power_of_two().trailing_zeros().max(7) as usize;
+        (bd.a, bd.b, LookupNet { n, unit_log, const_pos: konst, lo, bits, k, table, lo_rows, hi_rows, prod0, out0 })
     }
 
     /// The first row of the top low-decoder block: low minterm `l` is row `lo_top + l`.
@@ -318,7 +353,7 @@ mod tests {
         let table = random_table(n, 777, 0x000F_FFFF, (1 << 30) | (1 << 23) | (1 << 21));
         let k = varying(table, 31);
         assert_eq!(k, 20);
-        let (net, ln) = LookupNet::rows("t", table, n, 4, 31, k, String::new());
+        let (net, ln) = LookupNet::rows("t", table, n, 4, 31, k, true, String::new());
         assert_eq!(ln.k, 20);
         rows_hold(&net, &ln, table, n);
         let (net, ln) = LookupNet::build_v2("t", &table_sha512(table), table, n, 4, 31).unwrap();
@@ -337,8 +372,41 @@ mod tests {
         for j in 0..ln.k {
             for h in 0..nh {
                 let want: Vec<usize> = (0..nlo).filter(|&l| (table[h * nlo + l] >> j) & 1 == 1).map(|l| ln.lo_top() + l).collect();
-                assert_eq!(net.b[ln.prod0 + j * nh + h], want, "product row ({j}, {h})");
+                assert_eq!(net.b.row_cols(ln.prod0 + j * nh + h).collect::<Vec<_>>(), want, "product row ({j}, {h})");
             }
+        }
+    }
+
+    /// A generated read's slot is `build_v2`'s with the product rows' B side emptied: the same rows otherwise, identity and
+    /// rows digest.
+    #[test]
+    fn read_v2_is_build_v2_without_the_products_b_side() {
+        let n = 9;
+        let table = random_table(n, 4242, 0x00FF_FFFF, 0);
+        let sha = table_sha512(table);
+        let (built, bl) = LookupNet::build_v2("t", &sha, table, n, 3, 31).unwrap();
+        let (read, rl) = LookupNet::read_v2("t", &sha, table, n, 3, 31).unwrap();
+        let products = bl.prod0..bl.prod0 + (bl.k << (n - bl.lo));
+        let mut want = built.b.to_vecs();
+        products.clone().for_each(|r| want[r].clear());
+        assert!(products.clone().any(|r| built.b.row_len(r) > 0), "no product row reads the table");
+        assert!(read.a == built.a && read.b == Rows::from_vecs(&want), "the rows");
+        assert_eq!((read.useful, read.const_pos, read.unit_log, read.sha256, read.out_cols.clone()),
+                   (built.useful, built.const_pos, built.unit_log, built.sha256, built.out_cols.clone()));
+        assert_eq!((rl.prod0, rl.out0, rl.lo_top(), rl.k), (bl.prod0, bl.out0, bl.lo_top(), bl.k));
+        assert_eq!(rl.rows_digest(&read), bl.rows_digest(&built));
+    }
+
+    /// The builder writes a slot's rows into `Rows` exactly as into vectors, the products' B side or not.
+    #[test]
+    fn rows_are_written_alike() {
+        let n = 10;
+        let table = random_table(n, 31337, 0x7FFF_FFFF, 0);
+        for (lo, k, products_b) in [(4, 31, true), (5, 20, true), (4, 31, false)] {
+            let (va, vb, vl) = LookupNet::rows_of::<Vec<Vec<usize>>>(table, n, lo, 31, k, products_b);
+            let (ra, rb, rl) = LookupNet::rows_of::<Rows>(table, n, lo, 31, k, products_b);
+            assert!(ra == Rows::from_vecs(&va) && rb == Rows::from_vecs(&vb), "lo {lo} k {k}");
+            assert_eq!((rl.const_pos, rl.prod0, rl.out0, rl.lo_rows, rl.hi_rows), (vl.const_pos, vl.prod0, vl.out0, vl.lo_rows, vl.hi_rows));
         }
     }
 

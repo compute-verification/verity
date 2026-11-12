@@ -3,8 +3,7 @@ module
 public import Proofs.Flock.Soundness.Audit.Work
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Closure samples

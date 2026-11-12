@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.Discharge.Composed.Sound
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 

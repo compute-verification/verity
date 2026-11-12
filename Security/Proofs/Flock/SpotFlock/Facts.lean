@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Bridge.Members
 
 /-!
 # SPOT[Flock]'s two-stage code: the facts its order gives
@@ -11,13 +12,14 @@ public import Proofs.Flock.Claims.Sampling.KS
 * `iroots_fst`: the interior roots a run shows are read off its first two prover messages.
 * `interiorFixed`: fresh second-stage coins keep them (`Code.InteriorFixed` at `SpotFlock.code h`): the interior
   registration is the prover's message at round 1, before the second stage's coin.
-* `topoOk_sound`, `partitionsOk_sound`, `oneStageOk_sound`, `scopeOk_sound`, `cellsOk_sound`, `zkOk_sound`: the
+* `topoOk_sound`, `partitionsOk_sound`, `oneStageOk_sound`, `scopeOk_sound`, `filesOk_sound`, `zkOk_sound`: the
   verifier's decisions are sound for what they decide.
 * `stepWith_acc_at`, `run_acc_at`: an accepting run passed every round before the verifier could accept.
 * `refusesTwo`: an accepting run's statement is in the two-stage scope (`Code.RefusesTwo` at `SpotFlock.code h`), since
   round 2 checks the design evaluates and the design evaluates only in scope.
 * `regMatchesTwo`: the registration is the statement's two-stage design (`RegMatchesTwo` at `SpotFlock.code h`), since
-  the design evaluates only where the replay layout's slots are its cells.
+  the design evaluates only where the replay layout fits the members' files, whose replay partition has the layout's
+  shape (`shape_filesReplay`) and whose cells are the registration's blocks (`Flock.Bridge.Members.cell_filesReplay`).
 * `sessionsIn`: every session is in Flock's masked scope with at most the code's tables and the reference statement's
   shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), since the reference statement is in scope (`Held.xS₀_ok`).
 -/
@@ -27,7 +29,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Finset
-open Properties.Spot (slotPartition slotDesign)
+open Properties.Spot (slotPartition slotDesign bitsProgs membersPart filesReplay filesBlockOf)
 
 /-- A run appends to its transcript: one more round puts the prover's message and the verifier's answer after `t`'s. -/
 theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
@@ -166,33 +168,26 @@ theorem scopeOk_sound {C : Prog} {Pt : Partition} {d : Design.Two} (hs : scopeOk
   exact ⟨topoOk_sound htopo, partitionsOk_sound hpart, of_decide_eq_true hnd, fun v hv => hrep v hv,
     ⟨hlen, fun p hp => oneStageOk_sound (hrules p hp)⟩, hklen, fun k hk' => of_decide_eq_true (hk k hk')⟩
 
-theorem cellsOk_sound {g : RegTwo} {Pt : Partition} {l : Spot.Slots.Layout} {d : Design.Two}
-    (hc : cellsOk g Pt l d = true) : g.ns.size = Pt.strata.length ∧
-      (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧ ∀ ρ b, l.blocks[ρ]? = some b →
-        (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
-            cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
-          (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
-  unfold cellsOk at hc
-  rw [Bool.and_eq_true, Bool.and_eq_true, beq_iff_eq, List.all_eq_true] at hc
+theorem filesOk_sound {g : RegTwo} {ms : Spot.Bits.Members} {l : Spot.Slots.Layout} {k : List ℕ}
+    (hc : filesOk g ms l k = true) : g.ns.size = ms.length ∧ (∀ t < ms.length, k.getD t 0 = g.ks.getD t 0) ∧
+      Flock.Bridge.Members.FilesFit ms g.ns l ∧ ∀ ρ b, l.blocks[ρ]? = some b → b.unit = some ρ →
+        ∀ t < ms.length, ∀ p < g.ns.getD t 0, g.blockOf ρ t p = filesBlockOf ms g.ns ρ t p := by
+  unfold filesOk at hc
+  rw [Bool.and_eq_true, Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.all_eq_true] at hc
   obtain ⟨⟨hT, hk⟩, hc⟩ := hc
-  rw [List.all_eq_true] at hc
-  refine ⟨hT, fun t ht => by simpa using hk t (List.mem_range.2 ht), fun ρ b hb => ?_⟩
-  have hρ : ρ < l.blocks.size := (Array.getElem?_eq_some_iff.1 hb).1
-  have h1 := hc ρ (List.mem_range.2 hρ)
-  simp only [hb] at h1
-  cases hu : b.unit with
-  | none =>
-    simp only [hu, List.all_eq_true, List.mem_range, Bool.or_eq_true, bne_iff_ne, ne_eq] at h1
-    refine Or.inr ⟨by simp [hu], fun t v hv => ?_⟩
-    obtain ⟨hvr, hvρ, -⟩ := mem_filter.1 hv
-    rcases h1 v (mem_range.1 hvr) with hn | ha
-    · exact absurd hvρ hn
-    · exact ha
-  | some u =>
-    simp only [hu, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.all_eq_true, List.mem_range] at h1
-    obtain ⟨rfl, hcells⟩ := h1
-    refine Or.inl ⟨by simp [hu], fun t ht => ⟨fun a ha a' ha' he => ?_, (hcells t ht).2⟩⟩
-    exact List.inj_on_of_nodup_map (hcells t ht).1 (List.mem_range.2 ha) (List.mem_range.2 ha') he
+  have hslot : ∀ ρ b, l.blocks[ρ]? = some b → ∀ u, b.unit = some u → u = ρ ∧ ∀ t, t < ms.length →
+      (ρ + 1) * g.ns.getD t 0 ≤ ((ms[t]?).map (·.2.size)).getD 0 ∧
+        ∀ p, p < g.ns.getD t 0 → g.blockOf ρ t p = filesBlockOf ms g.ns ρ t p := by
+    intro ρ b hb u hu
+    have h1 := hc ρ (List.mem_range.2 (Array.getElem?_eq_some_iff.1 hb).1)
+    simpa only [hb, hu, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.all_eq_true, List.mem_range] using h1
+  refine ⟨hT, fun t ht => by simpa using hk t (List.mem_range.2 ht), ?_,
+    fun ρ b hb hbu t ht p hp => ((hslot ρ b hb ρ hbu).2 t ht).2 p hp⟩
+  intro ρ b hb u hu
+  have hu' := (hslot ρ b hb u hu).1
+  refine ⟨hu', fun t ht => ?_⟩
+  have := ((hslot ρ b hb u hu).2 t ht).1
+  rwa [List.getElem?_eq_getElem ht, Option.map_some, Option.getD_some] at this
 
 theorem zkOk_sound {xS : Msg} (hz : zkOk xS = true) : ∃ s spec sts, FlockDeploy.setupOf true xS = some (s, spec, sts) ∧
     0 < sts.size ∧ sts.size ≤ 200 ∧ spec.points ≤ 2 ∧
@@ -256,44 +251,33 @@ theorem next_short (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List FlockD
 
 /-! ## The statement is in scope -/
 
-theorem parse_prog {x : Msg} {s : AuditStatement} (hs : parse h x = some s) : s.prog = h.prog := by
+theorem parse_prog {x : Msg} {s : AuditStatement} (hs : parse h x = some s) : s.prog = bitsProgs h.ms := by
   unfold parse at hs
   cases hd : decode x with
   | none => simp [hd] at hs
   | some st => rw [hd] at hs; cases hs; rfl
 
-theorem partition_eq {s : AuditStatement} {Pt : Partition} (hP : partition h s = some Pt) :
-    ∃ lb, Spot.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ Pt = slotPartition lb := by
-  unfold partition at hP
-  cases hlb : (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption with
-  | none => simp [hlb] at hP
-  | some lb =>
-    rw [hlb] at hP
-    cases hP
-    exact ⟨lb, ok_of_toOption hlb, rfl⟩
+theorem partition_eq {s : AuditStatement} {Pt : Partition} (hP : partition h s = some Pt) : Pt = membersPart h.ms :=
+  (Option.some.inj hP).symm
 
 theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
-    ∃ l lb, Spot.Slots.layout h.reg.first.program h.reg.first.query = .ok l ∧
-      Spot.Slots.layout h.reg.first.program h.blockQuery = .ok lb ∧ replayDesign h = some d.replay ∧
-      d = ⟨slotPartition l, d.replay, h.k⟩ ∧ scopeOk h.prog (slotPartition lb) d = true ∧
-      cellsOk h.reg (slotPartition lb) l d = true := by
+    ∃ l, Spot.Slots.layout h.reg.first.program h.reg.first.query = .ok l ∧ replayDesign h = some d.replay ∧
+      d = ⟨filesReplay h.ms h.reg.ns l, d.replay, h.k⟩ ∧ scopeOk (bitsProgs h.ms) (membersPart h.ms) d = true ∧
+      filesOk h.reg h.ms l h.k = true := by
   unfold two at hd
   cases hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption with
   | none => simp [hl] at hd
   | some l =>
-    cases hlb : (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption with
-    | none => simp [hl, hlb] at hd
-    | some lb =>
-      cases hr : replayDesign h with
-      | none => simp [hl, hlb, hr] at hd
-      | some dr =>
-        simp only [hl, hlb, hr] at hd
-        split at hd
-        · rename_i hc
-          cases hd
-          rw [Bool.and_eq_true] at hc
-          exact ⟨l, lb, ok_of_toOption hl, ok_of_toOption hlb, by simp [hr], rfl, hc.1, hc.2⟩
-        · cases hd
+    cases hr : replayDesign h with
+    | none => simp [hl, hr] at hd
+    | some dr =>
+      simp only [hl, hr] at hd
+      split at hd
+      · rename_i hc
+        cases hd
+        rw [Bool.and_eq_true] at hc
+        exact ⟨l, ok_of_toOption hl, by simp [hr], rfl, hc.1, hc.2⟩
+      · cases hd
 
 /-- **The statement round 2 takes is in scope**: it parses, its partition and design evaluate, and so the two-stage
 scope holds. -/
@@ -307,10 +291,8 @@ theorem stmtOk_scope {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stm
     obtain ⟨⟨⟨⟨hP, hd⟩, -⟩, -⟩, -⟩ := hok
     obtain ⟨Pt, hPt⟩ := Option.isSome_iff_exists.1 hP
     obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 hd
-    obtain ⟨lb, hlb, rfl⟩ := partition_eq h hPt
-    obtain ⟨l, lb', -, hlb', -, -, hsc, -⟩ := two_eq h hd
-    rw [hlb] at hlb'
-    cases hlb'
+    obtain rfl := partition_eq h hPt
+    obtain ⟨l, -, -, -, hsc, -⟩ := two_eq h hd
     exact ⟨s, _, d, by simp [hs], hPt, hd, scopeOk_sound hsc s (parse_prog h hs)⟩
 
 /-- **Refuses at two stages** at SPOT[Flock]'s code (`Code.RefusesTwo`): an accepting run passed round 2, whose check
@@ -330,32 +312,62 @@ theorem refusesTwo (H : Msg → Msg) :
     simp [OC.eval, hok] at hne
   | true => exact stmtOk_scope h hok
 
+/-- **The members' replay partition has the layout's shape**: its classes' strata are the layout partition's
+(`slotPartition`), size for size. -/
+theorem shape_filesReplay (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.Layout) :
+    (filesReplay ms ns l).classes.map strataSizes = (slotPartition l).classes.map strataSizes := by
+  simp [filesReplay, slotPartition, strataSizes, Function.comp_def]
+
 /-- **The registration is the statement's two-stage design** at SPOT[Flock]'s code (`RegMatchesTwo`): the design
-evaluates only where the replay layout's slots are its cells. -/
+evaluates only where the replay layout fits the members' files (`filesOk`); their replay partition has the layout's
+shape, request `ρ`'s cell of template `t` is the registration's blocks `blockOf ρ t` on `[0, n_t)`, and an input slot's
+cells are empty. -/
 theorem regMatchesTwo :
     ∀ x s Pt d, (code h).parse x = some s → (code h).partition s = some Pt → two h s = some d → InScopeTwo Pt d s →
       ∃ g l, reg h x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
-        d.part = slotPartition l ∧ slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
+        d.part.classes.map strataSizes = (slotPartition l).classes.map strataSizes ∧
+        slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
         g.ns.size = Pt.strata.length ∧ (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧
         ∀ ρ b, l.blocks[ρ]? = some b →
           (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
               cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
             (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
-  intro x s Pt d hx hP hd _
+  intro x s Pt d hx hP hd hin
   have hx' : parse h x = some s := hx
   have hP' : partition h s = some Pt := hP
-  obtain ⟨lb, hlb, rfl⟩ := partition_eq h hP'
-  obtain ⟨l, lb', hl, hlb', hr, hdeq, -, hcells⟩ := two_eq h hd
-  rw [hlb] at hlb'
-  cases hlb'
+  obtain rfl := partition_eq h hP'
+  obtain ⟨l, hl, hr, hdeq, -, hfo⟩ := two_eq h hd
   have hreg : reg h x = some h.reg := by
     unfold parse at hx'
     unfold reg
     cases hdx : decode x with
     | none => simp [hdx] at hx'
     | some _ => rfl
-  refine ⟨h.reg, l, hreg, hl, congrArg Design.Two.part hdeq, ok_of_toOption hr, ?_⟩
-  exact cellsOk_sound hcells
+  have hdpart : d.part = filesReplay h.ms h.reg.ns l := congrArg Design.Two.part hdeq
+  have hdk : d.k = h.k := congrArg Design.Two.k hdeq
+  have hlen : (membersPart h.ms).strata.length = h.ms.length := by
+    simp [Flock.Bridge.Members.strata_membersPart]
+  obtain ⟨hT, hk, hfit, hblk⟩ := filesOk_sound hfo
+  have hnd := hin.2.1.1
+  have hne := hin.2.1.2.2.2.1
+  refine ⟨h.reg, l, hreg, hl, by rw [hdpart]; exact shape_filesReplay h.ms h.reg.ns l,
+    ok_of_toOption hr, by rw [hT, hlen], fun t ht => by rw [hdk]; exact hk t (hlen ▸ ht), fun ρ b hb => ?_⟩
+  rcases hbu : b.unit with _ | u
+  · refine Or.inr ⟨rfl, fun t v hv => ?_⟩
+    rw [hdpart, Flock.Bridge.Members.cell_filesReplay_input h.ms hnd hne hfit hb hbu] at hv
+    simp at hv
+  · have hu : u = ρ := (hfit ρ b hb u hbu).1
+    rw [hu] at hbu
+    refine Or.inl ⟨by rw [hu], fun t ht => ?_⟩
+    have ht' : t < h.ms.length := hlen ▸ ht
+    have heq : Set.EqOn (h.reg.blockOf ρ t) (filesBlockOf h.ms h.reg.ns ρ t) (Set.Iio (h.reg.ns.getD t 0)) :=
+      fun p hp => hblk ρ b hb hbu t ht' p hp
+    rw [hdpart]
+    refine ⟨fun a ha a' ha' he => Flock.Bridge.Members.injective_filesBlockOf h.ms h.reg.ns ρ t ?_, ?_⟩
+    · rw [← heq ha, ← heq ha']
+      exact he
+    · rw [Flock.Bridge.Members.cell_filesReplay h.ms hnd hne hfit hb hbu ht']
+      exact Finset.image_congr fun p hp => (heq (Finset.mem_range.1 (Finset.mem_coe.1 hp))).symm
 
 /-! ## The sessions are in scope -/
 

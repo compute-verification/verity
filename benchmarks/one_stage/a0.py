@@ -291,7 +291,10 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
     identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
     Lean holds the object to its key when it reads it (`archiveGet`). ``st["statement"]``: the statement `verify` sets up
-    (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`."""
+    (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
+    public file's header, the registered reads, the sample and the tables it checked the session against
+    (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
+    holds each statement to."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -326,6 +329,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
             "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
+            **{k: v[k] for k in ("public_header_sha512", "registered_sha512", "unit_draw", "session_tables") if k in v},
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 

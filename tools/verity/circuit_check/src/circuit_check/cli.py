@@ -794,7 +794,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             got = [CC.lookup(cache, hit[0]["keys"][i], REPO, moved=False) for i in idx]
             if all(g is not None and not _errored(g[0]) for g in got):
                 records = [{**g[0], "cache": {"hit": g[1]}} for g in got]
-                rep = CK.report(records, opts) if shard is None and binding is None else SH.unjoined(records, opts)
+                rep = CK.report(records, opts, catalog=True) if shard is None and binding is None else SH.unjoined(records, opts)
                 rep["peaks"] = []
                 rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
                 if shard is not None:
@@ -1225,7 +1225,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             r, got = _checked(tasks[i]) if tracing else (_one(*tasks[i][:3]), None)
             done(i, r, *(_observe(r, got) if tracing else (None, None, None)))
     records = [r for r in out if r is not None]
-    rep = CK.report(records, opts) if only is None else SH.unjoined(records, opts)
+    rep = CK.report(records, opts, catalog=everything and not specs) if only is None else SH.unjoined(records, opts)
     rep["peaks"] = heaviest(rep["targets"])
     if tracing:
         rep["cache"] = stats
@@ -1245,7 +1245,7 @@ def combined(dirs: list[Path]) -> tuple[dict, dict]:
     (`checks.report`), with its ``peaks``, the shards' cache counts summed (each shard's under ``shards``) and ``combined``:
     N, the list's digest and each shard's wall time, prologue (`run`'s ``prologue_s``) and jobs."""
     request, records, manifests = SH.read(dirs)
-    rep = CK.report(records, CK.Options(**request["options"]))
+    rep = CK.report(records, CK.Options(**request["options"]), catalog=request["all"] and not request["specs"])
     rep["peaks"] = heaviest(rep["targets"])
     if caches := [m["cache"] for m in manifests if m.get("cache") is not None]:
         rep["cache"] = {"hits": sum(c["hits"] for c in caches), "stored": sum(c["stored"] for c in caches),
@@ -1794,6 +1794,8 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
     s = rep["summary"]
     for name in s["failure_names"]:
         print(f"FAIL {name}")
+    for d, why in s.get("block_held", {}).items():
+        print(f"held block/past-range {d}: {why}")
     for k, w in s["warnings"].items():
         print(f"unchecked {k}: {w['total']} over {w['definitions']} target(s)")
     if "shard" not in rep and (rs := RG.section(rep["targets"])):

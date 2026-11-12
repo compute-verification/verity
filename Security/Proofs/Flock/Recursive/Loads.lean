@@ -20,7 +20,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: where V*'s statement enters a session (gap 8)

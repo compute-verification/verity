@@ -12,30 +12,37 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   replay block's edges, each link member's boundary port under the boundary's salts at S, registered on the stream after the
   boundary (`Stream.register_interiors`); its window names the boundary registration and S, which the verifier holds it to
   (`source_of`). The stream's second stage samples ``--k`` proof blocks in each (replay block, template) cell.
+* **The auditor's params** (`toy.references`), fixed before the run: each template's circuit file and the header of its
+  reference statement, `member_stager`'s statement of its member in the interior window of Q replay blocks, staged on
+  stand-in rows (`service.template_circuits`' ``proofs``).
 * **The second stage** (`second_stage`, over any interior window of word-row members, its two records and the verifier's
   reads): `a5.audit` of the stream's second sample: a ``--zk`` session per member with
   sampled proof blocks, run by ``flock-circuit prove --zk`` itself as SPOT[Flock]'s proof server does (`a0.DIRECT`; under
   ``--firewall`` behind the ZK server), Lean's verdicts on each against the verifier's own ``--registered`` reads of every
   port (`toy.reads`: the link ports at the boundary record, every other at the interior record), the audit record, the
   wires of the sampled proof blocks, and a5's negatives (the registered reads' three on b_in's session among them). Each
-  session's circuit file is held to the one its template's params name (`pins`: `member_stager`'s, built afresh from
-  the template, its member and the window's partition), and its statement as round 2 takes it (`statements`) to round
-  2's check (`second_stage.check`) where the tree has it.
+  session's circuit file is held to the one the params name for its template (`pins`), and its statement as round 2
+  takes it (`statements`) to round 2's check (`second_stage.check`, the form allowed) at the params' reference headers.
 * **The outcome** (`outcome_of`): the sessions delivered to the stream and its outcome on what the interior's audit
-  record took, with both stages' coin evidence once the session has ended: the boundary's audit record over the replay
-  sample and the interior's over the second sample, and the run of record over both.
+  record took, with both stages' coin evidence once the session has ended, the sessions' statements and the params:
+  the boundary's audit record over the replay sample and the interior's over the second sample, with round 2's check,
+  and the run of record over both.
 * **Refused run** ``--altered``: the proof server replays span S[0] on an ingress one bit off (`toy.one_bit_off`, a bit the
   fold's AND carries to the egress), so b_in's row and b_out's output are not the boundary's at S[0], every circuit and wire
   holding: Lean's registered reads refuse both link members ("does not open"), the fold and flips accepted.
 
 Exit 0 when the run is as expected: every session's circuit file the one its template's params name, and every Lean
-verdict accepted with every negative refused, the record and the outcome
-accepted or refusing only the sessions' reads of their registrations' own ports (`own_reads_only`: one-stage's record takes
-reads of earlier values alone), the interior's at the interior record and the links' boundary ports at the boundary
-record, or (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and the outcome
-refused. ``--out`` holds both windows (``boundary/``, ``interior/``, their private files too), a5's records
-(``audit/``), the challenger session's records (``challenger/``), the sessions' statements (``statements.json``) and
-``summary.json`` (both stages' registrations, laws and draws, and the outcome, among it).
+verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted or refusing only
+the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
+alone), and the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
+those reads (the interior's at the interior record and the links' boundary ports at the boundary record); or
+(``--altered``) refused at both link members by Lean's registered reads and nowhere else, and the outcome refused.
+``--out`` holds the params
+(``proofs.json``, and each template's reference statement under ``references/m<k>/``), both windows (``boundary/``,
+``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
+``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
+(``coins.json``), the sessions' statements (``statements.json``) and ``summary.json`` (both stages' registrations, laws
+and draws, and the outcome, among it).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
@@ -45,7 +52,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -62,6 +68,8 @@ from verity.core.protocols.spot import challenger as Ch, coins as CC, service as
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by
 ALTERED = "does not open"
+#: what round 2 refuses every two-stage run by while the form is off (`second_stage.FORM`)
+FORM_REFUSED = "two-stage-form"
 #: the run root the run's challenger session opens on, which both registrations name
 ROOT = hashlib.sha512(b"verity/two-stage/toy/run/v1").hexdigest()
 CHALLENGER = "two-stage toy: a development challenger session on this machine (a5_coins local)"
@@ -142,26 +150,28 @@ def drawn(stream: S.Stream, coins: StageCoins, registration: S.WindowCommitmentR
     return draw, segment
 
 
-def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[dict | None],
-               own: dict[str, list[str]]) -> dict:
+def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[dict | None], statements: list[dict],
+               proofs: dict) -> dict:
     """The stream's outcome of the second stage's sample: the sessions delivered (`Stream.deliver`), then
     `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
-    sessions, with both stages' coin evidence: accepted, the checks each stage's audit record failed, and whether each
-    refuses only the sessions' reads of its registration's own ports ``own[stage]`` (`own_reads_only`)."""
+    sessions, with both stages' coin evidence, the sessions' ``statements`` and the params ``proofs``: accepted, the
+    checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports,
+    `verifier.audit_record`'s ``own_reads``), and the codes of round 2's check in the interior's (``statements``)."""
     sessions = handed["sessions"]
     verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in handed["verdicts"].items()}
     given = {x: handed[x] for x in ("proved_units", "instances", "served", "session_roots")}
     try:
         o = stream.deliver(second, sessions) or stream.outcome(second, verdicts, handed["statement"], coins=evidence[0],
-                                                               interior_coins=evidence[1], **given)
+                                                               interior_coins=evidence[1], statements=statements,
+                                                               proofs=proofs, **given)
     except (S.Refused, S.Pending) as e:
         return {"accepted": False, "refused": e.verdict.to_json() if isinstance(e, S.Refused) else str(e)}
     body = stream.records[-1]
     audits = {"interior": body["audit"], "replay_sample": (body.get("replay_sample") or {}).get("audit")}
     return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"],
             **{k: None if r is None else sorted(x for x, c in r["checks"].items() if not c["ok"]) for k, r in audits.items()},
-            "own_reads_only": {k: own_reads_only(r, own[k]) for k, r in audits.items()},
-            "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()}}
+            "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()},
+            "statements": ((body["audit"].get("checks") or {}).get("statements") or {}).get("codes")}
 
 
 def stage_of(registration: S.WindowCommitmentRecord, draw: S.Draw) -> dict:
@@ -175,18 +185,12 @@ def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
                   for p, _ in m.all_rows if p != T.link(t))
 
 
-def link_reads(window: T.CS.Binding, links: list[dict], drawn: list[int]) -> list[str]:
-    """The boundary registration's own ports the sessions read: the boundary port of each link (``{"template", "port",
-    "value"}``) whose member the second stage drew a unit of."""
-    hit = {m.template for m in window.members if any(m.base <= u < m.base + m.n for u in drawn)}
-    return sorted({x["value"] for x in links if x["template"] in hit})
-
-
 def own_reads_only(record: dict | None, ports: list[str]) -> bool:
-    """Whether the audit record refuses only the sessions' reads of its registration's own ``ports``: its one failed
+    """Whether a5's audit record refuses only the sessions' reads of its registration's own ``ports``: its one failed
     check is one-stage's ``registered``, which takes reads of earlier values alone, naming no registered value and
     exactly those ports. `SpotFlock.FrameIs` asks for those reads (an interior port's at the interior record, a link
-    port's at the boundary record's leaf S[i]), so the two-stage record check is to take them."""
+    port's at the boundary record's leaf S[i]), and the stream's two-stage records take them (`verifier.audit_record`'s
+    ``own_reads``)."""
     bad = {k: v for k, v in ((record or {}).get("checks") or {}).items() if not v.get("ok")}
     d = (bad.get("registered") or {}).get("detail") or {}
     return set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong") and d.get("opened") == ports
@@ -210,40 +214,40 @@ def statements(audit_dir: Path, window: T.CS.Binding) -> list[dict]:
     return out
 
 
-def pins(window: T.CS.Binding, sets: dict, stmts: list[dict]) -> dict[str, bool]:
-    """Each session's circuit file against the one an auditor's params name: by template, whether the SHA-512 its header
-    names (``circuit_sha512``) is that of `member_stager`'s file for the template, built afresh from the template and
-    the member alone, bound to the window's own partition and program."""
-    from verity_flock.class_statement import member_stager
-
-    members, bind = {m.template: m for m in window.members}, {"partition": window.partition_digest, "program": window.partition["program"]}
-    return {x["template"]: member_stager(sets[x["template"]][1], members[x["template"]], bind).pin == x["header"].get("circuit_sha512")
-            for x in stmts}
+def pins(proofs: dict, stmts: list[dict]) -> dict[str, bool]:
+    """Each session's circuit file against the one the auditor's params ``proofs`` name (`toy.references`: `member_stager`'s
+    file for the template, built afresh from the template and its member alone, bound to the interior's partition and
+    program): by template, whether the SHA-512 its header names (``circuit_sha512``) is the params'."""
+    named = {e["template"]: e["circuit"] for e in proofs["templates"]}
+    return {x["template"]: named.get(x["template"]) == x["header"].get("circuit_sha512") for x in stmts}
 
 
 def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, drawn: list[int], stmts: list[dict],
-              record: dict, links: list[dict]):
-    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed), where the tree has it: over the
-    design's ``links`` and the reads the audit record's verdicts of record report."""
-    if importlib.util.find_spec("verity.core.protocols.spot.second_stage") is None:
-        return None
+              record: dict, proofs: dict) -> dict:
+    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links the replay
+    block's Definition makes (`second_stage.replay_links`, at the boundary record's ports, as the stream derives them),
+    the reads the audit record's verdicts of record report, and each template's reference header the params ``proofs``
+    give."""
     from verity.core.protocols.spot import second_stage as SS
     from verity.core.protocols.spot.one_stage import audit as A, partition as P
+    from verity.ml.circuits.codec import descriptor_id
 
+    replay = T.boundary_window(int(brec["population"]), len(sample)).program
     own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
-                 SS.links_of(links), A.session_registered(record.get("verdicts") or {}))
+                 SS.replay_links(replay, descriptor_id(T.REPLAY), brec), A.session_registered(record.get("verdicts") or {}),
+                 tuple((e["template"], e["header"]) for e in proofs["templates"]))
     return SS.check(True, own, stmts).to_json()
 
 
 def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window_dir: Path, source, brec: dict, irec: dict,
-                 sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict], links: list[dict], out: Path,
-                 provenance: dict) -> tuple[dict, bool, dict, dict]:
+                 sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict], proofs: dict, out: Path,
+                 provenance: dict) -> tuple[dict, bool, dict, dict, list[dict] | None]:
     """The second stage over the interior registration ``irec`` of ``window`` (written at ``window_dir``), chained after
     the boundary registration ``brec`` and its replay sample: `a5.audit` of the stream's second sample ``second`` (its
     draw, law and the interior registration's receipt), each member's session verified against ``reads`` (by member
-    key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2
-    under the design's ``links`` (``{"template", "port", "value"}``). -> (a5's summary, its acceptance, the audit
-    record, what the run reports)."""
+    key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2 at
+    the params ``proofs`` (`toy.references`). -> (a5's summary, its acceptance, the audit record, what the run reports,
+    the sessions' statements: None without a draw)."""
     import a5
     import records_audit as RA
 
@@ -256,39 +260,40 @@ def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window
     got = {"audit": {x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives",
                                            "circuits", "timing")},
            "accepted": ok, "record": {"failed": sorted(k for k, v in (record.get("checks") or {}).items() if not v.get("ok"))}}
+    stmts = None
     if s.get("draw") is not None:
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
-        got["pins"] = pins(window, sets, stmts)
-        got["round_two"] = round_two(sample, window, irec, brec, s["draw"], stmts, record, links)
-    return s, ok, record, got
+        got["pins"] = pins(proofs, stmts)
+        got["round_two"] = round_two(sample, window, irec, brec, s["draw"], stmts, record, proofs)
+    return s, ok, record, got, stmts
 
 
 def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding, r2: dict | None,
              o: dict | None, files: dict | None) -> bool:
     """Both: every check before the sample passed and every session's circuit file the one its template's params name
     (`pins`, ``files``). Honest: every Lean verdict accepted, the sessions' registered reads the verifier's own, every
-    negative refused, the record accepted or refusing only the reads of the interior's own ports (`own_reads_only`),
-    round 2 ``r2`` accepting the statements where the tree has it, and the stream's outcome ``o`` accepted or, in each
-    stage's audit record, refusing only the sessions' reads of that registration's own ports: the interior's, and the
-    links' boundary ports at the boundary record. ``--altered``: Lean's verify refused both link members (m0, m3) by
-    `ALTERED` and accepted the fold and flips, round 2 refuses the statements where the tree has it, and the outcome
+    negative refused, a5's record accepted or refusing only the reads of the interior's own ports (`own_reads_only`),
+    round 2 ``r2`` accepting the statements, and the stream's outcome ``o`` accepted or refused by round 2's two-stage
+    form alone (`FORM_REFUSED`, while `second_stage.FORM` is off): the interior's audit record failing no check but
+    round 2's, by that code at most, and the replay sample's none. ``--altered``: Lean's verify refused both link
+    members (m0, m3) by `ALTERED` and accepted the fold and flips, round 2 refuses the statements, and the outcome
     refuses."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
     before = all((s.get("checks_before_draw") or {}).values()) and bool(files) and all((files or {}).values())
     if not a.altered:
         refused = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (s.get("negatives") or {}).values()]
         own = own_reads_only(record, own_ports(window, s.get("draw") or []))
-        oo = (o or {}).get("own_reads_only") or {}
         return (before and audit.get("complete") is True and audit.get("registered_reads") is True
                 and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
-                and (ok or own) and (r2 is None or r2.get("ok") is True) and o is not None
+                and (ok or own) and (r2 or {}).get("ok") is True and o is not None
                 and (o.get("accepted") is True
-                     or (own and oo.get("interior") is True and (o.get("replay_sample") == [] or oo.get("replay_sample") is True))))
+                     or (o.get("interior") in ([], ["statements"]) and o.get("statements") in ([], [FORM_REFUSED])
+                         and o.get("replay_sample") == [])))
     links = [f"lean-verify/m{t}" for t in T.LINKS]
     rest = [f"lean-verify/m{t}" for t in range(len(T.TEMPLATES)) if t not in T.LINKS]
     return (before and audit.get("accepted") is False and all(ALTERED in (why.get(x) or "") for x in links)
-            and all((audit.get("verdicts") or {}).get(x) is True for x in rest) and (r2 is None or r2.get("ok") is False)
+            and all((audit.get("verdicts") or {}).get(x) is True for x in rest) and (r2 or {}).get("ok") is False
             and o is not None and o.get("accepted") is False)
 
 
@@ -332,6 +337,9 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         print("TWO " + json.dumps({f"{stage}_refused": summary[stage]["refused"]}, default=str))
         return 1
+    proofs = T.references(a.q, out / "references")
+    S.template_circuits(proofs, stream.spec.check.query)
+    (out / "proofs.json").write_text(json.dumps(proofs, indent=1, sort_keys=True))
     bc = T.boundary(T.ingress(a.n), a.q)
     brec = T.write(bc, out / "boundary", {"toy": "two-stage boundary"})
     try:
@@ -356,10 +364,10 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     segments.append(segment)
     summary["second_stage"] = stage_of(ireg, second)
     sets = {m.template: (composer(t, m), t) for m, t in zip(it.window.members, T.TEMPLATES)}
-    s, ok, record, got = second_stage(a, sets, it.window, out / "interior", source_of(it.window, bd, sample), brec, irec,
-                                      sample, (second.draw, second.law, ireg.receipt),
-                                      T.reads(brec, irec, it.window, sample), T.links(it.window), out,
-                                      {"toy": "two-stage interior", "altered": a.altered})
+    s, ok, record, got, stmts = second_stage(a, sets, it.window, out / "interior", source_of(it.window, bd, sample), brec,
+                                             irec, sample, (second.draw, second.law, ireg.receipt),
+                                             T.reads(brec, irec, it.window, sample), proofs, out,
+                                             {"toy": "two-stage interior", "altered": a.altered})
     summary.update(interior={"population": it.window.population, "law": it.window.law, "run": it.window.run,
                              "members": [{"key": m.key, "n": m.n, "base": m.base} for m in it.window.members],
                              "links": T.links(it.window)},
@@ -368,17 +376,18 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     summary["record"]["own_reads_only"] = own_reads_only(record, own_ports(it.window, drawn_units))
     published = draws.evidence()
     summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
+    evidence = [AC.evidence(published, g) for g in segments]
+    (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [c.read.hex() for c in coins.stages]},
+                                               indent=1, sort_keys=True))
     if "handed" in s:
-        own = {"interior": own_ports(it.window, drawn_units),
-               "replay_sample": link_reads(it.window, T.links(it.window), drawn_units)}
-        summary["outcome"] = outcome_of(stream, second, s["handed"], [AC.evidence(published, g) for g in segments], own)
+        summary["outcome"] = outcome_of(stream, second, s["handed"], evidence, stmts, proofs)
     summary["as_expected"] = expected(a, s, ok, record, it.window, summary.get("round_two"), summary.get("outcome"),
                                       summary.get("pins"))
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     r2, o = summary.get("round_two"), summary.get("outcome") or {}
     print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "accepted", "record", "pins", "as_expected")},
                                "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
-                               "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "own_reads_only",
+                               "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                  "refused")}},
                               default=str))
     return 0 if summary["as_expected"] else 1

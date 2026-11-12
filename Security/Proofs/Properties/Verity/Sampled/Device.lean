@@ -4,8 +4,9 @@ public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.NetworkCertifier.Check.LinkWindow
 public import Proofs.Core.Game.Tape
-import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Init.Data.String.Defs
 
 /-!
 # The device's history at a play: the run that printed the play's log
@@ -53,6 +54,8 @@ fixes from what the play fixed (`Deployment.setupOf`).
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open private pairs from Spot.ChallengerSession
 

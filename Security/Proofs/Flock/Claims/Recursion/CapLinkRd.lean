@@ -40,7 +40,7 @@ import Proofs.Flock.Claims.Bridge.Transport
 import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Recursion.FlockKSLin
 import Proofs.Flock.Claims.Recursion.OuterKS
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

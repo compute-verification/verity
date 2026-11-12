@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

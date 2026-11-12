@@ -6,8 +6,8 @@ public import Mathlib.Algebra.Polynomial.Degree.Defs
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Data.Nat.Bitwise
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
@@ -531,7 +531,7 @@ theorem value_degRounds_le [CharP F 2] (k : ℕ) : ∀ (n : ℕ) (G : (Fin n →
       refine value_bind_le_of_forall _ _ _ _ fun c => ?_
       refine value_draw_bind_le _ F _ (fun r => (degPoly claim c).eval r = (∑ b ∈ Finset.range (2 ^ n), P b).eval r)
         _ _ ?_ fun r hr => ?_
-      · refine Game.prCoin_eval_eq_eval_le _ _ (fun hPT => hc ?_) (k + 1) (degPoly_natDegree_le _ _) hTd
+      · refine Verity.Game.prCoin_eval_eq_eval_le _ _ (fun hPT => hc ?_) (k + 1) (degPoly_natDegree_le _ _) hTd
         rw [cube_succ, ← degPoly_sum claim c, hPT, hTe, hTe, Finset.sum_add_distrib]
       · refine (value_bind_le' _ _ _ (fun x => x.2 ≠ G (Fin.cons r x.1)) 0 ?_).trans ?_
         · rintro ⟨rs, out⟩ hx

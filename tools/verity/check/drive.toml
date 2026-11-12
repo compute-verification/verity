@@ -43,7 +43,7 @@ land = "review"
 # the branch the review landing fast-forwards and `next` is built on: "checked", whose tip drive's full check (`train.sh TIP
 # MACHINES`, recorded) checks after each landing; `main` moves only to a commit of `checked` whose check passed every
 # step on the merge gate (not circuit-check, `off_gate` in policy.toml), and a red step's culprit, unless fixed forward within
-# 2 h or a warn step's, is reverted on `checked`, never on `main`. "main" lands on `main` and checks it after. Only drive's App
+# 30 min or a warn step's, is reverted on `checked`, never on `main`. "main" lands on `main` and checks it after. Only drive's App
 # pushes `checked`
 land_into = "checked"
 # the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold

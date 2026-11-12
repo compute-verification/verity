@@ -37,8 +37,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SoundAtBridge
 import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A checked unit's proof layer is sound through its Flock sessions (the proof)

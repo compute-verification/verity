@@ -37,8 +37,9 @@ RANGES = {
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """The mask over 20 keys selecting 16 (reaching `DsaTopKKey_v2`, `DsaRadixPass_v1` and `DsaRadixTies_v1`) and the long row
-    over them (the mask, its settings and the index read); the settings at small statics shaped as GLM-5.3's (an odd N,
+    """The mask over 20 keys selecting 16 (reaching `DsaTopKKey_v2`, `DsaRadixPass_v1` and `DsaRadixTies_v1`), the counted mask
+    over them (reaching `DsaRowValid_v1` at a row length no power of two) and the long row over them (the mask, its settings and
+    the index read); the settings at small statics shaped as GLM-5.3's (an odd N,
     K = N - 1; reaching `DsaButterflyTagBits_v1` and `DsaButterflyCtl_v1`) and with picks (N 33, K 8); the rows' read likewise
     (N 9, K 8; N 7, K 3) and at GLM-5.3's row width (576 bf16) over 5 rows; and 6 rows padded to 9, and 9 padded to 16, a long
     row's shape (T >= K, N = 2K)."""
@@ -47,6 +48,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
     return [
         ("DsaTopKMask_v2", lambda: bind(BM.DsaTopKMaskV2, N=20, TOPK=16)),
+        ("DsaTopKMaskCounted_v2", lambda: bind(BM.DsaTopKMaskCountedV2, N=20, TOPK=16)),
         ("DsaTopKRow_v2", lambda: bind(BM.DsaTopKRowV2, N=20, TOPK=16)),
         ("DsaButterflySettings_v2", lambda: bind(BM.DsaButterflySettingsV2, N=9, K=8)),
         ("DsaButterflySettings_v2-pick", lambda: bind(BM.DsaButterflySettingsV2, N=33, K=8)),

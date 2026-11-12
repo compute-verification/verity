@@ -73,33 +73,33 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 /-! ## The extractor's parts -/
 
 /-- The extractor at one accepted inner run `li`, under the outer run `j`: every slot's extraction (`runExt`). -/
-noncomputable def innerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (c : L.ECoins x) (j : Fin (L.k x))
-    (li : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen)) :
+noncomputable def innerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (c : L.ECoins x) (j : Fin (L.kOut x))
+    (li : Fin (L.kIn x) × ((Fin (L.V.k x) → Coin) × Seen)) :
     RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   L.runExt x s li.2.1 li.2.2 fun p => c.2.2 (j, li.1, p)
 
 /-- The extractor at one accepted outer run `jo`: the inner wait on the second stage, and `innerBody` at each. -/
 noncomputable def outerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (c : L.ECoins x)
-    (jo : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen)) :
+    (jo : Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen)) :
     RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
-  (waitAccC (L.k x) ((List.finRange (L.cap x)).map fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) []).bind
-    fun inner => flatMapRP (L.innerBody x s c jo.1) ((List.finRange (L.k x)).zip inner)
+  (waitAccC (L.kIn x) ((List.finRange (L.capIn x)).map fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) []).bind
+    fun inner => flatMapRP (L.innerBody x s c jo.1) ((List.finRange (L.kIn x)).zip inner)
 
 /-- The outer wait's kept runs, indexed. -/
 noncomputable def outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (c : L.ECoins x) : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen)) :=
-  (List.finRange (L.k x)).zip ((waitAccC (L.k x) ((List.finRange (L.cap x)).map c.1) []).eval H run').1
+    (c : L.ECoins x) : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen)) :=
+  (List.finRange (L.kOut x)).zip ((waitAccC (L.kOut x) ((List.finRange (L.capOut x)).map c.1) []).eval H run').1
 
 /-- **What the extractor keeps** at the outer runs `Z`: at an accepted judged run, `Z = outerList`. The list is a
-parameter so that unfolding `found` never asks the kernel to evaluate the outer wait over `List.finRange (L.k x)`. -/
+parameter so that unfolding `found` never asks the kernel to evaluate the outer wait over `List.finRange (L.kOut x)`. -/
 noncomputable def found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
-    (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) : List (List Msg × Opening Bool) :=
+    (Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))) : List (List Msg × Opening Bool) :=
   ((flatMapRP (L.outerBody x s c) Z).eval H run').1
 
 theorem found_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
-    (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) :
+    (Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     L.found H x s run' c Z = ((flatMapRP (L.outerBody x s c) Z).eval H run').1 :=
   rfl
 
@@ -110,8 +110,8 @@ theorem E_ext_eq (L : Compiled Coin A) (x : Msg) (r₀ : Fin (L.V.k x) → Coin)
       | none => .ret none
       | some s =>
         if v₀.out = .acc then
-          (waitAccC (L.k x) ((List.finRange (L.cap x)).map c.1) []).bind fun outer =>
-            (flatMapRP (L.outerBody x s c) ((List.finRange (L.k x)).zip outer)).bind fun found =>
+          (waitAccC (L.kOut x) ((List.finRange (L.capOut x)).map c.1) []).bind fun outer =>
+            (flatMapRP (L.outerBody x s c) ((List.finRange (L.kOut x)).zip outer)).bind fun found =>
               .ret (some (assemble s found))
         else .ret none :=
   rfl
@@ -164,7 +164,7 @@ theorem passes_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : 
     · exact Sampling.Passes.ret_nil H run' L.commit
 
 theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (s : AuditStatement) (c : L.ECoins x) (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) :
+    (s : AuditStatement) (c : L.ECoins x) (Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     Sampling.Passes H run' L.commit (flatMapRP (L.outerBody x s c) Z) :=
   Sampling.Passes.flatMapRP fun _ _ => Sampling.Passes.bind _ fun _ => Sampling.Passes.flatMapRP fun li _ =>
     L.passes_runExt H x run' s li.2.1 li.2.2 _
@@ -198,8 +198,9 @@ theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fi
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (c : L.ECoins x) {j : Fin (L.k x)} {r : Fin (L.V.k x) → Coin}
-    (hj : (accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1))[j.val]? = some r) :
+    (c : L.ECoins x) {j : Fin (L.kOut x)} {r : Fin (L.V.k x) → Coin}
+    (hj : (accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1))[j.val]? =
+      some r) :
     (j, (r, (run' r).seen)) ∈ L.outerList H x run' c := by
   unfold outerList
   rw [waitAccC_eval_nil]
@@ -208,10 +209,10 @@ theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : 
 /-- **A block's extraction at a slot of a kept inner run, under a kept outer run, is kept**, at the slot's coins. -/
 theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
-    {Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))} {j : Fin (L.k x)} {r : Fin (L.V.k x) → Coin}
-    (hj : (j, (r, (run' r).seen)) ∈ Z) {l : Fin (L.k x)} {d : Fin (L.V.k x) → Coin}
-    (hl : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
-      ((List.finRange (L.cap x)).map (c.2.1 j)))[l.val]? = some d)
+    {Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))} {j : Fin (L.kOut x)} {r : Fin (L.V.k x) → Coin}
+    (hj : (j, (r, (run' r).seen)) ∈ Z) {l : Fin (L.kIn x)} {d : Fin (L.V.k x) → Coin}
+    (hl : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
+      ((List.finRange (L.capIn x)).map (c.2.1 j)))[l.val]? = some d)
     {i : Fin (L.nPU x)} {v : ℕ} (hv : (L.checked x (forkOn (L.stage2 x) r d))[i.val]? = some v) (hvlt : v < L.nPU x)
     {q : List Msg × Opening Bool}
     (hq : q ∈ ((L.unitExt x s v (forkOn (L.stage2 x) r d) (run' (forkOn (L.stage2 x) r d)).seen
@@ -222,8 +223,8 @@ theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditSt
   refine List.mem_flatMap.2 ⟨(j, (r, (run' r).seen)), hj, ?_⟩
   unfold outerBody
   rw [(RP.eval_bind _ _ _ _).1, flatMapRP_eval, waitAccC_eval_nil]
-  have hm : ((List.finRange (L.cap x)).map fun l => forkOn (L.stage2 x) r (c.2.1 j l)) =
-      ((List.finRange (L.cap x)).map (c.2.1 j)).map (forkOn (L.stage2 x) r) := by
+  have hm : ((List.finRange (L.capIn x)).map fun l => forkOn (L.stage2 x) r (c.2.1 j l)) =
+      ((List.finRange (L.capIn x)).map (c.2.1 j)).map (forkOn (L.stage2 x) r) := by
     rw [List.map_map]; rfl
   dsimp only
   rw [hm, accList_map, List.map_map]
@@ -267,13 +268,13 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
     refine mem_filter.2 ⟨mem_powerset.2 (filter_subset _ _), ?_⟩
     by_contra hlt
     exact hfail ⟨s, Pt, hs, hPt, lt_of_not_ge hlt⟩
-  by_cases hshort : (accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length <
-    L.k x
+  by_cases hshort : (accList (fun r => (run' r).out = .acc) (L.kOut x)
+    ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x
   · exact Or.inl hshort
   refine Or.inr ⟨_, hB, accList_length_eq hshort, fun j r hj => ?_⟩
   have hjZ := L.mem_outerList H x run' c hj
-  by_cases hshort2 : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
-    ((List.finRange (L.cap x)).map (c.2.1 j))).length < L.k x
+  by_cases hshort2 : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
+    ((List.finRange (L.capIn x)).map (c.2.1 j))).length < L.kIn x
   · exact Or.inl hshort2
   refine Or.inr ⟨accList_length_eq hshort2, fun l d hl v hv hgood => ?_⟩
   obtain ⟨b, hb, hnc⟩ := faulty_wrong hv (ιOf fd (L.iroots x (run' r).seen v))

@@ -370,12 +370,15 @@ def test_the_catalog_s_run_builds_every_record_into_a_fresh_cache_tars_it_and_gi
         (work / d / "stale" / "old.json").write_text("{}")
     calls = _stand_in(monkeypatch, CB, rc, report, records={"v/k1/a.json": '{"a": 1}', "v/k2/b.json": '{"b": 2}'},
                       slices=SLICED)
+    monkeypatch.setenv("OMP_NUM_THREADS", "64")
     doc = _graph(CATALOG)
     res = runners.execute(doc["tasks"][0], doc, work, circuit_catalog.run)
     assert contract.result_errors(res, doc["tasks"][0]) == [], res
     assert (res["status"], res["detail"]) == (status, detail), res
     (c,) = calls
     assert c["argv"][3:9] == ["--all", "--records-only", "--cache", str(work / "cache"), "--slices", str(work / "slices")]
+    assert c["env"] == {**os.environ, **circuit_catalog.THREADS} and c["env"]["OMP_NUM_THREADS"] == "1", \
+        "each of its builds, one per core at once, has one-thread pools"
     assert not c["cache"] and not (work / "cache").exists() and not (work / "slices").exists(), "both are the task's scratch"
     if status == "pass":
         CB.pack(_records(tmp_path / "same", {"v/k1/a.json": '{"a": 1}', "v/k2/b.json": '{"b": 2}'}), tmp_path / "same.tar.gz")

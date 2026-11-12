@@ -231,8 +231,9 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
             day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None,
-            seed_salt: str | None = None) -> dict[str, Any]:
-    """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
+            seed_salt: str | None = None, pool: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
+    the Lean adds its `pin` to the supplied or output values itself."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
          "ports": {k: dict(v) for k, v in ports.items()}, "program": codec.encode_program(program), "query": dict(query),
@@ -259,6 +260,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["declarations"] = None if declarations is None else [dict(d) for d in declarations]
     if seed_salt is not None:
         p["seed_salt"] = seed_salt
+    if pool is not None:
+        p["pool"] = dict(pool)
     return p
 
 
@@ -270,16 +273,17 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
-          declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`, and
-    R6's seed salt when it passes `seed_salt`."""
+          declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
+          pool: Mapping[str, Any] | None = None) -> Verdict:
+    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`,
+    R6's seed salt when it passes `seed_salt`, and R7's pool chain when it passes `pool`."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
-                 day=day, declarations=declarations, seed_salt=seed_salt)
+                 day=day, declarations=declarations, seed_salt=seed_salt, pool=pool)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs, day, declarations, seed_salt),
+                                                  window_root, held, outputs, day, declarations, seed_salt, pool),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
@@ -372,11 +376,12 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
         held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
         value_outputs: Mapping[str, Mapping[str, str]] | None = None,
-        interior: Mapping[str, Any] | None = None, seed_salt: str | None = None) -> Verdict:
+        interior: Mapping[str, Any] | None = None, seed_salt: str | None = None,
+        pool: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
-    log registered first, ``seed_salt`` its window's seed salt), `check_public`'s values and declared items, the receipt's challenger and place in
+    log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool), `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
@@ -388,13 +393,16 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, and its window's `seed_salt`
     when it has one), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
-    (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, and `proofs`, the auditor's params naming
-    each template's circuit file (`service.template_circuits`'s form, under the interior's params; None names none);
-    `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`."""
+    (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`,
+    and `proofs`, the auditor's params naming each template's circuit file and reference header
+    (`service.template_circuits`'s form, under the interior's params; None names none); the Lean derives the design's
+    links from the replay block's Definition.
+    `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`, its audit record with round 2's
+    `statements` check."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
-                              seed_salt=seed_salt),
+                              seed_salt=seed_salt, pool=pool),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
             "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
             "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
@@ -421,7 +429,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             "coins": None if it["coins"] is None else dict(it["coins"]),
             "proved_units": None if it["proved_units"] is None else list(it["proved_units"]),
             "instances": it["instances"], "served": None if it["served"] is None else list(it["served"]),
-            "session_roots": None if it["session_roots"] is None else dict(it["session_roots"])}
+            "session_roots": None if it["session_roots"] is None else dict(it["session_roots"]),
+            "statements": None if it.get("statements") is None else list(it["statements"])}
     got = lean("run", args)
     for path in (("audit",), ("interior", "audit")):
         at = got
@@ -498,20 +507,27 @@ def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  law: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
-                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None) -> dict[str, Any]:
+                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
+                 own_reads: bool = False) -> dict[str, Any]:
     """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the registration's
-    values (`audit.session_registered(verdicts, registration)`): the record of record, with `verifiers` (`{"of_record",
-    "lean", "python", "agree"}`, each side's acceptance and failed checks)."""
+    values (`audit.session_registered(verdicts, registration)`), with `own_reads` (a two-stage run's, whose round 2
+    holds those reads' rows) less the reads of the registration's own ports at their own roots (`Record.lessOwnReads`):
+    the record of record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each side's acceptance and failed
+    checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
+    opened = audit.session_registered(verdicts, registration)
+    if own_reads and opened is not None:
+        roots = {r["port"]: r["root"] for r in registration["roots"]}
+        opened = {v: r for v, r in opened.items() if not (v in roots and roots[v] == r)}
     py = audit.audit_record(registration, receipt, draw, law, list(proved_units), instances, statement, verdicts, delta,
-                            sessions, served, session_roots,
-                            audit.session_registered(verdicts, registration))
+                            sessions, served, session_roots, opened)
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     got = lean("record", {"registration": dict(registration), "receipt": dict(receipt), "draw": dict(draw),
                           "law": dict(law), "proved_units": list(proved_units), "instances": instances,
                           "statement": dict(statement), "verdicts": verdicts, "delta": exact,
                           "sessions": list(sessions), "served": None if served is None else list(served),
-                          "session_roots": None if session_roots is None else dict(session_roots)})
+                          "session_roots": None if session_roots is None else dict(session_roots),
+                          **({"own_reads": True} if own_reads else {})})
     if isinstance(got, str):
         try:
             got = json.loads(got)

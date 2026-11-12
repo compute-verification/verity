@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Flock.Game.Expect
+public import Definitions.Flock.Game
 public import Proofs.Flock.Claims.Prob
-public import Proofs.Flock.Soundness.Game.Expect
+public import Proofs.Flock.Soundness.Game
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

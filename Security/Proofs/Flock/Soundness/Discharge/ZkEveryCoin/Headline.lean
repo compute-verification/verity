@@ -21,7 +21,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Composed.Headline
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Flock.Soundness.ZK.Refusal

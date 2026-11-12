@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Model.Compiled
-public import Proofs.Flock.Soundness.Game.Lock
+public import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.LigeritoMid
 
 /-!

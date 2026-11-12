@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.Opening
 import Proofs.Flock.Soundness.Refine.Plays
 

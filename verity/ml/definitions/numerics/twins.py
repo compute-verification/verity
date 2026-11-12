@@ -699,7 +699,7 @@ class AttentionTwin(Twin):
 FAMILIES: dict[str, type[Twin]] = {cls.base_id: cls for cls in (GemmTwin, BiasAddTwin, EmbeddingTwin, TokenSelectTwin, SiluMulTwin,
                                                                 RoPETwin, RMSNormTritonTwin, RMSNormFusedTwin, AttentionTwin)}
 FAMILIES.update(CNR.twin_families(Twin, rand_bf16, RANDOM_KINDS))
-RMSNormCudaVector8Twin, RMSNormFusedCudaVector8Twin = (
+RMSNormCudaVector8Twin, RMSNormFusedCudaVector8Twin, RMSNormFusedCudaVector8BatchedTwin = (
     FAMILIES[k] for k in CNR.TWIN_DEFINITIONS)
 DEFINITIONS = {"Gemm_v1": b1.Gemm, "BiasAdd_v1": b1.BiasAdd, "Embedding_v1": b1.Embedding, "TokenSelect_v1": b1.TokenSelect,
                "SiluMul_v1": b1.SiluMul, "RoPE_v1": b1.RoPE, "RMSNormTriton_v1": b1.RMSNormTriton,

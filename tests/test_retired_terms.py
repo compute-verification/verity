@@ -80,7 +80,10 @@ DOC_TERMS = {
                                                       "stays in backticks)",
     "coin server, coin source, coin device, randomness source": "the challenger",
     "salted leaf, salted commitment": "hiding leaf, hiding commitment",
-    "miss probability, detection probability": "acceptance probability (detection is its complement)",
+    "acceptance probability P_a, a sampling design's acceptance probability": "miss probability (detection is its "
+                                                                              "complement; a prover's acceptance probability "
+                                                                              "keeps the word)",
+    "egress cone": "reach (E)",
     "link window": "an execution phase's transfer blocks (`link-window` stays in backticks until a format version)",
     "block-scaled, blockwise, scale block": "scale group",
     "production": "serving, or proving",
@@ -112,7 +115,7 @@ DOC_TERMS = {
     "prover gateway, verifier gateway": "the ZK server; the challenger",
     "batch verifier": "the verifier",
     "GPU workers": "workers",
-    "escape probability": "acceptance probability",
+    "escape probability": "miss probability",
     "post-landing run, postland": "after-landing run",
     "Commit window": "Commit period",
     "accounting period": "the monitoring period",
@@ -162,7 +165,9 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|wardens?"
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
                        rf"|coin{_SPACE}(?:servers?|sources?|devices?)|randomness{_SPACE}sources?"
-                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|(?:miss|detection){_SPACE}probabilit(?:y|ies)"
+                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|egress{_SPACE}cones?"
+                       rf"|acceptance{_SPACE}probabilit(?:y|ies){_SPACE}\$?(?:\\bar\{{?\s?)?P\u0304?\}}?_\{{?a\b"
+                       rf"|(?:sampling{_SPACE})?design's{_SPACE}acceptance{_SPACE}probabilit(?:y|ies)"
                        rf"|link{_SPACE}windows?|block{_SPACE}scaled|blockwise|scale{_SPACE}blocks?|productions?"
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
@@ -414,7 +419,7 @@ def test_the_glossary_records_the_retired_terms():
 #: the Glossary's older names (GLOSSARY.md) a Lean declaration's own name may carry, each word's forms and its term;
 #: `session`, `window` and `block` are left out, as each has a sense the Glossary keeps
 LEAN_WORDS = {"draw": (("draw", "draws", "drawn"), "sample"), "law": (("law", "laws"), "sampling design"),
-              "escape": (("escape",), "acceptance probability"), "wrong": (("wrong",), "incorrect"),
+              "escape": (("escape",), "miss probability"), "wrong": (("wrong",), "incorrect"),
               "dampener": (("dampener",), "slowdown"), "firewall": (("firewall",), "ZK server"),
               "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network certifier"),
               "tap": (("tap", "taps"), "network certifier"), "leg": (("leg", "legs"), "subprotocol")}
@@ -669,19 +674,21 @@ def test_the_doc_scan_reads_the_training_terms():
 
 
 def test_the_doc_scan_reads_the_owners_terms():
-    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the acceptance probability,
-    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction and a
-    scale group stay."""
+    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the miss probability, the reach,
+    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction, a
+    scale group and a prover's acceptance probability stay."""
     docs = {
         "a.md": "The coin server, a coin\nsource, the coin devices and a randomness source; salted leaves and a salted commitment.\n"
-                "A miss probability, the detection probabilities; the link window and a link-window.\n"
+                "Acceptance probability $\\bar P_a$, a design's acceptance probabilities, egress cones and a prover's "
+                "acceptance probability; the link window and a link-window.\n"
                 "Block-scaled FP8, blockwise scales, a scale block; in production, two productions.\n"
                 'The `link-window` key, a quoted "production", a reproduction and a scale group stay.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "coin server"), ("a.md", 1, "coin source"), ("a.md", 2, "coin devices"),
         ("a.md", 2, "randomness source"), ("a.md", 2, "salted leaves"), ("a.md", 2, "salted commitment"),
-        ("a.md", 3, "miss probability"), ("a.md", 3, "detection probabilities"), ("a.md", 3, "link window"),
+        ("a.md", 3, "Acceptance probability $\\bar P_a"), ("a.md", 3, "design's acceptance probabilities"),
+        ("a.md", 3, "egress cones"), ("a.md", 3, "link window"),
         ("a.md", 3, "link-window"), ("a.md", 4, "Block-scaled"), ("a.md", 4, "blockwise"), ("a.md", 4, "scale block"),
         ("a.md", 4, "production"), ("a.md", 4, "productions")]
 

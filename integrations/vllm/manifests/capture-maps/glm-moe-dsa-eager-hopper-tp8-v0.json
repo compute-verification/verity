@@ -265,14 +265,14 @@
    "status": "exists",
    "definitions": [
     "RMSNormCudaVector8_v1",
-    "RMSNormFusedCudaVector8_v1",
+    "RMSNormFusedCudaVector8_v3",
     "RMSNormCudaVector8_v2",
-    "RMSNormFusedCudaVector8_v2"
+    "RMSNormFusedCudaVector8_v4"
    ],
    "captures": [
     "glm53_cuda_rmsnorm_capture"
    ],
-   "note": "vLLM's default non-batch-invariant BF16 rms_norm / fused_add_rms_norm width-8 paths. The Program records BLOCK because M < 256 launches rms_norm at min(N/8,1024) and fused_add_rms_norm at min(N,1024), while M >= 256 launches both at 256; the H200 capture checks M 1,42,43,64,256,2048 at GLM-5.3 N=6144 and DeepSeek-V4-Pro N=7168"
+   "note": "vLLM's default non-batch-invariant BF16 rms_norm / fused_add_rms_norm width-8 paths. The Program records BLOCK because M < 256 launches rms_norm at min(N/8,1024) and fused_add_rms_norm at min(N,1024), while M >= 256 launches both at 256; the H200 capture checks M 1,42,43,64,256,2048 at GLM-5.3 N=6144 and DeepSeek-V4-Pro N=7168. fused_add_rms_norm binds RMSNormFusedCudaVector8_v3 (v1's words, its sum of squares as batches; v4 on bits), which the capture's rows (cuda_rmsnorm_rows.fused_add_rms_norm_rows) compute for both"
   },
   "fused-rope-triton": {
    "status": "port",

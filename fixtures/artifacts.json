@@ -142,6 +142,7 @@
   "art:312ea3d1cf187ff33570c6569c32dfdaa2aed0c21cc615096ff1e15c52231ff7": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z",
   "art:5f469df0920b86cf745da873d833a08666bffce8f055f7e817ac755724e9af2c": "verity/ml/circuits/ops/tests/fixtures/tc-sm120-mxf4-2026-10-01",
   "art:abb6201df38b08720d8251b836f523ed34396391c7977fa2a434f0a84ea86e4c": "benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json",
+  "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "verity/core/protocols/spot/tests/fixtures/form-refusals",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"

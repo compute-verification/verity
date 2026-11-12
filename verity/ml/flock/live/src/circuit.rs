@@ -2417,19 +2417,6 @@ pub struct Stmt {
     pub c0_identity: OnceLock<bool>,
 }
 
-/// Slot type `net`'s circuit, `CscCircuit::from_matrices` of its rows padded to its slot. The rows are lent to the matrices and
-/// taken back, not copied: the CSC reads only the rows' entries and the column count, so a padding row, which is empty, adds
-/// nothing to it.
-fn net_csc(net: &mut IrUnitNet) -> CscCircuit {
-    let k = 1usize << net.unit_log;
-    let lend = |rows: &mut Vec<Vec<usize>>| SparseBinaryMatrix { num_rows: k, num_cols: k, rows: Arc::new(std::mem::take(rows)) };
-    let (a, b) = (lend(&mut net.a), lend(&mut net.b));
-    let circ = CscCircuit::from_matrices(&a, &b);
-    net.a = Arc::try_unwrap(a.rows).expect("the lent rows have one holder");
-    net.b = Arc::try_unwrap(b.rows).expect("the lent rows have one holder");
-    circ
-}
-
 /// The strongly connected components of the per-VU slot graph (`(net, slot)`, an edge from each wire's source slot to its
 /// destination slot, the rows' circuits left out), sources first, each as its levels.
 fn slot_components(c: &Composite, wires: &[&Wire]) -> Vec<Vec<Vec<(usize, usize)>>> {
@@ -2765,7 +2752,7 @@ impl StmtCache {
 }
 
 impl Stmt {
-    pub fn new(mut c: Composite, n: usize, identity: Value) -> Result<Self, String> {
+    pub fn new(c: Composite, n: usize, identity: Value) -> Result<Self, String> {
         let blocks_real = n.div_ceil(c.g);
         let nbl = log2ceil(blocks_real.max(1)).max(3);
         shape_in_range(c.k_log + nbl, PT_LOCAL + nbl)?;
@@ -2778,26 +2765,21 @@ impl Stmt {
         // a typed template's generated read layouts, by circuit: their slot types' table-direct B side
         let reads: BTreeMap<usize, TableSide> = c.typed.as_ref().map(|t| t.parts.iter().zip(&t.inst.parts)
             .filter_map(|(&(net, _), &(j, _))| t.inst.reads.get(&j).map(|ln| (net, TableSide::of(ln)))).collect()).unwrap_or_default();
-        for ri in 0..c.ranges.len() {
-            let r = c.ranges[ri].clone();
+        for r in &c.ranges {
             let key = format!("{:?}", r.kind);
-            let t = match type_of.get(&key) {
-                Some(&t) => t,
-                None => {
-                    let circ = match r.kind {
-                        Kind::Net(i) => net_csc(&mut c.nets[i].1),
-                        Kind::Mask => {
-                            let k = 1usize << r.slot_log;
-                            let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
-                            CscCircuit::from_matrices(&id, &id)
-                        }
-                    };
-                    types.push((r.slot_log, circ));
-                    tables.push(match r.kind { Kind::Net(i) => reads.get(&i).cloned(), Kind::Mask => None });
-                    type_of.insert(key, types.len() - 1);
-                    types.len() - 1
-                }
-            };
+            let t = *type_of.entry(key).or_insert_with(|| {
+                let circ = match r.kind {
+                    Kind::Net(i) => c.nets[i].1.csc(),
+                    Kind::Mask => {
+                        let k = 1usize << r.slot_log;
+                        let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
+                        CscCircuit::from_matrices(&id, &id)
+                    }
+                };
+                types.push((r.slot_log, circ));
+                tables.push(match r.kind { Kind::Net(i) => reads.get(&i).cloned(), Kind::Mask => None });
+                types.len() - 1
+            });
             ranges.push((t, r.pos0, r.count));
         }
         let regions = Self::regions(&c)?;
@@ -3660,10 +3642,12 @@ mod tests {
         let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
         let uw = 1usize << (net.unit_log - 7);
         // an assertion row (its own column in A, B the constant) that fails: z is not a & b there
+        use crate::ir_block::RowWrite;
         let mut bad = net.clone();
-        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a[i].is_empty() && !bad.b[i].is_empty()).unwrap();
-        bad.b[i] = vec![bad.const_pos];
-        bad.a[i].push(i);
+        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a.row(i).is_empty() && !bad.b.row(i).is_empty()).unwrap();
+        bad.b = bad.b.with_row(i, &[bad.const_pos]);
+        let row: Vec<usize> = bad.a.row_cols(i).chain([i]).collect();
+        bad.a = bad.a.with_row(i, &row);
         for (net, slots, wide) in [(&net, 100, false), (&net, 64, false), (&net, 130, true), (&bad, 100, true)] {
             let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| match (w, wide) {
                 (0, false) => F128::new(r() & ((1 << n) - 1), 0),
@@ -3838,7 +3822,7 @@ mod tests {
         let eq: Vec<F128> = (0..n).map(|_| { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) }).collect();
         let mut want = vec![F128::ZERO; n];
         for r in ln.prod0()..ln.prod0() + (ln.k << 5) {
-            for &c in &net.b[r] {
+            for c in net.b.row_cols(r) {
                 want[c] += eq[r];
             }
         }
@@ -3864,10 +3848,7 @@ mod tests {
             }
             let k = 1usize << r.slot_log;
             let (a, b) = match r.kind {
-                Kind::Net(i) => {
-                    let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                    (pad(&c.nets[i].1.a), pad(&c.nets[i].1.b))
-                }
+                Kind::Net(i) => c.nets[i].1.padded(k),
                 Kind::Mask => {
                     let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
                     (id.clone(), id)
@@ -3973,30 +3954,16 @@ mod tests {
         }
     }
 
-    /// A slot type's circuit from its rows as they are is the one from its rows padded to its slot with empty rows, and the
-    /// rows come back unchanged.
+    /// A slot type's circuit from its rows in place is the one from its rows padded to its slot with empty rows.
     #[test]
-    fn net_csc_is_the_padded_rows_circuit() {
-        let mut s = 11u64;
-        let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
+    fn slot_csc_is_the_padded_rows_circuit() {
         let mut padded = 0;
         for (name, c) in test_circuits() {
             for (nm, net) in &c.nets {
                 let k = 1usize << net.unit_log;
                 padded += usize::from(net.a.len() < k || net.b.len() < k);
-                let pad = |rows: &Vec<Vec<usize>>| {
-                    let mut x = rows.clone();
-                    x.resize(k, Vec::new());
-                    SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() }
-                };
-                let want = CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b));
-                let mut lent = net.clone();
-                let got = net_csc(&mut lent);
-                assert!(lent.a == net.a && lent.b == net.b, "{name} {nm}: the rows changed");
-                let alpha = rnd();
-                let eq: Vec<F128> = (0..k).map(|_| rnd()).collect();
-                assert_eq!(format!("{} {:?}", got.n_cols(), got.fold_alpha_batched(alpha, &eq)),
-                           format!("{} {:?}", want.n_cols(), want.fold_alpha_batched(alpha, &eq)), "{name} {nm}");
+                let (a, b) = net.padded(k);
+                assert!(net.csc() == CscCircuit::from_matrices(&a, &b), "{name} {nm}");
             }
         }
         assert!(padded > 0, "no slot type with a padding row to leave out");

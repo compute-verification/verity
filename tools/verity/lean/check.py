@@ -1010,6 +1010,25 @@ def record_scope(policy: dict) -> list[str]:
     return list(dict.fromkeys([*meaning, *sorted(extra)]))
 
 
+def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
+    """The lock slice `Facts.lean` reads (`facts_of`'s config, less the scratch paths it writes to): the roots, the record's
+    scope, the allowed axioms, the guarantee names, the spec, the premises and listed assumptions, the verifier's entries,
+    the moves and the honest witnesses. The facts are a function of this and the `.olean` files, so `facts_key` hashes it."""
+    premises = (policy.get("shape") or {}).get("premises")
+    inline = (policy.get("shape") or {}).get("inline")
+    texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
+    asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
+    return {"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
+            "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
+            "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+            "spec": spec_of(policy),
+            "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
+            "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
+            "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
+            "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
+            "honest": honest_witnesses(policy)}
+
+
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None, keep: bool = True,
              sealed: "Sealed | None" = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
@@ -1029,22 +1048,10 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     kept, config = work / FACTS, work / "facts-config.json"
     for p in (kept, work / "facts.json", work / "canon.jsonl"):
         p.unlink(missing_ok=True)
-    premises = (policy.get("shape") or {}).get("premises")
-    inline = (policy.get("shape") or {}).get("inline")
-    texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
-    asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
     hashes, renamed_as, lifts = {}, {}, {}
     with tempfile.TemporaryDirectory(prefix="lean-facts-", dir=SCRATCH) as scratch:
         out, canon = Path(scratch) / "facts.json", Path(scratch) / "canon.jsonl"
-        config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                      "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
-                                      "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
-                                      "spec": spec_of(policy),
-                                      "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
-                                      "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
-                                      "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
-                                      "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
-                                      "honest": honest_witnesses(policy), "out": str(out), "canon": str(canon)}))
+        config.write_text(json.dumps(facts_config(policy, moved) | {"out": str(out), "canon": str(canon)}))
         prefix = sealed.env() if sealed else ["lake", "env"]
         rc, text = run([*prefix, facts_program(pkg), str(config)], pkg, work / "facts.log")
         if rc or not out.exists():
@@ -1089,8 +1096,9 @@ def stored_facts(path: Path) -> dict:
 
 
 #: the facts fields `facts_document` drops: the absolute `.olean` paths and the source positions, which a path move or a
-#: blank line above a proof changes but no lock check reads, so two builds of the same declarations give one document
-POSITIONAL = ("oleans", "spans")
+#: blank line above a proof changes but no lock check reads, so two builds of the same declarations give one document; and
+#: `proved_keys` (`proved`), which names the provers' build for `facts_key` and so changes on a prover's proof-only edit
+POSITIONAL = ("oleans", "spans", "proved_keys")
 
 
 def facts_document(facts: dict, files: dict[str, str], findings: dict, toolchain: str) -> dict:
@@ -1107,11 +1115,24 @@ def facts_document(facts: dict, files: dict[str, str], findings: dict, toolchain
             "findings": findings}
 
 
+def facts_bytes(doc: dict) -> bytes:
+    """``doc`` (`facts_document`) gzipped with no timestamp and canonical keys: equal documents are equal bytes, so the
+    graph's cutoff skips stage B when a proof edit leaves the facts unchanged."""
+    return gzip.compress(json.dumps(doc, sort_keys=True, ensure_ascii=False).encode(), compresslevel=1, mtime=0)
+
+
 def write_facts_document(path: Path, doc: dict) -> None:
-    """Write ``doc`` (`facts_document`) to ``path``, gzipped with no timestamp and canonical keys: equal documents are
-    equal bytes, so the graph's cutoff skips stage B when a proof edit leaves the facts unchanged."""
+    """Write ``doc`` (`facts_document`) to ``path`` as `facts_bytes`."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(gzip.compress(json.dumps(doc, sort_keys=True, ensure_ascii=False).encode(), compresslevel=1, mtime=0))
+    path.write_bytes(facts_bytes(doc))
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    """Write ``data`` to ``path`` whole or not at all, as `store_replay` does: a temporary file beside it, named for the
+    process and thread (the packages of one audit store in threads of one process), renamed over it (`os.replace`)."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
 
 
 def read_facts_document(path: Path) -> dict:
@@ -1125,6 +1146,50 @@ def read_facts_document(path: Path) -> dict:
     if doc.get("schema") != FACTS_SCHEMA:
         raise RuntimeError(f"the facts document {p} is {doc.get('schema')!r}, not {FACTS_SCHEMA}; rebuild its facts "
                            f"(`check.py --facts-only`)")
+    return doc
+
+
+def store_cached_facts(cache: Path, key: str, doc: dict) -> Path:
+    """Store ``doc`` (`facts_document`) in the facts cache ``cache`` under its content address ``key`` (`facts_key`): the
+    canonical, position-free document at `<key>.json.gz` (`facts_bytes`, the bytes `--facts-only` writes, so the graph's
+    content cutoff is unchanged: the key is never in the body), then a sidecar `<key>.json` recording the schema, the key
+    and the SHA-256 of those bytes.  Each is written whole or not at all (`write_atomic`), the sidecar last, so a crash
+    leaves a document without its sidecar, which `read_cached_facts` takes as a miss.  Returns the document's path."""
+    cache.mkdir(parents=True, exist_ok=True)
+    doc_path, data = cache / f"{key}.json.gz", facts_bytes(doc)
+    write_atomic(doc_path, data)
+    write_atomic(cache / f"{key}.json", json.dumps({"schema": FACTS_SCHEMA, "key": key,
+                                                    "sha256": hashlib.sha256(data).hexdigest()}, sort_keys=True).encode())
+    return doc_path
+
+
+def read_cached_facts(cache: Path, key: str) -> dict | None:
+    """The facts document in ``cache`` under ``key`` (`store_cached_facts`), looked up only by that content address: the
+    `facts_key` the caller recomputes from the current tree, never a caller's path.  None, a miss and never a hit, when the
+    document or its sidecar is absent, as a crash between the two writes leaves it.  Raises RuntimeError, refusing a
+    tampered or stale document under the right key name rather than judging it, when the sidecar can't be read, its schema
+    is not `FACTS_SCHEMA`, its recorded key is not ``key`` (a stale or misfiled document records another build's), or the
+    document's bytes don't hash to its SHA-256 (a tampered one).  The bytes are read once, then hashed and decoded."""
+    doc_path, side = cache / f"{key}.json.gz", cache / f"{key}.json"
+    if not doc_path.is_file() or not side.is_file():
+        return None
+    try:
+        meta = json.loads(side.read_text())
+    except (OSError, ValueError) as e:
+        raise RuntimeError(f"the facts sidecar {side} can't be read ({e!r}); the document is refused")
+    if not isinstance(meta, dict):
+        raise RuntimeError(f"the facts sidecar {side} is not an object; the document is refused")
+    if meta.get("schema") != FACTS_SCHEMA:
+        raise RuntimeError(f"the facts document {doc_path} is {meta.get('schema')!r}, not {FACTS_SCHEMA}; refused")
+    if meta.get("key") != key:
+        raise RuntimeError(f"the facts document under {doc_path.name} records key {meta.get('key')!r}, not {key}: stale or "
+                           f"misfiled, refused")
+    data = doc_path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != meta.get("sha256"):
+        raise RuntimeError(f"the facts document {doc_path} does not match its recorded SHA-256: tampered, refused")
+    doc = json.loads(gzip.decompress(data))
+    if doc.get("schema") != FACTS_SCHEMA:
+        raise RuntimeError(f"the facts document {doc_path} is {doc.get('schema')!r}, not {FACTS_SCHEMA}; refused")
     return doc
 
 
@@ -3683,15 +3748,19 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
 
 
 def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, str] | None = None,
-           ready=lambda q: None, keep: bool = True, seals: "Seals | None" = None) -> tuple[list[str], dict, dict[str, list[str]]]:
+           ready=lambda q: None, keep: bool = True, seals: "Seals | None" = None,
+           keys: bool = False) -> tuple[list[str], dict, dict[str, list[str]]]:
     """(failures, ``facts`` with each guarantee's facts taken from the package that proves it, {package: the guarantees it
     proves}) for a policy whose `proved_in` names the packages that prove its guarantees. Each must require ``pkg`` by path
     and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended, False when it did not
     pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
-    guarantees proved in ``pkg``; with ``keep``, its document is kept under `proved-in-*/` (`facts_of`). Raises
-    RuntimeError when a package's build did not pass or its facts cannot be read.  With ``seals`` (the run's seals) a
-    prover's facts are read from the copies taken at its own seal, which its build announced before this one reads it."""
+    guarantees proved in ``pkg``; with ``keep``, its document is kept under `proved-in-*/` (`facts_of`). With ``keys``, the
+    facts carry `proved_keys` (each prover's own modules' `replay_keys`, folded) for `facts_key`, which stage A computes
+    and a normal audit does not. Raises RuntimeError when a package's build did not pass or its facts cannot be read.
+    With ``seals`` (the run's seals) a prover's facts are read from the copies taken at its own seal, which its build
+    announced before this one reads it."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
+    proved_keys: list[list[str]] = []
     if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
         fails.append(Failure("proved_in.form", None, "proved_in: a list of paths, each relative to this package"))
     for entry, q in provers(pkg, policy) if isinstance(named, list) else []:
@@ -3751,6 +3820,10 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         fails += unreported(qf, f"{entry}'s ") + dropped(q, files, qf, f"{entry}'s ")
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
+        if keys:
+            qkeys = replay_keys(qf, (q / "lean-toolchain").read_text().strip())
+            proved_keys.append([entry, hashlib.sha256(
+                "".join(f"{m}\0{qkeys[m]}\n" for m in sorted(qf["modules"])).encode()).hexdigest()])
     pins, more, by = assign(policy.get("guarantees", {}), sources)
     own = sorted(set().union(*(own_modules(f) for _, f, _ in sources)))
     walked = {}
@@ -3760,7 +3833,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
     tables = [f.get("constants") for _, f, _ in sources]
     constants = None if None in tables else {c: e for t in tables for c, e in t.items()}
     return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts, "own_modules": own,
-                                  "assumption_reads": walked, "constants": constants}, by
+                                  "assumption_reads": walked, "constants": constants} | (
+                                      {"proved_keys": sorted(proved_keys)} if keys else {}), by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
@@ -4372,6 +4446,41 @@ def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
     return keys
 
 
+#: the lock sections the stored findings read that `facts_config` leaves out, so `facts_key` folds them: `compile_time`
+#: (`scans`, `listings`), `dependency_unchecked` (`dependency_scans`) and `upstream` (the upstream finding). The judge
+#: re-reads `guarantees`, `reads` and `dependencies` from the live lock in stage B, so those stay out of the key.
+FINDINGS_SECTIONS = ("compile_time", "dependency_unchecked", "upstream")
+
+
+def facts_key(facts: dict, policy: dict, toolchain: str, pkg: Path, files: dict[str, str],
+              moved: dict[str, str] | None = None) -> str:
+    """The content address of a package's stage-A facts document (`--facts-only`): a SHA-256 over `FACTS_SCHEMA`, the
+    toolchain, `Facts.lean`, the lock slice `facts_of` feeds `Facts.lean` (`facts_config`), the `replay_keys` of the
+    package's own modules, each of which folds its `.olean` files and its imports', the SHA-256 of every source file the
+    document records (``files``, {module: path}) and of the lakefile, which the source scans (`scans`, `heartbeats`,
+    `dropped`, `anonymous_instances`, `listings`) read and whose findings the document carries, and the lock sections
+    those findings read that `facts_config` omits (`FINDINGS_SECTIONS`). So the key names exactly the build the facts were
+    read from and the sources and lock the findings were taken from: a source edit the scans read (a `set_option
+    maxHeartbeats`, an `unchecked` option) or a change to one of those lock sections changes the key even when the `.olean`
+    bytes do not. The toolchain (`lean-toolchain`'s text) is already a factor; the dependency digests the findings carry
+    are a function of the imported `.olean` files, which the `replay_keys` already fold. A `proved_in` package also folds
+    each prover's own modules' key (`proved_keys`, left on ``facts`` by `proved`), since its facts take each guarantee from
+    the prover that proves it, and the prover is not in its graph."""
+    keys = replay_keys(facts, toolchain)
+    srcs = {rel: sha256(pkg / rel) for rel in files.values()}
+    srcs |= {f: sha256(pkg / f) for f in ("lakefile.toml", "lakefile.lean") if (pkg / f).is_file()}
+    h = hashlib.sha256(f"{FACTS_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Facts.lean')}\0".encode())
+    h.update((json.dumps(facts_config(policy, moved), sort_keys=True) + "\0").encode())
+    h.update((json.dumps({s: policy.get(s, {}) for s in FINDINGS_SECTIONS}, sort_keys=True) + "\0").encode())
+    for rel, digest in sorted(srcs.items()):
+        h.update(f"src:{rel}\0{digest}\n".encode())
+    for m in sorted(facts["modules"]):
+        h.update(f"{m}\0{keys[m]}\n".encode())
+    for entry, digest in sorted(facts.get("proved_keys", [])):
+        h.update(f"proved:{entry}\0{digest}\n".encode())
+    return h.hexdigest()
+
+
 def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
     """(the dependency modules to check, those to add unchecked) for the replay of the import closure: each module of the
     closure outside the package's own (``facts``' `graph` less its `modules`) that has not ``passed``, and every one that
@@ -4892,7 +5001,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
-          store: bool | None = None) -> dict:
+          store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -4921,8 +5030,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     on every failure those checks don't make (the build, the replay, the scans, the tests), else its report names the lock
     (`regenerated`) and its repairs (`bookkeeping`, `bookkeeping_warnings`).  ``facts_out`` writes the stage-A facts
     document there (`facts_document`, `write_facts_document`): the facts and the source and dependency findings a later
-    `--facts-from` (`audit_from_facts`) judges from, so the two give the same verdict and record (`--facts-only` drives
-    this with the replay and the tests off)."""
+    `--facts-from` (`audit_from_facts`) judges from, so the two give the same verdict and record.  ``facts_cache`` (a
+    directory, `--facts-only` with the replay and the tests off) writes it instead under its content address
+    (`facts_key`), so the lock run and the records step of one landing share the one document; the report's `facts_key`
+    and `facts_document` name it (the caller drops it on a tamper).  With ``facts_reuse`` (`--facts-cache`, a judging
+    audit) it is stored with its sidecar (`store_cached_facts`), which `read_cached_facts` checks on a reuse; without it
+    (`--facts-only`, the graph's stage A) the document alone is written, so stage A's output stays the bytes the graph's
+    content cutoff compares."""
     rep, policy, work = _open(pkg, out)
     if policy is None:
         return reported(rep)
@@ -5039,7 +5153,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         if "proved_in" in policy:
             p = time.monotonic()
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover,
-                                                    keep=kept_facts == "all", seals=seals)
+                                                    keep=kept_facts == "all", seals=seals, keys=facts_cache is not None)
             rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
@@ -5139,6 +5253,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails += lfails
     if update and listed:
         new["compile_time"] = listed
+    if facts_cache is not None:
+        rep["facts_key"] = facts_key(facts, current, rep["toolchain"], pkg, files, moved)
+        facts_out = facts_cache / f"{rep['facts_key']}.json.gz"
+        rep["facts_document"] = str(facts_out)
     if facts_out is not None:
         findings = {"cross": failures_json(cross), "scans": failures_json(scn), "dropped": failures_json(drp),
                     "dependency_scans": {"missed": failures_json(dep_missed), "read": rep["dependency_sources"]},
@@ -5147,7 +5265,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                                  "compile_time": listed, "notes": lnotes}}
         if "upstream" in policy:
             findings["upstream"] = {"pinned": rep.get("upstream", {}), "missed": up_missed}
-        write_facts_document(Path(facts_out), facts_document(facts, files, findings, rep["toolchain"]))
+        doc = facts_document(facts, files, findings, rep["toolchain"])
+        if facts_cache is not None and facts_reuse:
+            store_cached_facts(facts_cache, rep["facts_key"], doc)
+        else:
+            write_facts_document(Path(facts_out), doc)
     return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log)
 
 
@@ -5466,6 +5588,16 @@ def main(argv: list[str]) -> int:
                     "(`audit-<tag>/facts-doc.json.gz` under DIR, or a single document file) instead of building: the lock "
                     "checks and the stored source and dependency findings, no build, no kernel replay, no tests "
                     "(`audit_from_facts`).  Its verdict and, with --update, its record are a full audit's")
+    ap.add_argument("--facts-only", type=Path, metavar="DIR", help="stage A: read each named package's facts (build it with "
+                    "--build, as drive does, for a fresh sealed build) and write its facts document, keyed by that build "
+                    "(`facts_key`), into DIR, so `--facts-from DIR` judges from it with no build.  It does not record, "
+                    "replay or run tests; it passes once it has written each document (a lock failure is `--facts-from`'s "
+                    "to report)")
+    ap.add_argument("--facts-cache", type=Path, metavar="DIR", help="while judging each named package as usual, also store "
+                    "its sealed facts document into DIR, keyed by that build (`facts_key`), with a sidecar `<facts_key>.json` "
+                    "so a later reuse looks the document up by the key the current tree computes and refuses a tampered or "
+                    "stale one.  lean_changed's records step passes it so drive's lock run reuses the facts the records run "
+                    "already read, rather than recomputing them")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
@@ -5478,6 +5610,17 @@ def main(argv: list[str]) -> int:
                                      or a.replay_cache or a.artifacts or a.dev_cache):
         ap.error("--facts-from judges from a stored facts document: name packages, and not with --all, --build, --lift, "
                  "--name-instances, --fresh, --closure, --replay-cache, --artifacts or --dev-cache (the build's flags)")
+    if a.facts_only is not None:
+        if a.facts_from is not None:
+            ap.error("--facts-only writes a facts document and --facts-from judges from one: give one, not both")
+        if a.update or a.lift or a.name_instances or a.regenerate or a.moved or a.fresh or a.closure \
+                or a.replay_cache or a.dev_cache:
+            ap.error("--facts-only writes the facts, it does not record, judge or replay: not with --update, --lift, "
+                     "--name-instances, --regenerate, --moved, --fresh, --closure, --replay-cache or --dev-cache "
+                     "(`--facts-from` judges, with --update it records)")
+    if a.facts_cache is not None and (a.facts_only is not None or a.facts_from is not None):
+        ap.error("--facts-cache stores the document while judging the build; --facts-only writes it without judging and "
+                 "--facts-from judges from a stored one: give one, not a combination")
     due = (datetime.date.today() + datetime.timedelta(days=BOOKKEEPING_DAYS)).isoformat() if a.bookkeeping else None
     moved = None
     if a.moved:
@@ -5568,13 +5711,17 @@ def main(argv: list[str]) -> int:
                 rep = audit_from_facts(pkg, out, a.facts_from, a.update and mine, a.owner, a.repo.resolve(),
                                        moved if mine else None, due, log=print)
             else:
-                rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh,
-                            built=lambda: (passed.add(pkg), seal(pkg)), runs=not a.no_runs, repo=a.repo.resolve(),
+                rep = audit(pkg, out, a.build, a.update and mine, (not a.no_replay) and a.facts_only is None, a.fresh,
+                            built=lambda: (passed.add(pkg), seal(pkg)),
+                            runs=(not a.no_runs) and a.facts_only is None, repo=a.repo.resolve(),
                             moved=moved if mine else None,
                             ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                             name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                             closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
-                            bookkeeping=due, seals=run_seals)
+                            bookkeeping=due, seals=run_seals,
+                            facts_cache=(a.facts_only or a.facts_cache).resolve()
+                            if (a.facts_only or a.facts_cache) and mine else None,
+                            facts_reuse=a.facts_cache is not None)
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
@@ -5584,6 +5731,9 @@ def main(argv: list[str]) -> int:
                 rep["failures"] += tamper
                 if regen := rep.pop("regenerated", None):
                     Path(regen).unlink(missing_ok=True)
+                if doc := rep.get("facts_document"):     # the seal didn't hold: the stored facts may not be this build's;
+                    Path(doc).with_name(Path(doc).name.removesuffix(".json.gz") + ".json").unlink(missing_ok=True)
+                    Path(doc).unlink(missing_ok=True)    # the sidecar first, so a crash between leaves a miss
             if a.regenerate and rep.get("regenerated") and rep["failures"]:
                 rep["settled"], rep["failures"] = rep["failures"], []
             reports[pkg] = reported(rep)
@@ -5641,7 +5791,12 @@ def main(argv: list[str]) -> int:
         moved.write_text(json.dumps(reports[0]["moved"], indent=1) + "\n")
         print(f"audit: lifted {len(lifts)} guarantees; build, then `check.py --update --moved {moved} {pkgs[0]}` certifies each "
               f"lift as the same statement or prints the change", flush=True)
-    failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
+    if a.facts_only is not None:                        # stage A passes once it has written each named document; the lock
+        failed = by_controls + [r["package"] for r in reports  # verdict is `--facts-from`'s, not this run's
+                                if Path(r["package"]) in named and not (r.get("facts_document")
+                                                                        and Path(r["facts_document"]).is_file())]
+    else:
+        failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: guarantees, the definitions they read, or listed compile-time code changed in "
               f"{', '.join(changed)}: say so in the PR; the landing message shows the changes above (review.txt in "

@@ -29,6 +29,9 @@ SIDECARS = f"{SOURCE}/sidecars.py"
 SUFFIX = ".circuit-check"
 CATALOG = "circuit-catalog:records"
 RECORDS = {"name": "records", "path": "out/circuit-records.tar.gz"}
+#: the catalog task's slot, the large one (`check.tasks`' LEAN_SLOT, less its disk): every binding task waits on it, and its
+#: builds run as many at once as the memory their heaviest hold leaves room for
+CATALOG_SLOT = {"cores": 32, "mem_gb": 128, "disk_gb": 8}
 #: the directory of the catalog task's slices, and the part every binding's run shares
 SLICES = "out/slices"
 SHARED = {"name": "shared", "path": f"{SLICES}/shared.json"}
@@ -134,7 +137,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
     shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners import the binding runner
     return [{"id": CATALOG, "kind": "circuit-catalog", "about": "build every circuit-check catalog binding's record and slice",
              "inputs": shared, "outputs": [RECORDS, SHARED, *(slice_of(name) for name in found)],
-             "resources": {"cores": 16, "mem_gb": 64, "disk_gb": 8}},
+             "resources": CATALOG_SLOT},
             {"id": "circuit-coverage:catalog", "kind": "circuit-coverage", "inputs": shared, "reads": reads,
              "resources": {"cores": 1, "mem_gb": 16, "disk_gb": 2},
              "about": "the circuit-check catalog's bindings are the circuit-binding tasks'",

@@ -86,14 +86,19 @@ def check(B: Any, ids: Coll, config: Mapping[str, Any]) -> tuple[Coll, str]:
     description: (the bit, what it checks), the form `with_checks` and `derive.Ctx.check` take."""
     if not (isinstance(ids.type, Array) and ids.type.n >= 1 and ids.type.elem == Value(32)):
         raise ValueError(f"the stop rule reads a request's outputs, an Array of at least one i32, not {ids.type}")
+    fn, s = definition(ids.type.n, config)
+    return B.call(fn, ids, name=NAME), what(s)
+
+
+def definition(n: int, config: Mapping[str, Any]) -> tuple[Any, dict]:
+    """The rule's Call over a Program's n outputs (`check`'s): (`StopCheck_v1` bound, the config `spec` makes)."""
     if sorted(config) != sorted(KEYS):
         raise ValueError(f"the stop rule's config has the keys {sorted(config)}, not {list(KEYS)}")
     s = spec(config["stops"], **{k: config[k] for k in KEYS[1:]})
-    if (before := s["outputs"] - ids.type.n) < 0:
-        raise ValueError(f"the Program returns {ids.type.n} outputs, and its request has {s['outputs']} through its last")
-    fn = bind(SC.StopCheck, T=ids.type.n, STOP=tuple(s["stops"]), MAX_TOKENS=s["max_tokens"] - before,
-              PROMPT_LEN=s["prompt_len"] + before, MAX_MODEL_LEN=s["max_model_len"], FINISH=s["finish"])
-    return B.call(fn, ids, name=NAME), what(s)
+    if (before := s["outputs"] - n) < 0:
+        raise ValueError(f"the Program returns {n} outputs, and its request has {s['outputs']} through its last")
+    return bind(SC.StopCheck, T=n, STOP=tuple(s["stops"]), MAX_TOKENS=s["max_tokens"] - before, PROMPT_LEN=s["prompt_len"] + before,
+                MAX_MODEL_LEN=s["max_model_len"], FINISH=s["finish"]), s
 
 
 def in_derive(ctx: Any, outs: Sequence[Coll], at: Any) -> None:

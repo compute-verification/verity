@@ -10,8 +10,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Pous.EndToEnd
 import Proofs.Pous.Obligation
 import Proofs.Pous.P2.Rounds

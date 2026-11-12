@@ -7,8 +7,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Data.Fintype.BigOperators
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Exfiltration, at most what is delivered

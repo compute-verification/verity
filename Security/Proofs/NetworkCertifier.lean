@@ -4,6 +4,7 @@ public import Definitions.NetworkCertifier.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Pooled
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -28,6 +29,8 @@ public import Proofs.NetworkCertifier.Accepted
 public import Proofs.NetworkCertifier.Tap
 public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
+public import Proofs.NetworkCertifier.Checked
+public import Proofs.NetworkCertifier.WitnessesChecked
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -81,7 +84,8 @@ check accepts is a run of the constant-rate Program under the declared advice, s
 `SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
 `TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_certifier`): an accepted audit's extracted
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
-network certifier's; `Period` counts with it.
+network certifier's; `Period` counts with it. `Checked` proves the leak bounds with checked inputs (`SampledLeakChecked`,
+`PooledLeakChecked`): inputs a check pins cost no advice bits, and `WitnessesChecked` gives their nontrivial lemmas.
 -/
 
 @[expose] public section
@@ -154,5 +158,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
+theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTiming.sampledLeakChecked
+theorem PooledLeakChecked : NetTiming.Guarantees.PooledLeakChecked := NetTiming.pooledLeakChecked
 
 end NetTiming.SecurityProofs

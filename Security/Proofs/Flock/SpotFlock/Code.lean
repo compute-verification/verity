@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Sampling.Reg
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.ZkDecodeFlock
 public import Definitions.Claims.SamplingTwo
+public import Properties.Spot.Members
 
 /-!
 # SPOT[Flock]'s two-stage verifier
@@ -15,12 +16,15 @@ registration's roots (`iroots`). This is the deployment layer: the compiler's th
 these definitions from the premises it names, and nothing here imports a proof. A running verifier is this one only
 where it makes every check below.
 
-**The auditor's copies** (`Held`), fixed before the run and never the prover's: the registration's program (its
-descriptor's bytes and gates), the statement's partition query, the two-stage registration the samples read (`RegTwo`)
-and its proof-block query, the second stage's count per stratum, the registered reads the session must open against at
-a run's roots and interior roots (`registered`), the reference session statement (`xS₀`), in Flock's masked scope,
-which every session's statement is but for its sample and its registered reads, and the commitment's layout and the
-reference prover's framing (`frame`, a code whose verifier and samples are unread).
+**The auditor's copies** (`Held`), fixed before the run and never the prover's: the descriptor's bytes; the templates'
+circuit files and units (`ms`), whose lowerings side by side are the statement's program (`bitsProgs`) and whose units
+are its proof blocks (`membersPart`); the statement's partition query; the two-stage registration the samples read
+(`RegTwo`), whose proof block `blockOf ρ t p` the verifier checks is request `ρ`'s unit `p` of template `t`
+(`filesBlockOf`); the second
+stage's count per stratum; the registered reads the session must open against at a run's roots and interior roots
+(`registered`); the reference session statement (`xS₀`), in Flock's masked scope, which every session's statement is
+but for its sample and its registered reads; and the commitment's layout and the reference prover's framing (`frame`,
+a code whose verifier and samples are unread).
 
 **The run's statement** (`Roots`): the roots the boundary values are committed under, as canonical bytes
 (`Roots.encode`, read back by `decode`, which keeps only bytes that encode back to themselves).
@@ -38,10 +42,12 @@ reference prover's framing (`frame`, a code whose verifier and samples are unrea
   field (`pinOk`); it refuses `xS` otherwise;
 * rounds 3 on: Flock's masked verifier at `xS`, message for message, whose decision is the run's.
 
-The design evaluates (`two`) only where the verifier decides the two-stage scope (`scopeOk`: the program ordered, the
+The design's replay partition is the members' (`filesReplay`: each request's units of every template together), and
+it evaluates (`two`) only where the verifier decides the two-stage scope (`scopeOk`: the program ordered, the
 proof-block partition a partition of it, each proof block in one replay block and the design well formed) and that the
-replay layout's slots are the second stage's cells (`cellsOk`); every check is a decision, so the verifier refuses every
-statement out of scope.
+replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
+each member has room for its units, and the registration's blocks are theirs); every check is a decision, so the
+verifier refuses every statement out of scope.
 
 So every checked unit has the one session (`sessions = 1`) on rounds 3 on (`session`), and at a run refused before them,
 the session is `xS₀`'s run of a prover whose first message Flock refuses (`refusedSeen`). The coins are the verifier's own
@@ -67,17 +73,16 @@ def zkOk (xS : Msg) : Bool :=
       sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
   | none => false
 
-/-- **A two-stage registration's copies, as the auditor holds them**: the program's descriptor (`desc`) and gates
-(`prog`), the statement's partition query (`query`), the two-stage registration (`reg`) and the proof-block query its
-interior registration is over (`blockQuery`), the second stage's count per stratum (`k`), the registered reads a session
+/-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), the templates' circuit
+files and units (`ms`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
+stage's count per stratum (`k`), the registered reads a session
 opens against at a run's roots and interior roots (`registered`), the reference session statement (`xS₀`) in Flock's
 masked scope (`xS₀_ok`), and the commitment's layout and the reference prover's framing (`frame`). -/
 structure Held where
   desc : Msg
-  prog : Prog
+  ms : Spot.Bits.Members
   query : Query
   reg : RegTwo
-  blockQuery : Json
   k : List ℕ
   registered : List Msg → List (ℕ × List Msg) → ByteArray
   xS₀ : Msg
@@ -168,19 +173,20 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
     (d.replay.rules.zip d.part.classes).all (fun p => oneStageOk (strataSizes p.2) p.1) &&
     d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
 
-/-- **The replay layout's slots are the second stage's cells**, decided: the registration's templates are `Pt`'s
-strata, each with the design's count; each population slot `ρ` of `l` is unit `ρ`, whose cell of each stratum `t` is
-the `n_t` proof blocks `blockOf ρ t`, distinct; every proof block of an input slot is always checked. -/
-def cellsOk (g : RegTwo) (Pt : Partition) (l : Spot.Slots.Layout) (d : Design.Two) : Bool :=
-  g.ns.size == Pt.strata.length && (List.range Pt.strata.length).all (fun t => d.k.getD t 0 == g.ks.getD t 0) &&
+/-- **The replay layout fits the members' files**, decided: the registration's templates are the members, each with
+the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, each member `t` has room for its `n_t` units,
+`ρ·n_t` to `(ρ + 1)·n_t`, and the registration's block `blockOf ρ t p` is the members' (`filesBlockOf`). One check
+per slot and proof block, none per gate. -/
+def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.Layout) (k : List ℕ) : Bool :=
+  g.ns.size == ms.length && (List.range ms.length).all (fun t => k.getD t 0 == g.ks.getD t 0) &&
     (List.range l.blocks.size).all fun ρ =>
       match l.blocks[ρ]? with
       | some b =>
         match b.unit with
-        | some u => u == ρ && (List.range Pt.strata.length).all fun t =>
-            decide ((List.range (g.ns.getD t 0)).map (g.blockOf ρ t)).Nodup &&
-              decide (cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t))
-        | none => (List.range Pt.blocks.length).all fun v => replayOf Pt d.part v != some ρ || g.always v
+        | some u => u == ρ && (List.range ms.length).all fun t =>
+            decide ((ρ + 1) * g.ns.getD t 0 ≤ ((ms[t]?).map (·.2.size)).getD 0) &&
+              (List.range (g.ns.getD t 0)).all fun p => g.blockOf ρ t p == filesBlockOf ms g.ns ρ t p
+        | none => true
       | none => true
 
 /-- The tables' sizes `m` a session's statement sets up under `--zk`, in order; none where it doesn't set up. -/
@@ -209,27 +215,28 @@ def sessionOk (xS : Msg) : Bool :=
 def replayDesign : Option Design :=
   (slotDesign h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table).toOption
 
-/-- **The statement**: the auditor's program, query and first-stage design, at the run's roots. -/
+/-- **The statement**: the members' programs side by side (`bitsProgs`), the auditor's query and first-stage design,
+at the run's roots. -/
 def parse (x : Msg) : Option AuditStatement :=
   (decode x).map fun st =>
-    { desc := h.desc, prog := h.prog, query := h.query, design := (replayDesign h).getD ⟨[]⟩, roots := st.roots }
+    { desc := h.desc, prog := bitsProgs h.ms, query := h.query, design := (replayDesign h).getD ⟨[]⟩,
+      roots := st.roots }
 
-/-- **The proof-block partition**: the layout of the boundary registration's program under the proof-block query. -/
+/-- **The proof-block partition**: the members' units (`membersPart`), template `t`'s units stratum `t`. -/
 def partition (_ : AuditStatement) : Option Partition :=
-  (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption.map slotPartition
+  some (membersPart h.ms)
 
-/-- **The two-stage design**: the replay partition (the boundary registration's layout), the first stage's design and
-the second stage's counts, where the two-stage scope holds (`scopeOk`) and the replay layout's slots are its cells
-(`cellsOk`). -/
+/-- **The two-stage design**: the members' replay partition over the boundary registration's layout (`filesReplay`),
+the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`) and the layout
+fits the members' files (`filesOk`). -/
 def two (_ : AuditStatement) : Option Design.Two :=
-  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption,
-      (Spot.Slots.layout h.reg.first.program h.blockQuery).toOption, replayDesign h with
-  | some l, some lb, some d =>
-    if scopeOk h.prog (slotPartition lb) ⟨slotPartition l, d, h.k⟩ &&
-        cellsOk h.reg (slotPartition lb) l ⟨slotPartition l, d, h.k⟩ then
-      some ⟨slotPartition l, d, h.k⟩
+  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
+  | some l, some d =>
+    if scopeOk (bitsProgs h.ms) (membersPart h.ms) ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ &&
+        filesOk h.reg h.ms l h.k then
+      some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩
     else none
-  | _, _, _ => none
+  | _, _ => none
 
 /-! ## The run -/
 

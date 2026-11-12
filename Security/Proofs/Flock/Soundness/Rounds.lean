@@ -4,7 +4,7 @@ public import Definitions.Core.Game
 public import Definitions.Flock.Piop
 public import Mathlib.Algebra.Polynomial.Degree.Defs
 public import Mathlib.Algebra.Polynomial.Eval.Defs
-public import Proofs.Flock.Soundness.Game.Poly
+public import Proofs.Core.Game.Poly
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Algebra.Polynomial.Degree.Lemmas
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
@@ -17,7 +17,7 @@ The spec encodes a round's quadratic in three ways (`Flock.Piop`'s Z6 and L3, `F
 the verifier derives a quadratic from the prover's message and the running claim, and the new
 claim is its value at the fresh coin. If the running claim is false, the derived quadratic
 differs from the true one whatever the prover sends, so the new claim is false except with
-probability `2/|F|` (`Game.prCoin_eval_eq_eval_le`). These are the round-by-round lemmas the
+probability `2/|F|` (`Verity.Game.prCoin_eval_eq_eval_le`). These are the round-by-round lemmas the
 zerocheck, lincheck and Ligerito phases of `rep_sound` chain; a Fiat–Shamir proof would reuse
 them unchanged (`DESIGN.md` §8).
 
@@ -96,7 +96,7 @@ theorem residualRound_sound (req claim : F) (hreq : req ≠ 1) (Gt : F[X])
     have := add_self (req * g₁)
     linear_combination -this
   simp_rw [residualStep_eq]
-  exact prCoin_eval_eq_eval_le _ _ hne 2 (residualPoly_natDegree_le _ _ _ _) hGt
+  exact Verity.Game.prCoin_eval_eq_eval_le _ _ hne 2 (residualPoly_natDegree_le _ _ _ _) hGt
 
 /-! ## Rounds that impose `q(0) + q(1) = claim` (L3 and Ligerito) -/
 
@@ -109,7 +109,7 @@ theorem sumRound_sound (claim : F) (P T : F[X]) (hP : P.natDegree ≤ 2) (hT : T
     prCoin (fun t : F => P.eval t = T.eval t) ≤ 2 / Fintype.card F := by
   have hne : P ≠ T := by
     intro h; apply hclaim; rw [← hsum, h]
-  exact prCoin_eval_eq_eval_le P T hne 2 hP hT
+  exact Verity.Game.prCoin_eval_eq_eval_le P T hne 2 hP hT
 
 /-- The lincheck's quadratic from `(q(1), q(∞))` (§10 L3): `q(X) = e₀ + c₁X + q∞X²`, with
 `e₀ = claim + q(1)` and `c₁ = e₀ + q(1) + q(∞)`. -/

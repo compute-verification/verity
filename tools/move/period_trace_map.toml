@@ -1,0 +1,34 @@
+# A period's trace: what `tools/move/rename.py --map tools/move/period_trace_map.toml` renames. The values a node
+# committed for the circuit's gates in a period, at the coins, are its trace (the Glossary's word; "transcript" is a
+# run's messages), so `Accounting.PeriodRun.transcript` becomes `Accounting.PeriodRun.trace`. The bare word is renamed
+# only in the modules that declare, build or read that field, where every `transcript` is that trace; elsewhere
+# `transcript` is another declaration (`Pouw.Adversary.transcript`, `Accounting.PassProvenance.transcript`, the
+# recursion's `Stage.transcript`) and keeps its name. Core's `Verity.Circuit.Transcript`, the field's type, is
+# `glossary_names_map.toml`'s. Declarations keep their place in the locks' records: `rename.py --moves` prints the
+# renames that `check.py --update --moved` takes.
+[words]
+"PeriodRun.transcript" = "PeriodRun.trace"
+
+[[words_in]]
+files = [
+    "Security/Definitions/Accounting/JointPeriod.lean",
+    "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+    "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean",
+    "Security/Proofs/Accounting/JointBridge/HonestH200.lean",
+    "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean",
+    "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean",
+    "Security/Properties/Verity/Idle.lean",
+]
+words = { "transcript" = "trace" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]

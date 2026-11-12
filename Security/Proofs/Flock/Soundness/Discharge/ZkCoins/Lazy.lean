@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkCoins.Weights
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Lazy sampling of committed rounds

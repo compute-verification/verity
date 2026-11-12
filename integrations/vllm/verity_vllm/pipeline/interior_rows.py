@@ -316,7 +316,8 @@ def interior(spans: Sequence[Span], n_rho: int, boundary: str, sample: Sequence[
              previous: str | None = None, kind: str = "served", salt_key: bytes | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s), each padded to ``n_rho`` units, committed
     and registered after ``previous`` (the boundary registration's digest ``boundary`` by default) under the window
-    ``{kind, run, row, interior: true}``: ``row`` the served workload's row, ``replay`` the replay's run when given.
+    ``{kind, run, row, interior: true, replay_sample}``: ``row`` the served workload's row, ``replay_sample`` the replay
+    sample in order (round 2's ``second-interior-order``), ``replay`` the replay's run when given.
     Every leaf's salt is fresh from the OS; ``salt_key``: tests only, the salts derived from it (`ml.windows.rows.commit`)."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
@@ -334,7 +335,8 @@ def interior(spans: Sequence[Span], n_rho: int, boundary: str, sample: Sequence[
     data["refs"] = np.tile(np.arange(window.population, dtype=np.int64)[:, None], (1, len(first.rows)))
     fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
     c = CS.commit(window, [data], salt_key=salt_key, salts_of=fresh)
-    provenance = {"row": row, "interior": True, **({"replay": replay} if replay is not None else {})}
+    provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
+                  **({"replay": replay} if replay is not None else {})}
     rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R)
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
     return Interior(rec, ports, layer, c, [s.entries for s in spans])

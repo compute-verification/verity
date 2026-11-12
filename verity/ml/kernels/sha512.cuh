@@ -287,6 +287,41 @@ SX_HD const u64* kw_pad256() {
 #endif
 }
 
+// the same for a 128-byte message (bit length 1024): a Merkle node's last chunk
+#define SX_KW_PAD128_LIST                                                                                              \
+  0xc28a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull,                          \
+      0x3956c25bf348b538ull, 0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull,                      \
+      0xd807aa98a3030242ull, 0x12835b0145706fbeull, 0x243185be4ee4b28cull, 0x550c7dc3d5ffb4e2ull,                      \
+      0x72be5d74f27b896full, 0x80deb1fe3b1696b1ull, 0x9bdc06a725c71235ull, 0xc19bf174cf692a94ull,                      \
+      0x649b69c19ef14ad2ull, 0xf03e4786384f45f3ull, 0x11c1adc68b8cd5b9ull, 0x240ca1dc77ad9c65ull,                      \
+      0x3df12c6f5b2b0295ull, 0x6a74852aaeb0e883ull, 0xdcb4cbddcd4a0114ull, 0x36f988da845153c5ull,                      \
+      0x9b4761d2eea727cbull, 0xad33ee6d37b932c2ull, 0xc143c7fbb90f6167ull, 0x577487c7d5ef1fd6ull,                      \
+      0xe9250da555d6c804ull, 0x1652326c7c6f319cull, 0x9c73c1308a6abe80ull, 0xedcb859d96f4174full,                      \
+      0x05992bbc5302ea46ull, 0xc0515d8c72d32b21ull, 0xe27760859b58b01cull, 0xbd776eecd97e28bfull,                      \
+      0xfec461e497d05dfbull, 0x8c65848a09b42f15ull, 0x1d93677302646f8dull, 0x71d7625be0029f9bull,                      \
+      0xed8c8b143b918647ull, 0x5813345c6ddd5e95ull, 0x44837edc639f1da6ull, 0x65309e51db9245d4ull,                      \
+      0xa4de07e39af7c84cull, 0xea208293cb3b3d17ull, 0x33abda924feb6a30ull, 0x8965f30d8a442337ull,                      \
+      0x90808dcdb29ea41bull, 0xe2d6d8dad96f92caull, 0xfd690c3258486648ull, 0xddb95f897e662ce2ull,                      \
+      0x6b2b08dcc03f02bcull, 0x261c68ddf66cc62cull, 0xa4f0eddd57c1364dull, 0xe35537ec1f29acd2ull,                      \
+      0x27e70659eef7b721ull, 0xdabbb3bf5db9f4c8ull, 0x34436c1241ad0e37ull, 0x0302752801d6306bull,                      \
+      0xbf77d7d65bedd8cdull, 0xa9871d46c85cd973ull, 0x5fdbae1fae40e068ull, 0x468af1bb676f47b0ull,                      \
+      0x809520bd379dac58ull, 0x2766590af071ca9cull, 0xff96fca3577ecadeull, 0x1c490d6456b3b489ull,                      \
+      0xe85734c184192ce6ull, 0x2ba01930bbb71001ull, 0xabe1acaf661e43ebull, 0x120f3b5f15bf003dull,                      \
+      0xfd7d4cd1515c8209ull, 0x9cfa18c629a0c327ull, 0x7e39ff2d2a3f2faeull, 0x2ff0a5398e575356ull,                      \
+      0xc9117833006d097eull, 0x09d40c7849733ff8ull, 0x774d7c8f5f3aa6bdull, 0xe04b4161aa09de75ull
+
+__constant__ u64 KW_PAD128_DEV[80] = {SX_KW_PAD128_LIST};
+static const u64 KW_PAD128_HOST[80] = {SX_KW_PAD128_LIST};
+#undef SX_KW_PAD128_LIST
+
+SX_HD const u64* kw_pad128() {
+#ifdef __CUDA_ARCH__
+  return KW_PAD128_DEV;
+#else
+  return KW_PAD128_HOST;
+#endif
+}
+
 // compress's rounds alone, over a chunk whose K[t] + W[t] are given (kw_pad256): the chaining value compress gives over that
 // chunk, without its schedule
 template <int V, int ROLL>

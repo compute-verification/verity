@@ -159,7 +159,7 @@ structure ToyNumbers (D : Deploy Coin Col T) (x : Msg) : Prop where
 theorem scope_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : Scope D x :=
   ⟨toyStmt, toyPart, h.parse, h.partition, inScope_toy⟩
 
-theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : D.k x = 2 ^ 40 * 5 := by
+theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : D.k x = 2 ^ 10 * 5 := by
   have hp : D.part toyStmt = toyPart := by
     simp only [Deploy.part]
     rw [h.partition]
@@ -213,8 +213,9 @@ theorem κF_le {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κF D x 
 
 /-- The waits' slack factor is at most `3/2`. -/
 theorem slack_le : slack ≤ 3 / 2 := by
-  have hp1 : (2 : ℝ) ^ (-40 : ℝ) ≤ 1 / 2 := by
-    calc (2 : ℝ) ^ (-40 : ℝ) ≤ (2 : ℝ) ^ (-1 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by norm_num) (by norm_num)
+  have hp1 : (2 : ℝ) ^ (-(slackExp : ℝ)) ≤ 1 / 2 := by
+    calc (2 : ℝ) ^ (-(slackExp : ℝ)) ≤ (2 : ℝ) ^ (-1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le (by norm_num) (by norm_num [slackExp])
       _ = 1 / 2 := by rw [Real.rpow_neg_one]; norm_num
   have h : ∀ t : ℝ, 0 ≤ t → t ≤ 1 / 2 → (2 : ℝ) ^ t ≤ 3 / 2 := by
     intro t h0 h1
@@ -229,10 +230,10 @@ theorem κ_lt_one {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κ D 
   have hs := slack_le
   have hF := κF_le h
   have hk := k_of_toyNumbers h
-  have hkr : (D.k x : ℝ) = 2 ^ 40 * 5 := by rw [hk]; push_cast; ring
-  have hcapr : (D.cap x : ℝ) = 2 ^ 128 * (2 ^ 40 * 5) := by rw [Deploy.cap, hk]; push_cast; ring
+  have hkr : (D.k x : ℝ) = 2 ^ 10 * 5 := by rw [hk]; push_cast; ring
+  have hcapr : (D.cap x : ℝ) = 2 ^ 128 * (2 ^ 10 * 5) := by rw [Deploy.cap, hk]; push_cast; ring
   have hout : 2 * (D.k x : ℝ) / D.cap x ≤ 1 / 1000 := by rw [hkr, hcapr]; norm_num
-  have hexp : Real.exp (-(D.k x : ℝ) / 8) ≤ 1 / 1000 := by
+  have hexp : Real.exp (-(D.k x : ℝ) / 8) ≤ 1 / 100 := by
     refine (exp_neg_div_eight_le (by positivity)).trans ?_
     rw [hkr]
     norm_num
@@ -240,9 +241,9 @@ theorem κ_lt_one {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κ D 
     mul_le_mul_of_nonneg_left (by linarith) (by positivity)
   have h1' : slack ^ 2 * (1 / 4 + 1 / 100) ≤ (3 / 2) ^ 2 * (1 / 4 + 1 / 100) :=
     mul_le_mul_of_nonneg_right (pow_le_pow_left₀ hs0 hs 2) (by norm_num)
-  have h2 : (1 + slack) * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) ≤ (1 + slack) * (1 / 1000 + 1 / 1000) :=
+  have h2 : (1 + slack) * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) ≤ (1 + slack) * (1 / 1000 + 1 / 100) :=
     mul_le_mul_of_nonneg_left (by linarith) (by linarith)
-  have h2' : (1 + slack) * (1 / 1000 + 1 / 1000) ≤ (1 + 3 / 2) * (1 / 1000 + 1 / 1000) :=
+  have h2' : (1 + slack) * (1 / 1000 + 1 / 100) ≤ (1 + 3 / 2) * (1 / 1000 + 1 / 100) :=
     mul_le_mul_of_nonneg_right (by linarith) (by norm_num)
   unfold κ
   linarith

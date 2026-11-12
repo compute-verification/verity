@@ -912,11 +912,13 @@ def test_a_call_over_the_budget_fails_all_by_the_name_of_a_callee_that_breaks_q_
     does), checks each callee's partition inside the Call's check and fails by the callee's name, and its summary reads the
     Call partitioned by its callees.  Without the entries the Call is an unchecked warning, which fails nothing: ``--all``
     passes a value computed in two proof blocks."""
-    from circuit_check import cli
+    from circuit_check import block_held, cli
 
     top, twice, mul, opts = _two_callees()
     monkeypatch.setattr(TG, "load_registries", lambda: None)
     monkeypatch.setattr(TG, "suite", lambda: {top.id: top})
+    # the holds name the registry's Definitions, which this one-target catalog doesn't check (block/absent-hold)
+    monkeypatch.setattr(block_held, "HELD", {})
     monkeypatch.setattr(TG, "templates", lambda: [])
     monkeypatch.setattr(TG, "word_call_families", lambda: {TG.family(top)})
     monkeypatch.setattr(TG, "boolean_call_families", lambda words, found=None: set())

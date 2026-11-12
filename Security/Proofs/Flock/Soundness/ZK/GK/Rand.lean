@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Seq
+public import Proofs.Flock.Soundness.Game
 
 /-!
 # Zero knowledge: programs on finitely many uniform coins

@@ -335,6 +335,12 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     return desc
 
 
+def definitions(program) -> dict[str, FunctionDefinition]:
+    """The definitions `encode_program` records for `program`, by descriptor id: those a decoder of its descriptor
+    holds."""
+    return _walk(program, lambda fid, fn: None)
+
+
 def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str, FunctionDefinition]:
     """`encode_program`'s dependency walk: each specialization the descriptor records, by descriptor id in first-visit order.
     `done(fid, fn)` runs once per specialization, after every specialization it depends on: the order v1's tables intern in.

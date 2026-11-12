@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Flock.Game.Prob
+public import Definitions.Flock.Game
 
 /-!
 # A strategy's coins up to a point of the game, sampled ahead

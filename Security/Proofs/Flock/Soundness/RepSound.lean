@@ -7,7 +7,7 @@ public import Mathlib.CategoryTheory.Category.Basic
 public import Proofs.Flock.Soundness.LigeritoPhase
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 
@@ -28,7 +28,7 @@ probability at most `repError`. It is proved here from four phase lemmas, one pe
 
 The errors add up to `repError` exactly (`repError_eq`), and `Game.value_bind_le` chains the
 phases. Each phase lemma is a chain of per-coin (round-by-round) steps: `Rounds` for the sumcheck
-rounds, `Game.prCoin_mvEval_eq_zero_le` for the vector coins.
+rounds, `Verity.Game.prCoin_mvEval_eq_zero_le` for the vector coins.
 -/
 
 @[expose] public section

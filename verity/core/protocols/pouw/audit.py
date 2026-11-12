@@ -80,7 +80,7 @@ def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
 
 @functools.lru_cache(maxsize=1)
 def hm96_kernel_constants() -> bytes:
-    """`HM96`'s constants as a kernel reads them (Flock's ``hm96_finish_leaves``, pearl_c's ``hm_leaves``): the midstates
+    """`HM96`'s constants as pearl_c's ``hm_leaves`` reads them and Flock's ``Hm96Guard`` takes them: the midstates
     after the salt prefix and after the leaf prefix (eight u64 little-endian each), then the byte tables, per salt byte position
     and byte value the 64-byte column XOR little-endian (3 MiB)."""
     mids = [sha512_gates.midstate(p) for p in (hm96.SHA512.salt_prefix, hm96.SHA512.leaf_prefix(HM96_KEY))]

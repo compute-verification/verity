@@ -67,7 +67,8 @@ the deployed sampled verifier, each a hypothesis to discharge there.
 * `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails` holds or
   the extractor's own calls collide (`CommitmentScheme.Binds`).
 * `inner_bad_le`, `outer_bad_le`, `Pr_fails_le`: **the probabilistic half**. Each wait's truncation and union bound
-  (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(2·n_PU + 1)`), the sampling design and Flock's
+  (`wait_bad_le`), its union's size against the slack `c` (`k = 2^j·(2·n_PU + 1)`, `rpow_le_slack`), the sampling
+  design and Flock's
   error at the inner wait, averaged over the first stage and the tapes: `Pr[Fails] ≤ κ(δ) + √(γ·Pr[B])`.
 * `KS_of`, `Bits_of`, `KSCount_of_KS`: **the claims**: `KS` through `KSLin_of_ownColl`; `Bits` with the extractor's
   costs; and the count form, at the miss clamped at `0`.
@@ -737,22 +738,28 @@ end Split
 theorem card_S₁_le (d : Design) (Pt : Partition) (δ : ℝ) : (S₁ d Pt δ).card ≤ 2 ^ Pt.blocks.length :=
   (card_filter_le _ _).trans (by rw [card_powerset, card_range])
 
-/-- At most `2^m` sets, `m ≤ M + 1`, spread over `k = 2^40·(M + 1)` accepted runs cost at most the slack. -/
-theorem card_rpow_le_slack {N m M : ℕ} (hN : N ≤ 2 ^ m) (hm : m ≤ M + 1) :
-    (N : ℝ) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) ≤ slack := by
-  have hk : (0 : ℝ) < ((2 ^ 40 * (M + 1) : ℕ) : ℝ) := by positivity
-  calc (N : ℝ) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) ≤ ((2 : ℝ) ^ m) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) :=
+theorem one_le_slack : 1 ≤ slack := by
+  unfold slack
+  exact Real.one_le_rpow (by norm_num) (by positivity)
+
+/-- At most `2^m` sets spread over `k ≥ 2^j·m` accepted runs (`j = slackExp`) cost at most the slack. -/
+theorem rpow_le_slack {N m k : ℕ} (hN : N ≤ 2 ^ m) (hk : 2 ^ slackExp * m ≤ k) :
+    (N : ℝ) ^ (1 / (k : ℝ)) ≤ slack := by
+  rcases Nat.eq_zero_or_pos k with rfl | hk0
+  · rw [Nat.cast_zero, div_zero, Real.rpow_zero]
+    exact one_le_slack
+  have hkR : (0 : ℝ) < k := by exact_mod_cast hk0
+  have hj : (0 : ℝ) < 2 ^ slackExp := by positivity
+  calc (N : ℝ) ^ (1 / (k : ℝ)) ≤ ((2 : ℝ) ^ m) ^ (1 / (k : ℝ)) :=
         Real.rpow_le_rpow (Nat.cast_nonneg _) (by exact_mod_cast hN) (by positivity)
-    _ = (2 : ℝ) ^ ((m : ℝ) * (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ))) := by
+    _ = (2 : ℝ) ^ ((m : ℝ) * (1 / (k : ℝ))) := by
         rw [← Real.rpow_natCast, ← Real.rpow_mul (by norm_num)]
     _ ≤ slack := by
         unfold slack
         refine Real.rpow_le_rpow_of_exponent_le (by norm_num) ?_
-        rw [Real.rpow_neg (by norm_num), mul_one_div, div_le_iff₀ hk]
-        have hm' : (m : ℝ) ≤ M + 1 := by exact_mod_cast hm
-        push_cast
-        norm_num
-        nlinarith
+        rw [Real.rpow_neg (by norm_num), Real.rpow_natCast, mul_one_div, div_le_iff₀ hkR, ← div_eq_inv_mul,
+          le_div_iff₀ hj, mul_comm]
+        exact_mod_cast hk
 
 /-! ## The failure event's probability -/
 
@@ -763,9 +770,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- The slack bound at the waits' `k`. -/
 theorem rpow_k_le_slack (D : Deploy Coin Col T) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m)
-    (hm : m ≤ 2 * nPU D x + 1) : (N : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack := by
-  unfold Deploy.k
-  exact card_rpow_le_slack hN hm
+    (hm : m ≤ 2 * nPU D x + 1) : (N : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack :=
+  rpow_le_slack hN (Nat.mul_le_mul_left _ hm)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem nPU_eq {D : Deploy Coin Col T} {x : Msg} {s : AuditStatement} {Pt : Partition} (hs : D.parse x = some s)

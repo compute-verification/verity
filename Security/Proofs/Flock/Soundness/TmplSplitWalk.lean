@@ -7,6 +7,7 @@ import Proofs.Flock.Level3.FoldedBase
 import Proofs.Flock.Level3.Nodes
 import Proofs.Flock.Soundness.TmplFoldDef
 import Proofs.Flock.Soundness.TmplFoldRef
+import Proofs.Flock.Soundness.TmplPosMap
 import Std.Data.HashMap.Lemmas
 
 /-!
@@ -216,7 +217,7 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
   have hbd : ∀ j, (((t.defs.getD d default).calls.getD i default).bound id j).length =
       (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins := fun j => hlay.bound d i j hi
   have hlan := hlay.lanes d i hi
-  have hnk : nkOf β as = as.size := if_neg h6
+  have hnk : nkOf β as = as.size := ite_eq_right h6
   unfold walkCall at h
   simp only [h6, decide_false, Bool.false_and, Bool.false_eq_true, ↓reduceIte] at h
   unfold callVal
@@ -370,7 +371,7 @@ theorem walkCall_sum {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
   have hbd : ∀ j, (((t.defs.getD d default).calls.getD i default).bound id j).length =
       (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins := fun j => hlay.bound d i j hi
   have hlan := hlay.lanes d i hi
-  have hnk : nkOf β as = 1 := if_pos h6
+  have hnk : nkOf β as = 1 := ite_eq_left h6
   unfold walkCall at h
   simp only [h6, decide_true, Bool.true_and, ↓reduceIte] at h
   unfold callVal
@@ -458,6 +459,39 @@ theorem walkCall_sum {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
 
 /-! ## The walk -/
 
+/-- `walk`'s position table: with every layout in order (`DefPos`), `posTab`'s entries are `posIn`'s, so a position read
+from it is `posIn`'s. -/
+theorem tabled_posTab {t : Tmpl} {lays : Array Lay} (hpos : ∀ d < t.defs.size, DefPos t lays d) (d off m : ℕ)
+    (hm : m = 0 ∨ m = (t.defs.getD d default).cols) :
+    tabled (posTab t lays d off m) (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) =
+      fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y := by
+  funext y
+  by_cases h0 : m = 0
+  · simp [tabled, posTab, h0]
+  have hm' : m = (t.defs.getD d default).cols := hm.resolve_left h0
+  by_cases hd : d < t.defs.size
+  · have hok := writes_ok t lays hpos (t.defs.size + 1) d 0 off 1 hd
+    have htree := treeAt_writes t lays hpos (writes t lays (t.defs.size + 1) d 0 off 1) (Array.replicate m 0) hok.2
+      (fun w hw => by
+        have := (hok.1 w.1 (List.mem_map_of_mem hw)).2
+        rw [Array.size_replicate, hm']
+        omega)
+      (t.defs.size + 1) d 0 off 1 hd (by omega) (fun w hw => hw)
+    rw [← fillMap_writes] at htree
+    simp only [TreeAt] at htree
+    unfold tabled posTab
+    rw [ite_eq_right h0]
+    by_cases hy : y < (fillMap t lays (t.defs.size + 1) d 0 off 1 (Array.replicate m 0)).size
+    · rw [ite_eq_left hy]
+      have hy' : y < (t.defs.getD d default).cols := by
+        rw [fillMap_writes, setAll_size, Array.size_replicate] at hy
+        omega
+      have := htree.1 y hy'
+      rw [Nat.zero_add, Nat.one_mul] at this
+      exact this
+    · rw [ite_eq_right hy]
+  · exact absurd (hm'.trans (by simp [Array.getD, hd]; rfl)) h0
+
 /-- **A walk's step**: every class's walk at depth `F + 1` means its class's, from every walk's at `F`. -/
 theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ} (hs : s < 64)
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays)
@@ -467,14 +501,15 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
   obtain ⟨h6a, hL1, hL2, has⟩ := hpre
   rw [walk] at h
   simp only [show (!decide (6 ≤ β) && decide (β + al < 6)) = false by simp; omega, Bool.false_eq_true,
-    ↓reduceIte] at h
+    ↓reduceIte, tabled_eq] at h
+  rw [tabled_posTab hlay.pos d off _ (by split <;> simp)] at h
   obtain ⟨eL, st1, hE, h⟩ := sv_bind_ok h
   obtain ⟨gL, st2, hG, h⟩ := sv_bind_ok h
   obtain ⟨rfl, hH1, ht1⟩ := half_ok hE hst.1
   obtain ⟨rfl, hH2, ht2⟩ := half_ok hG hH1
   have hst2 : StOk t lays pt s st2 := ⟨hH2, by rw [ht2, ht1]; exact hst.2⟩
   by_cases h6 : 6 ≤ β
-  · simp only [h6, decide_true, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true, if_true] at h
+  · simp only [h6, decide_true, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true] at h
     obtain ⟨hq, hv⟩ := foldlM_sumF
       (fun (x : {x : ℕ × ℕ × List ℕ // x.2.1 < 2 ^ β}) (o : Tab) => of (eLow pt β x.1.2.1) *
         tabSum pt (β + al - 6) x.1.1 (gLow pt s β x.1.2.1) (Gs pt s pt.qc) (fun t' => Gs pt s (x.1.2.2.getD t' pt.qc)) o)
@@ -484,7 +519,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
         obtain ⟨q1, q2, q3⟩ := walkCall_sum hT hR hlay hcall ih hr hq.1 hq.2 hd (List.mem_range.1 hi) h6
           ⟨h6a, hL1, hL2, has⟩
         exact ⟨⟨q1, q2⟩, fun x => q3 x.1.1 x.1.2.1 x.2 x.1.2.2⟩
-    refine ⟨hq.1, by rw [show nkOf β as = 1 from if_pos h6]; exact hq.2, fun h6' => absurd h6 h6',
+    refine ⟨hq.1, by rw [show nkOf β as = 1 from ite_eq_left h6]; exact hq.2, fun h6' => absurd h6 h6',
       fun _ H a ha ip => ?_⟩
     have hv' := hv ⟨(H, a, ip), ha⟩
     dsimp only at hv'
@@ -492,13 +527,17 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
     refine congrArg₂ (· + ·) ?_ rfl
     rw [rows_val (fun o => of (eLow pt β a) * tabSum pt (β + al - 6) H (gLow pt s β a) (Gs pt s pt.qc)
         (fun t' => Gs pt s (ip.getD t' pt.qc)) o) (fun o n => rfl)
-      (Tab.ref (t.defs.getD d default) pt true (2 ^ al) (2 ^ β) as (eqHalf pt.r (β - 6) al)
-        (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y))
+      (t.defs.getD d default) pt true (2 ^ al) (2 ^ β) as (eqHalf pt.r (β - 6) al)
+        (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) _
       (fun _ cx v => of (eLow pt β a) * (hiE pt (β + al - 6) H cx *
         refS (t.defs.getD d default) pt (β + al - 6) H (2 ^ al) (eqHalf pt.r (β - 6) al)
           (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) (gLow pt s β a) (Gs pt s pt.qc)
           (fun t' => Gs pt s (ip.getD t' pt.qc)) v))
-      (fun o k cx w v => by rw [ref_tabSum]; ring), tabSum_empty, mul_zero, zero_add]
+      (fun o k cx w vs => by
+        rw [refs_tabSum, mul_add, ← List.sum_map_mul_left]
+        exact congrArg (_ + ·) (congrArg List.sum (List.map_congr_left fun v _ => by ring)))
+      (fun h => nomatch h),
+      tabSum_empty, mul_zero, zero_add]
     refine congrArg List.sum (List.map_congr_left fun r _ => ?_)
     rw [Finset.sum_range_one]
     unfold rowVal grpVal
@@ -516,7 +555,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
       simp only [of_mul, ← one_eq]
       rw [← hP]
       ring
-  · simp only [h6, decide_false, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true, if_true] at h
+  · simp only [h6, decide_false, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true] at h
     obtain ⟨hq, hv⟩ := foldlM_sumF
       (fun (x : ℕ × (ℕ → List ℕ)) (o : Tab) =>
         tabExp pt s (β + al - 6) x.1 (fun t' k => Gs pt s ((x.2 k).getD t' pt.qc)) o)
@@ -527,7 +566,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
         obtain ⟨q1, q2, q3⟩ := walkCall_exp hs hT hR hlay hcall ih hr hq.1 hq.2 hd (List.mem_range.1 hi) h6
           ⟨h6a, hL1, hL2, has⟩
         exact ⟨⟨q1, q2⟩, fun x => q3 x.1 x.2⟩
-    refine ⟨hq.1, by rw [show nkOf β as = as.size from if_neg h6]; exact hq.2, fun _ H ip => ?_,
+    refine ⟨hq.1, by rw [show nkOf β as = as.size from ite_eq_right h6]; exact hq.2, fun _ H ip => ?_,
       fun h6' => absurd h6' h6⟩
     have hv' := hv (H, ip)
     dsimp only at hv'
@@ -536,12 +575,18 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
     rw [Finset.sum_add_distrib]
     refine congrArg₂ (· + ·) ?_ rfl
     rw [rows_val (tabExp pt s (β + al - 6) H (fun t' k => Gs pt s ((ip k).getD t' pt.qc))) (fun o n => rfl)
-      (Tab.ref (t.defs.getD d default) pt false (2 ^ al) (2 ^ β) as (eqHalf pt.r 0 (β + al - 6))
-        (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y))
+      (t.defs.getD d default) pt false (2 ^ al) (2 ^ β) as (eqHalf pt.r 0 (β + al - 6))
+        (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y)
+        (fun y => (eqHalf pt.r 0 (β + al - 6)).at
+          (2 ^ β * ((off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) % 2 ^ al) / 64))
       (fun k cx v => hiE pt (β + al - 6) H cx *
         refX (t.defs.getD d default) pt s (β + al - 6) H (2 ^ al) (2 ^ β) as (eqHalf pt.r 0 (β + al - 6))
           (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) k v)
-      (fun o k cx w v => by rw [ref_tabExp, mul_assoc]), tabExp_empty, zero_add, list_sum_comm]
+      (fun o k cx w vs => refs_tabExp _ _ hs _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (fun _ hB hlow rowLow alpha rows o =>
+        rowsC_tabExp _ _ hs _ _ _ _ _ _ _ _ _ hB hlow (fun _ _ => rfl) rowLow alpha rows o), tabExp_empty,
+      zero_add,
+      list_sum_comm]
     refine Finset.sum_congr rfl fun k hk => congrArg List.sum (List.map_congr_left fun r _ => ?_)
     have hk' := has h6 k (Finset.mem_range.mp hk)
     unfold rowVal grpVal
