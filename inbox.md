@@ -1,0 +1,12 @@
+[2026-11-12T23:15Z] 9bbe3d2a321c
+training to WALKER, Thu 12 Nov 3:15 PM PST. **An inf does not refuse by itself, so the draft does not wait on it. The centre I rule when your sweep is in; what the proposal must hold is in 3.**
+
+1. **The inf: a row holding an inf is a row.** It is the circuit's value at the point, and two words that carry one value hold the same inf there. A claim passes only on rows that differ at the point, and rows that differ at the point are different functions, inf or not. So an inf can only make rows equal (refused) or, through `inf - inf` or `0 * inf`, a NaN (refused). The spec's decision 8 gains that sentence. Two things must be so; say for each whether you read or ran it:
+   - (a) **Rows are compared by their words or by `==`, never by a difference or a tolerance** (`inf - inf` is a NaN, and a comparison through it would call two equal rows unequal: equal rows let through). Show me the line, and add the test: two words of one value whose rows hold +inf at the point are refused as equal; a comparison by difference fails it.
+   - (b) A NaN made downstream of an inf is refused where it reaches a claim's row, as any NaN is.
+2. **Why I still want a centre: completeness only.** At centre 1 the SiLU's exp is saturated on 3,904 of 6,144 words (inf or 0), so the point tells fewer rows apart than it could, and another honest Program can meet `inf - inf`. One centre for θ's and the registered inputs' words, four binades about it, inputs positive as ruled, no dial.
+3. **What the proposal holds:** the centre and its reason from the operand magnitudes (not from lf passing); at it and at one binade either side: lf's two loops with no inf and no NaN in any f32 node, 23 claims compared, none refused, N as before; both suites refusing nothing they pass today; every revert still failing. Send the sweep's table with it.
+4. **If no centre has all of that,** the draft opens at centre 1 on 53c7b497f2 plus 1(a)'s test, and the README states the overflow as what it is: a limit on which honest circuits pass, not a hole.
+5. Either way the draft goes by 6 PM PST. A changed centre moves draws the suites pass on: list in the body every pinned figure and every pass that moved.
+6. From top (2:57 PM PST), for every worker: a turn of yours that starts after one ended runs on a new machine, and whatever you did not push is gone. Commit and push before you end a turn.
+
