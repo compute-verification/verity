@@ -54,6 +54,15 @@ def test_a_broadcast_is_a_zero_stride_run_and_distinct_values_are_not_merged():
     assert not isinstance(three, Strided) and len({three[j] for j in range(3)}) == 3  # never merged
 
 
+def test_a_view_of_a_broadcast_is_the_same_one_reference():
+    rep = sv._expand(_value(0), [2, 3], WHERE)  # one reference, six times
+    views = ((sv._select(rep, 1, 0, WHERE), 2), (sv._slice(rep, 1, 1, 3, 1, WHERE), 4), (sv._permute(rep, (1, 0), WHERE), 6))
+    for view, count in views:
+        r = view.refs
+        assert isinstance(r, Strided) and r.outer_stride == 0 and r.inner_stride == 0 and r.count == count
+        assert [r[k] for k in range(count)] == [rep.refs[0]] * count
+
+
 def test_an_inner_axis_select_is_a_strided_view():
     kc, v = _param(0, 7, 3, 8), _param(1, 8, 8)
     head = sv._select(kc, 1, 1, WHERE)  # [7][8]: one KV head out of [T][KVH][D]
