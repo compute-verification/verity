@@ -2570,12 +2570,13 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
 def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_path, server, server_v2):
     """`proofs.members_v2` writes v2's per-member form of ``proofs`` for a window of several members, and
     `OneStageZk`'s parsers read what it wrote (`proofs.members_parsed`, the executable's ``members``:
-    `membersParamsOfJson`, `membersEvidenceOf`, `membersHeld`), on an audit v1 accepts: every member with its files'
-    digests, its units and its ``vus_per_block``, and a statement for each member with a session, in the members'
-    order. The command's line says ``parsed, not checked`` and names no verdict, and the audit refuses the same case
-    for its keys, so no check of the form is reached. What the parsers refuse the command refuses with their reason:
-    statements out of the members' order, a statement of two sessions or of a member the parameters don't name, v1's
-    ``sessions`` other than the statements', and either file in the one statement's form."""
+    `membersParamsOfJson`, `membersEvidenceOf`, `membersHeld`, `drawnHeld`), on an audit v1 accepts: every member
+    with its files' digests, its units and its ``vus_per_block``, and a statement for each member with a session, in
+    the members' order, each a member the evidence's ``proved_units`` hold a unit of. The command's line says
+    ``parsed, not checked`` and names no verdict, and the audit refuses the same case for its keys, so no check of the
+    form is reached. What the parsers refuse the command refuses with their reason: statements out of the members'
+    order, a statement of two sessions, of a member the parameters don't name or of a member the sample holds no unit
+    of, v1's ``sessions`` other than the statements', and either file in the one statement's form."""
     rec, _, base, params = _audit_v1_accepts(SETUPS[3], "v2-members", server)
 
     def member(k: int, name: str, lo: int, hi: int, *sessions: str) -> PF.Member:
@@ -2597,7 +2598,8 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
     assert names == ["s0", "s1"] and [st_["member"] for st_ in pe["statements"]] == [ms[0].name, ms[2].name]
     assert blobs == [f for m in (ms[0], ms[2]) for f in (m.proof.circuit, m.proof.public, m.proof.sessions[0] / "session.json",
                                                          m.proof.sessions[0] / "rep-0.bin")] + [ms[1].proof.circuit, ms[1].proof.public]
-    p2, e2 = params | {"proofs": pm}, base | {"proofs": pe, "sessions": names}
+    # the sample: a unit of each member with a session, and none of the member without one
+    p2, e2 = params | {"proofs": pm}, base | {"proofs": pe, "sessions": names, "proved_units": [1, 4]}
     got, refused = PF.members_parsed(p2, e2)
     assert refused is None, refused
     assert got == {
@@ -2626,6 +2628,10 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
         "proofs: member x/c0: the parameters name no such member")
     assert why(e=e2 | {"proofs": {"statements": [first, {**last, "member": ms[0].name}]}}) == (
         f"proofs: member {ms[0].name}: a second statement: a member's units are one statement's")
+    assert why(e=e2 | {"proved_units": [1, 3]}) == (
+        f"proofs: member {ms[2].name}: the sample holds none of its units, and an undrawn member has no statement")
+    assert why(e=e2 | {"proved_units": [2, 3, 4]}) == (
+        f"proofs: member {ms[0].name}: the sample holds none of its units, and an undrawn member has no statement")
     assert why(e=e2 | {"sessions": names[::-1]}) == (
         "evidence: proofs: the sessions are not the evidence's sessions, in order")
     one = {"sessions": [x for st_ in pe["statements"] for x in st_["sessions"]]}
