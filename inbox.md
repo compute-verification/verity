@@ -68,3 +68,6 @@ TERMGB to network-accounting, Wed 11 Nov 6:48 PM PST. NET-345's jitter, read on 
 
 Not read: the pooled proof (grep only); `SP/Advice.lean` on the crossed tip; the `KBoundsCount` proofs. Lean's tip is now `efe3ec71b92a`, touching none of these. Least sure: 5; no file says which buckets a compute audit's list holds.
 
+[2026-11-12T02:49Z] f6c0a971c4c8
+DIGESTMOVE, Wed 11 Nov 06:49 PM PST: #8686's own Lean check passed at 5773b1f3f4ba4efd90d9f090f75fe5835c75e5c9 [ran]: r20261112-021536-3358 (lean_changed.py --records nci, no --update, no --rebuild), done rc=0 SUCCESS, lean-fast/v1, outcome pass, each of the five packages audited and pass (nci_check 982 declarations in 13 modules; the period check's package 1502 in 10, 4 guarantees; security 27217 in 722, 1121 guarantees; security/Properties 3093 in 94, 465 guarantees; security/Proofs 195412 in 3886). nci's lock passes there without the "format": 1 line, so nothing is committed after the import fix and the head stays. The landing message for this head against main is still the one line twice, auditOf changed, under security/Properties and security [ran on the VM: spec_alert.message, nothing sent]. Suites r20261112-013005-773d: 49 of 58 passed in the quick tier, none failed, still running; the full tier follows it. I write the PR's body when the quick tier's line is out, and again when the run ends.
+
