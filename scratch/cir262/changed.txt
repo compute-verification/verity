@@ -1,0 +1,9 @@
+adapters/vllm/tests/properties/glm53_flashmla_fp8_capture_gpu.py
+adapters/vllm/tests/properties/test_glm53_flashmla_fp8_capture.py
+verity/definitions/numerics/flashmla_dsv32_twin.py
+verity/definitions/numerics/flashmla_twin.py
+verity/definitions/registry/flashmla.py
+verity/definitions/registry/flashmla_dsv32.circuit-check.py
+verity/definitions/registry/flashmla_dsv32.py
+verity/definitions/tests/catalog_ids.json
+verity/definitions/tests/test_flashmla_dsv32.py
