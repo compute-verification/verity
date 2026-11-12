@@ -39,7 +39,7 @@ class SuppliedInputs:
         if ptype != Value(int(op.width)):
             raise err(f"{what}: a {op.width}-bit supplied value for a parameter of type {ptype!r}")
         if op.binding == "registration":
-            owner = "values"
+            owner: str | int = "values"
         elif op.binding == "run":
             if op.request not in req_index:
                 raise err(f"{what}: run value {op.name!r} names request {op.request!r}, which is not in the run header")

@@ -284,8 +284,6 @@ def make_patterns(C: dict[str, Any]) -> list:
     ]
 
 
-PATTERNS = make_patterns(C)
-
 # the census allowlist is PROTECTED (verity_vllm/properties/kernel_allowlist.py); profiles only reference it
 from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST  # noqa: E402
 

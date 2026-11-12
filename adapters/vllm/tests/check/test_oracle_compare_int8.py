@@ -15,7 +15,8 @@ K, D, H, G = 4, 8, 2, 2
 
 
 def _view(alloc, offset, shape, dtype):
-    strides, acc = [], 1
+    strides: list[int] = []
+    acc = 1
     for s in reversed(shape):
         strides.insert(0, acc)
         acc *= s
