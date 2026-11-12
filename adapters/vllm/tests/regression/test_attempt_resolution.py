@@ -165,6 +165,7 @@ def test_candidate_env_names_attempt_ids_or_a_directory(monkeypatch, tmp_path):
     assert _row().candidate_root() is None and _row().candidate("global_match.json") is None
 
 
+@pytest.mark.slow
 def test_naming_the_commit_attempt_resolves_the_chain_behind_it(store, monkeypatch):
     """`VERITY_REGRESSION_CANDIDATE=<commit attempt>`: its inputs cite the Match and Build artifacts, whose `meta.run_id` (stamped by
     `typed_outputs`) names the attempts that published them -- all three become the row's candidate attempts."""

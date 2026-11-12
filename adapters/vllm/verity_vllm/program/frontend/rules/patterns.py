@@ -18,14 +18,13 @@ import math
 
 import numpy as np
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant
-from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
 
 aten = torch.ops.aten
 _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
@@ -61,7 +60,11 @@ def _ensure_static(ctx, node) -> bool:
         return not isinstance(ctx.env[node], Coll)
     if node.op != "call_function":
         return False
-    from verity_vllm.program.frontend.rules.views import _STATIC_ARITH, _STATIC_MAKERS, StaticIndexRule
+    from verity_vllm.program.frontend.rules.views import (
+        _STATIC_ARITH,
+        _STATIC_MAKERS,
+        StaticIndexRule,
+    )
     if node.target not in _STATIC_MAKERS and node.target not in _STATIC_ARITH and node.target not in StaticIndexRule().targets():
         return False
     for a in node.args:
@@ -335,7 +338,7 @@ class HFRMSNormPatternRule(OpRule):
 
     def applies(self, node, ctx):
         m = self._match(node, ctx)
-        return True if isinstance(m, dict) else f"not the HF RMSNorm pattern ({m})"
+        return True if isinstance(m, dict) else f"not the HF RMS norm pattern ({m})"
 
     def emit(self, node, ctx):
         from verity_vllm.program.frontend.rules.common import from_rows, rows_of
@@ -458,7 +461,7 @@ def _buffer_source(node):
 
 
 def _stack_path(node) -> str:
-    stack = node.meta.get("nn_module_stack") or {}
+    stack = node.meta.get("nn_module_stack")
     return list(stack.values())[-1][0] if stack else ""
 
 
@@ -492,11 +495,11 @@ class HFRotaryTableRule(OpRule):
     modes = frozenset({"reference"})
     info = RuleInfo("HFRotaryTable[reference]", 4, "op-binding",
                     applies_to="matmul(views([to(f32)](inv_freq buffer f32|bf16[R])), to(f32)(static positions[T])) -> transpose -> cat(x,x) -> {cos,sin} -> [mul(scalar)] -> [to(dt)]",
-                    preconditions=("the left operand is a 1-D f32 or bf16 buffer of the module through shape views, same-dtype casts and (bf16 only) "
-                                   "exactly one bf16 -> f32 cast; the buffer dtype and the cast are recorded in the table's derivation",
+                    preconditions=(("the left operand is a 1-D f32 or bf16 buffer of the module through shape views, same-dtype casts and (bf16 only) "
+                                    "exactly one bf16 -> f32 cast; the buffer dtype and the cast are recorded in the table's derivation"),
                                    "the positions are a StaticIndex made from an arange through shape views, same-dtype casts and +/- of a Python int",
-                                   "cos and sin are read exactly by an optional scalar multiply and then EITHER one cast each (to f32|bf16; the cast is the "
-                                   "table) OR no cast (the f32 cos|sin is the table); which one is recorded as `terminal_cast`, the same for both",
+                                   ("cos and sin are read exactly by an optional scalar multiply and then EITHER one cast each (to f32|bf16; the cast is the "
+                                    "table) OR no cast (the f32 cos|sin is the table); which one is recorded as `terminal_cast`, the same for both"),
                                    "the resulting tables are [1, T, D] with D = 2R"),
                     evidence_domain="structural; the tables are prescribed Inputs (derived tables), their derivation recorded in the weights record")
 

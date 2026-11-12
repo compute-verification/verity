@@ -9,8 +9,23 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import (ROOT, TARGETS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, RowEngine, RowId, UsageError, done_source,
-                                row_file, row_path, row_target, row_world, workload_files)
+from verity_vllm.config import (
+    ROOT,
+    TARGETS,
+    VLLM,
+    WORKLOAD_SCHEMA,
+    WORKLOADS,
+    RowConfig,
+    RowEngine,
+    RowId,
+    UsageError,
+    done_source,
+    row_file,
+    row_path,
+    row_target,
+    row_world,
+    workload_files,
+)
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS
 from verity_vllm.pipeline import workload as W
@@ -141,6 +156,21 @@ def test_a_tp_workload_requires_the_batch_invariance_its_target_declares(tmp_pat
     target = json.dumps({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False})
     doc = _generate(tmp_path, "x__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", target=target)
     assert doc["engine"]["env"] == {"VLLM_BATCH_INVARIANT": "0"} and doc["engine"]["target"]["batch_invariant"] is False
+
+
+@pytest.mark.parametrize("row_id, rc", [
+    ("x__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", 0),
+    ("x__fp8__h200__tp8__b1__i256__o32__mixed__greedy___eager", 0),    # the label is what follows the id's last `__`
+    ("x__fp8__h200__tp8__b1__i256__o32__mixed__greedy__bi-eager", 3),
+    ("eager", 0),                                                       # an id without `__` is its own label
+    ("x-eager", 3),
+])
+def test_a_target_is_refused_unless_the_row_ids_execution_label_is_its_own(tmp_path, row_id, rc):
+    """`--target` on a row whose id ends in another execution label exits 3.  The label is `config.row_execution`'s, the
+    field after the id's last `__`, which is how the generator reads it for the row's `engine.env` too."""
+    target = json.dumps({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False})
+    doc = _generate(tmp_path, row_id, rc=rc, target=target)
+    assert rc or doc["sweep"]["execution"] == "eager"
 
 
 class _CharTok:
