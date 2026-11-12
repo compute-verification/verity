@@ -97,6 +97,41 @@ def Copies (st : _root_.Flock.Stmt) (c : _root_.Flock.Circuit) (x q i : ℕ) : P
       FlockSoundness.Discharge.Aliased.srcKey st.c x = .msg q (i / 8) (i % 8)) ∨
     OutCopies st c x q i
 
+/-- **`OutCopies` read off circuit `c` alone**: the stacked rows are those of `c`'s unit net (`Rows.ofNet`), which at an
+accepted session is its statement's logical net (`copies_of_ref`). -/
+def OutRef (c : _root_.Flock.Circuit) (x q i : ℕ) : Prop :=
+  c.outNet = c.unitNet ∧
+    ∃ (hb : FlockSoundness.Built c.unit) (u' j t jo k : ℕ),
+      u' < c.upv ∧ j < (c.leavesOut.getD u' #[]).size ∧ t < 16 ∧
+      (FlockSoundness.Rows.ofNet hb).nIn ≤ FlockSoundness.Discharge.Layout.outCol c j t ∧
+      FlockSoundness.Discharge.Layout.outCol c j t <
+        (FlockSoundness.Rows.ofNet hb).nIn + (FlockSoundness.Rows.ofNet hb).nComp ∧
+      x = c.upv * (FlockSoundness.Rows.ofNet hb).nIn +
+        (u' * ((FlockSoundness.Rows.ofNet hb).nComp + 1) +
+          (1 + (FlockSoundness.Discharge.Layout.outCol c j t - (FlockSoundness.Rows.ofNet hb).nIn))) ∧
+      jo < c.outPorts.size ∧ k < (c.outPorts.getD jo default).2 ∧
+      FlockSoundness.Discharge.Hidden.outAt c jo + k = (c.leavesOut.getD u' #[])[j]! ∧
+      q = _root_.Flock.HmOut.nIn c + jo ∧ i = 16 * k + t
+
+/-- **`Copies` read off a member circuit `c` alone**: an input column whose key in `c` is message bit `i` of row `q`, or
+a computed output column (`OutRef`). It reads only the registration, so a check of the members can decide it. -/
+def CopiesRef (c : _root_.Flock.Circuit) (x q i : ℕ) : Prop :=
+  (x < c.upv * (c.unit.inWords * _root_.Flock.WORD) ∧ q < c.ports.size ∧
+      FlockSoundness.Discharge.Aliased.srcKey c x = .msg q (i / 8) (i % 8)) ∨
+    OutRef c x q i
+
+/-- **Gate `g`'s copy fact at address `S` as a condition on the registration**, for the units `U`: each unit's template's
+member circuit copies, at the column `pickAny` gives `g` there, the address's port's bit at its place. -/
+def CopyRef (S : Address) (g : ℕ) (U : ℕ → Prop) : Prop :=
+  ∀ u, U u → ∃ m, h.ms[templateOf h.ms u]? = some m ∧
+    CopiesRef m.1 (pickAny h (templateOf h.ms u) (u - Properties.Spot.unitBase h.ms (templateOf h.ms u)) g)
+      (S.port u) S.place.2
+
+theorem rowsOfNet_congr {n n' : _root_.Flock.Net} (e : n = n') (hb : FlockSoundness.Built n)
+    (hb' : FlockSoundness.Built n') : FlockSoundness.Rows.ofNet hb = FlockSoundness.Rows.ofNet hb' := by
+  subst e
+  rfl
+
 section RowsFit
 
 open FlockSoundness FlockSoundness.Discharge Exec Flock Flock.Readable
@@ -342,6 +377,60 @@ theorem inBlock_of_counted (hr : r.Ok h) (hn : r.Counted h) : r.InBlock h := by
       _ ≤ a.st.c.g * 2 ^ a.st.nbl := by
         rw [hnbl]; exact FlockSoundness.Discharge.Integrate.fits_blocks hg0
 
+/-- **The registration's copy condition gives the session's** at an accepted run: the session's committed circuit
+has, at each input, its member circuit's key moved inside the unit (`Hidden.srcKey_commit`), its member circuit's unit
+net is its logical net (`unrolled_unit_commit`), and both have its ports and copies. -/
+theorem copies_of_ref (hr : r.Ok h) {x q i : ℕ} {m : _root_.Flock.Circuit × Array ℕ}
+    (hm : h.ms[templateOf h.ms r.u]? = some m) (hx : CopiesRef m.1 x q i) : Copies r.sts[0]! m.1 x q i := by
+  have hj := sts_pos hr
+  have e0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hj
+  have hsm := stmt_member hr
+  obtain ⟨_, _, _, hx', -, -, -, hok, hu, hck, -, -, -, hset⟩ := hr
+  obtain ⟨hpp, -⟩ := relS_setupOf hset hck
+  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h r.m₂ r.u) with
+  | none => simp [Claims.Flock.check, hS] at hck
+  | some S =>
+    obtain ⟨p, hpb, -, -, hc, hh⟩ := parsed_of_stmtOkAt h (stmtOkAt_unit h hx' hok hu) hS
+    obtain ⟨rfl, -⟩ := parsed_setupOf hset hpb
+    obtain ⟨T, a, hst0, -, hcirc, -⟩ := accepted_check hpp hc hh hj
+    have e1 : r.sts[0]! = a.st := e0.trans hst0.symm
+    obtain ⟨m', hm', hs⟩ := hsm
+    rw [Option.some.inj (hm'.symm.trans hm)] at hs
+    have hce : _root_.Flock.HmOut.unrolled a.st.c = m.1 := by
+      rw [← hcirc]
+      exact hs
+    obtain ⟨nets, he⟩ := FlockSoundness.Discharge.Hidden.Committed.unrolled_eq a.ht a.committed
+    have hm1 : m.1 = { a.st.c with nets := nets, tmpl := none } := hce.symm.trans he
+    obtain ⟨hRu, -⟩ := (_root_.Flock.Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hc
+    obtain ⟨d, hd⟩ := setupHidden_check hpp hc hh hj
+    rw [← hst0] at hd
+    have hunit : m.1.unit = FlockSoundness.lunit a.st.c := by
+      rw [← hce]
+      exact (FlockSoundness.unrolled_unit_commit ((_root_.Flock.Readable.tagsAt_typed _ _ _).trans hRu.2.1)
+        (FlockSoundness.Discharge.Hidden.setupHidden_spec' hd).parse).1
+    have hlw : (FlockSoundness.lunit a.st.c).inWords * _root_.Flock.WORD = a.st.c.unit.inWords * _root_.Flock.WORD :=
+      (show (FlockSoundness.unitRows a.st a.L.unit_built).nIn = _ from Nat.min_eq_left a.L.unit_at.in_le).symm.trans
+        a.L.unitRows_nIn
+    rw [e1]
+    unfold Copies
+    rcases hx with ⟨hxl, hq, hkey⟩ | ⟨ho, hb, u', j, t, jo, k, hu', hj', ht, h1, h2, hxe, hjo, hk2, hw, hq, hi⟩
+    · obtain ⟨hty, ⟨ls, hcc⟩, -⟩ := FlockSoundness.Discharge.Hidden.Committed.check a.ht a.committed
+      have C := FlockSoundness.check_facts hty hcc
+      refine .inl ⟨?_, ?_, ?_⟩
+      · have hup : m.1.upv = a.st.c.upv := by rw [hm1]
+        rw [hunit, hup, hlw] at hxl
+        exact hxl
+      · rw [hm1] at hq
+        exact hq
+      · rw [FlockSoundness.Discharge.Hidden.srcKey_commit a.ht a.committed C, hce, hkey]
+        rfl
+    · have hR : FlockSoundness.Rows.ofNet hb = FlockSoundness.unitRows a.st a.L.unit_built :=
+        rowsOfNet_congr hunit hb a.L.unit_built
+      rw [hR] at h1 h2 hxe
+      refine .inr ?_
+      unfold OutCopies
+      exact ⟨ho, a.L.unit_built, u', j, t, jo, k, hu', hj', ht, h1, h2, hxe, hjo, hk2, hw, hq, hi⟩
+
 end CheckedRun
 
 /-- **The copy fact from the copy rows**: where every accepted run's checked unit that needs `g` has its instance's block
@@ -354,5 +443,15 @@ theorem copyHolds_of_copies {S : Address} {g : ℕ}
   intro r hr hg
   obtain ⟨hblk, m, hm, hx⟩ := hc r hr hg
   exact CheckedRun.copy_of_copies hr hblk hm hx
+
+/-- **The copy fact from the registration's copy condition**: where every accepted run's checked unit that needs `g` is
+counted (the row fact's `Counted`) and is one of the units `U`, `CopyRef` gives the copy fact. -/
+theorem copyHolds_of_ref {S : Address} {g : ℕ} {U : ℕ → Prop}
+    (hU : ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → U r.u ∧ r.Counted h) (hc : CopyRef h S g U) :
+    CopyHolds h S g := by
+  intro r hr hg
+  obtain ⟨hu, hn⟩ := hU r hr hg
+  obtain ⟨m, hm, hx⟩ := hc r.u hu
+  exact CheckedRun.copy_of_copies hr (CheckedRun.inBlock_of_counted hr hn) hm (CheckedRun.copies_of_ref hr hm hx)
 
 end SpotFlock
