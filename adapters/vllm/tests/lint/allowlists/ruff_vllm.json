@@ -1,7 +1,6 @@
 {
   "rule": "ruff with vLLM's rules (adapters/vllm/tests/lint/ruff_vllm.toml)",
   "entries": [
-    {"file": "conftest.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_compiled_manifest.py", "kind": "B023", "symbol": "test_f_pm_29_weight_routing_is_in_the_v2_program_digest", "detail": "Function definition does not bind loop variable `w0`", "count": 2},
     {"file": "tests/acquire/test_compiled_manifest.py", "kind": "B023", "symbol": "test_f_pm_29_weight_routing_is_in_the_v2_program_digest", "detail": "Function definition does not bind loop variable `w2`", "count": 2},
     {"file": "tests/acquire/test_compiled_manifest.py", "kind": "E401", "symbol": "test_f_pm_29_weight_routing_is_in_the_v2_program_digest", "detail": "Multiple imports on one line"},
