@@ -208,14 +208,14 @@ fi
 LEAN_BAD=0
 if has lean; then
   echo "== lean $(date -u +%T)"
-  LSHA=$(cd verity/protocols/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+  LSHA=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
   LV=$FW/lean-$LSHA/flock-verify
   if [ ! -x $LV ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none > /dev/null
-    rm -rf $FW/lean-src && mkdir -p $FW/lean-src && cp -r verity/protocols/flock/verifier/. $FW/lean-src/ \
-      && (cd $FW/lean-src && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
-      && mkdir -p $(dirname $LV) && cp $FW/lean-src/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
+    rm -rf $FW/lean-src && LEAN_SRC=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier $FW/lean-src) \
+      && (cd $LEAN_SRC && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
+      && mkdir -p $(dirname $LV) && cp $LEAN_SRC/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
   fi
   mkdir -p $O/lean
   for name in served served-plain; do

@@ -1,7 +1,7 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
-takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate), which run after landing, in drive's
-after-landing run on `checked`'s tip.  It reports each step's real verdict; what gates and what may stay red is drive's
-(`research.policy`).
+takes off the merge gate (policy.toml's `off_gate`: circuit-check and ratchet-gate, which run after landing, in drive's
+after-landing run on `checked`'s tip, and lean-changed, which no shard runs: `shards.NO_SHARD`).  It reports each step's real
+verdict; what gates and what may stay red is drive's (`research.policy`).
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -20,20 +20,24 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
     ... --bookkeeping-warn                                  with --deferred and without --no-regenerate (drive's lock run):
                                                             lean-audit repairs a lock's bookkeeping and the caps it breaks and
                                                             warns rather than failing (`lean_audit.py --bookkeeping warn`)
-    ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
-                                                            nightly `audit-main`, which gates nothing), and unsharded and
-                                                            without --deferred the opt-in tests `OPT_IN` names, with their
-                                                            variables set, after their suites' runs; with --circuit-cache,
+    ... --no-cache [--circuit-cache]                        reuse no pass, build with Lake's local artifact cache off, and run
+                                                            every job, those off the gate too (the nightly `audit-main`, which
+                                                            gates nothing), and unsharded and without --deferred the opt-in
+                                                            tests `OPT_IN` names, with their variables set, after their suites'
+                                                            runs; of a pack only the suites' and tests' passes are imported,
+                                                            which the fresh suites are compared with; with --circuit-cache,
                                                             circuit-check alone still reuses and stores its per-target passes,
-                                                            and only its entries of a pack are imported: drive's after-landing
+                                                            and its entries of a pack are imported too: drive's after-landing
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
-                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
+                                                            policy.toml's `off_gate`: circuit-check, lean-changed,
+                                                            ratchet-gate), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with presigned URLs
                                                             for the pinned upstream build and inputs when the commit changes
-                                                            verity/protocols/flock/ (but sigma/, a README.md or PROTOCOL.md)
+                                                            verity/protocols/flock/ or a Lean package its verifier requires by path
+                                                            (but sigma/, a README.md or PROTOCOL.md)
                                                             against --base REF (default origin/main; also
                                                             ratchet-gate's base unless --ratchet-base REF is given), the pinned
                                                             Lean dependency bundles and the newest recorded checks' verdict
@@ -181,7 +185,8 @@ doesn't name:
                     `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`verity/protocols/flock/agreement/upstream.json`), which the step
                     fetches when the run was sent its presigned URLs (`agreement_url_file`); skipped by name without them.
-                    `research merge` requires it for a change under verity/protocols/flock/ (but sigma/, a README.md or PROTOCOL.md; `tool.py`)
+                    `research merge` requires it for a change under verity/protocols/flock/ or a Lean package the verifier
+                    requires by path (but sigma/, a README.md or PROTOCOL.md; `tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -193,7 +198,8 @@ doesn't name:
                     keeps built (`lean_changed.py`), then the audit's judgment of its guarantees on that build without the
                     kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
                     run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
-                    vouches for nothing: the audit decides
+                    vouches for nothing: the audit decides.  Off the gate and in no shard (`shards.NO_SHARD`): a recorded
+                    check skips it, and no shard of a sharded run runs it, though `--deferred` names it
     ratchet-gate    `adapters/vllm/tools/ratchet_gate.py BASE HEAD`, the gate as BASE has it: no change above BASE (the
                     commit in the run's `check-ratchet-base.txt` or else `check-base.txt`, which `--record --on` sends: its
                     --ratchet-base REF's and its --base REF's; else origin/main)
@@ -205,7 +211,8 @@ doesn't name:
                     gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
                     job, runs it
 
-Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
+Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
+local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
 
     pytest          `suites.py`'s own: a suite's pass is reused, on any machine, while its declared inputs, the base image and the
                     check code are unchanged, and names the recorded run that earned it (`--no-cache` passes `--fresh`)
@@ -242,12 +249,14 @@ with each step's log beside it, and `verdicts.tar.gz`: the passes this run store
 what its steps had passed.  `--record` declares it an output, so custody uploads it however the run ends: a cancel's SIGKILL
 leaves no result.json, and the pack is then in the attempt's run record alone (`attempt_pack` reads either).  Custody misses it only
 where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.
-`--record` without `--no-cache` (or with `--circuit-cache` beside it, for circuit-check's entries alone) sends presigned URLs of
-the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only passes, up to `GATHER_BYTES` of them,
-with the packs the Lean audits of ready marks left (`PACKERS`), those of the marks of the PRs this checkout holds before the newest
-(`verdict_url_file`): the launcher fetches none, and the run fetches and imports each before its steps (`verdicts_fetched`),
-beside a `--verdicts-in` pack, never in its place, so every machine reuses every pass a recorded check earned; each pack imported
-is named in the result's `verdicts`.  The agreement's pinned upstream build and inputs go the same way (`agreement_url_file`):
+`--record` sends presigned URLs of the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only
+passes, up to `GATHER_BYTES` of them, with the packs the Lean audits of ready marks left (`PACKERS`), those of the marks of the PRs
+this checkout holds before the newest (`verdict_url_file`): the launcher fetches none, and the run fetches and imports each before
+its steps (`verdicts_fetched`), beside a `--verdicts-in` pack, never in its place, so every machine reuses every pass a recorded
+check earned; each pack imported is named in the result's `verdicts`.  With `--no-cache` it sends both packs of each recorded
+check of the commit first (`commit_packs`), and the run imports only the entries it compares with (`COMPARED`, and
+circuit-check's under `--circuit-cache`): its fresh suites' `contradicts` then reads every pass the commit was recorded with, not
+only those its slot happens to hold.  The agreement's pinned upstream build and inputs go the same way (`agreement_url_file`):
 the launcher signs a URL of each and fetches neither, and lean-agreement fetches them as it starts (`lean_agreement_urls`), so a
 run whose agreement pass is reused fetches nothing.
 
@@ -819,7 +828,8 @@ LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "verity" / "check" / "lea
 
 def lean_regenerates() -> bool:
     """Whether this tree's lean-audit job takes `--regenerate`: a package whose only failures are record differences passes,
-    and its report names the regenerated lock, which drive commits after its lock run (`research.drive.Driver._commit_locks`).
+    and its report names the regenerated lock, which the verified queue's loop commits after a candidate's records run
+    (`research.vqueue_records.commit`).
     Read from the job, so a tree from before it runs as it always did."""
     try:
         return '"--regenerate"' in (LEAN_JOBS / "lean_audit.py").read_text()
@@ -893,16 +903,32 @@ def lean_slot(cmd: list[str]) -> list[str]:
     return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd, only) else cmd
 
 
-def requires_outside(lean: Path) -> list[str]:
-    """The packages the Lean package ``lean`` requires from outside its directory, by its manifest or its lakefile: the
-    agreement's pass is kept under that directory's files only, so it would outlive a change to one of them."""
+def required_packages(lean: Path) -> dict[str, Path | None]:
+    """{name: directory} of the packages the Lean package ``lean`` requires, by its manifest (which lists those its
+    requirements require too) or its lakefile: one required by path at that path, a fetched one None."""
     import tomllib
 
     m, lf = lean / "lake-manifest.json", lean / "lakefile.toml"
     entries = [*(json.loads(m.read_text()).get("packages", []) if m.exists() else []),
                *(tomllib.loads(lf.read_text()).get("require", []) if lf.exists() else [])]
-    return sorted({e.get("name", "?") for e in entries
-                   if (p := e.get("dir") or e.get("path")) is None or not (lean / p).resolve().is_relative_to(lean.resolve())})
+    return {e.get("name", "?"): None if (p := e.get("dir") or e.get("path")) is None else (lean / p).resolve() for e in entries}
+
+
+def requires_outside(lean: Path) -> list[str]:
+    """The packages the Lean package ``lean`` requires from outside the tree, by its manifest or its lakefile: a fetched
+    one, or one at a path that leaves the repository. The agreement's pass is kept under the files of the verifier's
+    package and of the packages of the tree it requires by path (`agreement_closure`), so it would outlive a change to
+    one of these."""
+    inside = (lean.resolve(), ROOT.resolve())
+    return sorted(n for n, d in required_packages(lean).items() if d is None or not any(d.is_relative_to(r) for r in inside))
+
+
+def required_in_tree(lean: str) -> tuple[str, ...]:
+    """The packages of the tree the Lean package at ``lean`` (from the root, ending in "/") requires by path from outside
+    its directory, each as ``lean`` is written."""
+    root, own = ROOT.resolve(), (ROOT / lean).resolve()
+    return tuple(sorted(d.relative_to(root).as_posix() + "/" for d in required_packages(ROOT / lean).values()
+                        if d is not None and d.is_relative_to(root) and not d.is_relative_to(own)))
 
 
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
@@ -915,17 +941,19 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     fails when the file sent can't be read or doesn't list both.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
     drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
-    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/protocols/flock/` (`tools/verity/check/tool.py`), and
-    `--record` sends its URLs then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
-    directory (`requires_outside`)."""
+    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/protocols/flock/` or a Lean package the verifier
+    requires by path (`tools/verity/check/tool.py`), and
+    `--record` sends its URLs then.  The agreement fails, sent or not, while the verifier's package requires one from outside the
+    tree (`requires_outside`)."""
     lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
         if FLOCK_VERIFIER.is_dir():
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: verity/protocols/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/flock/ "
-                                  "(but sigma/, a README.md or PROTOCOL.md) requires this step: `check.py --record` sends its URLs)")
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/flock/ or "
+                                  "a Lean package the verifier requires by path (but sigma/, a README.md or PROTOCOL.md) requires this step: "
+                                  "`check.py --record` sends its URLs)")
     if UPSTREAM_PIN.exists() and agreement_urls is not None:
         try:
             got = agreement_sent(agreement_urls)
@@ -936,7 +964,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
                          if len(got) == 2 else
                          f"the URLs sent list {' and '.join(got) or 'neither'} of the pinned upstream build and inputs")
     if outside := requires_outside(lean):
-        agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside its directory, which the "
+        agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside the tree, which the "
                      f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
     return [("lean-build", ["bash", "-c", SUITES.LAKE_BUILD], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
@@ -1222,7 +1250,9 @@ def record(argv: list[str]) -> int:
     when the commit changes a path `tools/verity/check/tool.py` names against REF (default origin/main, fetched first), or
     whenever --agreement is given, refused when they can't be signed, with
     `--on` REF's commit (`BASE_FILE`, ratchet-gate's base unless RREF's commit, `RATCHET_BASE_FILE`, is), and the presigned URLs of
-    the newest recorded checks' verdict packs (`verdict_url_file`) unless --no-cache without --circuit-cache. A commit that can't land on REF as it is (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
+    the newest recorded checks' verdict packs (`verdict_url_file`), with --no-cache after both packs of each recorded check of the
+    commit (`commit_packs`, the passes its fresh suites are compared with). A commit that can't land on REF as it is
+    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
@@ -1348,7 +1378,7 @@ def record(argv: list[str]) -> int:
         sent = json.loads(urls.read_text())
         shared = sum(k.startswith("lean-artifacts/") for k in sent)
         print(f"check: sending presigned URLs for {len(sent) - shared} pinned Lean dependency bundle(s) and {shared} Lean artifact "
-              f"bundle(s) of recent checks")
+              f"bundle(s) of recent checks, mark audits and records runs")
         if on:
             cmd += ["--send", str(urls)]
         else:
@@ -1359,7 +1389,7 @@ def record(argv: list[str]) -> int:
     if plan_file is not None:
         shutil.copyfile(plan_file, d / AUTO_PLAN)
         cmd += ["--send", str(d / AUTO_PLAN)]
-    if not combining and not records and ("--no-cache" not in rest or "--circuit-cache" in rest):
+    if not combining and not records:
         if "--verdicts-in" in rest[:-1]:
             i = rest.index("--verdicts-in")
             rest[i + 1] = str(given := Path(rest[i + 1]).resolve())
@@ -1367,7 +1397,7 @@ def record(argv: list[str]) -> int:
                 raise SystemExit(f"check: --verdicts-in {given}: no such pack")
             if why := VERDICTS.refusal(given):
                 raise SystemExit(f"check: --verdicts-in {given}: refused ({why})")
-        if urls := verdict_url_file(d):
+        if urls := verdict_url_file(d, commit=_rev("HEAD") if "--no-cache" in rest else None):
             if on:
                 cmd += ["--send", str(urls)]
             else:
@@ -1409,8 +1439,10 @@ GATHER_BYTES = 256 << 20
 VERDICT_URL_TTL_S = 6 * 3600
 
 
-def verdict_url_file(d: Path, store=None, heads: list[str] | tuple[str, ...] | None = None) -> Path | None:
-    """`VERDICT_URLS` in ``d`` (mode 600): the packs `verdict_packs` selects among those the store's remote holds, each with a GET
+def verdict_url_file(d: Path, store=None, heads: list[str] | tuple[str, ...] | None = None,
+                     commit: str | None = None) -> Path | None:
+    """`VERDICT_URLS` in ``d`` (mode 600): the packs `verdict_packs` selects among those the store's remote holds, after the packs
+    of ``commit``'s own recorded checks when it is given (`commit_packs`, which an uncached check compares with), each with a GET
     of its blob that the remote signs for `VERDICT_URL_TTL_S`, for the run to fetch and import before its steps
     (`verdicts_fetched`): the launcher lists and signs, and fetches nothing.  ``heads`` are `verdict_packs`'; the launcher, which
     gives neither them nor a ``store``, sends for the PRs this checkout's queue merges hold (`common.merged_heads`).  None, with
@@ -1425,8 +1457,14 @@ def verdict_url_file(d: Path, store=None, heads: list[str] | tuple[str, ...] | N
         if (sign := getattr(store.remote, "presign", None)) is None:
             print("check: verdicts: no store remote here signs URLs, so the run imports no recorded check's pack", flush=True)
             return None
+        newest = verdict_packs(store, remote=True, heads=heads)
+        own = commit_packs(store, commit, remote=True) if commit else []
+        if own:
+            print(f"check: verdicts: {len(own)} packs of {len({p['run'] for p in own})} recorded checks of {commit[:12]}, every "
+                  f"pass it was recorded with: {', '.join(dict.fromkeys(p['run'] for p in own))}", flush=True)
+        listed = list({p["sha256"]: p for p in [*own, *newest]}.values())
         packs = [{"run": p["run"], "sha256": p["sha256"], "bytes": p["bytes"], "url": sign(object_key(p["sha256"]), VERDICT_URL_TTL_S)}
-                 for p in verdict_packs(store, remote=True, heads=heads)]
+                 for p in listed]
     except Exception as e:  # noqa: BLE001  (no URL: the check reuses only its node's passes and the one given)
         print(f"check: no verdict packs listed from the store ({type(e).__name__}: {e})", flush=True)
         return None
@@ -1435,8 +1473,9 @@ def verdict_url_file(d: Path, store=None, heads: list[str] | tuple[str, ...] | N
     path = d / VERDICT_URLS
     with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
         json.dump(packs, f)
-    print(f"check: sending presigned URLs for the verdict packs of {len(packs)} recorded checks "
-          f"({sum(p['bytes'] for p in packs) / 2**20:.0f} MiB): {', '.join(p['run'] for p in packs)}", flush=True)
+    runs = list(dict.fromkeys(p["run"] for p in packs))
+    print(f"check: sending presigned URLs for the verdict packs of {len(runs)} recorded checks "
+          f"({sum(p['bytes'] for p in packs) / 2**20:.0f} MiB): {', '.join(runs)}", flush=True)
     return path
 
 
@@ -1505,6 +1544,19 @@ def verdict_packs(store, limit: int = GATHER, remote: bool = False, heads: list[
     return packs
 
 
+def commit_packs(store, commit: str, remote: bool = False) -> list[dict]:
+    """{run, sha256, bytes} of both packs (`PACK_FILES`: the passes it stored and those it reused) of each recorded check of
+    ``commit`` and each of its after-landing runs (`plan.own_checks`, newest first), the passes `check.py --plan` reads for it too:
+    every pass the commit was recorded with, held to no `GATHER_BYTES`.  With ``remote``, one the store's remote doesn't hold is
+    passed over, as no URL fetches it.  Read after `verdict_packs`, which refreshes the recent attempts."""
+    packs = []
+    for rid in _load("plan").own_checks(store, commit):
+        for name in PACK_FILES:
+            if (got := pack_file(store, rid, name)) is not None and (got[1].get("remote") or not remote):
+                packs.append({"run": rid, "sha256": got[1]["sha256"], "bytes": got[1]["bytes"]})
+    return packs
+
+
 def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
     """(attempt, pack) of the newest packs `verdict_packs` selects (those of no PR's marks beside them), fetched under ``d``,
     newest first, for a plan read here (`plan.py`, `measure`); one import refuses is passed over by name."""
@@ -1520,13 +1572,21 @@ def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]
     return packs
 
 
-#: the pack paths of circuit-check's per-target cache (`groups`' `--cache`), all a run with `--no-cache --circuit-cache` imports
+#: the pack paths of circuit-check's per-target cache (`groups`' `--cache`), which a run with `--no-cache --circuit-cache` reuses
 CIRCUIT_ENTRIES = "check/circuit-check/"
+#: the pack paths of the suites' and tests' passes (`$VERITY_TEST_CACHE`), what a run with `--no-cache` imports of a pack (and
+#: `CIRCUIT_ENTRIES` with `--circuit-cache`): it reuses none of them, and its fresh suites name each failure one of them answers
+#: for (`suites.py --fresh`'s `contradicts`)
+COMPARED = "tests/"
 
 
-def verdicts_in(pack: Path, run_dir: Path | None, only: str | None = None) -> dict:
+def _only(only: str | tuple[str, ...] | None) -> str:
+    return f" (only {', '.join((only,) if isinstance(only, str) else only)})" if only else ""
+
+
+def verdicts_in(pack: Path, run_dir: Path | None, only: str | tuple[str, ...] | None = None) -> dict:
     """Import a verdict pack before the steps run (`verdicts.py`): the path given, else its name in a recorded run's `inputs/`;
-    with ``only``, just its entries under that pack path."""
+    with ``only``, just its entries under that pack path (or those)."""
     try:
         here = pack.exists()
     except PermissionError:                  # the launcher's path, under a directory this machine can't read (its /root)
@@ -1534,7 +1594,7 @@ def verdicts_in(pack: Path, run_dir: Path | None, only: str | None = None) -> di
     if not here and run_dir is not None and (run_dir / "inputs" / pack.name).exists():
         pack = run_dir / "inputs" / pack.name
     added, kept = VERDICTS.import_(pack, only)
-    print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}{f' (only {only})' if only else ''}", flush=True)
+    print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}{_only(only)}", flush=True)
     return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept, **({"only": only} if only else {})}
 
 
@@ -1560,11 +1620,11 @@ def fetch_signed(p: dict, dest: Path) -> str | None:
     return None
 
 
-def verdicts_fetched(listed: list[dict], only: str | None = None) -> list[dict]:
+def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = None) -> list[dict]:
     """Fetch each pack ``listed`` (`take_verdict_urls`, newest first) and import it before the steps run (`verdicts.import_`, which
     never replaces an entry here, so where two packs hold one entry the newer's is kept); with ``only``, just its entries under
-    that pack path.  A pack that can't be fetched, isn't the one listed or that import refuses is passed over by name, so its
-    verdicts are recomputed.  Each pack's record for the result's `verdicts`."""
+    that pack path (or those).  A pack that can't be fetched, isn't the one listed or that import refuses is passed over by
+    name, so its verdicts are recomputed.  Each pack's record for the result's `verdicts`."""
     got, t0 = [], time.monotonic()
     with tempfile.TemporaryDirectory(prefix="check-verdicts-") as d:
         pack = Path(d) / "verdicts.tar.gz"
@@ -1582,8 +1642,7 @@ def verdicts_fetched(listed: list[dict], only: str | None = None) -> list[dict]:
             got.append({"run": p["run"], "sha256": p["sha256"], "skipped": why})
     taken = [g for g in got if "skipped" not in g]
     print(f"check: verdicts: {sum(g['added'] for g in taken)} imported, {sum(g['already'] for g in taken)} already here, from "
-          f"{len(taken)} of {len(listed)} recorded checks' packs{f' (only {only})' if only else ''} in {time.monotonic() - t0:.0f} s",
-          flush=True)
+          f"{len(taken)} of {len(listed)} recorded checks' packs{_only(only)} in {time.monotonic() - t0:.0f} s", flush=True)
     return got
 
 
@@ -1940,10 +1999,10 @@ def deferred_parts(steps: str) -> list[str]:
 def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
-    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
-    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
-    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
-    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
+    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), and never
+    those of `shards.NO_SHARD`, "all": every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake
+    packages, each spec's audit on its provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there
+    is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
@@ -1956,8 +2015,8 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
     held = {p for s in shards for p in s}
     mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
     return {"k": k, "n": n,
-            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of)
-                      if p in mine and (not gated or p.partition(":")[0] not in OFF_GATE)],
+            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of) if p in mine and p.partition(":")[0] not in SHARDS.NO_SHARD
+                      and (not gated or p.partition(":")[0] not in OFF_GATE)],
             "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
 
 
@@ -2423,8 +2482,9 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 def agreement_key(e: dict[str, str]) -> str | None:
     """What the agreement job reads: the tracked files `agreement_closure` names (verity/protocols/flock/agreement/: `ci.py` and the scripts
     it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
-    the inputs and the job's settings; and the Lean package `flock-verify` is built from, verity/protocols/flock/verifier/, its sources and
-    toolchain pin), the interpreter and the platform.  None when the tree's files cannot be listed."""
+    the inputs and the job's settings; and the Lean packages `flock-verify` is built from, verity/protocols/flock/verifier/ and
+    the packages of the tree it requires by path, their sources and toolchain pins), the interpreter and the platform.  None
+    when the tree's files cannot be listed."""
     files = tracked_files()
     if files is None:
         return None
@@ -2487,17 +2547,21 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 
 def agreement_closure(files: list[str]) -> list[str]:
-    """The tracked files the agreement job can read: verity/protocols/flock/agreement/, less any Lake package nested in its Lean package
-    (Flock's proofs are under `security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
-    requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which only
-    `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
+    """The tracked files the agreement job can read: verity/protocols/flock/agreement/, the verifier's Lean package and the
+    packages of the tree it requires by path (`required_in_tree`), which its executable is built from; less any Lake package
+    nested in the verifier's (Flock's proofs are under `security/Proofs/`), which it is not built from as long as the Lean
+    package requires nothing (a `require` in its lakefile keeps them all in), and less each of those packages'
+    `lean-audit.json`, which only `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the
+    verifier's lakefile mention it)."""
     pre, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
     nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
     if any("require" in (ROOT / f).read_text() for f in root if (ROOT / f).is_file()):
         nested = ()
-    return [f for f in files if f.startswith((pre, lean)) and f != lean + "lean-audit.json" and not f.startswith(nested or ("\0",))]
+    packages = (lean, *required_in_tree(lean))
+    locks = {p + "lean-audit.json" for p in packages}
+    return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))]
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
@@ -2790,8 +2854,9 @@ class Reused:
     process may import while it compiles them), beside the steps; it runs again once circuit-check ends when it found no task
     list to read circuit-check's targets from.  xz with a dictionary spanning many entries (`verdicts.XZ_FILTERS`): one tree's
     circuit-check entries run past a GB, and pack to a few MB.  `verdict_packs` never takes it; `plan.py` does, for a check
-    of the commit it plans and each `--from`.  With ``only`` (`--no-cache --circuit-cache`), just its entries under that pack
-    path: the plan also finds suites' passes here, which such a run runs again."""
+    of the commit it plans and each `--from`, and so does an uncached check of that commit (`commit_packs`).  With ``only``
+    (`--no-cache --circuit-cache`), just its entries under that pack path: the plan also finds suites' passes here, which such
+    a run runs again."""
 
     def __init__(self, run_dir: Path, before: dict[str, str], only: str | None = None):
         self.out, self.before, self.only = run_dir / REUSED_PACK, before, only
@@ -2918,7 +2983,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
         skipped = argv.startswith("skipped:")
         print(f"check: {name}: {argv}", flush=True)
         return steps.end({"step": name, "status": "skipped" if skipped else "failed", "detail": argv, "seconds": 0.0})
-    e = env()
+    e = env() if cache else env() | SUITES.UNCACHED_ENV
     t0 = time.monotonic()
     hit = None
     key = STEP_KEYS[name](e) if cache and name in STEP_KEYS else None
@@ -3071,8 +3136,9 @@ def agreement_verdicts(run_dir: Path) -> list[str]:
 def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
     """What the suites' runs say about the caches (`suites.py`), per suite: ``contradicts``, what a fresh run (`--no-cache`, which the
     nightly `audit-main` runs on `main`) failed that a cached pass, a suite's or a test's, answers for (a key that misses an input,
-    or a test whose outcome isn't a function of its inputs); ``nondeterministic``, the tests that both passed and failed under one
-    key (their inputs were identical)."""
+    or a test whose outcome isn't a function of its inputs), among the slot's own and, in a recorded run, every pass the commit's
+    recorded checks hold (`commit_packs`, imported before the steps); ``nondeterministic``, the tests that both passed and failed
+    under one key (their inputs were identical)."""
     found = []
     for f in ("suites.json", "suites-lean.json"):
         if (out / f).is_file():
@@ -3338,8 +3404,8 @@ def main(argv: list[str], script: bool = False) -> int:
         print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
     listed, verdicts = take_verdict_urls(out), {}
-    if circuit_cache and (pack or listed):
-        part = None if cache else CIRCUIT_ENTRIES
+    if pack or listed:
+        part = None if cache else ((CIRCUIT_ENTRIES, COMPARED) if circuit_cache else COMPARED)
         verdicts["in"] = [*([verdicts_in(pack, run_dir, part)] if pack else []), *(verdicts_fetched(listed, part) if listed else [])]
     if records is not None and (only is None or any(p.partition(":")[0] == "circuit-check" for p in only)):
         why = (cc_records_in(records, cache_dir() / "circuit-check") if circuit_cache

@@ -195,7 +195,8 @@ A spec-level reference for network accounting's timing channel:
   replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
   each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
   are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
+  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the advice decoder's block pool,
+  `verity_vllm.pipeline.advice_code.pool.BlockPool`, over whole traces);
 - the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
   checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
   lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
@@ -232,7 +233,7 @@ A spec-level reference for network accounting's timing channel:
 - the compile slice charging the length terms (`compile_slice_v7`): `CompileSlice_v7`, `CompileSlice_v1` with
   `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot for each certified arrival read from
   ``cert`` (its output length and its certified max_tokens), so a window's charge covers `code_v1`'s segment and its
-  length tail. It is the served windows' slice (vLLM's `serve_commit.SERVED_SLICE`), and
+  length tail. vLLM's served windows name it (`serve_commit.SERVED_SLICE`), except under `--admit tick`, and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge (and plain, ``--plain``);
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
@@ -358,7 +359,9 @@ A spec-level reference for network accounting's timing channel:
   audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
-  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
+  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. The period check, the
+  step from a period's records to the network bound, is not in the public tree, because it reads the inference-only
+  policy's layout check, which is withheld. Programs start at
   fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy

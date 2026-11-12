@@ -11,10 +11,13 @@ public import Definitions.Core.Site
 public import Definitions.Core.Period
 public import Definitions.Core.Structure
 public import Definitions.Core.Rec
+public import Definitions.Core.CoinBytes
+public import Definitions.Core.Game.Tape
+public import Definitions.Core.Game.TwoRun
+public import Definitions.Core.Game.InterleaveBridge
 public import Definitions.Nci
 public import Definitions.Nci.Support
 public import Definitions.Nci.Reads
-public import Definitions.Nci.Transfers
 public import Definitions.Nci.Dark
 public import Definitions.Nci.Covering
 public import Definitions.Nci.Capability
@@ -104,6 +107,7 @@ public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.ResponseCap
 public import Definitions.NetworkCertifier.Guarantees.Carried
+public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity
