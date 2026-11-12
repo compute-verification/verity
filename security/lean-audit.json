@@ -28884,8 +28884,8 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -56575,8 +56575,9 @@
    }
   },
   "Spot.ChallengerCoins": {
-   "digest": "0c2870734e866b7e4e0af76454b5165a695d79e0a4d4f5af2b9f39f90a559f55",
+   "digest": "56fae9925796ca2bd372abbe8c79f7c10fd89dc6d45c156c88e032f8db35a0fb",
    "definitions": {
+    "Spot.Challenger.FAMILY_ROOT": "73d04951cb6d6dd23f80140003c5dd9cd93bd72079ccbe9ccadaa50bfcf55d71",
     "Spot.Challenger.LIMITS": "e7bfb471561d80fdee056273c9f5c772f1d8042bb580ecf0c98661c934fb8008",
     "Spot.Challenger.Limits": "a0216a077b6946bf95377c777c0353192d673edebe19b2d0854123fcfef6433e",
     "Spot.Challenger.Limits.form": "228ff1082059ab62675600f06c13a2b45be4f7636b680269693d3e194de14531",
@@ -56593,7 +56594,7 @@
     "Spot.Challenger.SEGMENT_FORM": "c52e73ce8c32b42739c3ed9507c9c2b8652602c5fcc9c9d9691216556e79324f",
     "Spot.Challenger.WITHHELD": "218d71c722297a393b300c9c0d32291a596d31ea111ff6e032acf001e1db8718",
     "Spot.Challenger.arrSize": "1ba24d09e64bb2ca0b304ea389f91ab093599edac9fdd8d71eb7e16507962c55",
-    "Spot.Challenger.challengerStream": "8c772a2279fdbdb8c34c876ce441e7673aa99523286714dadf4ac76e59556f93",
+    "Spot.Challenger.challengerStream": "bf344249321fd12224dcbbf9a0a95a43b345e05bea215fb3cd20c8c720b7cedf",
     "Spot.Challenger.withheldOn": "0b901e9670b0baeb11447d1b44a31ef6052853b2d04bd530284525d1d902ecf4",
     "Spot.Challenger.withinAt": "f6f5b3c70fda31eee55c13ee910e2ef8c8c3f61205d67d9361ca2859f535e35d"
    }
