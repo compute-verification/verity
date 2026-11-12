@@ -23,6 +23,8 @@ from verity_vllm.program.frontend.strided_views import _tensor_type
 
 #: the op's outputs past O and the LSE: the backward's state (cumulative sequence lengths, maxima, the RNG state, the debug mask)
 _STATE = 7
+#: the op autograd pairs with the forward, which takes that state
+_BACKWARD = aten._scaled_dot_product_flash_attention_backward.default
 
 
 class FlashSdpa(_TrainRule):
@@ -31,7 +33,8 @@ class FlashSdpa(_TrainRule):
     `Fa2TrainHead_v1` unsplit, `Fa2TrainSplitHead_v1` in four splits), O (bf16) and the LSE (f32) of each head.  The rule claims
     every call at ``cc`` and refuses one it can't lower that way, so that no other rule lowers it with torch CPU's arithmetic: a
     shape the capture doesn't cover, a non-causal call, dropout, another scale, a debug mask, an operand that is not a bf16 value
-    and a read of the backward's state (the backward is not lowered)."""
+    and a read of the backward's state by anything but the op's own backward (`_scaled_dot_product_flash_attention_backward`,
+    which no rule lowers: a step that differentiates through the call is refused there)."""
 
     def __init__(self, cc: tuple[int, int]):
         if tuple(cc) != CB.TRAIN_CC:
@@ -71,9 +74,9 @@ class FlashSdpa(_TrainRule):
         for u in node.users:
             if u.target is not operator.getitem:
                 return f"{u.name} reads the op's whole result"
-            if u.args[1] >= 2 and u.users:
-                return (f"numerics_unregistered: {u.name} reads output {u.args[1]}, the backward's state (the backward is not "
-                        "lowered)")
+            if u.args[1] >= 2 and any(r.target is not _BACKWARD for r in u.users):
+                return (f"numerics_unregistered: {u.name} reads output {u.args[1]}, the backward's state, outside the op's own "
+                        "backward")
         return True
 
     def emit(self, node, ctx):

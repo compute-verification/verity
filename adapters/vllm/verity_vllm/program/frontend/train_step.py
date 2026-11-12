@@ -150,6 +150,26 @@ class _TF32Seen(TorchFunctionMode):
         return func(*args, **(kwargs or {}))
 
 
+#: `F.scaled_dot_product_attention`'s parameters in order (a builtin, which has no signature to read them from)
+_SDPA_PARAMS = ("query", "key", "value", "attn_mask", "dropout_p", "is_causal", "scale", "enable_gqa")
+
+
+class _FlashAttention(TorchFunctionMode):
+    """Gives a `F.scaled_dot_product_attention` call of bf16 operands with no mask to `aten._scaled_dot_product_flash_attention`,
+    the op `fa2_train`'s captures are of, with the call's own arguments; autograd then takes its backward from that op's. A meta
+    tensor's own dispatch is the math path whatever the SDPA backends allow."""
+
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        kwargs = kwargs or {}
+        if func is torch.nn.functional.scaled_dot_product_attention:
+            call = {**dict(zip(_SDPA_PARAMS, args)), **kwargs}
+            operands = [call["query"], call["key"], call["value"]]
+            if call.get("attn_mask") is None and not call.get("enable_gqa") and all(t.dtype == torch.bfloat16 for t in operands):
+                return torch.ops.aten._scaled_dot_product_flash_attention(
+                    *operands, call.get("dropout_p", 0.0), call.get("is_causal", False), False, scale=call.get("scale"))[0]
+        return func(*args, **kwargs)
+
+
 @contextlib.contextmanager
 def _patched(owner, name: str, value):
     """``owner.name = value`` for the block. Afterwards ``owner`` holds under ``name`` what it held itself before: that attribute
@@ -167,27 +187,34 @@ def _patched(owner, name: str, value):
 
 
 @contextlib.contextmanager
-def _gpu_branches():
+def _gpu_branches(fused_attention: bool = False):
     """The step as a GPU runs it, on meta tensors: a `Tensor.is_cuda` read from outside torch is True (torch's own reads keep the
-    meta tensor's answer, so its dispatch is unchanged); yields the set of TF32 settings the step's calls ran under."""
+    meta tensor's answer, so its dispatch is unchanged), and with `fused_attention` its bf16 attention is the flash attention op
+    (`_FlashAttention`); yields the set of TF32 settings the step's calls ran under."""
     # read from the class this is the descriptor, where torch's stubs give the bool an instance answers with
     base = cast(types.GetSetDescriptorType, torch._C.TensorBase.is_cuda)
 
     def is_cuda(t: torch.Tensor) -> bool:
         return True if not sys._getframe(1).f_code.co_filename.startswith(_TORCH_DIR) else base.__get__(t)
 
-    with _patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
+    attention: contextlib.AbstractContextManager = _FlashAttention() if fused_attention else contextlib.nullcontext()
+    with _patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode, attention:
         yield mode.seen
 
 
 def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
-                gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
+                gpu: bool = False, fused_attention: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
     """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`. `gpu`: traced
     as a GPU runs it (`_gpu_branches`): its CUDA branches, and the layout's `tf32` the cuda.matmul.allow_tf32 its calls ran
-    under, which must be one setting for the whole step (a step that changes it between products is refused)."""
+    under, which must be one setting for the whole step (a step that changes it between products is refused).
+    `fused_attention`, with `gpu`: bf16 attention is torch's flash attention op, forward and backward (`_FlashAttention`), where
+    the trace otherwise holds the math path, a meta tensor's dispatch. The backward op has no rule, so a step traced so derives
+    no Program when it differentiates through attention."""
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
+    if fused_attention and not gpu:
+        raise ValueError("export_step: fused_attention is a GPU's kernel: pass gpu=True with it")
     adamw = AdamW.from_torch(optimizer) if isinstance(optimizer, torch.optim.Optimizer) else optimizer
     wrap = _Loss(model, loss_fn)
     pnames = [n for n, _ in wrap.named_parameters()]
@@ -223,7 +250,7 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
     inputs = ([_ident(f"param_{n}") for n in short] + [_ident(f"exp_avg_{n}") for n in short] + [_ident(f"exp_avg_sq_{n}") for n in short]
               + list(scalars) + [_ident(f"buf_{n}") for n in bshort] + ["batch"])
     outputs = ["loss"] + [f"param:{n}" for n in short] + [f"exp_avg:{n}" for n in short] + [f"exp_avg_sq:{n}" for n in short]
-    branches: contextlib.AbstractContextManager[set[bool]] = _gpu_branches() if gpu else contextlib.nullcontext(set())
+    branches: contextlib.AbstractContextManager[set[bool]] = _gpu_branches(fused_attention) if gpu else contextlib.nullcontext(set())
     with sdpa_kernel(SDPBackend.MATH), branches as tf32:
         gm = make_fx(torch.func.functionalize(step, remove="mutations"), tracing_mode="fake")(*metas)
     if len(tf32) > 1:
