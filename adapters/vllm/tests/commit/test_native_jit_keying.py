@@ -3,13 +3,17 @@ name the source binds -- the two rules that make a stale .so (another tree's bui
 impossible to adopt and impossible to miss.  Torch-free: runs on the laptop and in the pod gate."""
 from __future__ import annotations
 
+import inspect
 import os
+import re
 import types
 
 from verity_vllm.commit.committer import native_jit as nj
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CPP = os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_collect.cpp")
+#: flush-to-zero, fast math and approximate division or square root, as a compiler names them once case and punctuation are dropped
+INEXACT = ("ftz", "fastmath", "precdiv", "precsqrt", "ofast")
 
 
 def _write(tmp_path, name, data: bytes):
@@ -32,6 +36,28 @@ def test_source_set_digest_changes_with_any_source_byte_and_with_the_flags_and_t
     assert nj.source_set_digest([a, b, c], torch_version="2.9.0", cuda_version="12.9") != d0, "toolchain in the key"
     assert nj.source_set_digest([a, b, c], cflags=("-O2",), torch_version="2.8.0", cuda_version="12.9") != d0, "flags in the key"
     assert len(d0) == 64
+
+
+def _inexact(flags) -> list[str]:
+    texts = [re.sub(r"[^a-z0-9]", "", f.lower()) for f in flags]
+    return [w for w in INEXACT if any(w in t for t in texts)]
+
+
+def test_the_committers_compilers_get_no_fast_math_or_flush_to_zero_flag():
+    for spelling in (("-O3", "--use_fast_math"), ("-ffast-math",), ("-Ofast",), ("-ftz=true",), ("-Xptxas", "--FTZ"),
+                     ("-prec-div=false",), ("--prec_sqrt=false",), ("--compiler-options", "'-fPIC -ffast-math'")):
+        assert _inexact(spelling), spelling
+    assert not _inexact(("-O3", "-std=c++17", "--expt-relaxed-constexpr", "--compiler-options", "'-fPIC'"))
+    for name in ("CFLAGS", "CUDA_CFLAGS"):
+        flags = getattr(nj, name)
+        assert not _inexact(flags), (f"native_jit.{name} = {flags} names {_inexact(flags)}: the committer's sources write committed "
+                                     "rows, so they are built with no fast-math, flush-to-zero or approximate division or square "
+                                     "root option; delete the flag")
+    # what the build passes and what keys its dir are these two constants
+    defaults = inspect.signature(nj.source_set_digest).parameters
+    assert defaults["cflags"].default is nj.CFLAGS and defaults["cuda_cflags"].default is nj.CUDA_CFLAGS
+    src = open(os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_ext.py")).read()
+    assert "cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS" in src
 
 
 def test_keyed_build_dir_is_a_child_of_the_named_parent():

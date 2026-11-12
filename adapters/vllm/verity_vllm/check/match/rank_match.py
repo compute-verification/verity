@@ -124,7 +124,7 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
     return out
 
 
-def own_producers_from_record(instances_path: str | Path, program_nodes_spec: dict[int, str] | None = None) -> dict[tuple[int, int], list[str]]:
+def own_producers_from_record(instances_path: str | Path) -> dict[tuple[int, int], list[str]]:
     """The same from a persisted record: `instances.jsonl` rows carrying `collective` + `operand_refs` (node-space runs kept in the file);
     the producer's spec is read from the row whose `node` the own run names."""
     from verity_vllm.program.compact import runs_from_file_items   # v2 files hold node-space progressions

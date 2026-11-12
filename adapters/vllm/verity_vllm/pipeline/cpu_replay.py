@@ -15,7 +15,8 @@ not served (a relation that reads it is not evaluated, named).  The tree is rows
 
 Then the same C2 as the in-process Commit (`pipeline.c2_replay.run`), and the run's verdict (`check.verdict.commit_verdict`): the
 row in `runs.jsonl`, `summary.json` and `verdict.json` are rewritten with the replay on the record and `commit.weights_attest`.
-Exit 0 PASS, 3 FAIL, 2 refused (a bundle that is not this record's, or a pick too large for this host's memory: `driver.PoolDoesNotFit`).
+Exit 0 PASS, 3 FAIL, 2 refused (`errors.Refused`: a bundle that is not this record's, or a record with no deferred replay to decide;
+`driver.PoolDoesNotFit`: a pick too large for this host's memory).
 
 Before the record is rewritten, the decided replay leaves its SLIM KEEP beside the bundle, `<out>/replay_slim_p<pair>/` (`keep`): what a
 later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, by other row kernels, without
@@ -58,6 +59,7 @@ import numpy as np
 from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.program.compiled_relations import warm_vml
@@ -89,10 +91,6 @@ class Options:
                                           help="a forked worker's measured peak memory beyond what the row evaluator states for its pick, "
                                                "GiB (default: the word replay's, admission commit.c2.replay_workers.small_vu): after the "
                                                "prewarm the workers are fitted to the cgroup's memory.max less its use (`driver.fit_pool`)")
-
-
-class Refused(Exception):
-    """The bundle is not the Commit record's, or the record has no deferred replay to decide."""
 
 
 def open_keep(keep: str | os.PathLike) -> dict[str, Any]:
@@ -164,12 +162,18 @@ def tensor_key_of(tree: dict[str, Any], i: int) -> bytes | None:
     return bytes.fromhex(ks) if ks else None
 
 
-def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
-    """Tensor ``i``'s root (`step_rows.keyed_tensor_root` under `tensor_key_of`)."""
+def held_tensor_key(tree: dict[str, Any], i: int) -> bytes:
+    """`tensor_key_of` tensor ``i``; KeyError where the slim keep carries none."""
     ks = tensor_key_of(tree, i)
     if ks is None:
         raise KeyError(f"registered tensor {i} ({tree['names'][i][0]}): the slim keep carries no salt key for it")
-    return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"), ks)
+    return ks
+
+
+def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
+    """Tensor ``i``'s root (`step_rows.keyed_tensor_root` under `held_tensor_key`)."""
+    return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"),
+                                       held_tensor_key(tree, i))
 
 
 def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
@@ -177,7 +181,7 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
     from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened), and the
     bundle's bytes of those alone."""
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
-    keys = {str(at[n]): tensor_key_of(tree, at[n]).hex() for n in sorted(keep_ & at.keys(), key=at.get)}
+    keys = {str(at[n]): held_tensor_key(tree, at[n]).hex() for n in sorted(keep_ & at.keys(), key=at.__getitem__)}
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
         "tensor_keys": keys, "extra": {n: i for n, i in tree["extra"].items() if str(i) in keys}}
 
@@ -386,7 +390,7 @@ def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[l
         if done is None:
             raise Refused(f"pair {pair}: the record was not decided by a replay of the bundle {b['manifest_sha256'][:16]} this keep was cut from")
         undecided(row["commit"], done["bundle"])
-    if awaiting and (row is None or not RB.awaits_replay(row.get("commit") or {})):
+    if row is None or (awaiting and not RB.awaits_replay(row.get("commit") or {})):
         raise Refused(f"pair {pair}: no instrumented run awaiting its deferred replay in {out / 'runs.jsonl'}")
     store, run = SD.load(bdir / "store")
     c = row["commit"]
@@ -526,7 +530,7 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     names = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
     with ThreadPoolExecutor(8) as pool:
         sums = pool.map(lambda r: hashed.get(r.removeprefix("store/")) or RB._sha256(p / r), names)
-        files = {r: {"sha256": h, "bytes": (p / r).stat().st_size} for r, h in zip(names, sums)}
+        files: dict[str, dict[str, Any]] = {r: {"sha256": h, "bytes": (p / r).stat().st_size} for r, h in zip(names, sums)}
     doc = {"schema": SLIM_SCHEMA, "pair": pair, "run_root": run.run_root.hex(), "program_digest": (ctx.get("args") or {}).get("program_digest"),
            "programs": sr.get("programs"), "binding_map_sha256": b["manifest"]["files"]["binding_map.json"]["sha256"],
            "bundle_manifest_sha256": b["manifest_sha256"], "commit_pass": c.get("commit_pass"), "picked": picked, "picks_key": PICKS_KEY,

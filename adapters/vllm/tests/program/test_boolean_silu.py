@@ -10,18 +10,16 @@ import json
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import evaluation as E
 from verity.circuits import partition_object as PO
-from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
-from verity.definitions.registry import act
-from verity.definitions.registry import b1
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions.registry import act, b1
 from verity.definitions.registry import boolean_silu as BSL
 from verity.definitions.registry import prims as P
 

@@ -45,7 +45,7 @@ def simulate(layer: str, o: dict):
     blk, row = np.divmod(o["sslot"][t], L.block)
     X.state_rows_of(saved, layer)[blk, row] = np.concatenate(
         [o["kv"][t], FT.fadd(o["score"][t], o["ape"][o["pos"][t] % L.ratio])], axis=1)
-    k = np.full((X.NBK[layer], X.page_bytes(L.pbs)), X.SENTINEL_K, np.uint8)
+    k: np.ndarray = np.full((X.NBK[layer], X.page_bytes(L.pbs)), X.SENTINEL_K, np.uint8)
     a = np.flatnonzero(X.compressed(o, layer))
     kv, sc, nrows = X.state_rows(saved, o["sbt"], o["req"][a], o["pos"][a], layer)
     rows = X.entries_twin(layer, kv, sc, nrows, o["w"], o["cs"][(o["pos"][a] // L.ratio) * L.ratio])
@@ -80,7 +80,7 @@ def test_the_statics_are_dsv4s() -> None:
     the `fp8_ds_mla` pages the decode reads (64 and 2 rows, 37440 and 1728 bytes), and the state's pages padded past their rows."""
     assert (X.D, X.NOPE, X.ROPE, X.QB, X.W128, X.R128, X.WORDS) == (512, 448, 64, 64, 8, 16, 520)
     assert tuple(X.LAYERS["c4"]) == (4, 1024, 4, 8, 64) and tuple(X.LAYERS["c128"]) == (128, 512, 8, 128, 2)
-    assert X.W128 * X.R128 == X.LAYERS["c128"].window and (X.TOKEN_BYTES, X.DATA_BYTES, X.SCALE_BYTES) == (584, 576, 8)
+    assert X.LAYERS["c128"].window == X.W128 * X.R128 and (X.TOKEN_BYTES, X.DATA_BYTES, X.SCALE_BYTES) == (584, 576, 8)
     assert X.page_bytes(64) == 37440 and X.page_bytes(2) == 1728 and X.STATE_PAGE == 9360
     assert all(L.block * 2 * L.width < X.STATE_PAGE for L in X.LAYERS.values())
     assert set(X.PTX_COUNTS) == {"c4", "c128", "store"} and len(X.SOURCES) == 4
@@ -296,7 +296,7 @@ def _one(job: dict, i: int) -> dict:
 def _ref_jobs(ob, edge_off: int, layer: str) -> list[dict]:
     """The first score row, the first two cache rows, a NaN edge row (at request 1's offset ``edge_off``) and, on ratio 128, the
     first token's columns, each one instance."""
-    by = {}
+    by: dict[tuple[str, str], dict] = {}
     for j in ob.jobs:
         by.setdefault((j["kind"], j["case"]), j)
     s1 = X.REQUESTS[layer][1][0]
@@ -409,11 +409,11 @@ def _kernels(texts: dict) -> types.ModuleType:
             return SimpleNamespace(currsize=1)
 
     K = types.ModuleType("sparse_attn_compress_cutedsl")
-    K.SparseAttnCompressNormRopeStoreC4Kernel, K.SparseAttnCompressC128Block8Kernel, K.SparseAttnNormRopeStoreKernel = (
-        type(n, (), {"compile": Compile(n)}) for n in ("c4", "c128", "store"))
-    K._TORCH_TO_CUTE = {torch.bfloat16: "bf16"}
-    K.compile_split_sparse_attn_cutedsl = lambda *a, **kw: (K.SparseAttnCompressC128Block8Kernel.compile(),
-                                                            K.SparseAttnNormRopeStoreKernel.compile())
+    c4, c128, store = (type(n, (), {"compile": Compile(n)}) for n in ("c4", "c128", "store"))
+    vars(K).update(SparseAttnCompressNormRopeStoreC4Kernel=c4, SparseAttnCompressC128Block8Kernel=c128,
+                   SparseAttnNormRopeStoreKernel=store, _TORCH_TO_CUTE={torch.bfloat16: "bf16"},
+                   compile_split_sparse_attn_cutedsl=lambda *a, **kw: tuple(
+                       vars(K)[n].compile() for n in ("SparseAttnCompressC128Block8Kernel", "SparseAttnNormRopeStoreKernel")))
     return K
 
 
@@ -430,7 +430,7 @@ def test_the_ptx_phase_reads_each_kernels_kept_ptx_and_cubin(kept, tmp_path, mon
     for name in ("vllm", "vllm.models", "vllm.models.deepseek_v4", "vllm.models.deepseek_v4.nvidia"):
         monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
     ops = types.ModuleType("vllm.models.deepseek_v4.nvidia.ops")
-    ops.sparse_attn_compress_cutedsl = K
+    vars(ops).update(sparse_attn_compress_cutedsl=K)
     monkeypatch.setitem(sys.modules, ops.__name__, ops)
     monkeypatch.setitem(sys.modules, f"{ops.__name__}.sparse_attn_compress_cutedsl", K)
     monkeypatch.setattr(X.shutil, "which", lambda tool: None)
@@ -499,15 +499,15 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     for k in ENV_KEYS:
         monkeypatch.delenv(k, raising=False)
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
     monkeypatch.setattr(X, "ptx", lambda outdir: {"ok": True})
-    by = {}
+    by: dict[tuple[str, str], dict] = {}
     for j in ob.jobs:
         by.setdefault((j["kind"], j["case"]), j)
     edge = _flipped(tmp_path / "bad", {**by[("entries", "c4-edge")], "rows": [0, 1]}, (0, 9))

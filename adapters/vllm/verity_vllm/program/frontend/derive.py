@@ -40,12 +40,12 @@ from typing import Any, Callable, NoReturn, Sequence
 import torch
 
 from verity.circuits.codec import descriptor_id, canonical_json, encode_program, program_digest
-from verity.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
 from verity.circuits.defs import bind as ir_bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.refs import runs as _refs_runs
-from verity.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
+from verity.circuits.liveness import dead_gates as _dead_gates
 from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 from verity_vllm.program import inputs
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
@@ -54,9 +54,9 @@ from verity_vllm.program.frontend.registration import RegisteredInputs, RunInput
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
 from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
 from verity.definitions.replay import replayer
-from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
+from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor
 from verity_vllm.program.frontend.value_types import Alloc
-from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
+from verity_vllm.program.frontend.rules.base import InPlaceRule, Rule, RuleSet, StateRule
 
 DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: rotary table without terminal cast, 0-d buffer operand in Elementwise; d3: embedding padding_idx, bf16 inv_freq rotary table; d2: HF 5.x plumbing
 
