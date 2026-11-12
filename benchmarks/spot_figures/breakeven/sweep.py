@@ -239,7 +239,7 @@ def run_case(job):
         sampled = pt["plan"]["replay_sample"]
         out["compile"] = {"sampled": sampled, "share": {str(h): sampled * h * 3600 / reprice.CORE_PER_GPU
                                                         / s.gpu_seconds for h in (*COMPILE_CORE_H, 14.0)}}
-        out["pool"] = pool(L, case, pt["registration_sample"])
+        out["pool"] = pool(L, case, sampled * MACHINE_GPUS * WINDOW / s.gpu_seconds)
         if case.leverage:
             walked = {k: v for k, v in out["pool"]["every"].items() if k.endswith("walked")}
             out["leverage"] = leverage(L, case, scope, WEIGHTS["FP4"] - advice, b4, walked)
