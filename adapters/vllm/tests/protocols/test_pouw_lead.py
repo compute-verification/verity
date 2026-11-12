@@ -15,10 +15,10 @@ import hashlib
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.pouw.verifier.serving import PassCommitment
 
 from tests.protocols._needs_torch import torch
+from verity.protocols.pouw.verifier.coins import Challenger
+from verity.protocols.pouw.verifier.serving import PassCommitment
 from verity_vllm import protocols as PO
 from verity_vllm.commit import lead_rows as L
 from verity_vllm.engine import hooks
@@ -105,12 +105,8 @@ class Backend:
 
     variant = "stand-in"
 
-    def __init__(self, log: list[tuple] | None = None):
-        self.loaded: list[int] = []
-        self.log: list[tuple] = [] if log is None else log
-        self.streams: list[bytes] = []
-        self.handed: list[list[bytes]] = []
-        self.doms: list = []
+    def __init__(self, log: list | None = None):
+        self.loaded, self.log, self.streams, self.handed, self.doms = [], [] if log is None else log, [], [], []
 
     def load(self, w, layer):
         self.loaded.append(w)
@@ -209,11 +205,11 @@ def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_
     root and the window's call count; then the words instance's domain, of each linear's chunks at the first call's m;
     then each call's root(A_j), the keying's digest of its rows at its position, its coins and its kernel, which gets
     the window's one domain."""
-    log: list[tuple] = []
+    log = []
     backend, layer, link = Backend(log), Linear(24, 1), Link(log)
     linears = _linears(16, 8, 8, 24)
     run = PL.LeadRun(ENTRY, backend, link, W, linears, keying=Keys())
-    assert all(v is None for v in (run.window, run.record)) and run.calls == 4
+    assert run.window is None and run.record is None and run.calls == 4
     x = _x(5, 2)
     xq, s_a = E.quantize_rows(x)
     y = run.call(3, layer, xq, s_a)
@@ -237,7 +233,7 @@ def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_
 
 
 def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
-    log: list[tuple] = []
+    log = []
     link = Link(log)
     backend = Backend(log)
     run = PL.LeadRun(ENTRY, backend, link, W, _linears(24, 40), keying=Keys(), rank=1, world=2)
@@ -261,8 +257,7 @@ def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
     assert out.activation_roots == sha(record.a_roots) and out.transcript_root == record.words_root
     assert out.records_root == sha([window.key_leaf, (2).to_bytes(8, "big"), *map(R.header, record.calls)])
     assert run.commits["passes"] == [out.to_json()] and run.commits["calls"] == 2 and run.details["passes"] == 1
-    again, open_window, open_dom = run.end_pass(), run.window, run.dom
-    assert again is out and open_window is None and open_dom is None
+    assert run.end_pass() is out and run.window is None and run.dom is None
     for w, layer in enumerate(layers):
         run.call(w, layer, *E.quantize_rows(_x(2, 9 + w)))
     assert run.m == 2 and run.dom.domain_id != backend.doms[0].domain_id
@@ -316,7 +311,7 @@ def test_a_top_of_the_wrong_size_is_refused_and_its_pass_never_published(calls, 
 def test_a_call_on_another_m_or_off_its_linear_is_refused_by_name_and_its_window_never_published(second, why):
     """A window's words are counted at its first call's m for one call of each linear's n x k: a call on another m (a MoE
     expert's ragged rows) or off its linear is refused before its root(A_j), coins or kernel, never recounted."""
-    log: list[tuple] = []
+    log = []
     run = PL.LeadRun(ENTRY, Backend(log), Link(log), W, _linears(16, 24), keying=Keys())
     run.call(0, Linear(16, 0), *E.quantize_rows(_x(3, 0)))
     w, n, m = second
@@ -337,7 +332,7 @@ def test_a_window_short_of_its_linears_calls_is_refused_at_its_end():
 
 
 def test_a_window_past_its_call_count_is_refused_and_never_published():
-    log: list[tuple] = []
+    log = []
     run = PL.LeadRun(ENTRY, Backend(log), Link(log), W, _linears(16, 16), keying=Keys())
     for w in range(2):
         run.call(w, Linear(16, w), *E.quantize_rows(_x(1, w)))
@@ -354,7 +349,7 @@ def test_a_window_the_link_refuses_commits_no_call():
         def open(self, *a):
             super().open(*a)
             raise F.FeedError("no salt")
-    log: list[tuple] = []
+    log = []
     run = PL.LeadRun(ENTRY, Backend(log), Closed(log), W, _linears(16, 16), keying=Keys())
     with pytest.raises(F.FeedError, match="no salt"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
@@ -379,7 +374,7 @@ def test_a_call_the_link_refuses_gets_no_kernel():
         def release(self, call, root):
             super().release(call, root)
             raise F.FeedError("refused")
-    log: list[tuple] = []
+    log = []
     run = PL.LeadRun(ENTRY, Backend(log), Refusing(log), W, _linears(16, 16), keying=Keys())
     with pytest.raises(F.FeedError, match="refused"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
@@ -399,7 +394,7 @@ class Runner:
 
 
 def test_install_serves_each_call_through_the_lead_and_uninstalls_to_the_plain_arm(monkeypatch):
-    log: list[tuple] = []
+    log = []
     monkeypatch.setattr(PP, "model_runners", lambda: (Runner,))
     monkeypatch.setattr(F, "InProcessCertifier", lambda: Link(log))
     model = Model(Linear(64, 1), Linear(64, 2), Linear(40, 3))
