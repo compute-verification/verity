@@ -63,7 +63,6 @@ pouw = [
 # device, and its part of the security analysis
 certifier = [
     "verity/protocols/certifier",
-    "verity/protocols/inference_only/verifier/nci",
     "verity/protocols/certifier/prover",
     "verity/protocols/certifier/device",
     "security/*/NetworkCertifier{,.lean}",
