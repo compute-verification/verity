@@ -10,7 +10,7 @@ machine-window of a deployment over a week, a month and a year.
   measured cost. A period's sessions are machines x period / window; its node-hours are sessions x a part's wall; the
   nodes the deployment keeps busy are those node-hours over the period.
 * **Deployments**: the census's datacenter (`benchmarks/census/deployments.json`, `dc-12500-machines-600s`) and the
-  world: `benchmarks/rho/data/reference.toml`'s `world-h200` fleet (HGX servers, derived from the census's
+  world: `verity/protocols/inference_only/rho/data/reference.toml`'s `world-h200` fleet (HGX servers, derived from the census's
   world-inference-2027), audited in the datacenter's windows (assumed: the census has no world cadence).
 """
 from __future__ import annotations
@@ -32,10 +32,10 @@ AUDITOR = ("Lean step_s",)
 
 def deployments(root: Path = ROOT) -> list[dict]:
     dc = next(d for d in json.loads((root / "benchmarks/census/deployments.json").read_text()) if d["id"] == DEPLOYMENT)
-    world = tomllib.loads((root / "benchmarks/rho/data/reference.toml").read_text())["fleet"][WORLD]["count"]
+    world = tomllib.loads((root / "verity/protocols/inference_only/rho/data/reference.toml").read_text())["fleet"][WORLD]["count"]
     return [{"id": dc["id"], "machines": dc["machines"], "window_s": dc["window_s"], "status": "census (stated)"},
             {"id": WORLD, "machines": world["value"], "window_s": dc["window_s"],
-             "status": f"benchmarks/rho {WORLD} ({world['status']}: {world['source']}); windows assumed {dc['window_s']} s"}]
+             "status": f"verity/protocols/inference_only/rho {WORLD} ({world['status']}: {world['source']}); windows assumed {dc['window_s']} s"}]
 
 
 def session(result: dict) -> dict:

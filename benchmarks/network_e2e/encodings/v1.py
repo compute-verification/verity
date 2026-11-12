@@ -24,7 +24,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, TypeVar
 
-from verity.core.protocols.certifier import advice as I1
+from verity.protocols.certifier.verifier import advice as I1
 from verity_vllm.pipeline.advice_code.codec import (
     advice_of_replay as advice_of_replay, AdviceCodeError, arrival_order as arrival_order, bits_by_window, book_of, CAPS as CAPS,
     charged as charged, check_record as check_record, Decision as Decision, decode as decode,

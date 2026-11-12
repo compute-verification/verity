@@ -78,8 +78,8 @@ if [ "${1:-}" != leased ]; then
   fi
   mkdir -p "$D"
   if [ "$ARM" != graphs ] && [ "$ARM" != async ]; then
-    (cd "$TREE/integrations/vllm" && HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
-      PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src \
+    (cd "$TREE/adapters/vllm" && HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
+      PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src \
       "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
     prc=$?
     [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
@@ -90,7 +90,7 @@ if [ "${1:-}" != leased ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
       | sh -s -- -y --default-toolchain none > "$OUT/lean.txt" 2>&1
-    (cd "$TREE/verity/core/protocols/pouw/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
+    (cd "$TREE/verity/protocols/pouw/verifier/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
     lrc=$?; say "LEAN pouw-check-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
@@ -124,7 +124,7 @@ fi
 ulimit -n "$(ulimit -Hn)"
 export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 CUDA_HOME=/usr/local/cuda-13.0
 export PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.elan/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
@@ -181,7 +181,7 @@ fi
 SESS=util80-${RESEARCH_RUN_ID:-local}
 pysample=(); sample=none
 [ "${PYSAMPLE:-0}" = 1 ] && { pysample=(--python-sampling=true --python-sampling-frequency="${PYHZ:-1000}"); sample=process-tree; }
-cd "$TREE/integrations/vllm" || exit 9
+cd "$TREE/adapters/vllm" || exit 9
 # shellcheck disable=SC2086
 "$NSYS" launch --session-new="$SESS" --trace=cuda,nvtx --cuda-graph-trace=node "${pysample[@]}" \
   "${serve[@]}" "${args[@]}" ${EXTRA:-} > "$SCR/serve.log" 2>&1 &
@@ -238,7 +238,7 @@ fi
 spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
 load() {  # $1 requests, $2 seed, $3 name
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
+  "$PY" "$TREE/demos/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"

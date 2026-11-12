@@ -5,7 +5,7 @@
 # (tp.serving_rows.source: sha512): a TP Commit's ranks, the stand-in's too, commit under rows-sha512 under the SHA-512 TP run
 # root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the sample.
 #   GLM-5.3 TP8: A5_TP=DIR holds the TP Commit's record (commit/runs.jsonl, commit/versions.json) and its windows (serving-rows/
-#     rank<r>/), A5_BUILD=DIR each rank's Programs of record (rank<r>/); the workload (integrations/vllm/workloads/$ROW.json) and
+#     rank<r>/), A5_BUILD=DIR each rank's Programs of record (rank<r>/); the workload (adapters/vllm/workloads/$ROW.json) and
 #     the partition file (A5_PARTITION, default glm53_silu_mul_v2_tp8.json) are this tree's. A5_WINDOWS=bundles: the Commit wrote no
 #     window and deferred its ranks' replay to sealed bundles (A5_TP/commit/replay_bundle_p0_rank<r>, as Commit 38b2), so each
 #     rank's stand-in window is made here first from its bundle (`verity-vllm tp-serving-rows`, up to A5_JOBS ranks at once);
@@ -43,7 +43,7 @@
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
 # circuits' pins; never a prover's file (inst-*, m*-inst-*, *-private.bin: the rows and their salts) nor a circuit (its pin is).
 # Stored: each session's circuit.txt files and lookup tables, by SHA-512 (sha512/<hex>, the Lean verifier's --archive layout), as one
-#   fixture/v1 tree with the run's custody key (integrations/vllm/verity_vllm/ops/store_trees.sh), the run labelled `circuits` = its
+#   fixture/v1 tree with the run's custody key (adapters/vllm/verity_vllm/ops/store_trees.sh), the run labelled `circuits` = its
 #   art id and $OUT/store/NAME.sha512 naming each file's key, so the run can be verified again from the store. A session whose
 #   tree isn't stored and preserved fails the run.
 # A5_DRY=DIR: none of the builds, windows or audits: each session dir DIR/NAME a run's scratch held (a5's --out) is kept and
@@ -66,7 +66,7 @@
 #   registration binding the advice's hiding root (`verity-vllm advice-windows`), and a5 derives its own from the record, the
 #   advice's opening and the compiler, never the workload (a5.py --advice-opening; --other-advice-opening and --other-windows
 #   its negatives). The advice and its openings are the prover's: never kept.
-#   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload integrations/vllm/workloads/$A5_ROW.json), A5_NAME the
+#   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload adapters/vllm/workloads/$A5_ROW.json), A5_NAME the
 #   audit's name (default glm), A5_SETS the SiluMul_v2 widths its partition reads (default "256 1536"), e.g. LLAMA32_1B TP2:
 #   A5_ROW=llama32-1b__bf16__rtxpro6000__tp2__b2__i256__o32__mixed__greedy__bi-eager A5_PARTITION=benchmarks/one_stage/
 #   llama32_1b_silu_mul_v2_tp2.json A5_SETS=4096.  A rank's proved population must keep Flock's m = k_log + log2(units) <= 35:
@@ -101,7 +101,7 @@ store() {  # NAME: $W/NAME's circuit.txt files and lookup tables by SHA-512, one
 print(json.dumps({"name": f"a5-circuits/{n}", "run": run, "source": src, "layout": "sha512/<hex>, the Lean verifier --archive",
                   "files": dict(reversed(x.split(" ", 1)) for x in open(keys).read().splitlines())}, sort_keys=True))' \
     $1 "${RESEARCH_RUN_ID:-}" "$(git rev-parse HEAD)" $O/store/$1.sha512 > $O/store/meta-$1.json
-  EV=$O/store VV=$VV LABEL_KEY=circuits LABEL_BY=proofs bash $REPO/integrations/vllm/verity_vllm/ops/store_trees.sh $W/store $1 > $O/store/$1.log 2>&1
+  EV=$O/store VV=$VV LABEL_KEY=circuits LABEL_BY=proofs bash $REPO/adapters/vllm/verity_vllm/ops/store_trees.sh $W/store $1 > $O/store/$1.log 2>&1
   rc=$?
   grep -E '^(STORED|PRESERVED-CHECK|LABEL|no custody)' $O/store/$1.log
   rm -rf $t; rmdir $W/store 2>/dev/null
@@ -122,23 +122,23 @@ fi
 
 ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/ml/flock HEAD:benchmarks/numerical; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock/prover HEAD:benchmarks/numerical; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 
-(cd verity/core/service/flock && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}   # a kept build dir: 20-gpu-link.sh re-applies this tree's patches and cargo rebuilds what changed
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
-(cd verity/core/service/spot && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)
@@ -149,7 +149,7 @@ done
 TG=(); TPL=()
 for t in ${A5_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); TPL+=(--template "$t"); done
 [ ${#TG[@]} -eq 0 ] || [ -n "${A5_ADVICE:-}" ] || { echo "A5_TRANSFER_GATES lists the advice compiler's transfer gates: set A5_ADVICE=workload"; exit 3; }
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
 if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
@@ -216,7 +216,7 @@ advice_pair() {  # COMMIT BUILD PARTITION WORKLOAD WINDOWS LOGS: windows under t
 }
 
 if [ -n "${A5_TP:-}" ]; then
-  N=${A5_NAME:-glm}; WIN=$A5_TP/serving-rows; WL=integrations/vllm/workloads/$ROW.json; ADV=()
+  N=${A5_NAME:-glm}; WIN=$A5_TP/serving-rows; WL=adapters/vllm/workloads/$ROW.json; ADV=()
   $REPO/.venv/bin/verity-vllm workload-file $WL > /dev/null || exit 8
   if [ -n "${A5_ADVICE:-}" ]; then
     WIN=$W/serving-rows
@@ -278,7 +278,7 @@ else
     fi
     I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
-    (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED "${TPL[@]}") \
+    (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED "${TPL[@]}") \
       > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
     WL=$S/workload.json; ADV=()
     if [ -n "${A5_ADVICE:-}" ]; then

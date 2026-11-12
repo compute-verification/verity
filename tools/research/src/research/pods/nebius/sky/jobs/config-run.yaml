@@ -85,7 +85,7 @@ setup: |
   [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
   chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$SWEEP_DIR"
-  cd "$SRC/integrations/vllm"
+  cd "$SRC/adapters/vllm"
   bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"     # skipped, without the lock, once this tree, role and venv passed
 
 run: |
@@ -93,7 +93,7 @@ run: |
   export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   export PATH=$CUDA_HOME/bin:$PATH
-  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  export PYTHONPATH=$SRC/adapters/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
   # a pod with no GPU has no driver libraries, but importing vLLM's CUDA platform loads libcuda.so.1: the host's copy, which
   # can't reach a GPU without the /dev/nvidia* devices a GPU-less pod lacks (cluster_up.sh keeps it in step with the driver)
   export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
@@ -173,7 +173,7 @@ setup: |
   # every job of the tree compiles its taps at the same paths, so they are built once
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm
-  cd "$SRC/integrations/vllm"
+  cd "$SRC/adapters/vllm"
   bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --out "/workspace/jobs/bootstrap/$ROLE"     # skipped, without the lock, once this tree, role and venv passed
 
 run: |
@@ -181,13 +181,13 @@ run: |
   export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   export PATH=$CUDA_HOME/bin:$PATH
-  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
+  export PYTHONPATH=$SRC/adapters/vllm:$SRC/tools/research/src
   # compiled kernels persist per tree on the host, so every cell of a tree after the first skips Triton's JIT of vLLM's
   # batch-invariant kernels. Eager rows only: a compiled row records triton_cache_dir in its
   # generated_kernels header. The fixed JIT build dirs only for trees whose native_jit stages its sources; an older tree would
   # rewrite their build.ninja and cost fixed trees a rebuild
   case "$ROW" in *__bi-eager) export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$(basename "$SRC") VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$(basename "$SRC");; esac
-  if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
+  if grep -q staged_sources "$SRC/adapters/vllm/verity_vllm/commit/committer/native_jit.py"; then
     export HIDDEN_GPU_BUILD=/workspace/jobs/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=/workspace/jobs/cache/jit/nc
   fi
   # the Commit's Attempt cites the Build task's artifact (--input build=art:...), as `row chain` does
@@ -201,7 +201,7 @@ run: |
   run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
   echo "$run_id" > "$SWEEP_DIR/$ROW/pipeline-commit-run"
   if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
-    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+    grep -q VLLM_REPLAY "$SRC/adapters/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
   fi
   research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
   # >>> commit watchdog: stop a Commit whose commit.log hasn't changed for COMMIT_STALL_S (default 15 min), so a hung Commit frees
@@ -313,7 +313,7 @@ secrets:
 setup: |
   set -euo pipefail
   if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
-    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+    grep -q VLLM_REPLAY "$SRC/adapters/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
   fi
   [ "$REPLAY_DEFERRED" = 1 ] || exit 0          # nothing deferred: no tree copy, no bootstrap
   # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
@@ -323,13 +323,13 @@ setup: |
   [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
   chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$SWEEP_DIR"
-  cd "$SRC/integrations/vllm"
+  cd "$SRC/adapters/vllm"
   bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"     # skipped, without the lock, once this tree, role and venv passed
 
 run: |
   set -euo pipefail
   if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
-    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+    grep -q VLLM_REPLAY "$SRC/adapters/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
   fi
   if [ "$REPLAY_DEFERRED" != 1 ]; then echo "replay: not deferred (REPLAY_DEFERRED=0), the Commit replayed on its GPU"; exit 0; fi
   # a Commit dispatched on an older template replayed on its GPU, and its verdict has no replay_deferred (a deferred one always does)
@@ -339,7 +339,7 @@ run: |
   export PATH=/workspace/jobs/venv312/bin:$PATH
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   export PATH=$CUDA_HOME/bin:$PATH
-  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  export PYTHONPATH=$SRC/adapters/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
   export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}   # as the build task: no GPU, the host's libcuda
   # one Attempt citing the Build's and the Commit's artifacts (research tool vllm.replay, from PR B)
   art() {   # outputs[$2] of the published Attempt whose run id is in $1, "" when none

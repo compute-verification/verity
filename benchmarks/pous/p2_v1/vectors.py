@@ -7,7 +7,7 @@ one full-width response), `audit-negative-vectors.json` (31 failing or boundary 
 `wire.verify_audit`) and the package's copy of the keys (`verity/.../pous/tests/fixtures/p2-v4-keys.json`), then replaces
 every pinned hash that changed, in `reference.py` and the package's keys test, with its new value.
 
-Every setup salt, audit id, challenge index and nonce is `verity.ml.randomness`'s, so every file but the maps'
+Every setup salt, audit id, challenge index and nonce is `verity.commitments.randomness`'s, so every file but the maps'
 `m`, `K`, `t` and `c` at a given salt moves when that derivation does; each file records the derivation it was made under
 (`randomness`), and rerunning this is the whole migration.
 """
@@ -18,9 +18,9 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from verity.core.protocols.pous.verifier import MerkleTree
-from verity.ml.commitments.identity import canonical_json_bytes
-from verity.ml.randomness import derive, frame
+from verity.protocols.pous.verifier.verifier import MerkleTree
+from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.randomness import derive, frame
 
 from . import reference as R
 from . import wire as Wi
@@ -28,7 +28,7 @@ from . import wire as Wi
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 AUDIT_VECTORS, NEGATIVE_VECTORS = R.AUDIT_VECTORS, R.NEGATIVE_VECTORS
-KEYS_FIXTURE = ROOT / "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
+KEYS_FIXTURE = ROOT / "verity/protocols/pous/verifier/tests/fixtures/p2-v4-keys.json"
 PINNED_TEXT = (HERE / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
 
 POINTS = (*(R.vector_params(w, c0) for w, c0 in ((64, 189), (96, 17), (128, 173))), R.DEPLOYMENT)
@@ -46,7 +46,7 @@ NEGATIVE_FULL_AUDIT_SOURCE = b"p2-audit-negative/full-audit-secret"
 
 
 def randomness_version() -> str:
-    """Which `verity.ml.randomness` derivation this process has: v1 (SHA-256) or v2 (SHA-512, truncated to the
+    """Which `verity.commitments.randomness` derivation this process has: v1 (SHA-256) or v2 (SHA-512, truncated to the
     32-byte key)."""
     source, domain = b"p2", "verity/pous/p2-probe/v4"
     framed = frame(source) + frame(domain) + frame(b"")
@@ -55,7 +55,7 @@ def randomness_version() -> str:
         return "verity/randomness/derive/v1"
     if got == hashlib.sha512(b"verity/randomness/derive/v2\0" + framed).digest()[:32]:
         return "verity/randomness/derive/v2"
-    raise AssertionError("verity.ml.randomness is neither v1 nor v2")
+    raise AssertionError("verity.commitments.randomness is neither v1 nor v2")
 
 
 def _hex(params: R.Params, value: int) -> str:

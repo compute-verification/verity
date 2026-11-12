@@ -8,6 +8,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_window_salt.py"]
 # `verity`: PoUW's check of record (`core_check.window_salt`) and the challenger's client. `a5_coins.py` and
-# `benchmarks/live_challenger`: the tests open the session on a local auditor host (auditor.py), whose serve.py runs under
+# `verity/composite/device/live_challenger`: the tests open the session on a local auditor host (auditor.py), whose serve.py runs under
 # its tests' stub of the Lean verifier's coins (stub_serve.py).
-inputs = ["verity", "benchmarks/one_stage/a5_coins.py", "benchmarks/live_challenger"]
+inputs = ["verity", "benchmarks/one_stage/a5_coins.py", "verity/composite/device/live_challenger"]

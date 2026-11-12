@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.pouw.credit import DELTA
+from verity.protocols.pouw.verifier.credit import DELTA
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 

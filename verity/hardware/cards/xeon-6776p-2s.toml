@@ -23,7 +23,7 @@ priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel 
 amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, art:1f22137354a4" }
 ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x rate.amx x cpu.sockets x (cpu.priority_cores x clock.priority_turbo + (cpu.cores - cpu.priority_cores) x clock.turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
 
-# The host's DRAM: R's host tier (verity/core/protocols/remote_bandwidth/timing.py's HOST_ figures).
+# The host's DRAM: R's host tier (verity/protocols/poub/verifier/timing.py's HOST_ figures).
 [memory]
 channels = { value = 8, unit = "channel/socket", mark = "ceiling", source = "Intel ARK 243691: 8 memory channels" }
 speed = { value = 6400, unit = "MT/s", mark = "placeholder", source = "DDR5-6400, the part's DDR5 rate (Intel ARK 243691), which remote_bandwidth/timing.py takes for the node; the node's DIMMs are not on record (a guest can't read them), and the part also takes MRDIMMs (ARK 243691: 'MRDIMM(8800MT/s)', 'Maximum Memory Speed 8000 MT/s'), so the ceiling is up to 8800 MT/s, 1.1264e12 B/s over both sockets, until the installed DIMMs are read" }

@@ -27,7 +27,7 @@ CLI_ROOTS = (
     "infra/cluster/src",
     "infra/ops",
     "benchmarks/harness/verity_bench",
-    "integrations/vllm/verity_vllm",
+    "adapters/vllm/verity_vllm",
     "tools/verity/circuit_check/src",
     "tools/verity/cli",
 )

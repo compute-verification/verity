@@ -1,5 +1,5 @@
-"""lean-unit-cut: `verity/ml/flock/verifier/unit_cut_agree.py` as check's lean-unit-cut step runs it, on the flock-verify the task
-reads (at its var `verify`): the Lean partition check's codes against `verity.ml.circuits.partition`'s on the script's random
+"""lean-unit-cut: `verity/protocols/flock/agreement/unit_cut_agree.py` as check's lean-unit-cut step runs it, on the flock-verify the task
+reads (at its var `verify`): the Lean partition check's codes against `verity.circuits.partition`'s on the script's random
 cuts, its result.json at the task's output.
 
 A pass is every cut agreeing, at least one checked.  A fail is the tree's: a disagreement on some cuts while others agree, or the
@@ -16,7 +16,7 @@ from .. import ROOT
 from ..graph import LOG
 from . import call
 
-SCRIPT = "verity/ml/flock/verifier/unit_cut_agree.py"
+SCRIPT = "verity/protocols/flock/agreement/unit_cut_agree.py"
 OUT = "lean-unit-cut"
 RESULT = f"{OUT}/result.json"
 TRACEBACK = "Traceback (most recent call last):"

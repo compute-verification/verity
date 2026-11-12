@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
-from verity.ml.circuits.census import NoBooleanWork
-from verity.ml.circuits.program import Program
+from verity.definitions.circuits.census import NoBooleanWork
+from verity.circuits.program import Program
 
 from . import logical as L
 from .logical import RegisteredInputs, Value
@@ -43,7 +43,7 @@ _partitions: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 def _partition(evaluate: Callable, program: Program, query: Mapping[str, Any]) -> Any:
     """`evaluate(program, query)`, once per Program, query and evaluator (a refusal too)."""
-    from verity.core.protocols.spot.one_stage.registration import query_digest
+    from verity.protocols.spot.verifier.one_stage.registration import query_digest
 
     memo = _partitions.setdefault(program, {})
     key = (evaluate, query_digest(query))
@@ -170,9 +170,9 @@ class Placed:
     def _units(self, record: Mapping[str, Any] | None, query: Mapping[str, Any] | None) -> tuple[dict[str, int], str | None]:
         """Each block's proof blocks under the registered partition, as core's one-stage verifier evaluates and checks it,
         or the served query's as circuits evaluates it, assumed; and which it was."""
-        from verity.core.protocols.spot.one_stage import partition as P
-        from verity.core.protocols.spot.one_stage.registration import query_digest
-        from verity.ml.circuits import partition_object as PO
+        from verity.protocols.spot.verifier.one_stage import partition as P
+        from verity.protocols.spot.verifier.one_stage.registration import query_digest
+        from verity.circuits import partition_object as PO
 
         program = self.program
         if record is None:

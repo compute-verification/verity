@@ -1,7 +1,7 @@
 """Ruff's findings on every tracked Python file outside ``archive/`` that the vLLM integration's ruff lint doesn't hold, held to
 ``allowlists/repo_ruff.json``: ``ruff check`` under the root ``ruff.toml``, with the ruff the root ``dev`` group pins.
 
-The integration's lint (``integrations/vllm/tests/lint/test_ruff.py``) holds ``integrations/vllm`` and ``verity/ml/definitions``
+The integration's lint (``adapters/vllm/tests/lint/test_ruff.py``) holds ``adapters/vllm`` and ``verity/definitions``
 to its own list, and ``archive/`` is kept but not developed (``archive/AGENTS.md``), so neither is held here (``LEFT_OUT``); this
 lint holds the rest of ``git ls-files``' ``*.py`` and ``*.pyi``, ``tools/verity`` among them, under the root's configuration
 alone: a nearer one would replace it for ``ruff check`` there, so there is none.  Findings are counted per ``(file, rule)``: the file relative
@@ -14,7 +14,7 @@ ahead of a tree, holding the findings of PRs queued below it on ``next`` that a 
 stale ``# noqa``).
 
 A file that moves takes its entries with it, in the same change (``--move``): this lint reads no history, so a renamed file's
-findings count under its new path.  The ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) fails a rename that
+findings count under its new path.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) fails a rename that
 leaves its entries behind, and a change that grows the list or the findings of the Python it changes, and judges a change to
 this module, to ``ruff.toml`` or to the ruff pin by running this lint as the change's base has it on the change's tree.  So
 it imports only the standard library, ``test_no_new_findings`` takes no fixture, and the gate reads ``LEFT_OUT`` from the
@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "ruff.toml"
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: what the integration's ruff lint holds to its own list (its `ROOT` and `DEFINITIONS`), and the archive
-LEFT_OUT = ("integrations/vllm/", "verity/ml/definitions/", "archive/")
+LEFT_OUT = ("adapters/vllm/", "verity/definitions/", "archive/")
 FIELDS = ("file", "rule", "count")
 #: the rules whose findings are errors: a syntax error, an undefined name, a misused statement or comparison
 ERRORS = ("syntax-error", "E9", "F63", "F7", "F82")
@@ -82,7 +82,7 @@ def test_the_repository_has_two_ruff_configurations() -> None:
                          check=True).stdout
     configs = sorted(p for p in out.decode().split("\0") if p and (Path(p).name in ("ruff.toml", ".ruff.toml") or
                                                                     "[tool.ruff" in (ROOT / p).read_text(encoding="utf-8")))
-    assert configs == ["integrations/vllm/ruff.toml", "ruff.toml"], (
+    assert configs == ["adapters/vllm/ruff.toml", "ruff.toml"], (
         f"ruff configurations {configs}: the root's `ruff.toml` holds every package but the vLLM integration, which extends it. "
         "Put a rule or a per-file exception in the root's, under `[lint.per-file-ignores]` for one path")
 

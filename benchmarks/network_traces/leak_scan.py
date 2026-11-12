@@ -6,7 +6,7 @@
     LS.scan(received, pieces, vdir)    # {"leaked": [k], "structured": {k: "across" | "public"}, "placed": {k: [...]}}
     LS.find_whole(received, short, vdir, control)  # each row shorter than a piece found whole, then `scan`'s rule
 
-It reads the format with Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
+It reads the format with Flock's own reader (``verity/protocols/flock/agreement``: `redigest.layout`, `transcript_check`).
 
 The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each witness row cut into 16-byte pieces that
 cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes and its last aligned chunk
@@ -55,7 +55,7 @@ import threading
 from pathlib import Path
 
 #: the directory of Flock's reader, `redigest.py`, and the modules it imports beside it
-sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier/redigest.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/flock/agreement/redigest.py").parent))
 import redigest as RD  # noqa: E402
 
 #: The verifier's files the statement fixes before any witness: its program and partition, and the staged circuit.

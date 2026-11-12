@@ -51,10 +51,10 @@ def tree(tmp_path: Path) -> Path:
     (t / "lean" / "P" / "lean-audit.json").write_text("{}\n")
     (t / "lean" / "P" / "P.lean").write_text("theorem t : True := trivial\n")
     # its own `verity`, whose twins (`check.PREBUILD`) build nothing
-    (t / "verity" / "ml" / "definitions" / "numerics").mkdir(parents=True)
-    for d in ("verity", "verity/ml", "verity/ml/definitions", "verity/ml/definitions/numerics"):
+    (t / "verity" / "definitions" / "numerics").mkdir(parents=True)
+    for d in ("verity", "verity/ml", "verity/definitions", "verity/definitions/numerics"):
         (t / d / "__init__.py").write_text("")
-    (t / "verity/ml/definitions/numerics/twins.py").write_text("def preload():\n    return {}\n")
+    (t / "verity/definitions/numerics/twins.py").write_text("def preload():\n    return {}\n")
     _git(t, "init", "-q")
     _git(t, "add", "-A")
     _git(t, "commit", "-q", "-m", "tree")
@@ -160,7 +160,7 @@ def test_a_kept_steps_key_is_its_inputs_not_the_slot_or_the_toolchain_it_is_list
     """A job run whole whose pass check keeps (`check.STEP_KEYS`) lists one key on every slot and host: keyed by its step key,
     which reads the slot's test cache, the kernel release and `rustc -vV`, `flock-rust-tests` passed on a worker's slot under
     another key than the lister's, so its verdict was never labelled."""
-    flock = tree / "verity" / "ml" / "flock"
+    flock = tree / "verity" / "protocols" / "flock" / "prover"
     (flock / "live").mkdir(parents=True)
     (flock / "check_build.sh").write_text("RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.0.0}\n")
     (flock / "live" / "lib.rs").write_text("pub fn f() {}\n")

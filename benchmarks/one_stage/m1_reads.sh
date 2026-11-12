@@ -14,7 +14,7 @@ RS_BUILD=${RS_BUILD-slots $(printf "$ROUTER" 256 8)}
 export HZ_CONFIGS=m1-reads HZ_MEM_GB=${RS_MEM_GB:-64}
 [ -n "${RS_CACHE:-}" ] && export HZ_CACHE=$RS_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
 rc=0 i=0
 m1() {   # m1 TAG ARGS...: one m1_unit run, its records in $OUT/TAG (never the circuit nor a prover's file)

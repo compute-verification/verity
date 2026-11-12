@@ -18,11 +18,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.active import DATA, HEADER, PAD
-from verity.core.protocols.certifier.warden import END
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.protocols.certifier.verifier import warden_rows as WR
+from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD
+from verity.protocols.certifier.verifier.warden import END
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE / "tests"))

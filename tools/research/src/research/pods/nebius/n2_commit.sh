@@ -157,7 +157,7 @@ EOF
 # GPU but a node 2 guest does with its GPU held, at 0% for as long as that takes (it can be whole leases). The key's other
 # fields are the row's own files, which go to node 2 unchanged; the code identity covers the workloads and the plans' schemas.
 plan_keyed() {  # plan_keyed JOB_TREE ROW_DIR: exit 0 when each plan in ROW_DIR is keyed to JOB_TREE's code, else 1 with the reason
-  PYTHONPATH=$1/integrations/vllm:$1/tools/research/src "${VY_JOB_PY:-/workspace/jobs/venv312/bin/python}" - "$1" "$2" << 'EOF'
+  PYTHONPATH=$1/adapters/vllm:$1/tools/research/src "${VY_JOB_PY:-/workspace/jobs/venv312/bin/python}" - "$1" "$2" << 'EOF'
 import json, os, sys
 tree, row = sys.argv[1:]
 try:
@@ -408,11 +408,11 @@ run() {
       return 0
     fi
     fetch_manifests "$BUILD_ART"
-    (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" \
+    (cd "$SRC/adapters/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" \
       --out "/workspace/jobs/bootstrap/$ROLE")
-    export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
+    export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/adapters/vllm:$SRC/tools/research/src
     case "$ROW" in *__bi-eager) export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$(basename "$SRC") VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$(basename "$SRC");; esac
-    if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
+    if grep -q staged_sources "$SRC/adapters/vllm/verity_vllm/commit/committer/native_jit.py"; then
       export HIDDEN_GPU_BUILD=/workspace/jobs/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=/workspace/jobs/cache/jit/nc
     fi
     gpu_env "$row_dir/n2_gpu_env.json"
@@ -524,9 +524,9 @@ replay() {
     read -r run_id rc < "$marker"
   else
     fetch_manifests "$BUILD_ART" "$COMMIT_ART"
-    (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu \
+    (cd "$SRC/adapters/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu \
       --out "/workspace/jobs/bootstrap/$ROLE-cpu")
-    export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+    export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/adapters/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
     export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
     echo "replay cites the Build ${BUILD_ART:-none} and the Commit ${COMMIT_ART:-none}"
     run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')

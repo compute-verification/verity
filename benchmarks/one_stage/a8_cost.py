@@ -1,4 +1,4 @@
-"""A8's cost points as observations of the one cost model (`verity.core.protocols.spot.costfit`, fitted in
+"""A8's cost points as observations of the one cost model (`verity.protocols.spot.costfit`, fitted in
 benchmarks/sampling_plan, whose `inputs.py` holds these), and the times each session measured.
 
     python benchmarks/one_stage/a8_cost.py RUN [RUN ...] [--json]
@@ -20,7 +20,7 @@ from dataclasses import asdict
 from pathlib import Path
 from statistics import mean
 
-from verity.core.protocols.spot.costfit import Observation
+from verity.protocols.spot.costfit import Observation
 
 PARAMS = ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "P", "DR", "DP", "DV")
 

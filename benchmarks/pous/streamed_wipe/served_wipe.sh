@@ -48,7 +48,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the key, the Le
   if [ -z "${WIPE_PROTOCOL_EXE:-}" ] && [[ " $* " != *" --no-lean "* ]]; then
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
-    L=verity/core/devices/memory_challenger/lean
+    L=verity/protocols/pous/device/lean
     tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity/core | tar -C "$S" -x
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L" > "$DIR/lake-setup.log" 2>&1

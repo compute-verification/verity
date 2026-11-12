@@ -20,12 +20,12 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from verity.ml.circuits.boolean import BIT
-from verity.ml.circuits.boolean.forms import add
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import add
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.types import Array
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import class_statement as CS
 
 HERE = Path(__file__).resolve().parent
