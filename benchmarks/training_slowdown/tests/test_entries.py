@@ -281,7 +281,9 @@ REFERENCES = {
     "l16-t20-1.1x-fullmuon-fe-wsd-5383-ema": (averaged, CLOSE),
     "l16-t20-1.1x-fullmuon-fe-wsd-ema": (averaged, CLOSE),
     "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd-102": (under(muon), CLOSE_BF16),
     "l16-t20-1.1x-ref-optim-fullmuon-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-2x-fullmuon-fe-wsd-40326": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611-ema": (averaged, CLOSE),
@@ -320,6 +322,7 @@ REFERENCES = {
     "s-t20-1.1x-shampoo-whole": (under(shampoo), CLOSE),
     "s-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd-3884": (under(muon), CLOSE_BF16),
 }
 
 
