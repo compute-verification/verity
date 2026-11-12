@@ -353,7 +353,7 @@ def bind_check() -> dict[str, Any]:
     for _, N, _, _ in NORMS:
         try:
             fn = bind(DN.DsaRMSNorm, N=N, EPS=EPS)
-            out[fn.id] = bool(fn.signature()) and SW.boolean_version(fn).id == f"DsaRMSNorm_v2{{N={N},EPS={EPS}}}"
+            out[fn.id] = bool(fn.signature()) and SW.boolean_version(fn).id == f"DsaRMSNorm_v3{{N={N},EPS={EPS}}}"
         except Exception as e:  # noqa: BLE001
             out[f"DsaRMSNorm_v1{{N={N}}}"] = DS._error(e)
     return {"bindings": out, "ok": len(out) == len(NORMS) and all(v is True for v in out.values())}
