@@ -648,8 +648,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}, *oks]
     law = sz.DR.parse_design(f"stratified:{2 * T}")
-    reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
-                  for x in ("ee", "ff"))
+
+    def registration(named: list[dict], layer: str = "ee") -> dict:
+        return R.record(program, query, law, sz.S.SCHEME, named, {"kind": "stand-in"}, leaf_layer=layer * 64)
+
+    reg, chain = (registration(roots, x) for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
     for name, r in (("tampered", other), ("chain", chain)):
         (scan / name).mkdir()
@@ -722,7 +725,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
             "accept", k, E), got
     unok = sz.frame(sz.set_of("egress"), "o0", [[1]] * (T - 1) + [[0]], 16, salts=sz.ok_salts(T))
     for named in ([*roots[:-1], {**roots[-1], "root": unok.root.hex()}], roots[:-1], roots[:-len(oks)]):
-        stated = R.record(program, query, law, sz.S.SCHEME, named, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+        stated = registration(named)
         said = sz.window_answer(stated, {**record, "registration": stated}, sz.Fraction(1, 100), "unused")
         (scan / "answers.json").write_text(json.dumps({**doc, "registration": stated, "windows": [
             {"window": 0, "answer": said, "registrations": registrations}]}))

@@ -7,7 +7,7 @@ its n rows `OK_ROW` under salts 0 … n − 1, at the member's ``o0`` frame doma
 and its proof blocks' count's and names no run, round or execution phase. One execution phase's scan has the members
 `members` gives, a function of the schedule's T alone, so the roots are constants of T (`constants`).
 
-The period check (`NetworkCheck.Period`'s rows form; Lean `NetworkCheck.ScanOk`, which this mirrors) computes them
+The period check (its rows form's `okChecks`; Lean `NetworkCheck.ScanOk`, which this mirrors) computes them
 once a period, from T, and holds every execution phase's scan's registration to them by comparison alone (`held`): its
 ``roots`` name each member's ``<member>/o0`` at the constant's root, leaves and domain, and no other port ending
 ``/o0``. A member's statement reads its ``o0`` rows at the root its registration names, so a proof block's ok word
