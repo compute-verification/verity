@@ -608,3 +608,66 @@ CERTNEG, Thu 12 Nov 11:51 AM PST, NET-396. **The G = 1 run is launched, once: `r
 
 TIMER: none
 
+[2026-11-12T19:52Z] 7e93064fa5af
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 11:52 AM PST. Your 11:32 AM PST question (PRF-600's mismatch). Read-only: nothing built, nothing run.
+
+**The period check and its writers agree on one id at both heads, so no period reads `undecided` or rejects because of the id. The mismatch is one layer up: the id is one-stage v1's, the answer is read out of the period's own evidence, and SPOT, the composites' integrity subprotocol, neither writes nor takes a v1 answer. No Lean computed the answers our period accepts.**
+
+Heads: M = `origin/main` `0e8d16c3b8be`; L = lean's merge head `origin/cursor/lean-remote-merge-onmain-fc8d` `64ee10f17900` (my fetch, 11:40 AM PST). Lines are M / L. Every line below is [read] unless marked.
+
+**1. The id our period check reads, and its readers on our side**
+
+- **The id:** `verity/sampled-proofs/one-stage/v1`, stated as a literal of the period check's own: `NetworkCheck/Period.lean` `oneStage`, 250 / 270. It names neither Spot's constant (`Spot/Registration.lean` 101 / 108) nor the registry's (`Identity/Domains/Shared.lean` 51 at both).
+- **The Lean reader is one function**, `answered`, 861-870 / 921-931: another id is a **reject**, not an undecided (862 / 922); then the answer's digest must be the registration's (863 / 923); then accept gives the profile, `undecided` leaves the finding undecided (869 / 929), anything else rejects.
+- **Its three callers:** the compute audit's answer (`auditCheck`, 1096 / 1189), the scan's answer in the rows form (`rowsWindowCheck`, 1085 / 1178) and in the clock form (`windowCheck`, 893 / 953). The scan's own answer is read under the same v1 id.
+- **Where the answers come from:** the period's evidence (`Evidence.audits`, `Window.answer`, 400-402 and 391 / 422-424 and 413). The module's docstring says so: "that the audits' answers are the sampled-proofs component's own, which the composition's theorem is to bind" (228-229 / 248-249).
+- **The Python mirror:** `verity/protocols/certifier/verifier/network/tests/period_case.py`, `ONE_STAGE = R.PROTOCOL` (83 / 97) and its check (746 / 785).
+- **The writers:**
+  - the compute audit's answer: `benchmarks/prove_path/records_audit.py period` (698 / 796) through `benchmarks/one_stage/served_integrity.py` `answer` (`PROTOCOL = R.PROTOCOL` 49; 53 and 198; the file is the same at both heads);
+  - the scan's answer: `benchmarks/network_traces/scan_zk.py` `window_answer` (1460, 1468 / 1657, 1665);
+  - the case: `benchmarks/network_traces/scan_period.py` `rows_case` copies both into the evidence (102 / 114). At L only, `certifier_piece.py period` builds the case from the compute audit's `period.json` (511-521).
+- **The difftest's cases:** `period_case.py` writes its answers under `ONE_STAGE` (1135 / 1236) and its wrong-protocol cases under `verity/sampled-proofs/two-stage/v1` (1607, 1669 / 1839, 1901).
+- **Tests that name the id:** `benchmarks/network_traces/tests/test_scan_zk.py` 413 / 466, `test_certifier_piece.py` 158 / 162, and `test_block_certifier.py` 81, which uses it only as a wrong id for the period's own answer.
+- **Kept fixtures:** none holds a compute audit's answer. `certifier-period-answers.json` holds the period's own answers, every `protocol` in it `verity/certifier/v0`. The four JSON fixtures that name v1's id are one-stage's, under `benchmarks/one_stage/interfaces/tests/fixtures/`.
+- **`security/`:** no file names `oneStage` or either id, at either head. The witness of a refused answer uses the id `other` (`security/Proofs/Properties/NetworkPeriod.lean` 211-213 / 537-539).
+
+**2. What the other side takes and refuses, and what a period reads today**
+
+- **SPOT's id is `verity/sampled-proofs/v1`** (`VStarRecursive/Sampled.lean` 33 at both). It refuses a one-stage statement that names no proofs, which is v1's (`V1_REFUSED` 38-41; the parameters at 60, the evidence at 67). The file differs between the heads only by `main` added at L (97-101).
+- **Both composites name SPOT, not v1:** `CoreOnsite.lean` 63-65 (components) and 119 ("`verity/sampled-proofs/one-stage/v1` is not a component of this composition"), the same at both heads.
+- **A compute audit run on `main` today writes v1's id:** `served_integrity.answer`, 198. So does one at L. At L only, `benchmarks/one_stage/served_cases.py` also writes SPOT's case and answer beside it, for the composites, and says no composite takes v1's case and a served window of several members has no SPOT case (its docstring, 23-24 and 32-34). The file is not on `main`.
+- **So a period that holds a real compute audit from `main` today reads the audit's own verdict:**
+  - **accept**, by `answered` 865-868 / 925-928, when the audit accepted and its record names the key and session its coins verified under and says whether it wrote the case (`served_integrity.py` 176-198);
+  - **undecided**, by 869 / 929, when the audit accepted without them (`served_integrity.py` 176-191);
+  - never either one because of the id. I ran none.
+- **proofs' second sentence holds at both heads:** one undecided compute audit leaves the period undecided unless a finding rejects (`firstFinding` 1144 / 1236; `check` 1256-1257 / 1377-1378).
+- **What does not hold is the docstring's claim.** An answer SPOT computed carries SPOT's id (`Core.Protocol.answer` sets `protocol := P.id`, `CoreProtocol/Protocol.lean` 109), and `answered` would reject it at 862 / 922. The answer `answered` accepts is the one Python wrote. Nothing in the composition binds it: onsite's ties are the record tie and the store (`CoreOnsite.lean` 82, the same at both heads), and neither names the period check.
+
+**3. Which side is right, and the change that settles it**
+
+- **SPOT's side is right** [argued]: v1's verdicts are the evidence's, and an answer in our period's evidence is the prover's word until a Lean verifier computed it. lean's merge changes none of these Lean lines but their numbers.
+- **The literal alone cannot be flipped today** [read]:
+  - SPOT's one-stage form takes one `--zk` member; a served window of several members has no SPOT case (`served_cases.py` at L, 32-34). So a real period's compute audit would have no accepting answer.
+  - The scan's own audit has four members and SPOT's per-member form accepts nothing (`Spot/OneStageZk.lean` `checkMembersAt_refuses` 1262, and `ROW_TABLES` 944-946, the same at both heads). So no scan would have one either.
+  - A flip without the composition's binding only renames whose word the period takes.
+- **The change that settles it, in two parts** [argued]:
+  1. The composition hands the period check SPOT's own answer for each compute audit's record, or a tie holds the evidence's copy to it (item 4). Then `answered` reads SPOT's id for a compute audit. Files: `NetworkCheck/Period.lean` (`oneStage`, `answered`, the docstring), `CoreOnsite.lean` (`ties`), `period_case.py` (the mirror and its cases), `records_audit.py period` or `served_cases.py` as the answer's source, `scan_period.py`, and the three test files of item 1.
+  2. The scan's answer stays Python's under v1's id until SPOT's per-member form accepts. It is named as open where the period check's guarantee is stated, as job 6's body already says of the member's tie.
+- **Statements and lock records of ours:** no statement names the id. `answered` is read by a statement (`security/Properties/NetworkPeriod.lean` 76 / 135) and by `check`. So a change of `oneStage` or `answered` moves the records that read them, with no statement's text changed [argued, from the records rule my run hit today]: the same records job 6 moves, soundness's 23 and proofs' 1 among them, a second time.
+- **Where it belongs** [argued]: in an issue of its own under NET-352, whose goal is that the period check reads verified answers.
+  - Not job 6's pull request: job 6 changes what a scan's registration names, not whose answers a period takes, and part 1 needs SPOT to answer for a served window first.
+  - Not NET-383: that is the onsite record's refusal of a local session's coins, in Python, on the answer's `public.coins`.
+  - If you want job 6's body to carry it, one line under "Not established": "The period check reads each audit's and each scan's answer out of its own evidence under one-stage v1's id; no Lean computed it, and the composition does not bind it." Say the word and I add it.
+
+**4. The tie proofs describes**
+
+- **What it would read on our side:** the period's commitment's `audits`, the compute audits' registration records (`Commitment.audits`, 352 / 374; `commitmentOf`, 796 / 856), each by `Flock.WindowRecord.digest`, the digest `answered` already holds each answer to (863 / 923). The other side is SPOT's commitment's digest (`Spot/OneStage.lean` 406-409 at both; `Sampled.lean` `digest c := c.digest`).
+- **Job 6's rows form adds nothing it needs and takes nothing from it:** the audits' registrations are in the period's commitment at `main` already, and job 6's constants are about the scan's registration, not the audits'.
+- **Two limits of a tie in today's form** (`CoreComposition/Tie.lean` 19-31, the same at both heads):
+  - A tie holds that every value its subprotocols name is one value. That gives "every compute audit of the period is SPOT's one record". "Exactly the registrations the period accepted, each once" over several records needs one SPOT case a record, which a composite of one sampled-proofs case does not hold.
+  - A tie reads cases, not answers. It binds the record. The profile and the bound the period reads off the evidence's answer (`factsOf`, 1057 / 1143) stay the prover's unless the composition passes SPOT's answer in.
+
+**Not read:** whether a5 sets `coins.verified` in a local development session (I read where it is written, `a5.py` 479 / 490, not when); that `Spot.Registration.digest` is `Flock.WindowRecord.digest` (`answered`'s docstring names both); PRF-600's branch; the remote composite beyond its ties' names.
+
+TIMER: none
+
