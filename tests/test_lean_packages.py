@@ -86,7 +86,7 @@ def test_the_unwitnessed_list_only_shrinks():
     changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here comes
     down with it (`_held`)."""
     _held("UNWITNESSED", UNWITNESSED, {_rel(p): len(_lock(p).get("unwitnessed", {})) for p in lake_packages()},
-          "`unwitnessed`", "it only shrinks (LEAN-66); give the guarantee you added its `honest` and `nontrivial` "
+          "`unwitnessed`", "it only shrinks; give the guarantee you added its `honest` and `nontrivial` "
           "witnesses under `witnesses` (check.py's failure names both) instead")
 
 
