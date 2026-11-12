@@ -79,3 +79,21 @@ the re-time for kernels' window on node A on **Fri 13 Nov at 15:45Z**:
 **Return by Fri 13 Nov 01:00Z** with the launch lines, each file's sha256, the dry run's result,
 the minutes needed, what on the node must be read in the launch's minute, and what could stop
 it. You are resumed for the go at 15:25Z.
+
+## Thu 12 Nov 19:35Z: benchmarks answered (HASH-98, 19:34Z): "`main`'s build, please." Row 1 STAYS in Friday's launch
+
+"Time row 1 from `main` in Friday's 7:45 AM PST window, beside row 2 at two and four provers, and
+label by 8:30 AM PST as planned. A row of record times the prover serving runs, and that's
+`main`'s." So:
+- **Row 1 at one, two and four provers is in your launch, from `main`** (the kit's tree, as
+  Thursday's), with row 2 at two and four provers. The labels are on by 16:30Z on Friday: say in
+  your return whether the chain's minutes allow that from a 15:45Z start, and what goes first if
+  not (row 1).
+- **KHSHARE's runs of today are the cross-check:** "If Friday's `main` rows land within their
+  spread, say so in one line. If they don't, that's a finding about the build." Build that line
+  into your reading: KHSHARE's own rows (walk off) at one, two and four provers, from its runs
+  `r20261112-190414-ca45` (four provers), `r20261112-184334-4cb9` (two and one).
+- **If Friday's window fails**, benchmarks' fallback is KHSHARE's runs labelled of record with a
+  second label `build=walk-head-switch-off`. That is the lead's to order, not yours: say at once
+  if your launch cannot run.
+- A note on my own clock: my resume to you said "19:45Z"; it was sent at about 19:33Z.
