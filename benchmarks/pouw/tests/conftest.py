@@ -26,9 +26,9 @@ import pytest
 from verity.protocols.certifier.verifier import active
 
 POUW = Path(__file__).resolve().parents[1]
-#: what under ``benchmarks/pouw/`` this suite takes no script from: the tests, the two packages the environment installs,
+#: what under ``benchmarks/pouw/`` this suite takes no script from: the tests, the package the environment installs,
 #: and ``edited_gemm``, a suite of its own whose files this suite's inputs do not hold
-NOT_SCRIPTS = frozenset({"tests", "machine_model", "exact_kit", "edited_gemm"})
+NOT_SCRIPTS = frozenset({"tests", "exact_kit", "edited_gemm"})
 #: the directories whose own scripts import by name a module whose name another directory holds too (``harness``:
 #: derive and report; ``h1_lanes``: run)
 AHEAD = ("harness", "h1_lanes")
