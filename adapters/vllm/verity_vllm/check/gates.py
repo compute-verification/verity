@@ -87,6 +87,21 @@ from typing import Any
 from verity_vllm.check.codes import VerificationCode as VC
 from verity_vllm.check.result import MISSING_INPUT, CheckResult
 from verity_vllm.check.verdict import match_verdict
+from verity_vllm.check.verdict_names import (
+    CANONICALITY,
+    COMPOSITION,
+    GATE_NAMES,
+    GATES,
+    HOLDOUT,
+    HOLDOUT_GATES,
+    INTEGRITY_GATES,
+    OBSERVATION,
+    PRIMITIVE,
+    ROOT_CLOSURE,
+    SEMANTIC_CLOSURE,
+    STRUCTURAL_GATES,
+    VU_PARTITION,
+)
 
 # ---------------------------------------------------------------------------------------------------------
 # FROZEN CONSTANTS — part of the accepted invariant set; change only through an approved decision in
@@ -106,23 +121,6 @@ COS_SIN_MAX_ULP = 1
 #: Diagnostic only (never gating): the cumulative instance count over decode steps is called "linear" when the
 #: least-squares residual is within this many instances.
 DIAG_MAX_LINEAR_RESIDUAL = 0.5
-#: The gate ids, in report order.
-GATES = ("G1", "G2", "G3", "G4", "G5", "G6", "G7")
-GATE_NAMES = {
-    "G1": "observation fidelity", "G2": "semantic closure", "G3": "root closure", "G4": "primitive exactness",
-    "G5": "composition exactness", "G6": "canonicality + regression", "G7": "holdout generalization",
-}
-#: The gates a holdout must pass (G7 is the holdout gate itself).
-HOLDOUT_GATES = ("G1", "G2", "G3", "G4", "G5", "G6")
-#: Structural gates outside the frozen G1..G7 set (evaluated and reported, verdict rule in `verdict`).
-STRUCTURAL_GATES = ("G8",)
-GATE_NAMES["G8"] = "VU partition"
-#: Each gate's id by what it checks: a reader of a gates document reads its keys by these names.
-OBSERVATION, SEMANTIC_CLOSURE, ROOT_CLOSURE, PRIMITIVE, COMPOSITION, CANONICALITY, HOLDOUT = GATES
-(VU_PARTITION,) = STRUCTURAL_GATES
-#: Integrity gates outside the frozen set: the fail-closed reference-integrity rule.
-INTEGRITY_GATES = ("R1",)
-GATE_NAMES["R1"] = "reference integrity (fail-closed)"
 #: The rule, versioned: quoted in every R1 result and in `gates.json["constants"]`; bump the date on any change of the rule.
 REF_INTEGRITY_RULE = {
     "id": "R1", "version": "2026-09-18",
@@ -1408,6 +1406,7 @@ FOLD_SUMMARY_FIELDS: dict[str, str] = {
 __all__ = [
     "TIER_A_K", "MIN_DECODE_TOKEN_STEPS", "CHAIN_MIN_SLICES", "REGIMES", "COS_SIN_MAX_ULP", "DIAG_MAX_LINEAR_RESIDUAL", "GATES", "GATE_NAMES", "HOLDOUT_GATES",
     "STRUCTURAL_GATES", "INTEGRITY_GATES", "REF_INTEGRITY_RULE", "ALL_GATES", "QUERY_USE_SCHEMA", "QUERY_USE_KIND",
+    "OBSERVATION", "SEMANTIC_CLOSURE", "ROOT_CLOSURE", "PRIMITIVE", "COMPOSITION", "CANONICALITY", "HOLDOUT", "VU_PARTITION",
     "GATES_SCHEMA", "FOLD_SUMMARY_SCHEMA", "FOLD_SUMMARY_FIELDS", "ARTIFACTS", "ARTIFACT_STAGE", "replay_b_key", "replay_b_rel",
     "GateResult", "ArtifactError", "RunArtifacts", "load_profile_config",
     "gate_observation", "gate_semantic_closure", "gate_root_closure", "gate_primitive", "gate_composition", "gate_canonicality", "gate_holdout",
