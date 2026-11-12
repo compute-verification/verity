@@ -145,6 +145,9 @@ SETTINGS: dict[str, Setting] = _declare(
     S("MERGE_THREAD", str, None, WHERE, "the Slack thread train.sh posts a failed launch to", "telemetry"),
     S("TRAIN_TREES", str, None, WHERE, "where train.sh puts its worktrees and logs (drive's auto plans' too); unset, TMPDIR",
       "scratch space"),
+    S("TRAIN_CARRY_FROM", str, None, WHERE, "run ids, comma-separated, whose verdict packs a recorded launch sends first, held "
+      "to no GATHER_BYTES (`check.carried_packs`): the shards a rebuilt candidate of the verified queue replaces",
+      "each pack is held to its sha256, and a pass to its key"),
     S("AWS_ACCESS_KEY_ID", str, None, WHERE, "the parent store key, which train.sh requires to mint the run's custody key",
       "a credential, never what a step computes", secret=True),
     S("AWS_SESSION_TOKEN", str, None, WHERE, "a temporary credential's token, which train.sh refuses: it cannot mint the "
