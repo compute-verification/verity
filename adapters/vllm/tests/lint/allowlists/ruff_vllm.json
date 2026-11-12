@@ -435,7 +435,6 @@
     {"file": "tests/observe/test_resolve_log_group_label.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/observe/test_resolve_m1.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/served_rope.py", "kind": "E741", "symbol": "commit", "detail": "Ambiguous variable name: `I`"},
-    {"file": "tests/pipeline/served_tp.py", "kind": "E741", "symbol": "commit", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/pipeline/test_admission_commit.py", "kind": "E702", "symbol": "test_cli_is_torch_free_and_reports_the_observed_check", "detail": "Multiple statements on one line (semicolon)"},
     {"file": "tests/pipeline/test_boundary_plan.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},

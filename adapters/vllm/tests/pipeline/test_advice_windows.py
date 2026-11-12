@@ -40,7 +40,7 @@ def advice_tp(tmp_path_factory):
     from tests.pipeline import served_tp as ST
 
     root = tmp_path_factory.mktemp("advice-tp")
-    c = ST.commit(root / "tp", world=2, I=256, law="subset:2", deferred=True)
+    c = ST.commit(root / "tp", world=2, inter=256, law="subset:2", deferred=True)
     c["compiler"] = AW.Traced.for_commit(c["commit"], c["build"])
     c["bytes"] = {"A": _advice(c), "A'": _advice(c, drop=("r1",))}
     c["advice"], c["reg"], c["opening"] = {}, {}, {}
@@ -322,7 +322,7 @@ def gated_tp(tmp_path_factory):
     from tests.pipeline import served_tp as ST
 
     root = tmp_path_factory.mktemp("gated-tp")
-    c = ST.commit(root / "tp", world=2, I=256, law="work:2", deferred=True, templates=(ROPE,))
+    c = ST.commit(root / "tp", world=2, inter=256, law="work:2", deferred=True, templates=(ROPE,))
     data = _advice(c)
     for name, gates in (("gated", (ROPE,)), ("bare", ())):
         comp = AW.Traced.for_commit(c["commit"], c["build"], gates)
