@@ -1,5 +1,5 @@
 {
- "about": "Pinned vectors of verity/ml/circuits/PROTOCOL.md (the program format), checked by verity/ml/circuits/tests/test_format_spec.py; written by it with --write.",
+ "about": "Pinned vectors of verity/circuits/PROTOCOL.md (the program format), checked by verity/circuits/tests/test_format_spec.py; written by it with --write.",
  "canonical_json": {
   "in_domain": [
    [
@@ -1361,6 +1361,14 @@
   [
    "a composite id that is not Name_vN",
    "ValueError: definition 'TPair_v1': form 'composite', id 'TPair_v01' (a composite's id is Name_vN)"
+  ],
+  [
+   "a composite keyed with an Input id",
+   "ValueError: definition 'Input8_v1': an input id keys only the input primitive"
+  ],
+  [
+   "a composite keyed with a RegisteredInput id",
+   "ValueError: definition 'RegisteredInput8_v1': an input id keys only the input primitive"
   ],
   [
    "a root with a parameter",
