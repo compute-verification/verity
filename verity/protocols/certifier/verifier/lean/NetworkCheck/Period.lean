@@ -137,8 +137,10 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   refused), the schedule's rows, words, word bits, row format and layout, the execution phase's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
   session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
-  `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
-  for another window's rows is refused); its Programs' rows are a compute audit's output (`progTied`): a lane's
+  `registered` naming each one's value at its root and domain, which bind the session, link, end and window (an answer
+  for another window's rows is refused; so is a registration listing the rows under another value or as ports of its
+  `roots`, since one-stage's record check holds a session's read to the registered entry of its value); its Programs'
+  rows are a compute audit's output (`progTied`): a lane's
   `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
   or `SelectEntry_v1` template's entries port's (`<descriptor id>/c<j>/o0`, `entriesPortName`) in the `roots` of an
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
@@ -1004,11 +1006,13 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
       { keyId := r.key, link := p.link, direction := d, window := w, digest := r.digest, signature := r.signature } do
     refuse s!"{what}: not under the deployment key in the session"
 
-/-- The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain. -/
+/-- The scan's registration holds the rows: an entry of its `registered` names their value at their root and
+domain. -/
 def holds (reg : Json) (r : Rows) : Bool :=
-  let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
-  (entries "roots" ++ entries "registered").any fun e =>
-    e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
+  let entries := match reg.getObjValD "registered" with | .arr xs => xs | _ => #[]
+  entries.any fun e =>
+    e.getObjValD "value" == .str r.value && e.getObjValD "root" == .str (Flock.hexOf r.root) &&
+      e.getObjValD "domain" == .str r.domain
 
 /-- The scan's Programs' rows in its registration, one tree a lane: lane `j`'s is the entry of its `roots` whose port,
 or of its `registered` whose value, is `scan/prog<j>`. -/
@@ -1171,7 +1175,9 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
       certifier certifies none of a window in which it refused a connection: traffic past the Program slots)"
   unless rs.size == 2 do refuse s!"{what}: registrations: the ingress rows, then the egress rows"
   for (r, d) in rs.zip #[Direction.ingress, .egress] do rowsCheck p s sd w d r
-  unless rs.all (holds reg) do refuse s!"{what}: the scan's registration doesn't hold the rows: another window's answer"
+  unless rs.all (holds reg) do
+    refuse s!"{what}: the scan's registration doesn't list the rows as registered values, each under its name at its \
+      root and domain: another window's answer, or rows that are ports of its roots"
   unless progTied audits reg do
     refuse s!"{what}: the scan's prog is no compute audit's output: no scan/prog<j> entry's root and domain are an \
       output port's of an audit's registration"

@@ -25,7 +25,9 @@ each link-window's ingress and egress rows committed and registered under a smal
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
 (`past-slots`: none of them and neither registration, as the network certifier leaves a window in which it refused a
 connection), and
-the scan's registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root
+the scan's registration listing both rows as registered values, each under its registration's value at its root and
+domain (`answer-window`: another window's rows, or these under another window's domain or value;
+`answer-unregistered`: the rows as ports of its `roots`), and each lane j's `scan/prog<j>` (`prog_name`) at the root
 and domain of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1`
 at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan
 slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
@@ -829,10 +831,10 @@ def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
 
 
 def _holds(reg: dict, doc: dict) -> bool:
-    """The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain."""
-    entries = [e for k in ("roots", "registered") if isinstance(reg.get(k), list) for e in reg[k]]
-    return any(isinstance(e, dict) and e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
-               for e in entries)
+    """The scan's registration holds the rows: an entry of its `registered` names their value at their root and
+    domain."""
+    return any(e.get("value") == doc["value"] and e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
+               for e in _entries(reg, "registered"))
 
 
 #: the scan's Programs' rows in its registration, one tree a lane, `PROG<j>` lane j's (`progName`): its `roots` entry's
@@ -983,7 +985,7 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
     for doc, d in zip(x.registrations, (INGRESS, EGRESS)):
         _rows_check(p, w, d, doc)
     if not all(_holds(reg, doc) for doc in x.registrations):
-        raise Finding(REJECT, f"{what}: another window's answer")
+        raise Finding(REJECT, f"{what}: another window's answer, or rows that are not the scan's registered values")
     if not _prog_tied(audits, reg):
         raise Finding(REJECT, f"{what}: the scan's prog is no compute audit's output")
     prof, pub = _answered(what, reg, x.answer)
@@ -1188,6 +1190,7 @@ EXPECT = {
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
     "rows-schedule": REJECT, "rows-capped": ACCEPT, "rows-cap-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
+    "rows-answer-unregistered": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
@@ -1740,7 +1743,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         if aimed and m == "answer-window":
             there = registrations(w + r.choice([1, -1] if w else [1]))
             named = r.choice([there, [regs[0], there[1]], [there[0], regs[1]],
-                              [x | {"domain": y["domain"]} for x, y in zip(regs, there)]])
+                              [x | {"domain": y["domain"]} for x, y in zip(regs, there)],
+                              [x | {"value": y["value"]} for x, y in zip(regs, there)]])
         elif aimed and m == "schedule":
             other = dataclasses.replace(sched, **{f: getattr(sched, f) + 1 for f in [r.choice(SAME_SHAPE)]})
             if r.random() < 0.5:
@@ -1810,9 +1814,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 recs[j] = sign(on, d, w, recs[j].digest, s=_flip(session, seed))
             elif m == "cert-key":
                 recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
-        entries = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
-        entries.insert(r.randrange(len(entries) + 1),
-                       {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
+        held = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
+        held.insert(r.randrange(len(held) + 1),
+                    {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
         T = sched.window
         units = 2 * T + (1 if aimed and m == "units" else 0)
         strata = [{"k": r.randint(1, T), "name": d.value, "size": T} for d in (INGRESS, EGRESS)] \
@@ -1823,11 +1827,18 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         if aimed and m == "answer-oversampled":
             k = _oversample(r, units, k, strata)
         fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
-        entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
+        entries = _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
-        rp.shuffle(entries)
+        # the rows are registered values, each under its registration's value; `answer-unregistered` lists them as
+        # ports of the roots under that name instead
+        listed = "roots" if aimed and m == "answer-unregistered" else "registered"
+        if listed == "roots":
+            held = [{("port" if name == "value" else name): v for name, v in x.items()} for x in held]
         rec = {"format": fmt, "law": law, "partition": f"{link}/scan/{w}", "population": units, "program": program,
-               "protocol": ONE_STAGE, where: entries, "window": {"kind": "stand-in", "window": w}}
+               "protocol": ONE_STAGE, "window": {"kind": "stand-in", "window": w}}
+        for name, es in ((where, entries), (listed, held)):
+            rec[name] = rec.get(name, []) + es
+            rp.shuffle(rec[name])
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         digest = bytes.fromhex(R.digest(rec))

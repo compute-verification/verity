@@ -609,12 +609,14 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
     its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
-    and two row registrations, each named by the registration's roots. The period's mirror reads the block's
+    and two row registrations, each a registered value of the registration under its own name. The period's mirror
+    reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
     with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
-    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), and refuses the
+    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), and refuses a
+    registration listing the rows as ports of its roots, one of them under another name or at the other's root, the
     forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
@@ -721,6 +723,21 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         got = PC.reference(SP.rows_case(run, scan, v3c=v3c))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
+    as_ports = [{"port": e["value"], **{k: e[k] for k in ("root", "leaves", "domain")}} for e in rows]
+    renamed = [{**e, "value": e["value"] + "/x"} for e in rows]
+    for unheld in (R.record(program, query, law, sz.S.SCHEME, [*roots, *as_ports], {"kind": "stand-in"},
+                            leaf_layer="ee" * 64),
+                   R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64,
+                            registered=[renamed[0], rows[1]]),
+                   R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64,
+                            registered=[rows[0], {**rows[1], "root": rows[0]["root"]}])):
+        its = sz.window_answer(unheld, {**record, "registration": unheld}, sz.Fraction(1, 100), "unused")
+        (scan / "answers.json").write_text(json.dumps({**doc, "registration": unheld, "windows": [
+            {"window": 0, "answer": its, "registrations": registrations}]}))
+        got = PC.reference(SP.rows_case(run, scan))
+        assert (got["verdict"], got["reason"]) == (
+            "reject", "window 0: another window's answer, or rows that are not the scan's registered values"), got
+    (scan / "answers.json").write_text(json.dumps(doc))
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "

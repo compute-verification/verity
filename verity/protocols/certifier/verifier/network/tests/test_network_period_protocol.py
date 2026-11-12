@@ -116,6 +116,7 @@ ROWS_REFUSALS = {
     "rows-past-slots": ("certifies none of a window in which it refused a connection", "refused a connection"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
     "rows-answer-window": ("another window's answer", "another window's answer"),
+    "rows-answer-unregistered": ("doesn't list the rows as registered values", "not the scan's registered values"),
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
     "rows-cap-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
     "rows-delta": ("is not the period's", "is not the period's"),
@@ -129,7 +130,8 @@ ROWS_REFUSALS = {
 def test_the_rows_form_refuses_what_it_must(server):
     """A link-window missing one of its records' certificates, one the network certifier left uncertified for refusing a
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
-    another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another response
+    another window's rows or for these under another window's name, a scan whose registration lists the rows as ports of
+    its `roots`, rows under a schedule whose digest isn't the bound one (one field off, or another response
     cap or none), scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
     no `SlotEntry_v1` or `SelectEntry_v1` template's entries, and a scan whose state is not its wired audit's
