@@ -28,3 +28,11 @@ Note, updated with these: note:training-20261112T2100Z-report-premise-review-927
 [2026-11-12T21:33Z] 8c3770640d3d
 PREMISE, Thu 12 Nov, 1:32 PM PST. **Done: #9272 is at 84995d9b78 with your rulings applied, its suites are green, and no run is in flight.** Handoff: note:training-20261112T2132Z-handoff-PREMISE. Left, in order: you read and mark #9272; you tell #9170's lane (TRN-135) that circuit_properties now names P_BATCH; step 2 of TRN-137 is not this PR.
 
+[2026-11-12T21:33Z] bf1588f08ff8
+SORT, TRN-146: carry of #8767. What it is for: the composition difftest takes 49 minutes instead of 84, and each thousand-case test gets a short form that every check can run. READ (the PR title).
+
+- Branch `cursor/carry-8767-dc90`, head 093ba58b791308016d9a3aa8358a31da7eb30e1e: #8767's head with `main` 30d6fcc92ff7 merged in. `tools/move/restack.py` crossed the three moves with no conflict. RAN.
+- The diff against `main` is 8 files, +145/−31: `verity/difftest/` (README, `protocol.py`, `__init__.py`, two tests) and `verity/protocols/remote/verifier/composition/` (README, `tests/reference.py`, `tests/test_composition_difftest.py`). RAN (`git diff --stat`).
+- Quick suites `r20261112-191633-c65b`, rc 0, last line: `63 suites: 63 passed (1 cached), 0 failed; 220.0 min of test time`. RAN (fetched stdout.log).
+- No Lean changed, so there is no records run. Question: none.
+
