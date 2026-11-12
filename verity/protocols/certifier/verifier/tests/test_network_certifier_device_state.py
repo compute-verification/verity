@@ -136,7 +136,7 @@ def test_a_span_or_session_that_is_no_span_or_session_and_a_life_with_no_room(tm
 def test_the_start_digest_is_the_documented_bytes():
     want = tagged_sha512("verity-network-certifier/start/v1", struct.pack(">Q", 86_400_000) + SCHEDULE)
     assert start_digest(86_400_000, SCHEDULE) == want and len(want) == 64
-    assert start_link("warden") == "warden-origin"
+    assert start_link("uplink") == "uplink-origin"
     assert len({start_digest(0, SCHEDULE), start_digest(1, SCHEDULE), start_digest(0, OTHER_SCHEDULE)}) == 3
     for base in (-1, 1 << 64):
         with pytest.raises(ValueError):
@@ -150,21 +150,21 @@ def test_the_starts_certificate_binds_base_schedule_link_session_and_key(tmp_pat
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     issuer = Issuer(signer, SESSION)
-    start = issuer.certify_start("warden", 1200, SCHEDULE)
+    start = issuer.certify_start("uplink", 1200, SCHEDULE)
     c = start.certificate
     assert issuer.started and signers.used(signer) == [0]
-    assert (c.link, c.direction, c.window, c.digest) == ("warden-origin", Direction.EGRESS, 0,
+    assert (c.link, c.direction, c.window, c.digest) == ("uplink-origin", Direction.EGRESS, 0,
                                                           start_digest(1200, SCHEDULE))
-    assert start.refusal(key, SESSION, "warden", SCHEDULE) is None and start.verify(key, SESSION, "warden", SCHEDULE)
+    assert start.refusal(key, SESSION, "uplink", SCHEDULE) is None and start.verify(key, SESSION, "uplink", SCHEDULE)
 
-    def refusal(s, *, key=key, session=SESSION, link="warden", schedule=SCHEDULE):
+    def refusal(s, *, key=key, session=SESSION, link="uplink", schedule=SCHEDULE):
         return s.refusal(key, session, link, schedule)
 
     replace = dataclasses.replace
     assert refusal(start, link="other") == "start"
     assert refusal(replace(start, certificate=replace(c, direction=Direction.INGRESS))) == "start"
     assert refusal(replace(start, certificate=replace(c, window=1))) == "start"
-    assert refusal(replace(start, certificate=replace(c, link="warden"))) == "start"
+    assert refusal(replace(start, certificate=replace(c, link="uplink"))) == "start"
     assert refusal(replace(start, certificate=None)) == "start"
     assert refusal(start, key=LmsSigner(signers.key(b"another certifier"), tmp_path / "none").public_key()) == "key"
     assert refusal(start, schedule=OTHER_SCHEDULE) == "schedule"
@@ -176,18 +176,19 @@ def test_the_starts_certificate_binds_base_schedule_link_session_and_key(tmp_pat
     moved = replace(c, digest=start_digest(0, SCHEDULE))
     assert refusal(CertifiedStart(0, SCHEDULE, moved)) == "signature"
     # a record's or a clock's certificate signs a salted digest under another tag: none opens as a start
-    record = issuer.sign("warden-origin", Direction.EGRESS, 0, certificate_digest(bytes(64), start_digest(1200, SCHEDULE)))
+    record = issuer.sign("uplink-origin", Direction.EGRESS, 0,
+                         certificate_digest(bytes(64), start_digest(1200, SCHEDULE)))
     assert refusal(CertifiedStart(1200, SCHEDULE, record)) == "opening"
 
 
 def test_a_refused_signer_gives_no_starts_certificate(tmp_path):
     """A session its leaf state has started is refused at the start's certificate, the session's first signature."""
     first = signers.signer(tmp_path)
-    assert Issuer(first, SESSION).certify_start("warden", 0, SCHEDULE) is not None
+    assert Issuer(first, SESSION).certify_start("uplink", 0, SCHEDULE) is not None
     first.close()
     again = Issuer(LmsSigner(first.key, first.state), SESSION)
-    assert again.certify_start("warden", 600, SCHEDULE) is None
-    assert again.refused == [("warden-origin", Direction.EGRESS, 0)] and not again.started
+    assert again.certify_start("uplink", 600, SCHEDULE) is None
+    assert again.refused == [("uplink-origin", Direction.EGRESS, 0)] and not again.started
     assert signers.used(first) == [0]
 
 

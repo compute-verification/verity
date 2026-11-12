@@ -1077,8 +1077,8 @@ async def wait_until(deadline: float, clock: Callable[[], float],
 
 async def precise_sleep(delay: float, clock: Callable[[], float] | None = None) -> None:
     """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against `clock`, the loop's unless one is given: the
-    proxy's sleep unless its caller injects one, and the network certifier's against its own clock
-    (`warden.Warden`). An injected sleep (a `VirtualClock`, the device difftest's harness) gets one wait a tick."""
+    proxy's sleep unless its caller injects one, and the network certifier's against its own clock. An injected sleep
+    (a `VirtualClock`, the device difftest's harness) gets one wait a tick."""
     if clock is None:
         clock = asyncio.get_running_loop().time
     await wait_until(clock() + delay, clock)

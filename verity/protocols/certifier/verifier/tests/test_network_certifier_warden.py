@@ -15,7 +15,7 @@ import socket
 
 import pytest
 
-from verity.protocols.certifier.verifier import active, io_tie as IT, pacer, warden as warden_module
+from verity.protocols.certifier.verifier import active, io_tie as IT, pacer, warden as device_module
 from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.protocols.certifier.verifier.grid import Reason
 from verity.protocols.certifier.verifier.release import read_watermark, release_of, watermark_head, with_release
@@ -429,14 +429,14 @@ def test_a_tick_whose_wait_ends_early_waits_again_and_never_runs_before_its_boun
 
     async def go():
         clock = EarlyClock(-TAU / 2)
-        warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
-        running = asyncio.create_task(warden.run())
+        device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(device.run())
         before, after = [], []
 
         async def settle(seen: list[int]) -> None:
             for _ in range(4):  # the loop runs whatever is ready: a tick that the clock's reading lets run runs here
                 await clock.sleep(0)
-            seen.append(warden.ticks)
+            seen.append(device.ticks)
 
         for t in range(PARAMS.window):
             await settle(before)
@@ -444,12 +444,13 @@ def test_a_tick_whose_wait_ends_early_waits_again_and_never_runs_before_its_boun
             await settle(after)
         clock.advance(PARAMS.window * TAU)
         await running
-        return warden, before, after, clock
+        return device, before, after, clock
 
-    warden, before, after, clock = asyncio.run(go())
+    device, before, after, clock = asyncio.run(go())
     assert before == list(range(PARAMS.window)) and after == list(range(1, PARAMS.window + 1))
-    assert warden.lateness == [0.0] * PARAMS.window and len(clock.waits) == 2 * PARAMS.window
-    assert [(r.link, r.status.reason) for r in warden.records] == [("requests", None), ("responses", None), ("fails", None)]
+    assert device.lateness == [0.0] * PARAMS.window and len(clock.waits) == 2 * PARAMS.window
+    assert [(r.link, r.status.reason) for r in device.records] == [("requests", None), ("responses", None),
+                                                                   ("fails", None)]
 
 
 def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_against_it(monkeypatch):
@@ -468,14 +469,15 @@ def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_again
         now[0] += delay / 2 if len(waits) % 2 else delay
 
     monkeypatch.setattr(pacer.time, "clock_gettime", read)
-    monkeypatch.setattr(warden_module, "precise_sleep", short)
-    warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1)
-    assert warden.clock is pacer.raw_clock
-    asyncio.run(warden.run())
-    assert set(asked) == {pacer.time.CLOCK_MONOTONIC_RAW} and all(clock is warden.clock for clock in waits)
-    assert warden.ticks == PARAMS.window and len(waits) >= 2 * PARAMS.window
-    assert 0 <= min(warden.lateness) and max(warden.lateness) < warden.slack
-    assert [(r.link, r.status.reason) for r in warden.records] == [("requests", None), ("responses", None), ("fails", None)]
+    monkeypatch.setattr(device_module, "precise_sleep", short)
+    device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1)
+    assert device.clock is pacer.raw_clock
+    asyncio.run(device.run())
+    assert set(asked) == {pacer.time.CLOCK_MONOTONIC_RAW} and all(clock is device.clock for clock in waits)
+    assert device.ticks == PARAMS.window and len(waits) >= 2 * PARAMS.window
+    assert 0 <= min(device.lateness) and max(device.lateness) < device.slack
+    assert [(r.link, r.status.reason) for r in device.records] == [("requests", None), ("responses", None),
+                                                                   ("fails", None)]
 
 
 def test_a_host_without_a_raw_clock_starts_no_network_certifier(monkeypatch):
@@ -491,10 +493,10 @@ def test_a_host_without_a_raw_clock_starts_no_network_certifier(monkeypatch):
         waits.append(delay)
 
     monkeypatch.setattr(pacer.time, "clock_gettime", refuse)
-    warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, sleep=sleep, paced=0.05)
+    device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, sleep=sleep, paced=0.05)
     with pytest.raises(pacer.ClockRefused, match="no raw monotonic clock"):
-        asyncio.run(warden.run())
-    assert (warden.ticks, warden.lateness, waits, warden._pacer, warden.records) == (0, [], [], None, [])
+        asyncio.run(device.run())
+    assert (device.ticks, device.lateness, waits, device._pacer, device.records) == (0, [], [], None, [])
 
 
 def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
