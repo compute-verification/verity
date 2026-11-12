@@ -67212,3 +67212,94 @@ Open with the exact line that stops it: #9043, pull request 2 and pull request 3
 - **Why it does no harm today, and when it would.** Every stop stream's audit record is not complete today (those two entries never run), and `summary.json` says a length is held only for a record that accepted and is complete, so no run claims a length. [run: `r20261111-214356-4ecc`] It would matter the day the two entries run: a stop record would then be complete on a boundary stream's audit record that is not. [guess]
 - **The change I would make, not made.** `across` answers the earlier audit record's `complete` beside `accepted`, and case 1 asks for both; an accept that is not complete becomes its own case or case 3 with its reason. It changes `across`'s answer and what case 1 means, so it is yours and the second reader's to rule, not mine to slip in. [guess] I left the code as it is and the three runs at `e90900dc4ed3` as they are. [run]
 - **Runs out, unchanged:** `r20261112-015524-6e90`, `r20261112-015704-349a`, `r20261112-015716-f5a3`, all three waiting for a slot at 02:00Z. [run]
+
+## 02:01Z KEPT: the two tables under `MIMALLOC_PURGE_DELAY=-1` (the kept process holds 11.4 GB or 13.4 GB between members at the 1.79 GB circuit file, not the 9.3 GB I derived); the 10.52 GB peak is the second program, not the earlier circuit file; `5e87ff2c83` does not stand: the same order at the commit before it gives the same peak, so it is taken out (`01488189d0`, checks running)
+
+Tags: [measured: run id], [run: id], [read: file], [derived], [guess]. Every figure: on a branch, not on `main`; stand-in values, not the served engine; one core of a loaded node; one run; GB is 10^6 kB as the kernel reports it; medians over 2 rounds. Until the scan of the order of members in the challenger's log is on `main`, a kept process's verdicts are per member only, and a window of more than one member gets no counted verdict.
+
+Re-dated hour: these tables were due Thu 12 Nov 00:30Z and are due 02:30Z; this entry is them. The second pull request's hour, Fri 13 Nov 02:00Z, did not fall inside the stop and stands.
+
+### 1. To paste on PRF-548: memory and seconds under `MIMALLOC_PURGE_DELAY=-1`
+
+Both runs on vy-nebius-cpu-6, exit 0, the guard held in every block (each kept member's verdict bytes are `verify`'s alone). First pull request: `cursor/proofs-keptverify-604f` at `0963ff842e` [measured: `r20261111-215159-3112`]. Second: `cursor/proofs-keptcircuit-7c1e` at `5e87ff2c83` [measured: `r20261111-215201-4d4e`]. Three members a process, the same member handed in three times.
+
+**Memory the kept process holds beside the next member's prover**
+
+| 1.79 GB circuit file, 151.8 MB program | first pull request | second pull request | `verify` alone, a process a member |
+|---|---|---|---|
+| held after the first member | 9.55 GB | 9.57 GB | nothing: the process ends |
+| **held after each later member** | **13.41 GB** | **11.41 GB** | nothing |
+| peak | 13.41 GB | 11.41 GB | 9.59 GB, 9.61 GB |
+| the same under the allocator's default: held / peak | 5.10 / 9.29 GB [`34fd`] | 5.26 / 9.26 GB [`d744`, `ee5b`] | 9.09 to 9.11 GB |
+
+| 542.7 MB circuit file, 141.2 MB program | first pull request | second pull request | `verify` alone |
+|---|---|---|---|
+| held after the first member | 6.90 GB | 6.92 GB | nothing |
+| **held after each later member** | **7.45 GB** | **6.92 GB** | nothing |
+| peak | 7.45 GB | 6.92 GB | 6.75 GB, 6.74 GB |
+| the same under the allocator's default: held / peak | 2.88 / 6.74 GB [`34fd`] | 3.08 / 6.76 GB [`d744`, `ee5b`] | 6.60 to 6.63 GB |
+
+**Seconds a member waits before its first check, same two runs**
+
+| | `verify` alone | first pull request, a later member | second pull request, a later member with the same circuit file |
+|---|---|---|---|
+| 1.79 GB circuit file | 49.3 s, 50.4 s | 18.6 s | **2.04 s** |
+| 542.7 MB circuit file | 35.2 s, 35.8 s | 6.19 s | **0.91 s** |
+| whole call for that member, its checks included, large / small | 68.2 / 41.9 s, 69.1 / 42.5 s | 36.9 / 12.5 s | 20.5 / 7.26 s |
+
+- **My figure of 21:37Z was wrong.** I derived that under this setting the process would hold its peak, about 9.3 GB at the 1.79 GB file. Measured, it holds 11.41 GB (second pull request) or 13.41 GB (first): the process returns nothing, and a later member does not reuse all the memory the member before it freed, so the process grows once more at its second member. It did not grow at the third (both later members read the same figure in both rounds); three members are all I measured.
+- **The second pull request holds 2.0 GB less than the first under the setting** at the 1.79 GB file, because a later member does not parse the file again.
+- **With the circuit file and the program both changing between members** (second pull request, members in the order small, small, large, small): peak 14.60 GB; 13.80 GB held after the large member and 13.92 GB after the small one that follows it [measured: `4d4e`].
+- **What the setting buys in seconds, same node:** `verify` alone waits 35.2 to 35.8 s under it against 38.1 to 38.6 s under the default at the small file, and 49.3 to 50.4 s against 54.0 to 54.9 s at the large [measured: `3112`, `4d4e` against `a532`; one run each, the node's load 6 to 16 against 13 to 27]. For a later member of a kept process I have no default run on that node; across nodes it is 0.91 s against 0.97 s and 2.04 s against 2.18 s (second pull request), 6.19 s against 7.15 s and 18.6 s against 20.9 s (first).
+- **So for a driver:** under the setting a kept process sits at 11.4 GB (13.4 GB with the first pull request alone) beside the next member's prover at the 1.79 GB file, against 5.1 to 5.3 GB under the default, for a few percent of the seconds. `verifier_env` keeps a value its caller sets [read: `proofs.py` on `main`], so the driver can start the kept process under either; which is the vLLM lane's to choose.
+
+### 2. Does #9005 change what the tables measure? No
+
+- #9005 is Python only: `proofs.py`, `a0.py`, `server_rate.py` and two tests [run: `gh pr view 9005`]. No Lean file and no file of the measurement. The verifier's binary and what it does under a given setting are as measured.
+- What it changes is which column `main` is in. On `main` the driver's member checks go through `a0.lean_verify`, which now starts `verify` under `MIMALLOC_PURGE_DELAY=-1` unless the caller's environment sets another value [read: `benchmarks/one_stage/a0.py:350`, `proofs.py:131` on `main`]. So the "`verify` alone" figures under the setting (9.6 GB peak, 49 to 50 s at the 1.79 GB file) are what a member costs on `main` today, and the default's are what it cost before.
+- My measurement's Python starts the verifier under whatever its job's environment holds, not through `verifier_env`. Every figure of mine says which setting it ran under. At the merge with `main` I make it start the verifier as the callers do and record the setting in its output.
+
+### 3. `a532`: what the 10.52 GB is made of [measured: `r20261111-221249-a532`, second pull request's head, the allocator's default, cpu-6, exit 0, the guard held]
+
+Members in the order large, small, large; the kept program is the large member's, so the last member keeps the program and changes circuit file. Two rounds.
+
+| | peak of the process |
+|---|---|
+| `verify` alone on the large member | 9.11 GB |
+| kept process, the circuit file never changes | 9.26 GB |
+| kept process, the circuit file changes, the program is the kept one (`a532`) | **9.34 GB** |
+| kept process, the circuit file changes and the member brings another program (`d744`) | 10.52 GB |
+
+- **The earlier circuit file is not what raised the peak.** With the program kept, a change of file costs 0.08 GB at the peak.
+- **The 10.52 GB is the second program:** 1.18 GB more than `a532`, and the one difference at that member is that it brings a program other than the kept one, so the kept program's bytes and two readings sit beside the member's own [derived: `d744` less `a532`]. Members of one window share one registered program, so a driver does not meet this.
+- **A member that keeps the program and changes circuit file waits 21.2 to 21.5 s** before its first check at the 1.79 GB file (`inputs` 20.5 to 20.8 s, `setup` 0.7 s), against 54.0 to 54.9 s alone. That is what a later member of the first pull request waits (20.9 s [`34fd`]): it pays for parsing its own file and nothing more.
+- **The 6 to 9 s I could not attribute at 22:18Z are the allocator's, not the verifier's** [derived]. Under the default the member that changes file and program waited 61 to 67 s against 53 to 54 s alone [`d744`]; under `MIMALLOC_PURGE_DELAY=-1` the same member waits 51.5 to 52.1 s against 50.1 to 50.3 s alone [`4d4e`]. Different nodes, one run each.
+
+**Does `5e87ff2c83` stand? No. I took it out.** The same order at `4f4443d306`, the commit before it [measured: `r20261112-012628-61f4`, cpu-6, the allocator's default, exit 0, the guard held]:
+
+| | before the commit (`61f4`) | with it (`a532`) |
+|---|---|---|
+| peak of the process | 9.34 GB | 9.34 GB |
+| held after each of the three members | 5.05 / 3.44 / 5.12 GB | 5.05 / 3.45 / 5.12 GB |
+| the large member that keeps the program and changes file: before its first check | 21.2 to 21.3 s | 21.2 to 21.5 s |
+| the small member between them, which brings another program | 40.9 to 41.0 s | 41.8 to 41.9 s |
+
+- **The commit changed nothing that can be measured.** It moved the circuit readers through a cell so that the earlier file's parse would be freed before another is parsed. The earlier parse was not what raised the peak, with it or without it. My reading at 21:30Z, that the 10.52 GB was the earlier circuit file still held, was wrong; the second program is what it was.
+- **The same-file figures do not depend on it either:** before it and with it a later member waits 0.96 s and 0.97 s (542.7 MB file), 2.10 s and 2.18 s (1.79 GB), and the process peaks at 6.76 GB and 9.26 GB in both [measured: `ee5b` at `16a0a485ff`, `d744` at `5e87ff2c83`]. So the tables of section 1, measured at `5e87ff2c83`, stand for the head without it; I do not run them again.
+- **New head of the second branch: `01488189d0`**, one commit that reverts `5e87ff2c83`. Its tree is `4f4443d306`'s, the tree `61f4` built and timed. No statement changes; the interface does not change. Local until its two files' tries and the test pass (below), then pushed.
+
+### 4. What #8789 frees of the first pull request: nothing yet, and it adds one file to the merge
+
+- **Still waiting on two.** #8949 at `c14e4bd2` and #9042 at `00963f01` are marked ready and admitted, not on `main` [run: `research queue status`, 01:28Z]. Both heads merge with `main` `be9a3d566905` without a conflict [run: `git merge-tree`].
+- **A trial merge of my first branch with `main` now has two conflicts** [run: `git merge-tree`, nothing committed]:
+  - `verity/protocols/flock/verifier/Flock/Program.lean`: #8789 moved it to `verity/circuits/lean/Circuits/Program.lean` and left a re-export; my branch holds an earlier commit of #9042's that adds three declarations to the old file. When #9042 is on `main` I take `main`'s side.
+  - `benchmarks/verifier_cost/README.md`: both sides added a paragraph at the same place; I keep both.
+- The conflict I named before, a comment in `verifyCmdBy`, is with #9042's head, not with `main`: it comes when #9042 lands, and mine wins. #8949's head is already in my branch.
+- No merge before both are on `main`, as you ruled. Then: merge, one records run and the tier at the merged head, open, and tell you; I do not mark it.
+
+### 5. Not done
+
+- **Running at `01488189d0`:** the two changed files' tries (`r20261112-015538-0e06` on cpu-10, `r20261112-015606-3599` on cpu-9), the test (`r20261112-015647-48d4` on cpu-1) and the quick tier against the first branch's head (`r20261112-015719-9916` on cpu-1). Tries and test by about 02:25Z, the tier by about 03:00Z [guess: each waits for a slot]. Then I push, and launch the one records run at that head.
+- **The second pull request's body:** drafted in the notes (`lanes/proofs/20261112T0135Z-draft-keptcircuit-pr-body.md`), with the sentence about per-member verdicts first; its checks table waits on the runs above. By Fri 13 Nov 02:00Z.
+- **The first pull request:** waits on #8949 and #9042 reaching `main`.
+- **The measurement's Python starting the verifier as the callers do:** at the merge with `main`.
