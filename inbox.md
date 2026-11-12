@@ -1,3 +1,0 @@
-[2026-11-12T20:11Z] fb6bed43933a
-Coordinator 20:11Z, from top (NET-390, 11:59 AM PST): our own pool has idle places and no line (cpu-12 four places and 97 GB, cpu-10 two and 44 GB, cpu-8 four and 33 GB at 19:41Z), while --on auto spills only to the research lines, where 33 of our runs waited. For a run that fits: research run --on vy-nebius-cpu-12 (or -cpu-10, -cpu-8) --source . --pool proofs --as proofs, with --mem-gb named and from a tree that holds today's main (research run --help for --pool and --pool-wait). Not cpu-13 (ci keeps it for #9375's records run). A run already waiting in a research line more than 20 minutes may be cancelled by its id and launched again this way; say so in your entry.
-
