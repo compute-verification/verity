@@ -125,6 +125,10 @@ struct CircuitParams {
     types_gen: u64,
     /// the units by the device's level walk ([`unit_walk`]) rather than its unit kernel, from the same input words
     u_walk: i32,
+    /// the walk's schedule cut at seeds ([`UnitCut`]): their rows, and their z in every pass of 256 units
+    u_n_seeds: i32,
+    u_seed_rows: *const u32,
+    u_seeds: *const u64,
 }
 
 #[cfg(feature = "sha512")]
@@ -260,7 +264,8 @@ unsafe extern "C" {
     fn flock_cuda_dev_zero(p: *mut c_void, bytes: usize) -> i32;
     fn flock_cuda_types_upload(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, host: u64, key: *const u8) -> i32;
     fn flock_cuda_unit_walk(types_gen: u64, inputs: *const u64, in_words: i32, n: i64, useful: i32, cpos: i32, levels: i32,
-                            level_off: *const u32, unit_log: i32, walked: i32, z: *mut u64, a: *mut u64, b: *mut u64) -> i32;
+                            level_off: *const u32, unit_log: i32, walked: i32, n_seeds: i32, seed_rows: *const u32, seeds: *const u64,
+                            z: *mut u64, a: *mut u64, b: *mut u64) -> i32;
     fn flock_cuda_types_share(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, key: *const u8) -> i32;
     fn flock_cuda_types_held(types_gen: u64, set: i32) -> i32;
 }
@@ -406,7 +411,8 @@ pub fn deep_unit(st: &Stmt) -> bool {
 /// `FC_UNIT_WALK=1`: a unit as deep as [`HOST_UNIT_LEVELS`], which then stays off the host; `FC_UNIT_WALK=2`: any unit. It
 /// needs the net's one-pass form ([`WalkRows::of`]) and the walk's rows on the device as the one copy the GPU's provers share
 /// ([`arrays_key`]). They are as large as the unit type's CSC, so where they can't be shared no prover takes a copy of its
-/// own: the walk is off for the process, which says so once, and the host builds a deep unit as before.
+/// own: the walk is off for the process, which says so once, and the host builds a deep unit as before. `FC_UNIT_CUT=1`
+/// beside it: the walk goes by the unit's cut schedule where it has one ([`unit_cut`]).
 pub fn unit_walk(st: &Stmt) -> bool {
     let levels = types(st).sched.level_off.len() - 1;
     let asked = match std::env::var("FC_UNIT_WALK").as_deref() {
@@ -417,16 +423,88 @@ pub fn unit_walk(st: &Stmt) -> bool {
     asked && walk_rows_shared(st)
 }
 
-/// Whether the device holds the unit's level walk's rows as the GPU's shared copy, put there at the first ask.
+/// The unit's level walk on a schedule cut at the chaining values of the SHA-512 compressions among the unit's rows
+/// (`ir_block::schedule_seeded`): the seeds' rows, and the plan that gives their z from a unit's input words alone
+/// (`sha512_native::UnitHashPlan`), which the host runs for every pass of a session's units. The device writes them
+/// before its levels and holds each to its row after (`fc_walk_units`, prove_circuit.cuh; `circuit::unit_walk_seeded` is
+/// the same on the host), so a seed the plan got wrong stops the session: the cut changes when a row is computed, never
+/// what a unit's words are.
+pub struct UnitCut {
+    pub sched: UnitSched,
+    pub seeds: Vec<u32>,
+    #[cfg(feature = "sha512")]
+    plan: crate::sha512_native::UnitHashPlan,
+}
+
+impl UnitCut {
+    /// The seeds' z for the units whose input words are `flat` (`[units][2 * in_words]` u64, a unit's F128 words lo then
+    /// hi), as the device takes them: `[passes][seeds][4]` u64, a pass 256 units, the units past the last with zero inputs.
+    fn given(&self, in_words: usize, flat: &[u64]) -> Vec<u64> {
+        #[cfg(feature = "sha512")]
+        {
+            let (per, units) = (2 * in_words, flat.len() / (2 * in_words));
+            let bit = |x: usize, col: u32| if x < units { (flat[x * per + col as usize / 64] >> (col % 64)) as u32 & 1 } else { 0 };
+            let passes: Vec<Vec<[u64; 4]>> = (0..units.div_ceil(256)).into_par_iter()
+                .map(|pass| self.plan.seeds_pass(|q, col| (0..32usize).fold(0u32, |v, l| v | bit(256 * pass + 32 * q + l, col) << l))).collect();
+            passes.into_iter().flatten().flatten().collect()
+        }
+        #[cfg(not(feature = "sha512"))]
+        {
+            let _ = (in_words, flat);
+            unreachable!("a unit's cut needs the SHA-512 build")
+        }
+    }
+}
+
+/// The statement's unit's cut, where the walk takes one: `FC_UNIT_CUT=1`, a one-pass unit with compressions among its
+/// rows, and a plan that derives from them. Decided once a process for the statement's types; where it is asked for and
+/// there is none, that is said once and the walk goes by the whole schedule.
+pub fn unit_cut(st: &Stmt) -> Option<&'static UnitCut> {
+    types(st).cut.get_or_init(|| {
+        if std::env::var("FC_UNIT_CUT").as_deref() != Ok("1") {
+            return None;
+        }
+        let unit = st.c.unit();
+        if !unit.one_pass() || unit.order.is_some() {
+            eprintln!("the unit's cut is off: {} has no one-pass form", unit.name);
+            return None;
+        }
+        #[cfg(feature = "sha512")]
+        {
+            let comps = crate::sha512_native::unit_compressions(unit);
+            let seeds: Vec<u32> = comps.iter().flat_map(|x| x.seeds()).collect();
+            if seeds.is_empty() {
+                eprintln!("the unit's cut is off: {} has no SHA-512 compression among its rows", unit.name);
+                return None;
+            }
+            match crate::sha512_native::UnitHashPlan::derive(unit, comps) {
+                Ok(plan) => Some(UnitCut { sched: crate::ir_block::schedule_seeded(unit, &seeds), seeds, plan }),
+                Err(why) => {
+                    eprintln!("the unit's cut is off: no plan for {}'s seeds ({why})", unit.name);
+                    None
+                }
+            }
+        }
+        #[cfg(not(feature = "sha512"))]
+        {
+            eprintln!("the unit's cut is off: it needs the SHA-512 build");
+            None
+        }
+    }).as_ref()
+}
+
+/// Whether the device holds the unit's level walk's rows as the GPU's shared copy, put there at the first ask: the cut
+/// schedule's where the unit has a cut ([`unit_cut`]).
 fn walk_rows_shared(st: &Stmt) -> bool {
     let unit = st.c.unit();
     let t = types(st);
     unit.order.is_none() && *t.walk.get_or_init(|| {
-        let Some(rows) = WalkRows::of(unit, &t.sched) else {
+        let sched = unit_cut(st).map_or(&t.sched, |c| &c.sched);
+        let Some(rows) = WalkRows::of(unit, sched) else {
             eprintln!("the unit's level walk is off: {} has no one-pass form, or is a cut unit", unit.name);
             return false;
         };
-        let arrays = [&t.sched.order, &rows.st, &rows.mid, &rows.cols, &rows.own];
+        let arrays = [&sched.order, &rows.st, &rows.mid, &rows.cols, &rows.own];
         let key = arrays_key(b"verity flock-circuit: the unit's level walk's rows", &arrays);
         let (h, len): (Vec<*const u32>, Vec<usize>) = arrays.iter().map(|v| (v.as_ptr(), v.len())).unzip();
         let shared = unsafe { flock_cuda_types_share(t.types_gen, 2, h.as_ptr(), len.as_ptr(), h.len(), key.as_ptr()) } == 0;
@@ -439,8 +517,28 @@ fn walk_rows_shared(st: &Stmt) -> bool {
 
 /// The units' words as the device's level walk builds them (`flock_cuda_unit_walk`, the kernels `fc_witness` runs under
 /// [`unit_walk`]), from their input words: a test vector against the host's (`Stmt::slot_zab`). The walk's working arrays
-/// start as 0xA5 bytes; `walked` false is the control, the same slots without the levels.
+/// start as 0xA5 bytes; `walked` false is the control, the same slots without the levels. On the cut schedule, with the
+/// plan's seeds, where the unit has a cut ([`unit_cut`]).
 pub fn device_unit_walk(st: &Stmt, ins: &[Vec<F128>], walked: bool) -> Result<Vec<(Vec<F128>, Vec<F128>, Vec<F128>)>, String> {
+    match walk_on_device(st, ins, walked, None) {
+        Ok(Some(words)) => Ok(words),
+        Ok(None) => Err("the device's cut walk found a seed that is not its row's z".into()),
+        Err(e) => Err(e),
+    }
+}
+
+/// The cut's control: the device's walk of `ins` with one of the plan's seeds off in the last of them. `Some(true)`: the
+/// device refused it, as it must; `None`: the unit has no cut.
+pub fn device_unit_walk_seed_off(st: &Stmt, ins: &[Vec<F128>]) -> Result<Option<bool>, String> {
+    let Some(cut) = unit_cut(st) else { return Ok(None) };
+    assert!(!ins.is_empty(), "a unit to walk");
+    Ok(Some(walk_on_device(st, ins, true, Some((cut.seeds.len() / 2, ins.len() - 1)))?.is_none()))
+}
+
+/// [`device_unit_walk`]; `off`: seed number and unit whose given bit is flipped. `Ok(None)`: the device found a seed that
+/// is not its row's z.
+#[allow(clippy::type_complexity)]
+fn walk_on_device(st: &Stmt, ins: &[Vec<F128>], walked: bool, off: Option<(usize, usize)>) -> Result<Option<Vec<(Vec<F128>, Vec<F128>, Vec<F128>)>>, String> {
     let (unit, t) = (st.c.unit(), types(st));
     if !walk_rows_shared(st) {
         return Err("the unit's level walk's rows are not on the device".into());
@@ -450,17 +548,27 @@ pub fn device_unit_walk(st: &Stmt, ins: &[Vec<F128>], walked: bool) -> Result<Ve
         assert_eq!(w.len(), unit.in_words, "a unit's input words");
         w.iter().flat_map(|x| [x.lo, x.hi])
     }).collect();
+    let cut = unit_cut(st);
+    let sched = cut.map_or(&t.sched, |c| &c.sched);
+    let mut given = cut.map_or(Vec::new(), |c| c.given(unit.in_words, &flat));
+    if let (Some(c), Some((seed, x))) = (cut, off) {
+        given[4 * (c.seeds.len() * (x / 256) + seed) + (x % 256) / 64] ^= 1 << (x % 64);
+    }
     let (mut z, mut a, mut b) = (vec![0u64; 2 * uw * ins.len()], vec![0u64; 2 * uw * ins.len()], vec![0u64; 2 * uw * ins.len()]);
     let rc = unsafe {
         flock_cuda_unit_walk(t.types_gen, flat.as_ptr(), unit.in_words as i32, ins.len() as i64, unit.useful as i32, unit.const_pos as i32,
-                             (t.sched.level_off.len() - 1) as i32, t.sched.level_off.as_ptr(), unit.unit_log as i32, walked as i32,
+                             (sched.level_off.len() - 1) as i32, sched.level_off.as_ptr(), unit.unit_log as i32, walked as i32,
+                             cut.map_or(0, |c| c.seeds.len() as i32), cut.map_or(null(), |c| c.seeds.as_ptr()), given.as_ptr(),
                              z.as_mut_ptr(), a.as_mut_ptr(), b.as_mut_ptr())
     };
+    if rc == 214 {
+        return Ok(None);
+    }
     if rc != 0 {
         return Err(format!("the device's level walk failed ({rc})"));
     }
     let slot = |v: &[u64], s: usize| v[2 * uw * s..2 * uw * (s + 1)].chunks_exact(2).map(|p| F128::new(p[0], p[1])).collect::<Vec<F128>>();
-    Ok((0..ins.len()).map(|s| (slot(&z, s), slot(&a, s), slot(&b, s))).collect())
+    Ok(Some((0..ins.len()).map(|s| (slot(&z, s), slot(&a, s), slot(&b, s))).collect()))
 }
 
 /// The hm96 leaves of the digests `x` (64 bytes each) under the host's `salts` (192 bytes each) as the device finishes a tree's
@@ -896,6 +1004,8 @@ struct Types {
     sched: UnitSched,
     /// whether the device holds the unit's level walk's rows (set 2), decided at the first ask ([`unit_walk`])
     walk: OnceLock<bool>,
+    /// the unit's cut, where the walk takes one, decided at the first ask ([`unit_cut`])
+    cut: OnceLock<Option<UnitCut>>,
     h_range: usize,
     hsched: UnitSched,
     /// the compression circuit's rows as CSR, A's then B's: small, and kept, since the device keys its copy by their addresses
@@ -989,7 +1099,7 @@ fn types(st: &Stmt) -> &'static Types {
             csc.iter_mut().zip(&mapped).filter(|(_, m)| !**m).for_each(|(t, _)| t.rows = None);
         }
         let sha = &c.nets[c.sha_net].1;
-        Types { types_gen, logs, csc, ranges, u_range, sched: schedule(c.unit()), walk: OnceLock::new(), h_range, hsched: schedule(sha),
+        Types { types_gen, logs, csc, ranges, u_range, sched: schedule(c.unit()), walk: OnceLock::new(), cut: OnceLock::new(), h_range, hsched: schedule(sha),
                 hcsr: [csr(&sha.a), csr(&sha.b)] }
     }));
     held.push((st.c.sha512, t));
@@ -1115,6 +1225,11 @@ pub fn prove_circuit(
     }
     // the units the device computes go by its level walk where that is on (not a cut template's: its schedule has two phases)
     let u_walk = matches!(src, CircuitSrc::Device { .. }) && u_host == 0 && mctx.is_none() && unit_walk(st);
+    // on the cut schedule where the unit has one, with the seeds the plan gives for this session's units
+    let cut = if u_walk { unit_cut(st) } else { None };
+    let walk_sched = cut.map_or(&t.sched, |c| &c.sched);
+    // SAFETY: uin is the session's units' input words, an F128 two u64 words (lo, hi)
+    let given = cut.map_or(Vec::new(), |c| c.given(unit.in_words, unsafe { std::slice::from_raw_parts(uin, 2 * st.blocks() * st.c.unit_range().count * unit.in_words) }));
     // the unit's rows as CSR for a device whose unit kernel computes the units and lacks them, dropped once the prover returns
     let ucsr = (matches!(src, CircuitSrc::Device { .. }) && u_host == 0 && !u_walk && unsafe { flock_cuda_types_held(t.types_gen, 1) } == 0)
         .then(|| [csr(&unit.a), csr(&unit.b)]);
@@ -1173,13 +1288,13 @@ pub fn prove_circuit(
         u_a_col: ucsr.as_ref().map_or(null(), |u| u[0].1.as_ptr()),
         u_b_off: ucsr.as_ref().map_or(null(), |u| u[1].0.as_ptr()),
         u_b_col: ucsr.as_ref().map_or(null(), |u| u[1].1.as_ptr()),
-        u_levels: (t.sched.level_off.len() - 1) as i32,
-        u_level_off: t.sched.level_off.as_ptr(),
-        u_order: t.sched.order.as_ptr(),
+        u_levels: (walk_sched.level_off.len() - 1) as i32,
+        u_level_off: walk_sched.level_off.as_ptr(),
+        u_order: walk_sched.order.as_ptr(),
         u_inputs: uin,
         u_warps: std::env::var("FC_WARPS").ok().and_then(|x| x.parse().ok()).unwrap_or(if unit.useful > 65536 { 8 } else { 1 }),
         witness_s: wphase.as_mut_ptr(),
-        u_levels0: if mctx.is_some() { t.sched.levels0 as i32 } else { (t.sched.level_off.len() - 1) as i32 },
+        u_levels0: if mctx.is_some() { t.sched.levels0 as i32 } else { (walk_sched.level_off.len() - 1) as i32 },
         u_n_late: if mctx.is_some() { t.sched.late_rows.len() as i32 } else { 0 },
         u_late_rows: t.sched.late_rows.as_ptr(),
         u_n_cut: t.sched.cut_rows.len() as i32,
@@ -1214,6 +1329,9 @@ pub fn prove_circuit(
         m_tables: null(),
         types_gen: t.types_gen,
         u_walk: u_walk as i32,
+        u_n_seeds: cut.map_or(0, |c| c.seeds.len() as i32),
+        u_seed_rows: cut.map_or(null(), |c| c.seeds.as_ptr()),
+        u_seeds: given.as_ptr(),
     };
     #[cfg(feature = "sha512")]
     if let Some((plan, words)) = native_sha.then(|| native_plan(st)).flatten() {

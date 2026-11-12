@@ -5967,7 +5967,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "device_walk_matches_host" {
         // the units as the device's level walk builds them (fc_walk_units from working arrays of 0xA5 bytes) are
         // Stmt::slot_zab's word for word, on every unit of every block; the control, the same slots without the levels,
-        // must differ, so the compare reads what the levels wrote
+        // must differ, so the compare reads what the levels wrote. Where the walk goes by the unit's cut (FC_UNIT_CUT=1),
+        // those are the cut schedule's words on the plan's seeds, and a second control, one seed off in one unit, must
+        // be refused by the device
         #[cfg(feature = "gpu")]
         if gpu {
             use rayon::prelude::*;
@@ -5975,6 +5977,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             let ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
             let (ni, net) = (st.c.unit_net, st.c.unit());
             let levels = flock_live::ir_block::schedule(net).levels();
+            let mut seed_off_refused = false;
             let mut checked = 0;
             for (k, chunk) in ins[ni].chunks(300).enumerate() {
                 let host = st.slot_zab(ni, net, chunk);
@@ -5993,10 +5996,19 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                         Err(e) => return json!({"case": name, "gpu": true, "pass": false, "why": e}),
                     }
                 }
+                if k == 0 {
+                    match flock_live::gpu_circuit::device_unit_walk_seed_off(st, chunk) {
+                        Ok(None) => {}
+                        Ok(Some(true)) => seed_off_refused = true,
+                        Ok(Some(false)) => return json!({"case": name, "gpu": true, "pass": false, "why": "the cut walk took a seed that is not its row's z"}),
+                        Err(e) => return json!({"case": name, "gpu": true, "pass": false, "why": e}),
+                    }
+                }
                 checked += chunk.len();
             }
+            let cut = flock_live::gpu_circuit::unit_cut(st).map(|c| json!({"seeds": c.seeds.len(), "levels": c.sched.levels(), "a_seed_off_refused": seed_off_refused}));
             return json!({"case": name, "gpu": true, "expect": "the device's level walk's units equal the host's, and not without the levels",
-                          "units": checked, "levels": levels, "pass": checked > 0 && checked == ins[ni].len()});
+                          "units": checked, "levels": levels, "cut": cut, "pass": checked > 0 && checked == ins[ni].len()});
         }
         return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
     }

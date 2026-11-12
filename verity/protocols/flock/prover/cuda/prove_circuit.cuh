@@ -101,6 +101,10 @@ typedef struct {
     // the units by the level walk (fc_unit_walk) in place of fc_unit_witness, from the same input words: its rows are set 2
     // of types_gen (flock_cuda_types_share), which must be on the device; not for a cut template (u_n_late)
     int u_walk;
+    // the walk on a schedule cut at seeds (u_n_seeds > 0; u_levels, u_level_off and set 2 are then the cut schedule's):
+    // the seeds' rows, [u_n_seeds], and their z from the host for every pass of FC_WALK_UNITS units,
+    // [passes][u_n_seeds][FC_WALK_G] u64, the units past the last among them (their input words are zero)
+    int u_n_seeds; const uint32_t* u_seed_rows; const uint64_t* u_seeds;
 } FlockCircuitParams;
 
 // hm96 leaves of the digests x[0..n) (64 bytes each) under the host's salts (192 bytes each), finished on the device as a tree's
@@ -303,6 +307,32 @@ __global__ void fc_walk_level(FcWalk d, uint32_t k0, uint32_t n) {
 __global__ void fc_walk_level_warp(FcWalk d, uint32_t k0, uint32_t n) {
     const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
     if ((t >> 5) < n) fc_walk_row_warp(d, k0 + (t >> 5), t & 31);
+}
+
+// A cut schedule's seeds (circuit.rs `unit_walk_seeded` is these steps on the host): their rows, every pass's rows of z as
+// the host gives them ([passes][n][FC_WALK_G]) and the flag a seed that is not its row's z sets, all on the device. n 0:
+// the schedule is not cut. A seed's row is written before the levels, so a row reads it whose level is not past the
+// seed's own; the seed's row is computed at its level as any row and written again, and after the levels every seed's row
+// is held to the one given. A row at the seed's own level reads the given word or the computed one: where every seed is
+// held they are the same word, and where one is not the flag is set.
+struct FcWalkCut {
+    const uint32_t* rows;
+    const uint64_t* given;
+    uint32_t n;
+    uint32_t* off;
+};
+
+// a pass's seeds into their rows of z: a thread a word
+__global__ void fc_walk_given(FcWalk d, const uint32_t* __restrict__ rows, const uint64_t* __restrict__ given, uint32_t n) {
+    const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
+    if (t < n * FC_WALK_G) d.z[(size_t)rows[t / FC_WALK_G] * FC_WALK_G + t % FC_WALK_G] = given[t];
+}
+
+// a pass's seeds held to their rows of z as the levels left them: a thread a word, and *off set where one differs (every
+// writer writes the same word)
+__global__ void fc_walk_held(FcWalk d, const uint32_t* __restrict__ rows, const uint64_t* __restrict__ given, uint32_t n, uint32_t* off) {
+    const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
+    if (t < n * FC_WALK_G && d.z[(size_t)rows[t / FC_WALK_G] * FC_WALK_G + t % FC_WALK_G] != given[t]) *off = 1;
 }
 
 // The input rows of a pass's units (inputs: their words, [n_units][in_words] F128) and the constant's: one CTA of
@@ -1110,24 +1140,65 @@ static void fc_zlin_transpose(const F128* df, int k_log, long long n_stripes, ui
 // n_units units' slots of z, a and b by the level walk (the kernels above), FC_WALK_UNITS units a pass: the input rows and
 // the constant's, a launch a level, the transposition into the slots (unit x's at block x / per_block, slot pos0 + x %
 // per_block). d holds set 2's first four arrays and the three working arrays; own is set 2's fifth; level_off is the host's.
-// `walked` false leaves the levels out (a test's control: the slots then hold whatever the working arrays held).
+// `walked` false leaves the levels out (a test's control: the slots then hold whatever the working arrays held). `cut`:
+// the schedule's seeds, each pass's written after the input rows and held to their rows after the levels (cut.off).
 static int fc_walk_units(FcWalk d, const uint32_t* own, const uint64_t* d_in, int in_words, long long n_units, uint32_t useful,
                          uint32_t cpos, int levels, const uint32_t* level_off, int per_block, int pos0, int unit_log, int k_log,
-                         uint32_t* z_out, uint32_t* a_out, uint32_t* b_out, bool walked = true) {
+                         uint32_t* z_out, uint32_t* a_out, uint32_t* b_out, bool walked = true, FcWalkCut cut = FcWalkCut{nullptr, nullptr, 0, nullptr}) {
     const unsigned long long tasks = (unsigned long long)((useful + 31) / 32) * (FC_WALK_UNITS / 32);
+    const unsigned cut_ctas = (unsigned)(((size_t)cut.n * FC_WALK_G + 255) / 256);
     for (long long u0 = 0; u0 < n_units; u0 += FC_WALK_UNITS) {
         const int nu = (int)std::min<long long>(FC_WALK_UNITS, n_units - u0);
+        const uint64_t* given = cut.n ? cut.given + (size_t)(u0 / FC_WALK_UNITS) * cut.n * FC_WALK_G : nullptr;
         fc_walk_seed<<<(unsigned)(2 * in_words), FC_WALK_UNITS>>>(d_in + (size_t)u0 * 2 * in_words, in_words, nu, own, d, cpos);
+        if (cut.n) fc_walk_given<<<cut_ctas, 256>>>(d, cut.rows, given, cut.n);
         for (int L = 0; walked && L < levels; L++) {
             const uint32_t k0 = level_off[L], n = level_off[L + 1] - k0;
             if (!n) continue;
             if (n < FC_WALK_WARP) fc_walk_level_warp<<<(n + 7) / 8, 256>>>(d, k0, n);
             else fc_walk_level<<<(n + 255) / 256, 256>>>(d, k0, n);
         }
+        if (cut.n && walked) fc_walk_held<<<cut_ctas, 256>>>(d, cut.rows, given, cut.n, cut.off);
         fc_walk_slots<<<(unsigned)((tasks + 7) / 8), 256>>>(d, useful, u0, n_units, per_block, pos0, unit_log, k_log, z_out, a_out, b_out);
         CK(cudaGetLastError());
     }
     return 0;
+}
+
+static size_t fc_walk_cut_bytes(uint32_t n, long long n_units) {
+    return (size_t)((n_units + FC_WALK_UNITS - 1) / FC_WALK_UNITS) * n * FC_WALK_G * sizeof(uint64_t);
+}
+
+// a cut schedule's seeds onto the device from the host's (rows: [n]; given: every pass's, fc_walk_cut_bytes), the flag
+// cleared; false: a CUDA error, and fc_walk_cut_down still frees what was taken
+static bool fc_walk_cut_up(FcWalkCut* c, const uint32_t* rows, const uint64_t* given, uint32_t n, long long n_units) {
+    *c = {nullptr, nullptr, n, nullptr};
+    if (!n) return true;
+    const size_t bytes = fc_walk_cut_bytes(n, n_units);
+    uint32_t *r = nullptr, *off = nullptr;
+    uint64_t* g = nullptr;
+    const bool ok = rows && given && cudaMalloc(&r, (size_t)n * sizeof(uint32_t)) == cudaSuccess && cudaMalloc(&g, bytes) == cudaSuccess &&
+                    cudaMalloc(&off, sizeof(uint32_t)) == cudaSuccess &&
+                    cudaMemcpy(r, rows, (size_t)n * sizeof(uint32_t), cudaMemcpyHostToDevice) == cudaSuccess &&
+                    cudaMemcpy(g, given, bytes, cudaMemcpyHostToDevice) == cudaSuccess && cudaMemset(off, 0, sizeof(uint32_t)) == cudaSuccess;
+    c->rows = r; c->given = g; c->off = off;
+    return ok;
+}
+
+// The flag read once the walk's kernels are done (*held: every seed was its row's z; true where the schedule is not cut),
+// the seeds wiped as the units' input words are, and freed. false: a CUDA error, and *held is false.
+static bool fc_walk_cut_down(FcWalkCut* c, long long n_units, bool* held) {
+    *held = true;
+    if (!c->n) return true;
+    uint32_t off = 1;
+    bool ok = c->off && cudaMemcpy(&off, c->off, sizeof(uint32_t), cudaMemcpyDeviceToHost) == cudaSuccess;
+    if (c->given) ok = fc_wipe_free((void*)c->given, fc_walk_cut_bytes(c->n, n_units)) == cudaSuccess && ok;
+    cudaFree((void*)c->rows);
+    cudaFree(c->off);
+    *c = {nullptr, nullptr, 0, nullptr};
+    *held = ok && off == 0;
+    if (!ok) cudaGetLastError();
+    return ok;
 }
 
 // set 2 of `gen` (the level walk's rows), which flock_cuda_types_share put on the device; false where it isn't there
@@ -1156,22 +1227,36 @@ static int fc_unit_walk(const FlockCircuitParams* N, int m, int k_log, F128* df,
     uint64_t* d_in;
     CK(cudaMalloc(&d_in, in_bytes));
     CK(cudaMemcpy(d_in, N->u_inputs, in_bytes, cudaMemcpyHostToDevice));
+    FcWalkCut cut;
+    bool held = true;
+    if (!fc_walk_cut_up(&cut, N->u_seed_rows, N->u_seeds, (uint32_t)std::max(N->u_n_seeds, 0), n_units)) {
+        fc_walk_cut_down(&cut, n_units, &held);
+        printf("FFI circuit: the unit's cut walk's seeds did not reach the device\n");
+        return 213;
+    }
     if (const int e = fc_walk_units(d, wd[4], d_in, N->u_in_words, n_units, (uint32_t)N->u_useful, (uint32_t)N->u_const, N->u_levels,
                                     N->u_level_off, per_block, N->r_pos0[ur], N->type_log[N->r_type[ur]], k_log, (uint32_t*)df,
-                                    (uint32_t*)d_a, (uint32_t*)d_b))
+                                    (uint32_t*)d_a, (uint32_t*)d_b, true, cut))
         return e;
     CK(cudaStreamSynchronize(0));
+    const bool read = fc_walk_cut_down(&cut, n_units, &held);
     CK(ffi_free(d.b)); CK(ffi_free(d.a)); CK(ffi_free(d.z));
     CK(fc_wipe_free(d_in, in_bytes));
+    if (!read) { printf("FFI circuit: the unit's cut walk's flag was not read\n"); return 213; }
+    // the units' words are then not the host's: the session stops here, before anything is committed to them
+    if (!held) { printf("FFI circuit: a seed of the unit's cut walk is not its row's z\n"); return 214; }
     return 0;
 }
 
 // The level walk alone (fc_walk_units, as fc_witness runs it) for n units of 2^unit_log rows from their input words (host
 // memory, [n][in_words] F128) into z, a and b (host memory, n << (unit_log - 7) F128 words each), with set 2 of `gen` on the
 // device: a test vector against the host's slots. The working arrays start as 0xA5 bytes, so a row read before it is written
-// shows; `walked` 0 is the control, the slots without the levels.
+// shows; `walked` 0 is the control, the slots without the levels. n_seeds > 0: set 2 and the levels are a cut schedule's,
+// with its seeds' rows and their z for every pass (FlockCircuitParams' u_seed_rows and u_seeds); 214 where a seed is not
+// its row's z, and z, a and b then say nothing.
 extern "C" int flock_cuda_unit_walk(unsigned long long gen, const uint64_t* inputs, int in_words, long long n, int useful, int cpos,
-                                    int levels, const uint32_t* level_off, int unit_log, int walked, uint64_t* z, uint64_t* a, uint64_t* b) {
+                                    int levels, const uint32_t* level_off, int unit_log, int walked, int n_seeds,
+                                    const uint32_t* seed_rows, const uint64_t* seeds, uint64_t* z, uint64_t* a, uint64_t* b) {
     uint32_t* wd[5];
     if (!fc_walk_rows(gen, wd)) return 213;
     const size_t in_bytes = (size_t)n * in_words * 16, out_bytes = (size_t)n << (unit_log - 3), row_bytes = (size_t)useful * FC_WALK_G * 8;
@@ -1182,14 +1267,20 @@ extern "C" int flock_cuda_unit_walk(unsigned long long gen, const uint64_t* inpu
         cudaMemcpy(d_in, inputs, in_bytes, cudaMemcpyHostToDevice) != cudaSuccess || cudaMemset(d_rows, 0xA5, 3 * row_bytes) != cudaSuccess ||
         cudaMemset(d_zab, 0, 3 * out_bytes) != cudaSuccess)
         e = 1;
+    FcWalkCut cut = {nullptr, nullptr, 0, nullptr};
+    bool held = true;
+    if (!e && !fc_walk_cut_up(&cut, seed_rows, seeds, (uint32_t)std::max(n_seeds, 0), n)) e = 1;
     if (!e) {
         const FcWalk d = {wd[0], wd[1], wd[2], wd[3], d_rows, d_rows + row_bytes / 8, d_rows + 2 * (row_bytes / 8)};
         e = fc_walk_units(d, wd[4], d_in, in_words, n, (uint32_t)useful, (uint32_t)cpos, levels, level_off, (int)n, 0, unit_log, unit_log,
-                          d_zab, d_zab + out_bytes / 4, d_zab + 2 * (out_bytes / 4), walked != 0);
+                          d_zab, d_zab + out_bytes / 4, d_zab + 2 * (out_bytes / 4), walked != 0, cut);
     }
     uint64_t* out[3] = {z, a, b};
     for (int k = 0; k < 3 && !e; k++)
         if (cudaMemcpy(out[k], (const char*)d_zab + k * out_bytes, out_bytes, cudaMemcpyDeviceToHost) != cudaSuccess) e = 1;
+    // after the copies, which wait for the walk's kernels
+    if (!fc_walk_cut_down(&cut, n, &held) && !e) e = 1;
+    if (!e && !held) e = 214;
     if (e) cudaGetLastError();
     // the units' values, as a session's scratch is wiped
     if (d_rows) cudaMemset(d_rows, 0, 3 * row_bytes);
