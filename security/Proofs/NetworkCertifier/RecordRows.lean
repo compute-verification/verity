@@ -15,7 +15,7 @@ meta import Definitions.NetworkCertifier.RecordRows
 of the cells the network certifier's code sends are those cells (`RowsFormat.read_record`), so the rows format is a
 `RecordFormat` (`RowsFormat.recordFormat`). A lane of `k` cells has cell `j` in bucket `t j` (`certifierLane_fst`); among the
 cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
-bucket's (`getElem?_filter_countP_take`); a row's frames are its connections' in turn, so a connection's are its own
+bucket's frames (`laneFrames_cell`); a row's frames are its connections' in turn, so a connection's are its own
 (`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row fits (`frames_record`).
 
 The deployed format is well formed under 2^32 connections and `B`, the frame's bytes, under 2^32 (`cellRows_wf`): a
@@ -55,33 +55,17 @@ theorem lanesOfRows_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns
     (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (c : κ) :
     lanesOfRows s (bucketFrames conns s (certifierCode s a)) c = certifierCode s a c := by
   have hlen : (certifierCode s a c).length = s.cells c := certifierLane_length _ _ _ _
-  have hfst : ∀ j (hj : j < (certifierCode s a c).length), ((certifierCode s a c)[j]).1 = s.bucket c j := by
-    intro j hj
-    have h := congrArg (fun l => l[j]?) (certifierCode_fst s a c)
-    simp only [List.getElem?_map, List.getElem?_eq_getElem hj, List.getElem?_range (hlen ▸ hj),
-      Option.map_some, Option.some.injEq] at h
-    exact h
   apply List.ext_getElem (by simp [lanesOfRows, hlen])
   intro j h1 h2
   have hj : j < s.cells c := by simpa [lanesOfRows] using h1
+  have hfst : ((certifierCode s a c)[j]).1 = s.bucket c j := by
+    have h := congrArg (fun l => l[j]?) (certifierCode_fst s a c)
+    simp only [List.getElem?_map, List.getElem?_eq_getElem h2, List.getElem?_range hj, Option.map_some,
+      Option.some.injEq] at h
+    exact h
   simp only [lanesOfRows, List.getElem_map, List.getElem_range]
-  rw [filterMap_bucketFrames hnd (hall c)]
-  have hpre : ¬(s.adm c ≤ s.bucket c j ∧ s.bucket c j < s.adm c + s.D) := fun h =>
-    absurd h.2 (Nat.not_lt.2 (Nat.le_add_right _ _))
-  simp only [laneFrames, hpre, ite_false, List.nil_append]
-  have key := getElem?_filter_countP_take (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) (certifierCode s a c) j h2
-    (by simp [hfst j h2])
-  have hcount : ((certifierCode s a c).take j).countP (fun x => x.1 == s.bucket c j) = j % s.r := by
-    have := congrArg (fun l => (l.take j).countP (· == s.bucket c j)) (certifierCode_fst s a c)
-    simp only [← List.map_take, List.countP_map, List.take_range, Nat.min_eq_left hj.le] at this
-    rw [show (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) = (· == s.bucket c j) ∘ Prod.fst from rfl, this,
-      ← countP_range_div s.r j]
-    congr 1
-    funext i
-    simp [CertifierSchedule.bucket]
-  rw [hcount] at key
-  rw [List.getElem?_map, key]
-  exact Prod.ext (hfst j h2).symm rfl
+  rw [filterMap_bucketFrames hnd (hall c), laneFrames_cell s a c hj, List.getElem?_eq_getElem h2]
+  exact Prod.ext hfst.symm rfl
 
 /-- A row of the code's cells holds each connection's load in the bucket. -/
 theorem length_bucketFrames (conns : List κ) (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (b : ℕ) :
