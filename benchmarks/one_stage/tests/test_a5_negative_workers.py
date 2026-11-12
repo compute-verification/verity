@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import multiprocessing
 import os
@@ -299,11 +300,12 @@ def test_the_registered_reads_negatives_are_the_same_entries_in_the_same_order_o
     (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
     seen: list[str] = []
 
-    def lean_verify(lean, st, n, sdir, zk, log):
+    def lean_verify(lean, st, n, sdir, zk, log, keys=None):
         seen.append(log)
         return {"accepted": False, "digest": "d", "why": f"{log}: holds no registered roots; does not open; the verifier's program reads"}
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
+    monkeypatch.setattr(a5.a0, "archive_put", lambda lean, st, n, sdir, log: {})
     mm = {"st": {"registered_file": tmp_path / "registered.json", "dir": tmp_path},
           "m": SimpleNamespace(n=4, port=lambda p: f"c0/{p}")}
     one = a5.registered_negatives(SimpleNamespace(lean="lean"), mm, tmp_path)
@@ -311,6 +313,51 @@ def test_the_registered_reads_negatives_are_the_same_entries_in_the_same_order_o
     seen.clear()
     several = a5.registered_negatives(SimpleNamespace(lean="lean", audit_mem_gb=1), mm, tmp_path, workers=3)
     assert json.dumps(several) == json.dumps(one) and sorted(seen) == sorted(one)
+
+
+@pytest.mark.parametrize("mem_gb", [0, 1])
+def test_at_once_every_registered_reads_case_is_put_before_any_is_verified(tmp_path, monkeypatch, mem_gb):
+    """`a5.registered_negatives` on a pool: its verifies read one archive, and `archive-put` writes again, in place, the
+    objects the cases share, so every case's put ends before any case's verify starts, and no verify puts. The stand-in
+    for the Lean binary puts as Lean does and, as Lean does, refuses an object that does not hash to its key. With
+    memory for one verify at a time the pool runs the cases in turn, so a case that put for itself would put after the
+    case before it was verified; with memory for all, the verifies start together."""
+    stage = tmp_path / "stage"
+    (tmp_path / "sessions" / "s0").mkdir(parents=True)
+    (tmp_path / "sessions" / "s0" / "session.json").write_text("{}")
+    stage.mkdir()
+    for name in ("circuit.txt", "pub-4.bin", "partition.json", "program.json"):
+        (stage / name).write_text(name)
+    ports = {f"p{j}": {"value": f"v{j}", "root": f"{j}" * 128, "leaves": 4, "reads": [0, 1, 2, 3]} for j in range(2)}
+    (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
+    held = tmp_path / "archive" / "sha512"
+    events: list[tuple[str, str]] = []
+
+    def run(cmd, log):
+        if cmd[1] == "archive-put":
+            events.append(("put", log.name.removesuffix(".archive-put.log")))
+            held.mkdir(parents=True, exist_ok=True)
+            keys = [(hashlib.sha512(Path(f).read_bytes()).hexdigest(), f) for f in cmd[3:]]
+            for key, f in keys:
+                (held / key).write_bytes(Path(f).read_bytes())
+            return SimpleNamespace(stdout="".join(f"{key}  {f}\n" for key, f in keys), stderr="", returncode=0)
+        events.append(("verify", log.name.removesuffix(".log")))
+        named = [cmd[i + 1] for i, x in enumerate(cmd) if x in ("--circuit", "--public", "--partition", "--program", "--registered")]
+        whole = all(hashlib.sha512((held / key).read_bytes()).hexdigest() == key for key in named)
+        why = "holds no registered roots; does not open; the verifier's program reads" if whole else "setup: archive"
+        return SimpleNamespace(stdout=f"VERDICT {json.dumps({'accepted': False, 'why': why})}\n", stderr="", returncode=1)
+
+    monkeypatch.setattr(a5.a0, "run", run)
+    st = {"registered_file": tmp_path / "registered.json", "dir": stage, "partition_file": stage / "partition.json",
+          "program_file": stage / "program.json", "archived": {}}
+    assert a0.lean_verify("lean", st, 4, tmp_path, zk=True)["why"].startswith("holds no")
+    events.clear()
+    got = a5.registered_negatives(SimpleNamespace(lean="lean", audit_mem_gb=mem_gb), {"st": st, "m": SimpleNamespace(
+        n=4, port=lambda p: f"c0/{p}")}, tmp_path, workers=3)
+    assert len(got) == 3 and all(e["refused"] for e in got.values())
+    assert events[:3] == [("put", name) for name in got]
+    assert events[3:] == [("verify", name) for name in got] if mem_gb == 0 else sorted(events[3:]) == sorted(
+        ("verify", name) for name in got)
 
 
 def test_the_flag_reaches_the_audit_and_defaults_to_one():

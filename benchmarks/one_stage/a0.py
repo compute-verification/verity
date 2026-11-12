@@ -24,7 +24,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
@@ -263,19 +263,13 @@ def archiving(held: dict | None, ident: tuple) -> AbstractContextManager:
         return held.setdefault(("archiving", ident), threading.Lock())
 
 
-def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
-                flags: Sequence[str] = ()) -> dict:
-    """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
-    held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
-    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
-    identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again,
-    a check running beside it (`a5.LeanPool`) waiting for the first to put it (`archiving`); Lean holds the object to its
-    key when it reads it (`archiveGet`)."""
-    sessions = sorted((out / "sessions").glob("*/session.json"))
-    if not sessions:
-        return {"accepted": False, "of_record": True, "why": "no session recorded"}
+def archive_put(lean: str, st: dict, n: int, out: Path, log: str = "lean-verify") -> dict[str, str]:
+    """What a `lean_verify` of ``st`` reads, held by content in ``out``'s archive (`flock-verify archive-put`): each
+    file's SHA-512 key by its name. ``st["archived"]``, a dict a run's members share: a circuit file archived once, by
+    its file's identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than
+    put again, a check running beside it (`a5.LeanPool`) waiting for the first to put it (`archiving`). A put writes
+    every other object again, in place, whether or not the archive holds it: none runs while a verify reads that
+    archive."""
     archive = out / "archive"
     tables = sorted(str(f) for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
     part = [str(st["partition_file"])] if st.get("partition_file") else []
@@ -297,6 +291,25 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
             keys["circuit.txt"] = pre[0]
         elif held is not None and "circuit.txt" in keys:
             held[ident] = (keys["circuit.txt"], archive / "sha512" / keys["circuit.txt"])
+    return keys
+
+
+def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
+                flags: Sequence[str] = (), keys: Mapping[str, str] | None = None) -> dict:
+    """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
+    held by content (`--archive`, SHA-512 keys: `archive_put`), and the verifier's own registered reads
+    (`st["registered_file"]`, `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's.
+    `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a
+    plain session's ``--coins os --stratified K``). ``keys``: `archive_put`'s, from a caller that put already, as one
+    whose verifies of one archive run at once must, every put before any verify; without them the put is this call's.
+    Lean holds each object to its key when it reads it (`archiveGet`)."""
+    sessions = sorted((out / "sessions").glob("*/session.json"))
+    if not sessions:
+        return {"accepted": False, "of_record": True, "why": "no session recorded"}
+    archive = out / "archive"
+    part, prog, reads = ([str(st[f"{k}_file"])] if st.get(f"{k}_file") else [] for k in ("partition", "program", "registered"))
+    if keys is None:
+        keys = archive_put(lean, st, n, out, log)
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []

@@ -571,7 +571,8 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
     value's root replaced, (a value of more than one row) every unit reading that value's next row, and its first window
     port read at another window tree's root, each with its other ports' reads as registered. Each verify is a process of
     its own (`a0.lean_verify`): one after another, or with more ``workers`` up to that many at once on a `LeanPool`
-    within the audit's memory, the session's archive put under the members' one claim (`a0.archiving`)."""
+    within the audit's memory. They read one archive, the session's, and a put writes again the objects the cases share
+    (`a0.archive_put`): at once, every case's put comes first, one after another, and no verify starts before the last."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port = next(iter(honest["ports"]))
@@ -586,21 +587,25 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
                   if honest["ports"][x]["root"] != honest["ports"][window[0]]["root"]), None)
     if other is not None:
         cases["window-port-read-against-another-window-tree"] = (window[0], {"root": other}, "does not open")
-    def verify(name: str) -> dict:
-        at, change, why = cases[name]
+    def staged(name: str) -> dict:
+        at, change, _ = cases[name]
         alt = {x: y for x, y in st.items() if x != "registered_file"}
         if change is not None:
             alt["registered_file"] = sdir / f"{name}.json"
             alt["registered_file"].write_text(json.dumps({**honest, "ports": {**honest["ports"], at: {**honest["ports"][at], **change}}},
                                                          sort_keys=True))
-        v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
-        return {"refused": a0.lean_refused(v, why), "why": v.get("why")}
+        return alt
+
+    def verify(name: str, alt: dict, **put: dict) -> dict:
+        v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name, **put)
+        return {"refused": a0.lean_refused(v, cases[name][2]), "why": v.get("why")}
 
     if workers == 1:
-        return {name: verify(name) for name in cases}
+        return {name: verify(name, staged(name)) for name in cases}
+    puts = [(name, alt, a0.archive_put(a.lean, alt, n, sdir, log=name)) for name in cases for alt in [staged(name)]]
     with LeanPool(workers, audit_memory(a, available_memory), available_memory) as pool:
-        for name in cases:
-            pool.submit(verify, name, lean_need(st))
+        for name, alt, keys in puts:
+            pool.submit(functools.partial(verify, alt=alt, keys=keys), name, lean_need(st))
         return dict(zip(cases, pool.results()))
 
 
