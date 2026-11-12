@@ -394,7 +394,7 @@ class TpRow(Row):
         one rank at a time and says so: the plan's ratios are fitted on GLM-5.3 B8 alone."""
         cm, layers = self.cm, R.model_layers(self.ck)
         if not layers or not self.shapes:
-            return cm.fold_rank_workers, cm.fold_workers, cm.fold_timeout or R.FOLD_LEG_MIN_S
+            return cm.fold_rank_workers, cm.fold_workers, cm.fold_timeout or R.FOLD_PART_MIN_S
         p = R.fold_plan(self.shapes, layers, self.W, int(cm.fold_mem_gb * 1e9) if cm.fold_mem_gb else None, folds=cm.fold_workers)
         gb = {k: round(p[f"{k}_bytes"] / 1e9) for k in ("gm", "fold", "mem")}
         rw, fw = (cm.fold_rank_workers, cm.fold_workers) if cm.fold_rank_workers else (p["rank_workers"], p["fold_workers"])
