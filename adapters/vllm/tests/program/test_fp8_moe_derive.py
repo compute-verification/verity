@@ -9,8 +9,11 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
+from verity.circuits.defs import bind
 from verity.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
 from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.definitions.registry import moe
 
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
@@ -18,7 +21,9 @@ from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
+from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.program.frontend.targets import FP8_DOTS
 
 E, M, TOPK, K, N, G = 3, 2, 2, 64, 40, 32
 NB, KG, NV = -(-N // G), K // G, M * TOPK
@@ -164,12 +169,6 @@ def test_the_padded_construction_does_not_own_the_fp8_launch(on_target):
 def test_the_dot_roles_bind_the_pair_forms_under_a_block_and_keep_their_notes():
     """The block-FP8 forms are optional statics of the `_dot` roles: the roles and their notes, and with them the vocabulary's
     version, are unchanged, and without `G` the roles bind what they always did."""
-    from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import HopperBF16WgmmaDot16
-    from verity.definitions.registry import moe
-
-    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-    from verity_vllm.program.frontend.targets import FP8_DOTS
     dot = FP8_DOTS["BlackwellE4m3QmmaDot32"]
     assert V.kind("moe_expert_gemm_dot", E=E, K=K, N=N, DOT=dot, G=G, KB=32, SWAP=False).id == \
         f"MoeExpertFp8Gemm_v1{{E={E},K={K},N={N},G={G},KB=32,SWAP=False,DOT={DOT}}}"

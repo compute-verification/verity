@@ -73,8 +73,7 @@ def _prompt_b():
 
 def _inputs_for(fn_u, prompts: dict[str, list[int]], lifted_words: bool, poison: dict | None = None):
     """One flat word list per root parameter of the (un)lifted workload, from the fixture weights and per-request prompts."""
-    _, w = _inputs()
-    w = list(w)
+    w = list(_inputs()[1])
     out, pos = [], 0
     for name, t in fn_u.signature()[0]:
         if name.startswith("shared."):
