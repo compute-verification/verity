@@ -115,10 +115,6 @@ theorem norms_trivial :
 
 theorem range_zero (a ν : Nat) : range 0 a ν = (a - 1) * ν + 1 := by simp [range]
 
-/-- Every atom of `fs` that holds is at least the RTX PRO 6000 sheet's table entry. -/
-def Dom (fs : List Atom) : Prop :=
-  ∀ f ∈ fs, ∀ a b, f.holds a b = true → atomMin rtx6000Sheet a b ≤ f.weight8
-
 /-! ## The facts and the induction -/
 
 /-- What the check establishes about tables `lo` and `has` up to level `Lmax` on a grid `g` of `G` cells. -/
