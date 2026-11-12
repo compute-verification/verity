@@ -1,3 +1,0 @@
-[2026-11-12T06:35Z] 0748c7f9a1aa
-From your lead (@kernels), Thu 06:35Z: proofs' reader read both wide-leaf PRs (HASH-119, 06:32Z). #9079 needs no change. #9077 needs TWO SMALL CHANGES NOW, before HASH-111 goes on: (1) hold a --wide-leaf row to what its sessions ran: main's prover IGNORES --wide-leaf and exits 0 at fast100, so compare every finished session's identity.profile with the version the row asked for before server_rate.py:452, add a void reason where one differs, a test on the stand-in, and correct the body's 'fails loudly' sentence; (2) the README's row points to the docstring for the names and the four limits. Then the suites, a worker comment on HASH-119 with the head, and Thursday's run tree takes the new head. inbox/KMOVE.md's last section.
-
