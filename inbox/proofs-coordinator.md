@@ -93816,3 +93816,16 @@ then `python3 read.py DIR/out` and `python3 provers.py DIR/out`, both in the not
 - The four subset tries above: ETA 17:35Z [guess].
 
 Branches: `cursor/proofs-landing-closes-99d1` at `826cea0776932dff8b9890eb77f0458b79ca7358`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
+
+## REDRAW, Thu 12 Nov 17:25Z: #9373 is open, unmarked, at `7efe3fbeb65d`: PRF-590's property; `6113` passed, 67 of 67 suites
+
+- [#9373](https://github.com/compute-verification/verity/pull/9373) is open and unmarked at head `7efe3fbeb65d376fae6ff0461df531ee975163d5` on `cursor/proofs-redraw-rate-5a71`: 23 files, +1,015 −101, no label, mergeable, `Refs PRF-590` as its last line [run: `research queue open`, `gh pr view`].
+- **`6113` passed.** `r20261112-161942-6113` at tree `7efe3fbeb65d`: exit 0, "67 suites: 67 passed (0 cached), 0 failed" [run: `research fetch --all`, `stdout.log:152`, `job.json`].
+- **The four tests.** The three suites that held them pass: `repository` 350 passed, `verity/protocols/pous/verifier` 547 passed and 12 skipped, `verity/protocols/spot/verifier` 865 passed [run: `stdout.log:31`, `:9`, `:115`]. The log names a passing test only in its suite's count, so that the four ran and passed there is [derived]: the first run's counts were 546 passed with 1 failed and 864 passed with 1 failed, one fewer pass in each. Each of the four passes locally at the head [run].
+- **The open command's warning**: "no label of it names a live goal of the Goals page (its labels: from:proofs)". PRF-590 has no goal label, so the body has no `Goal` line. The label is yours to add [run: its stderr].
+- **Against `main` at `6d95fcc68dd3`**: `git merge-tree` exits 0 and names no file. On a scratch merge, `pins.py --stale` exits 0 and the boundary test passes [run]. I did not merge `main` into the branch, and the merged tree has not been built: the candidate's check is its first build [derived].
+- **The body** is in the order you gave. It names the three corollaries as proved and not listed, and puts the stratified figure under what is not done, marked derived, not proved [read: the body as GitHub holds it].
+- **For the second reader**: the statement is `security/Properties/Spot/Rate.lean:122-129`, with its predicates at `:47-110`. The functions are in `verity/protocols/spot/verifier/lean/Spot/Select.lean`: `Rule.ofJson` (`:160`), `Rule.tableOver` (`:212`), `Rule.over` (`:235`), `parseRate` (`:66`), `parseStrataRate` (`:83`), `rate?` (`:93`), `FIXED` (`:101`) [read].
+- **Where I would push on it** [guess]: the work form's `AtRate` says only `1 ≤ K ≤ n`, with the rate held by the table's floors; the Bernoulli text stays itself; and the property holds only where `Rule.over` gives a rule, so a population it refuses (0, I believe) is outside it.
+- I marked nothing and wrote nothing on Linear or Slack. The open command linked the pull request to PRF-590 through the Linear app, as the command you gave does [run: its output].
+- Nothing is running. #9237 is untouched at `9d4aec0111fb`.
