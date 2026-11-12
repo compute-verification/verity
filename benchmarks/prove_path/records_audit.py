@@ -106,8 +106,9 @@ quotes the warm's beside it.
 ``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
 registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
-``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
-terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
+``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`:
+undecided for an accepted audit whose record names no challenger key and session a check verified its coins under, or
+doesn't say whether it wrote the case for the compiled check), and its terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
 values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
 the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
 
@@ -141,7 +142,8 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
 ``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
-takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
+takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
+LMS parameters, the only ones SPOT's v2 reads a challenger's signatures under), ``loopback:HOST:PORT``, that session on the challenger
 party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
@@ -1032,7 +1034,7 @@ def audit(a: argparse.Namespace) -> int:
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                          peer=a.peer, key_record=a.challenger_key)
+                                          peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
@@ -1156,6 +1158,9 @@ def main(argv: list[str] | None = None) -> int:
                    "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
                    "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
+    p.add_argument("--deployed-key", action="store_true",
+                   help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
+                   "its whole tree made over this machine's cores")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
@@ -1243,6 +1248,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.challenger:
         if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
             ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")
+        if a.deployed_key and a.challenger != "local":
+            ap.error("--deployed-key is a local session's key: it goes with --challenger local")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
         if not a.main:

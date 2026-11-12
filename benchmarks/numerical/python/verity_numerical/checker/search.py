@@ -42,6 +42,7 @@ from .gadgets import (
     SignedSum,
     StateOut,
 )
+from .. import settings
 from . import reference
 from .params import REAL, TINY, Params, Reject
 from .step import check_step_expr, gen_step
@@ -841,7 +842,7 @@ def main(argv: list[str] | None = None) -> int:
         rows.append(z3_group_step(timeout_ms=int(args.step_timeout * 1000)))
     report["z3"] = [asdict(r) for r in rows]
     print(render(rows), flush=True)
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = settings.RESEARCH_RUN_DIR
     path = args.json or (os.path.join(run_dir, "search.json") if run_dir else None)
     if path:
         with open(path, "w") as f:
@@ -862,7 +863,7 @@ def main(argv: list[str] | None = None) -> int:
                       "unresolved": unknown}
         result = {
             "schema": "research/result/v0.1",
-            "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
+            "run_id": settings.RESEARCH_RUN_ID or "local",
             "workload_fingerprint": {"params": repr(REAL), "timeout_s": args.timeout, "step_timeout_s": args.step_timeout},
             "validation": validation,
             "measurements": [{"name": f"z3.{r.gadget}.{r.query}", "value": r.seconds, "unit": "s"} for r in rows],
