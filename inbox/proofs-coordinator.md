@@ -71383,3 +71383,161 @@ Tags as before. Mailbox read at 05:08Z: nineteen sections, all read.
 - If it fails in the base's 201 files, my next entry lists every failure with its file and line, as you asked [read: your 04:56Z].
 
 I end my turn on `r20261112-044931-8ffd`, about 06:10Z.
+
+## SESSIONS, Thu 12 Nov 05:11Z: the table by session size [runs `d5e1`, `c59e`]: from 1 to 16, 64 and 200 tables a session the binding sum loses 7.2, 9.9 and 11.8 bits at each design's own sample; 4.0, 6.0 and 7.64 of them are the reruns, which an extractor a table would take back whole, and the rest is the larger sample; with the one-wait trace, the wide level-0 leaves and that extractor, every row reads 2^-105.3 or better for an execution phase counted in calls
+
+**For Daniel.** You asked whether the trade-off between the tables in a session and the binding error is fundamental. On this table, one part of it is not and one part is, in the proof as it is built today.
+
+- **The trade-off in numbers** [run `d5e1`; the cost model's arithmetic, nothing served]. For a datacenter's 10-minute execution phase at 10% compute cost, the best designed configuration bounds 5,313 GB at one table a session and 622, 373 and 316 GB at up to 16, 64 and 200 tables. The proof's binding error for that execution phase goes the other way: 2^-98.8, 2^-91.5, 2^-88.8 and 2^-86.9, counting SHA-512 calls on 64 KiB rows. It is 9 bits better counting compressions and 15.7 bits worse for a year of execution phases.
+- **Two causes, of different kinds.** Larger sessions let the same compute prove about 16 times more proof blocks from each sampled replay block. That is what lowers the GB, and the proof's error grows with everything the sample opens: 3.3 to 4.2 bits here. The second cause is that the proof, to recover any one committed value, reruns a whole session with all its tables together, and the reruns it needs grow with the tables: 4.0, 6.0 and 7.6 bits.
+- **The second cause is not fundamental** [relayed, and by read of the proof's definition of its reruns]. Each committed value sits in one table. A proof that reruns one table at a time would pay one table's reruns at any session size, and 200 tables a session would then cost 4.2 bits and not 11.9. Nobody has written that proof; it is assigned as of this hour.
+- **The first cause stays in this kind of proof**, which recovers committed values by rerunning. Two changes that do not depend on the session's size take bits off every row: reading the committed values off one pass of reruns in place of 210 (6.7 bits, a proof not yet on `main`), and wider leaves at the first level of each table (4.0 bits; a parameter that is yours to change, not built in the prover). With those two and the table-by-table reruns, every row with more than one table reads 2^-105.3 to 2^-106.4 for an execution phase counted in calls. For a year it is 2^-89.6 to 2^-90.7 in calls and 2^-98.6 to 2^-99.7 in compressions.
+- **Against your target** (over 100 bits, under 300 GB at 10% compute cost): no row of this table has both. The lowest bound is 316 GB (the best designed configuration, 200 tables a session), where the error reads 2^-86.9 as the proof stands and 2^-105.3 with the three changes.
+- **Two ideas that leave this trade-off**, both yours to decide and neither built. The padded commitment's binding error reads neither the session's size nor the reruns nor the sample; by its formula as written it is 2^-95.4 here for an execution phase in calls, because it counts every committed bit of a datacenter's execution phase, and 2^-111 in the form that counts only what a run opens. A 1,024-bit digest adds 255 bits to every figure, at over twice the hashing while serving.
+- **Not counted**: how many of the same committed values the proof blocks of one session need, which would lower the error. A model, not a count, puts it at 0.01 to 0.03 bit at one table and 0.16 to 0.45 bit at 16 tables and more; a count needs the served program's wiring at the plan's request sizes.
+
+**What ran, and how to read a tag.**
+
+- Run `r20261112-045042-d5e1` is the table: `wires_sessions.py` on COUNT's kit of run `0a76` (unchanged, at tree `bfc3da111b74`) and the class counts of runs `153e` and `082b`, the inputs of my run `fd5d`. Its designs at 1, 16 and 200 tables are run `0a76`'s (9 of 9 agree on K, the sampled proof blocks, the sessions and the coin bytes); 64 tables is new. Run `r20261112-045753-c59e` is section 4's model (`wires_share.py`, the same kit). Both are arithmetic on the cost model. Scripts, outputs and input hashes are in my artifacts under `sessions-by-size/`.
+- **Every figure in the tables is [run `d5e1`, modeled]** unless a line says otherwise; section 4's table is [run `c59e`, a model]. A derived figure is a difference or a ratio of two cells.
+- A configuration is one of the three of my 03:36Z entry. GB is the cost model's exfiltration bound as run `0a76` prints it (its rows of scope "world year" at the 10% point, `bits·1.05/8e9`), with a verification phase of a datacenter's 600 s (12,500 machines, 90,237,979.77 replay blocks).
+- The sum is `hashBound(T, e, N_s, K_s, K_m, c)` (`security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassNumbers.lean:50-51`), with `N_s` the sampled proof blocks (`code_hNs`), `K_s = K_m = K·Σ_t taken_t·M_t` with `M_t` by template (`code_hKs_cls`, `code_hKm_cls`, as my 03:36Z entry), and without the refusal's term (0.06 to 0.45 bit at one table, my 03:36Z entry). With `N_s` the sessions' count a cell moves by at most 0.013 bit, and over the counts' variants (PageCopy at 97 or 205, run `153e`'s counts alone, the scores unit at 836 or 644) by at most 0.054 bit.
+- **In calls** is `T = c = 513·2^80`; **in compressions** is `T = c = 2^80`, 9.00 bits better in every cell. **A year** is 52,560 execution phases under a union bound, 15.68 bits worse in every cell.
+- Only column (1) is the expression of a theorem on `main`, and `main` has its instances at one table only; #9086's instances at 2, 16 and 200 tables are open, and the lemma that bounds `K_m` on `main` has one proof block a session.
+
+**1 to 3 and 6. The table.** The designs first, then the bits.
+
+The reruns `e` in column (1) are `1 + 210·⌈4·J·2^23/e⌉` at the largest session's J tables; every design fills its largest session, so J is 1, 16, 64 and 200.
+
+| configuration | tables a session, at most | GB | K | sampled proof blocks | sessions | reruns `e` | classes `K_m` |
+|---|---|---|---|---|---|---|---|
+| the partition `main` defines | 1 | 12,684.1 | 21 | 79,309,587 | 157,132 | 2,592,237,061 | 31,059,977,949 |
+| the partition `main` defines | 16 | 1,566.9 | 12 | 725,099,784 | 89,824 | 41,475,792,121 | 283,969,920,072 |
+| the partition `main` defines | 64 | 940.2 | 20 | 1,208,499,640 | 37,483 | 165,903,167,851 | 473,283,200,120 |
+| the partition `main` defines | 200 | 817.5 | 23 | 1,389,774,586 | 13,882 | 518,447,399,191 | 544,275,680,138 |
+| the best designed configuration | 1 | 5,313.2 | 50 | 195,448,050 | 162,044 | 2,592,237,061 | 32,587,192,650 |
+| the best designed configuration | 16 | 622.0 | 30 | 1,876,245,540 | 97,275 | 41,475,792,121 | 312,816,203,130 |
+| the best designed configuration | 64 | 373.2 | 50 | 3,127,075,900 | 40,597 | 165,903,167,851 | 521,360,338,550 |
+| the best designed configuration | 200 | 316.3 | 59 | 3,689,949,562 | 15,437 | 518,447,399,191 | 615,205,199,489 |
+| the plan of record's case | 1 | 2,833.7 | 94 | 355,004,818 | 703,079 | 2,592,237,061 | 139,030,377,486 |
+| the plan of record's case | 16 | 854.7 | 22 | 1,329,349,604 | 164,610 | 41,475,792,121 | 520,611,520,132 |
+| the plan of record's case | 64 | 783.5 | 24 | 1,450,199,568 | 44,950 | 165,903,167,851 | 567,939,840,144 |
+| the plan of record's case | 200 | 752.1 | 25 | 1,510,624,550 | 15,071 | 518,447,399,191 | 591,604,000,150 |
+
+The columns, and the `e` each puts in the sum:
+
+- **(1) as it stands**: `e` above.
+- **(2a) the one-wait trace** (FINDER 18:34Z Wed: the bound is `2·hashBound` at `e = 1 + k`, the committed trace read off an extraction with one wait in place of 210): `e` = 12,343,987, 197,503,773, 790,015,086 and 2,468,797,140 at 1, 16, 64 and 200 tables, and the sum doubled. Worth 6.71 bits in every row.
+- **(2b) the wide level-0 leaves** (PARAMS 12:00Z Wed: level-0 codewords of 2^19 in place of 2^23 at a 2^35-bit table): `e` = 162,015,001 a table, so 162,015,001, 2,592,237,061, 10,368,948,031 and 32,402,962,621. Worth 4.00 bits in every row; at 16 tables it puts `e` back at today's one-table value.
+- **(2) both**: `2·hashBound` at `e` = 771,501, 12,343,987, 49,375,944 and 154,299,823. Worth 10.71 bits.
+- **(3) the reruns charged a table** (the extractor EXTFORM 10:11Z Wed named): `e` at one table's 2,592,237,061 whatever the session holds, at the design's own sample. The last column is what it is worth: log₂ of the tables.
+- **(3) with (2)**: `2·hashBound` at `e` = 771,501 in every row. [derived] The three change different factors of `e = 1 + waits·k` (the waits; `k` through the codeword's length; `k` through the tables it sums over), which is why I add them; nobody has proved two of them together.
+
+One execution phase. Each cell is −log₂ of the sum, in calls / in compressions:
+
+| configuration | tables | GB | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | (3) with (2): all three | (3) is worth, bits |
+|---|---|---|---|---|---|---|---|---|---|
+| the partition `main` defines | 1 | 12,684.1 | 98.87 / 107.87 | 105.58 / 114.58 | 102.87 / 111.87 | 109.58 / 118.58 | 98.87 / 107.87 | 109.58 / 118.58 | 0.00 |
+| the partition `main` defines | 16 | 1,566.9 | 91.67 / 100.68 | 98.39 / 107.39 | 95.67 / 104.68 | 102.39 / 111.39 | 95.67 / 104.68 | 106.39 / 115.39 | 4.00 |
+| the partition `main` defines | 64 | 940.2 | 88.94 / 97.94 | 95.65 / 104.65 | 92.94 / 101.94 | 99.65 / 108.65 | 94.94 / 103.94 | 105.65 / 114.65 | 6.00 |
+| the partition `main` defines | 200 | 817.5 | 87.09 / 96.09 | 93.80 / 102.81 | 91.09 / 100.09 | 97.80 / 106.81 | 94.73 / 103.74 | 105.45 / 114.45 | 7.64 |
+| the best designed configuration | 1 | 5,313.2 | 98.79 / 107.79 | 105.50 / 114.51 | 102.79 / 111.79 | 109.50 / 118.51 | 98.79 / 107.79 | 109.50 / 118.51 | 0.00 |
+| the best designed configuration | 16 | 622.0 | 91.53 / 100.53 | 98.24 / 107.24 | 95.53 / 104.53 | 102.24 / 111.24 | 95.53 / 104.53 | 106.24 / 115.24 | 4.00 |
+| the best designed configuration | 64 | 373.2 | 88.79 / 97.79 | 95.50 / 104.51 | 92.79 / 101.79 | 99.50 / 108.51 | 94.79 / 103.79 | 105.50 / 114.51 | 6.00 |
+| the best designed configuration | 200 | 316.3 | 86.91 / 95.91 | 93.62 / 102.62 | 90.91 / 99.91 | 97.62 / 106.62 | 94.55 / 103.55 | 105.26 / 114.27 | 7.64 |
+| the plan of record's case | 1 | 2,833.7 | 96.70 / 105.71 | 103.42 / 112.42 | 100.70 / 109.71 | 107.42 / 116.42 | 96.70 / 105.71 | 107.42 / 116.42 | 0.00 |
+| the plan of record's case | 16 | 854.7 | 90.80 / 99.80 | 97.51 / 106.52 | 94.80 / 103.80 | 101.51 / 110.52 | 94.80 / 103.80 | 105.51 / 114.52 | 4.00 |
+| the plan of record's case | 64 | 783.5 | 88.67 / 97.68 | 95.39 / 104.39 | 92.67 / 101.68 | 99.39 / 108.39 | 94.67 / 103.68 | 105.39 / 114.39 | 6.00 |
+| the plan of record's case | 200 | 752.1 | 86.97 / 95.97 | 93.68 / 102.69 | 90.97 / 99.97 | 97.68 / 106.69 | 94.61 / 103.62 | 105.33 / 114.33 | 7.64 |
+
+A year of execution phases (52,560). Each cell is −log₂, in calls / in compressions:
+
+| configuration | tables | GB | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | (3) with (2): all three | (3) is worth, bits |
+|---|---|---|---|---|---|---|---|---|---|
+| the partition `main` defines | 1 | 12,684.1 | 83.18 / 92.19 | 89.90 / 98.90 | 87.18 / 96.19 | 93.90 / 102.90 | 83.18 / 92.19 | 93.90 / 102.90 | 0.00 |
+| the partition `main` defines | 16 | 1,566.9 | 75.99 / 84.99 | 82.71 / 91.71 | 79.99 / 88.99 | 86.71 / 95.71 | 79.99 / 88.99 | 90.71 / 99.71 | 4.00 |
+| the partition `main` defines | 64 | 940.2 | 73.25 / 82.26 | 79.97 / 88.97 | 77.25 / 86.26 | 83.97 / 92.97 | 79.25 / 88.26 | 89.97 / 98.97 | 6.00 |
+| the partition `main` defines | 200 | 817.5 | 71.41 / 80.41 | 78.12 / 87.13 | 75.41 / 84.41 | 82.12 / 91.13 | 79.05 / 88.06 | 89.77 / 98.77 | 7.64 |
+| the best designed configuration | 1 | 5,313.2 | 83.11 / 92.11 | 89.82 / 98.82 | 87.11 / 96.11 | 93.82 / 102.82 | 83.11 / 92.11 | 93.82 / 102.82 | 0.00 |
+| the best designed configuration | 16 | 622.0 | 75.84 / 84.85 | 82.56 / 91.56 | 79.84 / 88.85 | 86.56 / 95.56 | 79.84 / 88.85 | 90.56 / 99.56 | 4.00 |
+| the best designed configuration | 64 | 373.2 | 73.11 / 82.11 | 79.82 / 88.82 | 77.11 / 86.11 | 83.82 / 92.82 | 79.11 / 88.11 | 89.82 / 98.82 | 6.00 |
+| the best designed configuration | 200 | 316.3 | 71.22 / 80.23 | 77.94 / 86.94 | 75.22 / 84.23 | 81.94 / 90.94 | 78.87 / 87.87 | 89.58 / 98.59 | 7.64 |
+| the plan of record's case | 1 | 2,833.7 | 81.02 / 90.02 | 87.74 / 96.74 | 85.02 / 94.02 | 91.74 / 100.74 | 81.02 / 90.02 | 91.74 / 100.74 | 0.00 |
+| the plan of record's case | 16 | 854.7 | 75.12 / 84.12 | 81.83 / 90.83 | 79.12 / 88.12 | 85.83 / 94.83 | 79.12 / 88.12 | 89.83 / 98.83 | 4.00 |
+| the plan of record's case | 64 | 783.5 | 72.99 / 81.99 | 79.71 / 88.71 | 76.99 / 85.99 | 83.71 / 92.71 | 78.99 / 87.99 | 89.71 / 98.71 | 6.00 |
+| the plan of record's case | 200 | 752.1 | 71.29 / 80.29 | 78.00 / 87.01 | 75.29 / 84.29 | 82.00 / 91.01 | 78.93 / 87.94 | 89.65 / 98.65 | 7.64 |
+
+Read off the table [derived from run `d5e1`'s cells]:
+
+- **The fall from one table**, column (1): 7.19, 9.93 and 11.78 bits at 16, 64 and 200 tables on the partition `main` defines; 7.26, 10.00 and 11.88 at the best designed configuration; 5.90, 8.03 and 9.73 at the plan of record's case.
+- **The reruns' part** is 4.00, 6.00 and 7.64 in every configuration. It is the whole of what (3) is worth.
+- **The sample's part** is the rest, the fall of column (3): 3.19, 3.93 and 4.13; 3.26, 4.00 and 4.24; 1.90, 2.03 and 2.09. It is the growth of `K_m`: 9.1, 15.2 and 17.5 times; 9.6, 16.0 and 18.9 times; 3.7, 4.1 and 4.3 times. The bound in GB falls by nearly the same factors (8.1, 13.5 and 15.5; 8.5, 14.2 and 16.8; 3.3, 3.6 and 3.8).
+- **With all three**, the rows above one table read 2^-105.26 to 2^-106.39 for an execution phase in calls and 2^-114.27 to 2^-115.39 in compressions; for a year, 2^-89.58 to 2^-90.71 in calls and 2^-98.59 to 2^-99.71 in compressions. No row reaches 100 for a year in calls; the one-table rows reach it for a year in compressions (2^-100.74 to 2^-102.90).
+- **Without (3)**, (2a) and (2b) alone bring 16 tables to 2^-101.5 to 2^-102.4 for an execution phase in calls, 64 tables to 2^-99.4 to 2^-99.7 and 200 tables to 2^-97.6 to 2^-97.8.
+
+**4. The classes a session's proof blocks share: it cannot be counted from the wiring I have. A model puts the fall of `K_m` at 0.8% to 2.1% at one table and 10.7% to 27.0% at 16 tables and more, 0.01 to 0.45 bit.**
+
+- **Why not** [read: `exact_merged.json`, `exactF.json` and `exact_classes.py` in `lanes/proofs/tools/`]. The two files hold, for each block type of rank 0's Program, its largest count, its blocks and its four largest counts. Which blocks need one class is computed inside the counter (a word's key is its writer and the hashed set of its readers, in `_count_chunk`) and is never written.
+- **What a count needs.** (i) The counter changed to write, for every class, how many blocks of each block type need it; it already builds the keys, and run `153e` took 879 s for two partitions on 16 cores. (ii) A Program at the plan's replay block: the cost model's replay block is 3,320.5 tokens [run `d5e1`], and rank 0's Program is one request of 256 and 32 tokens [read: run `153e`'s command], so its attention rows are shorter than the plan's. (iii) The rule that puts sampled proof blocks into sessions. The planner has none: it counts a block type's sessions as `⌈K·taken/(J·table)⌉`, and two proof blocks that need one class save nothing unless they are in one session.
+- **The two ends** [run `d5e1`]. No saving is the lemma on `main` (`code_hKm_cls` sums over proof blocks; a session there is one slot, `sessBlocks_eq_singleton`, `security/Proofs/Flock/SamplingGeneric/Fails.lean:289`). If every proof block of a session needed the same classes, column (1) would be 8.4 to 17.4 bits better; no wiring gives that, and it is here only as the ceiling.
+- **The model** [run `c59e`; the groups by read of the counter's layout (`sparse_layout` and the linears' columns), their sizes from the cost model's block counts]. Three block types, 91% of `K_m` on two of the configurations:
+  - a head block that is not its row's first (643 classes, 66.5% of `K_m`): 513 are its head's query words, which every head block of its row and head needs, 18.93 of this type a group; 128 are its key block's, which the 8 heads' blocks at that key block need;
+  - a head block that is its row's first (642, 3.5%): the 128 only, its query words' other needers being of another type and so in other sessions;
+  - a column of a K = 2,048 linear (2,050, 21.3%; 48.3% at the best designed configuration): 2,049 are the row's input words and weight, which the row's 1,024 columns need.
+  A group of r blocks sampled at the share f is needed with probability 1 − (1 − f)^r. At one table the shares are 0.0035 of the head blocks and 0.00003 of the columns; at 16 tables and more, 0.056 and 0.0005, the same at 16, 64 and 200 because those designs take the same 60.4 million proof blocks from each sampled replay block (62.5 million at the best designed configuration) and differ only in K.
+
+| configuration | tables | `K_m` summed over proof blocks | `K_m` by the model | less by | bits |
+|---|---|---|---|---|---|
+| the partition `main` defines | 1 | 31,059,977,949 | 30,393,274,938 | 2.1% | 0.03 |
+| the partition `main` defines | 16 | 283,969,920,072 | 207,344,458,504 | 27.0% | 0.45 |
+| the partition `main` defines | 64 | 473,283,200,120 | 345,574,097,507 | 27.0% | 0.45 |
+| the partition `main` defines | 200 | 544,275,680,138 | 397,410,212,134 | 27.0% | 0.45 |
+| the best designed configuration | 1 | 32,587,192,650 | 32,333,689,901 | 0.8% | 0.01 |
+| the best designed configuration | 16 | 312,816,203,130 | 279,487,152,087 | 10.7% | 0.16 |
+| the best designed configuration | 64 | 521,360,338,550 | 465,811,920,144 | 10.7% | 0.16 |
+| the best designed configuration | 200 | 615,205,199,489 | 549,658,065,770 | 10.7% | 0.16 |
+| the plan of record's case | 1 | 139,030,377,486 | 136,046,087,819 | 2.1% | 0.03 |
+| the plan of record's case | 16 | 520,611,520,132 | 380,131,507,258 | 27.0% | 0.45 |
+| the plan of record's case | 64 | 567,939,840,144 | 414,688,917,009 | 27.0% | 0.45 |
+| the plan of record's case | 200 | 591,604,000,150 | 431,967,621,884 | 27.0% | 0.45 |
+
+- **Which way the model errs** [derived]. It is not a bound. It takes every group at its mean size, where the real spread saves more. It takes a group's sampled blocks to fall in one session, where any rule other than the Program's order saves less. It counts no class common to two rows, where keys read by later rows save more. It gives nothing to the other block types, among them the scores and values units of the best designed configuration, whose ports the layout does not state.
+
+**5. Beside them, by formulas already in this file [relayed; the arithmetic is run `d5e1`'s].**
+
+- **The padded commitment** (TAIL 02:01Z Wed, line 36053 of this file): `ε ≤ κ_s + √(n_sess·2^48)·2T/2^256.5 + 2·P·2T/2^256.5 + 2T/2^256.5 + 2^-256`, T in compressions. Your `N·2T/2^256.5` a stage is its `2·P·2T/2^256.5` over the two stages.
+  - **What N is**: P, the committed bits of the execution phase, each once. At a datacenter's 600 s that is the output bits of every proof block, 1.23×10^21 = 2^70.06 over 5.24×10^18 proof blocks on the cost model's block types (2^70.11 at the best designed configuration) [run `d5e1`]. The registered weights' 2^42.46 [relayed: TAIL] add nothing to it. By TAIL's own rate, 2^39.29 bits a 287-token request, it is 2^69.25 [derived].
+  - It reads neither the tables nor the reruns nor the sample: one figure a configuration, **2^-95.44 for an execution phase in calls**, 2^-104.44 in compressions, 2^-79.75 and 2^-88.76 for a year. TAIL's 2^-120.4 was at P = 2^54.13, 1,843 requests of 4,557 tokens; a datacenter's 600 s commits 2^15.9 times more.
+- **Its form at the leaves a run opens** (TAIL's item 5, line 36101: `√(P·Q)·2T/2^256.5` in place of the `2·P` term). **What N is**: `√(P·Q)`, with Q nine ports a sampled proof block [relayed there from DRAFT-CORE], 2^29.4 to 2^34.9 here. It reads 2^-111.2 to 2^-111.4 for an execution phase in calls at `n_sess` every proof block of the phase, TAIL's own choice; the fork term leads there (`√(2^62.2·2^48)` = 2^55.1 against `√(P·Q)` at most 2^52.5). At `n_sess` the sample's sessions it is 2^-114.0 to 2^-116.8.
+- **Not in the file, and not derived here**: whether, under the two-stage design, P may count only what is ever committed (every replay block's boundary and the sampled replay blocks' interiors) and not every proof block's outputs.
+- **The 1,024-bit digest** (SCALE 08:04Z Wed, line 41253: "KECCAK[c=1024]: −255 [relayed for its CR level]"). **What N is**: the theorem's own counts, unchanged; only the 2^256 moves. Every cell of the table gains 255 bits. Its costs as SCALE relays them from WIDEHASH: serve-time hashing ×2.15 to ×2.40, proving +20% to +40%, a 128-byte digest, a new premise, and it walks back "One hash: SHA-512".
+
+Each cell: one execution phase in calls / in compressions; a year in calls / in compressions.
+
+| configuration | tables | padded commitment, committed bits P | padded, by committed bits | padded, by the leaves a run opens | (1) under a 1,024-bit digest |
+|---|---|---|---|---|---|
+| the partition `main` defines | 1 | 2^70.06 | 95.44 / 104.44; 79.75 / 88.76 | 111.37 / 120.37; 95.69 / 104.69 (Q 2^29.41) | 353.87 / 362.87; 338.18 / 347.19 |
+| the partition `main` defines | 16 | 2^70.06 | 95.44 / 104.44; 79.75 / 88.76 | 111.30 / 120.30; 95.62 / 104.62 (Q 2^32.60) | 346.67 / 355.68; 330.99 / 339.99 |
+| the partition `main` defines | 64 | 2^70.06 | 95.44 / 104.44; 79.75 / 88.76 | 111.27 / 120.28; 95.59 / 104.59 (Q 2^33.34) | 343.94 / 352.94; 328.25 / 337.26 |
+| the partition `main` defines | 200 | 2^70.06 | 95.44 / 104.44; 79.75 / 88.76 | 111.26 / 120.27; 95.58 / 104.59 (Q 2^33.54) | 342.09 / 351.09; 326.41 / 335.41 |
+| the best designed configuration | 1 | 2^70.11 | 95.39 / 104.39; 79.70 / 88.71 | 111.33 / 120.33; 95.65 / 104.65 (Q 2^30.71) | 353.79 / 362.79; 338.11 / 347.11 |
+| the best designed configuration | 16 | 2^70.11 | 95.39 / 104.39; 79.70 / 88.71 | 111.22 / 120.22; 95.54 / 104.54 (Q 2^33.98) | 346.53 / 355.53; 330.84 / 339.85 |
+| the best designed configuration | 64 | 2^70.11 | 95.39 / 104.39; 79.70 / 88.71 | 111.18 / 120.18; 95.49 / 104.50 (Q 2^34.71) | 343.79 / 352.79; 328.11 / 337.11 |
+| the best designed configuration | 200 | 2^70.11 | 95.39 / 104.39; 79.70 / 88.71 | 111.16 / 120.16; 95.48 / 104.48 (Q 2^34.95) | 341.91 / 350.91; 326.22 / 335.23 |
+| the plan of record's case | 1 | 2^70.06 | 95.44 / 104.44; 79.75 / 88.76 | 111.33 / 120.33; 95.65 / 104.65 (Q 2^31.57) | 351.70 / 360.71; 336.02 / 345.02 |
+| the plan of record's case | 16 | 2^70.06 | 95.44 / 104.44; 79.75 / 88.76 | 111.27 / 120.27; 95.59 / 104.59 (Q 2^33.48) | 345.80 / 354.80; 330.12 / 339.12 |
+| the plan of record's case | 64 | 2^70.06 | 95.44 / 104.44; 79.75 / 88.76 | 111.26 / 120.26; 95.58 / 104.58 (Q 2^33.60) | 343.67 / 352.68; 327.99 / 336.99 |
+| the plan of record's case | 200 | 2^70.06 | 95.44 / 104.44; 79.75 / 88.76 | 111.26 / 120.26; 95.58 / 104.58 (Q 2^33.66) | 341.97 / 350.97; 326.29 / 335.29 |
+
+**The three sentences, by read** (`origin/main` at `62bf29346f76`; paths under `security/`).
+
+1. **With the tables, only the reruns grow.** `e` is `Compiled.es`, the largest `1 + waits·k` over the proof blocks' session shapes (`Definitions/Claims/SamplingGeneric.lean:424-426`), and Flock's `k` is `⌈4·N₀/e⌉` at the session's `N₀`, its tables' level-0 codeword lengths summed (`Arg.ofFlock`, `:995-1011`; `Deploy.k`, `Definitions/Claims.lean:314`); the sessions' count `N_s` falls as a session holds more, so `e·N_s` stays about level, `K_s` does not read the sessions, and `K_m` (`sessCountIn`, `Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean:128-131`) can only fall, so the term that grows is `4·T·e·K_m`, which is 99.1% to 99.6% of the sum in every row [derived from run `d5e1`'s counts].
+2. **With the sample grow `N_s`, `K_s` and `K_m`**, each in proportion to the sampled proof blocks (`code_hNs`, `Proofs/Flock/SpotFlock/Counts.lean:123`; `code_hKs_cls` and `code_hKm_cls`, `SpotFlock/ClassCounts.lean:35` and `:62`); `T` does not, `c = n_PU·openCalls` reads every proof block of the partition and not the sample (`runCost`, `TwoFirstHitAt.lean:135-136`; `nPU`, `SamplingGeneric.lean:274-277`), and `e` moves with the sample only when the largest session then holds more tables.
+3. **Yes, three things besides `N₀` tie the reruns to the session.** The interface has one extractor and one witness a session: `Arg.ext` is one `E^rep` at the session's statement returning one `A.W` (`SamplingGeneric.lean:180-183`), `sessWit` runs it once at the session's first slot and `sessExt` reads that one witness at every proof block of the session (`:331-346`), so `runCost` and `firstHitCost` charge `e_s` a session and a class a session (`TwoFirstHitAt.lean:135-143`). Flock's extractor reruns the whole session's verifier and decodes every table from the same reruns (`Claims.Flock.E`, `Definitions/Claims.lean:318-319`; `assemble`'s `mapM` over the session's tables, `:217-224`), and its knowledge error reads the same `k` in the definitions tree (`:322`). And the knowledge-soundness proof bounds one wait's miss over all the session's tables at once, at the rate `N₀/(e·k)` with the words' lengths summed (`Proofs/Flock/Claims/KS/JointJ.lean:178`, `Joint.lean:408`, `Flock.lean:141`, `ZkTables.lean:124`); the finders themselves never read `N₀`, only `e_s`.
+
+**Not in the table.**
+
+- The sessions' knowledge error and the square-root term. The table is the hash term alone, as my 03:36Z entry. [relayed: PARAMS 12:00Z Wed] If the second repetition is dropped, a session of more than 20 tables has a knowledge error above 2^-100 on its own, which bears on the 64 and 200 rows.
+- Whether a design at these samples fits one run's coins and release log (my 01:54Z entry, section 3: it does not at a datacenter's 600 s).
+- (2a), (2b) and (3) are not on `main`: (2a) is a statement in FINDER's entry, not compiled there; (2b) is Daniel's parameter and is not built in the prover; (3) has no statement yet.
+- I wrote no Lean, changed no file of the repository and posted nothing.
