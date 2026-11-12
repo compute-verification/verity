@@ -1,4 +1,4 @@
-"""The network certifier's coin link (D7 of `Security/Definitions/NetworkCertifier/Guarantees.lean`, "The coins"): the one
+"""The network certifier's coin link (D7 of `security/Definitions/NetworkCertifier/Guarantees.lean`, "The coins"): the one
 path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the certifier's
 own grids.
 

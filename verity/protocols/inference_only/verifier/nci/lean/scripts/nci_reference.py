@@ -2,9 +2,9 @@
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
-`Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`): the computed gates of `D` divide into isolation units of at
+`Nci.CompliesRate Γ α` (`security/Definitions/Nci.lean`): the computed gates of `D` divide into isolation units of at
 most `Γ` gates, each with `novelReads R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R`
-with a wire into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones
+with a wire into `R` (`security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones
 `NciCheck.Check`'s docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program
 (`verity.circuits`), gate `g` of width `Value<w>` bits, an input gate when its primitive is an input
 (`program.is_input`, with no operands), reading the gates its operands name; θ is a list of ids of input gates bound at

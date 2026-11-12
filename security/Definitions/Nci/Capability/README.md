@@ -5,8 +5,8 @@ policy cuts verified work into blocks of at most c gates, each taking in at most
 registered information). A block can **import** information, spending fresh bits, or **reconstruct** it, spending
 gates. Every bound here says, in one ontology, how far those two budgets go. The Lean is `Nci.Capability` (the
 vocabulary), `Nci.Assumptions` (the premises) and `Nci.Guarantees` (the bounds), one module per role. How the bounds
-enter the security argument is `Security/README.md`, part 2. Over counted products, training's bound of record is the
-min-cut theorem (`Security/README.md`, Start here); the bounds here bound what a block holds and the uses it serves.
+enter the security argument is `security/README.md`, part 2. Over counted products, training's bound of record is the
+min-cut theorem (`security/README.md`, Start here); the bounds here bound what a block holds and the uses it serves.
 
 ## The ontology
 

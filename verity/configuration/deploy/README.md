@@ -11,7 +11,7 @@ Nothing is retried: every failure the runtime sees finishes the party refused by
 
 - `party.Party` (`party.py`): a party as a sans-IO next-message machine, `start(params, identity)` and then
   `on(received)`, each returning its actions (`Send`, `Timer`, `LogEntry`, `Finish`), as
-  `Security/Definitions/Core/Interaction.lean` states a prover and a verifier.
+  `security/Definitions/Core/Interaction.lean` states a prover and a verifier.
 - `manifest.Manifest` and `manifest.place` (`manifest.py`): what a protocol declares (its parties as `Role`s, its
   channels, its messages and what it needs of the workload), and the check of a placement of its parties on a site's
   machines: owners, capabilities, coins never crossing a developer-owned machine, and latency bounds.

@@ -143,12 +143,12 @@ takes one of the node's Lean audit slots (`lean_slot`; pool `LEAN_SLOT_POOL`, el
 requires by path, never beside one that writes the same `.lake` (`writing`). `check.py` exits 0 when every package
 passes, 1 when one fails, and 2 on a usage error or a refusal.
 
-A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
+A package that pins ArkLib (`security/Proofs`, and `security`, which audits it beside itself) is refused, exit 2, on a
 machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
 alike; the refusal prints the fast path's `research run --on auto …` line (`BELOW_FLOOR_RUN`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
 another floor (0: none). Unless `LEAN_NUM_THREADS` is set, the build and the replay of a package that pins Mathlib or
 ArkLib run only as many threads as its cgroup's memory holds (`build_threads`, `replay_threads`), one such replay at a
-time. An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
+time. An audit of a spec beside the ArkLib package that proves its guarantees (`security`)
 is refused below `SPEC_FLOOR_GIB` (160 GiB; `check.py` says why), and the
 refusal names `--kind lean-audit`, a 280 GiB shape.
 
@@ -162,7 +162,7 @@ a package then sends to the kernel each own module and each module of the closur
 loads unchecked the modules that passed and import one of those, and imports the rest. By induction over the import DAG
 every declaration of the closure has been through the kernel, with its imports present, under a key that covers them.
 The cache is shared between packages, so
-`Security` reuses the Mathlib modules `Security/Proofs` checked. So that a module's verdict is a function of its key,
+`security` reuses the Mathlib modules `security/Proofs` checked. So that a module's verdict is a function of its key,
 `Replay.lean` pins what the kernel loads: no constant from outside the module's imports, an equation lemma two modules
 realize checked once each, a reused public part's axiom copy taken as Lean's import does (`subsumesInfo`), and the
 quotient's own constants. A change to `Replay.lean` changes every key, so the next run is cold.
@@ -229,7 +229,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/protocols/pouw/verifier/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions_module`: the module (or a submodule) with named assumptions, or a list of such modules (`Security/Properties`
+- `assumptions_module`: the module (or a submodule) with named assumptions, or a list of such modules (`security/Properties`
   lists `Properties.Assumptions` beside `Definitions.Assumptions`, for an assumption stated over the code); each must be
   a module of the build or of a package it requires. `assumptions`: the named assumptions (with
   `owner`), the premises declared there. `domain`: a premise that is part of what its guarantee says (a scope, the layer
@@ -317,7 +317,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
 - **The trees**: `trees` names the module prefixes of the definitions tree (each area's vocabulary, named assumptions
   and guarantee statements), the properties tree (statements about the code) and the proofs tree (every proof, lemma and
   proof-only definition); a module's tree is that of its longest prefix (`Proofs.Properties` before `Properties`), and a
-  package's trees reach those that require it by path (`Security`'s reach `Security/Properties` and `Security/Proofs`).
+  package's trees reach those that require it by path (`security`'s reach `security/Properties` and `security/Proofs`).
   The check refuses a guarantee or property whose statement reads a definition in the proofs tree (move it to the
   definitions tree, or unlist it as a lemma), and a module of the definitions or properties tree that imports one.
   `except` ({prefix: the reason}, the package's own) lists exceptions by the read or importing module; an entry that

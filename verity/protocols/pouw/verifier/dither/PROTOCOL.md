@@ -411,7 +411,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
   the certifier counts. Its statement is `Pouw.Assumptions.CoinsConfidential`'s docstring
-  (`Security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
+  (`security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
   (`Accounting.Assumptions.Parties.WitnessPathPrivate`) discharges it in prose, with no Lean proof yet: private
   messages (the devices' signed records and salts, the prover's witness, a server's coins) travel only on private
   links, and the certifier sits on the server's own uplink.
