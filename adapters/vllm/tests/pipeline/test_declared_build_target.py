@@ -248,7 +248,8 @@ def test_a_traced_request_build_answers_the_device_name_its_target_states_on_a_g
     from verity_vllm.program.predict.steps import trace_commands
     target = {"compute_capability": [9, 0], "num_sms": 132, **({"device_name": name} if name else {})}
     phi = Phi(model={"repo": "zai-org/GLM-5.3", "revision": "r"}, target=target, tp={"world": 8, "rank": 3}, execution="eager")
-    [cmd] = trace_commands({"requests": [{"LP": 8, "T": 4, "policy": {"kind": "greedy"}}]}, types.SimpleNamespace(phi=phi), str(tmp_path))
+    [cmd] = trace_commands({"requests": [{"LP": 8, "T": 4, "policy": {"kind": "greedy"}}]}, types.SimpleNamespace(phi=phi, dsa_table_reads=False),
+                             str(tmp_path))
     a = cli.parse("build", cmd[2:])
     assert a.device_name == name and a.workload is None and (a.tp, a.rank, a.dead_free) == (8, 3, True)
     seen: dict = {}
