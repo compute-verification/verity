@@ -164,7 +164,8 @@ def test_a_commit_that_exits_holding_its_lease_keeps_it_until_its_gpu_is_empty(t
     ([["GPU-5"]] * 5, 3, 3, ["GPU-5"]),                                   # still there after the last look
 ])
 def test_a_new_lease_waits_for_another_process_to_leave_its_gpus(monkeypatch, looks, n, waited, left):
-    seq, slept = iter(looks), []
+    seq = iter(looks)
+    slept: list[float] = []
     monkeypatch.setattr(GL, "on_gpus", lambda uuids: next(seq))
     assert GL._foreign(["GPU-5"], slept.append, n) == (waited, left) and slept == [GL.CLEAR_EVERY_S] * waited
 
@@ -206,9 +207,14 @@ def test_a_commit_that_never_got_its_gpu_records_no_start(tmp_path):
 
 @pytest.mark.parametrize("item,seen", [({}, "device"), ({GL.WEIGHTS_HASH: "host"}, "host"), ({GL.WEIGHTS_HASH: "device-checked"}, "device-checked")])
 def test_a_leased_commit_hashes_its_weights_on_its_gpu_unless_the_item_says_how(tmp_path, item, seen):
-    env, got = {"GPU_LEASE": "/l/gpu-lease", **item}, []
-    GL.run(str(tmp_path), str(tmp_path / "commit.log"), ["true"], 60, env, lambda to, argv: got.append(env.get(GL.WEIGHTS_HASH)) or 0,
-           clock=lambda: 0.0)
+    env = {"GPU_LEASE": "/l/gpu-lease", **item}
+    got: list[str | None] = []
+
+    def run_tl(to: int, argv: list[str]) -> int:
+        got.append(env.get(GL.WEIGHTS_HASH))
+        return 0
+
+    GL.run(str(tmp_path), str(tmp_path / "commit.log"), ["true"], 60, env, run_tl, clock=lambda: 0.0)
     assert got == [seen] and env == {"GPU_LEASE": "/l/gpu-lease", **item}
 
 
@@ -372,6 +378,7 @@ def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_
     device-resident tensors in `RB.start`) and precedes every check that reads host memory; nothing after it calls CUDA."""
     src = Path(GL.__file__).with_name("commit.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     marks = ["GL.acquire(TL)", "TL.end(_wstage", '"gpu_mem"', 'TL.start("validate.openings"', "RB.start(out, pair", "GL.release(TL",
              'TL.start("validate.binding_coverage"', 'TL.start("validate.manifest_coverage"', "RB.defer(", "TL.start(\"validate.weights_pin\"",
              "openings_after_release(com", "for c in coms.values():\n        c.close()", 'TL.start("closure.summary")']
@@ -396,7 +403,10 @@ def test_the_lease_record_dates_the_release_and_names_its_stage_or_why_it_was_ke
 
     t = 1790884800.0                                   # 2026-10-01T20:00:00Z
     env = {"GPU_LEASE": "/l/gpu-lease"}
-    ticks = lambda: iter([t - 30, t + 600]).__next__
+
+    def ticks():
+        return iter([t - 30, t + 600]).__next__
+
     _, rec = GL.run(str(tmp_path), str(tmp_path / "log"), ["x"], 600, env,
                     run_tl({"released": "2026-10-01T20:02:30Z", "t": t + 150.0, "released_at": "work.pair0.instrumented"}), clock=ticks())
     assert rec["released"] == "2026-10-01T20:02:30Z" and rec["released_at"] == "work.pair0.instrumented" and rec["kept"] is None
@@ -544,5 +554,6 @@ def test_the_match_takes_its_lease_in_a_gpu_phase_before_its_first_stage():
     from verity_vllm.pipeline import match as M
     src = Path(M.__file__).read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     assert main.count("GL.acquire()") == 1 and main.index("GL.acquire()") < main.index("run_stage(")
     assert re.search(r'if a\.phase in \("gpu", "all"\):\n\s+GL\.acquire\(\)', main)
