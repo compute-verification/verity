@@ -75,14 +75,14 @@ class Recorded(P.Local):
         super().end(commitment, openings)
 
 
-def honest(verify: int | None = None) -> tuple[P.Period, Recorded]:
+def honest(verify: int | None = None) -> tuple[P.Run, Recorded]:
     c = Clock()
     prover = Recorded("n0", STORE, entropy=Entropy(b"salts"))
     return P.session("n0", prover, COINS, verify=verify, clock=c, sleep_until=c.sleep_until), prover
 
 
 @pytest.fixture(scope="module")
-def ended() -> tuple[P.Period, Recorded]:
+def ended() -> tuple[P.Run, Recorded]:
     return honest()
 
 
