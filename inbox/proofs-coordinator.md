@@ -75483,3 +75483,112 @@ Read on `main` at `d6075b75d289` [read: `git rev-parse origin/main`, 07:09Z] and
 - Owed in the 14:00Z entry: the file-by-file table, the full change list, the list of moves as you can post it, the word move's sites and the places that would contradict the Glossary.
 
 Next: the merge-side certificate when its run has a slot, then the 14:00Z entry.
+
+## WIRED, Thu 12 Nov 07:20Z: the three deciders are built and their proofs file compiles in the tree; none stopped on the cost rule; the head's tries and the difftest are in run `r20261112-071746-32ed`
+
+**Branch and head.** `cursor/proofs-wired-deciders-3b9e` at `8472b9e66f`, from the scratch's `8f941d294261`: seven
+files, 866 lines added, one changed. [run: `git diff --stat 8f941d294261 HEAD`] #8940 is not on `main`
+(`d6075b75d289`). [run: `git merge-base --is-ancestor 58a598e615b1 origin/main`, 07:07Z] Mailbox read: nothing after
+your 05:05Z section. [run: `git show origin/cursor/proofs-inbox:…`, 07:07Z]
+
+**What compiled in the tree.** Run `r20261112-065058-d0b6`, one-file tries with the axiom probe, at the text of commit
+`f633d4db58`: [run: r20261112-065058-d0b6, `stdout.log`]
+
+- `Spot/SecondWires.lean`: lean exit 0 in 32 s, no theorems in it.
+- `Spot/DifftestMain.lean`: lean exit 0 in 53 s.
+- `SpotFlock/WiresDecided.lean`: lean exit 0 in 1,429 s; none of its 9 theorems uses an axiom beyond `propext`,
+  `Classical.choice` and `Quot.sound`.
+
+Three commits followed that text (the two bounds under "cost" below, the mirror and its difftest, the deciders stated
+on wires and rows). The head compiles on my VM against a stand-in of the definitions, which is no verdict on the tree.
+[run: `lean` on this VM] Its verdict is run `r20261112-071746-32ed` (took its slot 07:18Z on vy-nebius-cpu-8): the
+same three tries, then the suite's difftest. ETA 08:05Z: the proofs file's imports took 24 minutes to build on the
+first node, and this is another node. [run: `slot.json`; guess: the ETA]
+
+**The three, as built** (`verity/protocols/spot/verifier/lean/Spot/SecondWires.lean`, 199 lines; it imports
+`Spot.SecondStage` and `Spot.Bits`, and no check imports it). [read: the file]
+
+| decider | reads | work |
+| --- | --- | --- |
+| `rowsUnder` | the wires' `template` and `port`, the rows (`Own.wires`, `Own.rows`) | one lookup of a port's rows a wire; one comparison a run, `row + (count - 1)·step < per`, however many units the run holds |
+| `namesOnce` | the parts' `template` | one comparison a pair of parts |
+| `wiresWide` | the wires, and each template's parsed circuit file: the reader's ports' `name` and `bits`; the writer's `outPorts`, `outRowPorts`, `upv`, `leavesOut` and three numbers of its unit net (`inWords`, `constPos`, the output group's `col`) | a wire: one pass over one unit's returned leaves' bits, each leaf looked up among the output rows, into a bitmap of the reader port's bits |
+
+- **None stopped on the cost rule.** [derived] No decider reads a gate, a batch member or a scan iteration: the
+  leaves are one unit's, listed in the file, and the same in every unit. `tests/test_verifier_cost.py` passes with the
+  new module in its scan. [run: pytest on that file, this VM]
+- **`wiresWide` as `WiresTie` states it would stop on it**: its `writesBit` asks `Bits.outGate`, which builds the unit
+  net's rows (`Rows.ofNet`) for every bit asked. [read: `Spot/Bits.lean`] So the decider is another function,
+  `covers`: a leaf's bit `t` of leaf `j` is on a computed row exactly when its column `col·WORD + 16 j + t` is at or
+  past `min (inWords·WORD) constPos` and before `constPos`, and its position on the output row is
+  `16 (x - lo) + t`. `WiresDecided.lean` proves that `covers` returning true gives the stated condition. [read: the
+  files]
+- **The work follows lists the file holds, never a number in it.** `writes` passes over `min upv leavesOut.size`
+  instances, and `covers` marks its bitmap only where the port's `bits` is at most the number of bits listed. A file
+  that names `upv` or `bits` as 2^60 costs nothing more. [read: the file]
+- **One direction is proved**: decider true gives the condition. I believe the decider is exact, and have not proved
+  it. [derived]
+
+**Proofs** (`security/Proofs/Flock/SpotFlock/WiresDecided.lean`, 228 lines). `rowsUnder_of_decided` and
+`namesOnce_of_decided` (the conditions word for word), `wiresWide_of_decided`, and
+`wiresMove_of_decided`: `(two h s).isSome`, `wiresCheckedAt h st rec second c₀ = true` and
+`Spot.SecondWires.decided (partsAt h …) (circuitsOf h) (ownOf h st rec second c₀) = true` give `wiresMove h = true`,
+through `secondWiresMove`. [read: the file] Like the other four files of this line it is under no root of
+`security/Proofs/Flock.lean`, and no cap is raised. [read: `Flock.lean`]
+
+**The mirror and the difftest.**
+
+- Mirror: `verity/protocols/spot/verifier/second_wires.py` (131 lines), beside `second_stage.py`; nothing imports it
+  but the test. [read: `rg second_wires`]
+- Difftest: `verity/protocols/spot/verifier/lean/tests/test_second_wires_difftest.py` (303 lines), in the suite of
+  `verity/protocols/spot/verifier/lean`. It asks the piece `second_wires` of the executable `sampled-proofs-difftest`
+  (`lake exe`, built by the harness `verity_difftest`), which `Spot/DifftestMain.lean` now serves beside
+  `Pieces.table`. `check`'s suites step runs it after the Lean build; alone it is
+  `uv run tools/verity/check/suites.py verity/protocols/spot/verifier/lean -- -k second_wires`. [read: the files]
+- Cases: 29 named (accepting and refusing for each of the three: 9 on the rows, 2 on the names, 14 on the widths, 4
+  on the three together), 17 malformed inputs both sides must reject, and 1,500 generated, where each decider must
+  give each answer at least 20 times. [read: the test]
+- It has not run in the tree yet (run `32ed`). On my VM the mirror agrees with the stand-in's piece on all of them.
+  [run: python and `lean --run` on this VM]
+
+**The wiring, for later** (none of it is in this branch).
+
+1. **The run's check, Lean:** `verity/protocols/spot/verifier/lean/Spot/Run.lean`, line 232, in `interiorAudit`
+   (with `public import Spot.SecondWires` at the top). The line
+   `let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)` becomes
+   `let rec_ := SecondStage.attach rec_ ((SecondWires.failures (own.parts.getD #[]) cs own).foldl (fun c x => c.fail x.1 x.2) (SecondStage.check SecondStage.FORM own it.statements))`.
+   [read: `Run.lean`]
+2. **Its mirror:** `verity/protocols/spot/verifier/service.py`, line 2430,
+   `rec = SS.attach(rec, SS.check(SS.FORM, own, statements), …)`: the check's verdict gains each
+   `second_wires.failures(own.parts or (), circuits, own)` code it does not have, in that order. [read: `service.py`]
+3. **The statement's verifier:** where `SpotFlock.stmtOk` (`security/Proofs/Flock/SpotFlock/Code.lean`, line 513) will
+   ask `designOk`, the next conjunct is
+   `Spot.SecondWires.decided (partsAt h …) (circuitsOf h) (ownOf h st rec second c₀)`; `wiresMove_of_decided` then
+   gives `wiresMove h`. It holds the circuit files already. [read: `Code.lean`, `WiresTie.lean`]
+4. **The refusals' names and texts** (`SecondWires.failures`, the same in the mirror): [read: the files]
+   - `second-wire-rows`: "a wire's rows give a unit of a run a row that is not one of its writer's units of the unit's
+     replay block"
+   - `second-part-names`: "two of the interior program's parts have one template name"
+   - `second-wire-widths`: "a wire's reader port has a bit its writer's circuit file does not write on the wire's
+     output row, or the reader's or the writer's circuit file is not given"
+5. **What `wiresWide` needs before item 1 and 2 are one line:** `cs`. The run's check holds each template's circuit
+   file's SHA-512 and a header with no width (`Run.Interior.circuits`). The input has to carry the files' bytes, held
+   to that SHA-512 and parsed. `rowsUnder` and `namesOnce` need nothing: with `cs` empty and no wire, `wiresWide`
+   passes; with a wire it refuses. [read: `Run.lean`]
+
+**Four things I chose that you may want otherwise.**
+
+1. `Spot.lean` gained one line, `public import Spot.SecondWires`, after `Spot.SecondStageExamples`: the Lean check
+   refuses a module no root imports (`orphan.file`). #9081's line is twelve lines above it. [read: `check.py`; `gh pr
+   diff 9081`]
+2. The piece is served from `Spot/DifftestMain.lean`, not `Spot/Pieces.lean`, which all four open branches change.
+   The lock's `exempt` reason for `Spot.DifftestMain` still says it serves `Spot.Pieces.table`; I did not edit the
+   lock. [read: `lean-audit.json`]
+3. Each decider is stated on the wires and the rows (`rowsUnderAt`, `wiresWideAt`, `decidedAt`, `failuresAt`), with a
+   one-line form on `Own`. The piece calls the first and builds no `Own`: FRAME's branch adds `supplied` and `fixed`
+   to `Own` and #9116 adds `returns`, and naming `Own`'s fields here would add a retired-term site the no-growth lint
+   refuses. [run: `git diff` of both branches; `ratchet_gate.py 8f941d294261 HEAD`, passed]
+4. `lean/pyproject.toml` lists the new test under `untraced`, as its siblings are. The test takes `PACKAGE` and
+   `PIECES` from `test_wires_difftest`, for the same lint. [read: the files]
+
+**Next.** When `32ed` ends: its verdict in one entry. Then nothing of mine is out; #8940 on `main` is still first.
