@@ -8,8 +8,6 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import contextlib
 import copy
 import json
-import sys
-import types
 
 import numpy as np
 import pytest
@@ -19,6 +17,7 @@ from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.registry import flashmla as F
 from verity.definitions.registry import flashmla_prefill as P
 
+from tests import fake_vllm
 from tests.properties import dsv4_flashmla_capture_gpu as X
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
@@ -485,11 +484,10 @@ def test_main_end_to_end_on_stubbed_launches(swa, pswa, tmp_path, monkeypatch, c
     and not in the H200's first hour."""
     ns, good, bad = swa
     plens, pgood, _, _ = pswa
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
