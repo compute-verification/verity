@@ -89,8 +89,9 @@ def test_the_gemm_route_follows_the_step(art: Path) -> None:
     assert down(6)["base"] == "Gemm_v2"
 
 
-def test_a_missing_route_leaves_the_build_incomplete(art: Path) -> None:
-    m = _build(art, routes={})
+@pytest.mark.parametrize("routes", [{}, *({"routes": held} for held in (None, {}, [], "", 0, False))], ids=repr)
+def test_a_missing_route_leaves_the_build_incomplete(art: Path, routes: dict) -> None:
+    m = _build(art, routes=routes)
     assert not m["complete"] and len(m["routes_missing"]) == 28
     assert all(g is None for s in m["steps_plan"] for g in s["gemms"].values())
 
@@ -120,6 +121,24 @@ def test_a_piece_argument_of_no_known_source_is_refused(art: Path, tmp_path: Pat
     assert "_weight_, l_positions_, " in src
     graph.write_text(src.replace("_weight_, l_positions_, ", "_weight_, positions, ", 1))
     with pytest.raises(Unmodelled, match=r"piece 0 argument 5 \(positions\): a unknown argument"):
+        _build(art, split_graph=str(graph))
+
+
+@pytest.mark.parametrize("operand,why", [
+    ("output_3", "an attention op's output buffer is not a piece's return"),
+    ("query_2", "piece 1 mm reads storage no launch wrote"),
+    ("key_2", "attention 0: its k is not a piece's return"),
+    ("value", "attention 0: its v is not a piece's return"),
+])
+def test_an_attention_op_whose_signature_leaves_an_operand_out_is_refused(art: Path, tmp_path: Path, operand: str, why: str) -> None:
+    """The wiring names an attention op's query, key, value and output by its signature's parameter names; one it cannot name is
+    left out of the op's record, and the build is refused."""
+    graph = tmp_path / "computation_graph.py"
+    src = (art / "computation_graph.py").read_text()
+    signature = next(line for line in src.splitlines() if line.lstrip().startswith("def forward(self, key_2: "))
+    assert f"{operand}: " in signature
+    graph.write_text(src.replace(signature, signature.replace(f"{operand}: ", f"x_{operand}: "), 1))
+    with pytest.raises(Unmodelled, match=re.escape(why)):
         _build(art, split_graph=str(graph))
 
 
