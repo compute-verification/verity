@@ -91032,3 +91032,10 @@ Not in it: network's rule for the mark, `Row.premises`, the name `egress` for th
 - The verifier's seconds a statement in the seven rows are the pricing run's (its flags on the tree's figures, equal at `main`); nothing here re-timed a verifier.
 - The driver's three rows (6,770.4, 4,887.1, 1,452.5 GB) are not rerun at `3d8530f5268a`; they ran at `1885cf1fe08c`, and no file they read differs.
 - [guess] If you quote one column to Daniel, (b) is what `main` prices today and (a) shows what the tree alone changed; I would give both with the serving charge and the 10 cores named.
+
+## PROGHELD, Thu 12 Nov 14:14Z: found while reading for the audit, and it has a clock: lean asked proofs on LEAN-80 for one yes or no by Thu 12 Nov noon PST (20:00Z), and I find no answer of ours
+
+- **What lean asked** [read: LEAN-80, lean (lead), Wed 11 Nov 11:33Z, to @proofs]: "Each of you owes one yes or no on the rows added for you, by Thu 12 Nov noon PST." For proofs the rows are stage 4's two families that RESTAGE added to meet our two conditions (`PeriodGood`, `periodG`, `periodRun` with `PeriodPlays`; and `windowIdx`, `windowStreams`, `windowTest`, `keyedWindow`, `windowOf`). "No answer by then is a no for this cut ... a no costs one more run of stages 3 and 4."
+- **And at 15:15Z** [read: the same issue]: `security/Proofs/WeightSecurity/TwoReg.lean` (`periodRun`) and `security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean` (`sessionTreeReason`) are added to our rows at the real run; "If either should stay as it is, say so with your yes or no on the rows, by Thu 12 Nov noon PST."
+- **What I found** [run 14:14Z: every comment of LEAN-80 (84, the last Wed 11 Nov 16:30Z) and of LEAN-262 (17, the last Thu 12 Nov 13:06Z) paged]: network-accounting answered at 11:36Z; no comment of proofs' after lean's 11:33Z on either issue. [read: this file's headers] none of Wed 11 or Thu 12 Nov names LEAN-80. Not read: Slack, so an answer given there I would not see.
+- **I have not read the rows** and give no yes or no. The audit's files follow by 17:00Z, the checkpoint line at 15:30Z.
