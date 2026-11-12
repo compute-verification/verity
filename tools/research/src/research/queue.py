@@ -59,9 +59,9 @@ candidate and those above it are built again without them in the same tick.
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
                                                    key the merged tree's statements still need (naming each); the vLLM
                                                    integration's ratchet gate, on a change that reaches what it judges,
-                                                   prints what it fails as a warning and refuses nothing, and so is each
-                                                   marked PR the head doesn't merge with (its lane, the files, the fix), which
-                                                   the queue would refuse one of later; a check it
+                                                   prints what it fails as a warning and refuses nothing; each marked PR
+                                                   the head doesn't merge with is a warning too (its lane, the files and the
+                                                   fix: the queue refuses whichever of the two it merges second); a check it
                                                    couldn't run it names under "checks skipped";
                                                    --no-preflight skips it
     research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
