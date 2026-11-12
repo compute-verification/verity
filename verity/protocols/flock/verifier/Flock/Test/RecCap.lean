@@ -93,14 +93,12 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
   | .error _ => false
 #guard topsListed inner #[.cap 1 128, .cap 2 128] ==
   some "V*'s list: the later levels' caps hold [128, 128] nodes, and the reps' schedule commits tops of [64, 64, 32] nodes a rep ([128, 128, 64] both reps')"
-#guard match statements inner with
-  | .ok ss => (ss.toList.drop (ss.size - 4)).map (·.name) ==
-      ["rec-cap/n128-l1", "rec-cap/n128-l2", "rec-cap/n64-l3", "rec-cap/n128"]
-  | .error _ => false
 
+-- `statements inner` is a whole V* list, about 20 minutes in the interpreter, so none is built here: that the deployed
+-- dense list passes `statements`' checks and ends in the RecCaps above is `flock-verify rec-statements` at this shape,
+-- compiled (`test_rec_vstar_checks.py::test_the_verifiers_statements_are_the_ones_v_star_stages`).
 -- Every message round a rep absorbs is one of V*'s list's message-round ports at both reps' rows (`checkRoundsListed`):
--- the deployed dense list passes it (`statements inner` above runs it), and a list without the parts is refused at
--- round 0. Each `statements` is a whole V* list in the interpreter, about 20 minutes, so no other shape is built here.
+-- a list without the parts is refused at round 0.
 #guard match checkRoundsListed inner (later ++ #[.cap 0 128]) with
   | .error e => e == "V*'s list: a rep's message round 0 (rec-c0) is a message-round port of none of its statements"
   | .ok () => false
