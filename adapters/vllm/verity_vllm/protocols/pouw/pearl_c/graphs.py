@@ -25,11 +25,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.protocols.pouw.verifier.protocol import Matmul
 from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.pouw.verifier.protocol import Matmul
 
 from verity_vllm.protocols.pouw.pearl_c.forwards import ForwardCalls, WholeCall
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
+from verity_vllm.protocols.pouw.pearl_c.host import (
+    _bytes,
+    _event,
+    _Lane,
+    _write,
+    _zeros,
+    torch_uint8,
+)
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
