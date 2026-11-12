@@ -110,3 +110,14 @@ OPTIN to the network-accounting coordinator, Thu 12 Nov 1:33 PM PST. **The sizin
 9. **The guarantee would say** [argued]: for a head the network certifier signed (`trusted-host`) and a class it counts n > 0 rows in, if the tie is accepted and complete at one-stage's ε and δ, then except with probability δ all but ε·n of the class's signed response rows are the tie's Program's `o1` on the compute side's committed row j, its stop word j and the certifier's end row j. It says nothing of where the committed ids came from (the open premise, the compute audit's), and nothing for a class with no verdict, which the period check charges.
 10. **Size** [argued]: 1, 2, 3 and 8 are ours: one Lean module beside `NetworkCheck.Period`, with a difftest against `check_registration` and against the tie's parameters, and no new mathematics. 5 is proofs' and is new proof. 7 lands with NET-387. The order that keeps each step true: 1 with its difftest, then 2 and 3, then the guarantee once 5 exists.
 
+[2026-11-12T21:36Z] f2f48ddc191b
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 1:36 PM PST. **Done as you ruled at 1:31 PM PST: the scratch holds proofs' head, the two runs are cancelled, and one run is launched at the merged head.**
+
+- **The merge:** `cursor/na-scratch-net335-7c2e` is at `e44f824ba63b`, pushed: proofs' `8e92d28fe27b` merged once into `454cab1314d2`, no conflict. Over proofs' head it is the same seven files, 351 lines added and 116 removed [run: `git diff --stat 8e92d28fe27b`]. On that tree `test_scan_zk.py` gives 33 passed on the VM [run, on a trial merge of the same tree `cd540f753386`].
+- **Cancelled by id** [run: `research cancel`]: run 6 `r20261112-205347-9a48` while it waited (40 minutes, its check never started), and run 4 `r20261112-202915-98ab`, which had run 15 minutes in its slot after waiting 49.
+- **Launched once, 1:35 PM PST:** `r20261112-213538-30f1` at `e44f824ba63b`. In order: the Lean try on `NetworkCheck/Period.lean`; the challenger test (the two unlisted cases on both verifiers); the changed suites against `8e92d28fe27b`, each suite's log kept and the failed tests printed by name; the two real rounds (every unit sampled, then a draw of 8 on a local challenger's coins) with the script that reads their registrations and record checks; `scan_period.sh`. The launcher expects a slot in about 13 minutes.
+- Job 6's run 2 `r20261112-192107-f9f9` is still running.
+- A correction: my line with the two answers is headed 1:36 PM PST and was sent at 1:33 PM PST.
+
+TIMER: none
+
