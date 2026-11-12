@@ -133,6 +133,15 @@ class Pod:
         git("update-ref", f"refs/pull/{n}/head", head, cwd=self.origin)
         return head
 
+    def merge_main(self, n: int) -> str:
+        """Main merged into pull request ``n``'s branch, and its new head."""
+        git("checkout", "-q", f"lane/{n}", cwd=self.origin)
+        git("merge", "-q", "--no-edit", "main", cwd=self.origin)
+        head = git("rev-parse", "HEAD", cwd=self.origin)
+        git("checkout", "-q", "main", cwd=self.origin)
+        git("update-ref", f"refs/pull/{n}/head", head, cwd=self.origin)
+        return head
+
     def mark(self, n: int, head: str, ready: bool = True, *, minute: int = 0) -> None:
         """A `ready` label on pr:N@HEAD, as `research queue ready` (or, false, `eject`) leaves it on the store's remote."""
         target = label_target(n, head)
@@ -246,13 +255,14 @@ def test_a_head_republishes_nothing_that_main_dropped(pod):
     assert "3 pull request(s) on a branch of origin, 1 registering ids main lacks" in p.stdout
 
 
-def test_a_mark_carries_to_a_later_head_that_registers_the_same_new_ids_and_so_does_an_ejection(pod):
-    """A push on top of the marked head that leaves its new ids as they were (a merge of main, a fix) needs no new mark,
-    as in the queue; an ejection at the marked head holds at the later one too."""
+def test_a_mark_carries_to_a_merge_of_main_as_in_the_queue_and_so_does_an_ejection(pod):
+    """A merge of main into the marked head leaves the pull request's own change as it was, so the new head needs no new
+    mark, as in the queue; an ejection at the marked head holds at the later one too."""
     pod.commit("main", {REGISTRY: A})
     marked = pod.pr(7, {REGISTRY: A | C})
     pod.mark(7, marked, minute=1)
-    later = pod.pr(7, {"README": "a fix\n"})
+    pod.commit("main", {"README": "main moves on\n"})
+    later = pod.merge_main(7)
     p = pod.run("once")
     assert p.returncode == 0, p.stdout + p.stderr
     (one,) = pod.heads_calls()
@@ -263,16 +273,17 @@ def test_a_mark_carries_to_a_later_head_that_registers_the_same_new_ids_and_so_d
     assert p.returncode == 0 and len(pod.heads_calls()) == 1 and "not marked ready: not exported" in p.stdout, p.stdout + p.stderr
 
 
-def test_no_mark_carries_from_a_head_whose_registry_cannot_be_read(pod):
-    """A marked head whose registry isn't JSON says nothing of what it registered, so the later head that mends the
-    registry is not exported on that mark, and the pass says which head it couldn't read."""
+def test_a_push_that_changes_the_pull_request_waits_for_its_own_mark(pod):
+    """A push on top of the marked head that changes anything of the pull request's own, here a file beside the registry it
+    leaves alone, is a head the queue calls unmarked: it is not exported until it is marked itself."""
     pod.commit("main", {REGISTRY: A})
-    marked = pod.pr(7, {REGISTRY: "<<<<<<< ours\n{}\n"})
-    pod.mark(7, marked)
-    pod.pr(7, {REGISTRY: A | C})
+    pod.mark(7, pod.pr(7, {REGISTRY: A | C}))
+    later = pod.pr(7, {"README": "a fix\n"})
     p = pod.run("once")
-    assert p.returncode == 0 and pod.heads_calls() == [], p.stdout + p.stderr
-    assert f"{marked[:9]}: no mark carries to it or from it: " in p.stdout and "not marked ready: not exported" in p.stdout, p.stdout
+    assert p.returncode == 0 and pod.heads_calls() == [] and "not marked ready: not exported" in p.stdout, p.stdout + p.stderr
+    pod.mark(7, later, minute=1)
+    p = pod.run("once")
+    assert p.returncode == 0 and [c["head"] for c in pod.heads_calls()] == [later], p.stdout + p.stderr
 
 
 def test_a_head_whose_registry_cannot_be_read_stops_no_other_head(pod):

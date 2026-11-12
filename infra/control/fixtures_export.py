@@ -14,8 +14,9 @@ this repository is: one `git ls-remote`, then a fetch of each head that moved in
 (refs/export/pr/N). It asks the store for a head's `ready` mark only when the head has new ids, as the queue reads the
 mark (`research.queue.StoreLabels`): the newest `ready` label on `pr:N@HEAD`, pulled from the store's remote first, and
 no answer at all, so no export, when that pull fails. A head with no `ready` label of its own takes those of another
-head of its pull request that registers the same new ids, so a merge of main into a marked branch costs no new mark and
-an ejection carries the same way. `pr N` asks for no mark: a person runs it.
+head of its pull request whose own change is the same (`research.queue.own_change`, from its merge base with main), so
+a merge of main into a marked branch costs no new mark and an ejection carries the same way; a head that changes
+anything else waits for its own mark. `pr N` asks for no mark: a person runs it.
 
 Nothing of a head is run, and only what its new ids register is checked out: each export reads a worktree of its own at
 the head's commit that holds a registry cut to the new ids and the tracked files those ids register, and nothing else.
@@ -26,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import hashlib
 import json
 import os
 import re
@@ -134,16 +134,6 @@ class Registries:
             raise Failed(doc)
         return {a: p for a, p in F.entries(doc or {}).items() if a not in self.main_ids}
 
-    def change(self, rev: str) -> str | None:
-        """A name for what ``rev`` registers anew, the same for two commits that register the same ids at the same paths, and
-        None for a commit that registers nothing new or can't be read: what `StoreLabels` compares two heads by."""
-        try:
-            new = self.new(rev)
-        except Failed as e:
-            say(f"{rev[:9]}: no mark carries to it or from it: {e}")
-            return None
-        return hashlib.sha256(json.dumps(sorted(new.items())).encode()).hexdigest() if new else None
-
 
 def live_heads(clone: str) -> dict[int, str]:
     """{number: head} for each pull request whose head is a branch of origin, each head fetched into `refs/export/pr/N` and
@@ -212,12 +202,18 @@ def export(clone: str, n: int, sha: str, new: dict[str, str], command: list[str]
     return rc
 
 
-def marks(store: str, reg: Registries, heads: list[tuple[int, str]]) -> Iterator[tuple[bool | None, str]]:
+def marks(clone: str, main: str, store: str, heads: list[tuple[int, str]]) -> Iterator[tuple[bool | None, str]]:
     """For each head, whether it is marked ready, or None with why when the store can't say."""
-    from research.queue import StoreLabels
+    from research.queue import StoreLabels, own_change
     from research.store.local import LocalStore
 
-    labels = StoreLabels(LocalStore(store), log=say, change=reg.change)
+    def change(rev: str) -> str | None:
+        """``rev``'s own change as the queue names it, by which a mark carries between two heads of a pull request; None
+        for a commit this clone lacks."""
+        base = git(clone, "merge-base", main, rev, ok=(0, 1, 128)).decode().strip()
+        return own_change(Path(clone), base, rev) if base else None
+
+    labels = StoreLabels(LocalStore(store), log=say, change=change)
     labels.prefetch(heads)
     for n, sha in heads:
         try:
@@ -241,7 +237,7 @@ def heads(clone: str, store: str, command: list[str], dry_run: bool) -> int:
     say(f"heads: main {main[:9]}, {len(live)} pull request(s) on a branch of origin, {len(fresh)} registering ids main lacks"
         + (f"; registry unreadable at the head of {', '.join(map(str, unread))}" if unread else ""))
     failed = 0
-    for (n, sha, new), (ready, why) in zip(fresh, marks(store, reg, [(n, sha) for n, sha, _ in fresh])):
+    for (n, sha, new), (ready, why) in zip(fresh, marks(clone, main, store, [(n, sha) for n, sha, _ in fresh])):
         at = f"pr {n} at {sha[:9]}: {len(new)} new id(s)"
         if ready is None:
             say(f"{at}, not exported: {why}")

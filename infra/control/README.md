@@ -219,9 +219,11 @@ though: the steward's lease makes its copy stand by, but kill the old guard firs
 The heads are the pull requests whose head is a branch of origin (one `git ls-remote`), fetched each into a ref of its own.
 For one that registers new ids the pass asks the store for its mark as the queue reads it (`research.queue.StoreLabels`):
 the newest `ready` label on `pr:N@HEAD`, pulled from the store's remote first, and when that pull fails no head is exported
-and the pass fails. A head with no `ready` label of its own takes those of another head of its pull request that registers
-the same new ids, so merging main into a marked branch needs no new mark, and an ejection carries the same way. The pass
-needs what the loop has: the clone, `r2.env` and python3.12. It calls neither `gh` nor GitHub's API.
+and the pass fails. A head with no `ready` label of its own takes those of another head of its pull request whose own change
+is the same (`research.queue.own_change`), so merging main into a marked branch needs no new mark, an ejection carries the
+same way, and a head that changes anything else waits for its own mark. A mark the queue's loop carries across a move
+`main` landed is not read. The pass needs what the loop has: the clone, `r2.env` and python3.12. It calls neither `gh` nor
+GitHub's API.
 
 Every commit a pass reads is named by a ref only the script writes (`refs/export/main`, `refs/export/pr/N`), so a fetch of
 anything else into the clone changes nothing a pass reads. A head is read in a worktree of its own, which holds a registry cut
