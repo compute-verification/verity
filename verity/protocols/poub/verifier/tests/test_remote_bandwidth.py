@@ -141,10 +141,10 @@ def finish(s: AuditRun, prover: audit.Prover, passes, clock: Clock, open_=None):
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
     for t in range(s.params.windows):
-        draws = s.close(t)
-        if isinstance(draws, audit.Verdict):
-            return out + [draws]
-        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], p) for i, p in draws]))
+        sampled = s.close(t)
+        if isinstance(sampled, audit.Verdict):
+            return out + [sampled]
+        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], p) for i, p in sampled]))
         if not out[-1].accepted:
             return out
     return out
@@ -421,7 +421,7 @@ def test_the_ledger_refuses_a_window_its_capacity_cannot_have_read() -> None:
 
 def test_the_horizon_puts_the_shortfall_where_it_hides_most() -> None:
     """Windows of unequal size: the pooled bound's shortfall goes to the largest windows first, each capped where its
-    samples would have found it (s distinct draws found s correct receipts), and a window opened whole has none."""
+    samples would have found it (s distinct samples found s correct receipts), and a window opened whole has none."""
     lengths, s, delta = (5000, 1000, 1000, 40), 40, 1e-6
     wrong, floor = audit.pooled(synthetic(lengths, s, delta))
     budget = -math.expm1(math.log(delta) / (4 * s)) * 4 * s
@@ -648,7 +648,7 @@ def test_a_64_row_sketch_is_its_own_signs_and_hashes_256_bytes(store) -> None:
 
 def test_an_honest_64_row_session_is_accepted_and_names_its_rows(rows64_store) -> None:
     """The verifier recomputes each opened receipt at the registration's 64 rows, and the record names them; receipts
-    made at 16 rows under the 64-row registration fail the first draw."""
+    made at 16 rows under the 64-row registration fail the first sample."""
     st = rows64_store
     s, prover, passes, clock = drive(st, params_of(st), SCHEDULE, plan=partial)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
@@ -694,7 +694,7 @@ def committed_with(receipter):
 ], ids=["signs-known-before-the-session", "block-sha512"])
 def test_sketch_receipts_not_under_the_passs_signs_reject(sketch_store, receipter) -> None:
     """Sketches under signs fixed before the session, or block-sha512 receipts, committed on the chain: each opening's
-    paths and decoding check, and the first draw fails the receipt."""
+    paths and decoding check, and the first sample fails the receipt."""
     s, prover, passes, clock = drive(sketch_store, params(receipt=receipts.SKETCH_SHA512), SCHEDULE,
                                      run=committed_with(receipter))
     assert finish(s, prover, passes, clock) == [audit.Verdict(0, False, "receipt", s.windows[0].draws[0])]
