@@ -43,7 +43,7 @@ def _only(res: dict, name: str, words: str) -> None:
 def test_the_inputs_these_tests_change_pass(world):
     colls, recorder = _world(world)
     res = RM.cross_rank_check(colls, recorder=recorder, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["Gemm_v1{K=8}"]} for r in colls})
-    assert res["verdict"] == "PASS" and res["failed"] == [], res
+    assert res["schema"] == "tp2/rank_match/v1" and res["verdict"] == "PASS" and res["failed"] == [], res
     assert [c["name"] for c in res["checks"]] == ["count", "order", "op", "segmentation", "site", "shard_linkage", "producer", "step", "recorder", "value"]
 
 
@@ -182,6 +182,7 @@ def _oracle(world: int = 2) -> dict[int, dict]:
 def test_the_match_directory_these_tests_change_binds(tmp_path, world):
     md, rank_match, _ = _match_dir(tmp_path, world)
     res = RM.commit_binding(md, world=world, match_oracle=_oracle(world))
+    assert res["schema"] == "verity/tp2/commit-binding/v1"
     assert res["result"] is True and res["failures"] == [] and res["n_bad_bindings"] == 0, res
     assert res["n_bindings"] == len(rank_match["peer_binding"]) and res["n_recorder"] == {str(r): 2 for r in range(world)}
 

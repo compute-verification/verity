@@ -25,7 +25,10 @@ from verity_vllm.protocols.remote_bandwidth.registry import (
     NodeMemory,
     RemoteBandwidthReceipt,
     aligned,
+    canonical,
     chain,
+    distinct,
+    runs_of,
 )
 from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
@@ -248,6 +251,14 @@ def test_a_plan_is_its_runs_each_block_once():
     t.begin_window(SIGMA)
     with pytest.raises(ValueError, match="reads a block twice"):
         t.begin_pass([2])
+
+
+def test_no_blocks_are_no_runs():
+    """A pass that reads no block has an empty ``(0, 2)`` plan: canonical as it is, with no block twice."""
+    runs = runs_of([])
+    assert runs.shape == (0, 2) and runs.dtype == np.int64
+    assert canonical(runs) is runs and distinct(runs)
+    assert runs_of([3, 4, 5, 9]).tolist() == [[3, 3], [9, 1]]
 
 
 def test_outside_a_window_a_pass_commits_nothing():
