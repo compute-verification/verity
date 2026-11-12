@@ -75804,3 +75804,348 @@ For the table:
 
 For BREAKEVEN:
 - I recomputed no GB cell. The setting is 0.94 to 1.06 on a GEMM table and 0.40 to 0.89 on the head's check by node, against the 0.02 the grid asks. The head statement's 160 core-seconds is a default-allocator figure; under the setting about 118 to 137 [derived across nodes]. KEPT's "about half" was already measured under it [read].
+
+
+## FIXEDCOST, Thu 12 Nov 07:31Z: sizing: under the allocator setting `main`'s runners already give the verifier, a later head session costs the verifier 123 s, not 235; the walk without an object an entry then removes at most 36% of its check; no lever of the verifier brings the head or the MoE type to 0.005 at one table a session; after the second worker's lever I would build one pass over the matrix for every coin vector of a call (the verifier's)
+
+Tags: [run] a command I ran in this job, with its run id; [read] a file or a run's output I read now, with its place;
+[relayed] another lane's statement I did not check; [derived] arithmetic on tagged figures; [guess]. Times are from
+`date -u`. Mailbox read at 07:30Z: four sections (04:38Z, 05:24Z, 05:38Z, 06:46Z), none newer; the
+coordinator's file read to its 07:29Z entry. Nothing in this
+entry runs on the served engine: every number is the Lean verifier of `main` (`62bf29346f`; my branch adds one
+benchmark script) on kept sessions and staged statements, one core, or the CPU prover, or the proof server's kept
+timed runs. I changed no verifier. None of the levers below is built.
+
+### 0. What changed in my 06:28Z entry
+
+1. **The head's 249 to 289 s a session on the CPU nodes is not what a loaded node does, as I wrote. It is the
+   allocator.** The same verify of one kept head session, twice back to back on one core [run
+   `r20261112-064329-1ad4`, exit 0, `vy-nebius-cpu-5`, core 31]:
+
+   | allocator setting | read of the circuit, s | session (setup and check), s | system time, s | peak, GB | verdict's bytes |
+   |---|---|---|---|---|---|
+   | default | 106.6 | **235.0** | 87.2 | 42.9 | sha256 `a86ced42213867b5` |
+   | `MIMALLOC_PURGE_DELAY=-1` | 104.9 | **122.6** | 5.3 | 47.8 | the same |
+
+   The MoE type the same way [run `r20261112-064329-ab25`, exit 0, the same core]: 21.54 and 21.88 s default, **18.51 s**
+   at `-1` (peak 8.2 GB against 7.4), 22.84 s at `0`; the verdict's bytes identical in all four.
+2. **`main` already runs the verifier under `-1`, and my jobs did not.** `VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY":
+   "-1"}` (`verity/protocols/spot/verifier/one_stage/proofs.py:75-77`, on `main` since `accab1a9bc`, 11 Nov 15:22Z) is
+   the environment of every `flock-verify verify` the runners start (`proofs.py:440`,
+   `benchmarks/one_stage/server_rate.py:298`, `benchmarks/one_stage/a0.py:350`) [read]. My jobs call the binary, so
+   every verifier second of my two earlier entries is under the allocator's default. So is the 155 s on the idle core:
+   that job called the binary too, and its peak is the default's 42.9 GB [read `52e3`]; its machine answers the clock
+   without a system call (19 s of system time in 438 s), which is why it sat between the two.
+3. **The three numbers at the runners' setting** [derived from run `1ad4`, `ab25`; GEMM not measured again by me: the clock
+   is 3% of its check, and another lane's 07:29Z entry finds the setting moves nothing on it [relayed]]. The fractions of my 06:28Z entry stand as measured under the default and move little:
+
+   | a later session of a kept call | default (my 06:28Z entry) | at `-1` |
+   |---|---|---|
+   | head, seconds | 155.9 (idle core); 249 to 283 (CPU nodes) | 122.6 |
+   | MoE, seconds | 22.3 to 23.3 | 18.5 |
+   | head, of a fresh process (read and session) | 0.55 | 0.54 |
+   | MoE, of a fresh process | 0.53 | 0.50 |
+   | head, of 1,006 core-seconds and a fresh process | 0.12 | 0.099 |
+   | MoE, of the same | 0.022 | 0.018 |
+4. **My guess that the clock call comes from the allocator's slow path inside the walk is measured** [run `ed2d`,
+   `05d1`, section 2].
+5. **One figure of my own notes, not of an entry:** I had read a head block's template as "85 thousand rows and
+   references". Those references are the rows' entries; the template also holds 342 thousand calls (section 5).
+
+### 1. For the second worker: the statements and sessions I timed, and which fold ran on them
+
+All three statements are **flat** (`--statement verity/flock-circuit`; their circuit files carry no template), so the
+fold that ran is `Sparse.foldT` (`Flock/Comp.lean:214`, its rows by `foldRows` and `foldRow`, `:204-212`) under
+`Stmt.baseOfFast` (`Flock/Statement.lean:301`), `Stmt.slotBase` (`:317`), `Stmt.partialRangesT` (`:445`) and
+`Stmt.foldedPartial` (`:468`), called once a repetition from `Zk.replay` (`Flock/Zk.lean:199`). `Tmpl.foldUnit` did
+not run on them: the call chains show `Sparse.foldRow < Sparse.foldRows < … < Stmt.baseOfFast < Stmt.slotBase` and no
+`Tmpl` frame [run `ed2d`, `05d1`].
+
+| block type | staged statement (`circuit.txt`, `pub.bin`, `pin.txt`) | kept sessions (each a `last-session` directory) | the unit's matrix; `unit_log`, `k_log`, `m` |
+|---|---|---|---|
+| head block, 256 blocks, 12.19 GB | `art:80b3775089ed687375f049a303695dae974ff5426dcb7941a35a476241477ad5`, `out/staged/proofs-prf502-row1-4b31e7caba011398` | seven, in the outputs of runs `38d6`, `8d4a`, `2be4`, `5832`, `934d`, `c736`, `8799`, each under `out/rate/SparseMlaHeadBlock_v2_NVIS_64_FIRST_false-k1/last-session` (`-k2` in `8d4a`, `-k4` in `2be4`) | 1,368.4 million entries; 25, 27, 35 |
+| MoE expert read and GEMM K=6144, 1,024 blocks, 1.79 GB | `art:bb7c2fa6f57e1d5f10fafbfb021ad7f969906bdb37055d56ff2fb6db2ca24992`, `out/staged` | seven: four in that same art under `out/rate/census_MoeExpertFp8ReadGemm_v1_…-a-off`, `-b-on`, `-c-off`, `-d-on`, one in `0dcd` (`-k1`), two in `7f41` (`-k2`, `-k4`) | 214.6 million; 24, 25, 35 |
+| GEMM K=512, 8,192 blocks, 112 MB | staged in the job from the census spec `BatchedGemm_v1{B=1,K=512,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}`, pin `90f9df32e5e20d20` | three: `fe31` (`-k1`), `8baa` (`-k2`, `-k4`), under `out/rate/census_BatchedGemm_v1_B_1_K_512_N_1_DOT_fn_HopperBF16WgmmaDot16_v1-k1/last-session` | 8,324,285; 19, 22, 35 |
+
+- The art id and directory of every session is one line of `sessions.tsv`, and each statement one line of `head.stmt`,
+  `moe.stmt`, `gemm.stmt`, in `lanes/proofs/20261112T0450Z-fixedcost/` of the notes. The jobs there take those files as
+  they are: `sessions_job.sh` (sessions 1 to n of a call), `read_job.sh` (one fold alone through
+  `benchmarks/verifier_cost/flock_read`), `prof_job.sh` (one verify under `perf`; `FX_CHAIN=1` for call chains),
+  `env_job.sh` (the same verify under each allocator setting, back to back on one core, with the verdict's sha256),
+  each with its `launch_*.sh`.
+- One fold alone at seeded coins, default allocator setting: 0.71 s (GEMM), 9.09 s (MoE), 127.3 s (head) [run `6967`,
+  `a4b0`, `7027`].
+- **Time the new fold under `MIMALLOC_PURGE_DELAY=-1` first**, since that is what `main` runs: under the default the
+  gain will look twice what it is (section 3, lever 1).
+- The sessions carry no Program, so every verify ends refused for want of it after every check has run, with exit 1;
+  the seconds are the checks'.
+
+### 2. Where one session's check goes
+
+A check is two repetitions, equal halves, each on its own coins: the tensor of the coins, the walk over the unit's
+matrix, the scaling by α, the projection, then region values and openings [run `3dfe`, `e9b8`]. By call chains at
+49 Hz, each sample put under the phase whose function is in its chain. Under the default setting: run
+`r20261112-063257-ed2d` (head, 15,186 samples) and `r20261112-063257-05d1` (MoE, 1,072), exit 0, `vy-nebius-cpu-14`.
+Under `-1`: run `r20261112-070503-fbe0` (MoE, 906 samples, session 19.1 s under the profiler), exit 0,
+`vy-nebius-cpu-7`; the head under `-1`: run `r20261112-070503-7cc9`, exit 0, `vy-nebius-cpu-7` core 143 (5,949 samples in the check; inputs 106.2 s, setup 2.3 s, session 123.9 s under the profiler; the clock call in 0.4% of the samples, all of them scheduler ticks).
+
+| share of the check | head, default | MoE, default | head, at `-1` | MoE, at `-1` |
+|---|---|---|---|---|
+| **the walk** (`Sparse.foldRow` and all under it) | **87.9%** | **39.3%** | **74.2%** | **37.4%** |
+| of it: the walk's own code | 19.5% | 21.5% | 38.5% | 26.2% |
+| of it: the allocator and reference counts | 18.5% | 10.0% | 32.8% | 9.7% |
+| of it: the kernel answering the clock | 47.3% | 5.4% | 0.3% | 0.2% |
+| of it: other kernel work (page faults) and the rest | 2.6% | 2.4% | 2.6% | 1.4% |
+| the scaling by α (`Stmt.baseOfFast` less the walk) | 6.9% | 19.1% | 14.9%, the allocator 8.8% | 21.6%, the allocator 12.1% |
+| the projection and the fold's rest (`Stmt.project`) | 2.9% | 17.0% | 6.4%, the allocator 1.0% | 19.9%, the allocator 3.2% |
+| the tensor of the coins (`tensorFast`) | 1.4% | 13.9% | 2.9% | 9.3% |
+| the repetition's rest, region values, openings | 0.9% | 10.7% | 1.6% | 11.8% |
+
+- **What the walk does** [read `Flock/Comp.lean:204-216`, `Base/Field.lean:13`]. For each entry it adds a coin value
+  into one column, `acc.modify (m.col i t) (· + ei)`. The accumulator is an `Array F128`, and an `F128`, two 64-bit
+  words, is a heap object in a Lean array, so every entry allocates one object and frees one.
+- **The one line on the allocator: yes, the `clock_gettime` share is mimalloc's purge.** The chain is `clock_gettime <
+  _mi_arenas_collect < mi_page_queue_find_free_ex < _mi_malloc_generic < Sparse.foldRow`, 47.6% of the head's check and
+  5.1% of the MoE type's under the default [run `ed2d`, `05d1`]; on the CPU nodes the clock is a system call [run
+  `3dfe`]; `MIMALLOC_PURGE_DELAY=-1` takes the head's session from 235.0 to 122.6 s and the MoE type's from 21.7 to
+  18.5 s with the verdict's bytes unchanged, for 11% and 10% more peak memory [run `1ad4`, `ab25`]. Another lane's
+  07:29Z entry measured the setting on its own runs and agrees: the head's check 117.5 to 121 s in a kept process
+  and 131 to 137 s in a fresh one, accepted with its Program, and no change on the GEMM type, 0.94 to 1.06 by pair
+  [relayed]; mine is 120.4 s. What is open is which paths start a verifier without `verifier_env`: by a search
+  of the callers, not traced further, `benchmarks/one_stage/zk_cost.py:503` and `:552`,
+  `benchmarks/private_circuit/universal.py:119`, `benchmarks/recursion_e2e/forge_after.py:186`,
+  `verity/protocols/flock/agreement/agree.py:125`, `benchmarks/pouw/hidden_zk/job.sh:186`, and any job that calls the
+  binary, as mine did [read]. I did not trace which setting the cost card's verifier seconds were measured under; its
+  0.10 to 0.17 µs a matrix entry is what the default gives on the large types (0.17 µs an entry on the head for a
+  session's check; 0.09 at `-1`) [derived from run `1ad4`], so the card's seconds for the large types may be up to
+  twice what `main` now pays [guess].
+- GEMM K=512 and a small head block by symbol only, default setting [run `4835`, `b54d`]: the walk's own code is 10%
+  and 20.5% of their checks (3.87 s and 2.62 s), allocation and reference counts 28% and 40%, the clock 3%; on GEMM
+  region values and openings are 21%.
+
+### 3. The levers, each a row
+
+Shares are of one later session's check at the runners' setting (`-1`): 120 s on the head, 17.9 s on the MoE type
+[run `1ad4`, `ab25`: the session less its setup]; GEMM's are of its 3.87 s under the default. Every share is [derived]
+from the columns "at `-1`" of section 2 unless it says [run]. "At most" is a bound read off a profile, not a
+measurement of new code.
+
+| lever | the function it changes | head | MoE | GEMM K=512 | what proves the new code equal to the old | size |
+|---|---|---|---|---|---|---|
+| 0. The allocator told never to purge | none; `VERIFIER_ENV`, `proofs.py:75-77` | 48% of the default's session [run `1ad4`] | 15% [run `ab25`] | none: 0.94 to 1.06 by pair [relayed: another lane's 07:29Z entry] | nothing to prove: the same binary, the same verdict bytes | **on `main`**; it has not run on the served engine in this job |
+| 1. The walk without an object an entry (the second worker's) | `Sparse.foldRow`, `Sparse.foldT`, `Flock/Comp.lean:204-216` | at most 36% (the walk less its own code); 68% if timed under the default | at most 11% | at most 28%, the whole check's allocation, not split [run `4835`] | an equation between the two folds that the compiler uses (`@[csimp]`), as `tensor_eq_fast` and `baseOf_eq_fast` are (`Statement.lean:281`, `:311`) | one function and one equation |
+| 2. **One pass over the matrix for both repetitions of a table** | `Zk.verify`'s two `verifyRep` calls (`Zk.lean:339-340`), each of which folds inside `Zk.replay` (`:199`); the fold's call tree down to `Sparse.foldT` | at most 19% (half the walk's own code) | at most 13% | at most 5% | section 4: a fold over a list of coin vectors proved equal to the list of folds, and a table of finished folds that `replay` reads, each entry equal to the fold it stands for | medium: the fold's five functions for a list, one copy of `replay`'s sampling, the equations |
+| 3. The same pass for every session of a call | the same, and `verifyCmd`'s loop over sessions (`FlockVerify.lean:1156-1186`) | at most 38% (lever 2's 19% in it); a later session then pays at least 0.26 of today's check with lever 1, 31 s | at most 26%; at least 0.63, 11.2 s | at most 10% | the same equations over a longer list | small after lever 2; every session's proofs read before the walk, so no verdict until the call's walk is done |
+| 4. The scaling, the projection and the tensor without an object a value | `Stmt.baseOfFast` (`Statement.lean:301`), `Stmt.project` (`:406`), `tensorFast` (`:274`) | at most 11% (their allocator and kernel shares) | at most 18% | not split | an equation each, as lever 1's | three functions; it wants the second worker's packed accumulator as its input |
+| 5. Each table of a session set up from the call's parsed circuit | `Stmt.setupTablesBy` (`Flock/ProgramRead.lean:359-450`), `Stmt.setupTablesOf` (`Flock/HmRow.lean:2591-2680`) | nothing at one table a session; 40 to 55% of a session of several tables [run `2254`, `ffdb`] | the same | the same | `Stmt.setupTables_eq` and `Stmt.setupTablesOf_eq_by` extended (the issue's text is in my 06:28Z entry) | small |
+| 6. One verifier call kept open for a block type's sessions | none in the verifier (`verify --session DIR...` reads the inputs once a call on `main`, `FlockVerify.lean:1104-1150`); the runner starts a process a session (`server_rate.py:292-298`) | not the check: the read of the circuit, 0.46 of a fresh process at `-1`, and the program's file | the same, 0.50 | the same, 0.42 | nothing to prove | the runner's; another lane measured it [relayed: `ba14`] |
+| 7. The fold read from the template's description | `Tmpl.foldUnit` (`Flock/TmplSplit.lean:576`), the stager's lowering | **worse than flat today** on a head block, 6.7 times the flat check; section 5 | not measured templated | not measured templated | `foldUnit_eq_project` (`security/Proofs/Flock/Soundness/TmplUnit.lean:53`) covers today's fold | large, and on the head it is the template that is too big, not the fold alone; where it pays today is the eleven word-level types, 0.136 of flat [relayed] |
+| 8. A table that holds more blocks | the proof system's schedule and the prover, section 6 | the fixed seconds a block divided by the factor, if a sample has the blocks | the same | at most 2.6 times less | the soundness bound's stated range (`Statement.lean:120-121`) | the proof system's |
+| 9. The prover's statement built once a block type, not once a table | `side_stmt`'s cache key, `flock-circuit.rs:478-572` | not measured | prover: 0.6 s a table of 3.5 [run `ffdb`] | prover: 0.1 s a table of 0.47 [run `2254`] | the prover's | the prover's |
+
+**What the rows add up to for a later session of a kept call** [derived], against 0.005 of a statement's fixed seconds
+at one table a session, which with the program's 1,006 core-seconds in them is 5.2 s (MoE) and 6.2 s (head):
+
+| | today at `-1` | after levers 1 and 4 | and lever 2 | and lever 3, at its bound |
+|---|---|---|---|---|
+| head, s a later session | 122.6 | 67 | 43 | 20 |
+| head, times over 6.2 s | 20 | 11 | 7.0 | 3.3 |
+| MoE, s | 18.5 | 13.3 | 11.0 | 8.6 |
+| MoE, times over 5.2 s | 3.6 | 2.6 | 2.1 | 1.7 |
+
+The small type is under its 5.1 s today (3.95 s). **No lever of the verifier brings the head or the MoE type to 0.005
+at one table a session;** with every one of them at its bound they stay 3.3 and 1.7 times over. What is left then is
+work once a coin vector over the slot (the tensor, the scaling, the projection), which no pass can share.
+
+**Why one pass is the lever I rank first after the second worker's.** After lever 1 the walk's own code is the largest
+part left: 38% of today's check on the head, 26% on the MoE type, against 11% and 18% for lever 4. On a head
+and a MoE later session together lever 2 removes at most 26 s and lever 3 at most 51 s, lever 4 at most
+16 s. It is also the answer to the question I was given: it is the one part of a second session's check that a
+first session of the same statement can pay for. If you would rather have the certain one first, lever 4 is three
+functions in the second worker's pattern and I can build that instead; say which.
+
+### 4. One pass over the matrix: the bound, and how to build it so that nothing accepted can change
+
+- **The bound.** The walk reads the matrix; the coins only decide what is added. One pass can serve R coin vectors
+  (2 for a table's repetitions, 2S for the S sessions of a call, whose coins are all in their proofs before the
+  verifier of record starts). What is shared is reading the entry and reaching its column; the addition, the tensor,
+  the scaling and the projection stay once a coin vector. With today's accumulator the cost of an entry is the object
+  it allocates, which is not shared, so this lever is worth little before lever 1. After lever 1 the R accumulators of
+  a column can lie side by side, and the bounds of the table assume the R additions cost nothing beside reaching the
+  column [guess: I cannot split those two from a profile].
+- **Where the fold sits** [read `Flock/Zk.lean:139-206`, `:290-340`]. `Zk.verify` calls `verifyRep` for repetition 0,
+  then for repetition 1; each replays its transcript, and the fold is one line of that replay
+  (`st.fold.folded alpha beta … ts`, `:199`), after its coins are sampled. Its value enters one constraint and no later
+  coin.
+- **The build.** (a) A fold over a list of coin vectors, with the equation that it is the list of today's folds, down
+  from `Sparse.foldT` through `baseOfFast`, `slotBase`, `partialRangesT`, `foldedPartial`. (b) A first, cheap replay of
+  each repetition that only samples the coins, to collect the folds' arguments; it needs no proof. (c) The pass, into
+  a table from arguments to values. (d) `replay` reads the table where the arguments match and folds as today where
+  they do not. The equation to prove is that a table whose every value is the fold of its arguments changes nothing,
+  so `Zk.verify` as the proofs read it stays as it is and the compiled code takes the fast one, the way `@[csimp]`
+  twins do today. The tree already keeps a copy of `Zk.verify` with one of its parts as a parameter and the equation
+  between the two, for the hash (`Zk.verifyWith`, `Flock/With/Zk.lean:382`; `Zk.verify_eq_verifyWith`,
+  `Flock/With/ZkEq.lean:62`) [read]. A wrong or failed first replay costs time, never a different verdict.
+
+### 5. The fold read from a template's description
+
+**Where today's `Zk.verify` stands against the rule that a verifier's work follows the description it reads, never the
+circuit it unrolls to** [read]:
+
+- **Across the blocks of a table it meets the rule.** The fold is over one unit's matrix whatever the table holds; the
+  blocks enter through one weight (`Statement.lean:425`). Measured: a session of one GEMM block costs 2.0 s, of 64
+  blocks 2.5 s, of 8,192 blocks 3.9 s [run `2254`, `af8f`].
+- **Inside the unit it does not, on a flat circuit file.** It walks every entry of the unit's unrolled matrix, twice a
+  table. All three statements I timed are flat, and so are the cost model's verifier seconds: its card is "on one
+  block's flat statement", 7 s plus 0.10 to 0.17 µs a matrix entry
+  [read `benchmarks/spot_figures/cards/verifier_cost.glm-5.3.json`].
+- **The scan that enforces the rule does not see this walk.** `tests/test_verifier_cost.py` refuses the fold over
+  unrolled rows only in a file that sets the recursive inner statement up from its flat file (its docstring and the
+  `RecCoins.lean` entry of `ALLOWED`); the main statement's flat fold is neither refused nor listed [read].
+- **On a templated circuit file the fold is `Tmpl.foldUnit`** (`Stmt.unitShare`, `Statement.lean:433`;
+  `Flock/TmplSplit.lean:576`), and `verify --zk` accepts such a statement on `main` (`ProvedScope.served`,
+  `ProvedScope.lean:594`; both templated verdicts of my run are acceptances [run `b54d`, `2629`]). It does not follow
+  the description either: by its own header (`TmplSplit.lean:1-25`) it pays a Definition's entries once a class, and
+  then, **for each placement, the placement's table and its bound inputs times its copies.**
+
+**Flat or templated on `main`, and what stops the served head block being templated.** The form is chosen when a
+statement is staged, type by type (`benchmarks/one_stage/m1_unit.py --structural iv/hybrid/4`;
+`benchmarks/served_units/stage.py` stages a table read templated; the proof server's timed runner proves whichever
+form the staged circuit names, `benchmarks/one_stage/server_rate.py:92-124`) [read]. Nothing in the verifier stops a
+templated head block: the served 16-key head block was staged templated, proved and accepted [read
+`r20261111-103330-0163`'s log]. It is kept flat because templated costs more there: 453 s of check against 65 to 75 s
+flat on that block [read the same log: its session's 673.4 s less 220.3 s of setup; relayed: the flat figure], 1.76 to
+1.91 times the flat core-seconds on head blocks, 1.01 and 0.93 on the fused MoE blocks [relayed]. Where it pays is the
+eleven word-level types of the cost card: 257.7 core-seconds templated against 1,899.6 flat at one block, 0.136
+[relayed; the flat sum is the card's, which I read]. I did not trace which form the cost model prices for each type of
+the best designed configuration beyond its keeping the head and the fused blocks flat [relayed].
+
+**What a head block's fold costs when it is read from the description** [run `r20261112-060430-b54d`, exit 0,
+`vy-nebius-cpu-5`, and `r20261112-065329-2629`, exit 0, `vy-nebius-cpu-11`: one small head block
+(`SparseMlaHeadBlock_v2`, DR=16, DV=16, 16 keys), one block, with its program, staged flat and templated, proved on
+CPUs, each verify profiled, default allocator setting; all accepted]:
+
+| | flat | templated (`iv/hybrid/4`) |
+|---|---|---|
+| circuit file | 207 MB | 86 MB |
+| ANDs of the unit; `unit_log`; the block's slot `k_log` | 476,025; 19; 23 | 656,240; 20; 23 |
+| read of the inputs, s | 5.39 | 7.47 |
+| setup at the sample, s | 4.02 | 4.15 |
+| **the check, s** | **2.62** | **17.45** (17.82 in the second run) |
+| the whole verify, s | 15.5 | 30.6 |
+
+- **The template is not small** [run `2629`: `flock-tmpl read`]: 5,235 Definitions, 14,757 rows holding 70,389
+  entries, and 341,932 calls in 1,394,473 segments, 1.8 million items, against 5,055,998 entries of the unit it
+  unrolls to [read `0163`'s log]: a third, not a hundredth.
+- **Today's fold does more work than the unrolled unit has entries** [run `2629`: `flock-tmpl fold`, the benchmark's
+  tool over the verifier's own functions, its own count of work]: `Tmpl.foldSplit`, which `foldUnit` runs, counts
+  31,503,937 units of work in 8.12 s a fold, 6.2 times the unrolled entries; the plain `Tmpl.fold` reaches the same
+  value with 9,532,081 in 4.65 s. Two folds of 8.1 s are the templated check. The flat check of the same block, two
+  folds and all the rest, is 2.62 s.
+- Where the templated check's samples are [run `b54d`]: allocating and freeing 39% (the placements' tables built and
+  dropped), the tables' own code about 20% (`Tmpl.Tab.bind` and its hash-map walks 10%, `Tmpl.locate` and
+  `Tmpl.firstGt` 7%), field multiplications 13%, the walk over rows 0.6%.
+- Why [read `TmplFold.lean:1-22`, `TmplSplit.lean:1-25`, with the counts]: a head block's lowering is many small
+  Definitions called very often (2.8 rows and 65 calls a Definition), and a bound input is paired with its caller's
+  column copy by copy, so the work follows the calls and their copies, not the rows. On the word-level types a
+  Definition's body is large and its calls few.
+- **So a fold that follows the description would not reach the target on the head as the head is lowered today**
+  [derived; the cost an item is a guess]. Even at one operation an item it reads 1.8 million items a fold, a third
+  of the entries a walk of the unrolled unit reads, and an item costs a table operation where an entry costs one
+  addition. What would have to change is the lowering (`m1_unit.py`'s structural form of the head block: fewer,
+  larger Definitions), which is the circuit's side, and then the fold's cost a placement. For the ten types that take the most fixed seconds, the head and the card's word-level types
+  (61.5 to 575.7 core-seconds flat at one block [read the card]), today's templated fold already gives the word-level
+  ones 0.136 of flat [relayed]; the head is the one it makes worse.
+- A smaller thing the same run shows: on this block the plain `Tmpl.fold` is 1.7 times faster than the split fold
+  `foldUnit` runs. I did not measure it on the served 16-key block.
+
+### 6. What bounds the blocks a table holds, and the verifier's seconds a block if it held more
+
+**The bound** [read]: a table is at most 2^35 bits, `m = k_log + nbl ≤ 35`, and a block's slot at most 2^27,
+`k_log ≤ 27`. The places: Flock's schedule covers `m` from 22 to 35 (`Flock/Schedule.lean:52`); the wide leaf is for
+`m` 32 to 35 (`Flock/WideLeaf.lean:13-34`); `MAX_K_LOG := 27` (`Flock/HmRow.lean:55`); the soundness bound's stated
+range is `k_log ≤ 27`, at most 1,024 regions, 64 points (`Flock/Statement.lean:120-121`); the refusals at
+`Statement.lean:241`, `HmRow.lean:1587`, `:2408`, `:2565` and `ProgramRead.lean:333`. The three timed statements are at
+2^35 already: 8,192 GEMM blocks, 1,024 MoE blocks, 256 head blocks. Beside the verifier's limits the prover must hold
+and commit the table: 2^35 bits is 4 GiB of values before any encoding, and 64 times more is 256 GiB [derived; I did
+not measure the prover's memory a table].
+
+**The verifier's seconds a block if a table held more** [derived from run `2254`, `ffdb`, `af8f`, `89c4` and read
+`52e3`, default allocator setting; such tables do not exist, so this is extrapolation]. The fold does not grow with
+the blocks. What grows is region values, openings and the setup at the sample: 0.18 ms a block on GEMM (3.95 s at
+8,192 blocks against 2.5 s at 64), and too little to measure on the MoE type (at most 2.6 ms a block).
+
+| block type | today, a table of 2^35 bits | 4 times more blocks | 16 times | 64 times |
+|---|---|---|---|---|
+| GEMM K=512 | 0.48 ms a block (3.95 s, 8,192 blocks) | 0.25 ms | 0.20 ms | 0.18 ms |
+| MoE | 22 ms a block (22.9 s, 1,024 blocks) | 5.6 to 7.5 ms | 1.4 to 3.8 ms | 0.35 to 2.9 ms |
+| head block | 0.61 s a block (155.9 s, 256 blocks) | 0.15 s | 0.04 s | 0.01 s, if what grows with blocks stays small: one size is measured |
+| head block, at `-1` [run `1ad4`] | 0.48 s a block (122.6 s, 256 blocks) | 0.12 s | 0.03 s | 0.007 s, on the same condition |
+
+A larger table divides the fixed seconds a block and adds no table to a session, where a session of more tables
+divides nothing [run `2254`, `ffdb`]. It helps only where a sample has that many blocks of one type to put in it,
+which is the cost model's to say, not mine; and what bounds it is the proof system's schedule and the prover's memory,
+not the verifier's check.
+
+### 7. The prover's part of what every session pays
+
+**On CPUs, a table of one GEMM K=512 block alone, 0.587 s end to end** [run `2254`, the prover's own timers]:
+
+| part | seconds | per table by necessity? |
+|---|---|---|
+| witness: the table's values built, salt trees, the level-0 commitment (`witness_s`) | 0.108 | Yes: each table commits other values under fresh salts, which zero knowledge needs. |
+| first repetition (`prove_s[0]`): the proof (`t.upstream`) 0.182, the zero-knowledge part (`t.zk_inner`) 0.043, the pads committed (`t.zk_pads_commit`) 0.017 | 0.263 | Yes as the protocol stands: each table's claim is proved twice, on coins of its own streams. |
+| second repetition: the proof 0.176, the zero-knowledge part 0.011, the pads 0.017 | 0.206 | the same |
+| of those three, waiting on the verifier's coins, 209 calls (`wait_e2e_s`); 0.292 with the wait for the verdict after the proofs are sent (`wait_s`) | 0.127 | Per table as the streams are, two a table. It is waiting, not compute. |
+| the statement built for the table's identity (`side_stmt`: its cache key holds the identity, so J tables build J statements) | outside the 0.587: 0.1 a table [derived: the process's seconds less its sessions'] | No. The identity enters the digest and the transcript's domain; the unit's matrix and its setup are the same for every table of a block type. This is lever 9. |
+| the session's files | 2.26 MB a table (144.8 MB at 64 tables) | Yes. |
+
+- The proof itself hardly depends on what the table holds: 0.18 s a repetition at one block, 0.5 s at 64 blocks; a
+  one-block table of the MoE type costs 0.60 s of witness and 1.43 s a repetition [run `2254`, `ffdb`]. I did not
+  profile inside the proof, so I cannot say how much of the 0.18 s is a fold over the unit's matrix like the
+  verifier's.
+
+**On a GPU, the later sessions of the kept proof server (sessions 3 to 121 of each timed run), by the session's own
+timers** [read `r20261111-015333-38d6` (head), `0dcd` (MoE), `fe31` (GEMM): `sessions.jsonl`; every table full, 2^35
+bits]. Two cautions in reading them: the sessions of those runs overlap on the
+device (the next starts while the last waits for its verdict), so a session's parts carry its neighbour's device
+time; and medians of parts do not add to the median of the whole.
+
+| | head, 256 blocks | MoE, 1,024 blocks | GEMM K=512, 8,192 blocks |
+|---|---|---|---|
+| end to end, s: median (fastest tenth) | 3.57 (3.37) | 4.71 (3.47) | 2.77 (1.76) |
+| witness, the blocks' values built and put on the device (`witness_s`): median (fastest tenth) | 2.76 (2.55) | 1.38 (1.20) | 0.46 (0.37) |
+| first repetition (`prove_s[0]`): fastest; median; slowest tenth | 0.34; 0.45; 0.63 | 0.34; 1.42; 3.20 | 0.24; 1.07; 2.22 |
+| second repetition: fastest; median | 0.27; 0.32 | 0.29; 0.31 | 0.19; 0.21 |
+| waiting for the device (`device_wait_s`): median; slowest tenth | 0; 0 | 0.03; 1.98 | 0.17; 1.64 |
+| waiting on coins inside the session (`wait_e2e_s`); calls | 0.19; 329 | 0.18; 333 | 0.20; 295 |
+| proof, bytes (two repetitions) | 2,408,324 | 2,424,580 | 2,336,644 |
+
+- **The head's 3.57 s is 77% the witness**, which is work on the blocks' values, 10.8 ms a block, not a cost of the
+  session. Its two repetitions are 0.77 s and its waits on coins 0.19 s.
+- **A repetition has a floor of 0.2 to 0.35 s whatever the table holds**: the second repetition is 0.21 to 0.32 s on
+  all three types, and the first is the same at its fastest. On the two smaller types the first repetition's median is
+  four to five times that, and it moves with the wait for the device, so I read the excess as the neighbour's device
+  time, not as work of the table [guess]. The benchmark that times a session alone is
+  `benchmarks/one_stage/session_split.py` with `--outstanding 1 --ahead 0`; I have no run of it.
+- **The question for the kernel lanes, with its numbers:** of a session's device time, what is fixed whatever the
+  table holds? These runs bound it from above at two repetitions of 0.2 to 0.35 s and 0.19 s of waits on 295 to 333
+  calls, 0.6 to 0.9 s a session of one table; what a table of one block pays on the device they do not show, since
+  every kept session holds a full table. On CPUs a one-block table pays 0.59 s.
+
+### Runs since my 06:28Z entry
+
+| run | what | machine | state |
+|---|---|---|---|
+| `r20261112-063257-ed2d` | call chains of one head session's verify, default setting | `vy-nebius-cpu-14` | exit 0 |
+| `r20261112-063257-05d1` | the same, MoE | `vy-nebius-cpu-14` | exit 0 |
+| `r20261112-060430-b54d` | a small head block flat and templated, each verify profiled | `vy-nebius-cpu-5` | exit 0 |
+| `r20261112-064329-ab25` | one MoE verify under default, `-1`, default, `0` | `vy-nebius-cpu-5` | exit 0 |
+| `r20261112-064329-1ad4` | one head verify under default, then `-1` | `vy-nebius-cpu-5` | exit 0 |
+| `r20261112-065329-2629` | the templated small head block again, with the template's size and both folds' work | `vy-nebius-cpu-11` | exit 0 |
+| `r20261112-064044-fe0e` | the same job, first submission | `vy-nebius-cpu-1` | cancelled by me at 07:01Z: it never got a slot |
+| `r20261112-070503-fbe0` | call chains of one MoE session's verify under `-1` | `vy-nebius-cpu-7` | exit 0 |
+| `r20261112-070503-7cc9` | call chains of one head session's verify under `-1` | `vy-nebius-cpu-7` | exit 0 |
+
+The scripts and the checkpoint are in `lanes/proofs/20261112T0450Z-fixedcost/` and
+`lanes/proofs/20261112T0513Z-report-fixedcost.md` of the notes, synced 07:30Z (notes commit `8d4d19030d`).
