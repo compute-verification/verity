@@ -9,14 +9,10 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-import sys
 from pathlib import Path
 
-import pytest
-
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-
 import ieee_pin as IP
+import pytest
 import sass_gate as SG
 
 UUID = "GPU-00112233-4455-6677-8899-aabbccddeeff"
