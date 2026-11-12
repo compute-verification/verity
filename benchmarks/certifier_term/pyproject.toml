@@ -1,0 +1,52 @@
+# `verity bench certifier_term` (`run.py`). Not a package: the suite holds the result the runner writes with `--out` to
+# the calculator's document and to the harness kit's writer (`uv run tools/verity/check/suites.py benchmarks/certifier_term`).
+# What the runner prints with no `--out`, and the calculator's numbers, are benchmarks/network_traces' suite's.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# The runner loads the calculator of K by its file, benchmarks/network_traces/leak_bounds.py. It imports the network
+# certifier's classes and calibration and the reporting δ, with the modules of `verity` those import (the circuits, the
+# commitments, SPOT), and reads rho's world fleet and hardware data and the census; a scope's requests are by
+# default the break-even planner's case, built from Figure 1's lines and the cards they read. The result is written by
+# the harness kit's writer, which reads its settings through verity_config, and capacity is read from a registration
+# log through verity.hardware's registration and site.
+inputs = [
+    "benchmarks/network_traces/leak_bounds.py",
+    "benchmarks/census/deployments.json",
+    "benchmarks/census/adversary.json",
+    "benchmarks/census/hardware.json",
+    "benchmarks/spot_figures/cards",
+    "benchmarks/spot_figures/cards.py",
+    "benchmarks/spot_figures/figure1.py",
+    "benchmarks/spot_figures/total_cost.py",
+    "benchmarks/spot_figures/breakeven",
+    "benchmarks/harness/verity_bench/__init__.py",
+    "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/settings.py",
+    "verity/__init__.py",
+    "verity/errors.py",
+    "verity/settings.py",
+    "verity/claims",
+    "verity/circuits",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/randomness",
+    "verity/configuration/__init__.py",
+    "verity/configuration/config/verity_config",
+    "verity/configuration/wire",
+    "verity/definitions/__init__.py",
+    "verity/definitions/circuits/__init__.py",
+    "verity/definitions/circuits/census.py",
+    "verity/definitions/registry/boolean_fp8_moe.circuit-check.json",
+    "verity/hardware/__init__.py",
+    "verity/hardware/record.py",
+    "verity/hardware/registration.py",
+    "verity/hardware/site",
+    "verity/protocols/__init__.py",
+    "verity/protocols/reporting.py",
+    "verity/protocols/certifier",
+    "verity/protocols/spot",
+    "verity/protocols/inference_only/rho/data/reference.toml",
+    "verity/protocols/inference_only/rho/data/hardware.toml",
+]

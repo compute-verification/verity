@@ -1,6 +1,7 @@
 """The Nebius server (pods/nebius/): an ssh machine `research run --on` reaches by the host its registry file names, the lease loop
-stopping a non-RunPod machine through its own command, gpu-lease sharing the GPUs, launch.sh's rendered cloud-init and VM spec,
-and the weight list's pins.  No cloud: nothing here calls Nebius; the ssh probe is stubbed."""
+stopping a non-RunPod machine through its own command, which sends its stop without the null device, gpu-lease sharing the GPUs,
+launch.sh's rendered cloud-init and VM spec, and the weight list's pins.  No cloud: nothing here calls Nebius; the ssh probe and the
+CLI are stubbed."""
 from __future__ import annotations
 
 import base64
@@ -100,6 +101,50 @@ def test_an_ssh_entry_without_a_usable_host_is_refused(reg):
         remote.pod_target({"provider": "ssh", "name": "x"})
     with pytest.raises(remote.Refused, match="runpod or ssh"):
         remote.pod_target({"provider": "aws", "name": "x"})
+
+
+# ---- the stop command ----------------------------------------------------------------------------------------------------------------------
+
+VM = "computeinstance-e00fake"
+
+
+def stop_vm(tmp_path: Path, *args: str, can_read: bool = True) -> tuple[subprocess.CompletedProcess, list[str]]:
+    """vm_stop.sh on a machine whose null device cannot be opened (every `/dev/null` in it names a path whose parent is a regular
+    file), beside a metadata service that hands out a token and a `nebius` that prints as the CLI does; and the CLI's calls."""
+    bin_dir, tmp, calls = tmp_path / "bin", tmp_path / "tmp", tmp_path / "calls"
+    for d in (bin_dir, tmp):
+        d.mkdir(exist_ok=True)
+    (tmp_path / "file").write_text("")
+    script = tmp_path / "vy-nebius-stop"
+    script.write_text((NEBIUS / "vm_stop.sh").read_text().replace("/dev/null", str(tmp_path / "file" / "null")))
+    (bin_dir / "curl").write_text("#!/bin/sh\nprintf token-from-metadata\n")
+    (bin_dir / "nebius").write_text(f'#!/bin/sh\necho "$*" >> {calls}\necho "what the CLI prints"\n'
+                                    f'case "$*" in *"instance get"*) exit {0 if can_read else 1};; esac\n')
+    for shim in bin_dir.iterdir():
+        shim.chmod(0o755)
+    calls.unlink(missing_ok=True)
+    r = subprocess.run(["sh", str(script), *args], env={"PATH": f"{bin_dir}:/usr/bin:/bin", "TMPDIR": str(tmp)},
+                       capture_output=True, text=True)
+    assert list(tmp.iterdir()) == [], "the token's directory is removed however the script ends"
+    return r, calls.read_text().splitlines() if calls.exists() else []
+
+
+def test_the_stop_command_sends_the_stop_though_the_null_device_cannot_be_opened(tmp_path):
+    """Catches a redirect to the null device before the stop: under `set -e` it ends the script with the stop never sent, and the
+    machine runs on past its lease."""
+    r, calls = stop_vm(tmp_path, VM)
+    assert (r.returncode, r.stdout) == (0, f"TERMINATED {VM} (nebius compute instance stop)\n"), r.stderr
+    profile, stop = calls
+    assert re.search(rf" --token-file {re.escape(str(tmp_path / 'tmp'))}/[^/ ]+/token --skip-auth$", profile), "the token goes by file"
+    assert stop.endswith(f"compute instance stop --id {VM} --async") and "token-from-metadata" not in profile + stop
+
+
+def test_the_stop_commands_probe_says_whether_the_account_can_read_the_vm_though_the_null_device_cannot_be_opened(tmp_path):
+    r, calls = stop_vm(tmp_path, "--probe", VM)
+    assert (r.returncode, r.stdout) == (0, f"the attached service account can read {VM}\n"), r.stderr
+    assert calls[-1].endswith(f"compute instance get --id {VM}") and not any("instance stop" in c for c in calls)
+    r, calls = stop_vm(tmp_path, "--probe", VM, can_read=False)
+    assert r.returncode == 4 and r.stdout.startswith(f"the attached service account cannot read {VM}") and len(calls) == 2
 
 
 # ---- gpu-lease -----------------------------------------------------------------------------------------------------------------------------
@@ -856,6 +901,24 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     nic = s["network_interfaces"][0]
     assert nic["public_ip_address"] == {"static": True} and nic["security_groups"] and s["secondary_disks"][0]["device_id"] == "data"
     assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
+
+
+def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nodes_deploy_gives_it():
+    """A node deploy.toml gives /etc/sysctl.d/61-vy-userns.conf has it from its first boot, from the same source, so a check
+    or a training job sandboxed there doesn't fail before the first install; a node it doesn't name gets none."""
+    manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
+    entry = next(f for f in manifest["file"] if f["path"] == "/etc/sysctl.d/61-vy-userns.conf")
+    src = (NEBIUS / "../../../../../.." / entry["src"]).read_bytes()
+    for name in ("vy-nebius-cpu-14", "vy-nebius-2", "vy-nebius-1", "vy-auditor-1"):
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME=name)
+        assert r.returncode == 0, r.stderr
+        ud = r.stdout.split("# instance create request (ids are placeholders)\n")[0]
+        assert len(ud.split("\n", 1)[1].rstrip("\n")) <= 32768, name
+        embedded = {m[0]: gzip.decompress(base64.b64decode(m[1]))
+                    for m in re.findall(r"  - path: (\S+)\n    permissions: '0644'\n    encoding: gz\+b64\n    content: (\S+)", ud)}
+        assert embedded.get(entry["path"]) == (src if name in entry["nodes"] else None), name
+    assert name not in entry["nodes"] and "vy-nebius-cpu-14" in entry["nodes"]
+    assert "sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf" in (NEBIUS / "vm_setup.sh").read_text()
 
 
 def test_a_vm_can_boot_on_another_ones_kept_data_disk():
@@ -2767,6 +2830,26 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     return m, calls, state
 
 
+def _table_fences(monkeypatch, m) -> dict[int, int]:
+    """The controller's fences kept in a table, {gpu: pid}, in place of `flock` processes: `fence` and `unfence` write it, and
+    `lock_holders` and `cmdline` answer from it alone.  For a test of what the controller decides, not of the locks: the real
+    `lock_holders` lists every flock on the machine by inode number, whatever its filesystem, so a lock another process holds
+    on a file with a GPU lock's inode number reads as a lease on that GPU, which the controller then leaves unfenced; and a
+    real fence is a process the machine may fail to start."""
+    held: dict[int, int] = {}
+    pids = iter(range(5_000_000, 6_000_000))               # above the kernel's largest pid: no process of the machine's
+
+    def unfence(gone: list[int]) -> None:
+        for i in [i for i, pid in held.items() if pid in gone]:
+            del held[i]
+
+    monkeypatch.setattr(m, "fence", lambda i, t: None if i in held else held.setdefault(i, next(pids)))
+    monkeypatch.setattr(m, "unfence", unfence)
+    monkeypatch.setattr(m, "lock_holders", lambda: {m.lock_path(i).stat().st_ino: [pid] for i, pid in held.items()})
+    monkeypatch.setattr(m, "cmdline", lambda pid: next((["flock", str(m.lock_path(i)), m.FENCE_CMD] for i, p in held.items() if p == pid), []))
+    return held
+
+
 def test_n1_lease_setup_makes_lease_files_writable_as_root_but_never_through_a_link(monkeypatch, tmp_path):
     """The lease dir is 0777 and setup's chmod runs as root, so a job that planted a symlink to a file of root's there (or a hard
     link, or swapped a listed file for a symlink) had root make that file world-writable."""
@@ -2813,10 +2896,12 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
     assert two.returncode == 75
 
 
-@needs_flock
-def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path, reap):
+def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path):
+    """What the controller decides, tick by tick, over fences it only records (`_table_fences`): that a real fence keeps
+    gpu-lease off its GPU is `test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu`'s."""
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_IDLE_S=120)
+    fences = _table_fences(monkeypatch, m)
     c = m.Controller()
     w = tmp_path / "gl" / "wait.1.4242"
     w.write_text("pid=4242 n=1 run=r-x who=backend-sweep-2 since=2026-09-30T22:00:00Z\n")
@@ -2828,18 +2913,19 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
     assert len(created) == 1 and created[0]["spec"]["template"]["spec"]["containers"][0]["resources"] == {
         "requests": {"nvidia.com/gpu": "1"}, "limits": {"nvidia.com/gpu": "1"}}      # no CPU or memory: waiters hold the queue's
     assert created[0]["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "provers" and s["pool"] == 0
-    assert all(g["fence_pids"] for g in s["gpus"])
+    assert [g["fence_pids"] for g in s["gpus"]] == [[fences[i]] for i in range(4)]
     state["holders"] = [(created[0]["metadata"]["name"], "hold-1", "GPU-b")]
     before = len(calls)
     s = c.tick(t + 10)
     assert s["pool"] == 1 and not s["gpus"][1]["fence_pids"] and not [a for a, _ in calls[before:] if a[0] == "create"]
+    assert sorted(fences) == [0, 2, 3] and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, False, True, True]
     os.close(fd)
     w.unlink()
     c.tick(t + 20)
-    assert not [a for a, _ in calls if a[:2] == ("delete", "job")]
+    assert not [a for a, _ in calls if a[:2] == ("delete", "job")] and sorted(fences) == [0, 2, 3]
     s = c.tick(t + 20 + 121)
     assert [a[2] for a, _ in calls if a[:2] == ("delete", "job")] == [created[0]["metadata"]["name"]]
-    assert s["gpus"][1]["fence_pids"]
+    assert s["gpus"][1]["fence_pids"] == [fences[1]] and s["gpus"][1]["holder"] is None
 
 
 @needs_flock

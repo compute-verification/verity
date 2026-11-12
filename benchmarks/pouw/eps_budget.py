@@ -15,17 +15,17 @@ every served output and everything derived from it free unless a check recompute
   memory-bound, the cheater's transcript is not (B̃ = S is generated from U, and the zero instance streams no weights),
   so decode's time ratio is a bandwidth gap no noise design closes; it is reported (`decode_dram`), not optimized.
 
-The designs are the registry's (benchmarks/pouw/machine_model/data/designs/, `machine-model designs`): each product is
+The designs are the registry's (benchmarks/machine_model/data/designs/, `machine-model designs`): each product is
 noised as its design's `[noise]` names, a leaf of the registry's NOISE, and priced per component in executed int8
 products and honest seconds, with γ (`products`, `parts`, `summary`, `skip_table`, `component_table`). A checked leaf's
 vector work that only the served output needs is priced in checked_strip's tensor–scalar model (`TS_EPS`, `pv_ts`), and
 `pv_block_table` prices P·V's block size for the designs whose P·V is `pv`. The peel's P·V is priced at the checked
 kernels' measured kernel (apv_l7qs): its tail a strip product, its sums and its served epilogue. Under the floor credit
-(Corollary D3, SPEC §2.9; `floor_skip`) ε_skip is the skippable work at its device's issue-model price over the floor
-program's bound B_♭, with ♭ priced on the device's own Π (`prices`), and honest's time above those prices is γ's. A
-design's ε_skip (`design_skip`) is the most over the models, contexts and phases under the floor credit, on sm_120 and
-on every device of the machine model (`device_table`); each registry's `[skip]` is that number (test_eps_budget holds
-them equal).
+(Corollary D3, SPEC §2.9; `floor_skip`) ε_skip is the work a cheater can skip at its device's issue-model price over
+the floor program's bound B_♭, with ♭ priced on the device's own Π (`prices`), and honest's time above those prices is
+γ's. A design's ε_skip (`design_skip`) is the most over the models, contexts and phases under the floor credit, on
+sm_120 and on every device of the machine model (`device_table`); each registry's `[skip]` is that number
+(test_eps_budget holds them equal).
 
 Two pieces of served-only work that the cheater skips are not priced as skippable:
 
@@ -34,8 +34,9 @@ Two pieces of served-only work that the cheater skips are not priced as skippabl
 - g1's centring correction, which nothing here prices.
 
 Honest runs both. Under the floor credit, ♭'s credit B_♭ leaves them out, which is sound for any program. Counting
-either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same. Against honest's time (`summary`'s honest credit) they are skippable work
-these shares omit, so there ε_skip is short of them.
+either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same. Against
+honest's time (`summary`'s honest credit) they are work a cheater can skip that these shares omit, so there ε_skip is
+short of them.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
-from verity_machine_model.eps import PRODUCTS, Design, design, designs, honest, machine, setup
+from verity_machine_model.eps import PRODUCTS, Design, design, designs, machine, setup
 from verity_machine_model.model import DATA, device, devices
 
 L = 32                      # transcript stride and the low-rank noise's rank
@@ -268,7 +269,7 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
 # ------------------------------------------------- the tensor–scalar model: checked leaves' vector work, pv's units
 
 #: The tensor–scalar (TS) model's facets in SMSP-cycles, (MMA coefficient, coefficient of every other vector-pipe warp
-#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv (checked_strip's
+#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/machine_model/data/rows.csv (checked_strip's
 #: TS_FACETS).
 TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
 #: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, as the checked kernels
@@ -459,7 +460,10 @@ def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
     tile = 128 * 2 * (32 + 1)
     counts = SASS.get(data.name, {}).get("APV_TAIL", APV_TAIL)
     four = {(imma if k == "IMMA" else k): v for k, v in counts.items()}
-    top = lambda n: max(pi.load(n).values())
+
+    def top(n: dict) -> float:
+        return max(pi.load(n).values())
+
     return Prices(pi.vector, setup(d, pi, data, "floor", "floor").baseline.T * 4096 / d.L, top(four) / tile,
                   top({**four, imma: counts["IMMA"] - 1}) / tile)
 
@@ -467,7 +471,7 @@ def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
 def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path = DATA, vector: str = "",
                phase: str = "prefill") -> tuple[float, dict, dict]:
     """Corollary D3's ε_skip pieces, SMSP-cycles a token-layer on
-    `data`'s device: (♭'s committed words, the skippable work n^s_♭ by component with no downstream check assumed, the
+    `data`'s device: (♭'s committed words, the skipped work n^s_♭ by component with no downstream check assumed, the
     same with P·V's served output checked). n^s_♭ leaves co32c's recombination and g1's correction out, so ♭'s credit
     does too, which is sound (the module docstring). The words are `prices` ♭ a MMA on the transcript products (k a
     word, QKᵀ at FLOOR_WORDS, P·V on the exact causal triangle in prefill, ctx keys in decode); a clean product's words

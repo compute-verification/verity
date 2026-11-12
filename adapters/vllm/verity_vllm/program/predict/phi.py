@@ -13,12 +13,16 @@
 `score.phi_of(row)` reads φ from a Build row's DECLARED inputs only: the row id, its workload manifest and the pinned
 checkpoint's `config.json`.  It never reads a Build output (descriptor, result, derive report): what the Build derived is the
 ground truth the prediction is scored against, not an input to it.
+
+`served_phi` is φ of an engine that served, from its run's record: the one formula every compile of a served engine's
+requests reads φ by.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -96,6 +100,59 @@ def _cap(r: dict) -> int:
 
 def load_phi(path: str | Path) -> Phi:
     return Phi.from_json(json.loads(Path(path).read_text()))
+
+
+#: the engine args a served engine's φ carries from its engine record: the ones class G states (`engine_classes.CLASS_G_LIMITS`,
+#: the prefix cache). A request Program's length rule reads ``max_model_len`` (`steps.compile_steps`), so two compiles of one
+#: served engine's requests that read them differently compile different Programs
+REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
+
+
+def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
+    """A served engine's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
+    (``meta``'s ``engine_record``: `LLM.engine_record`'s ``engine_kwargs``; where the launch left ``max_model_len`` to vLLM, -1,
+    the length the built engine reads back, ``effective``), and, from a record of the environment its build set
+    (``env_flags``), the DSA top-k's (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK
+    the engine served in the kernels' own order; a ValueError for a rank the world doesn't have."""
+    from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
+
+    rec = meta.get("engine_record")
+    kw = None if rec is None else rec.get("engine_kwargs")
+    world = 1 if kw is None else int(kw.get("tensor_parallel_size") or 1)
+    if not 0 <= rank < world:
+        raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
+    engine = {} if kw is None else {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    if engine.get("max_model_len") == -1:
+        effective = rec.get("effective")
+        engine["max_model_len"] = None if effective is None else effective.get("max_model_len")
+    if rec is not None and "env_flags" in rec:
+        flags = rec["env_flags"]
+        engine["env"] = {} if flags is None else {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
+    return {"world": world, "rank": rank}, engine
+
+
+def checkpoint_dtype(hf_config: Mapping[str, Any]) -> str | None:
+    """The checkpoint dtype φ states (``model["dtype"]``, in `config.DTYPES`' names, as `predict.score` states a served row's from its
+    id), read from the pinned config's `quantization_config`: a block-FP8 checkpoint (``quant_method: fp8``, ``fmt: e4m3``) is
+    ``float8_e4m3fn``, the dtype `predict.dsa`'s domain requires. Any other config states none, and the decoder takes the dtype its
+    config's shape implies (bfloat16, or int8)."""
+    from verity_vllm.config import DTYPES
+
+    q = hf_config.get("quantization_config")
+    return DTYPES["fp8"] if q is not None and q.get("quant_method") == "fp8" and q.get("fmt", "e4m3") == "e4m3" else None
+
+
+def served_phi(meta: Mapping[str, Any], hf_config: Mapping[str, Any], rank: int = 0) -> Phi:
+    """φ of an engine that served, from its run's record ``meta`` (its ``model`` and ``revision``, its ``target`` profile, its
+    ``execution`` label, ``eager`` where it states none, and its ``engine_record``): the model at its pinned config ``hf_config``,
+    with the checkpoint dtype that config states (`checkpoint_dtype`), on the run's target at its execution, at the engine's
+    tensor-parallel world at ``rank`` with the engine args class G states (`engine_of`, whose ValueError it raises); no workload.
+    A served window's registered compiler and the Builds its row dir holds both compile under it, so the Programs the one
+    compiles are the Programs the other wrote."""
+    tp, engine = engine_of(meta, rank)
+    dtype = checkpoint_dtype(hf_config)
+    return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": dict(hf_config), **({"dtype": dtype} if dtype else {})},
+               target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
 
 
 def save_phi(phi: Phi, path: str | Path) -> None:

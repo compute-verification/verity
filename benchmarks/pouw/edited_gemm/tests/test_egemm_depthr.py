@@ -1,7 +1,7 @@
-"""The fold's same-word depth-R binding proof (egemm_depthr_check.py): the
-served-GEMM scalar dial absorbs the same committed word R times through the XOR-in(13,19) fold with the same keys, and the
-R-fold still binds the word with no new luck term. The fast tests reuse the proof's functions on a key sample; the slow
-test runs the whole exact_kit check (every odd key exhaustively, n=10/12 key_ok_r11, 32-bit (13,19), and both mutations)."""
+"""The fold's same-word depth-R check (egemm_depthr_check.py): the served-GEMM scalar dial absorbs the same committed word
+R times through the XOR-in(13,19) fold with the same keys, and the check searches one family of changes to the word for a
+change the R-fold does not see. The fast tests reuse the check's functions on a key sample; the slow test runs the whole
+exact_kit check (every odd key exhaustively, n=10/12 key_ok_r11, 32-bit (13,19), and both mutations)."""
 from __future__ import annotations
 
 import importlib.util
@@ -22,7 +22,7 @@ W8 = (0x9E, 0x37, 0x79, 0xB9)  # a committed word's four s32 limbs, at the reduc
 
 
 def test_the_fold_is_faithful():
-    """One round of the proof's fold equals receipt_folds_r9.xorin_step (rotations 13, 19), the pinned r9 reference
+    """One round of the check's fold equals receipt_folds_r9.xorin_step (rotations 13, 19), the pinned r9 reference
     the dial iterates."""
     a0, a1 = np.uint32(0x9E3779B1), np.uint32(0x85EBCA77)
     y = np.arange(64, dtype=np.uint32) * np.uint32(2654435761)
@@ -36,9 +36,8 @@ def test_the_fold_is_faithful():
 
 
 def test_odd_depth_binds_and_key_ok_r11_binds_on_a_sample():
-    """On a sample of n = 8 odd keys, R = 1..4: no all-state collapse at odd depth (the one open shape needs per-round
-    alternating keys, unreachable by folding the same word), none among key_ok_r11 keys, and every collapse that does
-    occur sits on a KJ19-defective key (a near +-1), which is the even-depth run-of-two g3-chains already excludes."""
+    """On a sample of n = 8 odd keys, R = 1..4, over the check's family of changes: no all-state collapse at odd depth,
+    none among key_ok_r11 keys, and every collapse that does occur sits on a KJ19-defective key (a near +-1)."""
     keys = np.array([(a0, a1) for a0 in range(1, 256, 2) for a1 in range(1, 256, 32)], dtype=np.uint64)
     hits = M.collapses(keys, [W8], 4, [1, 2, 3, 4], 8, 3, 5)
     assert [h for h in hits if h[4] % 2 == 1] == []
@@ -55,8 +54,8 @@ def test_kj19_control_collapses_at_even_depth_and_is_rejected():
 
 
 def test_degenerate_key_collapse_is_detectable():
-    """A degenerate key a0 = 0 drops limb w0, so a w0-only change is invisible: the search must (and does) see it, which
-    is what makes the zero-collapse results above meaningful."""
+    """A degenerate key a0 = 0 drops limb w0, so a w0-only change is invisible: the search must (and does) see it, so a
+    search that finds nothing is not one that could find nothing."""
     hits = M.collapses(np.array([(3, 5)], dtype=np.uint64), [W8], 3, [3], 8, 3, 5, force_a0=0)
     assert len(hits) > 0
 
@@ -65,7 +64,7 @@ def test_degenerate_key_collapse_is_detectable():
 def test_full_depthr_check_passes():
     """The whole exact_kit check: n = 8 exhaustive over every odd key pair, n = 10/12 over key_ok_r11 keys, the 32-bit
     (13, 19) sample, and both mutations -- 10/10 checks, 2/2 mutations caught. Catches what the sampled fast tests cannot:
-    an all-state collapse on any odd key or any key_ok_r11 key across the full width."""
+    an all-state collapse of the family on any odd key or any key_ok_r11 key across the full width."""
     p = subprocess.run([sys.executable, str(HERE.parent / "egemm_depthr_check.py"), "--mutations"],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
