@@ -162,7 +162,7 @@ def delegation(lane: str, agent: str, until: str, mint: Callable[[str], str]) ->
 
 def speaks_for(handle: str | None, name: str, staffs: dict[str, tuple[str, ...]]) -> bool:
     """Whether the holder of ``handle`` delegates ``name``: its own handle, or a name it staffs, one a glob of its ``staffs``
-    ({handle: globs}, the registry's) matches.  No handle speaks for nothing."""
+    ({handle: globs}, the registry's) matches.  An agent that holds no handle (None) delegates nothing."""
     return bool(handle) and (handle == name or any(fnmatch.fnmatchcase(name, p) for p in staffs.get(handle, ())))
 
 
