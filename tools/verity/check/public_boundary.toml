@@ -173,12 +173,14 @@ protocols = [
     "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py",
     "adapters/vllm/tests/pipeline/test_registration_log.py",
     # the network certifier's advice code (advice v1), private with its protocol: the public compiler reads it only through
-    # a registration's `decode`, and its test of that is private with it, as are the difftest of its certified tick's step
-    # and the tick gate's lost-release test, which replays the run it serves under the advice code
+    # a registration's `decode`, and its test of that is private with it, as are the difftest of its certified tick's step,
+    # the tick gate's lost-release test, which replays the run it serves under the advice code, and the test of the code
+    # under a draft
     "adapters/vllm/verity_vllm/pipeline/advice_code",
     "adapters/vllm/tests/program/predict/test_steps_advice_code.py",
     "adapters/vllm/tests/pipeline/test_serve_tick_lost.py",
     "adapters/vllm/tests/pipeline/test_tick_step.py",
+    "adapters/vllm/tests/pipeline/test_advice_kept.py",
     # vLLM's PoUS option test runs the memory challenger's party in process
     "adapters/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
