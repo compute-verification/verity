@@ -10,7 +10,9 @@
   registered values' sizes and the cut's calls, DIR/circuit_facts.json) are compared by their SHA-512.
 - BUILD: PRED is the row's Build of record: its predicted.json names Program digest PROGRAM and manifest digest MANIFEST.
 - CUT: W, Pearl+'s window record, registers exactly the circuit's Pearl+ values (`PEARL_VALUES`), each at its size in the
-  circuit (two u16 words an FP32 word), under SCHEME, in 32-bit words.
+  circuit (two u16 words an FP32 word), under SCHEME, in 32-bit words, and beside them only what its version registers
+  that the circuit never reads: at version 2 the B rows of the weights the cut's calls read (`PEARL_WEIGHTS`), each
+  weight's N rows of K words a call's; at version 1 nothing.
 
 The seal's B-OF-RECORD (`served_verdicts.sh`) holds each sealed record to PRED's manifest, so this doesn't. A file a
 verdict can't read fails that verdict, naming the file. Each verdict prints a line; the last, ``SERVED-COMPARE: EQUAL``
@@ -22,7 +24,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -31,6 +35,9 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKLOADS = ROOT / "integrations" / "vllm" / "workloads"
 #: the circuit's values W registers: each linear's A rows and its y rows
 PEARL_VALUES = ("pearl-a/", "pearl-y/")
+#: what W registers beside them at its version 2 (`pearl_c.window`): each weight's B rows, ``pearl-b/<w>``, which the
+#: circuit, cut at its linears, never reads
+PEARL_WEIGHTS = re.compile(r"pearl-b/(0|[1-9][0-9]*)")
 VERDICTS = ("PHI", "BUILD", "CUT")
 
 
@@ -107,18 +114,31 @@ def build(pred: Path, of_record: str) -> dict[str, Any]:
     return {"ok": got == want, "names": got, "of_record": want}
 
 
-def cut(w: Path, params: Mapping[str, int], scheme: str) -> dict[str, Any]:
+def cut(w: Path, params: Mapping[str, int], calls: Sequence[Sequence[int]], scheme: str) -> dict[str, Any]:
     """CUT: W at `w` registers exactly the circuit's Pearl+ values of `params` at their sizes, under `scheme`, in 32-bit
-    words."""
+    words, and beside them only its version's weights (`pearl_c.window.version_of`). At version 2 those are the B rows of
+    the weights the cut's `calls` read, each call (K, N, _) of a position's forward: the circuit reads no B row and so
+    names no weight, and W registers a weight once however many calls read it, so a weight's B rows are N rows of K words
+    for a call's (K, N), every call's (K, N) has a weight, and no (K, N) has more weights than calls. At version 1 W
+    registers no weight. A weight's rows that aren't a call's, or past its calls' count, and a call's (K, N) with no
+    weight are among `differ`."""
+    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+
     rec = read_json(w)
+    version = PWR.version_of(rec)
     want = {n: size for n, size in params.items() if n.startswith(PEARL_VALUES)}
-    got = {e["value"]: e["leaves"] * e["words"] * 2 for e in rec["registered"]}
+    weights = {e["value"]: (e["leaves"], e["words"]) for e in rec["registered"] if PEARL_WEIGHTS.fullmatch(e["value"])}
+    got = {e["value"]: e["leaves"] * e["words"] * 2 for e in rec["registered"] if e["value"] not in weights}
     differ = sorted(n for n in set(got) | set(want) if got.get(n) != want.get(n))
+    read = Counter((int(n), int(k)) for k, n, *_ in calls) if version == PWR.VERSION else Counter()
+    held = Counter(weights.values())
+    differ += sorted(n for n, shape in weights.items() if held[shape] > read[shape])
+    differ += [f"a weight of {n} rows of {k} words, which a call reads" for n, k in sorted(read) if not held[n, k]]
     widths = sorted({e.get("word_bits") for e in rec["registered"]}, key=str)
     of = (rec.get("window") or {}).get("scheme")
-    return {"ok": not differ and bool(want) and of == scheme and widths == [32], "values": len(got),
-            "circuit_values": len(want), "differ": differ[:20], "differ_count": len(differ), "scheme": of,
-            "word_bits": widths}
+    return {"ok": not differ and bool(want) and of == scheme and widths == [32], "values": len(got) + len(weights),
+            "circuit_values": len(want), "weights": len(weights), "version": version, "differ": differ[:20],
+            "differ_count": len(differ), "scheme": of, "word_bits": widths}
 
 
 def judged(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -146,7 +166,8 @@ def said(name: str, v: Mapping[str, Any], a: argparse.Namespace) -> str:
                 f"{str(v['names'][1])[:16]}…; the row's Build of record is {v['of_record'][0][:16]}…, "
                 f"{v['of_record'][1][:16]}…{end}")
     return (f"CUT: W ({a.window_record}) registers {v['values']} values and the circuit reads {v['circuit_values']} Pearl+ "
-            f"values; {v['differ_count']} differ in name or size (scheme {v['scheme']}, word bits {v['word_bits']}){end}")
+            f"values; {v['weights']} more are weights' B rows, which W's version {v['version']} registers and the circuit "
+            f"never reads; {v['differ_count']} differ in name or size (scheme {v['scheme']}, word bits {v['word_bits']}){end}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -175,7 +196,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return phi(fields, served, declared)
 
     verdicts = {"PHI": judged(phi_verdict), "BUILD": judged(lambda: build(a.pred, a.of_record))}
-    verdicts["CUT"] = (judged(lambda: cut(a.window_record, circuits["served"]["params"], a.pearl_tables)) if circuits
+    verdicts["CUT"] = (judged(lambda: cut(a.window_record, circuits["served"]["params"], circuits["served"]["calls"],
+                                          a.pearl_tables)) if circuits
                        else {"ok": False, "error": "PHI lowered no circuit to hold W to"})
     for name in VERDICTS:
         print(said(name, verdicts[name], a), flush=True)

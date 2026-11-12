@@ -14,7 +14,11 @@
 #                         its own PP_PARTITION: its window has no step 1); `serve` around a stand-in
 #                         harness (the deferral's copy asked once, only after a serve that exited 0); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
-#                         reads the card: the H200's compute capability and SMs); the harness's own policy step,
+#                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
+#                         the settings' engine args through what a served window's close reads of it
+#                         (`rehearsal_window.py`: the row dir's Builds hold the Programs the registered compiler
+#                         compiles, the window's commit reads each request's served rows, and W as its writer writes
+#                         it is a W the served compare takes); the harness's own policy step,
 #                         which fixes the limits and states what they prove; the policy's Lean check on the class's
 #                         own Program (`rehearsal_limits.py`), and the settings' ALPHA, GAMMA and DAY_PROGRAM held to
 #                         what it answers ($OUT/record.env.add has the lines where they differ); the day's declaration
@@ -113,6 +117,11 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
 
 settings_class() {  # $1, the settings file: the class its serve commits the window at
   bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${V3C_CLASS-4,32,4}"' "$1"
+}
+
+settings_engine() {  # $1, the settings file: the engine args its serve states, MAX_MODEL_LEN,T (the harness's 512 each
+  # where the settings name none)
+  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${MAX_MODEL_LEN:-512},${T:-${H1_T:-512}}"' "$1"
 }
 
 serve() {
@@ -389,6 +398,9 @@ print(json.dumps(doc, sort_keys=True))
   cp "$D/pearlplus/serve-phi.json" "$OUT/serve-phi.json" 2> /dev/null
   step class-circuit 30m "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$D/pearlplus/serve-phi.json" \
     --class "$CLASS" --pearl-tables "$SCHEME" --out "$D/pearlplus/circuit-record.json"
+  # a stand-in window of the class through what its close reads of it: its row dir's Builds, its served rows and W
+  step served-window 30m "$PY" benchmarks/one_stage/rehearsal_window.py "$D/pearlplus/serve-phi.json" "$CLASS" "$SCHEME" \
+    "$(settings_engine "$SETTINGS")" "$OUT/served-window.json"
 
   # the harness's own policy step at the settings' limits: the limits file and its line, with what they prove
   step inference-policy 30m env SETTINGS="$SETTINGS" PEARLC_CHALLENGER_GATE= D="$D" OUT="$OUT" VENV="$TREE/.venv" \
