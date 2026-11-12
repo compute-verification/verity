@@ -86221,3 +86221,30 @@ Hunk 2, the last line of `__init__`'s signature. Mine: `tree_from: Sequence[str]
 - `r20261112-113134-dadb`, the twin at `42b213aebe00`: `suites.py --changed 7a528d6b1c01 --quick`, on `vy-nebius-cpu-2`, waiting for a slot at 11:34Z [read]. I expect it by 13:15Z.
 
 **Not run on the new heads yet:** anything remote; the three runs above are all of it. No ready line until `801e` and `2b22` are read. Mailbox read at 11:32Z: nothing after your 10:37Z section [run]. I marked nothing and posted nothing.
+
+## ACCOUNTS, Thu 12 Nov 11:38Z: one correction to my 11:32Z entry, item 18 (where ρ is applied), and v2 with the follow-up now compile together
+
+**Headline.** In the 11:32Z entry's table for item 18, two rows place each span in the period with ρ at both ends. That is sound, but it costs far more than soundness's sentence does: about 8.4% of a week's cover for a link watched in 168 separate one-hour spans at ρ = 5·10⁻⁴, against 0.05%. Use the reading below in your 13:00Z line instead. Nothing else in that entry changes.
+
+**What is wrong with placing each span** [derived].
+
+- A clock within ±ρ of real time places a moment only to within ρ times the time since its origin: 302 s at the end of a week at ρ = 5·10⁻⁴ (5·10⁻⁴ × 604,800 s).
+- Placing a span with its start charged and its end credited takes that off both ends of every separate span: 2ρt for a span t after the origin, 302 s on average over a week.
+- 168 one-hour spans lose 50,816 s, 8.4% of the week [run: Python, exact rationals]. A span of 3.2 s is lost whole once it is 3,200 s after the origin (3.2 / (2 × 5·10⁻⁴)).
+- My worked case did not show it because it was one span from the period's first tick.
+
+**The reading to use** [derived; not compiled].
+
+| Quantity in `rows` | Direction | Why it is sound |
+|---|---|---|
+| The cover of one series: its steps joined, their lengths summed | credit, ×(1 − ρ), down, once a series | one clock's spans that share no step share no real time, and each lasts at least (1 − ρ) of its length |
+| The last step of a series that surely ends inside the period | charge: a step counts only where the origin's tick plus its offset ÷(1 − ρ) is within the period | the one place a span's position matters for one series; costs at most ρ of the period once, 303 s of a week |
+| Whether two series' spans share real time (two keys on one link) | each span's outer bounds: start credited, end charged; what the bounds share is taken off the sum | two clocks; with "one key at a time on a link" from the device this row is not needed and the series add |
+| Whether a verified span lies whole in the period | its end a charge, as before | unchanged |
+| The ticks not covered, and amounts inside a check | as before | unchanged |
+
+So ρ's charge direction enters `rows` in two places only: the period's end, once a series, and the test that two series are apart. Everything else is the credit, once a series. [derived] At ρ = 5·10⁻⁴ the week's 168 spans then lose 0.05% of their length and at most 303 s at the period's end, 0.1% together.
+
+**Compiled since 11:32Z.** [run `r20261112-113457-eb2f`, exit 0] v2's Site with the follow-up's `Account.lean` in one file: the tie, the head's key, the period's heads and origins, on rates a second and `Site.over`. `rows` there reads the tick from the Site and takes `(S) (digest) (A) (period) (accounts) (answers)`. Four places differed between the two texts, each resolved by hand; every guard of both passes. That removes the first line of "Not established" in the 11:32Z entry. Scratch at `/tmp/acc/v23` on my VM, unpushed.
+
+**Next.** I write the reading above into that scratch `rows` (a device named by the series' origin, the three rows of the table) with guards at ρ above 0, and say the run id when it compiles. Still waiting on the four rulings named at the end of the 11:32Z entry.
