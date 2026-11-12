@@ -12,6 +12,7 @@ package's Lean options every try takes from it: with a real toolchain, an auto-b
 sets `autoImplicit = false`."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -844,6 +845,61 @@ def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fai
     assert "(3 imported" in capsys.readouterr().out
 
 
+def entry(store: Path, scope: str, mod: str, at: str, sources: dict[str, str], schema: str = "lean-module/v4") -> Path:
+    """An entry of a node's index (`module_keys`) as `put` writes one, and its file: ``mod`` of package ``scope`` compiled
+    under Lake's input hash ``at``, recording the SHA-512 of each of ``sources`` ({path: text}) and of its lakefile."""
+    art = f"{at}.olean"
+    files = {path: "sha512:" + hashlib.sha512(text.encode()).hexdigest() for path, text in sources.items()}
+    doc = {"schema": schema, "module": mod, "scope": scope, "hash": at, "outputs": {"o": art},
+           "digests": {art: "sha512:" + "0" * 128},
+           "inputs": {"vars": {"module": mod, "package": scope}, "env": {}, "reads": {},
+                      "files": {**files, f"{scope}/lakefile.toml": "sha512:" + "1" * 128}}}
+    (store / "keys").mkdir(parents=True, exist_ok=True)
+    (f := store / "keys" / f"{hashlib.sha512(json.dumps(doc).encode()).hexdigest()}.json").write_text(json.dumps(doc))
+    return f
+
+
+@pytest.mark.parametrize("took", list(TOOK.values()), ids=list(TOOK))
+def test_a_build_lake_took_and_would_compile_counts_where_the_index_records_its_source_as_it_is(tmp_path, took):
+    """`P.B` is a build Lake took, against a build of `P.A` that has since been rebuilt, so Lake would compile it and
+    doesn't hold it, though its source is the text it was taken for. On a node the index says so: an entry under its
+    package, its name and its trace's `depHash` records the SHA-512 of its source as it is, and `P.B` counts. An entry of
+    another text doesn't, nor two that disagree, nor one under another hash, package or schema; without an index, or
+    with one that has no entries, `P.B` is unchecked, as with Lake's word alone. Where Lake's word isn't taken, the index
+    isn't read."""
+    pkg, store = tmp_path / "p", tmp_path / "lean-artifacts"
+    write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/File.lean": "module\n", "P/A.lean": "module\n",
+                "P/B.lean": "module\nimport P.A\n"})
+    built(pkg, "P.A", "P.B")
+    (pkg / S.LIB / "P" / "B.trace").write_text(took)
+    at = json.loads(took)["depHash"]
+    said = lake_out(("✔", "Replayed", "P.A"), ("✖", "Building", "P.B", S.REBUILD))
+    word = ("Lake holds 1 of the 2 modules that could be siblings as their inputs are now (lake build --no-build -v "
+            "--no-ansi: exit 3 in 3 s, peak 900 MB)")
+    fact1 = S.Plan("P.File", True, ["P.A"], ["P.B"], word)
+    assert S.plan(pkg, "P/File.lean", lake_says(said)) == fact1
+    assert S.plan(pkg, "P/File.lean", lake_says(said), store) == fact1._replace(
+        word=f"{word}; the index records the source as it is of 0 of the 1 other builds Lake took that a stub could load "
+             "(0 entries read in 0 s)"), "no index here"
+    other = entry(store, "p", "P.B", at, {"p/P/B.lean": "module\nimport P.A\nopen P\n"})
+    entry(store, "p", "P.B", "0123456789abcdef", {"p/P/B.lean": "module\nimport P.A\n"})
+    entry(store, "q", "P.B", at, {"q/P/B.lean": "module\nimport P.A\n"})
+    entry(store, "p", "P.B", at, {"p/P/B.lean": "module\nimport P.A\n"}, schema="lean-module/v3")
+    (store / "keys" / "cut.json").write_text('{"schema": "lean-module/v4", "module": "P.B"')
+    assert S.plan(pkg, "P/File.lean", lake_says(said), store)[:4] == fact1[:4], "another text, hash, package or schema"
+    entry(store, "p", "P.B", at, {"p/P/B.lean": "module\nimport P.A\n"})
+    assert S.plan(pkg, "P/File.lean", lake_says(said), store)[:4] == fact1[:4], "two entries that disagree"
+    other.unlink()
+    p = S.plan(pkg, "P/File.lean", lake_says(said), store)
+    assert p == S.Plan("P.File", True, ["P.A", "P.B"], [], f"{word}; the index records the source as it is of 1 of the 1 "
+                       "other builds Lake took that a stub could load (5 entries read in 0 s)"), p
+    for refused in ((1, said[1]), (0, "")):
+        p = S.plan(pkg, "P/File.lean", lake_says(refused), store)
+        assert p[:4] == fact1[:4] and "index" not in p.word, p
+    write(pkg, {"P/B.lean": "module\nimport P.A\n\n"})
+    assert S.plan(pkg, "P/File.lean", lake_says(said), store)[:4] == fact1[:4], "its source changed since"
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 @pytest.mark.parametrize("how", ["cache", "ltar"])
 def test_a_build_lake_took_is_a_sibling_while_lake_holds_it_whatever_the_times_say(tmp_path, monkeypatch, capsys, how):
@@ -851,7 +907,9 @@ def test_a_build_lake_took_is_a_sibling_while_lake_holds_it_whatever_the_times_s
     from the archives of a published build (`ltar`), as a node's tree takes main's. Every trace there states one hash
     and no source. Without Lake asked none of the modules is a sibling; with it each is. Then `P.A`'s text changes,
     and its trace is made the newer of the two: `P.A` is unchecked, and so are `P.B` and the root, which import it and
-    which Lake says only ran. Written again as it was, later than every build, all are siblings again.
+    which Lake says only ran. Written again as it was, later than every build, all are siblings again. Then `P.A`
+    changes and Lake rebuilds it: Lake would compile `P.B`, which imports it, so `P.B` is unchecked until the node's index
+    records its source under its trace's hash.
 
     Only this test takes builds with Lake and has Lake say which it holds, so only it shows that `built_from` knows
     the traces and `held` the lines Lake writes for them, whole: its workspace log, its own jobs, a module's log."""
@@ -914,6 +972,17 @@ def test_a_build_lake_took_is_a_sibling_while_lake_holds_it_whatever_the_times_s
     os.utime(source, (2_100_000_000, 2_100_000_000))
     p = S.plan(pkg, "P/C.lean", ask)
     assert p[:4] == ("P.C", True, mods, []), ("written again as it was, later than every build", p)
+
+    write(pkg, {"P/A.lean": files["P/A.lean"] + "\ndef P.more : Nat := 2\n"})
+    lake(pkg, "build", "+P.A")
+    store, trace = tmp_path / "lean-artifacts", pkg / S.LIB / "P" / "B.trace"
+    p = S.plan(pkg, "P/C.lean", ask, store)
+    assert p[:4] == ("P.C", True, ["P.A", "P.D"], ["P", "P.B"]), ("Lake would compile P.B, whose import was rebuilt", p)
+    entry(store, "p", "P.B", S.dep_hash(trace), {"p/P/B.lean": files["P/B.lean"]})
+    p = S.plan(pkg, "P/C.lean", ask, store)
+    assert p[:4] == ("P.C", True, ["P.A", "P.B", "P.D"], ["P"]), ("the index records P.B's source under its hash", p)
+    assert p.word.endswith("; the index records the source as it is of 1 of the 2 other builds Lake took that a stub "
+                           "could load (1 entries read in 0 s)"), p
 
 
 DEFS = ("module\n\n@[expose] public section\n\nnamespace P\n\nstructure Trace where\n  log : List Nat\n  out : Nat\n\n"

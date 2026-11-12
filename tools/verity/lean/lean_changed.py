@@ -1695,7 +1695,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     which of the modules that could be siblings it holds as their inputs are now (`lake` with `SIBLINGS.WORD`, which
     compiles nothing, in the build's sandbox, where a write it is refused (`refused_write`) is taken as exit 2, and so
     leaves every build Lake took unchecked; the plan's `word` is a line, with the seconds), and once more after a rebuild
-    (`SIBLINGS.check`'s ``again``); lean's exit
+    (`SIBLINGS.check`'s ``again``); a build Lake took and doesn't hold is looked up in the node's artifact index, read
+    and never written (`SIBLINGS.in_index`); lean's exit
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
     the tree's dependencies can't be had, or Lake wanted to write in them (`refused_write`: its line names the path and the
     records run that builds them writable). Never check.py. What the build compiled in the sandbox goes into the node's
@@ -1773,7 +1774,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                     status = 2
                 return status, said, seconds, peak
 
-            plan = SIBLINGS.plan(tree / pkg, rel, ask) if siblings and rc == 0 else None
+            plan = SIBLINGS.plan(tree / pkg, rel, ask, artifacts.store) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
             elif plan is not None and plan.word:
@@ -1809,7 +1810,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                         status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox)
                         return status, built, time.monotonic() - began
 
-                    rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild, lambda: SIBLINGS.plan(tree / pkg, rel, ask))
+                    rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild,
+                                                       lambda: SIBLINGS.plan(tree / pkg, rel, ask, artifacts.store))
                     if output:
                         log(output.rstrip("\n"))
                     for line in lines.splitlines():

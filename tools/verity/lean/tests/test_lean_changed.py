@@ -1447,9 +1447,33 @@ def test_try_with_siblings_counts_a_build_lake_took_only_where_lake_says_it_hold
                      "module\n\npublic import Proofs.Flock.X\npublic import Proofs.Y\n"]
     assert capsys.readouterr().out == "", "Lake's lines stay out of the try's output"
     assert "lean-try: Sec/Proofs/Flock/X.lean: Lake holds 1 of the 2 modules that could be siblings as their inputs are " \
-        "now (lake build --no-build -v --no-ansi: exit 3 in 12 s, peak 1100 MB)" in said, said
+        "now (lake build --no-build -v --no-ansi: exit 3 in 12 s, peak 1100 MB); the index records the source as it is " \
+        "of 0 of the 1 other builds Lake took that a stub could load (0 entries read in 0 s)" in said, said
     assert any("(1 imported in 2 s, peak 700 MB); 1 unchecked, with no build of their source as it is or importing a "
                "module with none, in their package or one it requires: Proofs.Z" in s for s in said), said
+
+
+def test_try_with_siblings_looks_a_build_lake_took_and_would_compile_up_in_the_nodes_index(trying, tmp_path, monkeypatch):
+    """`Proofs.Z`, which Lake would compile, has an entry in the node's index (the artifact cache beside the dependencies
+    a try takes) under its package, its name and its trace's `depHash` that records its source as it is: the try counts
+    it, on a line that says so, and leaves the index as it was."""
+    tree, _ = trying
+    stubs, run = taken_siblings(tree, (3, WORD_YZ))
+    monkeypatch.setattr(LC.SIBLINGS, "run", run)
+    art, keys = "255a6a20482e9767.olean", tmp_path / "lean-artifacts" / "keys"
+    keys.mkdir(parents=True)
+    (keys / "z.json").write_text(json.dumps({
+        "schema": "lean-module/v4", "module": "Proofs.Z", "scope": "p", "hash": "255a6a20482e9767", "outputs": {"o": art},
+        "digests": {art: "sha512:" + "0" * 128},
+        "inputs": {"files": {"p/Z.lean": "sha512:" + hashlib.sha512(b"module\n").hexdigest()}}}))
+    before = {f.name: f.read_bytes() for f in keys.iterdir()}
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 0, said
+    assert stubs[1] == "module\n\npublic import Proofs.Flock.X\npublic import Proofs.Y\npublic import Proofs.Z\n"
+    assert any(s.endswith("; the index records the source as it is of 1 of the 1 other builds Lake took that a stub "
+                          "could load (1 entries read in 0 s)") for s in said), said
+    assert any("(2 imported in 2 s, peak 700 MB)" in s for s in said), said
+    assert {f.name: f.read_bytes() for f in keys.iterdir()} == before, "read, never written"
 
 
 def test_try_with_siblings_takes_no_word_from_a_pass_the_sandbox_refused_a_write(trying, tmp_path, monkeypatch):

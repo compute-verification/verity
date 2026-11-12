@@ -285,7 +285,9 @@ Lean's job in `check` and the tools around the audit:
   as it is: by the hash Lake's trace states for a module it built, and for one it took from its cache or an archive
   by Lake's own word, a `lake build --no-build -v` of the modules that could be siblings, which compiles nothing, run
   before any product is read and again after a rebuild. A word it can't take (an exit other than 0 or 3, a line it
-  doesn't read, a write the try's sandbox refused) leaves every build Lake took unchecked; no time decides. It leaves
+  doesn't read, a write the try's sandbox refused) leaves every build Lake took unchecked; no time decides. On a node,
+  a build Lake took and would compile (an import rebuilt since) counts where the node's artifact index records the
+  SHA-512 of its source as it is under its trace's hash, read and never written; a checkout has Lake's word alone. It leaves
   out uncounted, FILE's own module aside, what no root loads beside the rest: the other executables' roots, and every
   module under an `exempt` prefix of the package's lock (the name or below it, as the audit matches it), so two
   scripts that each declare `main` don't clash. It never fails on the lock: with none, or one that can't be read

@@ -67,9 +67,12 @@ that makes each module's `.olean`, captioned with the module's name, whether it 
 `Unpacked` (`held`). A module Lake took counts on that word alone. It is unchecked where Lake would compile it, where
 its line has another verb (one that imports a module Lake would compile only ran), and wherever Lake's word isn't
 taken: Lake isn't asked, its exit is neither 0 nor 3, it printed a line `held` doesn't know, or, in a try's sandbox, it
-wanted to write where the sandbox refuses (`lean_changed.refused_write`). That errs only towards unchecked: Lake's hash
-covers the builds of a module's imports, so one it took against an older build of an import is unchecked where one it
-built counts. The pass writes in the tree what Lake puts in place, and a `.trace.nobuild` beside the trace of each
+wanted to write where the sandbox refuses (`lean_changed.refused_write`). Lake's hash covers the builds of a module's
+imports, so Lake would compile one it took against an older build of an import, where one it built counts. On a node a
+second fact covers that case (`plan`'s ``index``, `in_index`): the node's index of compiled modules (`module_keys`)
+records, under each compile's package, module and Lake's hash of its inputs, the SHA-512 of the source it compiled, so
+a module Lake took counts where the entries under its trace's `depHash` record its source as it is. Neither fact is read
+where Lake's word isn't taken, and a checkout, which has no index, has Lake's word alone. The pass writes in the tree what Lake puts in place, and a `.trace.nobuild` beside the trace of each
 module it would compile, which nothing reads. Any other trace (one cut short, another schema's) says nothing, so its
 module is unchecked, never taken as built. A module of a fetched dependency (`.lake/packages`) is taken as built: its
 sources change only with the manifest, and its products with them.
@@ -82,6 +85,7 @@ from __future__ import annotations
 
 import contextlib
 import functools
+import hashlib
 import importlib.util
 import json
 import os
@@ -291,6 +295,62 @@ def built_from(trace: Path, name: str) -> tuple[str | None, bool]:
     return (got[0] if len(got) == 1 else None), took
 
 
+def dep_hash(trace: Path) -> str | None:
+    """The hash of all its inputs that ``trace`` states (`depHash`, sixteen hex digits), under which Lake found the outputs
+    of a module it took; None where it states none."""
+    try:
+        h = json.loads(trace.read_text()).get("depHash")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return h if isinstance(h, str) and re.fullmatch(r"[0-9a-f]{16}", h) else None
+
+
+@functools.cache
+def _keys():
+    """`module_keys.py`, loaded by path once a plan reads a node's index, for its layout (`INDEX`) and what an entry is
+    (`valid`)."""
+    spec = importlib.util.spec_from_file_location("lean_module_keys_for_siblings", HERE / "module_keys.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+#: an entry's field for Lake's input hash, as `module_keys.valid` takes it
+ENTRY_HASH = re.compile(rb'"hash"\s*:\s*"([0-9a-f]{16})"')
+
+
+def indexed(store: Path, wanted: set[tuple[str, str, str]]) -> tuple[dict[tuple[str, str, str], set[str]], int]:
+    """({(package, module, Lake's input hash): the digest of every Lean source the entries of ``store``'s index under it
+    record}, for the triples in ``wanted``; the count of entries read). Every entry is read: the index is named by keys,
+    which a module's input hash doesn't give. An entry is a compile of the module on this node, or one a bundle brought
+    from another, which the Lean check takes builds from on the same terms. One `module_keys.valid` refuses, or that isn't
+    JSON, is passed over. An entry that records no source is under its triple with nothing."""
+    got: dict[tuple[str, str, str], set[str]] = {}
+    keys, hashes, n = store / _keys().INDEX, {h for _, _, h in wanted}, 0
+    if not wanted or not keys.is_dir():
+        return got, n
+    with os.scandir(keys) as it:
+        for e in it:
+            if not e.name.endswith(".json"):
+                continue
+            n += 1
+            try:
+                with open(e.path, "rb") as f:
+                    raw = f.read()
+                if hashes.isdisjoint(h.decode() for h in ENTRY_HASH.findall(raw)):
+                    continue
+                d = json.loads(raw)
+            except (OSError, ValueError):
+                continue
+            if not _keys().valid(d) or (at := (d["scope"], d["module"], d["hash"])) not in wanted:
+                continue
+            files = d.get("inputs", {}).get("files") if isinstance(d.get("inputs"), dict) else None
+            got.setdefault(at, set()).update(
+                v for k, v in (files.items() if isinstance(files, dict) else ())
+                if isinstance(k, str) and k.endswith(".lean") and isinstance(v, str))
+    return got, n
+
+
 #: the `lake` arguments, module targets after them, of the pass that compiles nothing: all else a build does, with a
 #: line for every job (`-v`) and none of a terminal's control codes
 WORD = ["build", "--no-build", "-v", "--no-ansi"]
@@ -376,16 +436,55 @@ def held(rc: int, output: str, asked: list[str]) -> set[str] | str:
     return {m for m, said in mods.items() if said <= set(HELD)}
 
 
-def plan(pkg: Path, rel: str, lake: Callable[[list[str]], tuple[int, str, float, int]] | None = None) -> Plan | str:
+def in_index(index: Path, packages: list[Path], at: dict[str, tuple[Path, Path]], have: dict[Path, dict[str, bool]],
+             lost: set[str], holds: set[str], imports: Callable[[str], list[str]], asked: list[str]) -> tuple[set[str], str]:
+    """`plan`'s second fact: of the modules a stub of ``asked`` loads that Lake took rather than built and doesn't hold
+    (``holds``), those whose index entries under their package's name, their name and their trace's `depHash` record the
+    SHA-512 of their source as it is and no other (`indexed`), and a line that counts them; no line where there are
+    none to look up. A package whose `lakefile.toml` names none has no module looked up."""
+    scope: dict[Path, str] = {}
+    for q in packages:
+        try:
+            name = tomllib.loads((q / "lakefile.toml").read_text()).get("name")
+        except (OSError, ValueError):
+            name = None
+        if isinstance(name, str):
+            scope[q / LIB] = name
+    reach, todo = set(), list(asked)
+    while todo:
+        if (m := todo.pop()) not in reach and m in at:
+            reach.add(m)
+            todo.extend(imports(m))
+    wanted: dict[tuple[str, str, str], str] = {}
+    for m in sorted(reach - holds):
+        f, lib = at[m]
+        trace = lib.joinpath(*m.split(".")).with_suffix(".trace")
+        if have.get(lib, {}).get(m) and m not in lost and lib in scope and built_from(trace, f.name) == (None, True) \
+                and (h := dep_hash(trace)) is not None:
+            wanted[(scope[lib], m, h)] = m
+    if not wanted:
+        return set(), ""
+    t0 = time.monotonic()
+    got, n = indexed(index, set(wanted))
+    ok = {m for k, m in wanted.items() if got.get(k) == {"sha512:" + hashlib.sha512(at[m][0].read_bytes()).hexdigest()}}
+    return ok, (f"the index records the source as it is of {len(ok)} of the {len(wanted)} other builds Lake took that "
+                f"a stub could load ({n} entries read in {time.monotonic() - t0:.0f} s)")
+
+
+def plan(pkg: Path, rel: str, lake: Callable[[list[str]], tuple[int, str, float, int]] | None = None,
+         index: Path | None = None) -> Plan | str:
     """What the stub imports for FILE (``rel``, from ``pkg``), or why there is no check. A sibling is built, and so
     imported, only when every `.olean` a stub loads for it is of its source as it is (the module's docstring); the others
     are unchecked.
 
     ``lake`` runs `lake ARGS` in ``pkg`` and returns its (exit status, output, seconds, peak resident memory in MB), as
     `run` does. It is called once, with `WORD` and the modules that could be siblings, before any product is read, since
-    Lake puts in place the outputs it holds in an archive or its cache. A module Lake took rather than built counts only
-    where that output says Lake holds it (`held`); without ``lake``, or where its word isn't taken, none does. The plan's
-    `word` says which, with the pass's seconds."""
+    Lake puts in place the outputs it holds in an archive or its cache. A module Lake took rather than built counts
+    where that output says Lake holds it (`held`). ``index`` is the root of a node's index of compiled modules
+    (`module_keys`): a module Lake took and doesn't hold counts too where the index's entries under its package, its
+    name and its trace's `depHash` record the SHA-512 of its source as it is and no other (`indexed`), which holds where
+    Lake would compile it only because an import was rebuilt since. Where Lake's word isn't taken, neither fact is read
+    and no module Lake took counts. The plan's `word` says which, with the seconds."""
     mods, root = modules(pkg), pkg.resolve()
     path = (pkg / rel).resolve()
     if (mod := next((m for m, f in mods.items() if f == path), None)) is None:
@@ -419,12 +518,12 @@ def plan(pkg: Path, rel: str, lake: Callable[[list[str]], tuple[int, str, float,
     aside = (executables(pkg) | {m for m in mods if _audit().under(prefixes, m)}) - {mod}
     asked = sorted(set(mods) - above - aside)
     holds: set[str] = set()
-    word = ""
+    word, taken = "", True
     if lake is not None and asked:
         rc, said, seconds, peak = lake([*WORD, *(f"+{m}" for m in asked)])
         got, ran = held(rc, said, asked), f"lake {' '.join(WORD)}: exit {rc} in {seconds:.0f} s, peak {peak} MB"
         if isinstance(got, str):
-            word = f"Lake's word isn't taken, so every build Lake took rather than made is unchecked: {got} ({ran})"
+            word, taken = f"Lake's word isn't taken, so every build Lake took rather than made is unchecked: {got} ({ran})", False
         else:
             holds = got
             word = (f"Lake holds {len(got & set(asked))} of the {len(asked)} modules that could be siblings as their "
@@ -442,20 +541,25 @@ def plan(pkg: Path, rel: str, lake: Callable[[list[str]], tuple[int, str, float,
                 at.setdefault(m, (f, lib))
             else:
                 lost.add(m)
+    by_index: set[str] = set()
+    if index is not None and taken:
+        by_index, said = in_index(index, packages, at, have, lost, holds, imports, asked)
+        word = "; ".join(filter(None, (word, said)))
     good: dict[str, bool] = {}
 
     def current(m: str) -> bool:
         """Whether ``m``'s build is of its source as it is, and names the imports read here: its `.olean` and trace are
         there, its header is one `headers.py` reads, no package holds a product of its name with no source, which Lean
         could load in its place, and the trace states this source's hash or, of a module Lake took rather than built,
-        Lake said that it holds it as its inputs are now (``holds``)."""
+        Lake said that it holds it as its inputs are now (``holds``) or the index records this source under its trace's
+        hash (``by_index``)."""
         f, lib = at[m]
         if not have[lib].get(m) or m in lost or headers[m] is None:
             return False
         stated, took = built_from(lib.joinpath(*m.split(".")).with_suffix(".trace"), f.name)
         if stated is not None:
             return stated == lake_hash(f.read_bytes())
-        return took and m in holds
+        return took and (m in holds or m in by_index)
 
     def loads(m: str) -> bool:
         """Whether every build a stub that imports ``m`` loads is of its source as it is: ``m``'s own (`current`) and that
