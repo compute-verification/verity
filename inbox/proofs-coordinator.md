@@ -106519,3 +106519,45 @@ The one-member record against a bare public file is accepted (a `#guard`). The s
 **Next, in order:** read the two runs and fix what fails; the lemma that the wiring map moves no gate it sends a wire to at an accepted run (`rewires_of_two` gives it); the one-tree fact's roots at the map, case by case (a linked input, a wired input, a returned output, an output only the interior record holds); then the entry fact.
 
 **Not established.** That anything on the base since `3aeb727bea12` compiles. `NeededBits h` itself. That the bridge's lemmas compose into it without a new one about `keyProg`'s rows.
+
+## PROVED, Thu 12 Nov 22:46Z: A17, the notice for Daniel drafted: I would take the second guarantee, a fact about the check with no probability in it, stated at the same place map the theorem's claim reads so that the two compose; a clause in the claim would change the vocabulary every subprotocol's statement reads
+
+**In plain words, for Daniel.** Some blocks read a value the auditor registered ahead of time, such as the weights. The check already refuses unless such a read is opened against the root the auditor registered. The theorem's claim does not say so: it speaks of that read as of any other. There are two ways to say it. One adds a sentence to the theorem's claim. The other leaves the theorem alone and lists a second, smaller statement that an accept also cites. I would take the second. The fact has no chance in it: it follows from the accept alone, so it does not need to sit inside a bound on a probability. And the theorem's claim is written in words every protocol's statement shares, so a sentence added there reopens each of them.
+
+Clock: `date -u` read 22:46Z before the push. Mailbox read at `cb17934ed3`: your 22:42Z message is its last. No file of the tree changed; no run of mine is out. This is a draft for you to send, not a notice sent.
+
+### The notice, as I would send it
+
+**What an accept does not yet say.** Where a proof block reads a registered value, the compiled check holds the read to the root the auditor registered and refuses otherwise. The theorem's claim says each bound block's values are opened under "its port's root" and never says that, at such a read, this root is the registered one. So an accept of an audit with registered reads is not covered by the theorem as listed.
+
+**Option 1: a clause in the theorem's claim.**
+
+- Before: "the commitment opens gate `g` to `v`" means an opening of the row at `g`'s place that the row verifier accepts under the place's root, and the root is the committed public file's root for `g`'s port (`Vocab.Opens`, `security/Properties/Verity/Game.lean:781-790`; `placeOfRead`, `security/Proofs/Properties/Verity/Sampled/Place.lean:46`) [read].
+- After: the vocabulary gains what the parameters register for a gate, and `Opens` gains: where `g` is a registered read, the place's root is that registered root. A block whose registered read is opened under another root then counts among the unbound ones, inside the theorem's bound.
+- What changes: the claim of the one theorem, and with it the record of every listed guarantee stated over the vocabulary, since `Opens` is the one every protocol's claim reads (`Vocab.live`, `Game.lean:800-809`; `Holds`, `:820-828`) [read]. The lock names `Verity.Vocab` in 67 places of `security/lean-audit.json` and 110 of `security/Properties/lean-audit.json` [run: a count of mentions on my VM, not of guarantees]. Soundness's files that prove the openings reopen.
+
+**Option 2: a second guarantee, which the accept also cites.**
+
+- Before: the lock lists one guarantee for the accept.
+- After: two. The new one, in words: "in every exchange the compiled check accepts, at every gate of a registered read, the root of the gate's place is the root the parameters register for the value it reads." It has no probability, no finder and no named assumption [derived: the check decides it, `Flock.checkRegistered` and `Registered.checkFull`, `Spot/OneStageZk.lean:317-320`]. The one theorem's statement and records stay as they are. The run's record cites both.
+- What the two give together, as a corollary and not a listed change: outside the theorem's error, all but the stated share of blocks compute on values opened under their ports' roots, and at a registered read that root is the registered one. By the commitment's binding the rows are then the registered value's, or a SHA-512 collision is in hand.
+
+**Which I would take: option 2**, with one condition.
+
+- The fact follows from the accept alone. Inside the claim it would sit under a probability bound it does not need.
+- The claim's `Opens` is the one the period claims of five subprotocols read (sampled proofs, PoUW, PoUS, PoUB and the network certifier). A clause there is a change to each.
+- The condition: the second guarantee must speak of the same place map the claim reads (`V.place` at the deployed vocabulary, which is `placeOfRead`, `Sampled/Instance.lean:170`), not of the root in the session's own statement. Otherwise the two statements speak of two roots and the corollary does not follow. That is why the step before it, the link from the committed row to the trace's value, is needed either way.
+- What option 1 gives and option 2 does not: one citation. The rule that soundness is one theorem over everything the verifier accepts points to option 1 in the end. Option 2 does not close that door: the clause can move into the claim the next time the claim is reopened, and the second guarantee then becomes its proof.
+
+**What "the root the parameters register" is** [read: `Spot/OneStage.lean:13-25`]. It has four sources: a root the record itself registers and the registration check holds to the log's first registration of that value; a root the verifier pinned beforehand; a root of an earlier record's port; and a value the verifier fills itself. The statement has to name them as one function of the parameters and the record. I have not written it.
+
+### Not established
+
+- That the second guarantee can be proved with no premise beyond the theorem's four input premises. Nothing is stated in Lean; I ran no Lean.
+- The count of listed guarantees option 1 changes. I counted mentions of the vocabulary in the locks, not records whose hash would change.
+- Whether Friday's audit has any registered read. You asked the worker that holds Friday's tree; I found no answer in the inbox at this entry. If none of the 20 templates has one, A17 does not touch Friday's accept.
+
+### To post
+
+- The notice above, if you agree with option 2.
+- For the worker that takes A17's steps 1 and 2: "state the second guarantee on `V.place` at the deployed vocabulary; the root it compares with is one function of the parameters and the record over the four sources (`OneStage.lean:13-25`)".
