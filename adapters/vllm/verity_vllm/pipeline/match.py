@@ -87,6 +87,8 @@ from verity_vllm.pipeline.match_workload import (
 )
 from verity_vllm.records.schema_ids import MATCH_RUN_SCHEMA, MATCH_STAGES_SCHEMA
 
+__all__ = ["Options", "fold_construction_args", "main"]
+
 logger = init_logger(__name__)
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
