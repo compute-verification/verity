@@ -113,6 +113,43 @@ def test_window_of_a_pass_sent_by_vllms_client_reads_the_ids_the_arms_server_kep
     assert sorted(R.served_ids(d, "warm")) == ["cmpl-warm-u0-0-0-0123abcd"]
 
 
+def test_window_refuses_a_request_served_with_a_sampling_field_the_replay_does_not_apply(tmp_path: Path):
+    """The replay gives its engine a request's temperature, top-p, top-k, seed, length and ignore-EOS (`replay.params`).
+    A server puts the others in a request too, from the request or from the checkpoint's generation config; a replay
+    would sample without them, so the window is refused rather than replayed to tokens that differ."""
+    # what a served request holds where it and the generation config leave every such field out: vLLM's own values
+    own = {"temperature": 1.0, "top_p": 0.95, "top_k": 0, "min_p": 0.0, "seed": 7, "max_tokens": 2, "min_tokens": 0,
+           "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0, "stop_token_ids": [], "stop": [],
+           "ignore_eos": True, "logit_bias": None, "n": 1}
+    assert R.unapplied(own) == {} == R.unapplied({"max_tokens": 2}) and R.unapplied({}) == {}
+    # every field a served arrival holds (``own``'s, a step trace's) is either given to the replay's engine or refused
+    # at another value than vLLM's own
+    given = {"temperature", "top_p", "top_k", "seed", "max_tokens", "ignore_eos"}
+    assert given | set(R.UNAPPLIED) == set(own) and not given & set(R.UNAPPLIED)
+    for field, value in (("min_p", 0.05), ("presence_penalty", 0.5), ("frequency_penalty", 0.5), ("repetition_penalty", 1.05),
+                         ("min_tokens", 4), ("logit_bias", {"7": -100.0}), ("n", 2), ("stop", ["\n"]), ("stop_token_ids", [9])):
+        assert R.unapplied({**own, field: value}) == {field: value}, field
+    # a request that stops at its end of text has the checkpoint's other end-of-text ids there, put by vLLM itself in
+    # the replay's engine as in the served one
+    assert R.unapplied({**own, "ignore_eos": False, "stop_token_ids": [9, 11]}) == {}
+
+    def served(d: Path, sampling: dict) -> Path:
+        trace = arm(d) / "server" / "step_trace.9.jsonl.gz"
+        with gzip.open(trace, "rt") as f:
+            recs = [json.loads(line) for line in f]
+        for r in recs:
+            if r["kind"] == "arrive" and r["request"] == rid("sat1", 1):
+                r["sampling"] = sampling
+        with gzip.open(trace, "wt") as f:
+            f.write("".join(json.dumps(r) + "\n" for r in recs))
+        return trace.parent.parent
+
+    assert len(R.window(served(tmp_path / "own", own), "sat", 1)["requests"]) == 2
+    with pytest.raises(SystemExit, match=r"cmpl-sat1-00001-0-0123abcd was served with \{'repetition_penalty': 1.05\}, which the "
+                                         r"replay does not give its engine \(replay.params\)"):
+        R.window(served(tmp_path / "penalty", {**own, "repetition_penalty": 1.05}), "sat", 1)
+
+
 def test_window_refuses_a_pass_whose_ids_nothing_kept(tmp_path: Path):
     d = bench_arm(tmp_path / "unfinished", finished=(0,))
     with pytest.raises(SystemExit, match="cmpl-agentic@2-r1-u1-0-0-0123abcd arrived in the window and the server kept no ids"):

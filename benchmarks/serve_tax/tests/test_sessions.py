@@ -8,6 +8,7 @@ import inspect
 import json
 import math
 import re
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -44,13 +45,42 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     assert S.changes_of("prod-record") == ["the step record", "the served ids", "the canonical top-k"]
     # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
     assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
-    assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record")} == {"compiled"}
+    assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace")} == {"compiled"}
     assert S.stock_of("no such arm") == "compiled" and all(n in S.ARMS and not S.changes_of(n) for n in S.STOCK)
     # the recipe is one model's; its arms serve at the job's context limit, the same for the three
     for arm in ("prod", "prod-again", "prod-record"):
         with pytest.raises(SystemExit, match=f"arm {arm} starts the server as vLLM's recipe.*no recipe for moonlight"):
             S.published_context(arm, "moonlight", None)
         assert S.published_context(arm, "glm53", 131072) == 131072
+
+
+def test_what_prod_record_differs_from_prod_by_is_read_apart_by_two_arms(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """`prod-record` differs from stock in the seeds its sampled client sends, the record and the canonical top-k at
+    once, so a figure it moves names none of them. `prod-seeded` is stock's server sent the seeds and `prod-trace` is
+    `prod-record` with the top-k off: from stock to `prod-record` through the two, each step turns one of the three on."""
+    monkeypatch.delenv("VERITY_DSA_TOPK", raising=False)
+    names = ("prod", "prod-seeded", "prod-trace", "prod-record")
+    assert [S.stock_of(n) for n in names[1:]] == ["prod"] * 3
+    assert [S.sends_seed(S.ARMS[n]) for n in names] == [False, True, True, True]
+    assert [S.changes_of(n) for n in names] == [[], [], ["the step record", "the served ids"],
+                                                ["the step record", "the served ids", "the canonical top-k"]]
+    # the launch line is prod's in each, and prod-seeded's server is prod's whole: its environment too
+    argv = {n: S.server_argv(S.ARMS[n], GLM, Path("/ck"), 8000) for n in names}
+    assert argv["prod-seeded"] == argv["prod-trace"] == argv["prod-record"] == argv["prod"]
+    env = {n: S.server_env(S.ARMS[n], tmp_path, tmp_path / "site", None, 600.0, 600.0, private=tmp_path / "private")
+           for n in names}
+    assert env["prod-seeded"] == env["prod"]
+    assert replace(S.ARMS["prod-seeded"], what="", seeds=False) == replace(S.ARMS["prod"], parent="prod", what="")
+    assert [S.PLUGIN_ENV in env[n] for n in names] == [False, False, True, True]
+    assert env["prod-trace"][S.PLUGIN_ENV] == env["prod-record"][S.PLUGIN_ENV]
+    assert [env[n].get("VERITY_DSA_TOPK") for n in names] == [None, None, None, "canonical"]
+    assert replace(S.ARMS["prod-trace"], what="", env=S.TOPK_ENV, general=S.TOPK) == replace(S.ARMS["prod-record"], what="")
+    # a cost over prod takes prod-again alone for prod's second lifetime: prod-seeded's server is prod's, but what it is
+    # sent is not, so its seconds are no reading of the noise between two of prod's starts
+    assert S.same_engine("prod-again", "prod") and not S.same_engine("prod-seeded", "prod")
+    assert not any(S.same_engine(a, b) for a in names for b in names if a < b)
+    # no other arm is sent seeds without keeping the record
+    assert [n for n, a in S.ARMS.items() if a.seeds] == ["prod-seeded"]
 
 
 def test_an_arms_meta_holds_the_value_settings_in_force_in_the_environment_its_server_is_started_with(

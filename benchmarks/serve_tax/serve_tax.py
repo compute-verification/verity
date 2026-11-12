@@ -82,7 +82,14 @@ The arms, each one engine configuration; each adds its change to the arm it name
   prompt ids and served ids kept (`servetax_plugin.ServedIds`), which a replay of a pass sent by vLLM's client is
   given and compared with (`replay.window`), and the canonical DSA top-k, as ``two-stage`` has it: a row of more than
   2,048 keys is then a function of its inputs, which a replay that is to give the served tokens needs (it runs under
-  the same plugin and environment: `replay.served_under`).
+  the same plugin and environment: `replay.served_under`);
+- ``prod-seeded`` and ``prod-trace``: what ``prod-record`` differs from ``prod`` by, apart. ``prod-seeded`` is
+  ``prod``'s server with no change of ours, its sampled client sending each user's seed as ``prod-record``'s does
+  (`Arm.seeds`); ``prod-trace`` is ``prod-record`` with the canonical top-k off, vLLM selecting by its own rule. A
+  sampled pass of each beside ``prod`` and ``prod-record`` says which moves a figure, the share of draft tokens
+  accepted among them: ``prod-seeded`` against ``prod`` is the seed, ``prod-record`` against ``prod-trace`` the
+  canonical top-k, and ``prod-trace`` against ``prod-seeded`` the record and its ids. Neither is an arm a replay is
+  promised for.
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
@@ -100,7 +107,7 @@ one pass a load and rung: a load (`LOADS`) is one of the client's datasets, and 
 decoding to its length (``--ignore-eos``); under ``--sampled`` each is sampled instead, at the recipe's temperature
 and top-p (`SAMPLED`), naming its client as its ``user``. An arm that keeps the record is sent that user's seed too
 (`user_seed`, `sends_seed`; another in each server lifetime), under which its replay samples the request again; a
-stock arm is sent none, as a served request carries none. Each pass's DIR/<load>@<rung>/rep-<r>/result.json is the result the client
+stock arm is sent none, as a served request carries none, and ``prod-seeded`` is stock's server sent them. Each pass's DIR/<load>@<rung>/rep-<r>/result.json is the result the client
 saved, and `metrics` and `table` take its figures as the client computed them (`bench_metrics`). A load whose dataset
 is a file reads the node's one copy of it, pinned by revision and SHA-512 (`Dataset`): `passes --fetch` downloads it
 into the node's cache where it is missing, every run checks its SHA-512 and refuses a file that differs, and its
@@ -220,6 +227,9 @@ class Arm:
     #: `BASE_ARGS` no recipe sets left to vLLM's own defaults (`UNPUBLISHED`), behind the job's front end (`FRONT_ENDS`),
     #: with the flags of vLLM's own the job adds to the line (`published_args`)
     published: bool = False
+    #: whether a sampled pass's client sends the arm each user's seed though the arm keeps no record (`sends_seed`): the
+    #: client's part of a recording arm on a server that has none of our changes
+    seeds: bool = False
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -283,6 +293,10 @@ ARMS = {
                       published=True),
     "prod-record": Arm("prod", "+ the scheduler's step trace (StepTrace), each request's prompt ids and served ids, and "
                        "the canonical DSA top-k", plugin=("record", "ids"), env=TOPK_ENV, general=TOPK, published=True),
+    "prod-seeded": Arm("prod", "that server, a sampled pass's client sending each user's seed as prod-record's does: "
+                       "what a seed moves in vLLM's sampling, read apart", published=True, seeds=True),
+    "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
+                      "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
 }
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 #: the stock arms, vLLM with no change of ours: an arm's cost is over the nearest of them above it (`stock_of`)
@@ -1327,8 +1341,9 @@ def sends_seed(arm: Arm) -> bool:
     """Whether a sampled pass's client sends ``arm`` each user's seed (`user_seed`): where the arm keeps the record,
     whose replay samples each request again under the request's own seed. A stock arm is sent none, as a served
     request carries none, so vLLM samples its requests as it samples any without a seed; what a seed changes in
-    vLLM's sampling is then on our side of a cost, as a change of ours."""
-    return "record" in arm.plugin
+    vLLM's sampling is then on our side of a cost, as a change of ours. An arm that says so is sent them with no
+    record kept (`Arm.seeds`): stock's server under the recording arm's client, which reads that change apart."""
+    return "record" in arm.plugin or arm.seeds
 
 
 def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int, d: Path, tag: str,
