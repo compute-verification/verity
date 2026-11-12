@@ -24,22 +24,23 @@ two commit the same leaves, and the tests hold them to the same roots.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Protocol
 
 import numpy as np
+from verity.circuits import partition_object as PO
+from verity.circuits.evaluation.reference import evaluate_region
 from verity.protocols.pouw.prover import circuit as C
-from verity.protocols.pouw.verifier.audit import commit_rows
 from verity.protocols.pouw.prover.circuit import partition as CP
 from verity.protocols.pouw.prover.circuit import reference as R
 from verity.protocols.pouw.prover.circuit.ncp2 import D, Shape
+from verity.protocols.pouw.verifier.audit import commit_rows
 from verity.protocols.pouw.verifier.protocol import tagged
 
-from verity.circuits import partition_object as PO
 from verity_vllm.query.manifest.format import spec_family
-from verity.circuits.evaluation.reference import evaluate_region
 
 #: The model Program's families for one row of a PoUW site: its served output, checked by the replay against the call; the
 #: second is a biased linear's row whose bias add was the pre-bias output's only reader (`program.registry.pouw_rows`)
@@ -144,7 +145,7 @@ class Group:
     def __init__(self, size: int, dtype: str) -> None:
         self.h, self.dtype = hashlib.sha256(size.to_bytes(8, "little")), dtype
 
-    def update(self, values: np.ndarray) -> "Group":
+    def update(self, values: np.ndarray) -> Group:
         self.h.update(np.ascontiguousarray(values, dtype=self.dtype).reshape(-1).tobytes())
         return self
 

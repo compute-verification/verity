@@ -25,9 +25,10 @@ y is dq of their z and the served y is theirs.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 #: the matmul family: a call of any of these is a GEMM
 GEMMS = frozenset({"aten::_int_mm", "aten::mm", "aten::addmm", "aten::addmm_", "aten::_addmm_activation", "aten::bmm",
@@ -133,11 +134,10 @@ class Trace:
 
     def dispatch(self, mode: Any, func: Any, args: Sequence[Any], kwargs: Mapping[str, Any]) -> Any:
         name = func._schema.name
-        top = self._top is None
-        if top:
-            self._top = Invocation(len(self.invocations), name)
-            self.invocations.append(self._top)
-        inv = self._top
+        inv, top = self._top, self._top is None
+        if inv is None:
+            inv = self._top = Invocation(len(self.invocations), name)
+            self.invocations.append(inv)
         try:
             impl = None if func.namespace in KNOWN else _impl(func, args)
             if impl is not None:

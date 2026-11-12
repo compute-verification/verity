@@ -85,7 +85,7 @@ class WholeStep:
 
         def dispatch(*a: Any, **kw: Any) -> Any:
             key = self.key()
-            graphs = self.sets.get(key)
+            graphs = None if key is None else self.sets.get(key)
             if graphs:
                 mgr.graphs = graphs
                 desc = original(*a, **kw)
