@@ -58,6 +58,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/remote_bandwidth",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
+          # auditor_line.py: a line whose summed error is 1 or more holds no share, by the reporting grid's one rule
+          "verity/protocols/reporting.py",
           "verity/composite/__init__.py", "verity/composite/device/__init__.py", "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/composite/device/live_challenger/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

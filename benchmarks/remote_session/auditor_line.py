@@ -90,7 +90,9 @@ total of a record whose ledger didn't charge them). The total leaves out the win
 nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim prf/sha-512) with no number,
 in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
-whichever session the run made least, so the union bound holds where a maximum wouldn't.
+whichever session the run made least, so the union bound holds where a maximum wouldn't. A sum of 1 or more bounds
+nothing: the line at that T holds no share and says "no bound at this period" with the sum (its `no_bound`,
+`verity.protocols.reporting`'s rule for every row's error), and the sentence of who earned credit says so.
 
 **Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
 from the network certifiers' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
@@ -158,6 +160,7 @@ from verity.protocols.certifier.verifier import audit as caudit  # noqa: E402
 from verity.protocols.certifier.verifier import certificate as cert  # noqa: E402
 from verity.protocols.certifier.verifier.grid import GridParams, Reason, Status  # noqa: E402
 from verity.protocols.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
+from verity.protocols.reporting import no_bound  # noqa: E402
 from verity.protocols.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.spot.device import remote  # noqa: E402
@@ -1052,21 +1055,26 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
     """The line of record, on the auditor's clock: at each T and in each form the least share of weights held among
     the credited sessions there (exact, the first on a tie), with that session's filler held beside it, or zero with
     every session's reasons, and its error (`union_error` of those sessions); and who earned credit, who didn't and
-    why, in a sentence, with the error of the line over every T."""
+    why, in a sentence, with the error of the line over every T. A line's error is its credited sessions' summed, and
+    one of 1 or more bounds nothing (`reporting.no_bound`): that T's line holds no share, zero in each form, and says
+    why under `no_bound`, beside the sessions it would have credited and the error."""
     out: dict = {}
     lined = []
     for t in sorted({r["T"] for r in rows if r.get("T")}):
         at = [r for r in rows if r.get("T") == t]
         ok = [r for r in at if r["credit"]["ok"]]
         lined += ok
-        if ok:
+        error = union_error(ok)
+        why = no_bound(line.number(error["exact"]))
+        if ok and why is None:
             out[t] = {f: min(({"k": r["k"], **{n: r["shares_auditor_clock"][f][n] for n in (*SHARES, "exact")}}
                               for r in ok), key=lambda x: line.number(x["exact"]["time"])) for f in line.FORMS}
             out[t]["credited_sessions"] = [r["k"] for r in ok]
         else:
             out[t] = {**{f: {**dict.fromkeys(SHARES, 0.0), "exact": dict.fromkeys(SHARES, "0")} for f in line.FORMS},
-                      "credited_sessions": [], "zero": {r["k"]: r["credit"]["zero"] for r in at}}
-        out[t]["error"] = union_error(ok)
+                      "credited_sessions": [r["k"] for r in ok],
+                      **({"no_bound": why} if ok else {"zero": {r["k"]: r["credit"]["zero"] for r in at}})}
+        out[t]["error"] = error
     credited = [r["k"] for r in rows if r["credit"]["ok"]]
     zero = {r["k"]: r["credit"]["zero"] for r in rows if not r["credit"]["ok"]}
     if not credited:
@@ -1074,15 +1082,18 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
     else:
         said = (f"the line credits session(s) {', '.join(map(str, credited))}"
                 + (f"; session(s) {', '.join(map(str, zero))} earn none" if zero else ""))
+    none = {t: row["no_bound"] for t, row in out.items() if "no_bound" in row}
     return out, {"credited_sessions": credited, "zero": zero, "error": union_error(lined), "summary": said + "".join(
-        f"; session {k}: {'; '.join(why)}" for k, why in zero.items())}
+        f"; session {k}: {'; '.join(why)}" for k, why in zero.items()) + "".join(
+        f"; the line at {t} holds no share: {why}" for t, why in none.items()), **({"no_bound": none} if none else {})}
 
 
 def table(doc: dict) -> str:
     """`analyse`'s doc as Markdown: each session's five checks (`CHECKS`), with the reason of each that failed, and
     its credit, weights held then filler held; then the line at each T, time-held (labelled as under Identity, which
     nothing the verifier checks establishes) / link-charged with the snapshot forms, weights and filler apart, and its
-    error when it credits a session."""
+    error when it credits a session. A line whose error is 1 or more (its `no_bound`), and a session's credit where the
+    session's own is, print `reporting.NO_BOUND` with the error and no share."""
     b = line.FORMS
     checks = (*CHECKS, BOUNDARY) if doc["boundary"]["checked"] else CHECKS
     out = ["| session | T | " + " | ".join(checks) + " | credit |", "|---|---|" + "---|" * len(checks) + "---|"]
@@ -1090,18 +1101,21 @@ def table(doc: dict) -> str:
         c = s["credit"]
         cells = ["-" if n not in c else "yes" if c[n]["ok"] else f"no: {c[n]['reason']}" for n in checks]
         mine = {x: (s.get("shares_auditor_clock") or {}).get(x) for x in b}
-        credit = ("credited: weights " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) + ", filler "
+        why = no_bound(line.number(s["error"]["exact"]["total"])) if "error" in s else None
+        credit = (f"credited: {why}" if c["ok"] and why else
+                  "credited: weights " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) + ", filler "
                   + " / ".join(f"{mine[x]['filler_time']:.4%}" for x in b) if c["ok"] and all(mine.values())
                   else "zero")
         out.append(f"| {s['k']} | {s.get('T') or '-'} | " + " | ".join(cells) + f" | {credit} |")
     out.append("")
     for t, row in doc["line"].items():
-        out.append(f"line {t}: credited {row['credited_sessions']}, time-held (under Identity: no block over the "
-                   "boundary links) / link-charged weights "
-                   + " / ".join(f"{row[x]['time']:.4%}" for x in b) + ", filler "
-                   + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
-                   + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
-                   + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
+        out.append(f"line {t}: credited {row['credited_sessions']}, "
+                   + (f"{row['no_bound']}: the line holds no share" if row.get("no_bound") else
+                      "time-held (under Identity: no block over the boundary links) / link-charged weights "
+                      + " / ".join(f"{row[x]['time']:.4%}" for x in b) + ", filler "
+                      + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
+                      + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
+                      + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")")
                    + (f", error {ledger.DELTA_FORM}, δ = {row['error']['total']:.3g} "
                       f"(2^{row['error']['log2']:.2f}): the ledger's δ "
                       "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the credited "
