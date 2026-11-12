@@ -6,11 +6,11 @@ that makes anything else public; the execution phase's own root and W's root are
 
     item       kind         source     what it is
     verdict    output       outcome    every sampled tile proved and opened, or not
-    work       output       execution phase     the credited work, as the tile count N padded to a grid level (`bucket`)
+    work       output       `window`   the credited work, as the tile count N padded to a grid level (`bucket`)
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the sampling design subset:K′ they fix with the work level (`k_prime`)
     length     structure    parameter  the workloads of record's fixed length: each slot's public max_tokens (`length_item`)
-    flipped      coins        outcome    the verifier's own sample, after the receipt
+    `drawn`    coins        outcome    the verifier's own sample, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
