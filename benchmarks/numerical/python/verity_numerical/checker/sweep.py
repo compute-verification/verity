@@ -21,6 +21,7 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
 
+from verity_numerical import settings
 from verity_numerical.bench import instances as I
 from verity_numerical.checker.ctx import IntCtx
 from verity_numerical.checker.gadgets import Epilogue
@@ -139,7 +140,7 @@ def sweep(root: Path, tiers: list[str], limit: int | None, procs: int, log=print
 def _write_result(run_dir: Path, out: Path, doc: dict[str, Any]) -> None:
     status = "passed" if doc["passed"] else ("failed" if doc["complete"] else "not_run")
     detail = "; ".join(f"{t['tier']} {t['ok']}/{t['checked']} ok" + (f" ({t['bad']} bad)" if t["bad"] else "") for t in doc["tiers"])
-    env = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+    env = {"schema": "research/result/v0.1", "run_id": settings.RESEARCH_RUN_ID or "",
            "workload_fingerprint": {"stage": "checker.sweep", "dataset": doc["dataset"], "manifest_sha256": doc["manifest_sha256"],
                                     "params": doc["params"], "tiers": [t["tier"] for t in doc["tiers"]]},
            "validation": {"status": status, "checker": "verity_numerical.checker.sweep", "detail": detail, "evidence": [out.name]},
@@ -155,7 +156,7 @@ def _write_result(run_dir: Path, out: Path, doc: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = settings.RESEARCH_RUN_DIR
     ap.add_argument("--root", type=Path, default=I.DEFAULT_ROOT)
     ap.add_argument("--tiers", default=",".join(I.TIERS))
     ap.add_argument("--limit", type=int, default=None, help="first N instances of each tier (smoke)")

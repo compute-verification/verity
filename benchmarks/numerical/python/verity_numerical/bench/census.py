@@ -8,12 +8,13 @@ Each file is loaded as ``{id: entry}`` with entries as attribute namespaces (``H
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-ROOT = Path(os.environ.get("VERITY_CENSUS") or Path(__file__).resolve().parents[4] / "census")
+from .. import settings
+
+ROOT = Path(settings.VERITY_CENSUS or Path(__file__).resolve().parents[4] / "census")
 
 
 def raw(name: str) -> list[dict[str, Any]]:
