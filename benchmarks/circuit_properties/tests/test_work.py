@@ -4,7 +4,8 @@ their second iteration, whose batch is free, and whose value input's rows are le
 them; carried rows no one node shows distinct left out, one multiply by an input's words however it is written, a
 stated 0's update `θ`'s, a weight rounded to bf16 charged, rows times an input however a product reads them, a
 weight cancelled against itself, through a call too, or times its own rows in another order refused at a point, and a
-row holding a NaN or a specific operand overflowed there, the updates' premise held as facts; a lookup
+row holding a NaN, rows of one value that are inf there, or a specific operand overflowed there, the updates'
+premise held as facts; a lookup
 whose table is the registered one or the loop's own; a Program with no scan; one array times itself; two
 activations; the largest set of arrays a work multiplies pairwise; a weight decoded from a ternary code; a one-hot
 row; a rank-4 bottleneck between two carried weights; each operand's β at min(16, β(k)); and |C| in Boolean gates."""
@@ -642,17 +643,21 @@ VB = 4096
 EMB_VB = bind(RP.EmbeddingRef, V=VB, H=K, DT="f32")
 
 
-def _self_cancel(cancel: bool) -> Program:
-    """prev′ = the PN rows looked up by the iteration's tokens in a table of `VB` rows, plus (``cancel``) M plus -1
-    times M, M carried; and prev W^T."""
+def _self_cancel(cancel: bool, overflow: bool = False) -> Program:
+    """prev′ = the PN rows looked up by the iteration's tokens in a table of `VB` rows (``overflow``: times 2^127
+    twice), plus (``cancel``) M plus -1 times M, M carried; and prev W^T."""
+    big = const(32, 0x7F000000)
+
     def step(B, c, tok, z, zr):
         table, w, prev, m = c
         rows = Coll(ROWS_T, concat([B.call(EMB_VB, tok[p], table).refs for p in range(PN)]))
+        if overflow:
+            rows = _mul(B, _mul(B, rows, B.call(big)), B.call(big))
         new = _add(B, _add(B, m, _mul(B, m, B.call(const(32, 0xBF800000)))), rows) if cancel else rows
         return (_add(B, table, z), _add(B, w, z), new, _add(B, m, zr)), B.batch(LIN, prev, w, axes=(0, None))
 
-    return _loop("SelfCancel" if cancel else "RowsAlone", (("table", Array(VB, X_T)), ("w", W_T), ("prev", ROWS_T),
-                                                            ("m", ROWS_T)),
+    name = ("SelfCancel" if cancel else "RowsAlone") + ("Inf" if overflow else "")
+    return _loop(name, (("table", Array(VB, X_T)), ("w", W_T), ("prev", ROWS_T), ("m", ROWS_T)),
                  (("tok", Array(PN, I32)), ("z", X_T), ("zr", ROWS_T)), Array(PN, Y_T), step)
 
 
@@ -671,6 +676,15 @@ def test_a_weight_cancelled_against_itself_is_refused():
         with pytest.raises(WK.RepeatedRows) as e:
             WK.read(_scaled(kind), KB)
         assert e.value.operand == "w"
+
+
+def test_rows_of_one_value_that_are_inf_at_the_point_are_refused_as_equal():
+    """The looked-up rows times 2^127 twice are ±inf in every word at the point, and rows 0 and 1, one token's, carry
+    one value: compared by their words they are equal, and the Program is refused. Compared by their difference,
+    inf - inf is a NaN and would let them through."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_self_cancel(True, overflow=True), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SelfCancelInfStep_v1", "x", (0, 1))
 
 
 def _swap(order: str, carried: bool) -> Program:

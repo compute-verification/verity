@@ -16,8 +16,9 @@ the Program's digest, with no other randomness, so two reads agree.
 Rows are equal only where they agree at `points` points, enough to hold 64 sampled bits a row: P = ceil(64 / (K b)),
 b the bits its words hold at the point (`held`), at most those of the narrowest `θ` or registered input and of the
 narrowest rounding the Program holds, so a narrow row (an e2m1 word after a rounding, a one-word row) is not refused
-by chance. A row holding an f32 NaN is refused too: no comparison shows it distinct, and whoever submits the
-circuit can make a NaN at the point.
+by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), so a row holding an inf is
+a row: two words of one value hold the same inf there. A row holding an f32 NaN is refused: no comparison shows it
+distinct, and whoever submits the circuit can make a NaN at the point.
 
 The evaluation runs top-down along the reader's summaries (`Reader.summary`), a call's output at its caller's words,
 so an identity written through a call is seen, and a view's words are its source's, so an argument passed twice or
