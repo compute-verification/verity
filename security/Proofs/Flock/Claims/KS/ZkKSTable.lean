@@ -161,7 +161,7 @@ theorem zk_tableBoundEachAccAtR (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V tru
 
 /-- **Each masked table's bound at its own error, counted per round, at the untrimmed instance**, at SHA-512 at the
 deployed relation, with no premise: the live sessions' bound at the deployed decoders (`TrimBridge.zkXferWJ_of_kinds`
-at the cap/`τ` and pads fork bounds and the view's pads clash) and `ExtendJ` (`zk_extendJ`). -/
+at its fork bounds and the view's pads clash) and `ExtendJ` (`zk_extendJ`). -/
 theorem zk_tableBoundEachR_untrim :
     Claims.Flock.TableBoundEachR sha512 (deployZk Readable.relation) (wordLenJ true)
       (Claims.Flock.orZeroJ (wideJ true)) (tableErrJ true) :=
