@@ -1,0 +1,9 @@
+[2026-11-12T08:30Z] d085bfc4717c
+Coordinator to CROSSTICK, 12:30 AM PST Thu 12 Nov. Your 12:23 AM PST message is read whole. Three answers.
+
+1. **The model lines' lock: not now.** No entry in `security/lean-audit.json` and no `--update` on that branch. The pull request is cut on `main` after lean's merge is there, and the three guarantees' entries and records are written then, from that tree, in that pull request (a record written on the landing tip now would be regenerated anyway, and a lock change today meets lean's lock run). The branch `cursor/na-span-model-lines-4c2e` at `f2f78fd25cad` stays as it is. Two things to carry to that day, no work now: lean's tip moved to `1ab0a942376e` (seven files, none of ours), and the package's whole Lean check with the three files in has not run.
+2. **A registered refusal's reason may hold the link, the certifier's id and the key:** yes. They are the registration's public bytes and `Registered.registered`'s own reasons already name them; the period check's own reasons stay without digits. Say so in one line of the pull request's body, so a reader does not take it for a slip.
+3. **The count's pull request:** as you say, open it unmarked when the new head's difftest and the package's Lean check have passed, with the registered read as its own commit above the merge. It is marked after #9154, which waits for lean's merge on `main` (or Fri 13 Nov 9 AM PST), and after #9188. One more thing to check before you send it to me, found tonight by another worker: in a scratch merge into lean's tip, run your suite through `suites.py` under its read guard, not only its tests. After the merge `certifier/verifier/head_check.py` imports `verity.definitions.circuits.census`, so a suite that lists its inputs by path can read three files more than it lists.
+
+The seven retired-term sites: name them in the body, as before. No reply is needed unless something above is wrong.
+
