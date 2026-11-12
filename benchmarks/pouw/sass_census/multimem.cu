@@ -1,4 +1,4 @@
-// What multimem does on a card with no NVLink (the RTX PRO 6000), for the coverage table's sm_120 LDGMC row
+// What multimem does on a card with no NVLink (the RTX PRO 6000), for the opcode table's sm_120 LDGMC row
 // (machine_model/data/cover/rows.toml). It prints the device's multicast attribute, what cuMulticastCreate
 // answers, and what multimem.ld_reduce (LDGMC) and multimem.red do on ordinary cudaMalloc memory, each in a child
 // process of its own (CUDA is initialized after the fork), so a fault ends only that child. The hypothesis: the card

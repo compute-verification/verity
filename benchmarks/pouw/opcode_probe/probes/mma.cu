@@ -83,7 +83,7 @@ __device__ const uint8_t UE8M0MIX[7] = {124, 125, 126, 127, 128, 129, 130};     
 __device__ const uint8_t UE4M3MIX[8] = {0x38, 0x44, 0x4A, 0x4E, 0x51, 0x53, 0x55, 0x57};  // 1, 3, 5, ..., 15
 
 // The samples run once before the timed loop, so their loops roll (#pragma unroll 1) to keep live registers low.
-__device__ __forceinline__ uint32_t draw_e4m3(unsigned long long& s) {  // four E4M3 bytes of integers in [-16, 16]
+__device__ __forceinline__ uint32_t rand_e4m3(unsigned long long& s) {  // four E4M3 bytes of integers in [-16, 16]
   uint32_t w = 0;
 #pragma unroll 1
   for (int j = 0; j < 4; j++) {
@@ -93,7 +93,7 @@ __device__ __forceinline__ uint32_t draw_e4m3(unsigned long long& s) {  // four 
   }
   return w;
 }
-__device__ __forceinline__ uint32_t draw_nibbles(unsigned long long& s) {  // eight E2M1 nibbles (all are grid values)
+__device__ __forceinline__ uint32_t rand_nibbles(unsigned long long& s) {  // eight E2M1 nibbles (all are grid values)
   uint32_t w = 0;
 #pragma unroll 1
   for (int j = 0; j < 8; j++) {
@@ -103,7 +103,7 @@ __device__ __forceinline__ uint32_t draw_nibbles(unsigned long long& s) {  // ei
   return w;
 }
 template <bool NV>
-__device__ __forceinline__ uint32_t draw_scale(unsigned long long& s) {  // four mix-scale bytes a firing
+__device__ __forceinline__ uint32_t rand_scale(unsigned long long& s) {  // four mix-scale bytes a firing
   uint32_t w = 0;
 #pragma unroll 1
   for (int j = 0; j < 4; j++) {
@@ -188,9 +188,9 @@ OP_KERNEL(qmma_e4m3_data, TPB) {
   unsigned long long s = smix(((unsigned long long)blockIdx.x << 32) ^ lane ^ 0xE4A3ull);
   uint32_t x[4], y[2];
 #pragma unroll
-  for (int r = 0; r < 4; r++) x[r] = draw_e4m3(s);
+  for (int r = 0; r < 4; r++) x[r] = rand_e4m3(s);
 #pragma unroll
-  for (int r = 0; r < 2; r++) y[r] = draw_e4m3(s);
+  for (int r = 0; r < 2; r++) y[r] = rand_e4m3(s);
   float d[8][4] = {};
   OP_BEGIN
   OP_LOOP(it) {
@@ -207,10 +207,10 @@ __device__ __forceinline__ void omma_data_body(const OpArgs& a) {
   unsigned long long s = smix(((unsigned long long)blockIdx.x << 32) ^ lane ^ (NV ? 0x7F4Bull : 0xE803ull));
   uint32_t x[4], y[4];
 #pragma unroll
-  for (int r = 0; r < 4; r++) x[r] = draw_nibbles(s);
+  for (int r = 0; r < 4; r++) x[r] = rand_nibbles(s);
 #pragma unroll
-  for (int r = 0; r < 4; r++) y[r] = draw_nibbles(s);
-  const uint32_t sc = draw_scale<NV>(s);
+  for (int r = 0; r < 4; r++) y[r] = rand_nibbles(s);
+  const uint32_t sc = rand_scale<NV>(s);
   float d[8][4] = {};
   OP_BEGIN
   OP_LOOP(it) {
@@ -229,10 +229,10 @@ __device__ __forceinline__ void omma_sp_data_body(const OpArgs& a) {
   unsigned long long s = smix(((unsigned long long)blockIdx.x << 32) ^ lane ^ (NV ? 0x5A4Bull : 0x1203ull));
   uint32_t x[4], y[4];
 #pragma unroll
-  for (int r = 0; r < 4; r++) x[r] = draw_nibbles(s);
+  for (int r = 0; r < 4; r++) x[r] = rand_nibbles(s);
 #pragma unroll
-  for (int r = 0; r < 4; r++) y[r] = draw_nibbles(s);
-  const uint32_t sc = draw_scale<NV>(s);
+  for (int r = 0; r < 4; r++) y[r] = rand_nibbles(s);
+  const uint32_t sc = rand_scale<NV>(s);
   const uint32_t e = 0x4E4E4E4Eu;  // a valid 2:4 metadata (pairs {0,1} and {2,3}); the sample varies the values, not it
   float d[8][4] = {};
   OP_BEGIN

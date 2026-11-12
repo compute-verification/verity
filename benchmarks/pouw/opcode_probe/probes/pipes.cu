@@ -1,4 +1,4 @@
-// The pipes of sm_120's lane opcodes that the coverage table places on a pipe no run had placed them on
+// The pipes of sm_120's lane opcodes that the opcode table places on a pipe no run had placed them on
 // (machine_model/data/cover/rows.toml). Joint points: rows.jsonl only, no census line; pipes_verdict.py reads
 // them. Each warp runs 8 independent chains of the opcode, alone and beside a partner on the pipe the table puts it on,
 // on chains of their own:
