@@ -2,11 +2,11 @@
 
 Low to high: the base packages it requires (`Base`, `Circuits`, `Commitments`, whose own order Lake's requires hold);
 Flock alone; the ZK server (`Flock.Firewall` and the modules under it, the library `FlockZkServer`, with the executables
-`flock-firewall` and `flock-frame-tape`); and the recursion (`Flock.Rec*`, the library `FlockRec`, with V*'s circuit
-`VStar` and the `flock-rec-*` executables). A module imports its own layer and the layers below it, so Flock alone reads
-neither the ZK server nor the recursion, and the ZK server reads nothing of the recursion. The umbrella `Flock` and the
-tests (`Flock.Test.*`) read every layer. ``UP`` holds the imports that still point up, each with what removes it; an
-entry that matches no import fails, so the list only shrinks.
+`flock-firewall` and `flock-frame-tape`); and the recursion (`Flock.Rec*` and ``REC_MODULES``, the library `FlockRec`,
+with V*'s circuit `VStar` and the `flock-rec-*` and `flock-witness` executables). A module imports its own layer and the
+layers below it, so Flock alone reads neither the ZK server nor the recursion, and the ZK server reads nothing of the
+recursion. The umbrella `Flock` and the tests (`Flock.Test.*`) read every layer. ``UP`` holds the imports that still
+point up, each with what removes it; an entry that matches no import fails, so the list only shrinks.
 
 A module that moved to a base package keeps its old name in Flock's package as a forwarder until every importer names
 the base module: it holds `module`, one `public import` of the module it re-exports, and a comment. Anything else there
@@ -26,7 +26,9 @@ BASE = {"Base": VERITY / "circuits" / "base", "Circuits": VERITY / "circuits" / 
 LAYERS = ("the base packages", "Flock alone", "the ZK server", "the recursion", "every layer")
 BELOW, FLOCK, ZK, REC, ALL = range(5)
 ZK_ROOTS = {"FlockZkServer", "FlockFirewall", "FlockFrameTape"}
-REC_ROOTS = {"FlockRec", "FlockRecLinks", "FlockRecOpening", "FlockRecSparse"}
+REC_ROOTS = {"FlockRec", "FlockRecLinks", "FlockRecOpening", "FlockRecSparse", "FlockWitness"}
+#: the recursion's modules that `Flock.Rec…` doesn't spell: the recursive audit's predicates
+REC_MODULES = {"Flock.Witness"}
 #: `Flock.Rec…` by spelling only: the session's record and its text are Flock alone's
 NOT_REC = {"Flock.Record", "Flock.RecordText"}
 #: the imports that point up, each with what removes it
@@ -35,9 +37,6 @@ UP: dict[tuple[str, str], str] = {
         "until the `rec-*` pins' checks that `HmRow.parse` runs are a module of the recursion",
     ("Flock.HmRow", "Flock.RecOpening"):
         "until the `rec-*` pins' checks that `HmRow.parse` runs are a module of the recursion",
-    ("Flock.Witness", "Flock.RecCoins"):
-        "until `Flock.Witness` is split: the declarations that name nothing of the recursion stay, the rest are a module "
-        "of the recursion. It is the module's one import, and through it Flock alone and the ZK server reach the recursion",
     ("FlockVerify", "Flock"):
         "until `flock-verify`'s recursive commands are an executable of the recursion: `verifyCmd` names the `Rec*` "
         "modules and `VStar` through the umbrella",
@@ -55,7 +54,8 @@ def layer(module: str) -> int:
         return ALL
     if module == "Flock.Firewall" or module.startswith("Flock.Firewall.") or module in ZK_ROOTS:
         return ZK
-    if root == "VStar" or module in REC_ROOTS or (re.fullmatch(r"Flock\.Rec\w*", module) and module not in NOT_REC):
+    if root == "VStar" or module in REC_ROOTS | REC_MODULES or (
+            re.fullmatch(r"Flock\.Rec\w*", module) and module not in NOT_REC):
         return REC
     if root.startswith("Flock"):
         return FLOCK
@@ -98,8 +98,8 @@ def test_an_upward_import_is_found():
                    "import all Init.System.ST\npublic meta import Flock.Canon\n") == ["Flock.Hash", "Init.System.ST", "Flock.Canon"]
     assert [layer(m) for m in ("Init.Data", "Base.Hash", "Flock.Verify", "Flock.Record", "FlockVerify", "Flock.Firewall",
                                "Flock.Firewall.Honest", "FlockFirewall", "Flock.RecCoins", "VStar.Cli", "FlockRecLinks",
-                               "Flock", "Flock.Test.RecCap")] == [BELOW, BELOW, FLOCK, FLOCK, FLOCK, ZK, ZK, ZK, REC, REC, REC,
-                                                                 ALL, ALL]
+                               "Flock.Witness", "Flock.WitnessZk", "Flock", "Flock.Test.RecCap")] == [
+        BELOW, BELOW, FLOCK, FLOCK, FLOCK, ZK, ZK, ZK, REC, REC, REC, REC, FLOCK, ALL, ALL]
     sources = {"Flock.Verify": "import Flock.Firewall.Coins\nimport Base.Hash\n", "Flock.Firewall.Coins": "import Flock.RecCoins\n",
                "Flock.RecCoins": "import Flock.Firewall\nimport Flock.Verify\nimport VStar.Cli\n",
                "Flock.Test.RecCap": "import Flock\n", "Flock": "import Flock.RecCoins\n"}

@@ -21,6 +21,10 @@ arm is each linear's fastest kernel of the scheme's scaling by wall time, with t
 `stock` scheme's γ is the A/A control, one kernel against its own twin. A figure of record has at least `MIN_REPS` reps,
 an interval within `HALF_WIDTH` of the median ratio (`of_record_why`) and passes the SM-time cross-check
 (`cross_check_why`); the scheme gate is γ ≤ `GAMMA_CAP` at each point. `periods` states it per monitoring period.
+
+**What a γ covers** (`covers`) is its model's entry: one layer's linears, and not what `LEFT_OUT` names. **y's commitment**: a
+scheme's entry says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`); a timed run records it,
+and a figure from a run whose arm committed no y carries `WITHOUT_Y` (`y_note`).
 """
 
 from __future__ import annotations
@@ -83,6 +87,11 @@ MODELS = {
 }
 #: the kernel points' model
 KERNEL_MODEL = "llama3.1-70b"
+#: what a model's entry leaves out of the layer its γ is over, though serving the model computes it
+LEFT_OUT = {"llama3.1-70b": ("the LM head",)}
+#: the note of a figure from a run whose arm committed no y (`y_note`): where the served call commits y, the γ leaves y's tree
+#: out, and is understated by it
+WITHOUT_Y = "without y's commitment (y tree not timed)"
 
 
 @dataclass(frozen=True)
@@ -90,14 +99,17 @@ class Scheme:
     """A scheme the door times against stock. `arm` is its PoUW harness arm (`module:Class` in `arm_path`, as `bench.py
     --arm` and `--arm-path` take them), timed beside stock kernels of `family`, the stock scaling its useful output's
     quantization matches. `epsilon` (`module:function` in `arm_path`) is its soundness error at a shape on a card,
-    `(m, n, k, card) -> {"epsilon", "delta", "basis"}`, recorded beside its γ. `stock` has no arm: its γ is the A/A control
-    every run carries (`bench.py --twins`), the fastest stock kernel against its own twin."""
+    `(m, n, k, card) -> {"epsilon", "delta", "basis"}`, recorded beside its γ. `commits_y`: whether the arm's timed call
+    commits y, the call's output (y's tree), false unless the entry states it; a timed run records it beside its arm
+    (`overhead.json`'s `arm.commits_y`), and its figures carry `WITHOUT_Y` while it is false (`y_note`). `stock` has no arm:
+    its γ is the A/A control every run carries (`bench.py --twins`), the fastest stock kernel against its own twin."""
 
     id: str
     family: str
     arm: str | None = None
     arm_path: str | None = None
     epsilon: str | None = None
+    commits_y: bool = False
 
 
 #: Pearl+'s useful output is rowwise-scaled E4M3, so its stock, and stock's own A/A control, are that family's
@@ -113,6 +125,22 @@ def scheme(name: str) -> Scheme:
         return SCHEMES[name]
     except KeyError:
         raise ValueError(f"no scheme {name!r}: the door times {', '.join(SCHEMES)} (verity_bench.overhead.SCHEMES)") from None
+
+
+def y_note(arm: Mapping | None) -> str | None:
+    """The note a run's figures carry, from the `arm` record of its `overhead.json`: `WITHOUT_Y` unless the record says its
+    arm committed y (`commits_y`, the scheme's entry as the run recorded it; a record without the field timed no y tree).
+    None for a run with no arm: stock's A/A control commits nothing."""
+
+    return None if arm is None or arm.get("commits_y") else WITHOUT_Y
+
+
+def covers(model: str = KERNEL_MODEL) -> str:
+    """What a γ of `model` is over, in one sentence: its entry's linears, and what the entry leaves out (`LEFT_OUT`)."""
+
+    linears, out = MODELS[model], LEFT_OUT.get(model, ())
+    return (f"Each γ is over the {len(linears)} linears of one {model} layer ({', '.join(linears)})"
+            + (f" and leaves {' and '.join(out)} out" if out else "") + ".")
 
 
 def card(gpu: str) -> Gpu:

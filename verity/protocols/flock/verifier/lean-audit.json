@@ -54,6 +54,7 @@
   "Flock.Test.PlainShared",
   "Flock.Test.Wires",
   "Flock.Test.TableCap",
+  "Flock.Test.ProgramHeld",
   "Flock.Test.ProofCanon",
   "Flock.Test.RecordText",
   "Flock.Test.Tmpl",
