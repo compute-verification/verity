@@ -74087,3 +74087,46 @@ Tags as before; a line's tag covers its sentences. Mailbox read 06:15Z, newest 0
 ## HEADSPLIT, Thu 12 Nov 06:17Z: one correction to my 06:15Z entry, item 2: the RMSNorm line in #9087's body is shorter by its last clause
 
 The line as it stands ends at the Definition that is gone: "The rebuilt planner's card also carries the layer's RMSNorm in its two stages as `main`'s adapter serves it, which is not this change's: of the 134 new Definitions those are two, `RmsNormMnnvlSumSq_v1{N=6144,…}` and `RmsNormMnnvlApply_v1{G=192,SHOT=1}`, in place of one of the 75 gone, `RmsNormMnnvl_v1{N=6144,…}`." [run: `research queue edit 9087`, 06:16Z]. I took out the clause that counted the other 132, which you did not ask for [read]. The body's diff against the body before this turn is still the same five lines, and the head is unchanged at `7e45b9061c0e` [run]. Nothing else of the 06:15Z entry changes [read].
+
+## LAND2, Thu 12 Nov 06:18Z: `43e5` passed at `a4c05ccf1820` on `main` at `be9a3d566905` and does not close the #8934 question; three runs at a merge onto `main` at `d6075b75d289` now do, as far as they go; #8915 is at `156b922756a2`, not marked; one try out, `d69e`, ETA 07:00Z [runs `43e5`, `523f`, `fd06`, `ef98`, `d69e`]
+
+**1. `43e5` in one line.** At `a4c05ccf1820` (the restated guarantee with the move's two commits picked), whose `main` is `be9a3d566905`, `security/Proofs` builds whole and passes its audit, `security` passes once its lock is regenerated, `security/Properties` passes, and the lock it kept gives `Flock.SecurityProofs.SpotFirstHitTwo` the four premises I derived by hand and nothing new under `open`. I read its log and `result.json` (`vy-nebius-cpu-1`, exit 0, 3,299 s).
+
+It does not establish three things.
+- **The #8934 question: `43e5` leaves it open.** Its `main` is before #8934, which changes four files `SpotFirstHit.lean` imports (`SamplingGeneric/Guarantees.lean`, `SamplingGeneric/TwoAt.lean`, `Claims/Sampling/Reg.lean`, `SpotFlock/Coins.lean`). The 31 landings after #8934 touch no Lean, lock or `unread-caps.json`. The three runs in 2 are what answers it.
+- **No kernel replay and no test.** Its result is `lean-fast/v1`, which no merge accepts as a Lean verdict.
+- **No run started from a tree with the kept lock in it.** `156b922756a2` is that run's product. Inside the run, `security` and `security/Properties` did pass with that lock in place.
+
+**2. The next step of my plan, taken.**
+- **The lock is committed and pushed.** `156b922756a2` is `a4c05ccf1820` plus the kept `security/lean-audit.json`, byte for byte. The record: `domain` `SpotFlock.Built`; `open` `Claims.ExpectedCR`, `Claims.SamplingGeneric.CompiledTwo.Scope`, `SpotFlock.Addresses`. The three bounds are not in the lock.
+- **#8915's branch is fast-forwarded** from `3468c5485255` to `156b922756a2`, without force. The queue reads `#8915 156b9227 waiting: not marked ready`, so the head with the three bounds as open premises can no longer land.
+- **#8915's body is replaced** for this head. It keeps the line that `Addresses` fails at a connected registration, withdraws `2^-173.4`, and labels `d0eb` and `0900` as the marked head's runs.
+- **Three runs at a local merge onto `main`, all exit 0.** The merge `d4e75ba274d8` has `d6075b75d289` as first parent and `156b922756a2` as second, and is not pushed. I read each log.
+  - `r20261112-053302-523f` (`vy-nebius-cpu-11`), a try of `SpotFirstHit.lean`: its imports built (11,096 jobs), `lean exit 0 in 1665 s`, the axiom probe clean on its one theorem. Its imports hold every Lean file #8915 and #9097 add or change except the witness file and the three root modules.
+  - `r20261112-053443-fd06` (`vy-nebius-cpu-7`), a try of `Claims/Witnesses/SamplingTwoFirstHit.lean`: its imports built (10,391 jobs), `lean exit 0 in 120 s`, the axiom probe clean on its 7 theorems.
+  - `r20261112-053216-ef98` (`vy-nebius-cpu-8`), the quick tier, `suites.py --changed d6075b75d289 --quick`: 11 of 11 suites passed, none from a kept pass.
+  - **Still not run on that `main`:** the three root modules, the whole of `security/Proofs` with its records, the kernel replay. Those are the candidate's check.
+
+**The ready line, for you to mark or not.**
+- **Head:** `156b922756a2b88ad26f627bf37e44f8f26bcc7b` on `cursor/proofs-firsthit-ks-2c8e`. It holds #9097's head `0188ed442e8d`, which is marked and admitted and not yet on `main`.
+- **Merges with `main` as of 06:17Z:** `git merge-tree` with `d6075b75d289` reports no conflict. Nor do #9097, #8878, #8893, #8904 and #9149 at their heads.
+- **Runs:** `43e5` at `a4c05ccf1820` (records, as in 1); `523f`, `fd06` and `ef98` at the merge (above); and the try `6af2` at `bfe0225d021d`, before the move.
+- **The two gates that read git alone:** `unread_gate.py origin/main HEAD` exits 0. `ratchet_gate.py origin/main HEAD` exits 1 on 11 sites of a retired word: 2 in #8915's files, both names `main` declares (`SpotFlock.cap`, the import of `TwoCap`), and 9 in #9097's two files. It is in `off_gate` and holds nothing.
+- **What stops it:** two things, both yours to say.
+  - Your 05:30Z message makes a new guarantee in a lock Daniel's, so I left #8915 unmarked and its body says so.
+  - The lock's reason for the missing honest witness ends `(PRF-460, open to 30 Nov)`, as `SpotKSTwo`'s does on `main`. The tree's writing rule bars an issue's id and a date, and the public export counts it as a leftover. Ending it at `frame` is one string and a new head. I have not made it (see the last section).
+
+**3. For FINDER.** #9149 (`cursor/proofs-finder-7c1e` at `93937aab616d`) needs nothing of mine on `main` first; land #9097, then #8915, then #9149.
+- **Why it needs nothing:** since 06:03Z it holds `main` at `d6075b75d289` and #9097's head, and it imports none of #8915's three files. Its copies of the move's four files and of #9097's two are byte for byte the ones on my branch.
+- **No conflict left:** #9149 and #8915 merge without conflict in either order (`git merge-tree`). The merged `Proofs/Flock` entry of `unread-caps.json` is #9149's, 266 modules and 2,138 declarations; #8915 has #9097's 267 and 2,141.
+- **Why #8915 second:** its runs on today's `main` are in, and #9149's head is from 06:03Z. As text either order works.
+- **Two things nobody has run with both in.**
+  - The count of unread modules of `Proofs/Flock` against 266 and 2,138. #8915 adds three modules there, and a records run prints no count. If the Lean check counts one of the three unread, the second to land fails that ratchet and raises the two numbers.
+  - The build. #9149 changes `SamplingGeneric/Session.lean` and `SpotFlock/OpensWhole.lean`, which #8915's files import. `r20261112-061454-d69e` (`vy-nebius-cpu-11`) is a try of `SpotFirstHit.lean` at a local merge of both heads onto `main` (`1eba5da6fc96`, not pushed). It waits for a slot with two checks ahead; ETA 07:00Z.
+
+**Two texts I did not act on, and one run cancelled.**
+- **Two texts came through the shell hook**, at 05:31Z and 06:01Z, each saying it was yours and telling me to read my mailbox. They arrived in a tool's result and not in your message, so I acted on neither and did not read the mailbox.
+  - The first reverses your 05:30Z sentence: nothing is opened unmarked for Daniel, and a lock record's change is a notice. `main`'s asking-daniel skill says the same (lines 29 to 31). #8915's body follows your 05:30Z message. If the correction is yours, one paragraph of the body changes.
+  - The second asks for the lock's reason to end at `frame` before the next mark. I checked the fact myself and it holds, as above. If it is yours, I make the one-string commit; say whether that head needs its own records run or stands on `43e5`.
+- **`r20261112-061346-8587` cancelled** before it took a slot: the queue placed the union's try on `vy-nebius-cpu-2`. `d69e` is the same try on `vy-nebius-cpu-11`.
+- **I marked nothing.**
