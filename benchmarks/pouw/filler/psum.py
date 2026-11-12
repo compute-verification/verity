@@ -53,10 +53,10 @@ def cov(r, arm):
         slow, share = r["sched"]["slowdown"], r["sched"]["fill_share"]
     b, l = r["B"], r["L"]
     t1 = t0 * slow + other_ms(b) * slow
-    cap = PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
+    window = PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
     n = b * (LIN_TOK + LM_TOK + ATT_TOK_L * l)
     f = share * PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
-    return (CERT_SERVING * n + CERT_FILLER * f) / cap, slow, share
+    return (CERT_SERVING * n + CERT_FILLER * f) / window, slow, share
 
 
 def main():

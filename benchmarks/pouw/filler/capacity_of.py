@@ -1,4 +1,4 @@
-"""The certified share σ of a GPU's capacity, from a scored filler run's measured entries.
+"""The share σ of a GPU's capacity that is verified compute, from a scored filler run's measured entries.
 
 Each entry of a run's score.json is one served step beside its filler: the step's time, the served and filler MACs in
 it, and the SM clock. Their certified load, pooled over the step and the GPU's 4 × SMs SMSPs (a receipt attests no

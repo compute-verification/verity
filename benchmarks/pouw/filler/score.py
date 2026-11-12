@@ -17,7 +17,7 @@ A climber's run, from a clean pushed checkout:
 `score.py ARM` builds dcap.cu and dscore.cu (outside the lease), then under `gpu-lease 1 --wait` runs the gates before
 anything is timed: FILL's receipt gate (`dcap dgate`), the scorer's own at the arm's chunk shape (`dscore sgate`: poisoned
 and launched, every receipt equal to the host's; poisoned with nothing launched, none; stale and skipped work, none) and
-CAP's serving gate (`dcap gate`); a failed gate times nothing (exit 5). Then ncu's DRAM bytes for the filler's launches
+dcap's serving gate (`dcap gate`); a failed gate times nothing (exit 5). Then ncu's DRAM bytes for the filler's launches
 beside the counter's positive control (1 GiB streamed), and every suite point: ROUNDS rounds in ABBA order of K reps of
 serving alone on the whole GPU and K reps under the arm's placement, each arm block followed by a standalone block (the
 filler alone on the same SMs as long), every rep's SM clock and board power read (clocks are never set), then serving
@@ -663,7 +663,7 @@ def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: 
                        if smi else None})
     unread = [f"{s['dir']} {k} {a}" for s in sets for k, by_ in s["rows"]["arms"].items() for a, reps in by_.items()
               for ranks in reps for x in ranks if any(len(r) < 3 or not r[1] for r in x["reps"])]
-    whole = [((x["served_macs"] + x["fill_macs_rep"]) / (S.cap(x["mhz"]) * x["ms"] * 1e-3), f"{k} rank {x['rank']}")
+    whole = [((x["served_macs"] + x["fill_macs_rep"]) / (S.capacity(x["mhz"]) * x["ms"] * 1e-3), f"{k} rank {x['rank']}")
              for k, v in by.items() for ranks in v.get("phase", []) for x in ranks]
     g["dram"] = {"ok": bool(dram) and all(d["ok"] for d in dram), "dirs": dram}
     g["clocks"] = {"ok": bool(clocks) and all(c["ok"] for c in clocks) and not unread, "dirs": clocks,

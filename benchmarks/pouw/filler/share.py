@@ -1,4 +1,4 @@
-"""Certified share of int8 tensor capacity for Llama-3.1-8B serving, from dcap.cu's measurements.
+"""Verified compute as a share of int8 tensor capacity for Llama-3.1-8B serving, from dcap.cu's measurements.
 
 Reads one run's dcap.jsonl and prints its tables: τ for the honest kernels,
 nominal ÷ capacity over the decode grid, and the serving mixes with and without certified filler. Writes them as JSON.
@@ -91,8 +91,8 @@ class Model:
         self.bw = max(r["gb_per_s"] for r in bw) * 1e9
         lin = sorted((r for r in rows if r["mode"] == "lin"), key=lambda r: r["M"])
         self.mhz = sorted(r["mhz"] for r in rows if r["mode"] != "gate")[len(rows) // 2]
-        self.cap = PER_SM * SMS * self.mhz * 1e6
-        self.cap_max = PER_SM * SMS * F_MAX
+        self.capacity = PER_SM * SMS * self.mhz * 1e6
+        self.capacity_max = PER_SM * SMS * F_MAX
         lm = [(r["M"], next(a["ms_alone"] for a in r["algos"] if a["name"] == "lm_head")) for r in lin if r["M"] <= 256]
         self.lm_m, self.lm_ms = [m for m, _ in lm], [t for _, t in lm]
         self.lin_m = [r["M"] for r in lin]
@@ -106,7 +106,7 @@ class Model:
         slope = sum((x - mx) * (y - my) for x, y in pts) / sum((x - mx) ** 2 for x, _ in pts)
         self.att_bw, self.att_c0 = 1e3 / slope, my - slope * mx
         self.delta = sum(r["ms"] - self.lin(b) - self.att[(b, l)]["ms"] for (b, l), r in self.step.items()) / len(self.step)
-        self.eta_fa2 = causal(8192) / (FA2_MS_8192 * 1e-3 * self.cap)
+        self.eta_fa2 = causal(8192) / (FA2_MS_8192 * 1e-3 * self.capacity)
 
     def lm(self, b):
         return interp(self.lm_m, self.lm_ms, b)
@@ -127,11 +127,11 @@ class Model:
     def prefill_ms(self, p, eta_fa):
         """One prompt of p tokens, its linears in a prefill batch of max(p, 8192) tokens (k prompts packed)."""
         k = max(1, 8192 // p)
-        return (self.lin(k * p, heads=k) / k + causal(p) / (eta_fa * self.cap) * 1e3 + PRE_OTHER_MS_TOK * p)
+        return (self.lin(k * p, heads=k) / k + causal(p) / (eta_fa * self.capacity) * 1e3 + PRE_OTHER_MS_TOK * p)
 
     def row(self, n, ms, fill=0.0):
         """n nominal MACs (fill of them filler) in ms: the table's ratios."""
-        nc, nc_max = n / (self.cap * ms * 1e-3), n / (self.cap_max * ms * 1e-3)
+        nc, nc_max = n / (self.capacity * ms * 1e-3), n / (self.capacity_max * ms * 1e-3)
         tau = A_V99 * nc_max
         return {"nominal/capacity": nc, "nominal/capacity_2430": nc_max, "certified/nominal": CERT, "tau": tau,
                 "certified/capacity": CERT * nc, "forced_share": CERT * tau, "hidden": hidden(tau, A_V99),
@@ -207,7 +207,7 @@ class StepFiller(PointFiller):
         other = max(DEC_OTHER_MS, PRE_OTHER_MS_TOK * b)
         tc = (ms - other) * slow
         to = other * (max(1.0, slow) if pump else 1.0)
-        return tc + to, ((fused + pump) * tc + pump * to) * m.cap * 1e-3
+        return tc + to, ((fused + pump) * tc + pump * to) * m.capacity * 1e-3
 
 
 FILLER = {  # W11: 0.70 x the SM share, worst slowdown at batch ≤ 32
@@ -347,9 +347,9 @@ def with_filler(m, b, ms, lin_ms, name, l=None):
     share, slow = fl.at(b, l)
     t = ms * slow
     if fl.dsms:
-        floor = b * (LIN_TOK + LM_TOK) / (0.88 * m.cap * fl.dsms / SMS) * 1e3
+        floor = b * (LIN_TOK + LM_TOK) / (0.88 * m.capacity * fl.dsms / SMS) * 1e3
         t += max(0.0, floor - lin_ms * slow)
-    return t, share * m.cap * t * 1e-3
+    return t, share * m.capacity * t * 1e-3
 
 
 def tau_table(m):
@@ -359,10 +359,10 @@ def tau_table(m):
         if a["name"] in LIN:
             k, n = LIN[a["name"]]
             macs = 8192 * k * n
-            eta = macs / (a["ms_alone"] * 1e-3 * m.cap)
+            eta = macs / (a["ms_alone"] * 1e-3 * m.capacity)
             out.append({"kernel": f"{a['name']} m = 8192 (cuBLASLt int8, one layer)", "eta": eta,
-                        "tau": A_V99 * macs / (a["ms_alone"] * 1e-3 * m.cap_max)})
-    eta = r8k["macs"] / (r8k["ms"] * 1e-3 * m.cap)
+                        "tau": A_V99 * macs / (a["ms_alone"] * 1e-3 * m.capacity_max)})
+    eta = r8k["macs"] / (r8k["ms"] * 1e-3 * m.capacity)
     out.append({"kernel": "32 layers of linears, m = 8192 (measured)", "eta": eta, "tau": A_V99 * eta * m.mhz * 1e6 / F_MAX})
     # T1's unfused attention at s = 8192, η at its read clock
     for name, eta_t1 in [("QKᵀ s = 8192, materialized (T1)", 0.121), ("P·V s = 8192 (T1)", 0.443),
@@ -386,7 +386,7 @@ def grid(m):
         r = {"B": b, "L": l, "fits": b * l <= POOL_TOK, "measured": (b, l) in m.step, "ms": ms, **m.row(n, ms)}
         for name in FILLER:
             t, f = with_filler(m, b, ms, m.lin(b), name, l)
-            r[f"filler {name}"] = {"ms": t, **m.row(n + f, t, f / (m.cap * t * 1e-3))}
+            r[f"filler {name}"] = {"ms": t, **m.row(n + f, t, f / (m.capacity * t * 1e-3))}
         out.append(r)
     return out
 
@@ -409,7 +409,7 @@ def mixes(m):
                     t, f = with_filler(m, b, step, m.lin(b), fname, lbar)
                     td = d * t / b
                     fm = f * d / b
-                    r[f"filler {fname}"] = {**m.row(n + fm, t_pre + td, fm / (m.cap * (t_pre + td) * 1e-3)),
+                    r[f"filler {fname}"] = {**m.row(n + fm, t_pre + td, fm / (m.capacity * (t_pre + td) * 1e-3)),
                                             "time": (t_pre + td) / (t_pre + t_dec)}
                 out.append(r)
                 c = b * p / d
@@ -417,7 +417,7 @@ def mixes(m):
                 if mrows > 8192:
                     continue
                 st = (m.lin(int(mrows), heads=b) + m.att_ms(b, lbar) + m.delta
-                      + (b / d) * causal(p) / (eta_fa * m.cap) * 1e3 + max(DEC_OTHER_MS, PRE_OTHER_MS_TOK * mrows))
+                      + (b / d) * causal(p) / (eta_fa * m.capacity) * 1e3 + max(DEC_OTHER_MS, PRE_OTHER_MS_TOK * mrows))
                 out.append({**base, "schedule": f"chunked, M = {mrows:.0f}", "prefill_time_share": None,
                             **m.row(n, st * d / b)})
     return out
@@ -468,7 +468,7 @@ def main():
                        {f"{b}:{l}": v for (b, l), v in adaptive_pick(dfill_rows, t).items()} for t in (False, True)}
     res["fstep_pick"] = {("fused + pump" if s else "fused"): {f"{b}:{l}": v for (b, l), v in fstep_pick(fstep_rows, s).items()}
                          for s in (False, True)}
-    print(f"read clock {m.mhz:.0f} MHz, C = {m.cap / 1e12:.1f} TMAC/s (C_2430 = {m.cap_max / 1e12:.1f}); "
+    print(f"read clock {m.mhz:.0f} MHz, C = {m.capacity / 1e12:.1f} TMAC/s (C_2430 = {m.capacity_max / 1e12:.1f}); "
           f"DRAM read {m.bw / 1e9:.0f} GB/s; attention fit {m.att_bw / 1e9:.0f} GB/s + {m.att_c0:.3f} ms; "
           f"step δ {m.delta:.3f} ms; FA2 η {m.eta_fa2:.3f}; A(V99) {A_V99:.4f}; pool {POOL_TOK} tokens")
     worst = max(abs(c["model"] / c["measured"] - 1) for c in res["model_check"])

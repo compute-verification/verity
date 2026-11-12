@@ -101,7 +101,7 @@ def test_operands_are_balanced_noise(lib):
             assert got.tolist() == [val((nib >> q) & 1) for q in range(4)]
 
 
-def test_kinds_draw_independent_noise():
+def test_kinds_sample_independent_noise():
     """Each kind hashes in its own domain, so no kind's noise is another's."""
     rs = {kind: R.rows(C0, C1, 9, R.CTR_B, 0, kind) & np.uint64(R.M32) for kind in R.KINDS}
     assert len({r.tobytes() for r in rs.values()}) == len(R.KINDS)

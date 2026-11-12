@@ -3,13 +3,13 @@ Stdlib only: it runs on the node after the lease and in the pouw suite's CPU tes
 the driver's rows (`dscore.cu`) and the gates' outputs into SCORE, the per-entry minimum, the gates and the secondary
 metrics.
 
-The suite (CAP's mixes, Llama-3.1-8B on one RTX PRO 6000; `SUITE`): decode at B 1/32/128/256 over 2K–32K contexts (the
+The suite (share.py's mixes, Llama-3.1-8B on one RTX PRO 6000; `SUITE`): decode at B 1/32/128/256 over 2K–32K contexts (the
 longest dcap holds, B·L ≤ 786K), chat 1K/256 at B 32 and 256, RAG 8K/256 at B 144, code/agents 24K/512 at B 48,
 reasoning 1K/8K at B 132, and an 8,192-token prefill step. A mix's decode is measured at its mean context P + D/2,
 rounded down to 512 and capped at 786K/B (RAG reads 5K, code 16K, chat 1K). `ROBUST` points are reported, not scored.
 
 Each entry is one unit of serving-alone wall time. Per entry, with the arm:
-- served decode step: dcap's step + the non-GEMM kernels, max(1.09 ms, 4.684 µs × B) (CAP's convention), those stretched
+- served decode step: dcap's step + the non-GEMM kernels, max(1.09 ms, 4.684 µs × B) (share.py's convention), those stretched
   by the step's own slowdown;
 - prefill step: dcap's 32 layers of linears at M = 8192 (measured) + FA2 attention (73.11 ms causal 8,192) + non-GEMM
   (38.37 ms), the unmeasured two stretched by the linears' slowdown; a mix's prefill of P tokens is that step's time
@@ -40,7 +40,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import share  # CAP's constants: MACs a token, non-GEMM times, FA2, the int8 peak
+import share  # the capacity model's constants: MACs a token, non-GEMM times, FA2, the int8 peak
 
 log = logging.getLogger(__name__)
 
@@ -244,7 +244,7 @@ def point_stats(row: dict) -> dict:
     }
 
 
-def cap(mhz: float) -> float:
+def capacity(mhz: float) -> float:
     return PER_SM * SMS * mhz * 1e6
 
 
@@ -301,7 +301,7 @@ def mix_entry(pre: dict, dec: dict, p: int, d: int, b: int, l: int) -> dict:
 
 
 def coverage(e: dict, certified: dict = CERTIFIED) -> dict:
-    c = cap(e["mhz"]) * e["t1_ms"] * 1e-3
+    c = capacity(e["mhz"]) * e["t1_ms"] * 1e-3
     cs, cf = certified["serving"]["fraction"], certified["filler"]["fraction"]
     cert = cs * e["serving_macs"] + cf * e["filler_macs"]
     return {**e, "capacity_macs": c, "certified_macs": cert, "coverage": cert / c,
@@ -1306,7 +1306,7 @@ def defer_measured(p: dict) -> dict:
     ``lost_macs``, the filler MACs it gave up against the phase arm (r2's, or the point's own set); s = added ÷ plain,
     u = lost ÷ C × the hidden ms (plain − added), and d = lost ÷ C × the whole pass's ms (u(1 − s), but defined where
     s ≈ 1, where u isn't)."""
-    c = cap(p["mhz"])
+    c = capacity(p["mhz"])
     plain = p["served_macs"] / (DEFER_OF_PEAK * c) * 1e3
     added = p["defer_ms"] - p["base_ms"] * p["phase_slowdown"]
     lost = p["phase_fill_macs"] - p["defer_fill_macs"]
@@ -1352,7 +1352,7 @@ def defer_fit(T: int = DEFER_T, points: list[dict] | None = None, form: str = "u
     for p, m, r in zip(pts, meas, rows):
         fit = {q: math.exp(sum(c * x for c, x in zip([math.log(out[q]["intercept"][t]) for t in tps]
                                                     + [out[q]["batch"], out[q]["context"]], r))) for q in qs}
-        c, s = cap(p["mhz"]) * 1e-3, min(1.0, fit["s"])
+        c, s = capacity(p["mhz"]) * 1e-3, min(1.0, fit["s"])
         disp = (fit["u"] * (1 - s) if form == "u" else fit["d"]) * m["plain_ms"] * c
         t1 = p["base_ms"] * p["phase_slowdown"] + s * m["plain_ms"]
         share_fit = max(0.0, p["phase_fill_macs"] - disp) / (c * t1)
@@ -1454,9 +1454,9 @@ def defer_pass(macs: float, mhz: float, tp: int = 1, B: int | None = None, L: in
     """Decode's deferred noised pass over `macs` served products a GPU at (TP, B, L): its time (EGEMM × the model's
     unit), the ms of wall time it adds (s of it) and the filler MACs it displaces (d·C a ms of the pass)."""
     r = defer_rates(tp, B, L)
-    pass_ms = EGEMM * macs / (DEFER_OF_PEAK * cap(mhz)) * 1e3
+    pass_ms = EGEMM * macs / (DEFER_OF_PEAK * capacity(mhz)) * 1e3
     return {"pass_ms": pass_ms, "s": r["s"], "d": r["d"], "added_ms": r["s"] * pass_ms,
-            "displaces": r["d"] * pass_ms * cap(mhz) * 1e-3}
+            "displaces": r["d"] * pass_ms * capacity(mhz) * 1e-3}
 
 
 def entry_v5(e: dict, stats: dict, coins: float = PREFILL_COINS) -> dict:
@@ -1489,7 +1489,7 @@ def coverage_v5(e: dict, filler_fraction: float) -> dict:
     """An `entry_v5` entry's coverage in its two parts, each over C × its v5 wall time: the measured filler part
     (``filler_part``, its MACs at the folded fraction) and the modelled served part (``served_part_modelled``, every served MAC
     at `SERVED_V5`'s 0.9)."""
-    c = cap(e["mhz"]) * e["t1_ms"] * 1e-3
+    c = capacity(e["mhz"]) * e["t1_ms"] * 1e-3
     fp, sp = filler_fraction * e["filler_macs"] / c, SERVED_V5["fraction"] * e["serving_macs"] / c
     return {**e, "capacity_macs": c, "filler_part": fp, "served_part_modelled": sp, "coverage": fp + sp,
             "filler_share": e["filler_macs"] / c, "time": e["t1_ms"] / e["t0_ms"]}
@@ -1575,7 +1575,7 @@ def tp_entry(by_arm: dict, key: tuple[int, int, int], filler_fraction: float) ->
     f = statistics.mean(r["fill_macs_rep"] for r in recs)
     dp = defer_pass(n, mhz, tp, key[1], key[2])
     t1, fv5 = phase + dp["added_ms"], max(0.0, f - dp["displaces"])
-    c4, c5 = cap(mhz) * phase * 1e-3, cap(mhz) * t1 * 1e-3
+    c4, c5 = capacity(mhz) * phase * 1e-3, capacity(mhz) * t1 * 1e-3
     return {"entry": f"TP {tp} B {key[1]} L {key[2] // 1024}K", "tp": tp, "B": key[1], "L": key[2], "t0_ms": base,
             "t1_measured_ms": phase, "t1_ms": t1, "slowdown": phase / base, "mhz": mhz,
             "serving_macs": n, "filler_measured_macs": f, "filler_macs": fv5,

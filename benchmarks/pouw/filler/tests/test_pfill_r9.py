@@ -117,7 +117,7 @@ def test_r9_twin_equals_host_reference(build, kind, fold, tile, steps):
 
 
 @pytest.mark.parametrize("kind", list(R9_TILE))
-def test_r9_tile_draws_past_a_rejected_key(kind):
+def test_r9_tile_samples_past_a_rejected_key(kind):
     kb = R.block(C0, C1, R9_TILE[kind], R.CTR_KEY, R.DOMS[kind])
     assert R.keys(kb)[:2] != R.keys(kb, r9=True)[:2]
     assert not all(key_ok_r9(a) for a in R.keys(kb)[:2]) and all(key_ok_r9(a) for a in R.keys(kb, r9=True)[:2])

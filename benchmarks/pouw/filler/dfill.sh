@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dcap.cu's DRAM-free filler on one leased GPU (cwd = the source tree): its receipts gated bit for bit against the host and
-# CAP's gate first, under the same lease, and nothing is timed unless both pass; then its rate alone over (W, NC), ncu's DRAM
+# dcap's gate first, under the same lease, and nothing is timed unless both pass; then its rate alone over (W, NC), ncu's DRAM
 # and tensor-pipe counters for one chunk, and the decode step beside it on a green split and co-resident at the lowest
 # stream priority. The round's coins are flipped once per run (coins.txt). Clocks are read, never set.
 #
