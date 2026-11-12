@@ -79481,3 +79481,50 @@ My 08:27Z entry promised one entry when the three had ended. I write two of them
 **3. One line the runner prints in both runs**, as in each run of this file since #9081's first: "1 tests took over 5 s without the `slow` mark", the file's first test, at 52.6 s and 70.0 s. The file's three other tests that make a hand-off the same way are not listed, and in `8852` the other five took 14 s together. So the time is what the process pays once on first use, and a mark would move the line to the next test [guess: no per-test durations in the run's outputs]. Left unmarked.
 
 **4. For REDRAW:** nothing changes. Either head is a fast-forward of `dd89861a3e`, and each now has a passed run of the tests that call the piece.
+
+## HEADSPLIT, Thu 12 Nov 08:47Z: row 15's three lines. #9087 keeps the combine's word form and names one split end in place of eight; the file named the Boolean combine first and was moved to the word form on purpose; what stops `_v2` today is its description, 88 MB for the combine and 12 MB for the end against a 4 MiB limit. Not the ready line yet: the suites pass at `0cb0d8dbb679`, `main` merges with no stop, one audit still runs
+
+**For the mailbox's 07:40Z section (`inbox/headsplit.md`), HASH-98's row 15.**
+
+**1. #9087 changes the split ends and leaves the combine as it is.**
+
+- The combine stays `SparseMlaCombine_v1{NSPLIT=5,DV=64,INV={"fn":"Fa3InvSum_v1"}}`, the word form, 4,096 instances a statement: the same Definition `main` names. [read: the file at `main` `19fb19a21e40` and at #9087's head `0cb0d8dbb679`]
+- The eight column ends `SparseMlaSplitEndCols_v1{DV=512,G=64,C=0..7,INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}` become one `SparseMlaSplitEnd_v1{DV=64,INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}`, also the word form, 8,192 instances a statement. [read]
+- Why one: a split's values units already return 64 columns each, so its end runs on one column block. [read]
+- The rest of the file's change is the key blocks: two `SparseMlaHeadBlock_v2` become two `SparseMlaHeadScores_v2` and two `SparseMlaHeadValues_v2`, all Boolean. [read]
+
+**2. The file is not merely older than `_v2`. The word form was chosen, for the key blocks' sake; nothing a statement or a table needs holds the end and the combine to it today; the description's size does.**
+
+- History. `SparseMlaCombine_v2` was registered on 13 Oct (`52b9332895`). [run: `git log -S`] The file was created on 24 Oct naming it (`eeff14282d`: `SparseMlaSplitPart_v2` twice and `SparseMlaCombine_v2{NSPLIT=5,DV=512}`), and the next commit (`453da65287`) moved every template to the row's own word forms so that a whole key block's EX2 and RCP reads went to lookup slots. [run: `git show`] On 10 Nov (`141593ac72`) the key blocks went back to Boolean bodies, and its message says "The column ends and the combine are unchanged". [run]
+- Statement form: no need. Each of the four (end and combine, word form and Boolean version, at GLM-5.3's statics) is a chain template that reads inline, and `zk_refusal` is None for all four. [run: `r20261112-083225-b2b1` at `0cb0d8dbb679`, exit 0] That agrees with the lane's worker's call of 08:14Z. [relayed] I ran no `verify --zk` session on them. [run: nothing]
+- Table read: no need. The word end reads RCP and the word combine EX2 and RCP, inline in their own rows; the Boolean versions read no table. [run: the same run]
+- Size, measured in that run on the tree's own functions (`m1_families.sized`, whose Flock block is its estimate; `serving_rows.chunk_caps`; `description_sizes.py one`): [run]
+
+| Template at GLM-5.3's statics | AND gates | Flock block | Instances a statement | Description, bytes |
+|---|---|---|---|---|
+| split end on 64 columns, word form | 173,297 | $2^{22}$ | 8,192 | 4,914 |
+| split end on 64 columns, Boolean version | 166,229 | $2^{22}$ | 8,192 | 11,936,941 |
+| combine of five splits, word form | 1,560,795 | $2^{23}$ | 4,096 | 14,817 |
+| combine of five splits, Boolean version | 1,404,134 | $2^{23}$ | 4,096 | 87,842,907 |
+
+- The Boolean combine's count is kernels' count exactly; the word form's here is 1,560,795 against kernels' 1,676,431, and I have not found which lowering gives theirs. [run; relayed]
+- So the Boolean versions save 10% of the combine's AND gates and 4% of the end's, and leave the Flock block and the statement's size where they are. [derived]
+- And each Boolean version is one traced circuit (`boolean_dsa.flat`), so its description is every gate: 2.8 times and 21 times the 4 MiB a served template's description may hold (`description_sizes.SIZE`, `tests/tools/test_description_sizes.py`). [run; read]
+
+**3. Something stops it as registered, the description limit; with that met, the follow-up is small.**
+
+- The stop. Naming the two as registered adds two entries to `adapters/vllm/tests/tools/allowlists/description_sizes.json`, a list that only shrinks. [read: the test's docstring] #9087 itself takes that list from 16 entries to 14, by retiring the key blocks' two traced bodies. [read]
+- What lifts it: a Boolean end and combine whose bodies are Calls over Boolean leaf Definitions, as the key blocks' scores and values units are (1.8 MB and 1.0 MB of description). [read: the sizes file] That is circuits' to register. [guess: I have not asked them]
+- The file (ours): two strings under `templates` and the same two keys under `chunk_cap`; the values stay 8,192 and 4,096 for the versions registered today. [run]
+- The pins that move (the vLLM lane's): `STATEMENTS` in `adapters/vllm/tests/pipeline/test_served_unit_rows.py`, two of its 38 statements under new ids; and `adapters/vllm/tools/description_sizes.json`, two entries, by `description_sizes.py update -j 8 --run RUN` as a node job. [read]
+- What does not move: the planner's card (`benchmarks/sampling_plan/glm53_blocks.json`), the figures' card and `benchmarks/spot_figures/tests/test_headline.py` name the word forms from the census, not from this file; `verity/definitions/tests/catalog_ids.json` holds both families already. [run: `rg -l`; read]
+- The circuit-check target (circuits'): `uv run circuit-check verity/definitions/registry/boolean_sparse_mla_split.circuit-check.py`. The end's Boolean version at GLM-5.3's statics is bound and pinned there already, by #9087's circuits commit, and passed at `0cb0d8dbb679`. [run: `r20261112-073540-3c5b`] The combine is bound there only at three splits of 16 columns, so the follow-up adds its binding at five splits of 64 columns and its pin. [read]
+
+**Where #9087's ready line stands (item 3 of your 08:27Z message).**
+
+- Suites the change touches, at `0cb0d8dbb679` against `bcaf58a45d53`: exit 0; 58 suites, 58 passed, 2 of them from the cache (`verity/commitments`, `verity/definitions/private_circuits`), 0 failed; 115.0 min of test time. [run: `r20261112-073510-50d2`] The vLLM suite 14,271 passed and 420 skipped; `verity/definitions` 856; `benchmarks/one_stage` 560; the repository's 337; `benchmarks/spot_figures` 219; `benchmarks/sampling_plan` 52. [run]
+- The audit with whole key blocks (`r20261112-073639-12f8`) was still proving at 08:45Z, 58 minutes in; the same part took 1 h 15 min in `r20261112-014701-f09e`, so about 09:05Z. [run; guess]
+- `main` was `19fb19a21e40` at 08:42Z, not `1a3eadc9c5b4`. `git merge-tree --write-tree --name-only origin/main HEAD` exits 0 and names no file, so I merge nothing and rerun nothing: the queue's merge stands. [run] One file changed on both sides since `bcaf58a45d53`, `benchmarks/spot_figures/README.md`, two lines of `main`'s, and it merges by itself. [run]
+- Against lean's branch (`a88eee998fa2` at 08:42Z) the merge stops on the same five files as at 07:37Z, and all five are `main`'s own: lean's branch stops on each of them against `main` `19fb19a21e40` alone, among twelve, and #9087 changes none of the five. [run] They are `adapters/vllm/tests/dead_code_keep.json`, `adapters/vllm/verity_vllm/pipeline/serve_commit.py`, `benchmarks/one_stage/a5.py`, `benchmarks/one_stage/tests/test_a5_wiring.py` and `verity/protocols/poub/verifier/PROTOCOL.md`. [run]
+- Both mailbox files read at 08:43Z: nothing newer than 07:40Z and 05:31Z. [run]
+- The ready line follows when `12f8` ends: its verdict into #9087's body, both merge-trees once more, then the line. [read: your order]
