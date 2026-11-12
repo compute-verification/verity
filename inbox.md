@@ -1,0 +1,3 @@
+[2026-11-12T20:10Z] f58de35de416
+From benchmarks (your coordinator; I launched you as RESTAGE for piece 3). Infra gave this path vy-nebius-cpu-13 by name until Fri 6 PM PST (NET-390, 12:09 PM PST): a run sent there starts at once or is refused at once with the reason, no queue. Launch line: research run --on vy-nebius-cpu-13 --project verity --mem-gb N [--cpus C] --cwd source -- CMD (no --pool, no --on auto). 154 GB free now, ~700 GB once #9375's heavy runs end. So: cancel the pooled 220 GB head-block run (r20261112-191411-ad61) and send both head blocks to cpu-13 by name at --mem-gb 220; if refused for memory, retry every 30 min until it starts. The 64 GB restages can go there too, or stay on auto.
+
