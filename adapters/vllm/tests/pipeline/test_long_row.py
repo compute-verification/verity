@@ -2,6 +2,7 @@
 
 * at the served statics it is 44 units of the mask's cut, 8 positions, the merge, 64 chunks, 2,048 slots and 2,048 reads, 4,213
   units of 56 templates an instance, and its body calls exactly those (built without any callee's body);
+* past `dsa_topk_mask_cut.WHOLE_MAX` its positions and merge units are the ones `dsa_topk_reads.cut` names;
 * at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, with its
   return, each read's ok, the boundary's third value, a row a read, and each unit reads the window's operands and the units
   before it as round 2 links and wires them (`second_stage`'s node links and node wires);
@@ -35,6 +36,7 @@ from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, Tuple
 from verity.commitments import history as HT
 from verity.commitments.gates.embedding import read
+from verity.definitions.registry import dsa_topk_mask_cut as X
 from verity.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_links as IL, interior_rows as IR
 from verity_vllm.pipeline import long_row as LR
@@ -79,8 +81,8 @@ def test_the_served_row_is_4213_units_of_56_templates() -> None:
     assert descriptor_id(t.bindings["READ"]) == descriptor_id(read(1 << 17, 576))
     us = LR.units(t)
     by = Counter(d.base_id for _, d in us)
-    assert by == {"DsaTopKDigitCount_v1": 32, "DsaTopKDigitPick_v1": 4, "DsaTopKMaskBlock_v1": 8, "DsaMaskPositions_v1": 8,
-                  "DsaPositionsMerge_v1": 1, "DsaPositionsChunk_v1": 64, "DsaPositionsSlot_v1": 2048, "EmbeddingRead_v1": 2048}
+    assert by == {"DsaTopKDigitCount_v1": 32, "DsaTopKDigitPick_v2": 4, "DsaTopKMaskBlock_v2": 8, "DsaMaskPositions_v2": 8,
+                  "DsaPositionsMerge_v2": 1, "DsaPositionsChunk_v1": 64, "DsaPositionsSlot_v1": 2048, "EmbeddingRead_v1": 2048}
     ids = Counter(descriptor_id(d) for _, d in us)
     assert (len(us), len(ids)) == (4213, 56)
     assert sorted(ids.values()) == [1] * 53 + [64, 2048, 2048]
@@ -89,6 +91,18 @@ def test_the_served_row_is_4213_units_of_56_templates() -> None:
     nodes = _unlaid_nodes(t)
     assert {n.form for n in nodes} == {"call"}
     assert _members(nodes) == [descriptor_id(d) for _, d in us]
+
+
+@pytest.mark.parametrize("N", [43008, 1 << 17])
+def test_past_whole_max_its_positions_and_merge_are_the_cuts(N) -> None:
+    """Past `dsa_topk_mask_cut.WHOLE_MAX`, where the mask is cut a block a unit, its positions and merge units are the ones
+    `dsa_topk_reads.cut` names, each binding as many times; up to it the cut takes the mask whole, a block of N keys."""
+    t = bind(LR.DsaTopKReadRowsCut, **{**LR.SERVED, "N": N}, READ=read(LR.TABLE_V, LR.TABLE_H))
+    assert N > X.WHOLE_MAX
+    index = ("DsaMaskPositions", "DsaPositionsMerge")
+    got = Counter(descriptor_id(d) for k, d in LR.units(t) if k[0] in ("positions", "merge"))
+    assert sum(got.values()) == len(X.blocks(N, 2048)) + 1
+    assert got == {descriptor_id(d): n for d, n in R.cut(t) if d.base_id.rpartition("_")[0] in index}
 
 
 @pytest.mark.slow
@@ -113,7 +127,7 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     assert all(SS._node_wires(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
     wires = {(x.template.partition("{")[0], x.port, x.writer.partition("{")[0], x.wport)
              for x, _per, _runs in SS.wire_runs(defs, descriptor_id(L.replay))}
-    assert {("DsaPositionsChunk_v1", "slots", "DsaPositionsMerge_v1", "o0"),
+    assert {("DsaPositionsChunk_v1", "slots", "DsaPositionsMerge_v2", "o0"),
             ("DsaPositionsSlot_v1", "slots", "DsaPositionsChunk_v1", "o0"),
             ("EmbeddingRead_v1", "tok", "DsaPositionsSlot_v1", "o0")} <= wires
     returns = [(x.template, x.port, per) for x, per, _ in SS.link_runs(defs, descriptor_id(L.replay)) if x.value == BR.RETURN]
