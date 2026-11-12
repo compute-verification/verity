@@ -66,6 +66,11 @@ class CommitTokens:
     STOP, LENGTH = "stop", "length"
 
 
+def _identities(listed: list[dict[str, Any] | None] | None) -> list[dict[str, Any] | None]:
+    """A request's token identities as a list of its own: none where none is listed, by a null or by a field left out."""
+    return list(listed) if listed else []
+
+
 def commit_tokens_record(epr: dict[str, Any], *, order: dict[str, str], served_tokens: dict[str, list[int]] | None,
                          finish_reasons: dict[str, Any] | None, identities: dict[str, list[dict[str, Any] | None]], stop: dict[str, Any],
                          program_digest: str, pair: int, run_root: str) -> dict[str, Any]:
@@ -76,11 +81,11 @@ def commit_tokens_record(epr: dict[str, Any], *, order: dict[str, str], served_t
     C = CommitTokens
     wid = {v: k for k, v in order.items()}
     reqs = []
-    for rid, rec in sorted((epr.get("requests") or {}).items(), key=lambda kv: int(kv[0][1:])):
+    for rid, rec in sorted(EP.requests_of_record(epr).items(), key=lambda kv: int(kv[0][1:])):
         toks = None if served_tokens is None or served_tokens.get(rid) is None else [int(t) for t in served_tokens[rid]]
         reqs.append({C.REQUEST_ID: wid.get(rid, rid), C.INDEX: int(rid[1:]), C.CAP: int(rec["cap"]), C.GENERATED: toks,
                      C.SERVED_LEN: None if toks is None else len(toks), C.FINISH: (finish_reasons or {}).get(rid),
-                     C.EXECUTED_LEN: rec.get("executed_prefix_len"), C.IDENTITIES: list(identities.get(rid) or [])})
+                     C.EXECUTED_LEN: rec.get("executed_prefix_len"), C.IDENTITIES: _identities(identities.get(rid))})
     eos = stop.get("eos")
     return {C.SCHEMA_KEY: C.SCHEMA, C.PROGRAM_DIGEST: program_digest, C.PAIR: int(pair), C.RUN_ROOT: run_root, C.TOKENS_SOURCE: C.SERVED_OUTPUT,
             C.STOP_RULE: {C.EOS_IDS: None if eos is None else sorted(int(x) for x in eos), C.LAG: stop.get("declared_lag")},
@@ -93,8 +98,11 @@ def request_entries(record: dict[str, Any]) -> list[dict[str, Any]]:
     (`CommitTokens.ALIASES`) reads as this record's, unless the entry carries this record's name too, and an entry with no `index` takes its
     position in the record's request order.  A position that is not the request's is refused downstream by its request_id."""
     C = CommitTokens
-    out = []
-    for i, e in enumerate(record.get(C.REQUESTS) or []):
+    out: list[dict[str, Any]] = []
+    stated = record.get(C.REQUESTS)
+    if not stated:
+        return out
+    for i, e in enumerate(stated):
         e = dict(e)
         for alias, name in C.ALIASES.items():
             if alias in e:
@@ -138,7 +146,7 @@ def _commit_link_request(rid: str, rec: dict[str, Any], e: dict[str, Any], *, op
                      f"{first}): not one serving transcript")
     if finish is not None and e.get(C.FINISH) != finish:
         probs.append(f"{rid}: record finish_reason {e.get(C.FINISH)!r} != the driver's {finish!r}")
-    ids = list(e.get(C.IDENTITIES) or [])
+    ids = _identities(e.get(C.IDENTITIES))
     if len(ids) != a:
         probs.append(f"{rid}: (1) {len(ids)} token identities for {a} served tokens (one per served token)")
     token_probs: list[str] = []
@@ -210,7 +218,7 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
     "tokens_committed", "served_by_request", "executed_by_request", "lag_attested", "record", ...}."""
     C = CommitTokens
     problems: list[str] = []
-    reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
+    reduced = sorted(r for r, v in EP.requests_of_record(epr).items() if v.get("eos_stop"))
     eos_set = None if stop.get("eos") is None else {int(x) for x in stop["eos"]}
     decl = stop.get("declared_lag")
     for key, want in ((C.SCHEMA_KEY, C.SCHEMA), (C.PROGRAM_DIGEST, program_digest), (C.RUN_ROOT, run_root), (C.PAIR, pair)):
@@ -219,7 +227,11 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
     if record.get(C.TOKENS_SOURCE) != C.SERVED_OUTPUT:
         problems.append(f"record tokens_source {record.get(C.TOKENS_SOURCE)!r}: the served tokens must be the {C.SERVED_OUTPUT}, recorded apart from "
                         "the committed store (tokens read back from the store would make the check circular)")
-    srule, lg = record.get(C.STOP_RULE) or {}, record.get(C.LAG) or {}
+    srule, lg = record.get(C.STOP_RULE), record.get(C.LAG)
+    if not srule:
+        srule = {}   # a record that states no stop rule declares no EOS id and no LAG
+    if not lg:
+        lg = {}      # and one that states no lag block attests none
     rec_eos = srule.get(C.EOS_IDS)
     if (None if rec_eos is None else sorted(int(x) for x in rec_eos)) != (None if eos_set is None else sorted(eos_set)):
         problems.append(f"record stop_rule.eos_token_ids {rec_eos} != the Program's declared {None if eos_set is None else sorted(eos_set)}")
@@ -230,14 +242,15 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
         problems.append(f"(5) lag not attested: the Program declares LAG {decl!r}; " + ", ".join(f"{k} {v!r}" for k, v in legs.items())
                         + f"; record async_scheduling {lg.get(C.ASYNC)!r} vs the engine's {stop.get('async_scheduling')!r}, source {lg.get(C.SOURCE)!r}")
     by_rid: dict[str, list[dict[str, Any]]] = {}
-    for e in request_entries(record):
+    entries = request_entries(record)
+    for e in entries:
         by_rid.setdefault(f"r{e.get(C.INDEX)}", []).append(e)
     wid = {v: k for k, v in order.items()}
     committed: dict[str, bool] = {}
     served_n: dict[str, int | None] = {}
     executed_n: dict[str, int | None] = {}
-    for rid, rec in sorted((epr.get("requests") or {}).items(), key=lambda kv: int(kv[0][1:])):
-        es = by_rid.get(rid) or []
+    for rid, rec in sorted(EP.requests_of_record(epr).items(), key=lambda kv: int(kv[0][1:])):
+        es = by_rid.get(rid, [])
         if len(es) != 1:
             problems.append(f"{rid}: {len(es)} entries in the token record (one per request)")
             committed[rid], served_n[rid], executed_n[rid] = False, None, None
@@ -250,7 +263,7 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
     if not isinstance(past, dict) or past.get("ok") is not True or int(past.get("entries_n") or 0):
         problems.append(f"(6) {(past or {}).get('error') or 'rows_past_the_stop not run'}")
     return {"rule": COMMIT_LINK_RULE, "required": bool(reduced), "reduced_requests": reduced,
-            "record": {"path": path, "sha256": sha256, "schema": record.get(C.SCHEMA_KEY), "requests_n": len(record.get(C.REQUESTS) or [])},
+            "record": {"path": path, "sha256": sha256, "schema": record.get(C.SCHEMA_KEY), "requests_n": len(entries)},
             "tokens_committed": committed, "served_by_request": served_n, "executed_by_request": executed_n, "lag_attested": lag_attested,
             "problems": problems, "ok": not problems, "classification": ACTIVE_REFERENCE_ONLY}
 
@@ -270,8 +283,14 @@ def account_link_error(match_link: dict[str, Any], commit_link: dict[str, Any] |
 
 def sampled_ids_committed(bmap: dict[str, Any] | None) -> bool:
     """Whether the binding map binds a committed sampled id (`FAMILY`) at all: a row that committed none has no token to open."""
-    return any(((e.get("identity") or {}).get("op_path"), (e.get("identity") or {}).get("output_member")) == FAMILY
-               for e in (bmap or {}).get("entries") or [])
+    entries = bmap.get("entries") if bmap else None
+    if not entries:
+        return False
+    for e in entries:
+        identity = e.get("identity")
+        if identity and (identity.get("op_path"), identity.get("output_member")) == FAMILY:
+            return True
+    return False
 
 
 def sampled_identities(store: Any, rid: str, arrive: int, n: int) -> list[dict[str, Any] | None]:
@@ -309,7 +328,11 @@ def commit_link(com: Any, rc: Any, bmap: dict[str, Any], epr: dict[str, Any], *,
     """Writes this pair's token record into `out_dir` and links the executed prefix to it, opening every served token from the
     committer `com` against its run commitment `rc` through the binding map."""
     store = UnverifiedUnlinked(CommittedStore(bmap, OpenedReader(com, rc)))
-    ids = {rid: sampled_identities(store, rid, int(arrivals.get(rid, 0)), len((served or {}).get(rid) or [])) for rid in epr.get("requests") or {}}
+    ids: dict[str, list[dict[str, Any] | None]] = {}
+    for rid in EP.requests_of_record(epr):
+        arrive = int(arrivals.get(rid, 0))
+        tokens = served.get(rid) if served else None
+        ids[rid] = sampled_identities(store, rid, arrive, len(tokens) if tokens else 0)
     run_root = bytes(rc.run_root).hex()
     record = commit_tokens_record(epr, order=order, served_tokens=served, finish_reasons=finish, identities=ids, stop=stop,
                                   program_digest=program_digest, pair=pair, run_root=run_root)
@@ -331,7 +354,7 @@ def account_links(com: Any, rc: Any, bmap: dict[str, Any], epr: dict[str, Any], 
     A row with a Match record beside it that committed no sampled id writes no token record: its commit link is `not_applied`, by name,
     and places nothing, so the Match link alone decides.  With no Match record the token record is built either way: it is the account."""
     match = EP.link_to_match_account(epr, EP.load_match_account(match_dir), order=order, declared_lag=stop.get("declared_lag"), served_tokens=served)
-    reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
+    reduced = sorted(r for r, v in EP.requests_of_record(epr).items() if v.get("eos_stop"))
     if match_dir and not sampled_ids_committed(bmap):
         commit: dict[str, Any] = {"rule": COMMIT_LINK_RULE, "required": False, "reduced_requests": reduced, "record": None, "lag_attested": None, "problems": [],
                                   "ok": None, "not_applied": f"no committed {FAMILY[0]}/{FAMILY[1]} in the binding map: the Match link alone decides",

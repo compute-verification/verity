@@ -129,6 +129,24 @@ def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], in
     return [(name, shape, bits) for name, _count, shape, bits in parse_struct(str(wparam))]
 
 
+def _fields(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """The fields a record states: none where it states none, null or leaves the key out."""
+    fields = record.get("fields")
+    return fields if fields else []
+
+
+def _result(program: dict[str, Any]) -> dict[str, Any]:
+    """A loaded Program's result: an empty one where its result.json states none or the Program carries none."""
+    result = program.get("result")
+    return result if result else {}
+
+
+def _listed(record: dict[str, Any], key: str) -> list[Any]:
+    """The list a record states under `key`, as a list of its own: empty where it states none, null or leaves the key out."""
+    listed = record.get(key)
+    return list(listed) if listed else []
+
+
 def root_of_fields(fields: list[dict[str, Any]]) -> str:
     """root_of_record under the CURRENT schema from a record's `fields`: the ordered (field, digest | analytic:<analytic_key>) list."""
     ordered = []
@@ -145,7 +163,7 @@ def reroot(record: dict[str, Any]) -> str:
     """The root a record's fields give under the CURRENT schema -- a reader: the record is not changed.  For a current-schema record this
     equals its root_of_record (a self-check that the root is recomputable from the fields); for a v1 record it is the root v2 would have
     derived from the same fields (two v1 roots of one Llama-3.2-1B, cp-r1 / cp-a100, re-root to one)."""
-    return root_of_fields(record.get("fields") or [])
+    return root_of_fields(_fields(record))
 
 
 def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -154,8 +172,8 @@ def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     only in host-side information (analytic.inv_freq_sha256, the host note, sources/rule text) -- named separately, they do not make
     the weights differ.  `same_weights_of_record` = no one-sided field, no differing digest/shape/bits/analytic key; then reroot(a) ==
     reroot(b) whatever the two schemas were."""
-    fa = {f["field"]: f for f in (a.get("fields") or [])}
-    fb = {f["field"]: f for f in (b.get("fields") or [])}
+    fa = {f["field"]: f for f in _fields(a)}
+    fb = {f["field"]: f for f in _fields(b)}
     only_a = sorted(set(fa) - set(fb))
     only_b = sorted(set(fb) - set(fa))
     differ: list[dict[str, Any]] = []
@@ -188,14 +206,15 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
     `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`); `on_field(field, words)`
     is given each field it digests, its raw words row-major as digested."""
     t0 = time.perf_counter()
-    inst, res = program["instances"], program.get("result") or {}
+    inst, res = program["instances"], _result(program)
     tp = res.get("tp")
     if not isinstance(tp, dict):
         tp = {}
     world, rank = int(tp.get("world") or 1), int(tp.get("rank") or 0)
     fields = program_weight_fields(inst) if fields is None else fields
     if prefix is None:
-        named = MF.wrapper_prefix_of(inst.get("rows", []), res.get("attention_impls_observed") or [])
+        observed = res.get("attention_impls_observed")
+        named = MF.wrapper_prefix_of(inst.get("rows", []), observed if observed else [])
         # the rows' answer when it is the checkpoint's, else the prefix (up to two segments: GLM-5.3's `inner.model.`) under which the
         # most fields are checkpoint tensors 1:1 -- determined from the checkpoint, not assumed
         def hits(p: str) -> int:
@@ -270,13 +289,16 @@ def live_param_digests(model, *, include_buffers: bool = True, raw_for: re.Patte
 def _check_analytic(f: dict[str, Any], raw: np.ndarray | None) -> dict[str, Any]:
     """The served rotary table against the frozen analytic table's bound (analytic.check_cos_sin)."""
     from verity_vllm.program import model as analytic
-    a = f.get("analytic") or {}
+    a = f.get("analytic")
+    if not a:
+        a = {}      # an analytic field that states no table: no validator below
     rep: dict[str, Any] = {"field": f["field"], "served_name": f["served_name"], "table": a.get("table"), "expected_shape": a.get("expected_shape")}
     if raw is None:
         return rep | {"status": "missing", "why": "served table words not captured (live_param_digests raw_for) or not bf16"}
     if a.get("table") != "cos_sin":
         return rep | {"status": "error", "why": f"no validator for analytic table {a.get('table')!r}"}
-    C = dict(a.get("C") or {})
+    constants = a.get("C")
+    C = dict(constants) if constants else {}
     try:
         r = analytic.check_cos_sin(C, np.ascontiguousarray(raw, dtype=np.uint16))
     except Exception as e:                                        # noqa: BLE001 -- the reason is the evidence
@@ -297,17 +319,23 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
     whatever is on disk' is not the pin.  [W2] with `program_digests_of_record` (the Build digest of record / the manifest's component
     digests) a record built for another Program is refused by name; with `checkpoint_of_record` ({repo, revision}) a record whose
     manifest entry is another checkpoint is refused by name."""
-    lp = live.get("params") or {}
+    lp = live.get("params")
+    if not lp:
+        lp = {}     # no served parameter: every pinned field is missing
     mismatched, missing, compared = [], [], 0
-    ck = record.get("checkpoint") or {}
+    ck = record.get("checkpoint")
+    if not ck:
+        ck = {}     # a record that states no checkpoint states no shard pin and no manifest entry
+    shards = ck.get("shards")
     shard_why: list[str] = []
-    for fn, v in (ck.get("shards") or {}).items():
-        if v.get("pinned") is None:
-            ent = ck.get("entry")
-            shard_why.append(f"shard {fn}: no checkpoints.json entry for {ck.get('dir')}" + (f" ({ent.get('repo')} @ {str(ent.get('revision'))[:10]})" if ent else " (repo/revision unknown)"))
-        elif v.get("pinned") is not True:
-            shard_why.append(f"shard {fn} sha256 {str(v.get('sha256'))[:16]} != manifests/checkpoints.json pin {str(v.get('pinned_sha256'))[:16]}")
-    if not (ck.get("shards") or {}):
+    if shards:
+        for fn, v in shards.items():
+            if v.get("pinned") is None:
+                ent = ck.get("entry")
+                shard_why.append(f"shard {fn}: no checkpoints.json entry for {ck.get('dir')}" + (f" ({ent.get('repo')} @ {str(ent.get('revision'))[:10]})" if ent else " (repo/revision unknown)"))
+            elif v.get("pinned") is not True:
+                shard_why.append(f"shard {fn} sha256 {str(v.get('sha256'))[:16]} != manifests/checkpoints.json pin {str(v.get('pinned_sha256'))[:16]}")
+    else:
         shard_why.append("no shard pin recorded (record built with --no-verify-shards?)")
     shards_ok = ck.get("all_shards_pinned") is True and not shard_why
     prog_why = None
@@ -315,7 +343,8 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         pd = str(record.get("program_digest") or "")
         ofr = {str(x) for x in program_digests_of_record}
         stamped = record.get("of_record_set") if isinstance(record.get("of_record_set"), dict) else None
-        st = {str(x) for x in (stamped.get("program_digests") or [])} if stamped is not None else set()
+        stamped_digests = stamped.get("program_digests") if stamped is not None else None
+        st = {str(x) for x in stamped_digests} if stamped_digests else set()
         if short := sorted(x[:16] for x in ofr | st | ({pd} if pd else set()) if not FULL_DIGEST_RE.fullmatch(x)):
             prog_why = f"Program digests not full sha512 (128 hex), compared only whole: {short}"
         elif stamped is not None:
@@ -333,7 +362,9 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
             prog_why = f"record built for Program {pd[:16] or '?'} != Program of record {sorted(x[:16] for x in ofr)}"
     ent_why = None
     if checkpoint_of_record:
-        ent = ck.get("entry") or {}
+        ent = ck.get("entry")
+        if not ent:
+            ent = {}    # no manifest entry: the record is of no checkpoint the workload names
         want_repo, want_rev = checkpoint_of_record.get("repo"), str(checkpoint_of_record.get("revision") or "")
         if want_repo and ent.get("repo") != want_repo:
             ent_why = f"record's checkpoint entry {ent.get('repo')} != the workload's model {want_repo}"
@@ -342,11 +373,14 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
     # the record's engine assumption must be the engine's: a record that pinned the kv scales as 1.0 (kv_cache_dtype auto)
     # does not certify an engine running a quantized kv cache (its scales are other values) -- refused by name, never re-assumed
     kv_why = None
-    rec_kvd = str((record.get("engine_assumptions") or {}).get("kv_cache_dtype") or "auto")
+    assumed = record.get("engine_assumptions")
+    rec_kvd = str(assumed.get("kv_cache_dtype") or "auto") if assumed else "auto"
     if kv_cache_dtype is not None and str(kv_cache_dtype) != rec_kvd:
         kv_why = f"record assumes kv_cache_dtype={rec_kvd}; the engine runs kv_cache_dtype={kv_cache_dtype} (kv scales not of record)"
     analytic_checked: list[dict[str, Any]] = []
-    raws = live.get("raw") or {}
+    raws = live.get("raw")
+    if not raws:
+        raws = {}   # no table's words were kept: an analytic field has nothing to be checked on
     for f in record.get("fields", []):
         cands = [f["served_name"], f["field"]]
         if f["served_name"] == "lm_head.weight":
@@ -405,10 +439,11 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         why = f"{len(missing)} Program weight field(s) not found among the served parameters: " + ", ".join(missing[:8])
     elif analytic_failed:
         why = f"{len(analytic_failed)} engine table(s) outside the frozen analytic bound: " + "; ".join(f"{a['served_name']}: {a.get('why')}" for a in analytic_failed[:4])
-    unpinned = list(record.get("unpinned") or [])
+    unpinned = _listed(record, "unpinned")
+    of_record_set = record.get("of_record_set")
     return {"result": bool(ok), "root_of_record": record.get("root_of_record"), "program_digest": record.get("program_digest"),
             "program_of_record": bool(prog_why is None) if program_digests_of_record is not None else None,
-            "of_record_set": ((record.get("of_record_set") or {}).get("program_digests") if isinstance(record.get("of_record_set"), dict) else None),
+            "of_record_set": of_record_set.get("program_digests") if isinstance(of_record_set, dict) else None,
             "checkpoint_entry": ck.get("entry"), "checkpoint_entry_of_record": bool(ent_why is None) if checkpoint_of_record else None,
             "compared": compared, "mismatched": mismatched, "missing": missing, "unpinned": unpinned,
             "placeholders_deleted": placeholders_deleted,
@@ -418,7 +453,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
             "analytic": analytic_checked, "engine_assumptions": record.get("engine_assumptions"),
             "unpinned_note": (("engine constants left unpinned by name are not authenticated by this pin (form (B) only)") if unpinned else
                               "every declared weight field is pinned: checkpoint bytes by digest, kv scales as the engine constant, the rotary table by the frozen analytic bound"),
-            "unresolved": list(record.get("unresolved") or []), "shards": ck.get("shards"),
+            "unresolved": _listed(record, "unresolved"), "shards": shards,
             "all_shards_pinned": ck.get("all_shards_pinned"), "shards_ok": bool(shards_ok),
             "method": "sha256(served parameter bytes) == sha256(checkpoint-composed tensor of record) per Program weight field, shards pinned by "
                       "manifests/checkpoints.json sha256, record bound to the Program of record; engine constants: kv scales "
@@ -503,8 +538,14 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     if os.path.exists(mpath):
         try:
             m = json.loads(Path(mpath).read_text())
-            manifest_digests = [str(x) for x in ([m.get("program_digest")] + list(m.get("component_digests") or [])
-                                                 + [c.get("program_digest") for c in (m.get("components") or {}).values() if isinstance(c, dict)]) if x]
+            named = [m.get("program_digest")]
+            listed = m.get("component_digests")
+            if listed:
+                named += list(listed)
+            components = m.get("components")
+            if components:
+                named += [c.get("program_digest") for c in components.values() if isinstance(c, dict)]
+            manifest_digests = [str(x) for x in named if x]
         except Exception as e:  # noqa: BLE001
             why.append(f"manifest {os.path.basename(mpath)} unreadable ({type(e).__name__})")
     digests: set[str] = set(manifest_digests)
@@ -517,7 +558,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
         except Exception as e:  # noqa: BLE001
             why.append(f"{os.path.basename(d)}: not loadable ({type(e).__name__}: {str(e)[:80]})")
             continue
-        res = prog.get("result") or {}
+        res = _result(prog)
         pd = str(res.get("program_digest") or (prog["instances"].get("digest") or ""))
         st = weights_struct(prog)
         same = st == my_struct

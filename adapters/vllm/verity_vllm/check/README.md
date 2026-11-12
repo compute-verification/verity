@@ -11,8 +11,8 @@ and `replay/` the sampled replay of a Commit. Each module's docstring says what 
 ## What other code imports
 
 A module's `__all__` lists the names that the adapter's other packages and code outside the adapter import from it. A
-module without one is the package's own, but for three that other code reads and that state none: `c2_rules`,
-`compiled_autotune`, and `fold_compare`, which the `fold-compare` command runs. The Commit's side: `verdict` gives
+module without one is the package's own, but for two that other code reads and that state none: `c2_rules`, and
+`fold_compare`, which the `fold-compare` command runs. The Commit's side: `verdict` gives
 `commit_verdict` and `from_record`; `commit_rules` the required classes and their coverage; `commit_tokens`
 `account_links`; `cublas_route_pin` the route pin's gate and its stamp on the Commit record; `oracle_compare` the
 compare, the Match record's reader (`MatchOracle`), the producers of the members it reads, and the reader of opened
