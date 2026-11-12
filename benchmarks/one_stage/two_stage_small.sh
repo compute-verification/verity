@@ -16,6 +16,9 @@
 #   SMALL_ARGS="--inline --units 20 --v 2560" runs the class inlined as the greedy select in 20 units
 #   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
 #   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances
+#   SMALL_SERVE_PY and SMALL_SECOND_PY name another script for the serve and for `second` (two_stage_control.py: a
+#   negative control's class, and the prover that claims its changed ids); such a run exits 0 only if the control held
+#   as an honest class does, so a control that is refused exits 1 with its summary's reason
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
 # RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
 # SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.
@@ -53,7 +56,7 @@ UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW
 PY=(uv run --no-sync python)
 INLINE=(); UNLINKED=(); [ -n "${SMALL_INLINE:-}" ] && { INLINE=(--inline); UNLINKED=(--unlinked); }
 # shellcheck disable=SC2086
-"${PY[@]}" benchmarks/one_stage/two_stage_small.py serve --out "$W/serve" "${INLINE[@]}" ${SMALL_ARGS:-} | tee "$O/serve.json"
+"${PY[@]}" "${SMALL_SERVE_PY:-benchmarks/one_stage/two_stage_small.py}" serve --out "$W/serve" "${INLINE[@]}" ${SMALL_ARGS:-} | tee "$O/serve.json"
 CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$O/serve.json")
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
 # shellcheck disable=SC2086
@@ -62,7 +65,7 @@ CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["clas
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
-"${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
+"${PY[@]}" "${SMALL_SECOND_PY:-benchmarks/one_stage/two_stage.py}" second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second" "${UNLINKED[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
