@@ -702,8 +702,6 @@
     {"file": "verity_vllm/commit/committer/weights_rows.py", "kind": "assignment", "symbol": "WeightsRows.device_root", "detail": ""},
     {"file": "verity_vllm/commit/committer/weights_rows.py", "kind": "has-type", "symbol": "WeightsRows.device_root", "detail": "", "count": 6},
     {"file": "verity_vllm/commit/committer/weights_rows.py", "kind": "misc", "symbol": "WeightsRows.device_root", "detail": ""},
-    {"file": "verity_vllm/commit/memory_map.py", "kind": "arg-type", "symbol": "_history", "detail": ""},
-    {"file": "verity_vllm/commit/memory_map.py", "kind": "arg-type", "symbol": "rows", "detail": "", "count": 2},
     {"file": "verity_vllm/commit/row_tables_device.py", "kind": "assignment", "symbol": "device_lib", "detail": ""},
     {"file": "verity_vllm/config.py", "kind": "index", "symbol": "done_source_refusal", "detail": ""},
     {"file": "verity_vllm/config.py", "kind": "union-attr", "symbol": "done_source_refusal", "detail": "", "count": 2},
