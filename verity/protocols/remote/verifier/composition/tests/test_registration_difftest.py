@@ -28,11 +28,17 @@ from verity_difftest import protocol as P
 INTERFACE = Path(__file__).resolve().parents[6] / "verity/protocols/interface"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-SHEET = S.Sheet(S.DeviceFigures("sim-a", 2_000_000_000, (10**15, 2 * 10**15, 2 * 10**15, 15 * 10**14, 4 * 10**15)), 3200,
-                1 << 25, 64 << 30)
-SHEET_B = S.Sheet(S.DeviceFigures("sim-b", 1_000_000_000, (5 * 10**14, 10**15, 10**15, 75 * 10**13, 2 * 10**15)), 6400,
-                  1 << 26, 128 << 30)
-AUDITOR = G.Auditor((SHEET,), Fraction(1, 20), (("cert0", "k0"), ("chal0", "k1")))
+SHEET = S.Sheet(S.DeviceFigures("sim-a", 2_000_000_000, (10**15, 2 * 10**15, 2 * 10**15, 15 * 10**14, 4 * 10**15)),
+                3_200_000_000_000, 1 << 25, 64 << 30)
+SHEET_B = S.Sheet(S.DeviceFigures("sim-b", 1_000_000_000, (5 * 10**14, 10**15, 10**15, 75 * 10**13, 2 * 10**15)),
+                  6_400_000_000_000, 1 << 26, 128 << 30)
+LMS = S.SCHEMES[0]
+NS = Fraction(1, 10**9)
+AUDITOR = G.Auditor((SHEET,), Fraction(1, 20), (("cert0", "k0", LMS), ("chal0", "k1", LMS)),
+                    hosts=(("node0", S.HostFigures(1 << 25)),))
+#: `AUDITOR` with figures for a second host and its DRAM, which a twist registers.
+WIDE = dataclasses.replace(AUDITOR, memory=(("dram1", S.MemoryFigures("node1", 6554, 1)),),
+                           hosts=(*AUDITOR.hosts, ("node1", S.HostFigures(1 << 25))))
 
 
 def stated(k: S.Sheet, **figures: object) -> S.Sheet:
@@ -48,12 +54,13 @@ PAST = (stated(SHEET, clock=1_899_999_999), stated(SHEET, clock=2_100_000_001),
         stated(SHEET, peak_rate=(RATES[0], 21 * 10**14 + 1, *RATES[2:])))
 #: A sheet with a zero peak rate, refused at any tolerance.
 ZERO = stated(SHEET, peak_rate=(*RATES[:3], 0, RATES[4]))
-LOCS = (S.Loc("site0", "site"), S.Loc("node0", "host", "site0"), S.Loc("gpu0", "device", "node0", sheet=SHEET.digest()),
+LOCS = (S.Loc("site0", "site", time_unit=NS), S.Loc("node0", "host", "site0", chip=1 << 25),
+        S.Loc("gpu0", "device", "node0", sheet=SHEET.digest()),
         S.Loc("hbm0", "memory", "gpu0", tier="hbm", bytes=1 << 30),
-        S.Loc("cert0", "certifier", "site0", owner="auditor", key="k0"),
-        S.Loc("chal0", "challenger", "site0", owner="auditor", key="k1"))
-LINKS = (S.Link("up0", ("node0", "cert0"), 100, 1), S.Link("up1", ("cert0", S.OUTSIDE), 100, 1),
-         S.Link("mc0", ("chal0", "node0"), 10, 1))
+        S.Loc("cert0", "certifier", "site0", owner="auditor", key="k0", scheme=LMS),
+        S.Loc("chal0", "challenger", "site0", owner="auditor", key="k1", scheme=LMS))
+LINKS = (S.Link("up0", ("node0", "cert0"), 100_000_000_000, 1), S.Link("up1", ("cert0", S.OUTSIDE), 100_000_000_000, 1),
+         S.Link("mc0", ("chal0", "node0"), 10_000_000_000, 1))
 WEIGHTS = {"checkpoint_sha512": "c" * 128, "domain": "b" * 128, "kind": "theta", "leaves": 4, "root": "a" * 128,
            "value": "weights", "words": 64}
 ITEMS = (WEIGHTS, {"domain": "e" * 128, "kind": "theta", "leaves": 1, "root": "d" * 128, "value": "state",
@@ -122,10 +129,12 @@ HEX = st.sampled_from(["a" * 128, "b" * 128, "e" * 128])
 locs = st.builds(S.Loc, st.sampled_from(IDS), st.sampled_from(S.KINDS), st.none() | st.sampled_from(IDS),
                  st.sampled_from(S.OWNERS), st.sampled_from(["", SHEET.digest(), SHEET_B.digest()]),
                  st.none() | st.sampled_from(S.TIERS), st.sampled_from([0, 1, 1 << 30, (64 << 30) + 1]),
-                 st.sampled_from(["", "k0", "k1"]))
+                 st.sampled_from(["", "k0", "k1"]), st.sampled_from(["", LMS, "x"]), st.sampled_from([None, 0, 6554]),
+                 st.sampled_from([None, 1 << 25]), st.sampled_from([(), (("disk", 50),)]),
+                 st.sampled_from([None, Fraction(1, 10)]), st.sampled_from([None, NS, 0]))
 links = st.builds(S.Link, st.sampled_from(["up0", "up1", "mc0", "l3", "gpu0"]),
-                  st.tuples(st.sampled_from(IDS), st.sampled_from(IDS)), st.sampled_from([0, 1, 100]),
-                  st.sampled_from([0, 1]))
+                  st.tuples(st.sampled_from(IDS), st.sampled_from(IDS)), st.sampled_from([None, 0, 1, 100]),
+                  st.sampled_from([0, 1]), st.sampled_from([None, "a stand-in"]))
 sheets = st.sampled_from([SHEET, SHEET_B, dataclasses.replace(SHEET, mem=1), *WITHIN, *PAST, ZERO])
 #: Names a θ value takes: the example's, a new one, one outside ASCII and one with DEL.
 VALUES = ["weights", "state", "tables", "poids\u00e9", "poids\x7f"]
@@ -158,18 +167,21 @@ def pick(draw, xs):
 FIELDS = {"kind": S.KINDS, "parent": [None, *IDS], "owner": S.OWNERS, "sheet": ["", SHEET.digest(), SHEET_B.digest()],
           "tier": [None, *S.TIERS], "bytes": [0, 1, 64 << 30, (64 << 30) + 1], "key": ["", "k0", "k1"],
           "ends": [("node0", S.OUTSIDE), ("node0", "node0"), ("chal0", "hbm0"), ("cert0", "node0"), ("up0", "node0")],
-          "beta": [0, 1], "id": IDS}
+          "beta": [None, 0, 1], "unmediated": [None, "a stand-in"], "id": IDS, "scheme": ["", LMS, "x"],
+          "bw": [None, 0, 6554], "chip": [None, 1, 1 << 25], "time_unit": [None, 0, NS, 2 * NS],
+          "drift": [None, Fraction(1, 10)]}
 
 
 #: Site entries that, after the example's, each fail one check of their own: an uplink no certifier splits
 #: (`uncertified`, onsite), a host's memory no challenger reaches (`challenger-reach`, onsite), a device's memory over its
 #: sheet's (`capacity`), a sheet the auditor has no data sheet for (`sheet-digest`), a certifier that splits no uplink
-#: (`kind`).
+#: (`kind`). The second is checked under `WIDE`, which has figures for its host and DRAM.
 TWISTS = (G.site(links=(S.Link("l3", ("node0", S.OUTSIDE), 1, 0),)),
-          G.site(locs=(S.Loc("node1", "host", "site0"), S.Loc("dram1", "memory", "node1", tier="dram", bytes=1))),
+          G.site(locs=(S.Loc("node1", "host", "site0", chip=1 << 25),
+                       S.Loc("dram1", "memory", "node1", tier="dram", bytes=1, bw=6554))),
           G.site(locs=(S.Loc("hbm1", "memory", "gpu0", tier="hbm", bytes=64 << 30),)),
           G.site((SHEET_B,), (S.Loc("gpu1", "device", "node0", sheet=SHEET_B.digest()),)),
-          G.site(locs=(S.Loc("cert1", "certifier", "site0", owner="auditor", key="k0"),)))
+          G.site(locs=(S.Loc("cert1", "certifier", "site0", owner="auditor", key="k0", scheme=LMS),)))
 
 
 @st.composite
@@ -242,19 +254,26 @@ def cases(draw) -> dict:
     composite = pick(draw, S.COMPOSITES)
     source = pick(draw, ["changed"] * 5 + ["twist"] * 3 + ["random"] * 2)
     if source == "twist":
-        return case(composite, chain(composite, [*EXAMPLE, pick(draw, TWISTS)]))
+        return case(composite, chain(composite, [*EXAMPLE, pick(draw, TWISTS)]), WIDE)
     bodies = (draw(changed()) if source == "changed"
               else draw(st.lists(st.one_of(site, information, declarations), max_size=3)))
     log = chain(composite, bodies)
     if log and not pick(draw, range(8)):
         k = pick(draw, range(len(log)))
         log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, S.genesis("remote")]))
-    auditor = pick(draw, [AUDITOR] * 6 + [G.Auditor(), dataclasses.replace(AUDITOR, sheets=(SHEET_B,)),
+    auditor = pick(draw, [AUDITOR] * 6 + [G.Auditor(), WIDE, dataclasses.replace(AUDITOR, sheets=(SHEET_B,)),
                                          dataclasses.replace(AUDITOR, tolerance=0),
                                          dataclasses.replace(AUDITOR, tolerance=1),
-                                         dataclasses.replace(AUDITOR, keys=(("cert0", "k1"), ("chal0", "k1"))),
-                                         dataclasses.replace(AUDITOR, keys=(("cert0", "k\u00e9"), ("chal0", "k1"))),
-                                         dataclasses.replace(AUDITOR, keys=(("cert0", "k\x7f"), ("chal0", "k1")))])
+                                         dataclasses.replace(AUDITOR, keys=(("cert0", "k1", LMS), ("chal0", "k1", LMS))),
+                                         dataclasses.replace(AUDITOR, keys=(("cert0", "k0", S.SCHEMES[1]),
+                                                                            ("chal0", "k1", LMS))),
+                                         dataclasses.replace(AUDITOR, drift=(("cert0", Fraction(1, 10)),)),
+                                         dataclasses.replace(AUDITOR, hosts=(("node0", S.HostFigures(1 << 25, (
+                                             ("sim-a", 2),))),)),
+                                         dataclasses.replace(AUDITOR, hosts=(("node0", S.HostFigures(1 << 25, ways=(
+                                             ("up0", 100_000_000_000),))),)),
+                                         dataclasses.replace(AUDITOR, keys=(("cert0", "k\u00e9", LMS), ("chal0", "k1", LMS))),
+                                         dataclasses.replace(AUDITOR, keys=(("cert0", "k\x7f", LMS), ("chal0", "k1", LMS)))])
     composed = composite if pick(draw, range(16)) else pick(draw, S.COMPOSITES)
     c = case(composite, log, auditor, composed)
     broken = pick(draw, ["none"] * 12 + ["commitment", "params", "evidence"])
@@ -271,9 +290,26 @@ def cases(draw) -> dict:
 PORT = RegistrationPort(exe="core-registration", package=INTERFACE, reference=reference, inputs=cases())
 
 
+def _listing(**host: Any) -> G.Auditor:
+    """`AUDITOR` with these figures for `node0` beside its on-chip state (the Lean's `listing` and `withWay`)."""
+    return dataclasses.replace(AUDITOR, hosts=(("node0", S.HostFigures(1 << 25, **host)),))
+
+
+def _eth0(beta: int | None, why: str | None = "no certifier splits it") -> S.Link:
+    return S.Link("eth0", ("node0", S.OUTSIDE), beta, 0, why)
+
+
+WITH_DRAM = dataclasses.replace(AUDITOR, memory=(("dram0", S.MemoryFigures("node0", 6554, 1 << 31)),))
+LATER = G.site(locs=(S.Loc("dram0", "memory", "node0", tier="dram", bytes=1 << 31, bw=6554),))
+HOST = [G.site(locs=LOCS[:2])]
+
+
 def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
-    """The Lean's `#guard`s on `Core.Registration.Example`, in Python, and each replayed against the Lean."""
+    """The Lean's `#guard`s on `Core.Registration.Example`, in Python, and each replayed against the Lean: among them
+    the auditor's inventory at the log's end (a card short, a leaf left out and added later, a way out at another rate,
+    under another id or between other ends, and one with no rate) and the head after the first entry."""
     bare = [G.site((SHEET,), LOCS[:4], (S.Link("up0", ("node0", S.OUTSIDE), 100, 1),))]
+    up0 = 100_000_000_000
     ascii = "commitment: not ASCII without DEL (a byte at or above 0x7f)"
     expect = [(case("onsite", chain("onsite", EXAMPLE)), None),
               (case("onsite", chain("remote", EXAMPLE)), "entry 0: previous"),
@@ -300,7 +336,27 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
                "entry 0: figures"),
               (case("onsite", chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\u00e9"},))])), ascii),
               (case("onsite", chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\x7f"},))])), ascii),
-              (case("onsite", chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\x7f"},)), *EXAMPLE])), ascii)]
+              (case("onsite", chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\x7f"},)), *EXAMPLE])), ascii),
+              (case("onsite", chain("onsite", EXAMPLE), _listing(cards=(("sim-a", 1),))), None),
+              (case("onsite", chain("onsite", EXAMPLE), _listing(cards=(("sim-a", 2),))), "entry 3: inventory"),
+              (case("onsite", chain("onsite", EXAMPLE), WITH_DRAM), "entry 3: inventory"),
+              (case("onsite", chain("onsite", [*EXAMPLE, LATER]), WITH_DRAM), None),
+              (case("onsite", chain("onsite", [*EXAMPLE, LATER])), "entry 3: figures"),
+              (case("onsite", chain("onsite", EXAMPLE), _listing(ways=(("up0", up0),))), None),
+              (case("onsite", chain("onsite", EXAMPLE), _listing(ways=(("up0", 4 * up0),))), "entry 3: inventory"),
+              (case("onsite", chain("onsite", EXAMPLE), _listing(ways=(("eth0", up0),))), "entry 3: inventory"),
+              (case("onsite", chain("onsite", EXAMPLE), _listing(ways=(("up1", up0),))), "entry 3: inventory"),
+              (case("remote", chain("remote", HOST), _listing(ways=(("up0", up0),))), "entry 1: inventory"),
+              (case("remote", chain("remote", HOST)), None),
+              (case("remote", chain("remote", [G.site(locs=LOCS[:2], links=(_eth0(None),))]),
+                    _listing(ways=(("eth0", None),))), None),
+              (case("remote", chain("remote", [G.site(locs=LOCS[:2], links=(_eth0(1000),))]),
+                    _listing(ways=(("eth0", None),))), "entry 1: inventory"),
+              (case("remote", chain("remote", [G.site(locs=LOCS[:2], links=(_eth0(None),))]),
+                    _listing(ways=(("eth0", 1000),))), "entry 1: inventory"),
+              (case("remote", chain("remote", [G.site(locs=LOCS[:2], links=(_eth0(None, None),))])), "entry 0: kind"),
+              (case("remote", chain("remote", [G.site(locs=(LOCS[0], S.Loc("node0", "host", "site0")))])),
+               "entry 0: figures")]
     with D.Server(PORT.argv()) as server:
         for c, reason in expect:
             out = reference(c)
@@ -308,6 +364,9 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
             assert out["verdict"] == ("accept" if reason is None else "reject")
             D.replay(PORT, c, server)
     view = G.check(AUDITOR, "onsite", chain("onsite", EXAMPLE)).view()
+    first = [G.check(AUDITOR, "onsite", chain("onsite", EXAMPLE)[:n]).view() for n in (0, 1)]
+    assert first[0].first is None and first[1].first == first[1].head == view.first != view.head
+    assert view.to_json()["first"] == view.first and first[0].to_json()["first"] is None
     assert view.value("weights") == WEIGHTS and view.theta == ITEMS[:2] and view.builder == ITEMS[2]
     assert view.site.locs == LOCS
     assert view.declared(0) == DAY0 and view.declared(1) is None

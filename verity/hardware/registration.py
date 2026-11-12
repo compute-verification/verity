@@ -26,9 +26,11 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
 fails (`REFUSALS`): a site entry by the Site's (`verity.hardware.site.entry_refusal`), an information entry by `previous`
-and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`. A component reads
-its view of an accepted log (`View`): the Site, θ's values (`View.value`), the builder and the days' declared circuits
-(`View.declared`), at the head. Decoding takes exactly what the encoders write and raises `Malformed`
+and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`; where every entry
+passes and the Site the log folds to lacks hardware the auditor's figures list (`verity.hardware.site.incomplete`), it
+raises `Refused` by `inventory` at the log's length. A component reads its view of an accepted log (`View`): the Site,
+θ's values (`View.value`), the builder and the days' declared circuits (`View.declared`), at the head, and the head
+after the log's first entry (`View.first`). Decoding takes exactly what the encoders write and raises `Malformed`
 otherwise; a log or parameters holding a character outside ASCII without DEL are `Malformed` (`ascii`), in
 `Core.canonicalJson`'s words.
 """
@@ -240,14 +242,15 @@ def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: S.En
 
 @dataclass(frozen=True)
 class State:
-    """The log so far, folded: its Site, its information items in order, its head, its length and its declarations in
-    order."""
+    """The log so far, folded: its Site, its information items in order, its head, its length, its declarations in
+    order, and the head after its first entry (`first`, None while it is empty)."""
 
     site: S.Site
     items: tuple[Mapping[str, Any], ...]
     head: str
     entries: int
     declared: tuple[Declaration, ...] = ()
+    first: str | None = None
 
     def refusal(self, auditor: Auditor, composite: str, e: Entry) -> str | None:
         if isinstance(e, S.Entry):
@@ -259,38 +262,47 @@ class State:
         return None if _nodup([item_key(i) for i in self.items + e.items]) else "duplicate-information"
 
     def add(self, e: Entry) -> State:
+        s = replace(self, head=e.digest(), first=e.digest() if self.first is None else self.first,
+                    entries=self.entries + 1)
         if isinstance(e, S.Entry):
-            return replace(self, site=self.site.add(e), head=e.digest(), entries=self.entries + 1)
+            return replace(s, site=s.site.add(e))
         if isinstance(e, Declaration):
-            return replace(self, declared=self.declared + (replace(e, previous=""),), head=e.digest(),
-                           entries=self.entries + 1)
-        return replace(self, items=self.items + e.items, head=e.digest(), entries=self.entries + 1)
+            return replace(s, declared=s.declared + (replace(e, previous=""),))
+        return replace(s, items=s.items + e.items)
 
     def view(self) -> View:
         return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
-                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head, self.declared)
+                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head, self.declared,
+                    self.first)
 
 
 def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
-    """The log folded entry by entry, each held to the log before it; `Refused` at the first entry that fails."""
+    """The log folded entry by entry, each held to the log before it; `Refused` at the first entry that fails, or, where
+    every entry passes and the Site the log folds to is not complete against the auditor's figures, by `inventory` at
+    the log's length."""
     s = State(S.Site(), (), S.genesis(composite), 0)
     for e in log:
         if r := s.refusal(auditor, composite, e):
             raise Refused(s.entries, r)
         s = s.add(e)
+    if S.incomplete(s.site, auditor) is not None:
+        raise Refused(s.entries, "inventory")
     return s
 
 
 @dataclass(frozen=True)
 class View:
     """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder,
-    and the days' declared circuits in order."""
+    the days' declared circuits in order, the head, and `first`, the head after the log's first entry: the log only
+    appends, so every later head of this log has the same one, and a value bound to it is bound to this log whatever
+    is registered after. None for an empty log."""
 
     site: S.Site
     theta: tuple[dict[str, Any], ...]
     builder: dict[str, Any] | None
     head: str
     declarations: tuple[Declaration, ...] = ()
+    first: str | None = None
 
     def value(self, name: str) -> dict[str, Any] | None:
         """θ's registered value `name`."""
@@ -302,8 +314,8 @@ class View:
         return next((d for d in self.declarations if d.day == day), None)
 
     def to_json(self) -> dict[str, Any]:
-        return {"builder": self.builder, "declarations": [d.body() for d in self.declarations], "head": self.head,
-                "site": self.site.to_json(), "theta": list(self.theta)}
+        return {"builder": self.builder, "declarations": [d.body() for d in self.declarations], "first": self.first,
+                "head": self.head, "site": self.site.to_json(), "theta": list(self.theta)}
 
 
 # --- the core protocol ------------------------------------------------------------------------------------------------
