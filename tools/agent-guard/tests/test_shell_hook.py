@@ -377,8 +377,9 @@ def test_a_message_pushed_from_one_vm_is_pulled_and_delivered_on_another_once(tm
 def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_target_can_check_its_own_vm(tmp_path, monkeypatch):
     """One branch held every message for three hours while each `send` said only "pushed". `status` and a later `send` say a
     message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls. Every `send`, pushed or
-    `--local`, says in its one line that the target's next shell command delivers the message and nothing delivers it at a
-    turn's end: a target whose turn ended (one finished before its stop messages reached it) takes nothing until resumed."""
+    `--local`, says in its one line that the target's next shell command delivers the message, that nothing delivers it at a
+    turn's end, and that a target whose turn ended (one finished before its stop messages reached it) is resumed with the
+    text itself: what its VM held unshown may be gone by its next turn."""
     origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "worker"))
     env = {**os.environ, **GIT_ENV}
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
@@ -392,8 +393,9 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
 
     assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
     sent = tool("send", W, "--text", "fresh", "--repo", str(coord))
-    told = (f"{W}'s next shell command delivers it, and nothing delivers it at a turn's end: if {W} has ended its turn "
-            "(FINISHED or IDLE), resume it with Task (or a follow-up), and its first shell command delivers it")
+    told = (f"{W}'s next shell command delivers it, and nothing delivers it at a turn's end. If {W} has ended its turn "
+            "(FINISHED or IDLE), resume it with the text itself (Task or a follow-up): a message its VM holds unshown when "
+            "its turn ends may be gone by its next turn")
     assert re.fullmatch(re.escape(f"pushed for {W}: origin's inbox/{W} at ") + "[0-9a-f]{12}" + re.escape(
         f"; {told}. `--wait S` says whether its VM took it within S seconds\n"), sent.stdout), sent.stdout
     assert "earlier" not in sent.stderr
@@ -542,8 +544,9 @@ def test_guard_is_one_line_saying_what_is_off_why_and_the_fix_only_where_no_shel
 def test_send_wait_tells_the_sender_whether_a_vm_took_this_message(tmp_path, monkeypatch, capsys):
     """`send` says "pushed" whether or not anything will ever pull the message, and its warning that a target isn't pulling
     comes only with a later send, minutes on. `send --wait S` looks at origin until a VM has pulled this message: taken, and
-    after how long, or NOT TAKEN and exit 1 after S seconds, when the sender has to stop the work itself. The clock and the
-    sleep are the test's: the worker's pull happens inside the sender's second sleep."""
+    after how long, or NOT TAKEN and exit 1 after S seconds, when the sender has to stop the work itself. Taken is said as
+    neither shown nor acted on: a turn that ends before another command may lose it. The clock and the sleep are the
+    test's: the worker's pull happens inside the sender's second sleep."""
     origin, coord, worker, box = (tmp_path / n for n in ("origin.git", "coord", "worker", "worker-inbox"))
     env = {**os.environ, **GIT_ENV}
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
@@ -575,7 +578,11 @@ def test_send_wait_tells_the_sender_whether_a_vm_took_this_message(tmp_path, mon
     pull_in_nap.append(2)
     code, said = send("pause: the worker's hook pulls this", "60")
     assert code == 0 and naps == [5.0, 5.0], naps
-    assert f"inbox: taken 10 s after the push: {W}'s VM pulled" in said.out and "Taken is not acted on" in said.out
+    pushed, took = said.out.splitlines()
+    assert pushed.startswith(f"pushed for {W}: ")
+    assert re.fullmatch(re.escape(f"inbox: taken 10 s after the push: {W}'s VM pulled ") + "[0-9a-f]{12}" + re.escape(
+        ". Taken is neither shown nor acted on: its next shell command shows it, and if its turn ends first it may be gone by "
+        f"its next turn (then resume {W} with the text itself); its runs and its issue show whether it acted"), took), took
     assert "NOT TAKEN" not in said.err and inbox.unpulled(coord, W)[0] == 0
     delivered = hook("ls", W, box)
     assert delivered["permission"] == "deny" and "pause: the worker's hook pulls this" in delivered["user_message"]
@@ -602,8 +609,9 @@ def stop(conversation: str, inbox: Path, status: str = "completed", roots: tuple
 
 def test_the_stop_hook_offers_a_message_still_queued_when_a_turn_completes_as_its_follow_up_once(tmp_path):
     """A worker that ends its turn with no further shell command never meets the shell hook's refusal, so a message sent after
-    its last command waits until it is resumed. The stop hook offers it to Cursor as the turn's follow-up, once, for a runtime
-    that honours one; no delivery relies on it, and the shell hook does not deliver again a message the stop hook took."""
+    its last command is not shown in that turn and may be gone by its next. The stop hook offers it to Cursor as the turn's
+    follow-up, once, for a runtime that honours one; no delivery relies on it, and the shell hook does not deliver again a
+    message the stop hook took."""
     W = "bc-77777777-7777-4777-8777-777777777777"
     queue(W, "park the PR", tmp_path)
     assert stop(W, tmp_path, status="aborted") == {}

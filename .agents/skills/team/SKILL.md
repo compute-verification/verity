@@ -134,7 +134,8 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   resumed: it tells its launcher, who briefs an Opus worker from its note.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
-  its next shell command delivers it (`--local`: a subagent on your VM, no push); resume one whose turn has ended.
+  its next shell command delivers it (`--local`: a subagent on your VM, no push). Nothing delivers it at a turn's end,
+  and one waiting then may be gone by the next turn: an agent whose turn has ended is resumed with the text itself.
   `inbox.py selftest` checks your own VM end to end.
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or

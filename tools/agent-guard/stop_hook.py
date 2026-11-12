@@ -3,9 +3,10 @@
 as the turn's follow-up. No delivery relies on it.
 
 A message reaches an agent at its next shell command, which the shell hook (`shell_hook.py`) refuses once with it. A cloud
-agent whose turn ends with a message waiting starts no new turn for it, so it is reached only by resuming it, and
-`inbox.py send` tells every sender so. This hook stays installed so that a runtime that honours a `stop` hook's follow-up
-delivers with no further change.
+agent whose turn ends with a message waiting starts no new turn for it, and the message may be gone by its next turn: the
+inbox is under `/tmp`, which a cloud VM does not keep across a long pause. So an agent whose turn has ended is reached by
+resuming it with the text itself, and `inbox.py send` tells every sender so. This hook stays installed so that a runtime
+that honours a `stop` hook's follow-up delivers with no further change.
 
 When a turn completes, it pulls the agent's pushed messages (`inbox.py pull`, its git calls bounded by GIT_TIMEOUT_S) and
 hands everything queued for the agent to Cursor as `followup_message`, for the runtime to submit as the agent's next

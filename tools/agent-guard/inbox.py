@@ -27,12 +27,14 @@ seconds (default 30): `pull` appends the branch's new messages to this VM's inbo
 so a message reaches one VM once. A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `AGENT_ID.md`, and
 messages sent before delivery queue up in it. The agent's next shell command is refused once with them as the refusal's text,
 and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands.
-Nothing delivers one at a turn's end: an agent whose turn has ended (FINISHED or IDLE) runs no command, starts no turn for
-a message that waits, and is reached only by resuming it, with Task or a follow-up; its first shell command then delivers
-what waited. (`stop_hook.py` offers a waiting message to the runtime as the turn's follow-up; no delivery relies on it.)
-`send` says so each time, and says when earlier messages to the agent are still uncollected on origin; `send --wait S`
-says whether a VM took this one: taken is on the agent's VM, to be delivered at its next command, and not yet acted on.
-`--local` writes this VM's inbox directly and reaches only agents whose shell commands pass through this VM's hook.
+Nothing delivers one at a turn's end: an agent whose turn has ended (FINISHED or IDLE) runs no command and starts no turn
+for a message that waits (`stop_hook.py` offers one to the runtime as the turn's follow-up; no delivery relies on it). One
+its VM holds unshown when its turn ends may be gone by its next turn: `pull` has emptied the branch, and the inbox is under
+`/tmp`, which a cloud VM does not keep across a long pause. So an agent whose turn has ended is reached by resuming it with
+the text itself, with Task or a follow-up, never by `send` alone. `send` says so each time, and says when earlier messages
+to the agent are still uncollected on origin; `send --wait S` says whether a VM took this one: taken is on the agent's VM,
+neither shown nor acted on, and shown only if its turn runs another command. `--local` writes this VM's inbox directly and
+reaches only agents whose shell commands pass through this VM's hook.
 
 Which hooks a session runs is fixed when its VM boots, by its branch's tracked `.cursor/hooks.json`, and nothing on a
 running VM changes it. A shell hook that ran for an agent leaves its event in the guard's event log, or (a copy from before
@@ -197,10 +199,12 @@ def stale_note(agent: str, n: int, oldest: str, earlier: bool = False) -> str:
 
 
 #: a target that ended its turn runs no shell command, so its hook neither pulls nor delivers, and it starts no turn for a
-#: message that waits (a worker finished and marked its PR ready before two stop messages reached it); a sender without the
-#: Cursor API can't see that a turn has ended, so `send` always says it
-UNTIL_RESUMED = ("{agent}'s next shell command delivers it, and nothing delivers it at a turn's end: if {agent} has ended its "
-                 "turn (FINISHED or IDLE), resume it with Task (or a follow-up), and its first shell command delivers it")
+#: message that waits (a worker finished and marked its PR ready before two stop messages reached it); what its VM's inbox
+#: holds then, under `/tmp`, a cloud VM may not keep until its next turn, so a resume carries the text; a sender without
+#: the Cursor API can't see that a turn has ended, so `send` always says it
+UNTIL_RESUMED = ("{agent}'s next shell command delivers it, and nothing delivers it at a turn's end. If {agent} has ended its "
+                 "turn (FINISHED or IDLE), resume it with the text itself (Task or a follow-up): a message its VM holds "
+                 "unshown when its turn ends may be gone by its next turn")
 
 
 #: Cursor reads hooks.json as JSONC and strips these before parsing it, inside strings too: a `/*` in a command (a glob such as
@@ -423,8 +427,9 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
                   f"shell hook (`inbox.py guard {a.agent}` on its VM says). It stays on the branch for a later pull; to "
                   "stop its work now, cancel its runs yourself", file=sys.stderr)
             return 1
-        print(f"inbox: taken {waited:.0f} s after the push: {a.agent}'s VM pulled {ident}, and its next shell command "
-              "delivers it. Taken is not acted on: its runs and its issue show that")
+        print(f"inbox: taken {waited:.0f} s after the push: {a.agent}'s VM pulled {ident}. Taken is neither shown nor acted "
+              "on: its next shell command shows it, and if its turn ends first it may be gone by its next turn (then resume "
+              f"{a.agent} with the text itself); its runs and its issue show whether it acted")
         return 0
     if a.cmd == "status":
         n, oldest = unpulled(a.repo, full_id(a.agent))
