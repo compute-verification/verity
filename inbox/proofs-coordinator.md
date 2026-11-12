@@ -81598,3 +81598,181 @@ Tags as before; a line's tag covers its sentences. Mailbox read 09:35Z, newest 0
 - **What the last commit changes for a reader:** a tracked `lakefile.toml` or `lake-manifest.json` that does not parse now stops every map, naming the file. All 82 tracked today parse [run locally]. The alternative I set aside was an entry in the lint's allowlist: it would have left the new guard failing open.
 - **#9202's body** is replaced with these runs (the head did not move for it).
 - Not run: any Lean build; the check.
+
+## FIXEDCOST, Thu 12 Nov 09:40Z: #9209's statement read, nothing to refuse; the one pass is built, proved equal to `Zk.verify` on `Setup.ofCircuit` and pushed; timed in sessions it takes the head's later-session check to 0.81 of the fold alone (32.9 and 35.7 s against 40.6 and 44.0 s, two rounds) and changes nothing on MoE and GEMM, where I had derived a gain
+
+Tags: [run] a command I ran, with its run id; [read] a file or a run's output I read now, with its place; [relayed]
+another lane's statement I did not check; [derived] my arithmetic, with its steps; [guess]. Times are from `date -u`.
+Mailbox read at 09:38Z: newest section yours of 09:34Z (PRF-589); that entry follows by 11:00Z, this one answers
+the 08:41Z order. Everything timed here is the Lean verifier checking kept sessions of staged statements on a CPU
+machine; nothing ran on the served engine; the one pass is on my branch, not on `main`; the second worker's fold is on
+its branch (#9209), not on `main`.
+
+### 0. What changed in my 08:32Z entry
+
+1. **MoE with the one pass is not 10.9 s. Timed in a session it is 11.52 s against 11.31 s with the fold alone:** the
+   one pass as first built saves nothing there and costs 0.2 s (section 4). GEMM is 3.22 s against 3.25 s, as derived
+   (3.17 against 3.20).
+2. **The head with the one pass is 32.9 and 35.7 s against 40.6 and 44.0 s with the fold alone, two rounds,** where I
+   derived 31.7 against 38.9: the saving holds (7.8 and 8.3 s measured, 7.2 derived; 0.81 of the fold alone in both
+   rounds), on a base that is 1.7 to 5.1 s higher on this machine than the second worker's.
+3. **Why MoE's derived figure was wrong: my tool stopped its clock before the cells are split.** The tool's two-vector
+   pass returns one cell a column holding both sums, and I split the cells into the two vectors' arrays in the
+   comparison, outside the timed part [read: my kit's `FoldMain.lean`, `foldTRS2` and the check after it]. The verifier
+   as first built splits them, two objects a column a matrix. On MoE that split is about what the second walk costs
+   [guess, from a profile too coarse to say more: section 4].
+4. **So I rebuilt it to read the cells and split nothing** (`d603004787`, section 2); its timing is not in yet.
+
+### 1. The read of the second worker's statement (#9209, `Flock/Comp.lean` at `a62f144764f7`): nothing to refuse
+
+A read, no run of mine; places are lines of `verity/protocols/flock/verifier/Flock/Comp.lean` at `a62f144764f7` unless
+another file is named. [read] throughout, [derived] where marked.
+
+- **(a) Yes: the one statement that changes compiled code is `@[csimp] theorem Sparse.foldT_eq_fast : @foldT =
+  @foldTFast` (267 to 270).** The commit's whole change to the verifier's Lean is 53 added lines in this file (218 to
+  270) and no line removed [read: `git diff d6075b75d2 a62f144764f7`, the file less those lines is `main`'s byte for
+  byte]. The attributes it adds are `@[noinline]` on `addCell` (237) and that `@[csimp]` (267); it adds no `@[extern]`,
+  `@[implemented_by]`, `unsafe`, `partial`, `opaque` or axiom. The definitions it adds, `addCell` (237), `foldRowsFast`
+  (243) and `foldTFast` (263), are called by nothing but each other, so compiled code reaches them only through the
+  switch. The switch's proof (268 to 270) rewrites by `foldRows_eq_fast` (253), which rests on `foldRow_eq_row` (226),
+  `main`'s `rowFold_eq` (176) and `addCell_eq` (239, by `rfl`). The 53 lines hold no `sorry`. My own modules
+  import this file, so my Lean tries built it [run: section 2]; their axiom probe is of my theorems and reaches
+  `foldRow_eq_row` through them, not the switch itself.
+- **(b) Yes: `foldRow` (204), `foldRows` (209) and `foldT` (216) are `main`'s bytes,** as are `row` (162), `rowFold`
+  (167) and `col` (201). A proof or a record that reads `foldT` reads the definition it read before; `@[csimp]` changes
+  what the compiler emits for a call and nothing the kernel sees.
+- **(c) Yes, with one widening: the callers the compiler switches are `Stmt.baseOf` (`Flock/Statement.lean` 294, 296,
+  297) and `Stmt.baseOfFast` (302, 304, 305), and no other compiled code names `foldT`.** Every other mention is a proof
+  under `security/Proofs/Flock/` or a docstring [read: `rg 'foldT\b'` over the tree]. `baseOf` is itself compiled as
+  `baseOfFast` (`baseOf_eq_fast`, 311). The widening: those two are in the library, so the switch reaches every
+  executable of the package that folds a statement (the ZK server's firewall and the witness tool as well as
+  `flock-verify`), not only `verify`. That is the intent as I read it; the pull request should say it in a clause.
+- **(d) Nothing I would refuse. Two things I would want, neither before it lands:**
+  1. *The lock's walk now goes through the new code, and I expect its allow list to gain nothing.* The verifier's walk
+     follows a `@[csimp]` replacement (`tools/verity/lean/check.py` 1715, `Facts.lean` 1157), so from `Setup.ofCircuit`
+     it now enters `foldTFast`, `foldRowsFast`, `addCell`, `rowFold` and the two readers under it. The primitives those
+     reach (`ByteArray.uget`, `USize.add`, `USize.ofNat`, `UInt64.xor`, `Array.modifyM` and the 32-bit shifts) are
+     already in `verifier.allow` of the package's lock [read: `lean-audit.json`]. [derived] So the records run should
+     show no new allow entry; if it shows one, that entry is what a reader checks. The lead's recorded check decides,
+     not this read.
+  2. *Nothing holds the compiled behavior the docstrings claim* (no object allocated an entry). A toolchain bump can
+     bring the allocation back and no check fails; what is accepted cannot change either way. The second worker's check
+     script already counts the allocation calls in the fold's symbols; that count as a guard under
+     `benchmarks/verifier_cost/` would hold it. A later pull request's work.
+
+### 2. The one pass: built, proved equal, pushed; what the pull request's first paragraph states
+
+On `cursor/proofs-fixedcost-46fc`, cut from the second worker's `a62f144764f7` (merged in, not rebased); on a branch,
+not on `main`; nothing ran on the served engine. Issue PRF-587, part 3. I have no tool that opens a pull request; the
+branch is pushed and this is its first paragraph. Two heads: `03583c10e8` is the form the runs of section 4 timed (plus
+one comment and one line's layout); `d603004787` on top of it is the form that splits nothing (below).
+
+- **The equation [read: `Flock/ZkOnePass.lean`, `Zk.verifyOnePass_eq`; no hypothesis]:**
+  `Zk.verifyOnePass spec sts record proofs = Zk.verify spec (sts.map Setup.ofCircuit) record proofs`.
+  `flock-verify verify --zk` now calls the left side where it called the right (`FlockVerify.lean`, the session's
+  check; the file keeps its 1,995 lines). `Zk.verify` is called as it is: `verifyOnePass` is `Zk.verify spec` on
+  `Setup.ofCircuitGiven st ws` for each table, and `Setup.ofCircuitGiven st ws = Setup.ofCircuit st`
+  (`Setup.ofCircuitGiven_eq`) for walks that are the statement's at the points they are stored under (`WalksOk`),
+  which one pass's are (`walks2_ok`, on `Sparse.foldT2_eq : m.foldT2 e0 e1 = (m.foldT e0, m.foldT e1)`).
+- **No existing definition changes:** three new modules (`Flock/FoldTwo.lean` 161 lines, `Flock/FoldGiven.lean` 322,
+  `Flock/ZkOnePass.lean` 87), one import line in `Flock.lean`, and the call in `FlockVerify.lean`. No `@[csimp]`,
+  `@[extern]`, `@[implemented_by]` or `unsafe`. So no listed guarantee's record reads a definition this switches; the
+  records run that would show it is `r20261112-091237-69ef`, still running.
+- **The first pass's points need no proof,** as you put it, and the comment is at the lookup (`Stmt.foldedGiven`): the
+  points are read from the record's coins before the replay checks them; a hit is the walk stored under the very point
+  the replay asks at, and a miss runs the plain walk, so a wrong guess costs time only.
+- **Lean tries, all exit 0, each "none of its N theorems uses an axiom beyond propext, Classical.choice and
+  Quot.sound" [run]:** at `03583c10e8`: `r20261112-085612-4c39` (`FoldTwo`, 12), `r20261112-085612-727a` and, with the
+  comment, `r20261112-091439-7146` (`FoldGiven`, 14), `r20261112-085612-6eaf` (`ZkOnePass`, 3), `r20261112-085612-2104`
+  and, in the form pushed, `r20261112-090915-96a0` (`FlockVerify`, 8). At `d603004787`: `r20261112-092956-7c62`
+  (`FoldGiven`, 16, which builds `FoldTwo`); the tries of `FoldTwo`, `ZkOnePass` and `FlockVerify` there wait for a
+  slot (`r20261112-093040-c357`, `-e747`, `-ec33`).
+- **The form that splits nothing (`d603004787`):** `Sparse.foldC2` is the pass's cells, with `foldC2_fst` and
+  `foldC2_snd` saying each half is `foldT` of its vector; a net's base is read from the cells (`Stmt.baseOfBy`, proved
+  equal to the base from the two walks, `baseOfBy_eq`), so no array of either walk is made. A net with a lookup still
+  splits, since the table reads an array. The equation above and its statement are unchanged; `walks2_ok` is proved
+  for the new form.
+- **What the lock does not see, for the reader of the pull request:** the lock's walk of the verifier's compiled code
+  starts at its four entries (`Flock.verifyWith`, `Flock.Zk.verifyWith`, `Flock.Stmt.setupTablesWith`,
+  `Flock.Setup.ofCircuit`), and none reaches `verifyOnePass`, as none reaches `buildSessionBy` or `circuitOfKnowing`
+  today. The equation ties the compiled call to the entry; the new code's primitives are not held to `verifier.allow`.
+  [derived] They are the ones the fold already uses, and `Thunk.get` and `Thunk.mk`, which the list has. A one-off walk
+  with `Flock.Zk.verifyOnePass` as an entry would show it; I have not run one.
+- **What it does not cover:** a templated statement gets no pass (its unit is folded from the template, never from the
+  rows); a session of several tables gets one pass a table, not one for all.
+- **Not run:** the suites (`tests/test_lean_packages.py`, `tests/test_verifier_cost.py`, the Flock prover's layers
+  test) and lean-agreement. So this is not a ready line.
+
+### 3. `FlockVerify.lean` against the other branches: no conflict with any; the merged files are under the cap
+
+`git merge-tree --write-tree` of my head with each [run locally, at `de31e0151b`; `03583c10e8` adds a comment in another
+file]:
+
+| against | result | merged `FlockVerify.lean`, lines |
+|---|---|---|
+| #9190's branch (`f6d1341b85`) | no conflict | 1,985 |
+| its second (`cf5587e216`) | no conflict | 1,986 |
+| the program-holding branch (`87ea540411`) | no conflict | 1,997 |
+| `main` (`19fb19a21e`) | no conflict | 1,995 |
+| lean's branch `a88eee998fa2`, and its head `f3837f57d1` | 12 files stop, the same 12 that stop for `main` alone against it; none is mine | not merged |
+
+- For lean's branch I merged my head with `main` first and then against it, since my branch alone is 65 commits behind
+  and stops nowhere. You wrote 14 stops for `main`; I count 12 at `19fb19a21e` [run]. Mine adds none either way.
+- **The merged trees elaborate, two of three so far [run]:** my head merged with #9190's branch, `FlockVerify.lean`
+  tried, exit 0, no axiom beyond the three (`r20261112-091338-c55f`); with the program-holding branch, exit 0
+  (`r20261112-091338-a7ba`). With #9190's second, the try never started: its machine had no free slot for 20 minutes
+  and the launcher gave up (`r20261112-091338-bf11`, exit 79); relaunched (`r20261112-093405-7a5b`). The merges are
+  scratch commits in my checkout, pushed nowhere. A try elaborates the one file and builds what it imports; it is not the package's check.
+
+### 4. The figure for the bound: the head's later-session check with the fold and the one pass is 0.81 of the fold alone, two rounds
+
+A session timed with both exists as of 09:28Z, and a second round as of 09:38Z. One pinned core of a shared CPU
+machine (load 40 to 65), the two verifiers called in turn on the same kept session, one table a session; "the fold alone" is my branch's tree with
+`FlockVerify.lean` as the second worker's commit has it, so the two binaries differ by the one call. Built at
+`ed0f9b4418`, the one pass as first built (it splits the cells). The check of a session is the verifier's own line for
+that session: no read of the statement, no setup. [run] throughout.
+
+| a later session's check, s, at `MIMALLOC_PURGE_DELAY=-1` | the fold alone | the fold and the one pass | change | rounds | run |
+|---|---|---|---|---|---|
+| head (`38d6`) | 40.63, 44.02 | **32.86, 35.73** | −7.77 and −8.29 s, ×0.81 in both | 2 | `r20261112-090718-6a7c`, its profile step running |
+| MoE (`bb7c-a`) | 11.31 | 11.52 | +0.21 s, ×1.02 | 3, median; slower in each | `r20261112-090718-6160`, exit 0 |
+| GEMM K=512 (`fe31`) | 3.252 | 3.224 | −0.03 s, ×0.99 | 5, median | `r20261112-090718-9d20`, exit 0 |
+
+| the same at the allocator's default | the fold alone | the fold and the one pass | rounds |
+|---|---|---|---|
+| head | 55.78, 51.47 | 41.02, 59.87 | 2: the first 14.8 s faster, the second 8.4 s slower |
+| MoE | 13.56 | 13.49 | 3, median; the rounds spread 1.2 s |
+| GEMM K=512 | 3.448 | 3.358 | 5, median |
+
+- **At the default setting the head's spread on this machine is larger than the effect,** so I draw nothing from that
+  table; `main`'s runners give the verifier `-1` [read: in my 07:31Z entry], and the first table is the one to
+  book from.
+- **As the cost model should book it: the head's later-session check is ×0.81 of the figure it carries for the fold
+  alone; MoE and GEMM unchanged.** On this run that is 32.9 and 35.7 s. On the second worker's 38.89 s [relayed] it is 31.5 s
+  [derived: 38.89 × 0.81]. I would book the ratio and not my seconds: the base moved 3.4 s between my two rounds on
+  this shared machine while the ratio did not move. Two rounds is thin; the ratio agrees with the one I derived from the
+  tool (31.7 / 38.9 = 0.81).
+- **Every call's verdict line is the same bytes before and after,** in all three runs [read: each run's `table.txt`
+  last line, and the four head outputs' SHA-256]. Every call exits 1 in both: these sessions were kept without the
+  verifier's program, and the verdict's reason is that refusal, which the verifier gives last, after every check of
+  the session has passed [read: `FlockVerify.lean`, the comment over `refusals`]. So in both binaries the proofs' check
+  passed and the verdicts are equal; none is an accepted session.
+- **Peak memory:** head 45.6 GiB both ways (47,789,564 against 47,789,480 kB); MoE 7.79 against 8.07 GiB; GEMM 0.57
+  against 0.66 GiB. The walks kept for the session's second repetition are the difference.
+- **The profile confirms the hit:** with the one pass the plain walk's symbol is absent and the two-vector pass's is
+  present, on GEMM and MoE [read: each run's `perf-after-symbols.txt`]. On MoE the pass is 2.9% of the process against
+  the two walks' 5.6%, and the split is 1.2%; at 99 samples a second that is too coarse to account for the 0.2 s.
+
+### 5. Open, and what stops each
+
+1. **The form that splits nothing, `d603004787`, is pushed and not yet timed.** Its `FoldGiven` try passed; its other
+   three tries and its three timed runs are out (head `r20261112-093040-3adb`, MoE `r20261112-093040-7ece`, GEMM
+   `r20261112-093040-17ab`; MoE and GEMM about 09:50Z, the head about 10:15Z). Until they pass, the head I stand
+   behind is `03583c10e8`. What it should show: MoE at or under the fold alone, the head under 0.81. [guess]
+2. **A launch fault, for infra:** at 09:28Z `research run --on auto` sent nine launches of mine to one machine that
+   could not start a runner (`PermissionError: [Errno 13] Permission denied: '/dev/null'`, and "the machine has no
+   git") [run: `r20261112-092825-aedb`, `-c0a5`, `-83b1`, `r20261112-092903-027b`, each exit 3]. It took launches again
+   at 09:30Z. I named no machine.
+3. **The records run** `r20261112-091237-69ef` (started 09:12Z, at `de31e0151b`) and the third merged tree's try.
+4. **No ready line yet:** the suites and lean-agreement have not run on this branch.
+5. **PRF-589** (your 09:34Z): its entry by 11:00Z; I launch nothing on a GPU.
