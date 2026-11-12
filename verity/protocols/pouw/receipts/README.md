@@ -12,13 +12,13 @@ PouwSegCheck statements, the r9 twin, the filler scorer's fold table) is held to
 - `receipt_conform.py`: the checks, and `python receipt_conform.py` to run them on the reference and the header.
 - `conform_host.cpp`: the header's host driver the checks build.
 
-The directory is not a package. A caller puts it on `sys.path` and imports `receipt_folds` (the steps, key rules and
-schedules) or `receipt_conform` (the checks), taking the names each module's `__all__` lists; a kernel includes
-`receipt_folds.cuh` by relative path. `receipt_folds` imports the standard library alone. `receipt_conform` imports
-numpy only inside four of its checks (`p2ff_r9`, `pfill_ref`, `egemm_ref`, `e2e_definitions`), and the workspace only
-where `e2e_definitions` evaluates E2E's Definitions (`verity.circuits`). Neither reads the environment, and nothing
-under `verity/` but this directory's own test imports them: they are a definition and its checks, not code a prover or
-verifier runs.
+Its modules are imported by bare name, never as `verity.protocols.pouw.receipts`: a caller puts the directory on
+`sys.path` and imports `receipt_folds` (the steps, key rules and schedules) or `receipt_conform` (the checks), taking
+the names each module's `__all__` lists; a kernel includes `receipt_folds.cuh` by relative path. `receipt_folds` imports
+the standard library alone. `receipt_conform` imports numpy only inside four of its checks (`p2ff_r9`, `pfill_ref`,
+`egemm_ref`, `e2e_definitions`), and the workspace only where `e2e_definitions` evaluates E2E's Definitions
+(`verity.circuits`). Neither reads the environment, and nothing under `verity/` but this directory's own test imports
+them: they are a definition and its checks, not code a prover or verifier runs.
 
 ## The folds
 
