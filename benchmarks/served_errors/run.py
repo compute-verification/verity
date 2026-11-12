@@ -2,9 +2,11 @@
 evaluated there. Standard library only; it reads the workload card and nothing else.
 
 Each row is one term: the guarantee it sits in, the formula, the parameters, and its value as the log2 of a probability,
-for one window, proof or block, against a prover of `2^80` SHA-512 calls unless the row says otherwise. Every value is
-modeled: a formula from the Lean (or a reading of one, which the row names) evaluated at stated sizes. A row whose
-formula rests on an open premise names it; evaluating the formula discharges nothing.
+for one window, proof or block, against a prover of `2^80` SHA-512 calls unless the row says otherwise. Each row has a
+tag: `modeled`, a formula from the Lean (or a reading of one, which the row names) evaluated at stated sizes, or
+`assumed`, where the value rests on a constant taken rather than bounded (an open conjecture's gap, κ = 0). A row whose
+formula rests on an open premise names it; evaluating the formula discharges nothing. A sum of terms takes every term at
+one budget, which the row states.
 
 The served sizes it reads:
 
@@ -55,7 +57,7 @@ G0 = Fraction(1, 400)
 # The deployed PoUW window (`verity/protocols/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
 WINDOW_DELTA = Fraction(1, 2**40)
 SERVED_DELTA = Fraction(1, 100)
-# CircuitCredit's draw count (`security/Definitions/Accounting/Guarantees/Compose.lean`).
+# A K_d that `security/Definitions/Accounting/Guarantees/Compose.lean`'s docstring takes as its example; not served.
 COMPOSE_KD = 96000
 # The Sm120 headlines' window (`security/Definitions/Accounting/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
 SM120_CHECKS, SM120_BUDGET = 48000, -41.0
@@ -116,6 +118,16 @@ def card_sizes() -> dict[str, dict[str, float]]:
                                                                                 ("request", TOKENS_REQUEST))}
 
 
+def bind(q: float) -> float:
+    """PoUW's period binding at κ = 0, `|L|·√(q/2^256)`, log2, with L every operand byte the served tiles read."""
+    return lg(operand_positions()) + (q - 256) / 2
+
+
+def integrity_ks(sz: dict[str, float], t: float) -> float:
+    """The integrity leg's ks t at a card size and `2^t` calls: `n·(κ + fork)` at one table plus the link term."""
+    return l2sum(sz["n"] + KAPPA_TABLE, sz["n"] + session_ks(t, 1), link(sz["W"], t))
+
+
 def link(w: float, t: float = T) -> float:
     """SPOT's link term at `2^w` input and output bits: W·(2t(1+k)/2^256 + 1/(eM) + k/(eR_w))."""
     return l2sum(w + 1 + t + lg(1 + LINK_K) - 256 + 2, w - lg(math.e) - 192 + 1, w + lg(LINK_K) - lg(math.e) - 192 + 1)
@@ -124,35 +136,35 @@ def link(w: float, t: float = T) -> float:
 def rows() -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
 
-    def row(term: str, guarantee: str, formula: str, at: str, value: float | str, rests_on: str = "") -> None:
+    def row(term: str, guarantee: str, formula: str, at: str, value: float | str, rests_on: str = "",
+            tag: str = "modeled") -> None:
         out.append({"term": term, "guarantee": guarantee, "formula": formula, "at": at,
-                    "log2": round(value, 2) if isinstance(value, float) else value, "rests_on": rests_on})
+                    "log2": round(value, 2) if isinstance(value, float) else value, "rests_on": rests_on, "tag": tag})
 
     s1, s64 = session_ks(T, 1), session_ks(T, TABLE_CAP)
     row("flock session KS", "Flock.Guarantees.MaskedKS (one --zk session)", "κ + √γ·2T/2^256.5",
         f"T = 2^{T}, 1 table / {TABLE_CAP} tables", f"{s1:.2f} / {s64:.2f}", "StrictBirthday; ListWithin")
 
     ks_terms = "TileServiceSound / ServiceSound (open)"
-    for kd, what in ((DRAWS, "Pearl+'s draw"), (COMPOSE_KD, "CircuitCredit's K_d")):
+    for kd, what in ((DRAWS, "Pearl+'s 459 draws, the served K_d"), (COMPOSE_KD, "the docstring's example K_d")):
         row("pouw δ_ks", "Properties.Pouw.Period h1CheckedCreditPeriod, H1J10RCheckedCreditPeriod",
             "K_d · one session's KS (each session 2^80 calls)", f"K_d = {kd} ({what}), {TABLE_CAP} tables",
             lg(kd) + s64, ks_terms)
-    row("pouw δ_ks", "same", "κ·K_d + √γ·2T/2^256.5 (the window's 2^80 calls shared)", f"K_d = {COMPOSE_KD}, {TABLE_CAP} tables",
-        l2sum(KAPPA_TABLE + lg(TABLE_CAP) + lg(COMPOSE_KD), s64), ks_terms)
-    row("pouw δ_ks", "Pearl+'s check as served (tiles opened on SHA-512 trees)", "q²/2^513 (a SHA-512 collision)",
-        f"q = 2^{T}", 2 * T - 513, "StrictBirthday")
+    row("pouw δ_ks", "same", "κ·K_d + √γ·2T/2^256.5 (the window's 2^80 calls shared)",
+        f"K_d = {DRAWS} (served), {TABLE_CAP} tables", l2sum(KAPPA_TABLE + lg(TABLE_CAP) + lg(DRAWS), s64), ks_terms)
 
     pos = operand_positions()
-    bind_el, bind_word = lg(pos) + (T - 256) / 2, lg(pos / 4) + (T - 256) / 2
-    row("pouw δ_bind", "Pouw.Guarantees.PeriodBindingPerProver", "|L|·√(q/2^256 + κ), κ = 0",
-        f"|L| = {pos:,} operand bytes (or /4 in 32-bit words), q = 2^{T}", f"{bind_el:.2f} / {bind_word:.2f}",
-        "ExpectedCR; κ unbounded on main")
+    bind_el, bind_word = bind(T), bind(T) - 2
+    row("pouw δ_bind", "Pouw.Guarantees.PeriodBindingPerProver", "|L|·√(q/2^256 + κ) at κ = 0",
+        f"κ = 0, |L| = {pos:,} operand bytes (or /4 in 32-bit words), q = 2^{T}", f"{bind_el:.2f} / {bind_word:.2f}",
+        "ExpectedCR; κ = 0 assumed (κ unbounded on main)", "assumed")
 
     ks_pouw = lg(DRAWS) + s64
     for d, what in ((WINDOW_DELTA, "WINDOW_DELTA"), (SERVED_DELTA, "the served run's δ")):
         p = l2sum(lg(d), bind_el, ks_pouw)
         row("pouw leg p", "Nci.Guarantees.RemotePeriod (p = δ_s + δ_bind + δ_ks)", "δ_s + δ_bind + δ_ks a window",
-            f"δ_s = {what}, δ_bind at bytes, δ_ks at K_d = {DRAWS}", p, "PouwSound's bridge, not stated")
+            f"δ_s = {what}, δ_bind at κ = 0 at bytes, δ_ks at K_d = {DRAWS}", p,
+            "PouwSound's bridge, not stated; κ = 0 assumed", "assumed")
 
     nmax = SM120_BUDGET - lg(SM120_CHECKS) - s64
     row("sm120 n_π·δ_ZK", "Accounting.Guarantees.TS.Sm120SheetHeadline and siblings (ProofSoundAt)",
@@ -162,15 +174,17 @@ def rows() -> list[dict[str, Any]]:
     gaps = {name: pearl_gap(n, k) for name, (n, k) in LINEARS.items()}
     g = max(gaps.values())
     eps_a = g / (1 - g)
-    row("pearl+ ε_a", "Pouw.PearlC pearlCGapH100Rev1_llama32_1b (lemma, unlocked)", "g/(1 − g), the max over the four linears",
-        "H100 record, ρ = 1/400", f"{float(eps_a):.5%} ({eps_a})", "TTOutTilePearlCH100Rev1 (open conjecture)")
+    served = "Pearl+ as served, pearl-c-h100-v1-h3 (not pearl-fp8-v4, which has no value)"
+    row("pearl+ ε_a", f"{served}: Pouw.PearlC pearlCGapH100Rev1_llama32_1b (lemma, unlocked)",
+        "g/(1 − g), the max over the four linears", "H100 record, ρ = 1/400", f"{float(eps_a):.5%} ({eps_a})",
+        "TTOutTilePearlCH100Rev1 (open conjecture)", "assumed")
     for q in (64, T):
-        row("pearl+ δ_a", "same", "(q + N)/2^128", f"q = 2^{q}, N = {TILES:,} tiles" + (" (outside q ≤ 2^64)" if q > 64 else ""),
+        row("pearl+ δ_a", served, "(q + N)/2^128", f"q = 2^{q}, N = {TILES:,} tiles" + (" (outside q ≤ 2^64)" if q > 64 else ""),
             delta_pearl(q), "TTOutTilePearlCH100Rev1")
     for d in (SERVED_DELTA, WINDOW_DELTA):
         e = (1 + float(eps_a)) / (1 - sampling_eps(d)) - 1
-        row("pearl+ ε", "same, with the sample", "(1 + ε_a)/(1 − ε_s) − 1, ε_s = 1 − δ^(1/t)", f"t = {DRAWS}, δ_s = {d}",
-            f"{e:.3%}", "")
+        row("pearl+ ε", f"{served}, with the sample", "(1 + ε_a)/(1 − ε_s) − 1, ε_s = 1 − δ^(1/t)", f"t = {DRAWS}, δ_s = {d}",
+            f"{e:.3%}", "TTOutTilePearlCH100Rev1 (ε_a)", "assumed")
 
     for t in (T, 64):
         one = l2sum(REC_KAPPA, t + REC_EPS)
@@ -185,7 +199,7 @@ def rows() -> list[dict[str, Any]]:
     for name, sz in sizes.items():
         ks = l2sum(sz["n"] + KAPPA_TABLE, sz["n"] + s1)
         ks64 = l2sum(sz["n"] + KAPPA_TABLE + lg(TABLE_CAP), sz["n"] + s64)
-        lk = link(sz["W"])
+        lk = link(sz["W"], T)
         kst = l2sum(ks, lk)
         row("integrity ks_t", "Nci.Guarantees.RemotePeriod (ks t = ε_ks + δ_link, EndToEndHiddenDrawn)",
             "n·(κ + fork) + W·(2T(1+k)/2^256 + …)",
@@ -195,15 +209,20 @@ def rows() -> list[dict[str, Any]]:
             for period, n in PHASES.items():
                 row("integrity Σ ks_t", "Nci.Guarantees.RemotePeriod", "Σ_t ks t over hourly windows",
                     f"card floor, a {period} ({n} windows)", kst + lg(n), "")
-            ks_floor = kst
 
-    crypto = l2sum(delta_pearl(64), 2 * T - 513, ks_floor)
     row("joint, statistical", "Accounting.Guarantees.JointPeriodLive at the remote product (integrity + PoUW)",
         "Σ_a δ_a a block", "δ = 1/100 a leg", "0.02 a block", "by design")
-    row("joint, cryptographic", "same", "PoUW's δ_a + opening binding + integrity's ks_t", "q = 2^64, card floor", crypto,
-        "TTOutTilePearlCH100Rev1 at q ≤ 2^64")
-    for period, n in PHASES.items():
-        row("joint, cryptographic", "same", "over hourly blocks", f"a {period} ({n} blocks)", crypto + lg(n), "")
+    floor = sizes["floor"]
+    for q in (64, T):
+        terms = (delta_pearl(q), bind(q), integrity_ks(floor, q))
+        crypto = l2sum(*terms)
+        note = "every statement covers it" if q == 64 else "PoUW's δ_a by its formula, outside its statement's q ≤ 2^64"
+        row("joint, cryptographic", "same", "PoUW's δ_a + PoUW's δ_bind at κ = 0 + integrity's ks_t at the card floor",
+            f"one budget q = 2^{q} for every term ({note}): " + " + ".join(f"2^{x:.2f}" for x in terms), crypto,
+            "TTOutTilePearlCH100Rev1; κ = 0 assumed", "assumed")
+        for period, n in PHASES.items():
+            row("joint, cryptographic", "same", "over hourly blocks", f"q = 2^{q}, a {period} ({n} blocks)", crypto + lg(n),
+                "", "assumed")
     return out
 
 
@@ -216,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(rs, indent=1, ensure_ascii=False))
         return 0
     for r in rs:
-        print(f"{r['term']:22s} {str(r['log2']):>34s}   at {r['at']}")
+        print(f"{r['term']:22s} {str(r['log2']):>34s}  {r['tag']:8s} at {r['at']}")
         print(f"{'':22s} {r['guarantee']}: {r['formula']}" + (f"  [{r['rests_on']}]" if r["rests_on"] else ""))
     return 0
 
