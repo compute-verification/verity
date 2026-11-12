@@ -64,7 +64,7 @@ token that does and the first step.
 ## What each line means
 
 - **the first line**: the context limit the launch lines of ours and stock name, and for a model `limits.json` says
-  so of, that vLLM does not start with the limit left to it, why, and the run that showed it.
+  so of, that vLLM does not start with the limit left to it, at which settings, why, and the run that showed it.
 - **model**: the model as the benchmark names it and the checkpoint the engines loaded; they are two things where
   `CHECKPOINT` names another model's directory.
 - **what ran**: each arm from its own record (`meta.json`): the seconds its server took to come up, how many times it
@@ -124,8 +124,8 @@ the measured ones and names the arms that were not served whole.
 - **The recipe's settings are GLM-5.3's alone.** For every other model the arms are the benchmark's own: speculative
   decoding off and a context limit of 4,096 tokens unless `--max-model-len` is given.
 - **The context limit is not the model's own.** At the recipe's settings it is the recipe's number for the cards,
-  given outright: with the limit left to it, vLLM at the benchmark's pin does not start this model on them
-  (`limits.json`). The report prints the limit beside the model's own.
+  given outright: with the limit left to it and the recipe's other flags as they are, vLLM at the benchmark's pin does
+  not start this model on them (`limits.json`). The report prints the limit beside the model's own.
 - **`prod` is not the recipe's line whole.** It is behind vLLM's Python front end, with the engine's seed set, and
   its requests are token ids sent to the completions endpoint (`benchmarks/serve_tax/README.md` lists each
   departure). Every engine, stock too, starts with Python's hash seed and Inductor's block choice pinned.

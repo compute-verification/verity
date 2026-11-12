@@ -597,7 +597,8 @@ def test_the_first_line_says_the_limit_and_what_is_known_of_leaving_it_to_vllm(t
     auto = held["glm53"]["auto"]
     assert (out / "prod_repro.txt").read_text().startswith(
         "prod_repro: context limit 262,144 tokens, given outright to prod-record and prod; with the limit left to it "
-        f"(--max-model-len auto) vLLM does not start this model on these cards at the pin: {auto['why']} (run {auto['run']})\n"
+        f"(--max-model-len auto), at {auto['at']}, vLLM does not start this model on these cards at the pin: "
+        f"{auto['why']} (run {auto['run']})\n"
         "prod_repro: load chat; stock prod, stock again not served, ours prod-record; run r-1, commit ")
     # arms given different limits, or one left to vLLM, are said as they were started
     shutil.rmtree(out / "prod")
@@ -846,7 +847,8 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms_and
     assert (s["PASS_PROMPTS"], s["STOP_AT"], s["SAMPLED"]) == ("chat=8", "9999-01-01T00:00Z", "1")
     assert (s["MAX_MODEL_LEN"], s["PRIVATE"]) == ("262144", str(private))
     assert p.stdout.startswith("prod_repro: context limit 262,144 tokens, given outright to prod-record and prod; with the "
-                               "limit left to it (--max-model-len auto) vLLM does not start this model")
+                               "limit left to it (--max-model-len auto), at its recipe's flags and vLLM's own limit of "
+                               "requests at once, vLLM does not start this model")
     # the job's report reads the top-k's counters where its processes kept them, and keeps the counts in the run's
     assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
             "of more than its keys rewritten\n"

@@ -677,7 +677,7 @@ def _interval(c: dict) -> str:
 
 def _first(r: dict) -> str:
     """The report's first line: the context limit the launch lines of ours and stock name, and for a model `LIMITS`
-    says so of, that vLLM does not start with the limit left to it, with the run that showed it."""
+    says so of, that vLLM does not start with the limit left to it, at which settings, and the run that showed it."""
     sets, a = r["settings"], r["arms"]
     given = {n: sets[n]["context_limit"]["given"] for n in (a["ours"], a["stock"]) if n in sets}
     who, said = " and ".join(given), set(given.values())
@@ -693,8 +693,8 @@ def _first(r: dict) -> str:
         s = f"context limit left to vLLM by {who} (--max-model-len {v})"
     auto = r["limits"].get("auto")
     if auto and not auto["starts"]:
-        s += (f"; with the limit left to it (--max-model-len auto) vLLM does not start this model on these cards at the "
-              f"pin: {auto['why']} (run {auto['run']})")
+        s += (f"; with the limit left to it (--max-model-len auto), at {auto['at']}, vLLM does not start this model on "
+              f"these cards at the pin: {auto['why']} (run {auto['run']})")
     return "prod_repro: " + s
 
 
