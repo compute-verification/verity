@@ -1,6 +1,6 @@
 """Writes probes/sm90_jbreak.inc, the probe list of probes/sm90_jbreak.cu (the stress of the H200 rows).
 
-  python3 gen_jbreak.py            # rewrites probes/sm90_jbreak.inc; tests/test_dc.py checks the file is current
+  python3 gen_jbreak.py            # rewrites probes/sm90_jbreak.inc; tests/test_dc_jbreak.py checks it is current
 """
 from __future__ import annotations
 

@@ -95,10 +95,10 @@ uv run python benchmarks/pouw/dc/emp.py TIME_RUN_OUT BUILD_RUN_OUT/sass [--json 
 | `probes/s8_mma.cu`, `s8_mma.py`, `s8_mma.sh` | The integer step's semantics on each card, one instruction a tile in eight forms (s8/u8 × s8/u8, with and without `.satfinite`): mma.sync m16n8k32 on both, wgmma m64n8k32 and m64nNk32 for N = 64, 128, 256 (the N an s8 GEMM's warpgroup tile issues: families `wg64`, `wg128`, `wg256`) on sm_90a, tcgen05.mma kind::i8 128×32×32 on sm_100a (idesc bit 3 saturates), each against `verity.definitions.silicon.integer` on sm_120's IMMA probe's families at its tile, with the clamp tiles; `s8_mma.py evidence` writes an instruction's `tc-evidence/v1`, which pinned `sm90.*.s8` and `sm100.*.s8`. `s8_mma.sh build` compiles on a CPU node, and `S8_MMA_BIN` runs that binary on the card |
 | `probes/sm90_emp.cu`, `emp.sh`, `emp.py` | The ACCEL model's combined routes on sm_90a, each beside a saturated wgmma: the uniform chain with the honest step and an FFMA filler (`emp_pack`, `emp_pack3` at 3 warps a SMSP), 2:4 sparse wgmma against its dense twin with A in shared memory or registers (`wgsp_`, `wgsprs_`), LDS.128 beside SS wgmma (`emp_smem`), setmaxnreg producer/consumer splits (`emp_reg*`); `emp.sh` builds and gates on a CPU node and times on the H200, `emp.py` prices every timed loop's whole SASS on DS-90's facets (issue, tensor, alu, imad, shfl; a facet above 1 is a rate above the sheet) and reads each probe's event clock beside NVML's |
 
-The tests are `../tests/test_dc.py` (wgmma.cuh and sm90_jbreak.inc current, the twin against a per-word loop at
-L = 32 and 64 and against dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the
-device directories' form, pipe.py's SASS profile and q*, uniform.py's tables, fit and writer, emp.py's facet pricing
-and event clock),
+The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
+dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
+pipe.py's SASS profile and q*, uniform.py's tables, fit and writer, emp.py's facet pricing and event clock),
+`../tests/test_dc_jbreak.py` (sm90_jbreak.inc current),
 `../tests/test_dc_pipe.py` (the build gate's register limit, ε_tensor at L = 32 under the balance and under the round
 trip), `../tests/test_dc_uniform.py` (the table writer),
 `../tests/test_dc_s8_mma.py` (the SASS reader, and the word check on the sm_120 step's own words),
