@@ -214,6 +214,12 @@ An entry always registers a link out. An interface with no rate takes no certifi
 whose interfaces has a rate is refused. A file that states no interface gives no entry, since the entry would not say
 how the node reaches the outside. Each message says what to read or state.
 
+An auditor's host has no node file: `clock_drift(host, cards.load(sku))`, beside `node_entry`, reads the card of the
+time base its device's clock reads (`kind = "timebase"`) and gives, by `drift.max`'s mark, the host's premise
+(`ClockPremise`: `ClockRateWithin(<host>, <drift.max>)`, the number, its mark and its source) or, for a `ceiling`, the
+figure `Auditor.drift` takes. A number marked `premise` never becomes that figure, so a row that reads a drift the
+auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is refused.
+
 ~~~python
 from verity.hardware import cards, nodes
 from verity.hardware.site import Auditor, Registration, check, node_figures

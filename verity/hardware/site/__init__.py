@@ -20,7 +20,9 @@ auditor's figures for each host and each leaf under one (`HostFigures`, `MemoryF
 `node_figures` reads a node file's table (`verity.hardware.nodes.load(kind)`), its host card's, its leaves
 (`verity.hardware.nodes.leaves`) and its ways out (`verity.hardware.nodes.ways_out`). `Registration.node_entry` reads
 the same and its GPU card's, states those figures on the node's locations, and registers each way out, an interface or
-the storage path, as a boundary link that no certifier splits.
+the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's host's time base card
+(`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure `Auditor.drift`
+takes, never both.
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -57,6 +59,7 @@ import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
@@ -330,6 +333,55 @@ def node_figures(node: Mapping[str, Any], host_card: Mapping[str, Any], host: st
     its bits a second, or None where its file states none. `Registration.node_entry` states the same figures on the
     node's locations, which `check` holds to these."""
     return _Node.read(node, host_card, host, ways, leaves).figures(host)
+
+
+@dataclass(frozen=True)
+class ClockPremise:
+    """**A host's clock drift taken on a premise**: how far the clock of the auditor's device in host `host` may run
+    from real time, as a share of it, where no data sheet bounds it, with the premise that says so (`name`, as a row
+    that rests on it prints it), the time base card's mark (`premise`) and its source. It is the Lean's
+    `Account.Premised`, and never the auditor's figure for a device (`Auditor.drift`): a row that reads it names
+    `name` among its premises, and none of record does."""
+
+    host: str
+    name: str
+    drift: Fraction
+    mark: str
+    source: str
+
+
+def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
+    """**The drift of the clock in host `host`**, as its time base's card (`verity.hardware.cards.load(sku)`, a card
+    of kind `timebase`) states it in `drift.max`: by the entry's mark, a premise or the auditor's figure, never both.
+    Marked `premise`, it is the host's premise, `ClockRateWithin(<host>, <drift.max>)` with the number as the card
+    writes it in scientific notation; marked `ceiling`, it is the figure `Auditor.drift` takes for the auditor's
+    devices in the host, with no premise. A `measurement` is only a lower bound on the ceiling and a `placeholder`
+    no bound, so either is refused, as are a card of another kind and a drift that is not a share below 1 in `s/s`."""
+    _str(host, "the host's name")
+    if not host:
+        raise Malformed("the host's name is empty; name the auditor's host whose clock the card times")
+    sku = card.get("sku") if isinstance(card, Mapping) else None
+    if not isinstance(card, Mapping) or card.get("kind") != "timebase":
+        raise Malformed(f"card {sku!r} is no time base (its kind is "
+                        f"{card.get('kind') if isinstance(card, Mapping) else None!r}); give the card of the clock "
+                        f"host {host}'s device reads, `verity.hardware.cards.load(sku)` of a card of kind \"timebase\"")
+    try:
+        entry = card["drift"]["max"]
+        value, unit, mark, source = entry["value"], entry["unit"], entry["mark"], entry["source"]
+        drift = Fraction(str(value))
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        raise Malformed(f"time base {sku!r} states no drift.max entry {{value, unit, mark, source}} with a number as "
+                        "its value") from None
+    if unit != "s/s" or not 0 <= drift < 1:
+        raise Malformed(f"time base {sku!r}'s drift.max is {value} {unit}; state it in s/s, a share of real time "
+                        "below 1")
+    if mark == "ceiling":
+        return drift
+    if mark != "premise":
+        raise Malformed(f"time base {sku!r}'s drift.max is marked {mark!r}, which bounds no clock; mark it \"ceiling\" "
+                        "where a page bounds it, or \"premise\" with the premise its source states")
+    number = format(Decimal(str(value)).normalize(), "e")
+    return ClockPremise(host, f"ClockRateWithin({host}, {number})", drift, mark, _str(source, f"{sku}'s source"))
 
 
 def within_tolerance(tau: Fraction, e: Fraction, x: Fraction) -> bool:

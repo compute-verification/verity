@@ -7,22 +7,25 @@ gives a log accepted for `remote` against the auditor the card files give; a fil
 entry holds a link for each way out, none of which a certifier splits. The storage path's link and that of an interface
 that reads no line rate say why (`Link.unmediated`), so neither node's site is mediated; an interface with a rate says
 nothing, so `onsite` refuses the eight-card node by `uncertified`, with a network certifier standing in front of the
-node or without one, and takes the H200 node once a challenger reaches its host."""
+node or without one, and takes the H200 node once a challenger reaches its host. An auditor's host's time base card
+gives the host's clock drift, a premise or the auditor's figure by its mark, and a number marked `premise` never
+becomes `Auditor.drift`."""
 
 from __future__ import annotations
 
 import math
 import re
 from dataclasses import replace
+from fractions import Fraction
 
 import pytest
 
 from verity.errors import InvalidArtifact
 from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
-from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, Entry, HostFigures,
-                                  Link, Loc, Malformed, Refused, Registration, Sheet, Site, check, node_figures,
-                                  refusal)
+from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, ClockPremise, Entry,
+                                  HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, check,
+                                  clock_drift, node_figures, refusal)
 
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
@@ -646,3 +649,54 @@ def test_a_storage_path_that_breaks_a_rule_is_refused(tmp_path, monkeypatch, pat
     monkeypatch.setattr(nodes, "NODES", tmp_path)
     with pytest.raises(InvalidArtifact, match=refusal):
         nodes.ways_out(nodes.load("x"), HOST)
+
+
+TIMEBASE = "nebius-vm-monotonic-raw"
+"""The time base card of the virtual machines an auditor's device runs in; its `drift.max` is marked `premise`."""
+
+
+def _marked(mark: str, **entry: object) -> dict:
+    card = cards.load(TIMEBASE)
+    return {**card, "drift": {**card["drift"], "max": {**card["drift"]["max"], "mark": mark, **entry}}}
+
+
+def test_a_hosts_clock_on_a_premise_is_its_premise() -> None:
+    """The time base's `drift.max`, marked `premise`, gives the host's premise as the card states it: its name with
+    the host and the number as the card writes it, the number, its mark and its source."""
+    card = cards.load(TIMEBASE)
+    premise = clock_drift("vy-auditor-1", card)
+    assert premise == ClockPremise("vy-auditor-1", "ClockRateWithin(vy-auditor-1, 5e-4)", Fraction(1, 2000), "premise",
+                                   card["drift"]["max"]["source"])
+    assert cards.number(card["drift"]["max"]) == premise.drift
+
+
+def test_a_number_marked_premise_never_becomes_the_auditors_drift() -> None:
+    """A premise is not a figure: the auditor takes none from it for its device, so a row that reads the device's
+    drift from the Site prints no premise only where the card's mark is `ceiling`, and the same number then gives the
+    figure and no premise."""
+    premise = clock_drift("vy-auditor-1", cards.load(TIMEBASE))
+    assert isinstance(premise, ClockPremise) and not isinstance(premise, Fraction)
+    with pytest.raises(Malformed, match="not a nonnegative rational"):
+        Auditor((), drift=(("challenger0", premise),))
+    figure = clock_drift("vy-auditor-1", _marked("ceiling"))
+    assert figure == Fraction(1, 2000) and not isinstance(figure, ClockPremise)
+    assert Auditor((), drift=(("challenger0", figure),)).drift == (("challenger0", Fraction(1, 2000)),)
+
+
+@pytest.mark.parametrize(("host", "card", "refusal"), [
+    ("vy-auditor-1", lambda: cards.load("h200-sxm-141gb"), "is no time base"),
+    ("vy-auditor-1", lambda: cards.load("xeon-6776p-2s"), "is no time base"),
+    ("vy-auditor-1", lambda: _marked("measurement"), "marked 'measurement', which bounds no clock"),
+    ("vy-auditor-1", lambda: _marked("placeholder"), "marked 'placeholder', which bounds no clock"),
+    ("vy-auditor-1", lambda: _marked("premise", unit="ppm"), "state it in s/s"),
+    ("vy-auditor-1", lambda: _marked("ceiling", value=1.0), "below 1"),
+    ("vy-auditor-1", lambda: _marked("premise", value="fast"), "no drift.max entry"),
+    ("vy-auditor-1", lambda: {**cards.load(TIMEBASE), "drift": {}}, "no drift.max entry"),
+    ("", lambda: cards.load(TIMEBASE), "the host's name is empty"),
+])
+def test_a_clock_the_card_does_not_bound_is_refused(host: str, card, refusal: str) -> None:
+    """A card of another kind, a drift a measurement or a placeholder states, one in another unit or of a whole
+    second or more, a card with no drift.max, and a host with no name give no drift, and each message says what to
+    give."""
+    with pytest.raises(Malformed, match=refusal):
+        clock_drift(host, card())
