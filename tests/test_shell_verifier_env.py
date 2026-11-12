@@ -6,6 +6,11 @@ then under the same setting as one taken through Python.
 A command is found by the word `verify` followed by one of the verifier's options or by a variable that holds them, on
 one logical line (a line with its `\\` continuations), outside comment lines. `ALLOWED` names the scripts that still
 start the verifier under the allocator's default; it only shrinks.
+
+The finder reads text, so another tool's `verify` followed by a variable reads as the verifier's. `OTHER_TOOLS` names
+each such command with its script and its tool, and only that is let through: the command word for word, in that script,
+while the script sets the variable the command starts with once, and to that tool. Any other spelling is read as the
+verifier's, so a script can't leave the rule by renaming a variable.
 """
 from __future__ import annotations
 
@@ -20,7 +25,8 @@ from verity.protocols.spot.verifier.one_stage import proofs
 
 HELPER = "verity/protocols/spot/verifier/one_stage/verifier_env.sh"
 USE = "$(verifier_env)"
-FIX = f"start it as `{USE} VERIFIER verify ...` in a script that sources {HELPER}"
+FIX = (f"start it as `{USE} VERIFIER verify ...` in a script that sources {HELPER}; another tool's `verify` goes in "
+       "OTHER_TOOLS with its script and what the variable it starts with is set to")
 #: Flock's pod jobs, which start the verifier under the allocator's default
 ALLOWED = frozenset({
     "verity/protocols/flock/pod/76-read-gadget.sh",
@@ -33,13 +39,27 @@ ALLOWED = frozenset({
     "verity/protocols/flock/pod/92-zk-sessions.sh",
     "verity/protocols/flock/pod/93-zk-tree-from.sh",
 })
+#: (script, another tool's `verify` as the script writes it): what the script sets the command's first word to. An entry
+#: whose command its script doesn't hold lets nothing through.
+OTHER_TOOLS = {
+    ("benchmarks/prove_path/run.sh",
+     '$WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier'
+     " | tee $O/$name/verify.json || return 1"): '"$PY -m verity_vllm.pipeline.cli weights-tie"',
+}
 _OPTIONS = "archive|circuit|coins|partition|plain-tables|program|public|registered|session|statement|stratified|zk"
 _CALL = re.compile(rf'(?<![-\w/.])verify\s+(?:--(?:{_OPTIONS})\b|"?\$\{{?\w)')
 _SOURCED = re.compile(r'(?:^|[;&|(]\s*|\s)(?:\.|source)\s+"?(?:\$\{?\w+\}?/)?([\w./-]+\.sh)\b')
 
 
-def calls(text: str) -> list[tuple[int, str]]:
-    """Each logical line of a shell script that starts the verifier's `verify`, with the number of its first line."""
+def other_tool(path: str, text: str, command: str) -> bool:
+    """Whether `command`, a logical line of the script `path`, is another tool's `verify` as OTHER_TOOLS names it."""
+    tool = OTHER_TOOLS.get((path, command.strip()))
+    first = re.match(r"\$(\w+) ", command.strip())
+    return bool(tool and first) and re.findall(rf"(?<![\w$]){first[1]}\+?=(.*)", text) == [tool]
+
+
+def calls(path: str, text: str) -> list[tuple[int, str]]:
+    """Each logical line of the script `path` that starts the verifier's `verify`, with the number of its first line."""
     found, start, held = [], 0, ""
     for number, line in enumerate(text.split("\n"), 1):
         if line.lstrip().startswith("#"):
@@ -49,7 +69,7 @@ def calls(text: str) -> list[tuple[int, str]]:
         if line.endswith("\\"):
             held += line[:-1] + " "
             continue
-        if _CALL.search(held + line):
+        if _CALL.search(held + line) and not other_tool(path, text, held + line):
             found.append((start, held + line))
         held = ""
     return found
@@ -59,33 +79,45 @@ def scripts() -> dict[str, str]:
     return {p: (ROOT / p).read_text(errors="replace") for p in _tracked() if p.endswith(".sh") and not p.startswith("archive/")}
 
 
-def unset(text: str) -> list[int]:
-    return [number for number, command in calls(text) if USE not in command]
+def unset(path: str, text: str) -> list[int]:
+    return [number for number, command in calls(path, text) if USE not in command]
 
 
-@pytest.mark.parametrize("line, found, takes", [
-    ('$TIME "$O/t" bash -c "$(vlimit $gb) exec $LEAN verify --zk --circuit $D/circuit.txt"', True, False),
-    ('$TIME "$O/t" bash -c "$(vlimit $gb) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt"', True, True),
-    ('/usr/bin/time -v "$LEAN" verify "${coins[@]}" --statement s', True, False),
-    ('$(verifier_env) $LV verify "${V[@]}" --circuit c', True, True),
-    ('V=(verify --statement s --coins os)', True, False),
-    ('  # $LEAN verify --zk --circuit c', False, False),
-    ('"$PY" "$D/passes.py" verify --out "$O/passes" --fast', False, False),
-    ('ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log"', False, False),
-    ('gpg --verify $sig $file', False, False),
-    ('echo "plain: $(verify "$(one plain)" plain)"', False, False),
+_JOB = "benchmarks/job.sh"
+(_TIE, _TIE_VERIFY), _TIE_TOOL = next(iter(OTHER_TOOLS.items()))
+_TIE_TEXT = f"  WT={_TIE_TOOL}\n    {_TIE_VERIFY}"
+
+
+@pytest.mark.parametrize("path, text, found, takes", [
+    (_JOB, '$TIME "$O/t" bash -c "$(vlimit $gb) exec $LEAN verify --zk --circuit $D/circuit.txt"', True, False),
+    (_JOB, '$TIME "$O/t" bash -c "$(vlimit $gb) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt"', True, True),
+    (_JOB, '/usr/bin/time -v "$LEAN" verify "${coins[@]}" --statement s', True, False),
+    (_JOB, '$(verifier_env) $LV verify "${V[@]}" --circuit c', True, True),
+    (_JOB, 'V=(verify --statement s --coins os)', True, False),
+    (_JOB, '  # $LEAN verify --zk --circuit c', False, False),
+    (_JOB, '"$PY" "$D/passes.py" verify --out "$O/passes" --fast', False, False),
+    (_JOB, 'ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log"', False, False),
+    (_JOB, 'gpg --verify $sig $file', False, False),
+    (_JOB, 'echo "plain: $(verify "$(one plain)" plain)"', False, False),
+    pytest.param(_TIE, _TIE_TEXT, False, False, id="another tool's, as OTHER_TOOLS names it"),
+    pytest.param(_JOB, _TIE_TEXT, True, False, id="the same lines in another script"),
+    pytest.param(_TIE, _TIE_TEXT.replace("WT", "TIE"), True, False, id="its variable renamed"),
+    pytest.param(_TIE, _TIE_TEXT.replace("--out", "--zk --out"), True, False, id="its command edited"),
+    pytest.param(_TIE, f"{_TIE_TEXT}\n  WT=$LEAN", True, False, id="its variable set a second time"),
+    pytest.param(_TIE, f"  WT=$LEAN\n    {_TIE_VERIFY}", True, False, id="its variable set to something else"),
+    pytest.param(_TIE, _TIE_VERIFY, True, False, id="its variable not set in the script"),
 ])
-def test_the_finder_reads_each_form(line: str, found: bool, takes: bool) -> None:
-    assert [USE in command for _, command in calls(line)] == ([takes] if found else [])
+def test_the_finder_reads_each_form(path: str, text: str, found: bool, takes: bool) -> None:
+    assert [USE in command for _, command in calls(path, text)] == ([takes] if found else [])
 
 
 def test_a_command_is_read_with_its_continuation_lines() -> None:
     text = 'x=1\n$(verifier_env) \\\n  "$LEAN" verify --zk \\\n  --circuit c\n"$LEAN" verify --zk \\\n  --circuit c\n'
-    assert [(number, USE in command) for number, command in calls(text)] == [(2, True), (5, False)]
+    assert [(number, USE in command) for number, command in calls(_JOB, text)] == [(2, True), (5, False)]
 
 
 def test_every_shell_call_of_the_verifier_takes_its_allocator_setting() -> None:
-    found = [f"{path}:{number}" for path, text in scripts().items() if path not in ALLOWED for number in unset(text)]
+    found = [f"{path}:{number}" for path, text in scripts().items() if path not in ALLOWED for number in unset(path, text)]
     assert not found, f"the Lean verifier started under the allocator's default; {FIX}:\n" + "\n".join(found)
 
 
@@ -115,5 +147,5 @@ def test_the_shell_helper_prints_the_python_callers_setting(own: str | None) -> 
 
 def test_allowed_names_only_scripts_that_keep_the_default() -> None:
     all_ = scripts()
-    stale = sorted(path for path in ALLOWED if path not in all_ or not unset(all_[path]))
+    stale = sorted(path for path in ALLOWED if path not in all_ or not unset(path, all_[path]))
     assert not stale, "ALLOWED names scripts that no longer start the verifier under the default; drop them:\n" + "\n".join(stale)
