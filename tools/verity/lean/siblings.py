@@ -12,7 +12,7 @@ the module prefixes nothing imports, so no root loads such a module beside its s
 clashes in no build: two scripts run with `lean --run` each declare `main`. A prefix is matched as the audit matches it
 (`check.py`'s `under`: the name, or below it). FILE's own module stays in, so a try of such a script still checks it
 against the library. The check doesn't judge the lock, which is the audit's to judge: a package with no lock, or with one
-that can't be read, plans as one whose lock exempts nothing.
+that can't be read (a line on stderr says so), plans as one whose lock exempts nothing.
 
 The stub reads FILE's build through a `--setup` file (its `importArts`, as Lake hands a module its imports) and the rest
 from LEAN_PATH. It is a `module` with `public import`s, as a package root is, when FILE and every sibling are modules,
@@ -64,6 +64,7 @@ import re
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import time
 import tomllib
@@ -173,12 +174,17 @@ def executables(pkg: Path) -> set[str]:
 
 def exempt(pkg: Path) -> list[str]:
     """The module prefixes ``pkg``'s lock lists under `exempt`, which nothing imports. None for a package with no lock, or
-    with one that can't be read or whose `exempt` holds no names: the audit judges the lock, and a plan never fails on
-    it."""
-    try:
-        listed = json.loads((pkg / _audit().POLICY).read_text()).get("exempt")
-    except (OSError, ValueError, AttributeError):
+    with one whose `exempt` holds no names, or that can't be read, which a line on stderr says: the audit judges the
+    lock, and a plan never fails on it."""
+    lock = pkg / _audit().POLICY
+    if not lock.is_file():
         return []
+    try:
+        got = json.loads(lock.read_text())
+    except (OSError, ValueError) as e:
+        print(f"siblings: {lock} can't be read ({e}): no module is left out for its `exempt`", file=sys.stderr)
+        return []
+    listed = got.get("exempt") if isinstance(got, dict) else None
     return [p for p in listed if isinstance(p, str)] if isinstance(listed, (dict, list)) else []
 
 

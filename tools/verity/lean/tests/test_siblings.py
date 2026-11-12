@@ -154,30 +154,35 @@ def test_the_stub_leaves_out_the_modules_under_an_exempt_prefix_of_the_lock(tmp_
     assert S.plan(pkg, "P/Probe.lean") == S.Plan("P.Probe", True, ["P.A", "P.Runner"], ["P.D", "P.Probes"])
 
 
-def test_a_plan_never_fails_on_the_lock(tmp_path):
-    """The audit judges the lock; the sibling check only reads the names under its `exempt`. With no lock, or one that
-    can't be read (no JSON, no object, bytes that aren't text, a directory in its place) or whose `exempt` holds no
-    names, a package plans as one whose lock exempts nothing: both scripts are siblings. Nor does the plan ask for the
-    reason the audit asks of an entry."""
+def test_a_plan_never_fails_on_the_lock(tmp_path, capsys):
+    """The audit judges the lock; the sibling check only reads the names under its `exempt`. With no lock (or a
+    directory in its place), one whose `exempt` holds no names, or one that can't be read (no JSON, bytes that aren't
+    text), a package plans as one whose lock exempts nothing: both scripts are siblings. A lock that can't be read is
+    said on stderr, once a plan, and nothing else is. Nor does the plan ask for the reason the audit asks of an entry."""
     pkg = tmp_path / "p"
     write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/A.lean": "module\n", "P/D.lean": "module\n",
                 "P/Run/Bulk.lean": SCRIPT, "P/Probe.lean": SCRIPT})
     built(pkg, "P.A", "P.Run.Bulk", "P.Probe")
     lock, without = pkg / "lean-audit.json", S.Plan("P.D", True, ["P.A", "P.Probe", "P.Run.Bulk"], [])
     assert S.exempt(pkg) == [] and S.plan(pkg, "P/D.lean") == without, "no lock"
-    for text in ("", "{", "[]", "null", '"P.Run"', '{"roots": ["P"]}', '{"exempt": null}', '{"exempt": "P.Run"}',
-                 '{"exempt": 7}', '{"exempt": [["P.Run"], 7, null]}', '{"exempt": {}}'):
-        lock.write_text(text)
-        assert S.exempt(pkg) == [] and S.plan(pkg, "P/D.lean") == without, text
-    lock.write_bytes(b'{"exempt": {"P.Run\xff": "why"}}')
-    assert S.plan(pkg, "P/D.lean") == without, "bytes that aren't text"
-    lock.unlink()
     lock.mkdir()
     assert S.plan(pkg, "P/D.lean") == without, "a directory in its place"
     lock.rmdir()
+    for text in ("[]", "null", '"P.Run"', '{"roots": ["P"]}', '{"exempt": null}', '{"exempt": "P.Run"}', '{"exempt": 7}',
+                 '{"exempt": [["P.Run"], 7, null]}', '{"exempt": {}}'):
+        lock.write_text(text)
+        assert S.exempt(pkg) == [] and S.plan(pkg, "P/D.lean") == without, text
+    assert capsys.readouterr().err == "", "none of these is a lock that can't be read"
+    for data in (b"", b"{", b'{"exempt": {"P.Run": "why", "P.Probe": "why"}', b'{"exempt": {"P.Run\xff": "why"}}'):
+        lock.write_bytes(data)
+        assert S.plan(pkg, "P/D.lean") == without, data
+        err = capsys.readouterr().err
+        assert err.startswith(f"siblings: {lock} can't be read (") and err.count("\n") == 1, err
+        assert err.endswith("): no module is left out for its `exempt`\n"), err
     for text in ('{"exempt": {"P.Run": "", "P.Probe": null}}', '{"exempt": ["P.Run", "P.Probe", 7]}'):
         lock.write_text(text)
         assert S.plan(pkg, "P/D.lean") == S.Plan("P.D", True, ["P.A"], []), text
+    assert capsys.readouterr().err == ""
 
 
 def scripts(tmp_path: Path, exempt: dict[str, str]) -> Path:

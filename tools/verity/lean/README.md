@@ -284,7 +284,7 @@ Lean's job in `check` and the tools around the audit:
   as it is (by the hash Lake's trace states). It leaves out uncounted, FILE's own module aside, what no root loads
   beside the rest: the other executables' roots, and every module under an `exempt` prefix of the package's lock (the
   name or below it, as the audit matches it), so two scripts that each declare `main` don't clash. It never fails on
-  the lock: with none, or one that can't be read, it leaves out the executables' roots alone.
+  the lock: with none, or one that can't be read (which it says on stderr), it leaves out the executables' roots alone.
 - `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
   landing gate on its seeds (drive.toml's `landing_gates`).
 - `trusted_size.py`: the size of a package's spec, per area.
