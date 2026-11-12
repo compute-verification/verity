@@ -9,7 +9,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2399},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "function", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "lines", "count": 252},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1339},
-    {"file": "verity_vllm/engine/chunks.py", "kind": "function", "symbol": "attribute", "detail": "lines", "count": 193},
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1273},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "binding_record", "detail": "lines", "count": 199},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1430},
