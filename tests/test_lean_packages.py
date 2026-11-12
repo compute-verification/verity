@@ -354,10 +354,11 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
     the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as the larger of the two sides' caps."""
+    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap three-way: one side's change alone stands, and two
+    changes add, except two lowerings, which take the larger."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
-    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each added entries, the merge kept the "
-                      f"larger of their caps while the count took both: raise it to the count)")
+    assert not over, (f"{what} grew in {over}: {fix} (where a merged change lowered the cap while the other took room "
+                      f"under it, the merge kept the lowering while the count took both: raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
     for k, n in loose.items():
@@ -664,9 +665,9 @@ def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
     assert unmatched_first({"a/pkg": entries, "b/gone": entries}, audited) == ["a/pkg: P.Haevy", "b/gone: no audited package here"]
 
 
-def test_every_cap_merges_as_the_larger_of_its_sides():
+def test_every_cap_merges_key_by_key():
     """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
-    as the larger of the two sides' caps instead of conflicting."""
+    three-way, key by key, instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
             and isinstance(v := globals()[s.split(" = ")[0]], dict) and all(isinstance(n, int) for n in v.values())]
