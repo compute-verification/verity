@@ -18,6 +18,7 @@ import pytest
 from verity_vllm.commit.committer import pinned_pool as PP
 from verity_vllm.commit.served_record import served_rows
 from verity_vllm.config import UsageError
+from verity_vllm.engine import served_seed
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_guard as sg
@@ -527,8 +528,9 @@ def test_a_window_closed_off_the_loop_writes_the_records_one_closed_on_it_writes
     for name, com in (("on", Counted), ("off", Detached)):
         out = tmp_path / name
         out.mkdir()
-        ids = iter(range(1 << 20))
+        ids, coins = iter(range(1 << 20)), iter(range(1, 1 << 20))
         monkeypatch.setattr(so, "new_http_id", lambda: f"cmpl-{next(ids):04x}")
+        monkeypatch.setattr(served_seed, "in_process", lambda: (next(coins).to_bytes(64, "big"), "test"))
         sealer = ss.Sealer(1 << 40)
         with Sealed(out, sealer=sealer, com=com, window_steps=2) as s:
             for i in range(3):

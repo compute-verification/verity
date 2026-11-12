@@ -91,12 +91,26 @@ HD uint8_t row_byte(const int8_t* row, uint32_t K, uint32_t scale, uint32_t x) {
   return x < K ? (uint8_t)row[x] : (uint8_t)(scale >> (8 * (x - K)));
 }
 
+// A row's bytes as the digest reads them: an s8 row's codes then its scale (`S8Row`), or a row of bytes as they are
+// (`ByteRow`: a history table's u16 words, little-endian).
+struct S8Row {
+  const int8_t* row;
+  uint32_t K, scale;
+  HDM uint8_t operator()(uint32_t x) const { return row_byte(row, K, scale, x); }
+};
+
+struct ByteRow {
+  const uint8_t* row;
+  HDM uint8_t operator()(uint32_t x) const { return row[x]; }
+};
+
 HD uint32_t segments(uint32_t K) { return (K + 4 + SEG_BYTES - 1) / SEG_BYTES; }
 
-// d_j of the row (codes ``row``, scale bits ``scale``): S(j, s, m) = "verity/sha512-row-seg/v1/segment\0" || u64be j || u64be s ||
-// u64be m, zero padded to a block, then the segment's bytes.
-HD void seg_digest(const int8_t* row, uint32_t K, uint32_t scale, uint32_t j, uint32_t s, uint64_t out[8]) {
-  const uint32_t start = SEG_BYTES * j, len = (K + 4 - start) < SEG_BYTES ? (K + 4 - start) : SEG_BYTES;
+// d_j of the ``L``-byte row ``at``, whose first ``direct`` bytes ``base`` holds 8-byte aligned (0: none): S(j, s, m) =
+// "verity/sha512-row-seg/v1/segment\0" || u64be j || u64be s || u64be m, zero padded to a block, then the segment's bytes.
+template <class Row>
+HD void seg_digest_of(const Row& at, const uint8_t* base, uint32_t direct, uint32_t L, uint32_t j, uint32_t s, uint64_t out[8]) {
+  const uint32_t start = SEG_BYTES * j, len = (L - start) < SEG_BYTES ? (L - start) : SEG_BYTES;
   uint64_t h[8], w[16];
   iv(h);
   zero(w);
@@ -105,19 +119,18 @@ HD void seg_digest(const int8_t* row, uint32_t K, uint32_t scale, uint32_t j, ui
   put_be(w, 41, s, 8);
   put_be(w, 49, 8ull * len, 8);
   sha512_compress(h, w);
-  const bool aligned = K % 8 == 0 && (uintptr_t)row % 8 == 0;
   const uint32_t blocks = (len + 17 + 127) / 128;
   for (uint32_t q = 0; q < blocks; ++q) {
 #pragma unroll
     for (int i = 0; i < 16; ++i) {
       const uint32_t p = 128 * q + 8 * i;
       uint64_t v = 0;
-      if (aligned && p + 8 <= len && start + p + 8 <= K) {
-        v = bswap64(*(const uint64_t*)(row + start + p));
+      if (p + 8 <= len && start + p + 8 <= direct) {
+        v = bswap64(*(const uint64_t*)(base + start + p));
       } else {
         for (int k = 0; k < 8; ++k) {
           const uint32_t x = p + k;
-          const uint64_t b = x < len ? row_byte(row, K, scale, start + x) : (x == len ? 0x80u : 0u);
+          const uint64_t b = x < len ? at(start + x) : (x == len ? 0x80u : 0u);
           v |= b << (56 - 8 * k);
         }
       }
@@ -129,14 +142,20 @@ HD void seg_digest(const int8_t* row, uint32_t K, uint32_t scale, uint32_t j, ui
   for (int i = 0; i < 8; ++i) out[i] = h[i];
 }
 
-// x = SHA-512(Q || d_0 .. d_(s-1)), the digests ``dig`` (8 words each); Q = "verity/sha512-row-seg/v1\0" || u64be n_bits ||
-// u64be s || u32be 1024, zero padded.
-HD void outer_digest(const uint64_t* dig, uint32_t K, uint32_t s, uint64_t out[8]) {
+// d_j of the s8 row (codes ``row``, scale bits ``scale``).
+HD void seg_digest(const int8_t* row, uint32_t K, uint32_t scale, uint32_t j, uint32_t s, uint64_t out[8]) {
+  const bool aligned = K % 8 == 0 && (uintptr_t)row % 8 == 0;
+  seg_digest_of(S8Row{row, K, scale}, (const uint8_t*)row, aligned ? K : 0, K + 4, j, s, out);
+}
+
+// x = SHA-512(Q || d_0 .. d_(s-1)) of an ``L``-byte row, the digests ``dig`` (8 words each); Q = "verity/sha512-row-seg/v1\0" ||
+// u64be n_bits || u64be s || u32be 1024, zero padded.
+HD void outer_digest_bytes(const uint64_t* dig, uint32_t L, uint32_t s, uint64_t out[8]) {
   uint64_t h[8], w[16];
   iv(h);
   zero(w);
   put_str(w, ROWTAB_SEG_TAG);
-  put_be(w, 25, 8ull * (K + 4), 8);
+  put_be(w, 25, 8ull * L, 8);
   put_be(w, 33, s, 8);
   put_be(w, 41, SEG_BYTES, 4);
   sha512_compress(h, w);
@@ -163,6 +182,9 @@ HD void outer_digest(const uint64_t* dig, uint32_t K, uint32_t s, uint64_t out[8
   }
   for (int i = 0; i < 8; ++i) out[i] = h[i];
 }
+
+// x of an s8 row of ``K`` codes.
+HD void outer_digest(const uint64_t* dig, uint32_t K, uint32_t s, uint64_t out[8]) { outer_digest_bytes(dig, K + 4, s, out); }
 
 // ---- the salt: ChaCha20 (RFC 8439) ---------------------------------------------------------------------------------------
 
@@ -314,6 +336,57 @@ HD void midstates(const uint64_t prefixes[32], uint64_t ms[16]) {
     sha512_compress(h, w);
     for (int i = 0; i < 8; ++i) ms[8 * b + i] = h[i];
   }
+}
+
+// ---- history tables (`verity.commitments.history`) ----------------------------------------------------------------
+//
+// A table of ``cap`` leaves (a power of two) under its domain id: leaf p is the frame leaf (p, "hm96-sha512/row-seg/v1") of
+// the hm96 tree leaf of its row's string b || c, the placeholder's (``pad``, from the host) past the table's length. A row
+// is its ``L`` bytes as they are; its salt is the host's, 192 bytes as 48 little-endian u32 words.
+// The tree is kept whole: level l (0 the leaves) at node `hist_level`, the root at level ``depth``.
+
+constexpr uint32_t HIST_MAX_SEGS = 8;  // rows of at most 8 KiB
+
+// A history table as the host lays it out (`history_tables_device.Hist`: 18 words).
+struct Hist {
+  uint64_t did[8];  // its domain id
+  uint64_t pad[8];  // the placeholder's tree leaf
+  uint64_t cap;     // its leaves
+  uint32_t L, depth;
+};
+static_assert(sizeof(Hist) == 144, "Hist is 18 words");
+
+HD uint64_t hist_level(uint64_t cap, uint32_t l) { return 2 * cap - ((2 * cap) >> l); }
+
+HD void hist_pad_leaf(const Hist& t, uint64_t p, uint64_t out[8]) { frame_leaf(t.did, p, ROWTAB_ROW_SCHEMA, t.pad, out); }
+
+// Row ``row`` at position ``p`` under its salt ``y``: its string ``bc`` and its leaf ``out``.
+HD void hist_row(const Hist& t, uint64_t p, const uint8_t* row, const uint64_t* hm, const uint64_t ms[16],
+                 const uint32_t y[48], uint64_t bc[16], uint64_t out[8]) {
+  const uint32_t s = (t.L + SEG_BYTES - 1) / SEG_BYTES;
+  uint64_t dig[8 * HIST_MAX_SEGS], x[8], tl[8];
+  const bool aligned = (uintptr_t)row % 8 == 0;
+  for (uint32_t j = 0; j < s; ++j) seg_digest_of(ByteRow{row}, row, aligned ? t.L : 0, t.L, j, s, dig + 8 * j);
+  outer_digest_bytes(dig, t.L, s, x);
+  commit_string(x, y, hm, ms, bc);
+  tree_leaf(bc, ms + 8, tl);
+  frame_leaf(t.did, p, ROWTAB_ROW_SCHEMA, tl, out);
+}
+
+// Node ``j`` of level ``l + 1``, from its children at level ``l``.
+HD void hist_node(const Hist& t, uint64_t* tree, uint32_t l, uint64_t j) {
+  const uint64_t* below = tree + 8 * hist_level(t.cap, l);
+  frame_node(t.did, l, j, below + 16 * j, below + 16 * j + 8, tree + 8 * (hist_level(t.cap, l + 1) + j));
+}
+
+// Position ``p``'s sibling at level ``l``: the ``l``-th node of its path.
+HD const uint64_t* hist_sibling(const Hist& t, const uint64_t* tree, uint64_t p, uint32_t l) {
+  return tree + 8 * (hist_level(t.cap, l) + ((p >> l) ^ 1));
+}
+
+HD bool hist_ok(const Hist& t) {
+  return t.cap >= 2 && t.cap <= (1ull << 30) && (t.cap & (t.cap - 1)) == 0 && (1ull << t.depth) == t.cap && t.L >= 1 &&
+         t.L <= SEG_BYTES * HIST_MAX_SEGS;
 }
 
 }  // namespace rowtab

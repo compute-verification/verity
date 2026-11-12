@@ -56,6 +56,18 @@ when:
   its violations in one are counted again on the change's own copy (ruff's per rule, with the base's configs and pin),
   against the change's list: a lint module whose prose or ruff finding the change cleans, with its entry dropped, passes,
   and one that keeps its sites without its entry fails, naming the change's own sites.
+  A kind whose counts pool that the change keys anew, its list keeping none of the base's keys, at its base's total (a
+  lint that comes to count per file what it counted per package) is compared in the base's form: every key of the base's
+  lint is then uncovered by the change's list with no finding added, so the base's lint runs again with the base's
+  entries for that kind, which hold the tree to the base's counts key by key.  A re-keying that adds no finding passes,
+  and one that adds one fails at the base's key; one that changes the kind's total is judged as any change to a lint
+  is, so a change re-keys at the total and the next lowers it.
+  A change that edits a table that places modules (``PLACES``: P9's layer map and its package units) is judged by its
+  own table at the edges of the modules it adds, and by its base's between the modules its base holds: the base's lint
+  runs again with the change's tables, and with its own on the tree without the change's new Python files, and a
+  violation neither run finds goes.  A module's row may so change in the change whose new module first imports it,
+  while a row edited to admit an import between two modules of the base fails, naming the import: the row lands in one
+  change and that import in the next.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
@@ -115,7 +127,8 @@ are kept beside the verdict under BASE's key (they run BASE's lints and config),
 below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  A change's
 judgement reads only its own commits (and BASE), so the changes the cache doesn't hold are judged at once, each in a forked
 process of its own, its worktree and ruff cache with it, up to ``$RATCHET_GATE_JOBS`` at a time (default the lesser of 16 and
-this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before
+this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  git keeps
+no lock on a repository's worktrees, so each process adds and removes its own in its turn (`worktree_turn`).  Before
 marking a branch, run ``python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes,
 1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the
 host), which fails the check's step: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose
@@ -125,6 +138,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
+import fcntl
 import functools
 import hashlib
 import importlib.util
@@ -142,7 +157,7 @@ import tokenize
 import tomllib
 import types
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
@@ -205,10 +220,16 @@ CHEAPEST = 12
 SITE = re.compile(r"^[^:]+: ([^\s:]+):(?:(\d+)\b)?")
 #: a violation of the repository's ruff lint that names its (file, rule) pair: ``repo_ruff: file [RULE]: N found, M allowed``
 RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
+#: the tables that place a module, by lint file: each a dict literal of strings, which a change may edit for the modules it
+#: adds (`placed`)
+PLACES = {f"{LINT}/_imports.py": ("LAYER",), f"{LINT}/test_p09_layering.py": ("PACKAGE_OF",)}
 #: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
 MEASURES = {"size"}
+#: the file in the repository's common git directory whose lock is a process's turn at the repository's worktrees
+TURN = "ratchet-gate-turn"
 
-#: Run as ``python -I -c RUNNER LINT_DIR SLUGS`` (SLUGS a JSON list, or null for every lint): imports the lint directory as a
+#: Run as ``python -I -c RUNNER LINT_DIR SLUGS TABLES`` (SLUGS a JSON list, or null for every lint; TABLES a JSON object,
+#: {module: {name: rows}}, the dicts to hold those rows in place of the module's own): imports the lint directory as a
 #: package of its own, so no other file of the tree runs, with a stand-in for pytest (its marks), and calls each selected
 #: lint's ``test_no_new*`` tests.  A lint is a module whose ``NAME`` is a string literal, read before it is imported, so a
 #: test module that isn't one is never run.  Prints ``{"ran": [NAME, ...], "failures": [{"lint", "test", "message"}, ...]}``.
@@ -217,7 +238,7 @@ import ast, importlib, inspect, json, re, sys, traceback, types
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-lint, slugs = Path(sys.argv[1]), json.loads(sys.argv[2])
+lint, slugs, tables = Path(sys.argv[1]), json.loads(sys.argv[2]), json.loads(sys.argv[3])
 
 
 class Mark:
@@ -243,6 +264,16 @@ def lint_name(f):
     return None
 
 
+def place():
+    """Each loaded module's table holds the rows TABLES gives it, changed in place for whoever imported it by name."""
+    for stem, new in tables.items():
+        for name, rows in new.items():
+            table = getattr(sys.modules.get(f"base_lints.{stem}"), name, None)
+            if isinstance(table, dict) and table != rows:
+                table.clear()
+                table.update(rows)
+
+
 slug = lambda s: re.sub(r"^p\d+_", "", s)
 out = {"ran": [], "failures": []}
 for f in sorted(lint.glob("test_*.py")):
@@ -252,6 +283,7 @@ for f in sorted(lint.glob("test_*.py")):
         if name is None or not (selected or slug(name) in slugs):
             continue
         mod = importlib.import_module(f"base_lints.{f.stem}")
+        place()
     except Exception:
         out["failures"].append({"lint": f.name, "test": None, "error": True, "message": traceback.format_exc(limit=2)})
         continue
@@ -485,6 +517,33 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
             if any(hi[k] > lo[k] + caught.get(k, 0) for k in moved):
                 pooled.append(f"{total} over {len(moved)} moved key(s)")
     return grown, fix, pooled
+
+
+def base_form(before: dict[str, list], after: dict[str, list], paths: dict[str, str]
+              ) -> tuple[dict[str, list], list[str], list[str]]:
+    """(``after`` with the base's entries for each counted kind the change keys anew at its base's total; a note for each;
+    what to do about each kind it keys anew at another total): the lists a lint is run against to compare such a kind like
+    for like.  A kind is keyed anew when the change's list keeps none of its base's keys.  A lint that comes to key a kind
+    another way (typed_records' or-empty per file where it was per package) leaves every key of the base's lint uncovered
+    by the change's list, with no finding added; under the base's entries its base's lint holds the tree to the base's
+    counts, key by key, and the kind's total, which the change keeps, is all the change's list may allow.  At another
+    total the base's lint can't tell the re-keying from a lint loosened to drop its entries, so the kind stays held to the
+    change's list."""
+    like, notes, hints = dict(after), [], []
+    for s in sorted(before.keys() & after.keys()):
+        for k in sorted(counted_kinds(s, before[s] + after[s]), key=str):
+            lo, hi = ([e for e in side[s] if isinstance(e, dict) and not is_mark(e) and kind(e) == k] for side in (before, after))
+            (was, now), name = (sum(map(count, side)) for side in (lo, hi)), f"{paths[s]}{'' if k is None else f' {k}'}"
+            if not (lo and hi) or {key(e) for e in lo} & {key(e) for e in hi}:
+                continue
+            if was == now:
+                like[s] = [e for e in like[s] if e not in hi] + lo
+                notes.append(f"{name} keeps its total of {was} under other keys, so the base's lint is held to the base's "
+                             f"entries for it")
+            else:
+                hints.append(f"{name} is keyed anew and its total goes {was} -> {now}: a kind keyed anew is compared in the "
+                             f"base's form only at the base's total, so change its keys in one change and its counts in another")
+    return like, notes, hints
 
 
 def ruff_pin(rev: str) -> str | None:
@@ -935,17 +994,39 @@ def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
     return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{lint}/") and is_ratchet(f)} | ruff)
 
 
+@contextlib.contextmanager
+def worktree_turn() -> Iterator[None]:
+    """This process's turn at the repository's worktrees, held while git adds or removes one.  git keeps no lock on them: it
+    reads every worktree's entry to add or remove one, and deletes ``worktrees`` in the common git directory with its last
+    entry, so of two processes at it at once one can find an entry half written or the directory just gone ("could not create
+    directory of '.git/worktrees/tree'"), and the gate would exit 2 with no verdict.  The turn is the lock on `TURN` in
+    that directory, the same file from every checkout of the repository, so the processes of one run and of any other run
+    there wait for each other; it ends with the block, or with the process."""
+    path = Path(git("rev-parse", "--git-common-dir").strip()) / TURN
+    with contextlib.ExitStack() as held:
+        try:
+            fcntl.flock(held.enter_context(open(path, "a")), fcntl.LOCK_EX)
+        except OSError as e:
+            raise GitError(f"no turn at the repository's worktrees ({path}: {e}), so the gate can't add or remove the "
+                           f"lints' worktree: make {path} a file this user can write") from e
+        yield
+
+
 def drop_worktree(tree: Path) -> None:
-    """Remove the lints' worktree. Cleanup decides no verdict: when git won't remove it ("Directory not empty"), the directory
-    goes by hand and git forgets it."""
-    if subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True).returncode:
-        shutil.rmtree(tree, ignore_errors=True)
-        subprocess.run(["git", "worktree", "prune"], capture_output=True)
+    """Remove the lints' worktree, in this process's turn. Cleanup decides no verdict: when git won't remove it ("Directory
+    not empty"), the directory goes by hand and git forgets it."""
+    with worktree_turn():
+        if subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True).returncode:
+            shutil.rmtree(tree, ignore_errors=True)
+            subprocess.run(["git", "worktree", "prune"], capture_output=True)
 
 
-def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[str, list]) -> tuple[list[str], list[dict]]:
+def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[str, list],
+               tables: dict[str, dict[str, dict[str, str]]] | None = None, without: Iterable[str] = ()
+               ) -> tuple[list[str], list[dict]]:
     """(the lints run, their failures): each lint directory's base code, its lints ``selection`` names (None: all of them),
-    run on the change's tree against its allowlists, P16's with the change's public commands, with the base's ruff configs."""
+    run on the change's tree against its allowlists, P16's with the change's public commands, with the base's ruff configs;
+    with ``tables`` (`placed`), each lint file's tables hold those rows, and the tree is without the files ``without``."""
     selection = {lint: s for lint, s in selection.items() if git("ls-tree", "--name-only", c.lo, "--", lint).strip()}
     if not selection:
         return [], []
@@ -954,11 +1035,17 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
     runs = []
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
         tree = Path(d) / "tree"
-        git("worktree", "add", "-q", "--detach", str(tree), c.hi)
+        with worktree_turn():
+            git("worktree", "add", "-q", "--detach", "--no-checkout", str(tree), c.hi)
         try:
+            # the checkout `git worktree add` runs itself, after the turn: it writes only this worktree's own files, so the
+            # processes judging at once still check out at once
+            git("-C", str(tree), "reset", "-q", "--hard", "--no-recurse-submodules")
             for lint in selection:
                 shutil.rmtree(tree / lint, ignore_errors=True)
                 git("-C", str(tree), "checkout", "-q", c.lo, "--", lint)
+            for f in without:
+                (tree / f).unlink(missing_ok=True)
             for config in (RUFF_CONFIG, REPO_RUFF_CONFIG):
                 if git("ls-tree", "--name-only", c.lo, "--", config).strip():
                     git("-C", str(tree), "checkout", "-q", c.lo, "--", config)
@@ -966,7 +1053,8 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
                 for p in (tree / lint / "allowlists").glob("*.json"):
                     p.write_text(json.dumps({**(public if p == tree / CALLERS_LIST else {}),
                                              "entries": after.get(slug(p.name), [])}))
-                runs.append(subprocess.run([*python, "-c", RUNNER, str(tree / lint), json.dumps(slugs)], cwd=d,
+                rows = {PurePosixPath(f).stem: t for f, t in (tables or {}).items() if f.startswith(f"{lint}/")}
+                runs.append(subprocess.run([*python, "-c", RUNNER, str(tree / lint), json.dumps(slugs), json.dumps(rows)], cwd=d,
                                            capture_output=True, text=True,
                                            env={**os.environ, "RUFF_CACHE_DIR": str(Path(d) / "ruff-cache")}))
         finally:
@@ -980,6 +1068,53 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
             raise GitError(f"the base's lints at {c.lo[:12]} didn't run on {c.hi[:12]}: "
                            f"{(r.stderr or r.stdout).strip()[-300:]}")
     return ran, failures
+
+
+def placed(c: Change) -> dict[str, dict[str, dict[str, str]]]:
+    """{lint file: {name: rows}}: each table of ``PLACES`` the change edits, as the change has it.  A table is a module-level
+    dict literal of strings, read without running the change's lint code; one that isn't, at either end, stays the base's."""
+    def at(rev: str, path: str) -> dict[str, dict]:
+        try:
+            body = ast.parse(git("show", f"{rev}:{path}")).body
+        except (GitError, SyntaxError):
+            return {}
+        out = {}
+        for node in body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) \
+                    and node.targets[0].id in PLACES[path] and isinstance(node.value, ast.Dict):
+                try:
+                    rows = ast.literal_eval(node.value)
+                except ValueError:
+                    continue
+                if all(isinstance(x, str) for row in rows.items() for x in row):
+                    out[node.targets[0].id] = rows
+        return out
+    out = {}
+    for path in PLACES:
+        lo, hi = at(c.lo, path), at(c.hi, path)
+        if new := {name: rows for name, rows in hi.items() if name in lo and lo[name] != rows}:
+            out[path] = new
+    return out
+
+
+def at_new_modules(c: Change, selection: dict[str, list[str] | None], after: dict[str, list], found: list[str],
+                   had: set[str]) -> tuple[list[str], list[str], str]:
+    """(``found`` as the change's edit to a placing table leaves it; the violations that leave; the tables it edits).  A
+    module's place is a declaration, so the change's own tables judge the edges of the modules it adds, and its base's the
+    edges between the modules the base holds, which no edit to a row may admit at once.  The base's lint runs twice more
+    on the change's tree: with the change's tables, and with its own on the tree without the Python files the change adds (a
+    rename adds none), where an import of one names no module, so it is no edge.  A violation in ``found`` that neither run
+    finds arises only at a new module's edge, which the change's tables admit, and it goes; what the change's tables find
+    that the base's didn't is the change's too."""
+    tables = placed(c)
+    if not (found and tables):
+        return found, [], ""
+    new = [f for f in git("diff", "--name-only", "--diff-filter=A", "-M", "-z", c.lo, c.hi).split("\0") if f.endswith(".py")]
+    own = violations(base_lints(c, selection, after, tables)[1])
+    old = violations(base_lints(c, selection, after, without=new)[1]) if new else found
+    kept = [v for v in found if v in own or v in old]
+    return (kept + [v for v in own if v not in found and v not in had], [v for v in found if v not in kept],
+            ", ".join(f"{f}'s {name}" for f, names in tables.items() for name in names))
 
 
 def replaced(c: Change, lints: Iterable[str]) -> set[str]:
@@ -1122,6 +1257,9 @@ def judge(c: Change, base: str) -> None:
     noqa_grows = c.noqa_added > c.noqa_removed
     inherited: list[str] = []
     based: list[str] = []
+    rekey: list[str] = []
+    admitted: list[str] = []
+    places = ""
     if c.touched and not (grown or bad or uncalled or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
         if selection:
@@ -1130,13 +1268,21 @@ def judge(c: Change, base: str) -> None:
             if found:
                 had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
                 inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
+                like, rekeyed, rekey = base_form(before, after, {**was_at, **now_at})
+                if found and rekeyed:
+                    again = [v for v in violations(base_lints(c, selection, like)[1]) if v not in had]
+                    if len(again) < len(found):
+                        found, c.pooled = again, c.pooled + rekeyed
+                found, admitted, places = at_new_modules(c, selection, after, found, had)
                 found, based = own_copies(c, selection, found)
     if not (grown or bad or uncalled or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"public, each run by its caller: {', '.join(public)}"] if public else [])
             + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"]
-               if c.lints and not (inherited or based) else [])
+               if c.lints and not (inherited or based or admitted) else [])
+            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(admitted)} violation(s) only at the edges of the "
+                f"module(s) the change adds, which the change's tables admit ({places})"] if admitted else [])
             + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
                 f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else [])
             + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(based)} violation(s) in the base's copy of "
@@ -1174,7 +1320,9 @@ def judge(c: Change, base: str) -> None:
         c.why = (f"the base's lint code ({c.lo[:12]}) finds {len(found)} violation(s) on its tree that its allowlists don't "
                  f"cover: a change to a lint is judged like source, so fix the code or keep the lint and its entries"
                  + (f" (a layout move, whose lints move with it, is exempt once `python3 {MOVE_CHECK} {c.lo[:12]} "
-                    f"{c.hi[:12]}` certifies it)" if moves else ""))
+                    f"{c.hi[:12]}` certifies it)" if moves else "") + "".join(f"; {h}" for h in rekey)
+                 + (f"; the change edits {places}, which judge(s) the edges of the modules it adds: between modules its base "
+                    f"holds the base's tables judge, so the row lands in one change and that import in the next" if places else ""))
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 

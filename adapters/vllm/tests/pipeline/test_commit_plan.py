@@ -147,7 +147,6 @@ def test_the_plan_stage_plans_the_inputs_the_commit_stage_passes(tmp_path, monke
     r.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")
     Path(r.hidden_so).touch()
     monkeypatch.setattr(R, "applicable_taps", lambda man, ck: [])
-    monkeypatch.setattr(r, "gpu_exclusive", lambda why: None)
     monkeypatch.setattr(RC, "commit_verdict", lambda row, rck, wall: True)
     r.commit()
     cmd = ran["commit.commit_delta"]

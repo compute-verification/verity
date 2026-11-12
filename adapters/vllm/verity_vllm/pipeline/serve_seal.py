@@ -174,7 +174,7 @@ def committer_args(opts: Any) -> SimpleNamespace:
     return SimpleNamespace(arena_mb=0, profile_hooks=False, pinned_populate_threads=None, commit_scheme=opts.scheme,
                            required_manifest=opts.required_manifest, programs_root=programs_root_of(opts), program_dir=None,
                            hidden_so=opts.hidden_so, hidden_ns=opts.hidden_ns, tap_cap_mb=opts.tap_cap_mb, out=opts.out,
-                           tap_sources=TapSources(norm_tap_so=opts.norm_tap_so), memory_map=None, moe_source="auto",
+                           tap_sources=TapSources(norm_tap_so=opts.norm_tap_so), moe_source="auto",
                            required_classes=None)
 
 

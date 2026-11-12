@@ -1,0 +1,57 @@
+{
+ "definitions": {
+  "DsaRMSNormApply_v2{G=8}": {
+   "and": 24418,
+   "type": "3186a36dfbb20e971112d2f4e7ccd99063921db9058ee97847d4ad5890dd4a7c5a45a23b05cec4b564d7abea8dcb74f65458ca91f03569f5225049ce15fd2d42"
+  },
+  "DsaRMSNormApply_v3{G=8}": {
+   "and": 24418,
+   "type": "1b3b6393c1c9bad6ef64985c73c2ff330a464a32f644138937922f07490d6b338b60fc0c7ce368a4fef3e698631054f2cd30714b9f38d695872f2aead496dfd8"
+  },
+  "DsaRMSNormMeanRsqrt_v1{N=2048,EPS=1e-05}": {
+   "and": 2826,
+   "type": "e5702c135f5f5120a2589e997f9b10eb9df79fd0ac5e8290a87f5a13d7c145412c4a6d31ef6ed0b64aa58da3f6a09ea0de8e3fa9c1adade1a1d8133e28c7b6bd"
+  },
+  "DsaRMSNormMeanRsqrt_v1{N=256,EPS=1e-05}": {
+   "and": 2827,
+   "type": "81db051699db9f6f95082e52b54fbdf2f9a30b2b588c9ff9eeb19ab22b47b8e87fa574cec27c607559e13c99131df32bbadf6ee0a025bfa1f0635c99a0a1676d"
+  },
+  "DsaRMSNormMeanRsqrt_v1{N=512,EPS=1e-05}": {
+   "and": 2827,
+   "type": "cf58f727dd876016d784e21982e00990a436c883d2dc79f56d45f385bef72bef49b47188cb1ebde4bf868632730752ba23384fb600eff157cbc86ebf480b60c0"
+  },
+  "DsaRMSNormOut_v1": {
+   "and": 3048,
+   "type": "70502bfe71e4273ee01ae48943801d79d86e0a8a5bd26327b8b492e2e84b27ec5d6d4f7f477ab947d70ff8ebcbb9e41bdc0cad155e47df8f6a9ba25a4ff947de"
+  },
+  "DsaRMSNormScale_v1": {
+   "and": 34,
+   "type": "23ab31b973fdb6803dfa8c02676c6791542113827f2238f5f7cb7b217b2483958f0f6aab936fe2667f8721a6dfd8bd99063bb31c0cc690cb577f6e519c88331c"
+  },
+  "DsaRMSNormSquareFma_v1": {
+   "and": 3093,
+   "type": "694d30131f3acd5d749657de68b3b151f3afe9afaa8629983f26b28f9a9be6e21dce6677466cc88f71987e1765474dc185df1a7587334cd6289091bab85e7759"
+  },
+  "DsaRMSNormSquares_v1": {
+   "and": 3927,
+   "type": "d9d4c2bbf35f1c6d34c69a5026951aa861f29f529fbae346d6e64b41c78c86028b4c963bd2e277d26ed3af509c8d2a69c3bff3fd611070435ebd621cc04c9f68"
+  }
+ },
+ "digests": {
+  "DsaRMSNormApply_v3{G=64}": {
+   "sha512": "8621f899f6c67c7b69449fa943cda61f6bf98ecb9215715cb315d7322546de70de6cbbb4efccf0dd8e53cfb6b9bd566614b3f5adadb4f314f2f5cc2582a273a4"
+  },
+  "DsaRMSNormSumSq_v3{N=2048,EPS=1e-05}": {
+   "sha512": "71d2790fcade73cf76d776db7ed496ecc6436a33f5a6f49a8aac3187a9e654f2f490a690136939066f539350366c228e1b75d3fac13e22247ec004a1a2ed229d"
+  },
+  "DsaRMSNormSumSq_v3{N=512,EPS=1e-05}": {
+   "sha512": "8193944a8010798a485a07757a6fe54a0338916c0cf87ed77e8c099f7969b9bea39d0d26f680a77be03cc29fcbdad11a39ada06a867ae722ef6d7c8138360bec"
+  },
+  "DsaRMSNorm_v3{N=2048,EPS=1e-05}": {
+   "sha512": "6c11dc5ccee18ca4bb4388c950fa2c01ae679123ec12b0bd4b1c82c6ebe0a8b562abeb00cc4990d70f5355ba61eea6bb3c708ceb55e55c99b154dcea2b265de5"
+  },
+  "DsaRMSNorm_v3{N=512,EPS=1e-05}": {
+   "sha512": "23a68c1ec937a0933945d567b29904729865c0fef55ea10feb9bd923981128de119362fd487a94556db06a5fb8dbc1f049a51b5ddd18475efc8e41104ba315d3"
+  }
+ }
+}
