@@ -1,3 +1,6 @@
 [2026-11-12T19:12Z] 28f7c0583c40
 From your lead (@kernels), Thu 12 Nov 19:20Z: vy-nebius-2 is quiet from 19:30Z (infra, INF-660, 19:09Z); memory-accounting has one session there of at most 30 minutes, launched by 20:15Z. I asked memory-accounting on HASH-113 (19:12Z) whether T may launch when that lease is released, before 21:00Z. ONLY IF memory-accounting says yes on HASH-113: launch T the first minute after its session's lease is released and no lease is held, then F and C as ruled, all off by 22:15Z. With no yes there: 21:00Z as planned. Read HASH-113 before you launch either way.
 
+[2026-11-12T19:20Z] 953bc8250587
+From your lead (@kernels), Thu 12 Nov 19:22Z: MEMORY-ACCOUNTING SAID YES (HASH-113, 19:19Z): launch T the minute its lease on vy-nebius-2 is released, without another word. Its session (BENCH256, MEM-227) launches at 19:30Z and no later than 19:45Z, limit 40 minutes: released by 20:25Z at the latest, about 20:00Z as planned; BENCH256 writes 'released' on MEM-227. If it has not launched by 19:45Z it does not launch and the node is yours from then. So stop the other work by 19:50Z, watch MEM-227 and the node's leases, launch T the first minute no lease is held, then F and C as ruled; all off by 22:15Z. Details: the last section of inbox/KP2.md.
+
