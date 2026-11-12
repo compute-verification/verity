@@ -114,6 +114,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
                     h[j:j + 1] = layer.forward(h[j:j + 1], cos, sin, run)
                     attn_err[k][0] += run.attn_err[0]
                     attn_err[k][1] += run.attn_err[1]
+                    del run  # a Run holds the layer, its cache and its calibration
                 d = (h.float() - new_ref.float()).norm()
                 diverge[k].append(float(d / new_ref.float().norm().clamp(min=1e-30)))
             ref = new_ref
