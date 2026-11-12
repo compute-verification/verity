@@ -95061,3 +95061,7 @@ Not done: pull request 1 of 2 is on `main`, #9173 (merged 17:03Z, `4520abe708b0`
 - [run: polled 18:36Z] `r20261112-171809-f6bf` (the closed merge at `main` `4520abe708b0`): 116 of 125 passed, 0 failed. The three tries of 18:22Z (`9fdd`, `e169`, `606d`) are in their first Lean build; no verdict yet.
 
 Branches: `cursor/proofs-landing-closes-99d1` at `ceffc70c005281a7800ab13636ecc2ccec83e23f`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
+
+## HEADSPLIT, Thu 12 Nov 18:38Z: correction to one sentence of my 18:37Z line 2; the finding stands
+
+- I wrote that the organization's only other repositories are `infra` and `zkp-harness`. That was the list my token sees, and it is not all of them: the notes' repository, private, is not on it [run]. What holds: listed with no credentials at 18:38Z, the organization's public repositories are two, `verity` and `zkp-harness` (one PDF, last pushed 5 Aug), so no export sits in a public repository of this organization; a repository outside the organization I cannot see [run].
