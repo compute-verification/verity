@@ -85946,3 +85946,43 @@ def over (rate ticks : Nat) : Option Nat := S.timeUnit.map fun (u : Figure) => (
 ```
 
 JSON in v2: a location's keys are `bw`, `bytes`, `chip`, `drift`, `id`, `key`, `kind`, `owner`, `parent`, `shared`, `sheet`, `tier`, `time_unit`; the auditor's are `drift`, `hosts`, `keys`, `memory`, `sheets`, `tolerance`; a memory figure is `{"bw", "bytes", "host", "id"}`; a host's figures are `{"cards": [{"count", "sku"}], "chip", "id", "shared": [{"bw", "tier"}]}`; a device's drift is `{"drift", "id"}` [run `b9a1`, the round-trip guards].
+
+## STOPS, Thu 12 Nov 11:33Z: the narrower branch is pushed, `cursor/proofs-stops-switch-5035`; it merges with #9082's head with no stop, differs from `main` merged with #9116's head by the three files of the switch alone, and its run `r20261112-112841-f597` ended rc 0
+
+`cursor/proofs-stops-switch-5035` @ `4003997fdd8cf37e8d3d92fe6c109d7d80dfdcd6`
+
+In plain words. The branch vllm said yes to exists and is checked. It is `main` with #9116's head merged in, plus one commit that turns the two-stage form's switch on in the Lean and in its Python mirror and adds the labelled rehearsal script. Nothing else. It merges with #9082's head with no stop, and the tree that merge gives differs from `main` with #9116 and #9082 by those three files only, which is what vllm wants its label to say. The rehearsal on it ran and ended as it did on the scratch branch. Three things differ from your message and are yours to accept or turn back: it sits on `main` `33faab2be81c` rather than today's; the header sentence you asked for makes it stop in one line against vllm's existing rehearsal branch, which already holds the scratch branch's copy of that script; and the run used `--cwd clone`, as `276a` did. Every run from this branch is a development run: the form's switch on, ahead of its proof; not `main`'s verifier.
+
+**The branch**
+
+- [run] Pushed 11:27Z as a new branch, no force, no pull request; it never lands. Two commits on `main` `33faab2be81c`: `e490de43796a` merges #9116's head `3a580254f8bf` (no stop; tree `6f9ed65b8c94`, the tree my 10:50Z entry named), and `4003997fdd8c` holds the three files.
+- [run] The three files: `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean` (+5 −2: `def FORM : Bool := true` and one sentence in its docstring) and `verity/protocols/spot/verifier/second_stage.py` (+3 −1: `FORM = True` and its comment), both byte for byte as `cursor/proofs-stops-1340` holds them at `43cef2125e06`; and `benchmarks/one_stage/two_stage_stops.sh` (+33, new), that branch's file with one line added at the top of its header.
+- [run] The header's sentence was not there, so I added it as line 2: `# Every run from this branch is a development run: the form's switch on, ahead of its proof; not main's verifier.`
+- [read] **Which `main`: `33faab2be81c`**, the `main` that `43cef2125e06` holds, since vllm wrote at 11:14Z "I need no newer `main` in either" (VLLM-370, read only). [run] It merges with `main`'s tip at 11:32Z, `33866d93e66e`, with no stop. Say if you want today's `main` merged in; that is one merge commit.
+
+**The checks** (on the VM, merge drivers installed; `/opt/cursor/artifacts/stops-switch-branch-checks.log`)
+
+- [run] `gh pr view 9082 --json headRefOid,state` at 11:29Z: open, `7f131e38eaccbb64e0603997e21cb83d089dcdbb`, unchanged.
+- [run] **With #9082's head:** `git merge-tree --write-tree --name-only 4003997fdd8cf37e8d3d92fe6c109d7d80dfdcd6 7f131e38eaccbb64e0603997e21cb83d089dcdbb` exits 0 and prints the tree `4f8123c85bf5` alone. **It names no file.** In that tree `FORM` is on in the Lean and in the Python.
+- [run] **With `cursor/vllm-returnport-rehearsal-f701`** (its tip at 11:29Z, `bb372cf9a563`): `git merge-tree --write-tree --name-only 4003997fdd8cf37e8d3d92fe6c109d7d80dfdcd6 bb372cf9a563e9bcd3f5afe380a6841ff8704560` exits 1 and **names one file, `benchmarks/one_stage/two_stage_stops.sh`**. One hunk, added on both sides: the header sentence above. That branch holds `43cef2125e06` ([read] its log, and vllm-returnport's 11:25Z comment), so it already has the script without the sentence. The two files of the switch come out the same blobs, with no stop.
+  - [derived] This does not touch what vllm asked for: the tree that differs from `main` with #9082 by the switch alone is #9082's head merged with this branch, the check above. Merging this branch into the rehearsal branch that holds `43cef2125e06` adds nothing but the sentence, since the switch is in it already and the token select by units stays in it.
+  - [run] Without the sentence the same merge names no file (a local object, not pushed). If you would rather have that, say so and I push one commit that takes the sentence out; the label in `LABEL.txt` and in the script's output is unchanged either way.
+- [run] **Against `main` merged with #9116's head:** `git diff --stat e490de43796a3a70221ddc26d09c88f993cd8f65 4003997fdd8cf37e8d3d92fe6c109d7d80dfdcd6` prints exactly the three files, `3 files changed, 41 insertions(+), 3 deletions(-)`. The same three, and the same counts, on `main`'s tip `33866d93e66e` (`git diff --stat` of `git merge-tree --write-tree origin/main 3a580254f8bf` against `git merge-tree --write-tree origin/main 4003997fdd8c`), and with #9082 in (the tree of `e490de43796a` merged with `7f131e38eacc` against `4f8123c85bf5`).
+- [run] Against the scratch branch's head: `git diff --name-only 43cef2125e06 4003997fdd8c -- '*.lean'` prints nothing, so every Lean file is the one the scratch branch's runs built. The two heads differ in 16 files: the scratch's token select by units, and the one sentence.
+
+**The run**
+
+- [run] **`r20261112-112841-f597`, rc 0**, on vy-nebius-cpu-2, launched 11:28Z, ended 11:31Z. A development run: the form's switch on, ahead of its proof; not `main`'s verifier. The store's record names source commit `4003997fdd8c`, not dirty. Command: `research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_stops.sh`.
+- [read] `--cwd clone`, not the `--cwd source` of your message: `276a`'s record shows it ran in a clone, the script's own header says `--cwd clone`, and it builds Lean inside the tree.
+- [read] `LABEL.txt`: the label, commit `4003997fdd8cf37e8d3d92fe6c109d7d80dfdcd6`, `152:def FORM : Bool := true`, `92:FORM = True`, the script `two_stage_small.sh` with no flags, and its exit 0.
+- [read] The script's six checks are true (`before_draw`, `pins`, `lean_verdicts`, `negatives`, `round_two`, `outcome`). Round 2 is `{"ok": false, "codes": ["second-read"]}`; the outcome is not accepted on `second-read` alone, `refused` null, no `two-stage-form`. That is what `276a` gave on the scratch branch, and what the script expects of the toy's class, which commits no port for its block's return; vllm's return port supplies that read.
+- [read] **No separate Lean try: the script builds the file.** It runs `lake build sampled-proofs-verifier` in the Spot verifier's package; that executable's root `Spot.VerifierMain` imports `Spot.Pieces`, which imports `Spot.Returned`, which imports `Spot.SecondStage`. The run's `build-lean.log` has `Built Spot.SecondStage` and `Build completed successfully (475 jobs)`. Its only warnings in that file are two deprecations (`if_neg`, `if_pos`) in lines that are `main`'s.
+- `/opt/cursor/artifacts/stops-switch-rehearsal-f597.log`. The run is labelled in the store.
+
+**Not run on this branch, and what to expect**
+
+- No suite, no difftest, no records run. [derived] The tests that assert `main`'s off form will fail on it, as on the scratch branch: `test_a_two_stage_run_reaches_every_step` in the Lean difftest ([run] `d65c`) and the 14 of SPOT's `test_two_stage.py` ([relayed] vllm-returnport, 11:25Z, at `43cef2125e06`).
+- The lock at its head is `main`'s merged with #9116's, not regenerated for the switch: not a lock of record.
+- vllm's rehearsal on #9082's head merged with this branch: vllm's run.
+
+Nothing marked. Nothing posted on Linear or Slack. Pushes this turn: the new branch `cursor/proofs-stops-switch-5035` and this inbox file; nothing to #9116's branch or to `cursor/proofs-stops-1340`.
