@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import ast
-import hashlib
 import json
 from pathlib import Path
 
@@ -11,9 +9,6 @@ import numpy as np
 import pytest
 
 from tests import fake_vllm
-from verity_vllm.config import RowEngine, workload_file
-from verity_vllm.engine import static_schedule
-from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program import sampling_rng as R
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
@@ -61,20 +56,12 @@ def test_gumbel_seed_is_keyed_by_seed_and_position():
     assert R.gumbel_seed_of(0, 32, is_drafting=True) == R.gumbel_seed_of(0, 32 + (1 << 30))
 
 
-# --- the workloads + `load_workload`'s sampling parameters (the adapter imports torch; exec the pure function instead) ---
+# --- the workloads + `load_workload`'s sampling parameters (the adapter imports torch, so its tests skip where torch is absent) ---
 
 def _adapter_fn(name: str):
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
-    tree = ast.parse(src)
-    ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object, "RowEngine": RowEngine, "PP": PP,
-                "static_schedule": static_schedule, "workload_file": workload_file}
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "ACCEPTED_TOKENS":
-            exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name in (name, "execution_of_workload"):
-            exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
-    return ns[name]
+    pytest.importorskip("torch")
+    from verity_vllm.engine import vllm_adapter
+    return getattr(vllm_adapter, name)
 
 
 @pytest.mark.parametrize("name", WORKLOADS)
