@@ -208,7 +208,8 @@ class Advance:
 
 @dataclass(frozen=True)
 class Drop:
-    """Cancel `ready:<sha>`, delete `queue/<sha12>` and record ``outcome`` when it was decided (None when it only went stale)."""
+    """Cancel `ready:<sha>` but where, in shadow, it runs to its verdict to be compared, delete `queue/<sha12>` and record
+    ``outcome`` when it was decided (None when it only went stale)."""
     sha: str
     why: str
     outcome: Outcome | None = None

@@ -3755,7 +3755,7 @@ def test_under_gate_check_a_step_killed_while_the_shards_run_is_no_early_red(env
 def test_under_gate_check_an_early_red_is_compared_with_nothing_and_its_drop_cancels_graph2_s_check(env, monkeypatch):
     """graph2's check, in shadow, ended before the check that gates, which then fails a suite while its other shards run: that
     check hasn't ended, so graph2's verdict is logged as the one that came first and no line compares it with the fail so
-    far, and the drop cancels graph2's check, as every drop but one on `main` does."""
+    far, and the drop cancels graph2's check, as every drop of a check that hasn't ended in a pass or a fail does."""
     main = env.main()
     env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
     loop, runs = _check(env, monkeypatch)
@@ -4558,9 +4558,11 @@ def test_under_gate_check_a_followed_graph2_check_that_hasn_t_ended_a_day_after_
     assert loop.tick() == [] and [r["graph2"] for r in env.lines() if r["action"] == "compare"] == ["unfinished"]
 
 
-def test_under_gate_check_a_dropped_candidate_s_graph2_check_is_cancelled_at_its_drop_and_gets_no_compare_line(env, monkeypatch):
-    """Only a candidate `main` advanced to is followed.  One whose check failed is dropped as before, its graph2 check
-    cancelled then, and the drop's line says how graph2 read; whatever graph2 would have said, no line compares it."""
+@pytest.mark.parametrize("graph2", ["pass", "fail"])
+def test_under_gate_check_the_graph2_check_of_a_candidate_whose_check_failed_runs_on_past_its_drop_and_is_compared_when_it_ends(
+        env, monkeypatch, graph2):
+    """A candidate whose check failed is followed as one `main` advanced to is: its drop, beside its member's eject, leaves
+    graph2's check running and logs what the check said, and once graph2's ends its one line compares the two."""
     main = env.main()
     env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
     loop, runs = _check(env, monkeypatch, policy)
@@ -4571,14 +4573,77 @@ def test_under_gate_check_a_dropped_candidate_s_graph2_check_is_cancelled_at_its
     runs.end(sha, 3, "pytest", rows=(_row(NEW),))
     logged = loop.tick()
     assert _acts(logged) == ["slim", "slim", "eject", "drop"] and env.main() == main
-    assert (logged[-1]["cancel"], logged[-1]["graph2"]) == ("cancelled", PENDING) and "follow" not in logged[-1]
-    assert Path(f"{script}.cancel").read_text() == f"ready:{sha}\n"
+    drop = logged[-1]
+    assert (drop["cancel"], drop["graph2"]) == ("left running, in shadow", PENDING) and not Path(f"{script}.cancel").exists()
+    assert (drop["follow"]["check"], drop["follow"]["said"]) == (FAIL, "fail (step pytest)")
+    env.clock = T0 + 300
+    assert loop.tick() == []                                        # graph2 says it runs
     keys = env.listed(sha, {"pytest:a": ["pkg/tests/test_x.py"]})
-    env.result(keys["pytest:a"], "pytest:a", "pass")
-    Path(f"{script}.verdict").write_text(json.dumps({"state": PASS, "pending": 0}))
-    for env.clock in (T0 + 600, T0 + L.FOLLOW_S):
-        assert loop.tick() == []
-    assert not [r for r in env.lines() if r["action"] in ("compare", "graph2")]
+    env.result(keys["pytest:a"], "pytest:a", graph2)
+    Path(f"{script}.verdict").write_text(json.dumps({"state": graph2, "pending": 0}))
+    env.clock = T0 + 600
+    (line,) = loop.tick()
+    assert (line["action"], line["sha"], line["members"], line["graph2"], line["check"]) == ("compare", sha, [1], graph2, FAIL)
+    assert line["why"] == {"pass": "disagree: graph2 pass, the check fail (step pytest)",
+                           "fail": "agree: graph2 and the check fail"}[graph2]
+    env.clock = T0 + L.FOLLOW_S
+    assert loop.tick() == [] and not Path(f"{script}.cancel").exists()
+
+
+def test_under_gate_check_a_candidate_dropped_while_its_check_runs_has_nothing_to_compare_and_its_graph2_check_is_cancelled(
+        env, monkeypatch):
+    """Its check hasn't ended, so its drop has no reading to compare graph2's with: graph2's check is cancelled at the drop,
+    which follows nothing."""
+    pulled: list[bool] = []
+
+    def decide(s: Snapshot) -> list:
+        return [Drop(c.sha, "a member was pulled") for c in s.candidates] if pulled else policy(s)
+
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, decide)
+    script = env.graph2_script(loop, {"state": PENDING, "pending": 1})
+    _, built, _ = loop.tick()
+    pulled.append(True)
+    (drop,) = loop.tick()
+    assert (drop["sha"], drop["cancel"], "follow" in drop) == (built["sha"], "cancelled", False)
+    assert Path(f"{script}.cancel").read_text() == f"ready:{built['sha']}\n"
+
+
+def test_under_gate_check_at_most_two_dropped_candidates_graph2_checks_are_followed_and_the_oldest_past_them_is_given_up(
+        env, monkeypatch):
+    """Three candidates land one after another while their graph2 checks run, each left running at its drop.  The tick after
+    the third's, `KEPT_MAX` (2) newer ones run beside the first's, so it is read once more, cancelled and closed `unfinished`,
+    its line naming the two; the other two run on and get their own compare lines once they end, and the first no other."""
+    loop, runs = _check(env, monkeypatch)
+    script = env.graph2_script(loop, {"state": PENDING, "pending": 1})
+    shas = []
+    for k in (1, 2, 3):
+        env.put(k, {f"{k}.txt": f"{k}\n"})
+        shas.append(sha := next(r["sha"] for r in loop.tick() if r["action"] == "build"))
+        if k == 1:
+            runs.end(env.main())                                    # later, `main`'s check is the one that landed last
+        runs.end(sha)
+        drop = loop.tick()[-1]
+        assert (drop["action"], drop["cancel"], env.main()) == ("drop", "left running, in shadow", sha)
+        assert not Path(f"{script}.cancel").exists()
+    first, second, third = shas
+    assert L.KEPT_MAX == 2
+    (line,) = loop.tick()
+    assert (line["action"], line["sha"], line["graph2"], line["cancel"], line["followed"]) == (
+        "compare", first, "unfinished", "cancelled", [third, second])
+    assert line["why"].startswith("unfinished: graph2 pending ") and line["why"].endswith(
+        "the check pass; at most 2 are followed, and newer ones are")
+    assert Path(f"{script}.cancel").read_text() == f"ready:{first}\n"
+    assert loop.tick() == []                                        # the two newer ones run on
+    for k, sha in enumerate(shas, 1):
+        keys = env.listed(sha, {"pytest:a": [f"{k}.txt"]})
+        env.result(keys["pytest:a"], "pytest:a", PASS)
+        Path(f"{script}.verdict.ready:{sha}").write_text(json.dumps({"state": PASS, "pending": 0}))
+    compared = loop.tick()
+    assert [(r["action"], r["sha"], r["why"]) for r in compared] == [
+        ("compare", sha, "agree: graph2 and the check pass") for sha in (second, third)]
+    assert loop.tick() == [] and Path(f"{script}.cancel").read_text() == f"ready:{first}\n"
+    assert [r["sha"] for r in env.lines() if r["action"] == "compare"] == [first, second, third]
 
 
 @pytest.mark.parametrize("first", ["graph2", "the check"])
