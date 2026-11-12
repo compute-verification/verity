@@ -356,24 +356,24 @@ NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_
 TRUST_UPGRADE = ("ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root' || exit 0; "
                  "sudo -n apt-get -o DPkg::Lock::Timeout=120 update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive "
                  "NEEDRESTART_MODE=l apt-get -o DPkg::Lock::Timeout=120 install -y -qq --only-upgrade ca-certificates 'libnss3*'")
-CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"   # pods/nebius/wake.py
+#: what a control pod with no door yet is sent for a wake (pods/nebius/wake.py); its gate takes `wake INSTANCE` (pods/door.py)
+CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"
 
 
 def wake_on_control(iid: str, *, run=None) -> str | None:
     """Ask the control pod to start instance `iid` (pods/nebius/wake.py there, which starts only an instance the registry names,
-    before its deadline, under a live budget line) over the ssh path `pods create` reads the budgets guard through; -> the state
+    before its deadline, under a live budget line) through the pod's door, as `pods create` reads the budgets guard; -> the state
     it was in. Refused with the pod's reason."""
-    from .pods import budgets
-    from .pods.connect import ssh_base
+    from .pods import budgets, door
 
-    host = os.environ.get("RESEARCH_GUARD_HOST") or budgets.GUARD_HOST
+    host = budgets.guard_host()
     try:
-        r = (run or subprocess.run)([*ssh_base(host), f"{CONTROL_WAKE} {shlex.quote(iid)}"], capture_output=True, text=True, timeout=180)
+        r = door.ask(["wake", iid], f"{CONTROL_WAKE} {shlex.quote(iid)}", host=host, timeout=180, run=run)
     except Exception as e:  # noqa: BLE001  (no RunPod key or API, a timeout: the pod can't be asked)
         raise Refused(f"the control pod {host} can't be reached ({type(e).__name__}: {str(e)[:200]})") from None
     if r.returncode != 0:
         why = (r.stderr or r.stdout).strip().splitlines()
-        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}")
+        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}{door.hint(host, r.stderr)}")
     return json.loads(r.stdout.strip().splitlines()[-1]).get("was")
 
 
@@ -644,13 +644,15 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any], *, n
     return out
 
 
-def knows_job_user(pkg: Path | None) -> bool:
+def knows_job_user(pkg: Path | None, namespaces: bool = False) -> bool:
     """Whether the research package that will run on the machine runs the workload as `--job-user` (one that predates it would
-    run it as the machine's own user)."""
+    run it as the machine's own user) and, with `namespaces`, allows its unit the run's `--job-namespaces` (one that predates
+    them would allow it none)."""
     if pkg is None:
         return True
     try:
-        return (Path(pkg) / "jobuser.py").is_file() and '"job_user"' in (Path(pkg) / "remote.py").read_text()
+        text = (Path(pkg) / "remote.py").read_text()
+        return (Path(pkg) / "jobuser.py").is_file() and '"job_user"' in text and (not namespaces or '"job_namespaces"' in text)
     except OSError:
         return False
 
@@ -1565,6 +1567,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             try:
                 jobuser.check_user(req["job_user"])
                 jobuser.check_run_dir(run_dir, run_id)
+                if req.get("job_namespaces"):
+                    remote["job_namespaces"] = list(jobuser.check_namespaces(req["job_namespaces"]))
             except jobuser.Refused as e:
                 raise Refused(str(e)) from None
             remote["job_user"] = req["job_user"]
@@ -1622,6 +1626,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--store-read-dir", str(request_path.parent / STORE_READ_DIR)]
     if req.get("job_user"):
         argv += ["--job-user", req["job_user"]]
+        if remote.get("job_namespaces"):
+            argv += ["--job-namespaces", ",".join(remote["job_namespaces"])]
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
@@ -1964,13 +1970,14 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None, store_read: bool = False) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = ()) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
     is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
-    (research.jobuser), and refuses the run when it can't."""
+    (research.jobuser), and refuses the run when it can't; `job_namespaces` (--job-namespaces): the namespace types its unit
+    may make."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
@@ -2033,6 +2040,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if job_user and not knows_job_user(tool_pkg):
             raise Refused(f"--job-user: the research package in {source} predates it, so the machine would run the workload as its "
                           f"own user.  Commit a tree that has it")
+        if job_namespaces and not knows_job_user(tool_pkg, namespaces=True):
+            raise Refused(f"--job-namespaces: the research package in {source} predates it, so the machine's unit would allow the "
+                          f"workload no namespace.  Commit a tree that has it")
         if gpus and not knows_gpus(tool_pkg):
             raise Refused(f"--gpus: the research package in {source} predates it, so the machine would run the workload outside the "
                           f"GPU lease.  Rebase onto a main that has it, or wrap the command in `gpu-lease {gpus} --wait --`")
@@ -2073,6 +2083,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    **({"submitted_by": by} if (by := sender()) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
+                   **({"job_namespaces": list(job_namespaces)} if job_user and job_namespaces else {}),
                    **({"gpus": gpus} if gpus else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",

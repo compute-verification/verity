@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # The device witness's host unit walk (`flock-circuit unit-walk`, `unit_ab_into`) on served proof-block types: each type
 # staged once (benchmarks/served_units/stage.py, two units), then its unit walked over WALK_SLOTS seeded slots at each
-# width (FC_UNIT_WIDE: lane groups of 64 slots a pass) on each pool size, WALK_REPS rounds, one type at a time after every
-# stage has finished. The guard: every WALK line's `same`, each width's packed words the first run's (rc 9 if not). The
-# CPU seconds a slot at width 1 are the baseline, and a wider pass's are what it buys.
+# width (FC_UNIT_WIDE: lane groups of 64 slots a pass) and each distance it asks the cache for a row ahead of reading it
+# (FC_UNIT_AHEAD, column indices; 0: never) on each pool size, WALK_REPS rounds, first with every walk mapping its own row
+# vectors, then with them kept between walks (FC_UNIT_KEEP) on the prover's small pages, then kept on huge pages, the
+# rest of the walk on the device prover's small pages, one type at a time after every stage has finished. The guard:
+# every WALK line's `same`, each walk's packed words the first run's (rc 9 if not). The CPU seconds a slot at width 1 and
+# distance 0 with no vector kept are the baseline; a wider pass's, a walk's that asks ahead and a walk's on kept vectors
+# are what each buys (`sys_s`: the seconds of them spent in the kernel).
 # Run from the verity tree (a job run from a clone of it):
 #   bash benchmarks/unit_walk/run.sh WALK_UNITS="gq:K=2048 fp8-coord:K=6144" WALK_SLOTS=2048 WALK_THREADS=16,4
 # env: WALK_UNITS="gq:K=2048" (stage.py's TYPE[:S=V,...], space-separated)  WALK_SLOTS=2048  WALK_WIDE=1,8,4,2
-#      WALK_THREADS=$(nproc),4 (pool sizes)  WALK_REPS=2
+#      WALK_AHEAD= (distances; unset: 0, then the walk's own)  WALK_THREADS=$(nproc),4 (pool sizes)  WALK_REPS=2
 # Kept in $OUT: each type's stage.json, its WALK lines (walk-N.out) and UNITPROF lines (walk-N.err), the logs; never a
 # circuit.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -42,8 +46,8 @@ rc=0
 for i in "${staged[@]}"; do
   log "walk ${UNITS[$i]}: $SLOTS slots, widths $WIDE, threads $THREADS, $REPS rounds"
   (cd "$W/u$i" && FC_UNIT_PROFILE=1 "$BIN" unit-walk --circuit circuit.txt --slots "$SLOTS" --wide "$WIDE" --threads "$THREADS" \
-    --reps "$REPS") > "$O/walk-$i.out" 2> "$O/walk-$i.err" || { log "walk ${UNITS[$i]}: rc $?"; tail -5 "$O/walk-$i.err"; rc=8; }
-  if grep -q '"same":false' "$O/walk-$i.out"; then log "walk ${UNITS[$i]}: a width's packed words are not the first run's"; rc=9; fi
+    --reps "$REPS" ${WALK_AHEAD:+--ahead "$WALK_AHEAD"}) > "$O/walk-$i.out" 2> "$O/walk-$i.err" || { log "walk ${UNITS[$i]}: rc $?"; tail -5 "$O/walk-$i.err"; rc=8; }
+  if grep -q '"same":false' "$O/walk-$i.out"; then log "walk ${UNITS[$i]}: a walk's packed words are not the first run's"; rc=9; fi
   rm -rf "$W/u$i"
 done
 log "unit-walk: done, rc $rc"

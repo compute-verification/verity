@@ -46,3 +46,42 @@ extern "C" int rt_step_host(const Tab* tabs, const uint32_t* perm, uint64_t S, u
   tree(a->did, a->T, roots.data(), out);
   return 0;
 }
+
+// History tables, as `row_table.cu`'s rt_hist_* compute them, in host memory; 0, or 1 for a malformed table or range.
+static void hist_up(const Hist& t, uint64_t* tree, uint64_t lo, uint64_t hi) {
+  for (uint32_t l = 0; l < t.depth; ++l) {
+    lo >>= 1;
+    hi >>= 1;
+    for (uint64_t j = lo; j <= hi; ++j) hist_node(t, tree, l, j);
+  }
+}
+
+extern "C" int rt_hist_init_host(const Hist* t, uint64_t* tree) {
+  if (!hist_ok(*t)) return 1;
+  for (uint64_t p = 0; p < t->cap; ++p) hist_pad_leaf(*t, p, tree + 8 * p);
+  hist_up(*t, tree, 0, t->cap - 1);
+  return 0;
+}
+
+extern "C" int rt_hist_append_host(const Hist* t, uint64_t at, uint32_t k, const uint8_t* rows, const uint64_t* hm,
+                                   const uint64_t* prefixes, uint64_t* tree, uint64_t* bcs, const uint32_t* salts) {
+  if (!hist_ok(*t) || k == 0 || at + k > t->cap) return 1;
+  uint64_t ms[16];
+  midstates(prefixes, ms);
+  for (uint32_t i = 0; i < k; ++i)
+    hist_row(*t, at + i, rows + (size_t)i * t->L, hm, ms, salts + 48 * (size_t)i, bcs + 16 * (size_t)i, tree + 8 * (at + i));
+  hist_up(*t, tree, at, at + k - 1);
+  return 0;
+}
+
+extern "C" int rt_hist_paths_host(const Hist* t, const uint64_t* tree, const uint32_t* pos, uint32_t n, uint64_t* out) {
+  if (!hist_ok(*t)) return 1;
+  for (uint32_t i = 0; i < n; ++i) {
+    if (pos[i] >= t->cap) return 1;
+    for (uint32_t l = 0; l < t->depth; ++l) {
+      const uint64_t* s = hist_sibling(*t, tree, pos[i], l);
+      for (int q = 0; q < 8; ++q) out[8 * ((size_t)i * t->depth + l) + q] = s[q];
+    }
+  }
+  return 0;
+}

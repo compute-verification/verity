@@ -64,9 +64,10 @@ uv run python verity/protocols/inference_only/rho/periods.py --bounds min-cut --
   never restated in a file (`params.sourced`). From `verity`: the monitoring periods; the output bits an accepted
   incorrect proof block injects (`step_bits`), the widest public size class of a block's outputs, a power of two from
   16 to 262,144 bits (`verity.circuits.partition_v2`); the per-window δ (`verity.protocols.spot.verifier.profile`), once
-  for a window's coins and for SPOT's sample and twice for the window's cryptography; and the reporting δs
-  the incorrect-outputs row reports at. From `verity/protocols/inference_only/nci/calibrations.json`: the calibrated policy's `K`, with
-  the least and the greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling
+  for a window's coins and for SPOT's sample and, assumed, twice for the window's cryptography (PoUW's binding and
+  knowledge soundness, neither with a bound); and the reporting δs the incorrect-outputs row reports at. From
+  `verity/protocols/inference_only/nci/calibrations.json`: the calibrated policy's `K`, with the least and the
+  greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling
   `data/reference.toml` states, and only its range is read (`params.ranges`). The census's numbers are the exception:
   `verity` takes them as parameters, so the registry reads no census. `data/` states the reference datacenter's
   machines (the count of each reference fleet of 8-GPU servers), the world's active parameters and the session
@@ -82,8 +83,8 @@ uv run python verity/protocols/inference_only/rho/periods.py --bounds min-cut --
   terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
   `security/Definitions/Nci/Remote.lean`, whose
   `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
-  min-cut bound's `alphaHE` and `shareF` and state its `HE` and `HEShared`, found through the lock, which
-  `tests/test_min_cut.py` holds `min_cut.py` to.
+  min-cut bound's `alphaHE`, `shareF` and `workHEOn` and state its `HE`, `HEShared` and `HECharged`, found through
+  the lock, which `tests/test_min_cut.py` holds `min_cut.py` to.
 
 ## The model
 
@@ -128,18 +129,51 @@ structure (`structure.train-step-v1`, SmolLM2-135M's training step) is `s_×` in
 `units.gates_per_flop` counted on the same design, where `G` no longer cancels and a gate holds `u/w = 2G / (κ s_×)` of
 the reference's weight.
 
-**The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE` and `HEShared` (`min_cut.HE`,
-`min_cut.HE_SHARED`), each function one side of an inequality they conclude or that inequality solved for one term; it
-is standard library only, so another benchmark loads it by path. A work of `N` MACs with `O` output wires needs at
+**The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE`, `HEShared` and `HECharged`
+(`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
+that inequality solved for one term; it is standard library only, so another benchmark loads it by path. `HECharged`
+is stated and no lock lists a proof of it. A work of `N` MACs with `O` output wires needs at
 least `m` blocks of at most `k` fresh input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
 under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
 
 - `min_cut.bound(c, k, n, N=…, O=…, size=…)` is the bound at a policy `(c, k, n)` on a circuit's own MACs, output
   wires and gates: the least blocks, the most MACs a block, the slowdown `m c / size` (at least 1) and what it rests
   on. `N` and `O` are the caller's: it converts no count. Defaults: `β_w` and `b` a bf16 word's 16 bits, the most (H)
-  and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)`, and no bound past their last
-  `k`; `F = 1` (`HE`: at most two of forward, input-gradient and weight-gradient products), `share(3)` for all
-  three (`HEShared`).
+  and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)` (between two rows the next
+  row's, the most the rows allow there), and no bound past their last `k`; `F = 1` (`HE`: at most two of forward,
+  input-gradient and weight-gradient products), `share(3)` for all three (`HEShared`).
+- `min_cut.bound_charged(c, k, n, blocks=…, untied=…, untied_macs=…, w=…, N=…, O=…, size=…)` is the bound over a
+  monitoring period's `blocks` blocks when at most `untied` of the words they read are untied, each at most `word`
+  fresh bits in the one block that reads it. It computes Lean's `HECharged` (`min_cut.HE_CHARGED`), the count over a
+  set of blocks with the rest charged whole: `N ≤ H + T + ½ √(S O / q) + ½ √(S T / (q b))`, `T` what all the blocks
+  read between them, `S` the squares of what the blocks that aren't charged read, summed, `O` the whole work's output
+  wires and `H` what the charged blocks hold, each at most its gates over the fewest gates of a MAC. The count is
+  taken with the untied words as inputs, so the MACs that feed them, at most `untied_macs`, are added whole. A block
+  that reads more than the threshold `w` of the untied words is charged whole; `w` is fixed before the period, and by
+  default there is none and no block is charged. `most` is the most untied words one block reads, where its caller
+  states one: below the threshold no block is charged and (H) is taken there. It gives the slowdown, the period's
+  pooled total in gates (`gates`, the most gates of the work the period's blocks hold) and its share of the blocks'
+  own, the blocks charged at most, the MACs they hold and their share of the blocks and of the MACs, and what it
+  rests on: `HECharged`, (H) at the most a block that isn't charged reads, (E), and two premises no Lean statement
+  gives, the period's bound on the untied words, a node's, and an untied word's bits. With no untied word it is
+  `bound`'s slowdown. `best_w` is the threshold at which it is largest for a block count. A node's bound on its
+  untied words is a share of one execution phase's ticket weight, so nodes faster than the measured one take its
+  bound scaled by their rate; where the untied words are then as many as the blocks, `w = 0` charges every block and
+  gives 1, and the figure states its threshold. The count holds of any partition and any set of its blocks, and the
+  caller picks neither: that the partition a period's audit reads has so few blocks over `w` is a join the guarantee
+  that reads the bound owes. `O` is wires, values times their width, and a work that reads a registered table by a
+  few fresh gates leaves the matmuls that read it out. Its three readings are quoted side by side, each under its
+  premise's name (`Charged.reading`), never one as another:
+
+  | reading | (H) is asked | fixed before the period | a block over it | the count |
+  |---|---|---|---|---|
+  | one `β_x`, with the threshold `w` | once, at `k + word · w` | `w`, quoted with the figure | charged at its whole work, the tied circuit's `c` over the fewest gates of a MAC | `HECharged` at the best set of blocks |
+  | one `β_x` at the top cap, no block charged | once, where the block that reads the most untied words reads | nothing | no block is charged | `HECharged` at every block |
+  | a `β_x` a block, no threshold (`rows=True`) | of each block at the table's row for what it reads | nothing | no block is charged | `min_cut.HE_ROWS`, which no guarantee states: `HECharged` asks (H) once |
+
+- `min_cut.capped(slowdown, uncredited)` is a slowdown beside the share of a block's work no block is credited for,
+  `1 / (uncredited + 1 / slowdown)`: the dark share of `theorem.multiple_bound`, which no count covers. A figure of
+  `bound` or `bound_charged` is quoted beside it at a stated share, never alone.
 - The class `min-cut` in `CLASSES` is `min_cut.macs_a_block` on the profile's own counted products, the trained
   weights' forward and input-gradient products: a weight value at `b_w`, an activation value at `β(k)` and at most
   `b_a`, an output at `b_a`, and `outputs_per_product` from the model's shape. It bounds the declared inference
@@ -156,7 +190,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
-| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `beta`; `bound(c, k, n, N, O, size) → Bound` |
+| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size, rows) → Charged`, `best_w`, `capped` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `verity/protocols/inference_only/nci` algorithm by its traits |
@@ -170,6 +204,25 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `operating.py` | `work`, `exfil`, `points`, `incorrect` |
 | `figures.py` | `render` |
 | `lean.py` | `status(name)`, `weakest(cites)` |
+
+## What it writes and what loads it
+
+`periods.py` prints Markdown as `run.py` does and, with `--out DIR`, writes `periods.md` and `periods.json` there.
+Neither writes a file unless told where.
+
+This package has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). A loader puts this directory on
+`sys.path` and imports `rho`, and one that needs a number of the registry reads its file under `data/` by path. Either
+way its suite names what it reads here among its `inputs`, so this lists every loader:
+
+~~~sh
+git grep -n verity/protocols/inference_only/rho -- '*pyproject.toml'
+~~~
+
+Among them, `verity/protocols/inference_only/nci` calls `theorem.multiple_bound` for its slowdown `D`, and
+`benchmarks/circuit_properties` reads a model's shapes (`instances`, `params`). In the other direction, `families.py`
+reads `verity/protocols/inference_only/nci/algorithms.json` when a family names an algorithm of that library (a family
+of kind `nci`), and `params.py` reads `verity/protocols/inference_only/nci/calibrations.json` for the calibrated
+policy's `Γ` and `K` and the range of `K`.
 
 ## Status
 

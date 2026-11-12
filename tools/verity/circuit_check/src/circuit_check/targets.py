@@ -6,7 +6,8 @@ the suite runs over, every registered Definition and template at small bindings.
                 digest its id prints, ``StepBody_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
                 (``gemm-coordinate/k2048/sm80-mma-bf16``); an attention head is checked at the ends of its key-count range
-    row         a served workload's request Program, a Build's: its directory or its ``instances.json.gz``
+    row         a served workload's request Program, a Build's: its directory or its ``instances.json.gz``, read by the
+                sidecar of the package that writes it (`request_program`)
     sidecar     ``path/to/<module>.circuit-check.py``: the module's own Definitions its bindings reach, and its templates
                 (`sidecar_targets`)
 
@@ -18,7 +19,8 @@ reaches: a new Definition needs a binding.  A binding lives beside the Definitio
 ``TEMPLATE_PARAMS`` entry (a template, or ``<template>@<name>``: some of its instances, `template_params`); a module with a
 sidecar is one the registries import (`load_registries`).  A root too large to build
 whole is listed in ``_by_calls_roots`` and checked by its calls (`by_calls`), never built.  This module keeps what no one
-Definition module owns.
+Definition module owns, and imports ``verity`` and Flock only: what it needs of another distribution (the frontend
+vocabularies' kinds, a request Program's reader) that distribution's sidecar gives it (`sidecars`).
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ import re
 import sys
 import zlib
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator, Sequence
 
 import numpy as np
 
@@ -317,6 +319,35 @@ def kind_of(spec: str) -> str:
     return "template" if head in TM.TEMPLATES else "definition"
 
 
+#: the reader of a served workload's request Program, which the sidecar of the package that writes it defines
+ROW_READER = "request_program"
+#: the reader of a struct-slots split (`structural_slots`), which the sidecar of the module that writes one defines
+SPLIT_READER = "struct_slots_split"
+
+
+def _read_by(reader: str, what: str, path: str) -> Any:
+    """``path`` read by the one binding file that defines ``reader``; refused by name when none or several do."""
+    readers = {prefix: ns[reader] for prefix, ns in binding_files() if ns is not globals() and reader in ns}
+    if len(readers) != 1:
+        raise ValueError(f"{path}: {what} is read by the one sidecar that defines `{reader}`, and "
+                         f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
+    return next(iter(readers.values()))(path)
+
+
+def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
+    """A row target's request Program, read by the one binding file that defines `ROW_READER`: the Program's view, its
+    population as `verity.definitions.word.call_groups` reads one, and its instance rows, from the first at each call
+    (`verity.definitions.cross_call.check_program`)."""
+    return _read_by(ROW_READER, "a request Program", path)
+
+
+def struct_slots_split(path: str) -> tuple[Callable[[], Any], str, dict[str, tuple[int, int]], Callable[[str], Sequence[int]]]:
+    """A struct-slots split's directory as `structural_slots` reads it, by the one binding file that defines `SPLIT_READER`:
+    its reading (which raises on a directory that holds none), the format's name, each slot table's (index width, word width),
+    and a slot table's words by its name."""
+    return _read_by(SPLIT_READER, "a struct-slots split", path)
+
+
 # --- the catalog ----------------------------------------------------------------------------------------------------------------
 
 
@@ -326,7 +357,7 @@ def kind_of(spec: str) -> str:
 BINDINGS: dict[str, set[str]] = {}
 #: the root functions that run first, in catalog order (each file's in turn, this module first); any other ``_X_roots`` a
 #: binding file defines runs after them, by name (`root_functions`).  ``_X_roots`` holds ``_X_bindings`` beside it as one
-#: binding when the file defines both
+#: binding when the file defines both (`_root_function`)
 ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_gf2k_roots",
                   "_merkle_roots", "_lms_roots", "_pous_roots", "_rec_roots", "_kernel_roots", "_vocabulary_roots",
                   "_pouw_roots")
@@ -361,10 +392,28 @@ def root_functions() -> tuple[str, ...]:
     return (*ROOT_FUNCTIONS, *sorted(more))
 
 
-def _root_bindings(name: str) -> list[tuple[tuple[str, ...], Callable[[], list[Any]]]]:
-    """(units, root function) of every binding file that defines root function ``name``."""
+def _root_function(ns: dict[str, Any], name: str, errors: list[tuple[str, str]]) -> Callable[[], list[Any]]:
+    """Binding file ``ns``'s root function ``name``.  With ``_X_bindings`` beside it, which gives each binding as (label, the
+    bound Definition, or the error), its roots are made from that: the ones that bound, each error named in ``errors``."""
     pair = name.replace("_roots", "_bindings")
-    return [(tuple(prefix + n for n in (name, pair) if n in ns), ns[name]) for prefix, ns in binding_files() if name in ns]
+    if pair not in ns:
+        return ns[name]
+
+    def bound() -> list[Any]:
+        got = ns[pair]()
+        errors.extend((label, fn) for label, fn in got if isinstance(fn, str))
+        return [fn for _label, fn in got if not isinstance(fn, str)]
+
+    return bound
+
+
+def _root_bindings(name: str, errors: list[tuple[str, str]] | None = None) -> list[tuple[tuple[str, ...], Callable[[], list[Any]]]]:
+    """(units, root function) of every binding file that defines root function ``name`` (`_root_function`: a binding that
+    doesn't bind is named in ``errors``, `ROOT_ERRORS` unless given)."""
+    pair = name.replace("_roots", "_bindings")
+    errors = ROOT_ERRORS if errors is None else errors
+    return [(tuple(prefix + n for n in (name, pair) if n in ns), _root_function(ns, name, errors))
+            for prefix, ns in binding_files() if name in ns]
 
 
 def template_params() -> dict[str, tuple[str, list[dict]]]:
@@ -523,113 +572,14 @@ def operand_probes(fn: Any) -> list[dict[str, int]]:
 ROOT_ERRORS: list[tuple[str, str]] = []
 
 
-def _served_kind_statics() -> dict[str, dict[str, Any]]:
-    """The kinds no small table binds (launch tiles and CTA sizes, collective routes, split counts, the DSA and sparse-MLA shapes; DeepSeek-V4's
-    mHC, FlashMLA, compressors, routers and Marlin MoE; the int8 attention row, whose head dim is a multiple of 32), each at a
-    binding its Definition module's sidecar already checks, so they add no task."""
-    from verity.circuits.boolean.trace import word_of
-    from verity.definitions.ops.boolean import gemm as BG
-    from verity.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
-    from verity.definitions.registry import flashmla as FM, flashmla_prefill as FP
-    from verity.definitions.registry import marlin_moe as MM
-    from verity.definitions.registry import sparse_mla as SM
-    from verity.definitions.registry import tp_allreduce as TA
-
-    hop = word_of(BG.HopperBF16WgmmaDot16)
-    mla = {k: SM.SPARSE_MLA_GLM53[k] for k in ("NH", "DR", "DV", "BN", "DOT", "INV")} | {"SM_SCALE": SM.SPARSE_MLA_GLM53["SCALE"]}
-    trees = (TA.chain(8),) * 4 + ((((0, 1), (2, 3)), ((4, 5), (6, 7))),) * 4
-    mhc = {"HC": 4, "REPEAT": 20, "EPS": 1e-6, "HC_EPS": 1e-6, "TN": 64}
-    router = {"E": 8, "SCALE": 2.5}
-    marlin = {"E": 3, "K": 256, "N": 16, "TK": 128, "TN": 8, "GRID": 5, "DOT": MM.DOT}
-    int8_row = {"D": 32, "S": 33, "SCALE": 32 ** -0.5}   # Q' K'^T steps 32 channels, so D >= 32; int8_exact's sidecar's row
-    dsv4 = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
-            "mhc_pre_broadcast": {**mhc, "H": 7168, "NS": 28}, "mhc_residual_broadcast": {"HC": 2, "H": 8},
-            "mhc_fused_post_pre": {**mhc, "H": 1024, "NS": 4, "TH": 256}, "mhc_post_pre_tf32": {**mhc, "H": 1024, "NS": 4},
-            "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},
-            "dsv4_qnorm_rope_kv_insert": DQ.DSV4_INSERT, "dsv4_compress_c4": DC.DSV4_COMPRESSOR,
-            "dsv4_compress_c128": DC.DSV4_COMPRESSOR, "dsv4_inv_rope_quant_head": {"CHUNKS": 4, "QG": 128, "ROPE": 64},
-            "flashmla_decode": {**FM.FLASHMLA_DSV4, "NH": 1, "SPLITS": (0, 1), "NW": 64},
-            "flashmla_gather_row": FP.FLASHMLA_GATHER_DSV4, "flashmla_prefill": {**FP.FLASHMLA_PREFILL_DSV4, "NH": 1, "NP": 1},
-            "silu_mul_clamp": {"I": 4, "LIMIT": 10.0}, "moe_router_hash": router, "moe_router_sqrtsoftplus": router,
-            "marlin_moe_rank": {"E": 3, "P": 30, "BM": 4}, "marlin_moe_align": {"P": 30, "BM": 4}, "marlin_moe_gemm": marlin,
-            "marlin_moe_gemm_w": marlin}
-    return {"rmsnorm_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256}, "rmsnorm_fused_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256},
-            "all_reduce_mnnvl": {"WORLD": 8, "N": 8, "SHOT": 2},
-            "all_reduce_rmsnorm_mnnvl": {"WORLD": 8, "N": 512, "SHOT": 1, "CLUSTER": 2, "EPS": 1e-5, "FMA": False},
-            "all_reduce_custom": {"WORLD": 8, "SIZE": 64, "STAGE": 2},
-            "all_reduce_multimem": {"WORLD": 8, "SIZE": 128, "TREES": trees, "FTZ": False},
-            "all_reduce_nccl_tree": {"WORLD": 4, "SIZE": 8, "CHAIN": (0, 1, 2, 3)},
-            "dsa_indexer_k_row": {"D": 128, "ROPE": 64, "EPS": 1e-6}, "dsa_indexer_q": {"H": 32, "D": 128, "ROPE": 64},
-            "dsa_latent_row": {"KVL": 512, "R": 64, "EPS": 1e-5},
-            "dsa_mqa_logits": {"N": 4, "H": 32, "D": 128},
-            "cublas_splitk_gemm": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
-            "cublas_splitk_gemm_f32out": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
-            "batched_gemm": {"B": 2, "K": 32, "N": 3, "DOT": hop},
-            "ll_bf16_dotprod": {"N": 2, "K": 256, "BS": 64, "VEC": 2, "FMA": 1},
-            "ll_bf16_splitk": {"N": 2, "K": 128, "SPLIT_K": 2, "TILE_K": 32, "WARPS": 2, "DOT": hop},
-            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla},
-            "int8_attention_row": int8_row, "int8_attention_row_table": int8_row, **dsv4}
-
-
-def _vocabulary_bindings() -> list[tuple[str, Any]]:
-    """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics, or at
-    `_served_kind_statics`' when no small table binds it: (label, the bound Definition, or the error)."""
-    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32
-    from verity_vllm import TargetProfile
-    from verity_vllm.program.frontend.rules import vocab as V
-    from verity.definitions.registry import prims as P
-
-    small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
-             "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
-             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
-             "SCALE": "shared-per-block", "S": 4, "KB": 32, "SWAP": False, "FP8_DOT": BlackwellE4m3QmmaDot32,
-             "CONSTRUCTION": "shared-greedy", "TARGET": TargetProfile.default(), "RSF": 2.5, "KERNEL": "block"}
-    wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element scale groups and 256-thread quantization
-    e4m3 = {**small, "G": 32, "DOT": BlackwellE4m3QmmaDot32}  # the MoE pair forms with FP8 scale groups: an e4m3 step, one K tile per scale group
-    act = {**small, "G": 8}                                  # the experts' fused activation quant: a scale group dividing I
-    served = _served_kind_statics()
-    vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
-    kinds = [(v.name, k, make) for v in vocabularies for k, make in v.kinds.items()]
-    kinds += [("dense", k, make) for k, make in V._dense_kinds()[0].items()]
-    out = []
-    for vocabulary, kind, make in kinds:
-        label = f"{vocabulary}/{kind}"
-        code = make.__code__
-        args = code.co_varnames[:code.co_argcount]
-        required = args[:len(args) - len(make.__defaults__ or ())]
-        optional = tuple(a for a in args[len(required):] if a in small)   # a defaulted static is bound both ways
-        for dt in (("bf16", "f32") if "DT" in args else (None,)):
-            variants = [(required, "")] + ([(required + optional, "+" + "+".join(optional))] if optional else [])
-            for names, suffix in variants:
-                fn, err = None, None
-                for table in (small, wide, e4m3, act, *([served[kind]] if kind in served else [])):
-                    try:
-                        fn = make(**{a: (dt if a == "DT" else table[a]) for a in names})
-                        _ = getattr(fn, "gates", None)
-                        break
-                    except Exception as e:  # noqa: BLE001  (retried with the next table, then named)
-                        fn, err = None, f"{type(e).__name__}: {str(e)[:160]}"
-                out.append((label + suffix, fn if fn is not None else err))
-    return out
-
-
-def _vocabulary_roots() -> list[Any]:
-    out = []
-    for label, fn in _vocabulary_bindings():
-        if isinstance(fn, str):
-            ROOT_ERRORS.append((label, fn))
-        else:
-            out.append(fn)
-    return out
-
-
 _CALLS: set[str] = set()
 #: what `is_call` decides by without the catalog: ``words`` (`word_call_families`) and ``candidates`` (`boolean_call_candidates`
 #: of them), each built once, and the candidates it was asked about that `certified_boolean_calls` names (``certified``) and
 #: doesn't (``uncertified``)
 _SHORT: dict[str, set[str]] = {}
 #: the catalog's roots, made without building a body (`binding_roots`), each part once: ``bindings`` (`_kinds_and_templates`) and
-#: ``roots`` (the registered ones, every other root function's and each model's); ``unbound``, the vocabulary kinds that made none
+#: ``roots`` (the registered ones, every other root function's and each model's); ``unbound``, the vocabulary kinds that made none,
+#: and ``vocabularies``, the binding files that bind one
 _BOUND: dict[str, list[Any]] = {}
 
 
@@ -659,29 +609,26 @@ def binding_roots() -> list[Any]:
 
 
 def _kinds_and_templates() -> list[Any]:
-    """The vocabulary kinds' Definitions (`_vocabulary_bindings`) and each template's at its instance statics, built once, each
-    under the binding units the catalog makes it under (`_produce`): whichever makes a Definition first gives it its `made_by`."""
+    """The vocabulary kinds' Definitions (the ``_vocabulary_roots`` of each binding file that binds a frontend vocabulary) and
+    each template's at its instance statics, built once, each under the binding units the catalog makes it under (`_produce`):
+    whichever makes a Definition first gives it its `made_by`."""
     if "bindings" not in _BOUND:
         load_registries()
-        units = _root_bindings("_vocabulary_roots")[0][0]
-        unbound: list[str] = []
-
-        def kinds() -> list[Any]:
-            bound = _vocabulary_bindings()
-            unbound.extend(f"{label}: {fn}" for label, fn in bound if isinstance(fn, str))
-            return [fn for _label, fn in bound if not isinstance(fn, str)]
-
-        out = _produce(units, kinds)
+        unbound: list[tuple[str, str]] = []
+        vocabularies = _root_bindings("_vocabulary_roots", unbound)
+        out = [fn for units, make in vocabularies for fn in _produce(units, make)]
         for _label, sub, sts in templates():
             out += _produce((_TEMPLATE_UNITS[sub.id],), lambda sub=sub, sts=sts: [sub.definition(**st) for st in sts])
-        _BOUND["bindings"], _BOUND["unbound"] = out, unbound
+        _BOUND["bindings"], _BOUND["unbound"] = out, [f"{label}: {err}" for label, err in unbound]
+        _BOUND["vocabularies"] = [units[0] for units, _make in vocabularies]
     return _BOUND["bindings"]
 
 
 def word_call_families() -> set[str]:
     """The word Call families of a served Program: the replay's row families (`verity.definitions.numerics.rows.ROWS`), every
     frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
-    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's."""
+    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a path no binding file
+    binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would be left out."""
     if "words" not in _SHORT:
         load_registries()
         from verity.definitions.numerics import rows
@@ -689,6 +636,10 @@ def word_call_families() -> set[str]:
         made = _kinds_and_templates()
         if _BOUND["unbound"]:
             raise RuntimeError(f"the Call families are unknown while a vocabulary kind doesn't bind: {_BOUND['unbound']}")
+        if not _BOUND["vocabularies"]:
+            raise RuntimeError("the Call families are unknown where no binding file binds a frontend vocabulary: none that "
+                               "`sidecars.discover` finds defines `_vocabulary_roots` (the frontend's package, whose sidecar "
+                               "binds it, isn't on this path)")
         _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in made}
     return _SHORT["words"]
 
@@ -701,6 +652,8 @@ def word_call_families() -> set[str]:
 CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "AllReduceMultimemVector_v1": ("AllReduceMultimem_v1",),
     "And2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
+    "AttnDotStepA_v1": ("AttnBlockFirst_v3",),
+    "AttnDotStep_v1": ("AttnBlockFirst_v3",),
     "Bf16AddF2fp_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
     "Bf16MulBf16_v2": ("AllReduceRmsNormMnnvl_v2",),
     "Bf16ToF32_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
@@ -731,16 +684,23 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "DsaWaksmanSwap_v1": ("DsaButterflyRows_v1",),
     "DsaWaksmanSwap_v2": ("DsaButterflyRows_v2",),
     "F2fpBf16_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "F32AddFtz_v3": ("AttnBlockFirst_v3",),
     "F32AddFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
     "F32Add_v3": ("RMSNormFusedCudaVector8_v4",),
     "F32Div_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32Max_v2": ("AttnBlockFirst_v3",),
+    "F32MulFtzConst_v1": ("AttnBlockFirst_v3",),
     "F32MulFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
     "F32Mul_v3": ("RMSNormFusedCudaVector8_v4",),
+    "FmaSubRowF32FtzConstElement_v1": ("AttnBlockFirst_v3",),
+    "FmaSubRowF32FtzConstScalar_v1": ("AttnBlockFirst_v3",),
+    "GuardNegInfZero_v2": ("AttnBlockFirst_v3",),
     "MhcFusedSplit_v2": ("MhcFusedPostPre_v2",),
     "MhcPreBigFuse_v2": ("MhcFusedPostPre_v2",),
     "MoeExpertFp8CoordinateW_v1": ("MoeExpertFp8GemmW_v1",),
     "MoeExpertFp8Coordinate_v1": ("MoeExpertFp8Gemm_v1",),
     "MoeExpertFp8ScaleRow_v1": ("MoeExpertFp8GemmW_v1", "MoeExpertFp8Gemm_v1"),
+    "MufuEx2Ftz_v2": ("AttnBlockFirst_v3",),
     "MufuRcpFtz_v2": ("AllReduceRmsNormMnnvl_v2",),
     "Not_v1": ("DsaRadixTies_v1", "MhcFusedSplit_v2"),
     "RMSNormPairSumCuda_v2": ("RMSNormFusedCudaVector8_v4",),
@@ -1072,13 +1032,14 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     load_registries()
     mod = next((m for m, files in SC.discover().items() if files.get("py") == p), None)
     if mod is None:
-        raise ValueError(f"{path}: no sidecar of a module under `sidecars.PACKAGES` (`sidecars.discover`)")
+        raise ValueError(f"{path}: no sidecar `sidecars.discover` finds (of a module of `sidecars.packages`)")
     ns = vars(dict(SC.binding_modules())[mod])
     prefix = f"{ns['__name__']}#"
     names = sorted(_root_names(ns), key=lambda n: (n not in ROOT_FUNCTIONS, ROOT_FUNCTIONS.index(n) if n in ROOT_FUNCTIONS else 0, n))
     by_unit: list = []
     for name in names:
-        _produce(tuple(prefix + n for n in (name, name.replace("_roots", "_bindings")) if n in ns), ns[name], by_unit)
+        _produce(tuple(prefix + n for n in (name, name.replace("_roots", "_bindings")) if n in ns),
+                 _root_function(ns, name, ROOT_ERRORS), by_unit)
     for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
         _produce((f"{prefix}_model_roots:{label}",), lambda make=make: [(lambda fn: (fn.body, fn)[1])(make())], by_unit)
     reached = reachable(r for _units, roots in by_unit for r in roots)
@@ -1104,8 +1065,8 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
 
 
 __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
-           "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
+           "ROOT_FUNCTIONS", "ROW_READER", "SPLIT_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
            "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
-           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
+           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "struct_slots_split", "subcircuit", "suite",
            "table_probe", "template_of", "template_params", "templates", "word_call_families"]

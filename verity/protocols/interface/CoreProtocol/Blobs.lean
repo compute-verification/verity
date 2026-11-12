@@ -16,7 +16,7 @@ A protocol without blobs needs none of this: `Protocol` and `Protocol.answer` ar
 module
 
 public import CoreProtocol.Cli
-public import Flock.Hash
+public import Base.Hash
 
 @[expose] public section
 set_option backward.privateInPublic true

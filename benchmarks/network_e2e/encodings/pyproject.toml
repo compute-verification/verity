@@ -1,12 +1,15 @@
 # The advice's encodings (network certification for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the certifier's
 # CacheStep_v1 against derived's prefix rules, and its difftest vectors; `cache_pool_vectors.py`: CacheStep_v2 against
-# the replay's block pool (`replay.BlockPool`), and its difftest vectors; `compile_slice_pool.py`: CompileSlice_v2's pool
-# calls against `BlockPool` over whole traces; `arith_vectors.py`: the certifier's arithmetic
-# encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from vLLM's own scheduler, which the tests read
-# as fixtures (it needs vLLM). Those fixtures (`tests/fixtures/`) and the certifier's vectors these modules write are
-# fetched fixtures (`fixtures/artifacts.json`), which `suites.py` fetches before the suites that read them; one a module
-# rewrote is registered there again. Not a package: the modules load by path (the directory's name shadows the stdlib's
+# the advice decoder's block pool (`verity_vllm.pipeline.advice_code.pool.BlockPool`), and its difftest vectors;
+# `compile_slice_pool.py`: CompileSlice_v2's pool calls against `BlockPool` over whole traces; `arith_vectors.py`: the
+# certifier's arithmetic encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from vLLM's own
+# scheduler, which the tests read as fixtures (it needs vLLM); `pool_row_trace.py`: vLLM's own block pool, driven by the
+# replay's over whole traces, and the carried pool's row the vLLM integration exports from it; `pool_cut.py`: a trace
+# cut at every window edge, where vLLM's pool, the replay's and CompileSlice_v6's window agree on the carried row.
+# Those fixtures (`tests/fixtures/`) and the certifier's
+# vectors these modules write are fetched fixtures (`fixtures/artifacts.json`), which `suites.py` fetches before the
+# suites that read them; one a module rewrote is registered there again. Not a package: the modules load by path (the directory's name shadows the stdlib's
 # `encodings`), and they run here as a suite (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -28,6 +31,9 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/spot/verifier/one_stage/partition.py",
           "verity/protocols/spot/verifier/one_stage/produced.py",
           "verity/protocols/spot/verifier/one_stage/registered.py",
+          # test_pool_row and test_pool_cut export the carried pool's row with the integration's exporter
+          # (`engine.pool_row`), which refuses with the integration's `Refused`
+          "adapters/vllm/verity_vllm/engine/pool_row.py", "adapters/vllm/verity_vllm/errors.py",
           # test_tick serves the replay's scheduler behind the vLLM integration's certified-tick gate (`serve_admit`)
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
           "adapters/vllm/verity_vllm/pipeline/serve_admit.py", "adapters/vllm/verity_vllm/engine/__init__.py",

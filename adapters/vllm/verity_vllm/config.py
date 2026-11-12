@@ -179,10 +179,6 @@ class RowId:
                           f"o{self.max_output}", self.arrivals, self.sampling, self.execution))
 
 
-#: A row id inside text (a workload path, a log line): ten ``__``-separated fields, the four integer ones by their prefix.
-ROW_ID_PATTERN = r"[\w\-]+__[\w\-]+__[\w\-]+__tp\d+__b\d+__i\d+__o\d+__\w+__\w+__[\w\-]+"
-
-
 def row_tokens(row: str) -> list[str]:
     """A row id's ``__``-separated fields as written, unvalidated (`RowId.parse` validates them)."""
     return row.split("__")
@@ -693,10 +689,6 @@ class CommitConfig:
                                      help="extra Commit flags appended after --program-digest, verbatim")
     replay_args: str | None = option("--replay-args", env="REPLAY_ARGS", default=None, help="extra replay flags, verbatim")
     replay_workers: int = option("--replay-workers", env="REPLAY_WORKERS", type=int, default=32, help="TP: replay workers")
-    hot_engine: str = option("--hot-engine", env="HOT_ENGINE", default="0", help="1 = run the Commit on the pod's hot worker")
-    group: str = option("--commit-group", env="COMMIT_GROUP", default="", metavar="MEMBERS_JSON",
-                        help="config run: the rows of one engine (this row included) committed in one process under one GPU lease, and "
-                             "replayed by this row's replay stage (verity_vllm.pipeline.row_group)")
     commit_timeout: int | None = option("--commit-timeout", env="COMMIT_TIMEOUT", type=int, default=None,
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
@@ -755,8 +747,6 @@ class RunEnv:
     hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
     norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
     router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
-    hot_root: str = option("--hot-root", env="HOT_ROOT")
-    hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
     verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
