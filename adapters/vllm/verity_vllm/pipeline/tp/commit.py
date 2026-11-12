@@ -43,6 +43,7 @@ from verity_vllm.check.component_programs import post_load_tensors
 from verity_vllm.commit import step_rows
 from verity_vllm.config import UsageError, group, option, workload_arg
 from verity_vllm.engine import served as SV
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
@@ -54,6 +55,9 @@ from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
 from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
+from verity_vllm.records.schema_ids import LATE_READ_CHECK_SCHEMA
+
+logger = init_logger(__name__)
 
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:
@@ -113,7 +117,8 @@ def build_program_digest(d: str | None) -> tuple[str | None, str | None]:
             return components_fold_digest(json.loads(c.read_text())["program"]["digest"] for c in comps), kind
         kind = "request Program"
         return json.loads((P / "result.json").read_text())["program"]["digest"], kind
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[tp2commit] the Build's record under %s is unreadable (read as %s): %r", d, kind or "a workload Program", e)
         return None, kind
 
 
@@ -737,7 +742,7 @@ def main(args: Options) -> int:
         t64 = {int(v["rank"]): (v.get("t6_4") or {"result": False, "error": "no t6_4 in the rank's value-check result"}) for v in vres}
         # aggregate: True only when every rank is True; None (not applicable) when every rank recorded applicable False (dense TP row); else False
         t64_all_na = bool(t64) and all(v.get("applicable") is False and v.get("result") is None for v in t64.values())
-        (out / "t6_4_check.json").write_text(json.dumps({"schema": "verity/commit-integ/t6_4-check/v1", "tp": args.tp, "per_rank": t64,
+        (out / "t6_4_check.json").write_text(json.dumps({"schema": LATE_READ_CHECK_SCHEMA, "tp": args.tp, "per_rank": t64,
                                                            "applicable": (not t64_all_na),
                                                            "result": (None if t64_all_na else bool(len(t64) == world and all(v.get("result") is True for v in t64.values()))),
                                                            "layers_compared": sum(int(v.get("layers_compared") or 0) for v in t64.values()),

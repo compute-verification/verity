@@ -179,7 +179,6 @@
     {"file": "verity_vllm/pipeline/timeline.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/timeline/v1"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-sweep/tp-sampled-replay/v1"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-sweep/tp-weights-pin/v1"},
-    {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity/commit-integ/t6_4-check/v1"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity/commit-integ/value-check-tp/v1"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity/tp2/xrank-collectives-fold/v1"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity/tp2/xrank-collectives/v1"},

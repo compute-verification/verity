@@ -7,6 +7,7 @@ CPU-only: `tp.commit.main` over a stand-in LLM of two ranks, which stops the Com
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -314,7 +315,8 @@ def test_a_rank_s_program_digest_is_read_from_its_build_by_the_kind_of_row(tmp_p
 @pytest.mark.parametrize("record,kind", [(None, "request Program"), ("{not json", "request Program"), ("[]", "request Program"),
                                          ('{"program": {}}', "request Program"), ('{"program": null}', "request Program")],
                          ids=["absent", "not JSON", "a list", "no digest", "no Program"])
-def test_an_unreadable_build_record_answers_no_digest_and_the_kind_it_was_read_as(tmp_path, record, kind):
+def test_an_unreadable_build_record_answers_no_digest_and_the_kind_it_was_read_as(tmp_path, caplog, record, kind):
+    """Each time the driver's log says which dir, what it was read as and the error; with no Build dir there is nothing to say."""
     d = tmp_path / "build"
     d.mkdir()
     if record is not None:
@@ -326,3 +328,9 @@ def test_an_unreadable_build_record_answers_no_digest_and_the_kind_it_was_read_a
     (d / "build_request_LP0_T2").mkdir()
     (d / "build_request_LP0_T2" / "result.json").write_text('{"program": {}}')
     assert TPCM.build_program_digest(str(d)) == (None, "components-fold of 1 request Programs")
+    assert TPCM.build_program_digest(None) == (None, None)
+    said = [r.getMessage() for r in caplog.records if r.name == TPCM.__name__ and r.levelno == logging.WARNING]
+    start = f"[tp2commit] the Build's record under {d} is unreadable (read as "
+    assert [m[len(start):].split("): ")[0] for m in said if m.startswith(start)] == [
+        kind, "a workload Program", "components-fold of 1 request Programs"]
+    assert len(said) == 3 and "JSONDecodeError" in said[1] and said[2].endswith("KeyError('digest')")
