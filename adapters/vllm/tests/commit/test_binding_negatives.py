@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+from typing import Any
 
 import pytest
 
@@ -99,8 +100,30 @@ def lookup(ref):
     return lambda e: ref.get(f"{e['identity']['step']}|{e['name']}|{e['identity']['invocation']}")
 
 
+def value_correspondence(openings: list, entries: list[dict[str, Any] | None], reference, *, chunk: int) -> dict[str, Any]:
+    """For each (opening, map entry): the opened chunk bytes must equal the PRODUCER's bytes for that identity.  `reference(entry)` returns
+    the bytes the producer wrote for that (step, name, invocation), or None (not checkable).
+    Openings can verify against the root and still fail here (late read after overwrite; relabelled occurrence)."""
+    bad = []
+    checked = 0
+    for o, e in zip(openings, entries, strict=True):
+        if e is None:
+            bad.append({"step": o.step, "index": o.index, "why": "no binding"})
+            continue
+        ref = reference(e)
+        if ref is None:
+            continue
+        checked += 1
+        start = o.index * chunk - e["stream_offset"]
+        want = ref[max(start, 0):max(start, 0) + len(o.value)] if start >= 0 else ref[:len(o.value) + start]
+        got = o.value[:len(want)] if start >= 0 else o.value[-start:]
+        if got[:len(want)] != want:
+            bad.append({"step": o.step, "index": o.index, "name": e["name"], "why": "opened bytes != producer bytes"})
+    return {"ok": not bad, "checked": checked, "bad_n": len(bad), "bad": bad[:8]}
+
+
 def correspondence(ops, bound, ref) -> dict:
-    return B.value_correspondence(ops, [e for _, e, _ in bound], lookup(ref), chunk=CHUNK)
+    return value_correspondence(ops, [e for _, e, _ in bound], lookup(ref), chunk=CHUNK)
 
 
 # ---------------------------------------------------------------------- positive
@@ -148,7 +171,7 @@ def test_map_leaves_are_the_committers_leaves():
     pop = list(B.expected_population(structure(), workload()))
     picks, bound, unbound, ops = open_population(c, run, bmap, pop)
     assert not unbound and all(c.verify(run, o) for o in ops)
-    vc = B.value_correspondence(ops, [e for _, e, _ in bound], lookup(reference(stream)), chunk=rows)
+    vc = value_correspondence(ops, [e for _, e, _ in bound], lookup(reference(stream)), chunk=rows)
     assert vc["ok"] and vc["checked"] == len(ops), vc
     with pytest.raises(ValueError, match=f"{rows}-byte leaves"):
         B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=256)
@@ -279,7 +302,7 @@ def test_late_read_verifies_but_fails_correspondence():
     e = B.map_index(bmap)[("r0", 1, 0, "model.layers.0.self_attn.qkv_proj", "0", 0)][0]
     ops = c.open([(1, e["leaf_lo"] + 1)])
     assert all(c.verify(run, o) for o in ops), "openings verify against the committed root"
-    vc = B.value_correspondence(ops, [e], lookup(reference(stream)), chunk=CHUNK)
+    vc = value_correspondence(ops, [e], lookup(reference(stream)), chunk=CHUNK)
     assert not vc["ok"] and vc["bad"][0]["why"] == "opened bytes != producer bytes"
 
 
@@ -300,7 +323,7 @@ def test_relabelled_occurrence_is_rejected():
     ops = c.open([(2, ea["leaf_lo"]), (2, eb["leaf_lo"])])
     assert all(c.verify(run, o) for o in ops)
     ref = reference(stream)
-    vc = B.value_correspondence(ops, [ea, eb], lookup(ref), chunk=CHUNK)
+    vc = value_correspondence(ops, [ea, eb], lookup(ref), chunk=CHUNK)
     assert not vc["ok"] and vc["bad_n"] == 2
 
 
