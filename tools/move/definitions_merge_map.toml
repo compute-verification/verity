@@ -6,7 +6,8 @@
 #   files, but for `targets/`, which lands whole in a directory of its own: a directory row would record in research's
 #   `moves.json` that each dropped `__init__.py` moved, and would read a path into either directory as moved whole.
 # - Each Python unit keeps its name; `tests/test_boundaries.py` lists the new places beside the old ones.
-# Nothing is edited, and no file is added. The format is `layout_map.toml`'s. It runs after `definitions_kept_map.toml`.
+# Nothing is edited, and no file is added. The format is `layout_map.toml`'s. It needs no other map;
+# `definitions_served_map.toml` runs after it.
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
