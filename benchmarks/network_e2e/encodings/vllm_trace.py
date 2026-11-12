@@ -154,7 +154,7 @@ def header(sched: Any, engine: Engine) -> dict[str, Any]:
 
 def kept_drafts(seed: int, request: str, j: int, d: int, accept: float) -> int:
     """How many of the d drafts after output j of `request` the fake executor keeps: the drafts before the first one
-    rejected, each kept with probability `accept`, drawn from the seed, the request and j alone."""
+    rejected, each kept with probability `accept`, a function of the seed, the request and j alone."""
     rng = random.Random(f"{seed}:{request}:{j}")
     k = 0
     while k < d and rng.random() < accept:
