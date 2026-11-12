@@ -14,6 +14,9 @@ inputs = [
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/nsys.py",
     "benchmarks/harness/verity_bench/overhead.py",
+    # overhead.paired calls the kit's, which reads its settings
+    "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/settings.py",
     "benchmarks/harness/verity_bench/overhead_node.py",
     "verity/configuration/config/verity_config",
     "verity/__init__.py",
