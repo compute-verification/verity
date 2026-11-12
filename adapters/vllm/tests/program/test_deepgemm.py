@@ -342,6 +342,7 @@ def test_boolean_versions_agree_with_their_word_views(target) -> None:
         assert not bad.size, f"{target.id}: {bad.size} of {len(r)} instances differ from {word.id}, first {bad[:5]}"
 
 
+@pytest.mark.slow
 def test_flashinfer_group_on_bits_at_its_guards() -> None:
     rng = np.random.default_rng(7)
     rows = np.stack(_guard_rows(rng, 128))

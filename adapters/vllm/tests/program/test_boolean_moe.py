@@ -423,7 +423,7 @@ def test_the_sigmoid_routers_word_views() -> None:
 
 
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
-@pytest.mark.parametrize("E_, TOPK", [(8, 2), (16, 8)])
+@pytest.mark.parametrize("E_, TOPK", [(8, 2), pytest.param(16, 8, marks=pytest.mark.slow)])
 def test_the_router_slots_are_the_routers_words(kernel, E_, TOPK) -> None:
     """`MoeRouterSigmoidBiasSlots_v1` returns `MoeRouterSigmoidBias_v1`'s words in its order, slot k's weight and id each a field
     (a row of a unit) of its own."""
