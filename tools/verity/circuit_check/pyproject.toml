@@ -31,6 +31,7 @@ markers = [
 untraced = [
     "tests/test_ambient.py",
     "tests/test_cache.py",
+    "tests/test_cache_expiry.py",
     "tests/test_cache_imports_and_moves.py",
     "tests/test_cache_redteam.py",
     "tests/test_circuit_check.py",
