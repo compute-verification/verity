@@ -175,7 +175,7 @@ def test_main_refuses(stage, monkeypatch, tmp_path, argv, why):
     assert not (tmp_path / "stage.json").exists()
 
 
-#: the 18 types that were `Q_word` classes of a word Definition (CIR-259)
+#: the 18 types that were `Q_word` classes of a word Definition
 RETIRED = {"moe-gemmw", "moe-chunk", "moe-w13", "dsa-krow", "dsa-logits", "moe-sum", "silu-mul", "rope", "dsa-topk", "s8-linear",
            "router", "dsa-q", "rmsnorm-cuda", "sparse-mla-head", "token-select", "moe-w2", "rmsnorm-triton", "silu-quant"}
 
