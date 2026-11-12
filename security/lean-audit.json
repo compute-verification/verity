@@ -55149,7 +55149,7 @@
    }
   },
   "Proofs.Flock.SpotFlock.Code": {
-   "digest": "897a45dfefd13192bc109e939ce9f8680f6a20acc034399cfb5a90a81550ceff",
+   "digest": "3dca8d7e60a1ea95c34d289b807ba92dc752db210a33c00af5c1559e810291ba",
    "definitions": {
     "SpotFlock.Held": "752da4fd16134fe305d3c8402bf285a4f877ff82832b30340794c9f7d714cd26",
     "SpotFlock.Held.desc": "179ec1b9ad7cfb7bfd8265185f8315714cfe6b49683a24609ffc144bb14a3721",
@@ -55205,7 +55205,7 @@
     "SpotFlock.pinOk": "311809c0c1000e96088c5a5b0f982d80cf6b44f336144e6560e5d197f51e23dc",
     "SpotFlock.portEntry": "8e70e04aca151905ef7296a9552235cfde54ce861361ad568b61f53daaf71605",
     "SpotFlock.portRoots": "682f6a6839c7f88c9456dd086611a01f679a49eabab61336f8b58ec8d63b77bb",
-    "SpotFlock.readsOk": "bb1a0907bce78426e600bf0549e1014cd8cbd7618bbf457b29660a19d34b8be1",
+    "SpotFlock.readsOk": "d19559d5d9db8f154a4ce3403a38f594e85977077cc504ded9aee6aeb851e92f",
     "SpotFlock.refRegisteredOf": "dd1111313e33df4818c34abc9684d7e88ce33ce5e0f7e7f6465d61c0d1c5526e",
     "SpotFlock.refsOf": "4e604e14eaac42ce51ad16a692e54ee9ab172e577a5731bd8616733feab79b41",
     "SpotFlock.refusedSeen": "024f7609fe61f1400dd1372c8df182cfc088b47ae58be4dc5c2cd1a63cc8cb28",
@@ -57536,7 +57536,7 @@
    }
   },
   "Spot.SecondStage": {
-   "digest": "9ee154f97be1547974c9608eff705b115838ec94859368a607b6002fe39806fd",
+   "digest": "a27e1b8b2f3f95515a525ff65982250acd92a6a153922dd6c90f62d30c26a6de",
    "definitions": {
     "Spot.SecondStage.Checked": "52526db3f80591213b39931dabf9b672031fd8cc237edb85b12d063b24b0b158",
     "Spot.SecondStage.Checked.draw": "b3d2c49ff050a3b47ddab2d926e49b54f309985a6de1dff50317aa835fe9e9a0",
@@ -57614,6 +57614,7 @@
     "Spot.SecondStage.linkOf": "cf4e927a484861a5af19485d51622fc8eb79ae84677cdd17c848d7b426b36421",
     "Spot.SecondStage.linkedRead": "dd53173112066294bd5c5c0dde2e8e002fef76d2ec4851106617ca709a803a8c",
     "Spot.SecondStage.linkedRow": "48c7152e99abc0afdb304742aa484b114ae7190608cf6569cd617b4674791627",
+    "Spot.SecondStage.namesOk": "bb9abddcc549344e5233e2e2ce22e716f1b4fa7cb3a55621d60cfcd76d8024cf",
     "Spot.SecondStage.ownDraw": "984a1fc095e7d9a818cbad2928a5b49962bcd52f5467f70a4b2a8279c1c7c983",
     "Spot.SecondStage.placedOk": "a80967e6b78d683089d476363e894e8f4d84606d6e6a2ec2b6d72d81fe6c2a78",
     "Spot.SecondStage.populationOk": "b1156e615d46a066ddbd7823eafc0f7888835a3d9b54df0fbb4516b9e44f252f",
