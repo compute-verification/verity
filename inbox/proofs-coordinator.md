@@ -81370,3 +81370,66 @@ Mailbox read: 29 sections, the last 09:23Z, read at 09:30Z.
 - So when #9112 is on `main` I launch that command through `research run` at `main`, check it with the bench's reader, then label. Until then `verity bench exfiltration` prints `d670`'s 14,228.6, which `main`'s driver no longer gives. Say if you want it made another way.
 
 **Next in this turn:** `designs.json` put again with `main`'s limits as `first_limit_main` and the old one labelled superseded; then #9185's ready line when `r20261112-090213-b15c` is read (in its slot since 09:06Z; about 09:48Z).
+
+## HEADSPLIT, Thu 12 Nov 09:34Z: READY LINE: #9087 at `0cb0d8dbb679` is ready for your mark. Every run at that head ended with exit 0; `main` `33faab2be81c` merges with no stop, so the queue's merge stands; the five stops against lean's branch are `main`'s own; I have not marked it. One thing I found and put right in the body before writing this: the driver's figures were of an older commit, and read 1.5% higher at this head
+
+**The line.** #9087 (CIR-241), head `0cb0d8dbb679`: ready for your mark. [derived: from the rows below]
+
+**Head.** `0cb0d8dbb679` is the merge of `main` `bcaf58a45d53` into `7e45b9061c0e`. [read] My checkout, the branch on the remote and the pull request's head are that commit, and the tree is clean. [run: 09:33Z] The pull request carries no label. [run: `gh pr view`, 09:33Z]
+
+**Checks at that head, each exit 0.** [run: each run's own output, fetched and read]
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-073510-50d2` | the suites the change touches, against `bcaf58a45d53`, without slow tests except in eight test modules the change reaches, which run whole | 58 suites, 58 passed, 2 of them from the cache, 0 failed; 115.0 min of test time |
+| `r20261112-073540-3c5b` | circuit-check of the four sparse-attention sidecars | 52 targets, 0 failures, 25 warnings that never fail on 24 Definitions; every target checked, none reused |
+| `r20261112-073613-4294` | the one-stage audit on CPUs with scores and values units, the stand-in's smallest configuration, a local challenger's coins | accepted; 24 of 24 verdicts on 8 sampled proof blocks; 19 of 19 tampered windows refused; 8 min 43 s; 12.4 GB of peak resident memory |
+| `r20261112-073639-12f8` | the same audit with whole key blocks, the path that reads the line #9123 renamed (`TS.BITS_PER_CHUNK`) | accepted; 15 of 15 verdicts on 5 sampled proof blocks; 19 of 19 tampered windows refused; 1 h 11 min 7 s; 12.5 GB |
+
+- In the suites run: the vLLM suite 14,271 passed and 420 skipped; `verity/definitions` 856; `benchmarks/one_stage` 560; the repository's 337; `benchmarks/spot_figures` 219; `benchmarks/sampling_plan` 52. [run]
+- The eight modules run whole: `test_served_unit_rows.py` (the statements' pin), `test_serving_rows_chains.py`, `test_serving_rows_splits.py`, `test_zk_partition_names.py`, `test_block_census.py`, `test_figures.py`, `test_total_cost.py` and `test_sparse_mla_head_units.py`. [run]
+- The two audits' samples differ, so their two times are not a measured speed-up. [read]
+- Not repeated at this head: the description sizes' update (`r20261112-053353-392e`) and the planner's card's rebuild (`r20261112-053427-652b`), both at `37bb346c88`. [read] `main` from `d6075b75d289` to `bcaf58a45d53` changes none of their files, and their tests are among the suites above. [run: my 08:00Z entry's item 3]
+- Nothing ran on the served engine: no GLM-5.3 run served these units. [read]
+
+**The cost figures in the body: what I found at 09:03Z, and what I did.** I had not rerun the cost model after the merge of `main` `d6075b75d289` (`37bb346c88`, 05:28Z), and that merge brought `main`'s changes to the cost model's own files: the serving cost's parts (#9059) and the driver's `--steady` option (#9089). [run: `git diff b1217c59fd HEAD -- benchmarks/spot_figures/`] The body's figures were all of `b1217c59fd`. [read] So I ran each of them again at `0cb0d8dbb679`: [run]
+
+| Run at `0cb0d8dbb679` | What | Against the body's figures |
+|---|---|---|
+| `r20261112-090421-226b` | the cost model's lines at the three budgets, for this partition card and for whole key blocks (the job behind the body's first table) | 486 rows each; every bound and every share equal to the run at `b1217c59fd`; only each line's total moves, by 0.08 points of compute. The first table stands as written |
+| `r20261112-091117-88b4` | the driver's own command, its three rows over the world's year | 14,438.4, 8,814.3 and 2,483.6 GB, where the body had 14,228.6 and 8,686.3 for the first two: 1.5% more |
+| `r20261112-090552-eb6c` | the scratch wrapper, the 128k workload, units of 64 and of 128 columns | 8,052.2 and 8,654.1 GB for the first row, 2,439.3 and 2,986.2 GB for the second: each 1.5% more, each percentage the same (−44.2%, −40.1%, −72.3%, −66.1%) |
+| `r20261112-091145-b348` | the scratch wrapper without the 128k workload | 7,838.9 → 6,958.4 GB (−11%) and 2,140.9 → 1,283.5 GB (−40%): each 1.5% more, each percentage the same |
+| `r20261112-091257-2a33`, at `main` `19fb19a21e40` | the driver's own command on `main` | the same three figures as at my head |
+
+- The cause is `main`'s, not this change's: the serving cost in the driver's rows is 4.42% of compute where it was 4.34%, which leaves less of the driver's 10% to the replays and proofs. [run: the rows' own parts, before and after] The serving-cost card's figure for this configuration went from 2.04% to 2.12%. [read: the card at the two commits]
+- The key blocks' shares of the proving are as before: 52.3%, 86.9%, 12.5%, 48.5%. [run]
+- The first table is untouched because its budgets are the replays and proofs alone, outside the serving cost. [read: `total_cost.py`'s docstring; run: `226b`]
+- What I changed in the body (two edits, 09:24Z and 09:32Z, each read back equal): the driver's table and its sentence stay as they were and are now labelled "of `b1217c59fd`", with one bullet under them that gives every figure at this head, its runs and the cause; and one bullet under "What was run" for `226b`. [run] No figure of the table was replaced. [run: the diff of the body is those two bullets]
+- **One thing about `main` that is not mine to fix:** `verity bench exfiltration` still prints 14,229 GB at this head, because it reads a labelled run of 11 Nov (`r20261111-052546-d670`), while the driver it stands for computes 14,438.4 GB on `main` today. [run: the command at `0cb0d8dbb679`, 09:22Z to 09:25Z; `2a33`] The command's figure and the driver's have differed since #9059 landed. [derived] Whoever owns the labelled run would make a new one; I name no owner. [guess]
+- The break-even multiples in the body (5.5 and 5.9 times, 4.8 and 5.2 times) are from the full command at `b1217c59fd` and I have not rerun it; they are read off the same bounds, which did not move. [read; derived]
+
+**The circuit-check report is in the body.** Under "What was run": the report at `7d32f20548` (`r20261111-191338-2322`), at `7e45b9061c` (`r20261112-054456-59f3`) and at `0cb0d8dbb6` (`r20261112-073540-3c5b`), each 52 targets and 0 failures with the warnings named. [read: the body as read back at 09:32Z]
+
+**The body otherwise.** Four edits since my 08:00Z entry (08:48Z, 09:00Z, 09:24Z, 09:32Z), each read back equal to what I sent. [run] The four checks above are under "What was run", with the merge's two resolutions. [read] "Not in this pull request yet" holds three things: the statements' pin against #9075, Lean's certificate of the lines' designs (not run, not planned while the line is not a bound), and the bounds against proof overhead (written by the runs, none read into the body). [read] It ends `Refs CIR-241` and names PRF-576 nowhere. [run]
+
+**merge-tree against `main`.** `main` was `33faab2be81c` at 09:33Z; `1a3eadc9c5b4` and `19fb19a21e40` are behind it. [run] `git merge-tree --write-tree --name-only origin/main HEAD` exits 0 and names no file. [run] So I merged nothing and reran nothing: the queue's merge stands. [derived] One file is changed on both sides since `bcaf58a45d53`, `benchmarks/spot_figures/README.md`, and it merges by itself. [run]
+
+**merge-tree against lean's branch** (`cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`, 09:33Z). It stops on five files, and all five are `main`'s own, not #9087's. [run] The evidence: lean's branch stops on each of the five against `main` `33faab2be81c` alone, among 23 files there; #9087 changes none of the five; and against #9087's head before the merge of `main` (`7e45b9061c0e`) lean's branch merged with no stop at 07:37Z. [run] I changed nothing to avoid them, as you ruled. [read] The five:
+
+- `adapters/vllm/tests/dead_code_keep.json`
+- `adapters/vllm/verity_vllm/pipeline/serve_commit.py`
+- `benchmarks/one_stage/a5.py`
+- `benchmarks/one_stage/tests/test_a5_wiring.py`
+- `verity/protocols/poub/verifier/PROTOCOL.md`
+
+**Two things for your read before the mark.**
+
+- #9075 is open at `2cac0a17e724` with no label, and it meets #9087 in four files, each one a command writes: the statements' pin (`test_served_unit_rows.py`), the description sizes' file and its list, and the planner's card. [run: `git merge-tree` of its head against mine, 09:33Z] By your ruling whichever of the two lands second regenerates them. [read]
+- The vLLM lane's yes was given at `65ecd910b07a`. [read] Since then, in its files: `6803fbe8c6` and `7f95cacd29` (its lead's two requests), `ad1a12c8cf` (the description sizes' file and its list), and the merge's three phrases in the docstring of `chunk_rows.reads`, worded by circuits on CIR-241 and placed as you confirmed at 08:27Z. [read]
+
+**Row 15's three lines** are in my 08:47Z entry (`5c4cbd13f6f7`), above this one. [run]
+
+**Mailboxes.** Both files read at 09:33Z: nothing newer than 07:40Z and 05:31Z. [run]
+
+**Next.** PRF-576 is mine now and not started; it lands after the census of record's workload card (PRF-577, on #9112, open at `366a6ece9985`). [read; run: `gh pr view`, 09:33Z]
