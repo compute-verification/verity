@@ -3115,7 +3115,6 @@
     {"file": "benchmarks/pouw/gpu_kit/bench.cuh", "count": 1},
     {"file": "benchmarks/pouw/h1_lanes/j10r.py", "count": 4},
     {"file": "benchmarks/pouw/h1_lanes/job.sh", "count": 2},
-    {"file": "benchmarks/pouw/h1_lanes/run.py", "count": 4},
     {"file": "benchmarks/pouw/h1_lanes/served.py", "count": 22},
     {"file": "benchmarks/pouw/h1_lanes/served.sh", "count": 71},
     {"file": "benchmarks/pouw/h1_prove/drawn.py", "count": 10},
@@ -3125,7 +3124,6 @@
     {"file": "benchmarks/pouw/h1_prove/layer.py", "count": 2},
     {"file": "benchmarks/pouw/h1_prove/live.py", "count": 18},
     {"file": "benchmarks/pouw/h1_prove/live.sh", "count": 21},
-    {"file": "benchmarks/pouw/h1_prove/run.py", "count": 46},
     {"file": "benchmarks/pouw/h1_prove/served.py", "count": 18},
     {"file": "benchmarks/pouw/h1_prove/served.sh", "count": 7},
     {"file": "benchmarks/pouw/harness/native.py", "count": 1},
@@ -5457,6 +5455,8 @@
     {"file": "benchmarks/network_e2e/encodings/by_class.py", "count": 7},
     {"file": "benchmarks/network_e2e/encodings/tests/test_by_class.py", "count": 18},
     {"file": "benchmarks/machine_model/verity_machine_model/lean_headline.py", "count": 7},
-    {"file": "benchmarks/machine_model/verity_machine_model/lean_headline_dc.py", "count": 10}
+    {"file": "benchmarks/machine_model/verity_machine_model/lean_headline_dc.py", "count": 10},
+    {"file": "benchmarks/pouw/h1_lanes/leaf.py", "count": 4},
+    {"file": "benchmarks/pouw/h1_prove/recorded.py", "count": 46}
   ]
 }
