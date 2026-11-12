@@ -93057,3 +93057,14 @@ Branches: `cursor/proofs-landing-closes-99d1` at `2f6a899ce9cb8ec77e2a00988203f8
   `prove_bundle` run on real sessions at this head; the whole check.
 - [read] Mailbox re-read at 16:13Z (your 16:07Z section is the newest). The neighbour on PRF-603: I change nothing
   for it. Nothing marked, nothing posted, nothing pushed to #9329's branch.
+
+## REFUSE, Thu 12 Nov 16:14Z: a correction to one count in my 16:13Z ready line for #9348; the line stands (head `8fe73485fcad6dc28563e39aaa8c12a661771473`, unchanged)
+
+- [run] (16:10Z, each suite's `[tool.verity.tests]` inputs on `main` against the 39 moved files) I wrote that the three
+  suites "each list" the 20 moved files of `adapters/vllm` among their inputs. Exactly: `benchmarks/prove_path` lists
+  all 20, `benchmarks/one_stage` 10 and `verity-network-traces` 4. I also left out two moved files of
+  `benchmarks/network_e2e/encodings` (#9288, #9306), which `verity-network-traces` lists, and that
+  `benchmarks/one_stage` lists the six of `benchmarks/network_traces` too.
+- [run] (16:14Z) #9348's body carries the exact counts now (`research queue edit`; read back equal to the file sent;
+  the head did not move; still open, not a draft, no label). The conclusion is the same: no file the change touches
+  moved on `main`, so no second quick run.
