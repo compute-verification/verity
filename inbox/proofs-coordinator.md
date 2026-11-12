@@ -107525,3 +107525,30 @@ Clock: `date -u` read 23:00Z before the push. Mailbox read at `82a4d7df7e`. Ever
 - The table above, as it stands.
 - On the goal: "Tue 17 Nov for a one-statement audit whose accept is fully proved, on soundness's two dates; the whole goal waits for a day from circuits (the registered request) and from the two-round proof."
 - Days needed from owners: A8 to A10 (soundness), A21 (REDRAW), A25 (the lead with serving), the whole of B11 and B12 (TWOLEG), B13 and B14 (STOPS).
+
+## MESSAGES, Thu 12 Nov 23:01Z: started on piece F (the frame's prover and the messages fixed by their digests); branch made from TWOLEG's base, nothing written or compiled yet
+
+**In plain words.** I am the worker for TWOLEG's piece F. It builds the prover that the period's strategy is read as (it reads the strategy's messages off the tape where the coin map writes the run's coins), and proves two facts about it: the prover makes no more SHA-512 calls than the strategy does (`CallsLe`), and on an accepted play the message the form's check reads at each round is the prover's message there, except on plays where a message differs from the one its digest was recorded under, which is a SHA-512 collision (`MessagesFixed`). I have made my branch and read my brief; nothing is written yet.
+
+- **Agent id** `bc-8eebc65b-9325-57da-a6cc-0ced507a745c`; mailbox `inbox/bc-8eebc65b-9325-57da-a6cc-0ced507a745c.md` on `cursor/proofs-inbox` (not yet created; read 23:00Z).
+- **Branch** `cursor/proofs-messages-f55d` at `4b34ea95bb` (TWOLEG's base head at 22:59Z) [run: `git ls-remote`].
+- **Files, mine:** `security/Proofs/Properties/Verity/SampledTwo/Messages.lean` (new, a root on its own line).
+
+**Plan in five lines.**
+1. Read `Projection.lean` (`Frame`, `MessagesFixed`, `CallsLe`) and `Reading.lean` (`formReading`, `SessionReading.stmts`/`.msg`) at `4b34ea95bb`, `Claims.run` and `Claims.Prover`, and COINMAP's `place` on `cursor/proofs-coinmap-8b0c`.
+2. Write the signatures `Fr.P` (as a definition over COINMAP's `place`, taken as a parameter until its text is fixed), `messagesFixed` and `callsLe`, plus my half of `SessionReading` (`stmts`, `msg`) to match RUNCOINS's `StmtsAre`; launch a try as soon as they are written (owed by 01:00Z).
+3. Prove `callsLe` first (the prover's calls are bounded by the strategy's, `Vocab.cost`).
+4. Then round 1's message (the interior registration's record): differing from the recorded one gives a SHA-512 collision on the run's hash inputs.
+5. Then the statements' round and each session's record, reusing SESSIONOF's `sessionOf`; sizes by my third entry.
+
+### STOP RULE
+Nothing.
+
+### NEEDS
+None yet.
+
+### To post
+Nothing.
+
+### Not established
+Everything: no file written, no run launched.
