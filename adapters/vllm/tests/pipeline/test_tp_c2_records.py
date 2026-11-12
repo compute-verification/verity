@@ -366,3 +366,19 @@ def test_a_commit_equal_to_a_failed_match_runs_capture_is_compared_and_is_no_pas
     comp = C2.oracle_compare_component(_both(cblock, {"attribution": ATTRIBUTION, "match_oracle": differs}),
                                        {"match_record": {"path": "/match", "tp2_match_verdict": False}}, MANIFEST)
     assert comp["result"] is False and comp["oracle_is_failed_match_run"] is True
+
+
+# the Commit driver's readers of a document's block and list
+
+@pytest.mark.parametrize("doc", [{}, {"name": None}, {"name": {}}, {"name": []}, {"name": 0}, {"name": ""}],
+                         ids=["none", "a null one", "an empty block", "an empty list", "zero", "an empty string"])
+def test_a_block_or_a_list_a_document_does_not_hold_reads_empty(doc):
+    assert (C2.block_of(doc, "name"), C2.list_of(doc, "name")) == ({}, [])
+
+
+def test_a_block_or_a_list_a_document_holds_is_handed_on_as_it_is():
+    block, listed = {"result": None}, [0]
+    doc = {"block": block, "list": listed}
+    assert C2.block_of(doc, "block") is block and C2.list_of(doc, "list") is listed
+    # neither reader types what it hands on: a list in a block's place is the caller's to read
+    assert C2.block_of(doc, "list") is listed and C2.list_of(doc, "block") is block

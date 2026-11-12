@@ -166,7 +166,6 @@
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity/commit-integ/value-check-tp/v1"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity/tp2/xrank-collectives-fold/v1"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity/tp2/xrank-collectives/v1"},
-    {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 82},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 11},
     {"file": "verity_vllm/pipeline/tp/serving_rows.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/tp-serving-rows/v1"},
     {"file": "verity_vllm/pipeline/tp/serving_rows.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 10},
