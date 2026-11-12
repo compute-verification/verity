@@ -92893,3 +92893,28 @@ marked): `a0.py` +15 −3, `a11.py` +7 −4, and a test file of 58 lines.
   point 3 was not recomputed there.
 - [run] Of #9329 I ran the 16 cases named above and `git merge-tree` (with `main`: no stop; with #9237: no stop), no
   other test of it.
+
+## FRAME, Thu 12 Nov 16:04Z: three of the four candidate records runs read `pass` and the fourth, #9229's, is still running; ready to mark #9229 at `9e075516baffaf0b36f18bfd08b7ec244e341243`
+
+**The candidate records runs, each `main` with one head merged in, in no branch. The three that ended: rc 0, outcome `pass`, every package `pass`** [run: each run's OUTCOME line and `AUDIT: PASS` lines]:
+
+| pull request, head | `main` | run | ran |
+|---|---|---|---|
+| #9176, `99f2f3ba2cf1` | `1a3ea2e6b06b` | `r20261112-150639-494f` | 15:07:13Z to 15:36:17Z |
+| #9080, `a5eb973283ee` | `1a3ea2e6b06b` | `r20261112-150739-d62b` | 15:08:09Z to 15:33:03Z |
+| #9212, `f2412ec7156f` | `2eb974c8ea00` | `r20261112-152200-f136` | 15:22:41Z to 15:45:26Z |
+| #9229, `9e075516baff` | `2eb974c8ea00` | `r20261112-152245-3500` | took its slot at 15:24Z; still running at 16:04Z |
+
+So `main`'s moved definition (`Verity.Accel.Sm120.card`) and its lock lines regenerate nothing over #9176, #9212 or #9080, and nothing is pushed. `3500` is alive (its memory moves) and has run longer than the others, 40 minutes against 23 to 29 [run: `research status`]; I do not know why, and I say its verdict in one line when it ends, in bold first if it is not `pass`. Between `2eb974c8ea00` and `main` at 16:04Z (`87fec6c6491b`) no Lean file, lakefile, lock or Lean-check code moved [run: `git diff --name-only`]. `tests/lint/allowlists/repo_retired_terms.json` moved again, a file of #9080: #9080's head still merges onto `main` with exit 0 and the merged file is valid JSON with its two entries [run].
+
+**ready to mark #9229 at `9e075516baffaf0b36f18bfd08b7ec244e341243`.** It changes nothing a guarantee says or rests on [read: its records run's review]. It holds #9176 at `99f2f3ba2cf1` and lands after it. Open, not a draft, unmarked [run: `gh pr view`, 16:04Z].
+
+- Quick tier at the head, `r20261112-152014-1532`: rc 0, `QUICK_EXIT 0`, "9 suites: 9 passed (0 cached), 0 failed" (15:20:36Z to 15:42:20Z), `HEAD_AT 9e075516baff...` [run]. It is `suites.py --changed 99f2f3ba2cf1 --quick`, the suites this change reaches over #9176's head.
+- Records at the head, `r20261112-143351-6143`: rc 0, outcome `pass`, three `AUDIT: PASS`, as in my 15:25Z entry [run].
+- Notice line for the lock: what `SpotKSTwo` and `SpotExfilTwo` read changes in `SpotFlock.readsOk`, and `Spot.SecondStage.namesOk` is read for the first time; no guarantee's record moves [run: `r20261112-124211-450a`'s review].
+- Merges [run: `git merge-tree`, 16:04Z]: onto `main` `87fec6c6491b` exit 0; with #9212's head exit 0; with #9080's head exit 0. Against lean's merge branch (`f3837f57d113`): 31 stops, `main`'s 31, none beyond, and none a file this change touches. It holds #9176's two stopped files as #9176 has them [derived].
+- Body updated 15:45Z with the quick tier.
+
+**Heads, unchanged since my 15:25Z entry:** #9176 `99f2f3ba2cf1`, #9212 `f2412ec7156f`, #9229 `9e075516baff`, #9080 `a5eb973283ee`. All four merge onto `main` `87fec6c6491b` with exit 0 and stop against lean's branch only where `main` does [run, 16:04Z]. I push nothing to any of them.
+
+**I wait on** `r20261112-152245-3500` alone (vy-nebius-cpu-11). By the others' lengths it should have ended already; I expect it before 16:20Z [guess]. Then one line with its verdict. The rest is yours: the marks in your order, and CROSSCLOSE's word on whether its close serves #9212 and #9080.
