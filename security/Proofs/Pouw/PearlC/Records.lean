@@ -51,7 +51,7 @@ def Prices.sm120 : Prices := ⟨8, 2, ⟨40, 1⟩⟩
 atom, 32, and the E4M3 cast at its cheapest implementation, 8.0, at both FP32 prices) and the A-only forming 2 per element
 (one FFMA on every 8th element at 8.376, 1.047, rounded up). `Costs` counts the forming in whole units, and rounding `qa`
 up raises `W_ref` and not the credit, so g here is above g at the measured 1.047 (0.37349% against 0.36218% for v2 at
-the cap 1/1,000, 8192³). The add is exact. The gap's price rule computes g at this record and at the issue-bound
+the bound 1/1,000, 8192³). The add is exact. The gap's price rule computes g at this record and at the issue-bound
 `Prices.sm120`, and publishes the larger. -/
 def Prices.sm120Loop : Prices := ⟨1047 / 125, 2, ⟨40, 2⟩⟩
 
