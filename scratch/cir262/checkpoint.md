@@ -1,1 +1,2 @@
 2026-11-12T13:41Z FP8READ: read the pin's call (b=1, s_q=T, 64 padded heads, no sink), FlashMLA V32 kernel source at 6bc49418, vllm's run r20261112-113028-b56a (how it takes the lease); writing the item-1 card job for 18:05Z; no code yet.
+2026-11-12T14:16Z FP8READ: pushed the preliminary V32 twin (2d3b19561d) and the capture script with its test (7e914c0893; 11 tests pass here on twin-made words); the card wrapper is written; next the Definitions' module while waiting for card 1 at 18:05Z.
