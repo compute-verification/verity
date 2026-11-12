@@ -35,7 +35,8 @@ either the tie isn't run, and the row says so.
 bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothing.
 
     python deviations.py try (--stand-in | --front-env NAME) --out DIR [--class all|CLASS] [--ids FILE] [--seed S]
-        [--requests 8] [--rate 2] [--max-tokens 16] [--tail 8] [--hold-ms 500] [-- REHEARSE-FLAG ...]
+        [--tag T] [--requests 8] [--rate 2] [--max-tokens 16] [--tail 8] [--hold-ms 500] [--cell-bytes B]
+        [-- REHEARSE-FLAG ...]
     python deviations.py relay --class CLASS --front-env NAME --payload P [--listen 127.0.0.1:0] [--log FILE]
         [--hold-ms 500] [--seed S]
     python deviations.py table --out DIR [--ids FILE] [--stand-in]
@@ -46,6 +47,9 @@ bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothi
   table, a class a row: what is changed, the check that refuses it, the refusal's own words, the bits planted, read
   right and charged, and the try's seconds end to end; `rows.json` holds the rows. It exits 0 when every class did
   what its row's check says: honest accepted, and each other class refused by that check or not shown to the client.
+- A try's request i is named ``<class>-<tag>-<i>`` (its `user`), the tag ``--tag`` or a random one a command: the
+  server's record names a request by its `user`, so one record over every try, and over what the server served before
+  them, holds each of a try's requests once, and ``--ids`` reads the right row.
 - The front's address is the value of the environment variable ``--front-env`` names, ``HOST:PORT``. It has no
   default, only `relay` reads it, and nothing a try writes holds it: the network certifier's upstream is the
   deviating process on the loopback. ``--stand-in`` starts `warden_serve.py fake --id-payload` as the front instead.
@@ -510,9 +514,10 @@ def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
             raise SystemExit(f"the deviating process ended before it listened (exit {deviating.wait()})")
         upstream = "%s:%d" % tuple(json.loads(line)["listening"])
         with open(run / "rehearse.log", "w") as log:
-            subprocess.run(relay + ["rehearse", "--upstream", upstream, "--ids", "--out", str(run), "--requests",
-                                    str(args.requests), "--rate", str(args.rate), "--max-tokens", str(args.max_tokens),
-                                    "--tail", str(args.tail), "--cell-bytes", str(args.cell_bytes), *args.rehearse],
+            subprocess.run(relay + ["rehearse", "--upstream", upstream, "--ids", "--users", f"{cls}-{args.tag}",
+                                    "--out", str(run), "--requests", str(args.requests), "--rate", str(args.rate),
+                                    "--max-tokens", str(args.max_tokens), "--tail", str(args.tail), "--cell-bytes",
+                                    str(args.cell_bytes), *args.rehearse],
                            stdout=log, stderr=subprocess.STDOUT)
     finally:
         _stop(procs)
@@ -565,6 +570,8 @@ def parser() -> argparse.ArgumentParser:
     for q in (t, r):
         q.add_argument("--hold-ms", type=float, default=500.0, help="how long the bucket class holds a response")
         q.add_argument("--seed", type=int, help="the planted string's seed (default: the system's randomness)")
+    t.add_argument("--tag", help="a try's request i is named CLASS-TAG-i in the server's record (default: a random "
+                                 "tag a command)")
     t.add_argument("--requests", type=int, default=8)
     t.add_argument("--rate", type=float, default=2.0, help="Poisson arrivals a second")
     t.add_argument("--max-tokens", type=int, default=16, help="the most max_tokens a request samples")
@@ -599,6 +606,7 @@ def main(argv=None) -> int:
     if args.command == "try":
         if not args.stand_in:
             front_of(args.front_env)
+        args.tag = args.tag or secrets.token_hex(4)
         for cls in classes:
             seconds[cls] = one_try(cls, args.out / cls, args)
             print(f"{cls}: tried in {seconds[cls]:.1f} s", flush=True)

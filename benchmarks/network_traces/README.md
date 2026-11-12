@@ -182,6 +182,9 @@ and against a served front, whose `HOST:PORT` is the value of an environment var
   (`io_tie.cells_match` on each bucket of the egress record). The tie needs the Commit's sampled ids of each request:
   `--ids`, the server's record by request `user`, or under `--stand-in` the stand-in's own. Without them the tie isn't
   run and the row says so. Its map is the certified placement, a stand-in for the advice's.
+- A try names its request i `CLASS-TAG-i` (`--tag`, by default a random one a command), so one record of the server
+  over every try, and over what it served before them, holds each request once. `table --out DIR --ids FILE` reads
+  the tries again once the server's record is there.
 - The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
   client. `table --out DIR` prints the table of the tries in a directory again.
 

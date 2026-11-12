@@ -97,21 +97,25 @@ def test_the_fronts_address_comes_from_the_named_variable_and_no_message_holds_i
         assert "FRONT" in str(e.value) and "front.example" not in str(e.value)
 
 
-FIELDS = [{"model": "fake", "user": f"user-{k}", "prompt": [7, 8, 9 + k], "max_tokens": 4 + k, "seed": k}
-          for k in range(sc.REQUESTS)]
-REQUESTS = [dv.id_request(**f, frame_bytes=PARAMS.cell_bytes, offset=0) for f in FIELDS]
-#: the stand-in's own ids of each request
-HONEST = [ws.fake_ids(json.loads(request.partition(dv.BLANK)[2])) for request in REQUESTS]
+def _requests(users: str = "user") -> tuple[list[dict], list[bytes], list[list[int]]]:
+    """Eight id requests named ``<users>-<k>``: their fields, their bytes, and the stand-in's own ids of each."""
+    fields = [{"model": "fake", "user": f"{users}-{k}", "prompt": [7, 8, 9 + k], "max_tokens": 4 + k, "seed": k}
+              for k in range(sc.REQUESTS)]
+    requests = [dv.id_request(**f, frame_bytes=PARAMS.cell_bytes, offset=0) for f in fields]
+    return fields, requests, [ws.fake_ids(json.loads(request.partition(dv.BLANK)[2])) for request in requests]
 
 
-def _try(tmp: Path, cls: str, bits: list[int], chunk: int = 300) -> dict:
-    """Class `cls` through the relay on a virtual clock: eight id requests, each answered by the stand-in's own ids
-    (`HONEST`) as the class deviates them, the k-th connection planting from `bits` in turn; its row."""
-    fields, requests = FIELDS, REQUESTS
+FIELDS, REQUESTS, HONEST = _requests()
+
+
+def _try(tmp: Path, cls: str, bits: list[int], chunk: int = 300, users: str = "user") -> dict:
+    """Class `cls` through the relay on a virtual clock: eight id requests named ``<users>-<k>``, each answered by the
+    stand-in's own ids as the class deviates them, the k-th connection planting from `bits` in turn; its row."""
+    fields, requests, honest = _requests(users)
     bit, served, lines = _bits(bits), [], []
     for k in range(len(requests)):
         dev = dv.Deviation(cls, bit, P)
-        out = _through(dev, ws.id_response(HONEST[k], P), chunk)
+        out = _through(dev, ws.id_response(honest[k], P), chunk)
         served.append((out, not dev.withhold))
         lines.append({"release": k, "class": cls, "planted": "".join(map(str, dev.planted))})
     log = sc.relay_run(tmp, tmp.parent / f"key-{cls}", {}, PARAMS, requests=requests, served=served)
@@ -160,3 +164,26 @@ def test_the_tie_is_not_run_without_the_commits_ids_and_the_row_says_so(tmp_path
     row = dv.row("tokens", tmp_path / "tokens", None)
     assert (row["tie"], row["ok"]) == (dv.NOT_RUN, None) and "--ids" in row["words"]
     assert "not shown either way" in dv.table([row])
+
+
+def test_a_trys_requests_take_its_name_and_one_record_over_two_tries_holds_each_once(tmp_path):
+    """Two tries against one server leave one record of its sampled ids by `user`. `--users` names a try's requests,
+    which changes nothing else of its traffic; named apart, each try's tie reads its own rows of the one record."""
+    named = ws.id_traffic(3, model="m", seed=5, users="tokens-ab")
+    assert [x["ids"]["user"] for x in named] == ["tokens-ab-0", "tokens-ab-1", "tokens-ab-2"]
+    plain = ws.id_traffic(3, model="m", seed=5)
+    assert [x["ids"] | {"user": f"user-{i}"} for i, x in enumerate(named)] == [x["ids"] for x in plain]
+    args = ws.parser().parse_args(["rehearse", "--fake", "--ids", "--out", str(tmp_path), "--requests", "2", "--users",
+                                   "honest-ab"])
+    assert [x["ids"]["user"] for x in ws.traffic_of(args, "m")] == ["honest-ab-0", "honest-ab-1"]
+
+    tries = {"honest": tmp_path / "honest", "tokens": tmp_path / "tokens"}
+    _try(tries["honest"], "honest", [], users="honest-ab")
+    _try(tries["tokens"], "tokens", [1, 0] * 60, users="tokens-ab")
+    record = tmp_path / "requests.jsonl"
+    record.write_text("".join(json.dumps({"user": f["user"], "output_ids": ids}) + "\n"
+                              for users in ("honest-ab", "tokens-ab") for f, ids in zip(*_requests(users)[::2])))
+    rows = {cls: dv.row(cls, run, dv.committed_ids(run, record)) for cls, run in tries.items()}
+    assert (rows["honest"]["tie"], rows["tokens"]["tie"]) == ("accepted", "refused")
+    assert all(r["ok"] for r in rows.values())
+    assert _requests("honest-ab")[2] != _requests("tokens-ab")[2]
