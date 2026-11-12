@@ -27,7 +27,9 @@ parts in order. A flow is the two addresses, the two ports and the protocol, and
 outside the list above; an IP fragment of a flow it reads, whose ports and length one fragment doesn't hold (nothing
 is reassembled); an encapsulation, between any addresses, since the flows read here could be inside it (MPLS, PPPoE,
 MACsec, provider bridging; IP in IP, GRE, ESP, AH, EtherIP, L2TP; VXLAN, Geneve and GTP-U by their UDP ports); a
-packet kept too short for its headers; a file that ends inside a packet.
+packet kept too short for its headers, with how many of its bytes this reads (its frame header, its IP header and
+the first 14 of TCP's or 4 of UDP's), or, where the bytes kept end before the header that says so is whole, with that
+header; a file that ends inside a packet.
 
 **Which bytes are compared.** The certifier opens one connection to the server for each client connection it admits,
 and one more for the watermark stream. Of each, the record gives two counts, both of the byte stream (what a `read`
@@ -111,7 +113,8 @@ TUNNEL_PROTOCOLS = {4: "IP in IP", 41: "IPv6 in IP", 47: "GRE", 50: "ESP", 51: "
 TUNNEL_PORTS = {4789: "VXLAN", 8472: "VXLAN", 6081: "Geneve", 2152: "GTP-U"}
 #: the least a capture keeps of each packet for every header here to be whole: Ethernet with two VLAN tags, IPv6 with
 #: a fragment header, TCP with every option. A packet whose headers are shorter keeps the first bytes of its content
-#: in the rest
+#: in the rest. The README's command for a link captures at it, and nothing here reads it: a packet is refused by
+#: what this reads of it, never by this length
 SNAPSHOT = 14 + 8 + 40 + 8 + 60
 
 
@@ -123,7 +126,26 @@ class _Unread(Exception):
     """A packet this doesn't read, with what it is."""
 
 
-SHORT = f"kept too short for its headers: capture at least {SNAPSHOT} bytes of each packet (`-s {SNAPSHOT}`)"
+#: how the refusal of a packet kept too short ends: it names no length for every capture
+LENGTHS = ('No one length suits every capture, since a length past a packet\'s headers keeps the first bytes of its '
+           'content: see "Taking the capture" (a link) and "On the server\'s loopback" in '
+           'benchmarks/network_traces/README.md')
+
+
+def _cut(kept: int, header: str) -> _Unread:
+    """A packet whose `kept` bytes end before `header` is whole, the header that says how many of its bytes this
+    reads."""
+    return _Unread(f"kept too short for its headers: the {kept} bytes kept of it end before its {header} is whole, so "
+                   f"this can't tell how many it reads. Capture again keeping more of each packet. {LENGTHS}")
+
+
+def _needs(kept: int, frame: int, at: int, transport: str, first: int) -> _Unread:
+    """A packet of which `kept` bytes are kept and this reads `at + first`: a frame header of `frame` bytes, its IP
+    header up to `at` and the first `first` bytes of `transport`'s."""
+    headers = (f"{frame} of its frame header, " if frame else "") + f"{at - frame} of its IP header"
+    return _Unread(f"kept too short for its headers: this reads its first {at + first} bytes ({headers} and "
+                   f"{transport}'s first {first}) and {kept} are kept. Capture again keeping at least that many of "
+                   f"each packet; a packet with longer headers needs more. {LENGTHS}")
 
 
 def packets(path: Path, facts: dict) -> Iterator[tuple[int, int, bytes]]:
@@ -161,25 +183,25 @@ def read_packet(link: int, wire: int, data: bytes) -> tuple | None:
     for an encapsulation and a packet kept too short."""
     if link == ETHERNET:
         if len(data) < 14:
-            raise _Unread(SHORT)
+            raise _cut(len(data), "Ethernet header")
         at, kind = 14, int.from_bytes(data[12:14], "big")
         while kind in VLAN:
             if len(data) < at + 4:
-                raise _Unread(SHORT)
+                raise _cut(len(data), "Ethernet header")
             kind, at = int.from_bytes(data[at + 2:at + 4], "big"), at + 4
     elif link in (LINUX_SLL, LINUX_SLL2):
         at = 16 if link == LINUX_SLL else 20
         if len(data) < at:
-            raise _Unread(SHORT)
+            raise _cut(len(data), "Linux cooked header")
         kind = int.from_bytes(data[14:16] if link == LINUX_SLL else data[0:2], "big")
     else:
         at, kind = 0, {4: IPV4, 6: IPV6}.get(data[0] >> 4 if data else 0)
     if kind in TUNNEL_FRAMES:
         raise _Unread(f"{TUNNEL_FRAMES[kind]}, an encapsulation this doesn't read")
-    fragment = 0
+    frame, fragment = at, 0
     if kind == IPV4:
         if len(data) < at + 20:
-            raise _Unread(SHORT)
+            raise _cut(len(data), "IPv4 header")
         header = (data[at] & 15) * 4
         # a segment the sender's kernel had not yet cut for the wire can be kept with a total length of 0
         above = (int.from_bytes(data[at + 2:at + 4], "big") or wire - at) - header
@@ -187,12 +209,12 @@ def read_packet(link: int, wire: int, data: bytes) -> tuple | None:
         protocol, src, dst, at = data[at + 9], data[at + 12:at + 16], data[at + 16:at + 20], at + header
     elif kind == IPV6:
         if len(data) < at + 40:
-            raise _Unread(SHORT)
+            raise _cut(len(data), "IPv6 header")
         above = int.from_bytes(data[at + 4:at + 6], "big") or wire - at - 40
         protocol, src, dst, at = data[at + 6], data[at + 8:at + 24], data[at + 24:at + 40], at + 40
         while protocol in EXTENSIONS and not fragment:
             if len(data) < at + 8:
-                raise _Unread(SHORT)
+                raise _cut(len(data), "IPv6 extension header")
             size = 8 if protocol == FRAGMENT else (data[at + 1] + 1) * 8
             if protocol == FRAGMENT:
                 fragment = int.from_bytes(data[at + 2:at + 4], "big") & 0xFFF9
@@ -205,12 +227,12 @@ def read_packet(link: int, wire: int, data: bytes) -> tuple | None:
         return src, dst, protocol, None, None, max(above, 0), None, 0, True
     if protocol == TCP:
         if len(data) < at + 14:
-            raise _Unread(SHORT)
+            raise _needs(len(data), frame, at, "TCP", 14)
         sport, dport, seq = struct.unpack_from("!HHI", data, at)
         return src, dst, protocol, sport, dport, max(above - (data[at + 12] >> 4) * 4, 0), seq, data[at + 13], False
     if protocol == UDP:
         if len(data) < at + 4:
-            raise _Unread(SHORT)
+            raise _needs(len(data), frame, at, "UDP", 4)
         sport, dport = struct.unpack_from("!HH", data, at)
         tunnel = TUNNEL_PORTS.get(dport) or TUNNEL_PORTS.get(sport)
         if tunnel:

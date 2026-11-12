@@ -4,8 +4,9 @@ and direction, a retransmitted segment on the wire twice and in the stream once,
 certifier's listed under names with no address printed or written, and the foreign flow refused, or counted and
 skipped when told. On captures built from the fixture's packets: a stream counted across the sequence numbers' wrap
 and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreement, the pairing's counts on each side,
-every capture format read to the same sums, and each thing the reader doesn't read refused by its name. Then a run of
-the network certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
+every capture format read to the same sums, and each thing the reader doesn't read refused by its name, a packet kept
+too short with the least length that reads it and with no length for every capture. Then a run of the network
+certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
 server's side saw: the two counts agree in each direction, the watermark stream's among them and the server's answer
 on it in no sum; a run of two execution phases is counted across both phases' records; a run in the id egress form,
 at the id front's cell, agrees as one in the bytes form does, and its capture kept at 54 bytes a packet holds no
@@ -470,12 +471,24 @@ def _with_ip_options(packet: bytes, n: int = 8) -> bytes:
      "is VXLAN by its UDP port, an encapsulation"),
     ("MPLS", [fx.ethernet(bytes(4) + fx.first()[0], kind=0x8847)], {}, "is MPLS, an encapsulation"),
     ("cut inside its headers", [fx.ethernet(p) for p in fx.first()], {"snapshot": 40},
-     r"packet 0 is kept too short for its headers: capture at least 130 bytes of each packet \(`-s 130`\)"),
+     r"capture\.pcap's packet 0 is kept too short for its headers: this reads its first 48 bytes \(14 of its frame "
+     r"header, 20 of its IP header and TCP's first 14\) and 40 are kept\. Capture again keeping at least that many of "
+     r"each packet; a packet with longer headers needs more\. No one length suits every capture, since a length past "
+     r"a packet's headers keeps the first bytes of its content: see \"Taking the capture\" \(a link\) and \"On the "
+     r"server's loopback\" in benchmarks/network_traces/README\.md$"),
     ("IPv6 kept at 54 bytes a packet",
      [fx.ethernet(fx.ip(fx.CERTIFIER6, fx.SERVER6[0], fx.TCP, fx.tcp(40001, 8000, 1, fx.SYN)))], {"snapshot": 54},
-     "packet 0 is kept too short for its headers: capture at least 130 bytes of each packet"),
+     r"packet 0 is kept too short for its headers: this reads its first 68 bytes \(14 of its frame header, 40 of its "
+     r"IP header and TCP's first 14\) and 54 are kept\. Capture again keeping at least that many of each packet"),
     ("eight bytes of IP options kept at 54 bytes a packet", [fx.ethernet(_with_ip_options(fx.first()[0]))],
-     {"snapshot": 54}, "packet 0 is kept too short for its headers: capture at least 130 bytes of each packet"),
+     {"snapshot": 54},
+     r"packet 0 is kept too short for its headers: this reads its first 56 bytes \(14 of its frame header, 28 of its "
+     r"IP header and TCP's first 14\) and 54 are kept\. Capture again keeping at least that many of each packet"),
+    ("cut inside its IP header", [fx.ethernet(p) for p in fx.first()], {"snapshot": 30},
+     r"capture\.pcap's packet 0 is kept too short for its headers: the 30 bytes kept of it end before its IPv4 header "
+     r"is whole, so this can't tell how many it reads\. Capture again keeping more of each packet\. No one length "
+     r"suits every capture, since a length past a packet's headers keeps the first bytes of its content: see "
+     r"\"Taking the capture\" \(a link\) and \"On the server's loopback\" in benchmarks/network_traces/README\.md$"),
     ("another link type", [fx.ethernet(p) for p in fx.first()], {"link": 105},
      r"capture\.pcap has link type 105: this reads Ethernet \(1\), raw IP \(101\) and Linux cooked \(113, 276\)"),
 ])
@@ -485,6 +498,75 @@ def test_what_the_reader_doesnt_read_is_refused_by_its_name(tmp_path, name, fram
     for skip in (False, True):
         with pytest.raises(cf.Refused, match=said):
             cf.read([path], *_given(), skip_foreign=skip)
+
+
+_SYN = fx.tcp(40001, 8000, 1, fx.SYN)
+_SYN6 = fx.ip(fx.CERTIFIER6, fx.SERVER6[0], fx.TCP, _SYN)
+_UNDER = fx.ip(fx.CERTIFIER6, fx.SERVER6[0], fx.TCP, _SYN, extensions=bytes([fx.TCP, 0, 1, 4, 0, 0, 0, 0]))
+#: one packet of each kind of header the reader walks: what it is, its link type, its frame, each header the reader
+#: holds whole before it can tell a length (the length that holds it, its name), the length the reader reads of the
+#: packet, and the headers that length is the sum of
+_WALKED = [
+    ("IPv4 in an Ethernet frame", fx.ETHERNET, fx.ethernet(_packet(fx.TCP, _SYN)), ((14, "Ethernet"), (34, "IPv4")),
+     48, "14 of its frame header, 20 of its IP header and TCP's first 14"),
+    ("under two VLAN tags", fx.ETHERNET, fx.ethernet(_packet(fx.TCP, _SYN), (7, 9)), ((22, "Ethernet"), (42, "IPv4")),
+     56, "22 of its frame header, 20 of its IP header and TCP's first 14"),
+    ("with 40 bytes of IP options", fx.ETHERNET, fx.ethernet(_with_ip_options(_packet(fx.TCP, _SYN), 40)),
+     ((14, "Ethernet"), (34, "IPv4")), 88, "14 of its frame header, 60 of its IP header and TCP's first 14"),
+    ("in a Linux cooked frame", fx.LINUX_SLL, fx.cooked(_packet(fx.TCP, _SYN)), ((16, "Linux cooked"), (36, "IPv4")),
+     50, "16 of its frame header, 20 of its IP header and TCP's first 14"),
+    ("in a Linux cooked v2 frame", fx.LINUX_SLL2, fx.cooked(_packet(fx.TCP, _SYN), 2),
+     ((20, "Linux cooked"), (40, "IPv4")), 54, "20 of its frame header, 20 of its IP header and TCP's first 14"),
+    ("raw IP", fx.RAW, _packet(fx.TCP, _SYN), ((20, "IPv4"),), 34, "20 of its IP header and TCP's first 14"),
+    ("IPv6", fx.ETHERNET, fx.ethernet(_SYN6), ((14, "Ethernet"), (54, "IPv6")), 68,
+     "14 of its frame header, 40 of its IP header and TCP's first 14"),
+    ("IPv6 under an extension header", fx.ETHERNET, fx.ethernet(_UNDER),
+     ((14, "Ethernet"), (54, "IPv6"), (62, "IPv6 extension")), 76,
+     "14 of its frame header, 48 of its IP header and TCP's first 14"),
+    ("UDP", fx.ETHERNET, fx.ethernet(fx.ip(SERVER[0], fx.BESIDE, fx.UDP, fx.udp(53535, 53, fx.data(40)))),
+     ((14, "Ethernet"), (34, "IPv4")), 38, "14 of its frame header, 20 of its IP header and UDP's first 4"),
+]
+
+
+@pytest.mark.parametrize("link, frame, cuts, need, headers", [case[1:] for case in _WALKED],
+                         ids=[case[0] for case in _WALKED])
+def test_a_packet_kept_too_short_is_refused_with_the_least_length_that_reads_it(tmp_path, link, frame, cuts, need,
+                                                                                headers):
+    """Kept at each length under the one the reader reads of it, a packet is refused: with that length and the headers
+    it is the sum of, once the bytes kept hold every header that says it; before that, with the first header they
+    don't hold whole. Kept at that length it is read. Neither names a length for every capture. A raw IP packet with
+    no byte kept has no version to be read by, and is a frame that isn't IP."""
+    path = tmp_path / "capture.pcap"
+    servers, certifiers = (SERVER[0], fx.SERVER6[0]), (CERTIFIER[0], fx.CERTIFIER6)
+    given = [cf.endpoint(a) for a in servers], [cf.endpoint(a) for a in certifiers]
+    for kept in range(1 if link == fx.RAW else 0, need):
+        path.write_bytes(fx.pcap([frame], link=link, snapshot=kept))
+        header = next((header for under, header in cuts if kept < under), None)
+        met = (f"the {kept} bytes kept of it end before its {header} header is whole, so this can't tell how many it "
+               f"reads. Capture again keeping more of each packet" if header else
+               f"this reads its first {need} bytes ({headers}) and {kept} are kept. Capture again keeping at least "
+               f"that many of each packet; a packet with longer headers needs more")
+        with pytest.raises(cf.Refused) as refused:
+            cf.read([path], *given)
+        assert str(refused.value) == f"capture.pcap's packet 0 is kept too short for its headers: {met}. {cf.LENGTHS}"
+    path.write_bytes(fx.pcap([frame], link=link, snapshot=need))
+    assert cf.read([path], *given)["capture"]["files"] == [{"packets": 1, "link_type": link, "snapshot": need}]
+
+
+def test_the_refusal_of_a_packet_kept_too_short_names_headings_the_readme_has():
+    """The refusal names no length for every capture: it names the README's two commands by their headings. Each
+    heading is there with its command under it, and the command states the length the heading's paragraph is about:
+    the link's the reader's `SNAPSHOT`, the loopback's 54."""
+    where, headings = cf.LENGTHS.rsplit(" ", 1)[1], cf.LENGTHS.split('"')[1::2]
+    assert HERE.parents[1] / where == HERE / "README.md"
+    assert headings == ["Taking the capture", "On the server's loopback"]
+    readme, lengths = (HERE / "README.md").read_text(), []
+    for heading in headings:
+        assert f"\n**{heading}**" in readme, \
+            f"the README has no heading {heading!r}: name the one it has in capture_flows.py's LENGTHS"
+        command = readme.split(f"\n**{heading}**", 1)[1].split("\n    tcpdump ", 1)[1].splitlines()[0]
+        lengths.append(int(command.split(" -s ")[1].split()[0]))
+    assert lengths == [cf.SNAPSHOT, 54]
 
 
 def test_a_file_that_isnt_a_whole_pcap_capture_is_refused_with_what_to_do(tmp_path):
