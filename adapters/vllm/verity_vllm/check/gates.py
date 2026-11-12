@@ -477,13 +477,6 @@ def _get(d: Any, path: str, what: str) -> Any:
     return cur
 
 
-def _first(d: dict, *keys: str) -> Any:
-    for k in keys:
-        if isinstance(d, dict) and k in d:
-            return d[k]
-    return None
-
-
 # ---------------------------------------------------------------------------------------------------------
 # G1 — observation fidelity
 # ---------------------------------------------------------------------------------------------------------

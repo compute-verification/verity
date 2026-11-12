@@ -14,6 +14,7 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "advice_run.py"
 _spec = importlib.util.spec_from_file_location("advice_run", SCRIPT)
+assert _spec is not None and _spec.loader is not None
 AR = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("advice_run", AR)
 _spec.loader.exec_module(AR)
@@ -84,6 +85,7 @@ def _class_g_phi(execution: str | None = None, effective: dict | None = None):
     from verity_vllm.program.predict.phi import Phi
 
     spec = importlib.util.spec_from_file_location("advice_compile", SCRIPT.parent / "advice_compile.py")
+    assert spec is not None and spec.loader is not None
     AC = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(AC)
     model, revision = "zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42"

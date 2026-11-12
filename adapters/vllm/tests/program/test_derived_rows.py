@@ -344,6 +344,7 @@ def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
     `verity.definitions.numerics.mma` and follows silicon_total's rules: grouped (8, 8) truncating 25-bit accumulation; NaN / inf*0 /
     mixed infinities -> 0x7FFFFFFF; a one-signed infinity -> that infinity; group overflow is a sticky infinity; +0; subnormals."""
     import sys
+
     from verity.definitions.registry import prims as P
     one, two, z, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
@@ -461,7 +462,12 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
     NH, Dh, n = 3, 16, 600
     x = words((n, NH, Dh), 90, 150)
     cs = words((n, Dh), 118, 128)
-    x[0, 0, 0] = 0x0001; x[0, 0, 8] = 0x8000; cs[1, 0] = 0x0000; cs[2, 9] = 0x8000; x[3, 1, 5] = 0x0080   # subnormal, -0, +0 cache, -0 sin, min normal
+    # subnormal, -0, +0 cache, -0 sin, min normal
+    x[0, 0, 0] = 0x0001
+    x[0, 0, 8] = 0x8000
+    cs[1, 0] = 0x0000
+    cs[2, 9] = 0x8000
+    x[3, 1, 5] = 0x0080
     out = D.rope_rows(x, cs)
     assert out.shape == (n, NH, Dh) and out.dtype == np.uint16
     R = Dh // 2
@@ -483,7 +489,8 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
     one = D.rope_rows(xr[4], csr[4])
     assert one.shape == (12, 128) and np.array_equal(one, outr[4])
     # negative: flip one input word -> exactly its pair's two outputs change (in that head), nothing else
-    x2 = xr[4].copy(); x2[7, 20] ^= 0x0040
+    x2 = xr[4].copy()
+    x2[7, 20] ^= 0x0040
     d = np.flatnonzero(D.rope_rows(x2, csr[4]) != one)
     assert set(d.tolist()) <= {7 * 128 + 20, 7 * 128 + 84} and len(d) >= 1
     with pytest.raises(ValueError, match="RoPE_v1"):
@@ -496,8 +503,8 @@ def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
     KV head h // (NH/KVH)), one query over T keys, ceil(T/BN) blocks last -> first, Fa2InvSum epilogue -- on random N(0,1) words."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
-    from verity.definitions.registry import b1
     from verity.definitions.numerics import derived_rows as D
+    from verity.definitions.registry import b1
     NH, KVH, Dh, BN = 4, 2, 64, 128
     rng = np.random.default_rng(7000 + T)
     q = _rand_bf16(rng, (NH, Dh))
@@ -518,12 +525,11 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     the independent C++ model `verity.definitions.numerics.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 production
     capture, hopper-profile.md) on Qwen2.5-1.5B geometry (NH=12, KVH=2, D=128, BN=128) and Llama-3.2-1B's (NH=32, KVH=8, D=64, BN=192
     -- the tile the H100 B8 1024/128 Program of record binds at T >= 2) -- two implementations, one word sequence."""
-    from verity.definitions.numerics import fa2_relation, fa3_model
-
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
-    from verity.definitions.registry import b1, hopper
     from verity.definitions.numerics import derived_rows as D
+    from verity.definitions.numerics import fa2_relation, fa3_model
+    from verity.definitions.registry import b1, hopper
     from verity.definitions.registry import prims as P
     NH, KVH, Dh, BN = (12, 2, 128, 128) if geometry == "qwen" else (32, 8, 64, 192)
     rng = np.random.default_rng(9000 + T)
@@ -732,7 +738,7 @@ def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
     from verity.circuits.evaluation import evaluate_call
     from verity.definitions.registry import b1
     BN = b1.fa2_kblock_n(D_)  # the geometry E6 pins for this head dim; here bound explicitly as the declared static
-    assert BN == (128 if D_ <= 64 else 64)
+    assert (128 if D_ <= 64 else 64) == BN
     prog, call = _standalone(bind(b1.AttnBlockV3, D=D_, NVIS=NVIS, FIRST=FIRST, BN=BN))
     rng = np.random.default_rng(7000 + 1000 * D_ + NVIS + FIRST)
     q = _rand_bf16(rng, D_)

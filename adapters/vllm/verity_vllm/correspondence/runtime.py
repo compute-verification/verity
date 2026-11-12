@@ -307,14 +307,6 @@ class RuntimeCorrespondence:
         """Every Call whose owning module path is exactly `module` (the module-body partition)."""
         return list(self._by_module.get(module, ()))
 
-    def calls_under(self, prefix: str) -> list[int]:
-        """Every Call whose owning module path is `prefix` or lies below it."""
-        out: list[int] = []
-        for m, ks in self._by_module.items():
-            if m == prefix or (prefix and m.startswith(prefix + ".")) or prefix == "":
-                out.extend(ks)
-        return sorted(out)
-
     def modules(self) -> list[str]:
         return sorted(self._by_module)
 

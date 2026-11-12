@@ -4,7 +4,7 @@ encodings (§8.5), the registry version record (§8.1). Runs locally."""
 from __future__ import annotations
 
 from verity.circuits import Program, bind
-from verity.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity.circuits.liveness import dead_gates
 from verity_vllm.program.frontend.correspond import compare_bodies, correspond
 from verity_vllm.program.frontend.provenance import registry_version
@@ -93,7 +93,7 @@ def test_compare_bodies_distinguishes_repeated_reference_from_distinct_values():
         return Coll(Array(3, F32), Concat([z.refs] * 3))  # the raw node; concat() now normalises this to the Strided (DC B.1)
 
     def repeated_strided(B, S):
-        z = B.call(b1.ZERO32)
+        B.call(b1.ZERO32)
         return Coll(Array(3, F32), Strided("n", 0, 0, 1, 0, 0, 3))
 
     def distinct(B, S):
