@@ -14,10 +14,11 @@ on private copies of the files they read (`Pipeline`); the replay after the buil
 and is the one that judges. The audits of `UNREAD_FACTS` that replay also write what each constant of their roots mentions
 (`Unread.lean`, `unread_facts`), which `unread.py`'s ratchet on wholly unread modules reads.
 
-It judges what it read against the package's policy and records, `lean-audit.json`. README.md says how: "What it checks"
-lists every way a package fails (each failure carries a code, `Failure`, which the report lists in `failure_codes`), then
-the sandbox, the Lean slot and the memory floors; the sections after it cover the policy, `proved_in`, `--update`,
-`--moved` and lifts, `--regenerate` and its bookkeeping, merging records and `upstream`.
+It judges what it read against the package's policy and records, `lean-audit.json`. README.md is the outline: "What it
+checks" lists every way a package fails (each failure carries a code, `Failure`, which the report lists in
+`failure_codes`), then the sandbox, the Lean slot and the memory floors; "The lock" lists the policy's sections and
+`proved_in`, and "The records" `--update`, `--moved` and lifts, `--regenerate` and its bookkeeping, and merging records.
+Each line there names the function or constant here whose docstring has the rule.
 
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error or a refusal. This directory is self-contained (the
 standard library, `lake` and the toolchain's `lean` and `leanchecker`): another repository can copy it and use it with
@@ -321,7 +322,8 @@ def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> 
 
 def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
     """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor, which is
-    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves)."""
+    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves).
+    `check.py` and the fast path (`lean_changed.py`) refuse by it alike."""
     heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
              and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
     spec = [p for p in pkgs if (p / POLICY).is_file() and json.loads((p / POLICY).read_text()).get("proved_in")]
@@ -804,7 +806,10 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
     statement reads; a statement that reads a non-theorem constant of a proof package is refused), and `theorem X.SecurityProofs.G : X.Guarantees.G := @old` appended to the module that
     proves ``old``, or to the one ``beside`` names, which then imports the spec module and the proof's. Returns the
     moves ({old: X.SecurityProofs.G}) for `--update --moved`, which certifies each lift as the same statement or prints
-    the change."""
+    the change. What it cannot follow (an `open` of a namespace a definition module opens only through a proof's
+    declaration, a `variable` an `omit` or `include` changes) fails the build or prints as a change, never as the same
+    statement. ``old`` stays as a lemma. A guarantee that takes a named assumption as a hypothesis moves it into `G`,
+    which prints as a change."""
     files = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
     proofs = {m for _, q in provers(pkg, policy) if q.is_dir() for m in lean_modules(q)}
     def declared(mods):
@@ -901,7 +906,9 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict, sealed: "Sealed
     lakefile of each such package, comments aside.  A hit fails unless `dependency_unchecked` lists its module (a lakefile:
     `<package>/lakefile.lean`) with the reason.  The toolchain, which defines these options, is trusted, and a path
     dependency is a package of the repository, audited on its own.  With ``sealed`` (the package's seal) the sources and
-    lakefiles are read from its copies, which ``oleans`` then name, so no dependent's build can change what is scanned."""
+    lakefiles are read from its copies, which ``oleans`` then name, so no dependent's build can change what is scanned.
+    The imported modules are the ones the `dependencies` record covers, and their sources are there once the package is
+    built, so the scan builds nothing."""
     fails, seen, read = [], set(), 0
     allowed = policy.get("dependency_unchecked", {})
     loaded = [os.path.realpath(o) for o in oleans]
@@ -3896,6 +3903,11 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
     return pins, fails, by
 
 
+class Unpassed(RuntimeError):
+    """A `proved_in` package's build did not pass, so `proved` reads none of its facts: the audit fails with
+    `proved_in.unpassed`, a consequence of that package's own failures."""
+
+
 def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, str] | None = None,
            ready=lambda q: None, keep: bool = True, seals: "Seals | None" = None,
            keys: bool = False) -> tuple[list[str], dict, dict[str, list[str]]]:
@@ -3905,9 +3917,18 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
     pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
     guarantees proved in ``pkg``; with ``keep``, its document is kept under `proved-in-*/` (`facts_of`). With ``keys``, the
     facts carry `proved_keys` (each prover's own modules' `replay_keys`, folded) for `facts_key`, which stage A computes
-    and a normal audit does not. Raises RuntimeError when a package's build did not pass or its facts cannot be read.
+    and a normal audit does not. Raises `Unpassed` when a package's build did not pass, RuntimeError when its facts
+    cannot be read.
     With ``seals`` (the run's seals) a prover's facts are read from the copies taken at its own seal, which its build
-    announced before this one reads it."""
+    announced before this one reads it.
+
+    A spec package keeps the lock, the trusted object, and a package it names is untrusted: its own audit replays its
+    declarations through the kernel, so `check.py SPEC` audits each package `proved_in` names in the same run, without
+    `--update` unless it is named too, and the spec's reading waits for its build. Moving a proof out of the spec's
+    package so changes no guarantee or `reads` record, and sends no DM (`tests/test_audit.py` builds the move); the
+    spec's own checks (layers, scans, escapes, its replay) run as before. A proofs package's modules sit under a root
+    of their own (`proved_in.shared-root`), and because a library whose root is `Pkg` claims every `Pkg.*` module, an
+    umbrella module `Pkg` cannot move into the proofs package."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
     proved_keys: list[list[str]] = []
     if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
@@ -3941,7 +3962,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                                  f"modules under a root of their own (declarations keep their names)"))
             continue
         if ready(q) is False:
-            raise RuntimeError(f"proved_in: {entry}'s build did not pass (its report says why), so its facts are not read: "
+            raise Unpassed(f"proved_in: {entry}'s build did not pass (its report says why), so its facts are not read: "
                                f"its .lake holds whatever an earlier or interrupted build left, and a module it lacks would "
                                f"read as a missing import here")
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
@@ -4081,7 +4102,15 @@ def lifted_into(a: dict, b: dict, fact: dict, mv: dict, renames: dict[str, str] 
     its type (``fact``) is a definition of a spec module (`spec_module`) applied under binders, and with that definition
     unfolded once (`Facts.lean`'s `liftOf`) its type hashes to ``a``'s type hash (after `--moved`, ``mv``: its text under
     the old names), and its named assumptions are ``a``'s (renamed by ``renames``).  None when it is not certified, and then
-    the change is a change of meaning."""
+    the change is a change of meaning.
+
+    Lifting `theorem X (xs) : e` to `theorem X (xs) : G as` with `def G (ys) : Prop := e'` in a `Guarantees` module
+    changes the record's signature and type hash. A certified lift gets one line (`LIFTED`), and `G`, new and read by no
+    other guarantee, needs no reading of its own; the review then holds no statement change. Any other lift prints in
+    full: a `G` whose value differs from `e` in anything the hash sees (binder names and metadata aside), a `G` outside a
+    `Guarantees` module, and a lift that moves a named assumption from the theorem's binders into `G`, which the
+    record's `assumptions` would lose. The landing DM reads only the records, so it still lists a lifted guarantee as
+    changed."""
     lift = fact.get("lift")
     if not (a and b and lift and spec_module(lift.get("module") or "")):
         return None
@@ -4354,7 +4383,8 @@ _SANDBOX: bool | None = None
 
 def sandboxed() -> bool:
     """Whether builds run in `sandbox.sh` here: it needs `unshare` and unprivileged user namespaces, and it must leave this
-    tool's own directory read-only (checked, not assumed)."""
+    tool's own directory read-only (checked, not assumed). The audit says when it had to build without one; the
+    `compile-time` check then stands in for the sandbox."""
     global _SANDBOX
     if _SANDBOX is None:
         probe = Path(tempfile.mkdtemp(prefix="lean-audit-sandbox-"))
@@ -4493,12 +4523,15 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     must be there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be
     one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
     Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
-    and its file, and keeps the recompile's outputs in the upper layers; a pass removes them. Without the sandbox there is
-    no overlay, so nothing is recompiled and the report's `unsampled` says so; a module of the population that no build of
+    and its file, the report's `mismatched` lists each module failed so ({module: its package's directory}), which
+    a records run has Lake compile before it audits again (`lean_changed.mismatched`), and the recompile's outputs stay
+    in the upper layers; a pass removes them. Without the sandbox there is no overlay, so nothing is recompiled and the
+    report's `unsampled` says so; a module of the population that no build of
     this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the audit, and only
     a cold run passes there (`lean_audit.sandboxed`'s probe can pass where this one fails). The audit prints the sample
     under its line (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories
-    (`writing`), so no build changes an overlay's lower layer while it is mounted."""
+    (`writing`), so no build changes an overlay's lower layer while it is mounted. A sample can miss a wrong module, so
+    the uncached nightly check stays the backstop."""
     mk, og = sibling("module_keys"), sibling("olean_graph")
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
@@ -4578,6 +4611,7 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
             graphs.append(m)
     rep["by_graph"] = graphs
     if fails:
+        rep["mismatched"] = {f.entry: str(keyed[f.entry].package.dir.resolve()) for f in fails}
         for f in list(top.rglob("*")):
             if f.is_symlink() or not (f.is_file() or f.is_dir()):
                 f.unlink()                              # whiteouts: the run's files keep regular files only
@@ -5277,7 +5311,8 @@ def dependency_digests(pkg: Path, toolchain: str, oleans: list[str], sealed: "Se
     the toolchain's own library. A dependency's other modules may be built or not (the upstream watch's exact pass builds
     all of ArkLib) without changing the record. Lean's `.olean` files are reproducible, so the record holds across machines
     and changes only at a bump. With ``sealed`` (the package's seal) the fetched packages are read from its copies, which
-    ``oleans`` then name; the toolchain's library is read live, since no prover writes it."""
+    ``oleans`` then name; the toolchain's library is read live, since no prover writes it. The record also changes when
+    the package's imports change (run `--update`); checking it takes seconds."""
     packages_dir = sealed.packages_dir if sealed else pkg / ".lake" / "packages"
     libs = [(d.name, d / ".lake" / "build" / "lib" / "lean") for d in sorted(packages_dir.iterdir())] if packages_dir.is_dir() else []
     libs.append(("toolchain", toolchain_bins(toolchain)[0].parent.parent / "lib" / "lean"))
@@ -5643,7 +5678,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                                                     keep=kept_facts == "all", seals=seals, keys=facts_cache is not None)
             rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
-        rep["failures"].append(Failure("lean", None, f"lean: {e}"))
+        rep["failures"].append(Failure("proved_in.unpassed", None, str(e)) if isinstance(e, Unpassed) else
+                               Failure("lean", None, f"lean: {e}"))
         background.shutdown(cancel_futures=True)
         return reported(rep)
     if waited:
@@ -5927,7 +5963,22 @@ def packages(root: Path) -> list[Path]:
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
     """Build each package of the controls (`CONTROLS`) with ``toolchain``: it must pass clean, and fail each check once a
     violation is added (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs
-    elan and the toolchain with `setup.sh`."""
+    elan and the toolchain with `setup.sh`, so a machine without elan works.
+
+    Among the violations (`tests/fixtures/violations.json`, by key):
+    - `kernel`: a false theorem added through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass
+      every check but the replay and fail the replay;
+    - `initializer`: an initializer that tries to forge the facts, which must never run where the audit reads the
+      package;
+    - `compile_time_io`: compile-time IO that rewrites a checker input and restores it, which the compile-time check
+      refuses and the sandbox blocks;
+    - `docstring`: a docstring that names `debug.skipKernelTC`, which must pass;
+    - `dependency_option`: a fetched dependency (a package at `.lake/packages/dep`) whose module sets
+      `debug.skipKernelTC`, which must fail, and `dependency_docstring`: one whose docstring and comments name it, which
+      must pass;
+    - `closure_dependency`: a dependency that adds a false theorem through `debug.skipKernelTC`, spelled so that no scan
+      finds it, which must pass every check, the replay of the package's own modules included, and fail the replay of
+      the import closure (`--closure`), so it fails without `--fresh`."""
     return [f for fixture in CONTROLS for f in controls_of(fixture, toolchain, out, install, log)]
 
 

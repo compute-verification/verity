@@ -129,9 +129,10 @@ theorem unit_member {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
       (∀ i, i < (P.defs[sc.d]!).params.size → i < ((P.defs[P.root]!).body.nodes[k]!).args.size) ∧
       sc = P.child P.rootScope k m := by
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
+  have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hrs
-  obtain ⟨k, m, hk, hkey, -, hm, rfl⟩ := unit_node hr hfirst hrs hu
+  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hir hrs
+  obtain ⟨k, m, hk, hkey, -, hm, rfl⟩ := unit_node hr hfirst hir hrs hu
   obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec k hk
   have hnode : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by
     simp [Desc.isInputNode, hkey]

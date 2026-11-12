@@ -13,9 +13,10 @@ public import Mathlib.Tactic
 A unit is a member of a root node that is no input, and its gates are that member's place in the node's.
 
 `ReadProg`: what the record check reads of a Program before it reads a unit of it; its last clause, that the root is
-the first Definition of its key, the decoder gives (`readProg_of_decode`). `unit_node` gives a unit its root
-node and member, from the root's ranges (`ranges_spec`), and `unit_within` puts the member's gates inside the node's.
-From those:
+the first Definition of its key, the decoder gives (`readProg_of_decode`). The template query passes over the input
+nodes of such a Program (`readProg_inputs`), so its ranges are the root's nodes whose callee's key is no input id.
+`unit_node` gives a unit its root node and member, from the root's ranges (`ranges_spec`), and `unit_within` puts
+the member's gates inside the node's. From those:
 
 * `unitsComputed` (`UnitsComputed`): a gate inside a unit is computed, since its root node is no input node.
 * `gate_located`: every gate of the Program is located, holds one value, and reads nothing where it is an input.
@@ -28,7 +29,7 @@ namespace NciCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope isInputId)
 open Flock.TemplateQuery (TRange)
-open NciCheck.Record.SecurityProofs (RootFirst ranges_spec evaluate_asked)
+open NciCheck.Record.SecurityProofs (RootFirst InputsRead ofProg_def ranges_spec evaluate_asked)
 open NciCheck.Properties.SecurityProofs
 
 /-- **A Program the record check reads**: it decodes, in order, its root and its bodies laid out and its input
@@ -45,16 +46,46 @@ theorem readProg_of_decode {bytes : ByteArray} {P : Prog} (hdec : Flock.Program.
     (hwk : Desc.walkable P = true) (hkey : NciCheck.RecordText.keyedAsInput P = false) : ReadProg P :=
   ⟨⟨bytes, hdec⟩, hov, hl, hin, hwk, hkey, DecodeKeys.root_first bytes P hdec⟩
 
+/-- **The template query passes over the input nodes of a Program the record check reads**: a root node's callee is
+a Definition before the root and the first of its key (`DecodeKeys.decode_keys`), and where its key is an input id
+it is a primitive, since no root node calls a composite keyed as an input. -/
+theorem readProg_inputs {P : Prog} (hP : ReadProg P) : InputsRead P := by
+  obtain ⟨⟨bytes, hdec⟩, -, -, -, -, hkey, -⟩ := hP
+  obtain ⟨hr, -, -⟩ := BodiesOk.decode_root bytes P hdec
+  obtain ⟨st, hPd, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hPd]; exact hinv.1
+  obtain ⟨-, huniq⟩ := DecodeKeys.decode_keys bytes P hdec
+  intro k hk hI
+  have hfn : ((P.defs[P.root]!).body.nodes[k]!).fn < P.root := ((hok P.root hr).2.1 k hk).1
+  have hlt : ((P.defs[P.root]!).body.nodes[k]!).fn < P.defs.size := Nat.lt_trans hfn hr
+  have hprim : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = true := by
+    have e : (P.defs[P.root]!).body.nodes[k]! = (P.defs[P.root]!).body.nodes[k] := getElem!_pos _ k hk
+    have hany := Array.any_eq_false.1 hkey k hk
+    rw [e] at hI ⊢
+    cases hp : (P.defs[((P.defs[P.root]!).body.nodes[k]).fn]!).prim with
+    | true => rfl
+    | false =>
+      exfalso
+      simp [hp, hI] at hany
+  have hfst : ∀ j < ((P.defs[P.root]!).body.nodes[k]!).fn,
+      (P.defs[j]!).key ≠ (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key := by
+    intro j hj he
+    have h1 := huniq j (Nat.lt_trans hj hlt)
+    rw [he, huniq _ hlt] at h1
+    exact absurd (Option.some.inj h1) (Nat.ne_of_gt hj)
+  rw [ofProg_def hlt hfst]
+  exact hprim
+
 /-- **A unit is a member of a root node that is no input**: the node's callee has the unit's template for its key,
 which is no input id. -/
 theorem unit_node {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size) (hk : RootFirst P)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
-    {sc : Scope} (h : UnitAt P rs tid u sc) :
+    (hin : InputsRead P) (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs)
+    {tid : String} {u : ℕ} {sc : Scope} (h : UnitAt P rs tid u sc) :
     ∃ k m, k < (P.defs[P.root]!).body.nodes.size ∧
       isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key = false ∧
       tid = (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key ∧
       m < ((P.defs[P.root]!).body.nodes[k]!).members ∧ sc = P.child P.rootScope k m := by
-  obtain ⟨hnodes, hall⟩ := ranges_spec hr hk hrs
+  obtain ⟨hnodes, hall⟩ := ranges_spec hr hk hin hrs
   obtain ⟨i, m, hi, hti, hm, -, hsc⟩ := h
   have hmem : rs[i]! ∈ rs.toList := by
     rw [getElem!_pos rs i hi]
@@ -116,8 +147,9 @@ theorem unitsComputed {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) : UnitsComputed P rs := by
   intro tid u sc g p ops sc' hu hlo hhi hgate
   obtain ⟨hr, hrp, hlay, -⟩ := read_bodies hP
+  have hir := readProg_inputs hP
   obtain ⟨-, -, hl, hin, -, -, hfirst⟩ := hP
-  obtain ⟨k, m, hk, hno, -, hm, rfl⟩ := unit_node hr hfirst hrs hu
+  obtain ⟨k, m, hk, hno, -, hm, rfl⟩ := unit_node hr hfirst hir hrs hu
   obtain ⟨h1, h2⟩ := unit_within P (hlay P.root hr) hrp hk hm
   have hg : (DescAgree.rootOffs P)[k]! ≤ g ∧ g < (DescAgree.rootOffs P)[k + 1]! :=
     ⟨Nat.le_trans h1 hlo, Nat.lt_of_lt_of_le hhi h2⟩
@@ -161,6 +193,7 @@ theorem gatesOwn {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadPr
   obtain ⟨p, ops, sc, w, hgate, hw, hinp⟩ := gate_located hP hg
   refine ⟨p, ops, sc, w, hgate, hw, hinp, fun hcomp => ?_⟩
   obtain ⟨hr, hrp, hlay, -⟩ := read_bodies hP
+  have hir := readProg_inputs hP
   obtain ⟨-, -, hl, hin, -, hkey, hfirst⟩ := hP
   obtain ⟨-, h0, hK, -⟩ := DescAgree.rootLaidOut_spec P hl
   obtain ⟨k, hkn, hgk⟩ := DescAgree.node_exists (DescAgree.rootOffs P) (DescAgree.nodeCount P) h0 g
@@ -181,7 +214,7 @@ theorem gatesOwn {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadPr
       have hprim : (P.defs[((P.defs[P.root]!).body.nodes[k]).fn]!).prim = false := by
         simpa [Desc.isInputNode, hI] using hnode
       simp [hprim, hI] at hany
-  obtain ⟨hnodes, hall⟩ := ranges_spec hr hfirst hrs
+  obtain ⟨hnodes, hall⟩ := ranges_spec hr hfirst hir hrs
   have hkin : k ∈ rs.toList.map (·.node) := by
     rw [hnodes, List.mem_filter]
     exact ⟨List.mem_range.2 hk, by simpa using hno⟩
@@ -227,11 +260,11 @@ theorem gatesOwn {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadPr
 
 /-- A range of the root: its node is one of the root's, and its count the node's members. -/
 theorem range_node {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size)
-    (hk : RootFirst P) (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {i : ℕ}
-    (hi : i < rs.size) :
+    (hk : RootFirst P) (hin : InputsRead P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {i : ℕ} (hi : i < rs.size) :
     rs[i]!.node < (P.defs[P.root]!).body.nodes.size ∧
       rs[i]!.count = ((P.defs[P.root]!).body.nodes[rs[i]!.node]!).members := by
-  obtain ⟨-, hall⟩ := ranges_spec hr hk hrs
+  obtain ⟨-, hall⟩ := ranges_spec hr hk hin hrs
   have hmem : rs[i]! ∈ rs.toList := by
     rw [getElem!_pos rs i hi]
     simp
@@ -240,9 +273,10 @@ theorem range_node {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.ro
 
 /-- The root's ranges are in the order of their nodes. -/
 theorem ranges_sorted {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size)
-    (hk : RootFirst P) (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs)
+    (hk : RootFirst P) (hin : InputsRead P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs)
     {i i' : ℕ} (hi : i < rs.size) (hi' : i' < rs.size) (h : i < i') : rs[i]!.node < rs[i']!.node := by
-  obtain ⟨hnodes, -⟩ := ranges_spec hr hk hrs
+  obtain ⟨hnodes, -⟩ := ranges_spec hr hk hin hrs
   have hs : (rs.toList.map (·.node)).Pairwise (· < ·) := by
     rw [hnodes]
     exact List.Pairwise.filter _ List.pairwise_lt_range
@@ -274,14 +308,15 @@ theorem units_apart {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
         (P.child P.rootScope rs[i]!.node m).off := by
   obtain ⟨hr, hrp, hlay, -⟩ := read_bodies hP
   have hfirst : RootFirst P := hP.2.2.2.2.2.2
-  obtain ⟨hk, hc⟩ := range_node hr hfirst hrs hi
-  obtain ⟨hk', hc'⟩ := range_node hr hfirst hrs hi'
+  have hir := readProg_inputs hP
+  obtain ⟨hk, hc⟩ := range_node hr hfirst hir hrs hi
+  obtain ⟨hk', hc'⟩ := range_node hr hfirst hir hrs hi'
   rw [hc] at hm
   rw [hc'] at hm'
   have hw := unit_within P (hlay P.root hr) hrp hk hm
   have hw' := unit_within P (hlay P.root hr) hrp hk' hm'
   rcases Nat.lt_trichotomy i i' with h | h | h
-  · have hn := ranges_sorted hr hfirst hrs hi hi' h
+  · have hn := ranges_sorted hr hfirst hir hrs hi hi' h
     have hmono := Resolve.offsets_mono P P.root (hlay P.root hr) hrp (rs[i]!.node + 1) rs[i']!.node hn
       (Nat.le_of_lt hk')
     exact Or.inl (Nat.le_trans hw.2 (Nat.le_trans hmono hw'.1))
@@ -293,7 +328,7 @@ theorem units_apart {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
     rcases Nat.lt_or_gt_of_ne hmm with h | h
     · exact Or.inl (members_apart P _ h)
     · exact Or.inr (members_apart P _ h)
-  · have hn := ranges_sorted hr hfirst hrs hi' hi h
+  · have hn := ranges_sorted hr hfirst hir hrs hi' hi h
     have hmono := Resolve.offsets_mono P P.root (hlay P.root hr) hrp (rs[i']!.node + 1) rs[i]!.node hn
       (Nat.le_of_lt hk)
     exact Or.inr (Nat.le_trans hw'.2 (Nat.le_trans hmono hw.1))

@@ -1,0 +1,93 @@
+# The starts an attack trains from, and the data they were trained and are scored on. `training_slowdown.starts` and
+# `training_slowdown.data` read it and check every file they open against it.
+#
+# A start: `art` is the store artifact holding it and `path` its directory there (theta.safetensors, start.json);
+# `installed` is where a node holds the same directories. `digest` is θ's digest as start.json records it. `c0_macs` is
+# the counted MACs of the start's own training (start.json's provenance.c0.macs, a float because the largest is past
+# TOML's integers) and `l0_bpb` θ's bits per byte on the whole search pool (provenance.search_pool.bpb).
+#
+# A data: its tokenizer, the sha256 of its built stream's manifest and tokenizer.json, the selection the stream was
+# built from (a fixture in fixtures/artifacts.json, which the manifest names by sha256), each held-out set's tokens by
+# sha256, and where a node holds each.
+
+installed = "/workspace/research/te/starts"
+
+[data.v3]
+tokenizer = "bpe32k"
+vocab = 32000
+eot = 0
+manifest_sha256 = "1f497ac981268d8cb4b9547fb6c4e3d6fc1b574a4b2e410c1172cec4d0068dd7"
+tokenizer_sha256 = "d5cd5131fde5e8b8b2c81f0696020fe55c4446aae34953aef2a89ac3e0ac95a9"
+selection = "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2"
+selection_sha256 = "0bd75f1aa81fbc228a5fd7044421c6abc0f534bf80e80d02c494d41db84c7b4e"
+search_sha256 = "1424e777b2d6f319f9662fbe0c22bdbc962074849f10779708ca76941154c5f3"
+final_sha256 = "b753d476cfeebd6bf7b71ede9604158d10e0de834798d9646150b8fd4a8d38e4"
+train = "/workspace/research/scratch/covert-witness/train/v3"
+search = "/workspace/research/scratch/covert-witness/heldout/v3/search-pool"
+final = "/workspace/research/te/sealed/heldout/v3/final"
+
+[starts.s-t20]
+data = "v3"
+art = "art:064ff36b5573c10828f8bba9866ad1c1952e2e36317114f1318a62a553554c2f"
+path = "starts/s-t20"
+theta_file_sha256 = "7b3677757171d2013e6b5fd44dbf93e078fd038acc3d69e914500d88fa30c84c"
+start_json_sha256 = "cc49c326d9745e95cdf1f1a97194b6f4bb545e4edc63b36e95ca99cf64a5f007"
+digest = "071d3867a17a5f8e16a15f26b3141b58bf16fbb53c01abacc6a8d6b0b1f360b1"
+shape = { family = "lf", d_model = 512, n_layer = 6, n_head = 8, d_ff = 1408, vocab = 32000, ctx = 1024, tied = true, parameters = 35658240, tokens = 385482752 }
+c0_macs = 5.643309536068644e+16
+l0_bpb = 1.2581427867916535
+
+[starts.s-t200]
+data = "v3"
+art = "art:064ff36b5573c10828f8bba9866ad1c1952e2e36317114f1318a62a553554c2f"
+path = "starts/s-t200"
+theta_file_sha256 = "353324042ca7c7357bbc0cebc2f87c1485a63bf31ad567326134ab01a2222e3d"
+start_json_sha256 = "934386f69c119a849d2af87a78d78d035e3554ac058c39e1a007f9ac120b2980"
+digest = "3fbf01b5f9079695670d7889f5714e9f785c4416f8e50b3aef8c2cb6a25b52c7"
+shape = { family = "lf", d_model = 512, n_layer = 6, n_head = 8, d_ff = 1408, vocab = 32000, ctx = 1024, tied = true, parameters = 35658240, tokens = 3854827520 }
+c0_macs = 5.643309536068644e+17
+l0_bpb = 1.18507453352078
+
+[starts.m-t20]
+data = "v3"
+art = "art:064ff36b5573c10828f8bba9866ad1c1952e2e36317114f1318a62a553554c2f"
+path = "starts/m-t20"
+theta_file_sha256 = "9f249867069d7116fd3d29d0103ed5e14ea413cefc9a8002fe98460412ac3128"
+start_json_sha256 = "a58cc348e8e6eb31c6511b79855e558adec37d655fce0e89700d2611ef4be22a"
+digest = "3669435ebb3d606caef0971ae41b47666cf4dca398934214d6721a0f844a9a10"
+shape = { family = "lf", d_model = 768, n_layer = 8, n_head = 12, d_ff = 2048, vocab = 32000, ctx = 1024, tied = true, parameters = 81212160, tokens = 1132658688 }
+c0_macs = 3.570158551743717e+17
+l0_bpb = 1.1539070421843887
+
+[starts.m-t200]
+data = "v3"
+art = "art:064ff36b5573c10828f8bba9866ad1c1952e2e36317114f1318a62a553554c2f"
+path = "starts/m-t200"
+theta_file_sha256 = "1d2f3d3252c9dd9820a2b9f2d3c0ad2b9b4f91c95019d4cfdeb5faefa9a7d131"
+start_json_sha256 = "769f4f975b1fc50601423c0191488382c67d6505f419c7ecbd1e41c2b200c256"
+digest = "b40e24e3564d47df9bd18d98f9f0fd1eae6e3d40b4501de69c3999c8aef5b1b8"
+shape = { family = "lf", d_model = 768, n_layer = 8, n_head = 12, d_ff = 2048, vocab = 32000, ctx = 1024, tied = true, parameters = 81212160, tokens = 11327176704 }
+c0_macs = 3.5703444652249743e+18
+l0_bpb = 1.0939461565726842
+
+[starts.l16-t20]
+data = "v3"
+art = "art:064ff36b5573c10828f8bba9866ad1c1952e2e36317114f1318a62a553554c2f"
+path = "starts/l16-t20"
+theta_file_sha256 = "8638929014bf768ddb5980fc3dfc07e41ccdebc827091bb870b183b4f2db6b38"
+start_json_sha256 = "236e3afe66e4af55cd023538d754eda01eb3e723608d4f057a6427d6517e4cf3"
+digest = "016abe0cf79cda8726e38500eb9eed4957a247004d34212270aec9bde8cf6157"
+shape = { family = "lf", d_model = 1024, n_layer = 16, n_head = 16, d_ff = 2816, vocab = 32000, ctx = 1024, tied = true, parameters = 238322688, tokens = 4111073280 }
+c0_macs = 3.5860252159130337e+18
+l0_bpb = 1.041875760274018
+
+[starts.xl-t20]
+data = "v3"
+art = "art:064ff36b5573c10828f8bba9866ad1c1952e2e36317114f1318a62a553554c2f"
+path = "starts/xl-t20"
+theta_file_sha256 = "8569c6124ca04d4dda2fea864d3236e03d22da92dec2636dc762129b00876422"
+start_json_sha256 = "fd212b6c6852b5661bca4d789de2c65eb2ae9e90607c8d4c457a4577719b91e7"
+digest = "3ca02d80a4827936945600379dec8e6eab7ce0f6cbb93c62be79e0f9aed25ab6"
+shape = { family = "lf", d_model = 1536, n_layer = 21, n_head = 24, d_ff = 4224, vocab = 32000, ctx = 1024, tied = true, parameters = 656146944, tokens = 12140150784 }
+c0_macs = 2.7491104057549537e+19
+l0_bpb = 0.9572249545017505

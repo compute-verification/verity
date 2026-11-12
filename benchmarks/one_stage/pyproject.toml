@@ -1,6 +1,6 @@
 # The one-stage audit runs (a0 ... a11) and composite.py (onsite's and remote's cases from their subprotocols' cases, on
-# a stub executable). Not a package: the suite tests a5's coin sources (`a5_coins.py`) on a toy window
-# through `service.Stream` and the Lean verifier of record (`sampled-proofs-verifier`, built with lake on first use), and
+# a stub executable). Not a package: the suite tests where a5 gets its coins (`a5_coins.py`) on a toy window
+# through `service.Stream` and the Lean verifier (`sampled-proofs-verifier`, built with lake on first use), and
 # M1's family census sizing split proof blocks and candidates (`m1_families.py --estimate`, on stand-ins: nothing is
 # lowered) and the proof-block census over it (`block_census.py`, on stand-in sized units), R2's other population (`r2_population.py`) and A8's scan of what the verifier received (`a8.scan`), on toy
 # files, composite's onsite and remote cases from their subprotocols' cases (`composite.py`, on a stub executable),
@@ -11,6 +11,8 @@
 # tables on a dry run's toy scratch (`test_a5_tp_store`, through `adapters/vllm/verity_vllm`'s `ops/store_trees.sh`),
 # and the vLLM demo's endpoint serving under predict's row in a toy tree (`test_vllm_example`). Decode's FP8 linear's
 # two cuts are sized for real in ANDs a token (`test_flashinfer_decode_cut`: its units lowered by `m1_families.estimate`).
+# One test proves: `test_audit_two_members` takes two members of a tiny window through the records audit on the real
+# prover, ZK server and Lean verifier.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -21,6 +23,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_a0_archive_once.py",
+    "tests/test_audit_two_members.py",
     "tests/test_a5_coins.py",
     "tests/test_a5_memo.py",
     "tests/test_a5_outputs.py",
@@ -33,6 +36,15 @@ untraced = [
     "tests/test_served_overhead.py",
     "tests/test_served_verdicts.py",
 ]
+# The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
+# builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/flock/prover/check_build.sh bin`'s,
+# from the live crate and the patches under `verity`, on the Flock checkout check's flock-circuit-build step leaves on a
+# machine: the test skips on a machine without one, since its build fetches nothing.
+artifacts = ["verity/protocols/flock/verifier/.lake/build/bin/flock-verify",
+             "verity/protocols/flock/verifier/.lake/build/bin/flock-firewall"]
+# What the suite's test process may reach with the processes it starts, past the runner's default for one:
+# `test_audit_two_members`' audit holds a session's prover and verifier and the ZK server's Lean at once.
+worker_gb = 6
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
 # `verity/composite/device/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
@@ -50,7 +62,8 @@ untraced = [
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `demos/vllm/serve.sh`: the
 # demo's endpoint (`test_vllm_example`); `demos/vllm/commit.sh`: the demo's Commit, which `test_commit_records` runs
-# through bash in a toy tree. `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
+# through bash in a toy tree, with `demos/vllm/published.sh`, the list of files a Commit run publishes.
+# `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/composite/device/live_challenger",
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
@@ -58,7 +71,7 @@ inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "demos/vllm/serve_load.py", "demos/vllm/serve.sh",
-          "demos/vllm/commit.sh",
+          "demos/vllm/commit.sh", "demos/vllm/published.sh",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",

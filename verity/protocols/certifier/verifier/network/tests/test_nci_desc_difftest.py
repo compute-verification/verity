@@ -1,6 +1,6 @@
 """The difftest of the description-sized inference-only check (`NciCheck.Desc`) against the unrolled one: the Python half.
 
-`verity/protocols/inference_only/verifier/nci/lean/scripts/desc_difftest_vectors.py` writes 4,010 declarations divided into IUs of
+`verity/protocols/inference_only/verifier/nci/lean/scripts/desc_difftest_vectors.py` writes 4,082 declarations divided into IUs of
 root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
 carry, one past `NciCheck.Desc.walkBound`'s limit, four on a scan of no iterations, twelve on whole members of a batch
 returning leaves of two arguments they share, 335 whose references name leaves of other widths than their types give
@@ -48,7 +48,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.DescD
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,010 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 4,082 instances, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",

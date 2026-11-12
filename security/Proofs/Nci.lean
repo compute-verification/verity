@@ -4,6 +4,7 @@ public import Proofs.Nci.Inequalities
 public import Proofs.Nci.LoomisWhitney
 public import Proofs.Nci.Cut
 public import Proofs.Nci.CutWitness
+public import Proofs.Nci.Untied
 public import Proofs.Nci.CutCharged
 public import Proofs.Core
 public import Proofs.Nci.Chain

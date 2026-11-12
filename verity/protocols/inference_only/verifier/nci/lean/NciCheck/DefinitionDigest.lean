@@ -1,8 +1,9 @@
 module
 
-public import Flock.Canon
-public import Flock.Hash
-public import Flock.Steps
+public import Base.Bytes
+public import Base.Canon
+public import Base.Hash
+public import Circuits.Steps
 
 /-!
 # A Definition's digests, read off its Program's descriptor
@@ -10,16 +11,17 @@ public import Flock.Steps
 Two digests of a Definition of a Program (`verity-ir/descriptor/v1`), each computed from the descriptor's JSON, with no
 decode of the Program:
 
-* `definitionDigest`, the circuit format's own (`verity/ml/circuits/PROTOCOL.md` §4.8, `codec.definition_digest`): the
+* `definitionDigest`, the circuit format's own (`verity/circuits/PROTOCOL.md` §4.8, `codec.definition_digest`): the
   SHA-512 of the Definition's canonical entry (`canonicalEntry`). A callee enters it by descriptor id, so it covers the
   Definition's own body and none of its callees'.
 * `closureDigest`: the SHA-512 of the canonical JSON object that maps each Definition one reaches, by descriptor id, to
   its `definitionDigest`. It covers the Definition's body and every body under it, so a check that takes a Definition
   by this digest takes no other body under its name: the digest a pin is computed with.
 
-Code: Lean core, and Flock's canonical JSON, SHA-512 and step bound; nothing of the policy's check, whose package it
-shares so that every check requiring this package reads one definition. The period check takes its slot entries'
-Definitions by `closureDigest`.
+Code: Lean core, the base package's bytes, canonical JSON and SHA-512 (`Base.Bytes`, `Base.Canon`, `Base.Hash`) and the
+circuit format's step bound (`Circuits.Steps`); nothing of the policy's check, whose package it shares so that every
+check requiring this package reads one definition. The period check takes its slot entries' Definitions by
+`closureDigest`.
 -/
 
 @[expose] public section

@@ -245,8 +245,9 @@ theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
       m < ((P.defs[P.root]!).body.nodes[k]!).members ∧ sc = P.child P.rootScope k m ∧
       (P.defs[sc.d]!).body = default ∧ (P.defs[sc.d]!).gates = 1 ∧ ∃ w, (P.defs[sc.d]!).ret = .value w := by
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
+  have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hrs
+  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hir hrs
   obtain ⟨i, m, hi, -, hm, -, rfl⟩ := hu
   have hmem : rs[i]! ∈ rs.toList := by
     rw [getElem!_pos rs i hi]
@@ -312,9 +313,10 @@ theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
     ∃ g, Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g := by
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
   obtain ⟨hov, hlay⟩ := read_walk hP
+  have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hrs
-  obtain ⟨k, m, hk, hkey, -, hm, rfl⟩ := unit_node hr hfirst hrs hu
+  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hir hrs
+  obtain ⟨k, m, hk, hkey, -, hm, rfl⟩ := unit_node hr hfirst hir hrs hu
   obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec k hk
   have hnode : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by
     simp [Desc.isInputNode, hkey]
