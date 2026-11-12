@@ -51,7 +51,9 @@ that command in two things, each with the recipe's own alternative:
 - **The front end.** The command starts vLLM's Rust front end (`VLLM_USE_RUST_FRONTEND=1`) with the tokenizer mode
   `glm5_next`, which the integration's pin does not have. The arm takes what the recipe names for such a build: the
   Python front end and `--tokenizer-mode auto`. The release the recipe names as its minimum is also later than the
-  pin.
+  pin. A job on a build that has the Rust front end asks for the command's own with `PUBLISHED_FRONTEND=rust`: the
+  server is then `vllm serve` under that variable with `--tokenizer-mode glm5_next`, and the arm's `meta.json` names
+  the front end it served behind (`front_end`). Every other arm serves behind the Python one, whatever the job says.
 - **The context limit.** The command names none, so vLLM takes the model's own, 1,048,576 tokens, and by the recipe's
   own note refuses to start on eight H200s, whose KV cache does not hold one request of that length. The arm serves
   at `--max-model-len auto`, vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves

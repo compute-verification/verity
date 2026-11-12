@@ -346,10 +346,19 @@ vllm:num_requests_running{engine="0",model_name="m"} 7.0
 def test_counters_sum_each_over_its_label_sets_and_the_schedule_reads_them():
     c = S.counters(METRICS)
     assert c == {"steps": 50.0, "step_tokens": 6000.0, "generation_tokens": 1200.0, "prompt_tokens": 4800.0,
-                 "prompt_tokens_cached": 1200.0, "preemptions": 0.0}
+                 "prompt_tokens_cached": 1200.0, "preemptions": 0.0, "drafts": 0.0, "draft_tokens": 0.0,
+                 "accepted_tokens": 0.0}
     s = S.schedule_metrics(c)
     assert (s["steps"], s["tokens_per_step"], s["rows_per_step"], s["prompt_cached_share"]) == (50.0, 120.0, 24.0, 0.25)
+    assert "accepted_per_draft" not in s
     assert S.schedule_metrics(None) == {} == S.schedule_metrics(dict(c, steps=0.0))
+    # an engine that drafts: its drafts, the tokens they proposed and the accepted ones, and not the per-position counter
+    drafting = S.counters(METRICS + 'vllm:spec_decode_num_drafts_total{engine="0",model_name="m"} 400.0\n'
+                          'vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="m"} 2000.0\n'
+                          'vllm:spec_decode_num_accepted_tokens_total{engine="0",model_name="m"} 700.0\n'
+                          'vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",model_name="m",position="0"} 300.0\n')
+    assert (drafting["drafts"], drafting["draft_tokens"], drafting["accepted_tokens"]) == (400.0, 2000.0, 700.0)
+    assert S.schedule_metrics(drafting)["accepted_per_draft"] == 1.75
 
 
 def test_the_table_carries_each_loads_schedule():
@@ -440,10 +449,11 @@ def test_max_model_len_replaces_the_base_context_limit():
     assert S.base_args() == S.BASE_ARGS and len(S.base_args(40960)) == len(S.BASE_ARGS)
 
 
-def test_the_published_arm_starts_the_server_as_the_models_recipe_does():
+def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path, monkeypatch):
     """The arm's line is stock's with the recipe's flags added and the runner's cap on the requests at once dropped,
     and nothing else, at the job's context limit, and at the recipe's, not the runner's, where the job names none; a
-    model with no recipe here is refused."""
+    model with no recipe here is refused. Behind the Rust front end the same flags go to ``vllm serve`` with the
+    recipe's own tokenizer mode, under the variable that starts it, and no other arm's server has it."""
     glm = S.MODELS["glm53"]
     context = S.published_context("published", "glm53", None)
     assert context == glm.published_context == S.AUTO == "auto"
@@ -452,7 +462,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does():
     argv = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context)
     cap = stock.index("--max-num-seqs")
     at = stock.index("--max-model-len")
-    assert argv == [*stock[:at], *glm.published, *stock[at:cap], *stock[cap + 2:]]
+    assert argv == [*stock[:at], *glm.published, "--tokenizer-mode", "auto", *stock[at:cap], *stock[cap + 2:]]
     assert argv.count("--max-model-len") == 1 and argv[argv.index("--max-model-len") + 1] == "auto"
     # the recipe's command for the cards, flag for flag, with the front end's fallback for a build without it
     for flag, value in (("--served-model-name", "glm-5.3"), ("--tensor-parallel-size", "8"), ("--tokenizer-mode", "auto"),
@@ -461,6 +471,19 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does():
                         ("--reasoning-parser", "glm47")):
         assert argv.count(flag) == 1 and argv[argv.index(flag) + 1] == value, flag
     assert "--enable-auto-tool-choice" in argv and "--max-num-seqs" not in argv
+    # the Rust front end: vLLM's serve command with the checkpoint as its argument and the recipe's tokenizer mode,
+    # every other flag as behind the Python one; the variable is the published arm's alone, whatever the job's says
+    rust = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context, front=S.RUST)
+    assert rust[:5] == [argv[0], "-m", "vllm.entrypoints.cli.main", "serve", "/ck"]
+    assert argv[:5] == [argv[0], "-m", "vllm.entrypoints.openai.api_server", "--model", "/ck"]
+    mode = argv.index("--tokenizer-mode") + 1
+    assert rust[5:] == [*argv[5:mode], "glm5_next", *argv[mode + 1:]]
+    assert [S.front_end(S.ARMS["published"], g) for g in (None, "python", "rust")] == ["python", "python", "rust"]
+    assert S.front_end(S.ARMS["compiled"], "rust") == "python" and S.FRONT_ENDS == ("python", "rust")
+    monkeypatch.setenv("VLLM_USE_RUST_FRONTEND", "1")
+    env = S.server_env(S.ARMS["published"], tmp_path, tmp_path, None, 1.0, 1.0)
+    assert "VLLM_USE_RUST_FRONTEND" not in env
+    assert S.server_env(S.ARMS["published"], tmp_path, tmp_path, None, 1.0, 1.0, front=S.RUST)["VLLM_USE_RUST_FRONTEND"] == "1"
     assert S.base_args(without=S.UNPUBLISHED) == ("--max-model-len", "4096", "--seed", "0", "--disable-uvicorn-access-log")
     # auto is the engine's to resolve: no load is checked against it, and a number still is
     assert S.context_of({"long": (1,)}, "auto") == "auto" and S.context_arg("auto") == "auto" and S.context_arg("4096") == 4096
@@ -471,9 +494,10 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does():
     for model_id, why in (("moonlight", "no recipe for moonlight"), (None, "no recipe for no model")):
         with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53's\)"):
             S.published_context("published", model_id, None)
-    # a recipe is its flags and its context limit together, and one arm alone is started by it
+    # a recipe is its flags, its context limit and its tokenizer mode behind each front end together, and one arm
+    # alone is started by it
     for name, m in S.MODELS.items():
-        assert bool(m.published) == (m.published_context is not None), name
+        assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
     assert [n for n, a in S.ARMS.items() if a.published] == ["published"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 

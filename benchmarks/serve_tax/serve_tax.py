@@ -36,9 +36,10 @@ The arms, each one engine configuration; each adds its change to the arm it name
   differ by, the noise floor of a cost (`cost_report`);
 - ``no-prefix-cache``: ``--no-enable-prefix-caching``;
 - ``published``: ``compiled`` started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags,
-  its speculative decoding among them, the context limit the job names or else the recipe's, and vLLM's own cap on
-  the requests it runs at once in place of `BASE_ARGS`'s. What stock vLLM serves under the settings its authors
-  publish, where ``compiled`` is stock under the settings the other arms share;
+  its speculative decoding among them, the context limit the job names or else the recipe's, vLLM's own cap on the
+  requests it runs at once in place of `BASE_ARGS`'s, and behind the front end the job names (`FRONT_ENDS`). What
+  stock vLLM serves under the settings its authors publish, where ``compiled`` is stock under the settings the other
+  arms share;
 - ``eager``: ``--enforce-eager``, the tax if commits or replay force eager;
 - ``bi-compiled``: ``compiled`` with ``VLLM_BATCH_INVARIANT=1``, vLLM's batch-invariant kernels;
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
@@ -189,8 +190,8 @@ class Arm:
     #: template, the model's (`Model.check`), and its window, the run's; `PRIVATE` as in ``env``
     rows: dict = field(default_factory=dict)
     #: whether the server starts as vLLM's recipe for the model starts it: the model's published flags added
-    #: (`Model.published`), at the job's context limit or else the recipe's (`published_context`), and the flags of
-    #: `BASE_ARGS` no recipe sets left to vLLM's own defaults (`UNPUBLISHED`)
+    #: (`Model.published`), at the job's context limit or else the recipe's (`published_context`), the flags of
+    #: `BASE_ARGS` no recipe sets left to vLLM's own defaults (`UNPUBLISHED`), behind the job's front end (`FRONT_ENDS`)
     published: bool = False
 
 
@@ -310,11 +311,12 @@ class Model:
     #: the check template its boundary commitment's replay block is made of, a serving template's descriptor id
     check: str | None = None
     #: what the command of vLLM's recipe for the model (recipes.vllm.ai) adds to ``args``, for the cards this file
-    #: serves the model on, and the context limit that command is served at where the job names none: the
-    #: ``published`` arm's server (`Arm.published`). What of the recipe the integration's pin can't run is not in it,
-    #: and the README says what that is
+    #: serves the model on, the context limit that command is served at where the job names none, and the recipe's
+    #: tokenizer mode behind each front end (`FRONT_ENDS`): the ``published`` arm's server (`Arm.published`). The
+    #: README says where the arm departs from the recipe's command
     published: tuple[str, ...] = ()
     published_context: int | str | None = None
+    published_tokenizer: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         unknown = [c for p in self.target_parts for c in p.changes if c not in CHANGES]
@@ -337,6 +339,12 @@ BASE_ARGS = ("--max-model-len", "4096", "--max-num-seqs", "256", "--seed", "0", 
 UNPUBLISHED = ("--max-num-seqs",)
 #: vLLM's word for the longest context limit the cards' KV cache holds, which the engine resolves when it starts
 AUTO = "auto"
+#: the front ends an arm that starts the server as the recipe does (`Arm.published`) serves behind: vLLM's Python
+#: server, which every other arm has, or its Rust one, which ``vllm serve`` starts in front of the engine under
+#: `RUST_ENV` on a build that has it
+PYTHON, RUST = "python", "rust"
+FRONT_ENDS = (PYTHON, RUST)
+RUST_ENV = {"VLLM_USE_RUST_FRONTEND": "1"}
 #: what makes vLLM write a request's or a response's text to the server's log, which a run publishes: the flags no arm
 #: or model may carry, and the variable a server's environment never keeps
 LOGS_TEXT_ARGS = ("--enable-log-requests", "--enable-log-outputs")
@@ -363,14 +371,14 @@ MODELS = {
                    metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}",
                    # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm, its command "FP8 on 8xH200 (standard)":
                    # the FP8 checkpoint, tensor parallel, an FP8 KV cache, five draft tokens a step from the model's
-                   # own draft layer. The tokenizer mode is the recipe's for a build without its Rust front end. The
-                   # command names no context limit and the model's own does not fit these cards' KV cache, so the
-                   # limit is the longest that does (`AUTO`); the recipe's command builder caps these cards at
-                   # 262,144, which a job that wants it names
-                   published=("--tokenizer-mode", "auto", "--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
+                   # own draft layer. The command's tokenizer mode is its Rust front end's, and the recipe names the
+                   # other for a build without it. The command names no context limit and the model's own does not
+                   # fit these cards' KV cache, so the limit is the longest that does (`AUTO`); the recipe's command
+                   # builder caps these cards at 262,144, which a job that wants it names
+                   published=("--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
                               "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
                               "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
-                   published_context=AUTO),
+                   published_context=AUTO, published_tokenizer={PYTHON: "auto", RUST: "glm5_next"}),
 }
 
 
@@ -484,23 +492,34 @@ def published_context(arm: str, model_id: str | None, given: int | str | None) -
     return model.published_context if given is None else given
 
 
+def front_end(arm: Arm, given: str | None) -> str:
+    """The front end ``arm``'s server starts behind: the job's (``--published-frontend``) for an arm that starts the
+    server as the recipe does, and vLLM's Python server for every other arm, whose plugins and tick it loads."""
+    return given or PYTHON if arm.published else PYTHON
+
+
 def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None,
-                max_model_len: int | str | None = None) -> list[str]:
+                max_model_len: int | str | None = None, front: str = PYTHON) -> list[str]:
+    """The server's command: vLLM's Python server, or behind `RUST` ``vllm serve``, the command that starts the Rust
+    front end (under `RUST_ENV`, `server_env`)."""
     base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
-    return [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
-            model.served, "--host", "127.0.0.1", "--port", str(port), *model.args,
-            *(model.published if arm.published else ()), *base, *arm.args,
+    serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
+             else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
+    published = (*model.published, "--tokenizer-mode", model.published_tokenizer[front]) if arm.published else ()
+    return [sys.executable, "-m", *serve, "--served-model-name",
+            model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *published, *base, *arm.args,
             *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
 
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
                edges: dict | None = None, boundary_rows: dict | None = None, check: str | None = None,
-               private: Path | None = None) -> dict[str, str]:
+               private: Path | None = None, front: str = PYTHON) -> dict[str, str]:
     """The server's environment: the job's, with on its path only what the arm's plugins need (`entry_points`): the
     plugin site, this tree for a change of `servetax_plugin`'s or the tick, and each other plugin's directory, so a
     stock arm's processes import nothing of ours; ``VLLM_PLUGINS``, which would let a job's environment drop one of
-    them, is unset, and so is what would put each response's text in the server's log (`LOGS_TEXT_ENV`). An arm with
+    them, is unset, and so is what would put each response's text in the server's log (`LOGS_TEXT_ENV`); `RUST_ENV`
+    is set behind the Rust front end and unset behind the Python one, whatever the job's environment says. An arm with
     ``boundary_rows`` gets its object: the arm's (`Arm.rows`), or ``boundary_rows`` in its place, with ``check`` (the
     model's check template) where it names none, at ``window_s``; its classes' directories, which hold values, go
     under ``private`` and never under ``d``. `PRIVATE` in the arm's data is ``private``."""
@@ -509,8 +528,9 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
             *(str(ROOT / path) for _, path in arm.general)]
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
                PYTHONPATH=os.pathsep.join([*ours, *SHARED.PYTHONPATH]))
-    for name in ("VLLM_PLUGINS", *LOGS_TEXT_ENV):
+    for name in ("VLLM_PLUGINS", *LOGS_TEXT_ENV, *RUST_ENV):
         env.pop(name, None)
+    env.update(RUST_ENV if front == RUST else {})
     if private is None and keeps_private(arm):
         raise SystemExit("this arm keeps files on the node, outside its run's directory: --private DIR")
     env.update(_private(arm.env, private))
@@ -560,10 +580,13 @@ def reset_prefix_cache(port: int, tries: int = 30) -> bool:
 
 #: a load's schedule, from the engine's counters on the server's Prometheus /metrics (summed over engines): its steps
 #: (each step with outputs observes ``iteration_tokens_total`` once), the tokens they scheduled and sampled, the prompt
-#: tokens the prefix cache served, and preemptions
+#: tokens the prefix cache served, preemptions, and under speculative decoding its drafts, the tokens they proposed
+#: and the tokens of them the model accepted (an engine without it has no such counters, and they read 0)
 SCHEDULE = {"steps": "vllm:iteration_tokens_total_count", "step_tokens": "vllm:iteration_tokens_total_sum",
             "generation_tokens": "vllm:generation_tokens_total", "prompt_tokens": "vllm:prompt_tokens_total",
-            "prompt_tokens_cached": "vllm:prompt_tokens_cached_total", "preemptions": "vllm:num_preemptions_total"}
+            "prompt_tokens_cached": "vllm:prompt_tokens_cached_total", "preemptions": "vllm:num_preemptions_total",
+            "drafts": "vllm:spec_decode_num_drafts_total", "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+            "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total"}
 
 
 def counters(text: str) -> dict[str, float]:
@@ -1350,12 +1373,14 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
     port = corpus().free_port()
-    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context)
+    front = front_end(arm, getattr(a, "published_frontend", None))
+    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front)
     BODY_EXTRA.clear()
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
     try:
-        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows, model.check, private)
+        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows, model.check, private,
+                         front)
         check_plugins(env, arm)
     except SystemExit:
         shutil.rmtree(out / ".site", ignore_errors=True)
@@ -1365,6 +1390,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         print(f"[serve-tax] no busy GPU-seconds: {no_nvml}", flush=True)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
+            "front_end": front,
             "plugin": list(arm.plugin), "env": arm.env, "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "general": entry_points(arm),
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
@@ -1588,12 +1614,15 @@ def edge_windows(arm_dir: Path, load: str, rep: int = 1) -> list[tuple[float, fl
 
 def schedule_metrics(s: dict | None) -> dict:
     """A load's schedule from its counters (`SCHEDULE`): its engine steps, the tokens each scheduled and the rows each
-    sampled (one per request that emitted a token), its preemptions and the prompt's share served from the prefix cache."""
+    sampled (one per request that emitted a token; under speculative decoding a request emits its accepted draft
+    tokens in the same step, so these are tokens a step and no longer rows), its preemptions, the prompt's share served
+    from the prefix cache and, where the engine drafted, the draft tokens accepted a draft."""
     if not s or not s.get("steps"):
         return {}
     return {"steps": s["steps"], "tokens_per_step": s["step_tokens"] / s["steps"],
             "rows_per_step": s["generation_tokens"] / s["steps"], "preemptions": s["preemptions"],
-            "prompt_cached_share": s["prompt_tokens_cached"] / s["prompt_tokens"] if s["prompt_tokens"] else None}
+            "prompt_cached_share": s["prompt_tokens_cached"] / s["prompt_tokens"] if s["prompt_tokens"] else None,
+            **({"accepted_per_draft": s["accepted_tokens"] / s["drafts"]} if s.get("drafts") else {})}
 
 
 def edge_records(arm_dir: Path) -> list[dict]:
@@ -2609,6 +2638,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
+    r.add_argument("--published-frontend", choices=FRONT_ENDS, help="the front end of an arm that starts the server as "
+                   "the model's recipe does (default: python, which the other arms have)")
     r.add_argument("--max-model-len", type=context_arg, help="the engines' context limit, a number of tokens or auto "
                    "(default: BASE_ARGS's)")
     r.add_argument("--edges-s", metavar="S,S,...", help="the restore arms' edges, seconds after the first load's first request")
