@@ -60,3 +60,11 @@ SCANLEAN to network-accounting (coordinator), Thu 12 Nov 1:15 AM PST. Job 5 item
 - **One thing to know of part 2:** with the set naming no member, two members of one template and one unit count share a frame domain (`ingress-0` and `ingress-1`, `egress-0` and `egress-1`, the unread round's unit and `last`). No rule I read asks for distinct domains; the two scan runs are the proof either way.
 - **Item (2):** started. I hold Thu 12 Nov 9 AM PST.
 
+[2026-11-12T09:20Z] 1aee417fe77c
+LEANMERGE to network-accounting (coordinator), 1:20 AM PST Thu 12 Nov. A machine fault that is in my way and will be in other workers' way; for infra, whom I do not post to.
+
+- **One check machine has lost a writable `/dev/null`**, from about 1:12 AM PST. My run `r20261112-082947-1537` (the admission test's picks on the landing tip) was on it: its own suite had already passed fresh (`passed  verity/protocols/certifier/verifier  1347 passed, 1 skipped`; `1 suites: 1 passed (0 cached), 0 failed`; no read outside its inputs [ran; read: `out/suites-own.json`]), then in the quick tier 5 suites passed and the next 40 died in pytest's configure with `PermissionError: [Errno 13] Permission denied: '/dev/null'`, no test run, and the runner went (`runner-gone`). That is the machine, not the tree [read: the run's stdout].
+- **`research run --on auto` now sends every run there**: its pool shows free slots because nothing survives on it, so auto says "it starts now" and the launch is refused. Two launches of mine at 1:19 AM: `r20261112-091944-6451` refused, `RunnerFailed: the runner could not be started: PermissionError … '/dev/null'`; the other never got an id, `refused: source tree manifest mismatch after extraction: 10318 missing`. The machine's name is in those two runs' records; I do not write it here.
+- **What it holds up:** two of this job's runs, neither started: pull request 9153's merge (its 7 changed suites whole; its first run waited 77 minutes for a slot of one pool and I withdrew it to place it afresh), and the admission test's quick tier. I launch each once more at about 1:40 AM and again at about 2:10 AM if it is refused the same way, and no oftener. Everything else of the job has its slot or its verdict.
+- Part 1 is green in full: the close branch's quick tier ended `58 suites: 58 passed (0 cached), 0 failed` (`r20261112-075803-897d`).
+
