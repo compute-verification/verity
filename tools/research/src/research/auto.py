@@ -45,7 +45,10 @@ START_WITHIN_MIN is late. Its launch says so in one line; under REFUSE it is ref
 A machine that can start no run takes no job: its idle slots are idle because nothing starts there, so they would draw every
 launch to it. The probe tries what a launch needs whatever the job (`no_start`): NULL_DEVICE is a character device its user
 opens to read and write, as the runner's start does, and GIT answers. A machine that fails is shut out with the reason
-(NO_START), as one under a disk floor is, and node 2 is then `closed`.
+(NO_START), as one under a disk floor is, and node 2 is then `closed`. What the probe can't see, the launch finds: a
+machine that refuses a launch as one that can start no run (remote.CannotStart) is passed over, and the job is placed again
+from the same documents with that machine shut out (`passed_over`), until TRIES machines have refused it so; then the
+launch is refused with each one's reason. Any other refusal is the launch's answer, and it is tried nowhere else.
 
 Node 2 takes no `--on auto` job while it is held: until the time in its HOLD_FILE, which infra writes with the reason when one
 lane has the whole node. `choose` then treats it as a node 2 that is down, and the launcher is told until when and why (`off`).
@@ -91,8 +94,10 @@ DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
 #: what a launch needs of a machine whatever the job, which the probe tries (its `no_start`): the null device, which the
 #: runner's start opens to read and write and git opens before it does anything, and git, which ships a tree as a checkout
 NULL_DEVICE, GIT = "/dev/null", "git"
-#: how a machine that can start no run is worded where it is shut out
+#: how a machine that can start no run is worded where it is shut out, by its probe or after it refused a launch (`passed_over`)
 NO_START = "no run starts there"
+#: the machines that may refuse one `--on auto` launch as machines that can start no run before the launch gives up
+TRIES = 3
 #: a pool whose line has waited this long beside a free slot is stalled on memory and takes no job (`_pool`), nor does one whose
 #: every fitting slot is idle and blocked with slot.py's memory reason, which contains MEMORY_BLOCK
 STALL_MIN, MEMORY_BLOCK = 5, " GB of memory free"
@@ -367,6 +372,13 @@ def off(n2: Any) -> str | None:
         why = share.get("error") if isinstance(share, dict) else n2 if isinstance(n2, str) else "not read"
         return f"{AUTO_NODE}'s share wasn't read ({why})"
     return None
+
+
+def passed_over(machine: str, why: str) -> dict:
+    """The documents of a ``machine`` that refused a launch as one that can start no run (``why``), as its probe gives them
+    when it finds that itself (`read`): `choose`, `expect`, `smaller` and `closed` then shut it out with the reason, and the
+    job is placed again from the documents already read, with no second probe."""
+    return {"share": {"no_start": why}} if machine == AUTO_NODE else {SPILL_POOL: {"error": f"{NO_START}: {why}"}}
 
 
 def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None,

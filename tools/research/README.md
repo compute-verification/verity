@@ -21,7 +21,8 @@ src/research/
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── cores.py        --cpus (--queue): a queued run's whole cores, claimed on the machine
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
-├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
+├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there; a machine that
+│                   can start no run is shut out, or passed over once it refuses the launch for that
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit; it makes no namespace but those
 │                   --job-namespaces lists (of user, mnt, net), where the workload holds capabilities
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
