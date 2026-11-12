@@ -12,6 +12,7 @@ public import Definitions.Pouw.Guarantees.NCP
 public import Definitions.Pouw.Guarantees.OnsiteFreed
 public import Definitions.Pouw.Guarantees.PearlC
 public import Definitions.Pouw.Guarantees.PearlCFlockTile
+public import Definitions.Pouw.Guarantees.PearlCS8
 public import Definitions.Pouw.Guarantees.PearlCTileCheck
 public import Definitions.Pouw.Guarantees.Receipt
 public import Definitions.Pouw.Guarantees.RelativeSecurity
@@ -23,7 +24,7 @@ public import Definitions.Pouw.Guarantees.Writes
 # PoUW's guarantees (trusted)
 
 Every statement a document outside the package cites as proved, as a `def G : Prop` over `Definitions.Pouw` and
-`Definitions.Pouw.Assumptions`, by topic. Its proof is the theorem `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`; a pin cited only
+`Definitions.Pouw.Assumptions` (and `PearlCS8` over the named assumptions `Definitions.Assumptions.PearlC`), by topic. Its proof is the theorem `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`; a pin cited only
 inside the package stays a lemma under its own name.
 -/
 
