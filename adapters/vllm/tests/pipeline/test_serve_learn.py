@@ -77,7 +77,7 @@ class Bounded(Committer):
             self.steps.append((self.run, step, outcome))
             return committed(sched)
 
-        self.runner.execute_model = execute_model
+        vars(self.runner)["execute_model"] = execute_model
 
     def finalize(self) -> Any:
         rc = super().finalize()
@@ -112,7 +112,7 @@ def served(tmp_path: Any, engine: Engine, com: Bounded, opts: so.Options, blocks
 def stand_ins(opts: so.Options) -> tuple[Engine, Bounded, Any]:
     runner = Runner()
     engine = Engine(runner)
-    engine.vllm_config = SimpleNamespace(model_config=SimpleNamespace(get_vocab_size=lambda: 32000))
+    vars(engine)["vllm_config"] = SimpleNamespace(model_config=SimpleNamespace(get_vocab_size=lambda: 32000))
     return engine, Bounded(runner, opts.learning.learn_host_budget_mb), SimpleNamespace(vllm=SimpleNamespace(llm_engine=engine))
 
 

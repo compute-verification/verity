@@ -494,8 +494,6 @@
     {"file": "tests/pipeline/test_serve_async.py", "kind": "method-assign", "symbol": "Committer.install", "detail": ""},
     {"file": "tests/pipeline/test_serve_async.py", "kind": "var-annotated", "symbol": "Arm.__init__", "detail": ""},
     {"file": "tests/pipeline/test_serve_async.py", "kind": "var-annotated", "symbol": "Engine._launch", "detail": ""},
-    {"file": "tests/pipeline/test_serve_learn.py", "kind": "attr-defined", "symbol": "stand_ins", "detail": ""},
-    {"file": "tests/pipeline/test_serve_learn.py", "kind": "method-assign", "symbol": "Bounded.install", "detail": ""},
     {"file": "tests/pipeline/test_serve_offloop.py", "kind": "attr-defined", "symbol": "Detached.detach", "detail": "", "count": 2},
     {"file": "tests/pipeline/test_serve_offloop.py", "kind": "func-returns-value", "symbol": "test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound", "detail": ""},
     {"file": "tests/pipeline/test_serve_offloop.py", "kind": "func-returns-value", "symbol": "test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take", "detail": ""},
