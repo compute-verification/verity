@@ -33,7 +33,8 @@ class _Finalized:
     host committer that made it."""
 
     def __init__(self, com: Any, rc: Any) -> None:
-        self._com, self._rc, self.calls = com, rc, []
+        self._com, self._rc = com, rc
+        self.calls: list[str] = []
 
     def finalize(self) -> Any:
         self.calls.append("finalize")
@@ -53,7 +54,8 @@ class _Compare:
     """A checker whose compare says ``said`` (an exception: raises it)."""
 
     def __init__(self, said: Any) -> None:
-        self.said, self.reference, self.uninstalled, self.read = said, True, 0, []
+        self.said, self.reference, self.uninstalled = said, True, 0
+        self.read: list[Any] = []
 
     def compare(self, reader: Any) -> Any:
         self.read.append(reader)
@@ -80,7 +82,7 @@ def _rank(committed: dict, *, modules: Any = ..., partials: Any = ...) -> tuple[
     com = _Finalized(*commit_host_steps(committed))
     vc = None if modules is None else _Compare({"verdict": "PASS"} if modules is ... else modules)
     tps = None if partials is None else _Compare(_partials({"tensors": 1, "tap_equal": 1}) if partials is ... else partials)
-    eng = SimpleNamespace(runner=SimpleNamespace(), model=torch.nn.Linear(2, 2))
+    eng: Any = SimpleNamespace(runner=SimpleNamespace(), model=torch.nn.Linear(2, 2))
     w = _Rank()
     w._tp2_commit = {"rank": 1, "com": com, "tps": tps, "eng": eng, "base": baseline_state(eng), "rc": "the run before"}
     if vc is not None:

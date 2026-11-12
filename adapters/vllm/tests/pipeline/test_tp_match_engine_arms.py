@@ -79,8 +79,9 @@ def test_without_a_warm_up_the_workload_is_the_only_run(tmp_path, monkeypatch, s
 
 def test_the_engines_kwargs_are_recorded_without_the_model_and_the_tokenizer(tmp_path, monkeypatch, stand_ins):
     llm, out, _ = _arm(tmp_path, monkeypatch, stand_ins, "control", "--engine-arg", 'model="org/model"', "--engine-arg", 'tokenizer="org/tok"')
-    assert (llm.kw["model"], llm.kw["tokenizer"]) == ("org/model", "org/tok")
-    assert _read(out)[0]["engine_kwargs"] == {k: v for k, v in llm.kw.items() if k not in ("model", "tokenizer")}
+    kw = llm.kw
+    assert kw is not None and (kw["model"], kw["tokenizer"]) == ("org/model", "org/tok")
+    assert _read(out)[0]["engine_kwargs"] == {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}
 
 
 def test_a_request_the_run_returned_no_tokens_for_generated_none(tmp_path, monkeypatch, stand_ins):
