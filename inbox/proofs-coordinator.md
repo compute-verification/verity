@@ -70895,3 +70895,46 @@ The run timed one statement six times on one card, in this order. [read: `out/jo
 What the run's record does not hold: a dump of the provers' environment. What I give is the job's parameters, the scripts, the wrappers and the provers' own lines; a variable inherited from the node's shell would show in none of the first three. [read: the record's 132 files] No new run was launched for this entry; runs read: `r20261111-115454-5832` (exit 0), `r20261111-085942-4a34` (exit 0). [read: `research data show`]
 
 For the table: the head block at two provers a card, 2.1425 GPU-seconds a statement, is measured (`r20261111-115454-5832`, step 4) on a branch build (`7b12b8825b39`, `cursor/proofs-headprof-2b18`) with keyed salts, which is not on `main` and has not run on the served engine; `main`'s prover with nothing set is measured in that run at one prover only, 2.7122 (less one later change of `main`'s), and at two provers is not measured.
+
+## WIDEZK, Thu 12 Nov 04:53Z: `940e` exit 0: no proof of mine fails against the base's real proofs; five outside proofs did, and WIDELEAF has since changed all five. #9108 is at `e39cc8aa6e` with `main` in it and has no clean build yet. One run of mine builds both branches' 438 files on their merge, `r20261112-044931-8ffd`, about 06:00Z. I expect the ready line about 11:00Z
+
+**Mailbox** read at 04:39Z and 04:53Z: four sections, the newest yours of 04:38Z [read]. My VM was reset again; my branch `cursor/proofs-widezk-3e4d` is at `4e658a66c7`, pushed, unchanged since 02:08Z [run: `git fetch`].
+
+**`r20261112-021245-940e`** (vy-nebius-cpu-9; slot 02:17Z, ended 03:34Z, exit 0) [run].
+
+- Its tree, local: my `4e658a66c7` and the two changes of my 02:14Z entry (`FrameSched`, `SimSession`), with no proof replaced beforehand [run].
+- The loop built my 237 files six times in 77 minutes. It replaced five proofs by `sorry`, all outside my directories and none of mine, and after the fifth all 237 built [run].
+- So every proof in my 237 files elaborates against the base's real proofs, at WIDELEAF's `5f3de00dfb` [run]. A replaced proof keeps its statement, which is all a file that imports it reads [read: Lean's module system].
+- My two proposed changes built: neither is in the run's list [run]. Both are in WIDELEAF's `c695f5e827` [read: `git diff 5f3de00dfb c695f5e827`].
+- The five, all under `Claims/ZK/` [run]:
+  1. `FramePlan.lean:241` (`tabOfLevel0_ok`) and `FrameReal.lean:150` (`tabOfLevel0_sched`): each walks `Finish.tabOfLevel0`'s refusals without the new third one. `c695f5e827` changes both files, two lines each [read: the same diff].
+  2. `FrameBeta.lean:376` and `:412` (`beta_unrefused`), `FrameOuter.lean:694` (`outer_of_answer`), `FrameRankFault.lean:533` and `:569` (`rank_of_prog`): the proof names `wideLeaf` and the statement does not, so the name is out of scope. The first is where WIDELEAF's `1ea9` stopped at 04:19Z [run: `1ea9`'s log]. The other two are behind it, where `1ea9` did not reach [run: the loop met each only after replacing the one before].
+- WIDELEAF's `e39cc8aa6e` (04:45Z) changes exactly those five places, each to `_` as I would have, and drops the three files' `variable {wideLeaf : Bool}`, which nothing in them reads any more [read: its diff and the three files]. A scan of `security/` on the merged tree finds no other theorem of that kind: ten more name `wideLeaf` in a proof, each after binding it there [read: my scan].
+- What `940e` does not say: no axiom check, since five proofs under my files were `sorry` on its tree; and its base is before `main` `62bf29346f76` [run].
+
+**#9108** [read: `gh pr view` at 04:52Z, and its branch].
+
+- Head `e39cc8aa6e`, moved at 04:45Z: `c695f5e827`, then `main` `62bf29346f76` merged in (`c3a2b78cf7`, 04:37Z), then the five places above. GitHub says it merges [read].
+- So it holds #9040 as landed, and I merged nothing: its branch is not mine to push, and mine waits for your word (your 03:17Z) [read].
+- Its body still opens "Not ready: do not mark" and still says it is stacked on #9040 [read].
+- No build of it has passed: `c37b` failed in three files [relayed: WIDELEAF's 02:52Z entry], `1ea9` in one [run].
+
+**Between it and a ready line,** in order.
+
+1. **A clean build at its head.** #9108 does wait on WIDELEAF's rerun: it is the first thing its body lists as missing [read]. I know neither the rerun's id nor its head [relayed: your 04:38Z]. If it runs at `c695f5e827`, it stops at `FrameBeta.lean:376` again [guess: `e39cc8aa6e` is the first commit to change that line].
+2. **My 17 files merged.** The merge of my `4e658a66c7` with `e39cc8aa6e` has no conflict and differs from `e39cc8aa6e` in those 17 files only [run: a local merge, not pushed].
+3. **`r20261112-044931-8ffd` reads 1 and 2 at once** (vy-nebius-cpu-13, launched 04:49Z, two checks ahead in line at 04:53Z) [run]. On that merge it builds WIDELEAF's 201 files (the list in `1ea9`'s command) and my 237, every proof in place. It goes on past a failing proof, so it lists every failure, not the first [run: as `940e` did]. It overlaps WIDELEAF's rerun in the 201 files; it is on a different tree, the one that gets marked.
+4. **Then what its body names:** the one records run at the head to be marked, with its count of changed records; the suites; the body rewritten [read: #9108's body].
+5. **One thing for whoever reads its diff.** With `main` merged, #9108 deletes a module #9040 landed, `Soundness/Accounting/WideLeafChecks.lean` (125 lines, with `padTableError_le_m1Wide`), rewrites `Soundness/Refine/WideLeafChecks.lean` (dropping `padTableError_le_scheduleWide`), and removes `Zk.queries0Wide` and `Zk.scheduleWide` from `Flock/WideLeaf.lean` [read: `git diff origin/main e39cc8aa6e`]. Nothing left in the tree names the two definitions or the module [read: `git grep`]. `padTableError_le_m1_wide` in `ZkHiddenM1.lean` stays, as on `main` [read]. I did not compare what the deleted theorems say with what stays.
+
+**A run I cancelled.** `r20261112-044557-cd5b`, launched 04:46Z on `c695f5e827` with `main` and my own copy of the five changes, before I saw that WIDELEAF's head had moved at 04:45Z. It waited three minutes in line and never started [run: `research cancel`]. `8ffd` replaces it, on the exact merge of the two pushed branches.
+
+**The hour I expect the ready line: about 11:00Z Thu 12 Nov** [guess]. Its parts:
+
+- `8ffd`'s first build ends about 06:00Z if it has a slot by 05:10Z [guess: `940e`'s first build took 28 minutes and `add5`'s 32; this one has 201 more files].
+- If that build is clean: your word and the two branches merged by 07:00Z, the records run with its wait by 09:00Z, the lock's commit, the suites and the body by 11:00Z [guess: I have run none of the last three on this branch; `1ea9` waited 64 minutes for a slot, `940e` four].
+- If `8ffd` lists failures, add the changes and one more build, about 1.5 hours a round [guess]. I see no way to a ready line before 09:00Z [guess].
+
+**Mine.** Nothing is open in my 237 files: no statement weakened, no premise added, no file stopped on [run: `940e`]. My own axiom probes of the 237 are not on #9108's path: the records run's Lean check replays every declaration and reads its axioms [read: AGENTS.md, "The Lean check"]. I run them in one run after `8ffd`, on the merged head, unless you say the records run stands for them.
+
+I end my turn on `r20261112-044931-8ffd`: its first build about 06:00Z, its exit then if the build is clean.
