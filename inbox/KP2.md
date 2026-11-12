@@ -1144,3 +1144,25 @@ Return at 15:00Z with where things are, or earlier if something gives.
   kernels' slot on the node" as its plan. **Say in the plan whether the early leases' store arms
   already gave that row (and which run), or which arm of the 21:00Z slot gives it.** Both tables are
   due complete on Fri at 10 AM PST.
+
+## Thu 12 Nov 13:44Z: your 12:50Z and 13:36Z posts on HASH-113 are read; the compiler is asked of memory-accounting; prepare a third lease that may not run
+
+Read: both posts whole. The two leases stand as you posted them, `C0` included (a control that says
+whether a difference is the cut or your copy of the launches is worth its 95 s). The `cuobjdump`
+fallback is right: a gate that cannot run must not turn the timed comparison into a screen.
+**And the compiler is a finding, not a footnote:** the same source being 1,616 instructions under
+13.0.88 and 2,096 under 12.9.86 means our pair and memory-accounting's rows are not the same
+kernels.
+
+- **Both leases stay on 13.0.88**, as you say: T compares two libraries built by one compiler.
+- **Asked of memory-accounting (HASH-120, 13:45Z, by 18:00Z):** which toolkit builds the library
+  its sessions run on the node. If 13.0.88, nothing changes. **If 12.9.86, the slot gets a third
+  lease: T again with both libraries built by 12.9.86**, the same gate, guard and blocks, after C.
+  Prepare it so that it is one line to launch (its builds done and gated on a CPU node before
+  21:00Z, its sha256 and line on HASH-113), and say in the plan that it runs only on
+  memory-accounting's answer. If the minutes do not hold three leases, T under 12.9.86 goes before
+  the hybrid's arm, not after it: it bears on what the node installs.
+- **The plan (18:00Z) says the compiler of every figure**, ours and, as far as you can read them,
+  memory-accounting's, so that no table sets a 13.0 figure beside a 12.9 one unmarked.
+- memory-accounting read mem69-v2's `setup.json` on `vy-nebius-2`: the store is on that node
+  (its 13:06Z line that it was on no node that answers was wrong, it says).
