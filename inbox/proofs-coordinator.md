@@ -106129,3 +106129,26 @@ I'll make every one of these compile myself in this change, unless soundness wan
 - The host key's parameters on vy-challenger-1 (the code reads H = 20; the file is unknown).
 
 **NEEDS**: the A25 question to infra (above). **To post**: none.
+
+## RELAX, Thu 12 Nov 22:35Z: #9458 (the `complete` answer) opened first, so R7's branch merged its head and the runs restart there: `cursor/proofs-r7-certified-b6a0` is at `6388939bcb9b`. No conflict; the Python side passes on the merged tree. Ready line still by Fri 06:00Z
+
+**Why** [read: your 20:16Z word; run: `gh pr view 9458`]: "whoever opens second merges the first's head and reruns the records". #9458 is open against `main` since 20:37Z at `dbb268ce3009`, unmarked; mine is not open yet. Its records and mine both move `Properties.Spot.acceptMeans`.
+
+**What moved** [run: `git merge`, `git push`, `git rev-parse` of the remote]
+- `cursor/proofs-r7-certified-b6a0`: `8b4ce503e1a7` → `6388939bcb9bf0e5f5c6bf1e4aee9505a9f1a0c8`, one merge commit, no rebase, no force. `cursor/proofs-r7-certified-read-77a3` is at the same commit.
+- It brought #9458's eight commits and the commits of `main` beneath them that lean's merge head did not have: 43 files, among them six that both change (`security/Properties/Spot.lean`, `Spot/OneStage.lean`, `Spot/Record.lean`, `audit.py`, `test_difftest.py`, the verifier's README). Git merged each without a conflict.
+- The hunks do not meet: #9458 adds `Public.complete`, `Record.allRan` and the record's `complete`; I change `Registered`, `UnitsProved` and `recordChecks`. #9458 changes no proof file. Whether the merged proofs elaborate is what the tries say. [read: both diffs]
+- For CERTSTOP and network's worker: nothing of mine changed in this step. An accept's public output gains `complete`, #9458's.
+
+**On the merged tree, on the VM, Python only** [run]: the audit record's certified tests (4 passed), the stream tests and the three difftest tests with every Lean call stubbed (all ok). `ruff` names 14 findings under the SPOT verifier, each on a line of the base [run: `git blame` of each].
+
+**Runs at `6388939bcb9b`, launched 22:35Z** [run: `research run`]
+- Records `r20261112-223453-2b16` (vy-nebius-cpu-8), suites `r20261112-223454-8d3d` (vy-nebius-cpu-10), tries `r20261112-223455-22bf` (vy-nebius-cpu-12, the nine changed Lean files with `--siblings`).
+- Cancelled before they started, 14 minutes into their lines: `d08f`, `de56`, `9b45`, at the head before the merge. [run: `research cancel`]
+- If #9458's head moves before mine opens I merge it again and rerun the records; tell me if you would rather I not follow it.
+
+**Merged tree** [run: `git merge-tree --write-tree`, 22:33Z, of `8b4ce503e1a7`]: clean with `origin/main` at `783b526ab6f5`. lean's merge head `bafae2eaec2e` is not on `main` yet.
+
+**Not established:** as at 22:21Z, and that the two changes' proofs elaborate together.
+
+For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `6388939bcb9b` (holds #9458's head) | records `2b16`, suites `8d3d`, tries `22bf` out | ready line by Fri 06:00Z | nothing needed.
