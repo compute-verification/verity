@@ -44,6 +44,11 @@ def _words(bits, width: int = 32) -> list[list[int]]:
     return (b << np.arange(width, dtype=np.uint64)).sum(axis=2).tolist()
 
 
+def _one(d, *args, width: int = 32) -> list[int]:
+    """Each instance's first output word of ``d`` on ``args``."""
+    return [r[0] for r in _words(BS.evaluate_bits(d, *args), width)]
+
+
 def _lists(M: int, K: int, rows: int) -> tuple[np.ndarray, np.ndarray]:
     """``rows`` instances of the merge's operands: lists with words past their counts, and counts at K's edges, past K and
     past 2^31, then random up to K + 1, so that lists fill K and overflow it."""
@@ -77,10 +82,9 @@ def test_the_merges_pieces_are_its_steps(K: int) -> None:
     n, RB = 64, K.bit_length()
     a, w = ([rng.getrandbits(32) for _ in range(n)] for _ in range(2))
     s = [rng.getrandbits(1) for _ in range(n)]
-    one = lambda d, *args: [r[0] for r in _words(BS.evaluate_bits(bind(d), *args))]  # noqa: E731
-    assert one(R.DsaPositionsKeep, _bits(s, 1), _bits(w)) == [x if k else 0 for k, x in zip(s, w)]
-    assert one(R.DsaPositionsShift, _bits(s, 1), _bits(a), _bits(w)) == [x if k else y for k, x, y in zip(s, a, w)]
-    assert one(R.DsaPositionsShiftIn, _bits(s, 1), _bits(w)) == [0 if k else y for k, y in zip(s, w)]
+    assert _one(bind(R.DsaPositionsKeep), _bits(s, 1), _bits(w)) == [x if k else 0 for k, x in zip(s, w)]
+    assert _one(bind(R.DsaPositionsShift), _bits(s, 1), _bits(a), _bits(w)) == [x if k else y for k, x, y in zip(s, a, w)]
+    assert _one(bind(R.DsaPositionsShiftIn), _bits(s, 1), _bits(w)) == [0 if k else y for k, y in zip(s, w)]
     edge = [0, 1, K - 1, K, K + 1, 1 << 31, (1 << 32) - 1]
     counts = [edge[r % len(edge)] if r < 2 * len(edge) else rng.randrange(K + 2) for r in range(n)]
     offs = [(0, K, K - 1, 1)[r % 4] if r < 28 else rng.randrange(K + 1) for r in range(n)]
@@ -270,28 +274,27 @@ def test_the_selects_pieces_are_their_steps() -> None:
     and n past a block's start, on random operands and at their edges."""
     rng = random.Random(11)
     n = 64
-    one = lambda d, *args, width: [r[0] for r in _words(BS.evaluate_bits(d, *args), width)]  # noqa: E731
     for N in (1, 2, 7, 44, 256):
         a = _masks(N, n, N)
-        assert one(bind(BM.DsaRadixPassCount, N=N), a, width=N.bit_length()) == a.sum(axis=1).tolist()
+        assert _one(bind(BM.DsaRadixPassCount, N=N), a, width=N.bit_length()) == a.sum(axis=1).tolist()
     for w, rb in ((1, 3), (9, 5), (16, 12), (6, 12)):
         cnt, r = ([rng.choice((0, 1, (1 << b) - 1, rng.randrange(1 << b))) for _ in range(n)] for b in (w, rb))
-        got = one(bind(BM.DsaRadixPassLeft, W=w, RB=rb), _bits(cnt, w), _bits(r, rb), width=1 + rb)
+        got = _one(bind(BM.DsaRadixPassLeft, W=w, RB=rb), _bits(cnt, w), _bits(r, rb), width=1 + rb)
         assert got == [int(c >= x) | (x if c >= x else (x - c) % (1 << rb)) << 1 for c, x in zip(cnt, r)]
     q, g, a, p = ([rng.getrandbits(1) for _ in range(n)] for _ in range(4))
-    got = one(bind(BM.DsaRadixPassKey), *(_bits(x, 1) for x in (q, g, a, p)), width=2)
+    got = _one(bind(BM.DsaRadixPassKey), *(_bits(x, 1) for x in (q, g, a, p)), width=2)
     assert got == [x ^ y ^ (t & x) | (z ^ y ^ (t & y)) << 1 for x, z, y, t in zip(q, g, a, p)]
     word = [rng.choice((0, 1, (1 << 32) - 1, rng.getrandbits(32), rng.getrandbits(8))) for _ in range(n)]
     for L in (0, 4, 16, 31):
-        assert one(bind(BM.DsaRowValidRoot, L=L), _bits(word), width=2) == [int(x < 1 << L) | int(x >= 1 << L) << 1 for x in word]
+        assert _one(bind(BM.DsaRowValidRoot, L=L), _bits(word), width=2) == [int(x < 1 << L) | int(x >= 1 << L) << 1 for x in word]
     node, b = [rng.randrange(4) for _ in range(n)], [rng.getrandbits(1) for _ in range(n)]
     t = [x & 1 & y for x, y in zip(node, b)]
     got = _words(BS.evaluate_bits(bind(BM.DsaRowValidStep), _bits(node, 2), _bits(b, 1)), 2)
     assert got == [[(x & 1 ^ k) | (x >> 1 ^ k) << 1, k | (x >> 1) << 1] for x, k in zip(node, t)]
-    assert one(bind(BM.DsaRowValidLast), _bits(node, 2), _bits(b, 1), width=2) == [(x >> 1 ^ k) | (x >> 1) << 1 for x, k in zip(node, t)]
+    assert _one(bind(BM.DsaRowValidLast), _bits(node, 2), _bits(b, 1), width=2) == [(x >> 1 ^ k) | (x >> 1) << 1 for x, k in zip(node, t)]
     for AT in (1, 16, 16384, (1 << 31) + 5):
         at = [AT - 1, AT, AT + 1, *word[3:]]
-        assert one(bind(X.DsaRowValidOffset, AT=AT), _bits(at), width=32) == [max(x - AT, 0) for x in at]
+        assert _one(bind(X.DsaRowValidOffset, AT=AT), _bits(at), width=32) == [max(x - AT, 0) for x in at]
 
 
 @pytest.mark.parametrize("N,AT", [(8, 0), (6, 8), (40, 16), (600, 0)])
@@ -336,7 +339,9 @@ def test_the_mask_units_as_calls_stay_small_at_the_served_statics(N: int, AT: in
     16 KiB.  The mask whole is within a Flock block's proved range."""
     from verity_flock import circuit as FC
 
-    size = lambda d: len(canonical_json(encode_program(Program(d))))  # noqa: E731
+    def size(d) -> int:
+        return len(canonical_json(encode_program(Program(d))))
+
     if AT is None:
         unit = bind(X.DsaTopKMaskWholeV2, N=N, TOPK=2048)
         assert size(bind(BM.DsaRadixPassV2, N=N, TOPK=2048)) < 1 << 17
@@ -419,23 +424,25 @@ def test_the_picks_pieces_are_its_steps() -> None:
     rng = random.Random(9)
     n, TOPK = 64, 100
     RB = TOPK.bit_length()
-    word = lambda bits=32: [rng.choice((0, 1, (1 << bits) - 1, rng.getrandbits(bits))) for _ in range(n)]  # noqa: E731
-    one = lambda d, *args, width=32: [r[0] for r in _words(BS.evaluate_bits(d, *args), width)]  # noqa: E731
+
+    def word(bits: int = 32) -> list[int]:
+        return [rng.choice((0, 1, (1 << bits) - 1, rng.getrandbits(bits))) for _ in range(n)]
+
     a, b, r, s = word(), word(), word(RB), word(1)
-    assert one(bind(X.DsaTopKCountAdd), _bits(a), _bits(b)) == [(x + y) % (1 << 32) for x, y in zip(a, b)]
+    assert _one(bind(X.DsaTopKCountAdd), _bits(a), _bits(b)) == [(x + y) % (1 << 32) for x, y in zip(a, b)]
     t = [x if i % 2 else y for i, (x, y) in enumerate(zip(a, r))]
-    assert one(bind(X.DsaTopKDigitGe, TOPK=TOPK, READ=1), _bits(t), _bits(r, RB), width=1) == [int(x >= y) for x, y in zip(t, r)]
+    assert _one(bind(X.DsaTopKDigitGe, TOPK=TOPK, READ=1), _bits(t), _bits(r, RB), width=1) == [int(x >= y) for x, y in zip(t, r)]
     t = [TOPK - 1, TOPK, TOPK + 1, *a[3:]]
-    assert one(bind(X.DsaTopKDigitGe, TOPK=TOPK, READ=0), _bits(t), width=1) == [int(x >= TOPK) for x in t]
-    assert one(bind(X.DsaTopKDigitEdge), _bits(s, 1), _bits(b, 1), width=1) == [x & ~y & 1 for x, y in zip(s, b)]
-    assert one(bind(X.DsaTopKDigitTake, W=32), _bits(s, 1), _bits(a)) == [x if k else 0 for k, x in zip(s, a)]
-    assert one(bind(X.DsaTopKDigitBits), np.eye(X.BINS, dtype=np.uint8), width=X.DIGIT) == list(range(X.BINS))
+    assert _one(bind(X.DsaTopKDigitGe, TOPK=TOPK, READ=0), _bits(t), width=1) == [int(x >= TOPK) for x in t]
+    assert _one(bind(X.DsaTopKDigitEdge), _bits(s, 1), _bits(b, 1), width=1) == [x & ~y & 1 for x, y in zip(s, b)]
+    assert _one(bind(X.DsaTopKDigitTake, W=32), _bits(s, 1), _bits(a)) == [x if k else 0 for k, x in zip(s, a)]
+    assert _one(bind(X.DsaTopKDigitBits), np.eye(X.BINS, dtype=np.uint8), width=X.DIGIT) == list(range(X.BINS))
     above = word(RB)
-    assert one(bind(X.DsaTopKDigitLeft, TOPK=TOPK, READ=1), _bits(above, RB), _bits(r, RB), width=RB) == [
+    assert _one(bind(X.DsaTopKDigitLeft, TOPK=TOPK, READ=1), _bits(above, RB), _bits(r, RB), width=RB) == [
         (x - y) % (1 << RB) for x, y in zip(r, above)]
-    assert one(bind(X.DsaTopKDigitLeft, TOPK=TOPK, READ=0), _bits(above, RB), width=RB) == [(TOPK - y) % (1 << RB) for y in above]
+    assert _one(bind(X.DsaTopKDigitLeft, TOPK=TOPK, READ=0), _bits(above, RB), width=RB) == [(TOPK - y) % (1 << RB) for y in above]
     before = [x if i % 2 else y for i, (x, y) in enumerate(zip(a, word(RB)))]
-    assert one(bind(X.DsaTopKDigitShare, RB=RB), _bits(r, RB), _bits(before), width=RB) == [max(x - y, 0) for x, y in zip(r, before)]
+    assert _one(bind(X.DsaTopKDigitShare, RB=RB), _bits(r, RB), _bits(before), width=RB) == [max(x - y, 0) for x, y in zip(r, before)]
 
 
 @pytest.mark.parametrize("K", range(X.ROUNDS))
