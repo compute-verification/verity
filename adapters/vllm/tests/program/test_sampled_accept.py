@@ -91,14 +91,25 @@ def test_the_outputs_are_accept_v1s():
         assert bind(A.SampledAccept, K=k, V=V, TILE=TILE).signature()[1] == bind(spec.Accept, K=k).signature()[1]
 
 
+def _x(w: list[int]) -> list[list[int]]:
+    """A unit's lanes as its rows of `ROW` lanes, one parameter each."""
+    return [w[j:j + A.ROW] for j in range(0, len(w), A.ROW)]
+
+
 def _tile(row, tile: int) -> tuple[int, int]:
-    """A tile's maximum and sum by its units: the head, then its parts of `part` lanes, each handing its thread sums on."""
-    w, n, step = _words(row), len(row), A.part(tile)
-    m = evaluate(bind(A.AcceptTileHead, N=n, FIRST=True, LAST=False), w, 0)[0]
+    """A tile's maximum and sum by its units: its heads of `head` lanes, each handing its maximum on, then its parts of `part`
+    lanes, each handing its thread sums on."""
+    w, n, step, h = _words(row), len(row), A.part(tile), A.head(tile)
+    out: tuple = ()
+    for at in range(0, n, h):
+        hn = min(h, n - at)
+        out = evaluate(bind(A.AcceptTileHead, N=hn, AT=at, FIRST=at == 0, LAST=False), *_x(w[at:at + hn]), 0,
+                       *(out[1:] + out[:1] if at else ()))
+    m = out[0]
     acc: tuple = ()
     for at in range(0, n, step):
         pn = min(step, n - at)
-        acc = evaluate(bind(A.AcceptTileSum, N=pn, AT=at, LAST=at + pn == n), w[at:at + pn], m, *([list(acc)] if at else []))
+        acc = evaluate(bind(A.AcceptTileSum, N=pn, AT=at, LAST=at + pn == n), *_x(w[at:at + pn]), m, *([list(acc)] if at else []))
     return m, acc[0]
 
 
@@ -127,7 +138,7 @@ def _row_end(logits, d: int, seed: int, pos: int, tile: int = TILE) -> int:
     assert n <= A.part(tile)
     others = [w for pair in zip(_words(m[:-1]), _words(s[:-1])) for w in pair]
     at = _words(logits[d])[0] if 0 <= d < v else NEG_INF
-    return evaluate(bind(A.AcceptRowEnd, T=t, N=n, AT=0), _words(logits[v - n:]), _words(m[-1])[0], at, seed, pos, *others)[0]
+    return evaluate(bind(A.AcceptRowEnd, T=t, N=n, AT=0), *_x(_words(logits[v - n:])), _words(m[-1])[0], at, seed, pos, *others)[0]
 
 
 @pytest.mark.parametrize("name", list(VECTORS))
@@ -190,7 +201,7 @@ def test_the_heads_carry_the_logit_at_the_draft_token(sizes):
         carry, lo = (), 0
         for t, n in enumerate(sizes):
             last = t == len(sizes) - 1
-            out = evaluate(bind(A.AcceptTileHead, N=n, FIRST=t == 0, LAST=last), row[lo:lo + n], d, *carry)
+            out = evaluate(bind(A.AcceptTileHead, N=n, AT=0, FIRST=t == 0, LAST=last), *_x(row[lo:lo + n]), d, *carry)
             assert _f(out[0]) == max(_f(w) for w in row[lo:lo + n])
             carry, lo = out[1:], lo + n
             assert last or carry[0] == lo
@@ -260,8 +271,9 @@ def test_sampled_accept_refuses_a_layout_the_kernels_were_not_read_at(statics, w
 
 
 def test_sampled_accept_has_no_dead_gate():
-    units = [A.AcceptUniform, bind(A.AcceptTileHead, N=1, FIRST=True, LAST=True), bind(A.AcceptTileHead, N=3, FIRST=False, LAST=False),
-             bind(A.AcceptTileHead, N=3, FIRST=False, LAST=True), bind(A.AcceptTileSum, N=16, AT=0, LAST=True),
+    units = [A.AcceptUniform, bind(A.AcceptTileHead, N=1, AT=0, FIRST=True, LAST=True),
+             bind(A.AcceptTileHead, N=3, AT=0, FIRST=False, LAST=False), bind(A.AcceptTileHead, N=3, AT=512, FIRST=False, LAST=False),
+             bind(A.AcceptTileHead, N=3, AT=0, FIRST=False, LAST=True), bind(A.AcceptTileSum, N=16, AT=0, LAST=True),
              bind(A.AcceptTileSum, N=16, AT=512, LAST=True), bind(A.AcceptRowEnd, T=17, N=16, AT=0),
              bind(A.AcceptResample, K=2, N=2, FIRST=True, LAST=False), bind(A.AcceptResample, K=2, N=1, FIRST=False, LAST=False),
              bind(A.AcceptResample, K=2, N=2, FIRST=False, LAST=True), bind(A.AcceptResample, K=1, N=1, FIRST=False, LAST=True)]
@@ -270,18 +282,24 @@ def test_sampled_accept_has_no_dead_gate():
 
 
 def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers():
-    """GLM-5.3's layout with five draft tokens: nine Definitions; each draft row's lanes once in a head and once in a part
-    or the row end, every row's lanes once in the resample; a wire names a unit already written and one of its outputs."""
+    """GLM-5.3's layout with five draft tokens: twelve Definitions; each draft row's lanes once in a head and once in a part
+    or the row end, every row's lanes once in the resample, each read one row of `ROW` lanes; a wire names a unit already
+    written and one of its outputs; no unit is past a proof block's rows (`interface.check_proof_block`)."""
+    from verity.commitments.windows import interface as IF
+
     k, v = 5, 154880
     plan = A.plan(k, v)
     n = Counter(u.defn.id for u in plan)
     assert n == {
-        "AcceptTileHead_v1{N=8192,FIRST=True,LAST=False}": k, "AcceptTileHead_v1{N=8192,FIRST=False,LAST=False}": 17 * k,
-        "AcceptTileHead_v1{N=7424,FIRST=False,LAST=True}": k, "AcceptTileSum_v1{N=4096,AT=0,LAST=False}": 19 * k,
-        "AcceptTileSum_v1{N=4096,AT=4096,LAST=True}": 18 * k, "AcceptRowEnd_v1{T=19,N=3328,AT=4096}": k,
+        "AcceptTileHead_v1{N=4096,AT=0,FIRST=True,LAST=False}": k, "AcceptTileHead_v1{N=4096,AT=4096,FIRST=False,LAST=False}": 18 * k,
+        "AcceptTileHead_v1{N=4096,AT=0,FIRST=False,LAST=False}": 18 * k,
+        "AcceptTileHead_v1{N=3328,AT=4096,FIRST=False,LAST=True}": k, "AcceptTileSum_v1{N=2048,AT=0,LAST=False}": 19 * k,
+        "AcceptTileSum_v1{N=2048,AT=2048,LAST=False}": 19 * k, "AcceptTileSum_v1{N=2048,AT=4096,LAST=False}": 19 * k,
+        "AcceptTileSum_v1{N=2048,AT=6144,LAST=True}": 18 * k, "AcceptRowEnd_v1{T=19,N=1280,AT=6144}": k,
         "AcceptResample_v1{K=5,N=32,FIRST=True,LAST=False}": 1, "AcceptResample_v1{K=5,N=32,FIRST=False,LAST=False}": 4838,
         "AcceptResample_v1{K=5,N=32,FIRST=False,LAST=True}": 1}
     assert dict(A.cut(bind(A.SampledAccept, K=k, V=v, TILE=A.STATS_TILE))) == dict(Counter(u.defn for u in plan))
+    assert max(IF.check_proof_block(d) for d in {u.defn for u in plan}) <= IF.K_MAX
     seen: dict = {}
     read = {kind: np.zeros((k + 1, v), np.int64) for kind in ("head", "sum", "resample")}
     for u in plan:
@@ -289,6 +307,7 @@ def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers(
         assert sorted(params) == sorted([name for name, _ in u.reads] + [name for name, _, _ in u.wires]), u.key
         for _, (name, *at) in u.reads:
             if name == "logits":
+                assert at[1] % A.ROW == 0 and at[2] == min(at[1] + A.ROW, v), (u.key, at)
                 read["sum" if u.key[0] == "row" else u.key[0]][at[0], at[1]:at[2]] += 1
         for _, key, i in u.wires:
             ret = seen[key].signature()[1]
@@ -302,8 +321,9 @@ def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers(
 @pytest.mark.parametrize("fn, statics, why", [
     (A.AcceptTileSum, dict(N=100, AT=0, LAST=False), "whole vectors of every thread"),
     (A.AcceptTileSum, dict(N=16, AT=100, LAST=True), "multiple of 512"),
-    (A.AcceptTileHead, dict(N=0, FIRST=True, LAST=False), "positive int"),
-    (A.AcceptTileHead, dict(N=4, FIRST=1, LAST=False), "FIRST is a bool"),
+    (A.AcceptTileHead, dict(N=0, AT=0, FIRST=True, LAST=False), "positive int"),
+    (A.AcceptTileHead, dict(N=4, AT=0, FIRST=1, LAST=False), "FIRST is a bool"),
+    (A.AcceptTileHead, dict(N=4, AT=512, FIRST=True, LAST=False), "starts its first tile"),
     (A.AcceptRowEnd, dict(T=16, N=16, AT=0), "17 to 32"),
     (A.AcceptResample, dict(K=0, N=4, FIRST=True, LAST=False), "positive number of draft tokens"),
     (A.AcceptResample, dict(K=1, N=1, FIRST=True, LAST=True), "one lane"),

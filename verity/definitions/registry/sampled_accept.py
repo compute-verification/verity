@@ -83,14 +83,14 @@ from functools import cache
 import numpy as np
 
 from verity.circuits.defs import SpecializedDefinition, bind, composite
-from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.ops.fp32 import F32Add, F32AddFtz, F32Fma, F32Mul
 from verity.definitions.ops.mufu import mufu_ex2_words, table
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import BitAnd, BitNot, F32, F32Eq, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity.definitions.registry import dead_free as DF, sampling as SA
+from verity.definitions.registry import dead_free as DF, sampling as SA, topp_stages as TS
 from verity.definitions.registry.dsa import I32Sub
 from verity.definitions.registry.dsv4_moe import Ex2Approx
 from verity.definitions.registry.ref_prims import F32GtStrict, F32Sub
@@ -104,10 +104,17 @@ STATS_TILE = 8192
 THREADS, VECTOR = 128, 4
 #: lanes of the one-warp reduction over a row's tiles (`PADDED_VOCAB_NUM_BLOCKS` for 17 to 32 tiles)
 PADDED_TILES = 32
-#: the lanes of a tile one `AcceptTileSum_v1` unit adds, at most (`part`): half a tile at the pin, a unit of a Flock block
-PART = 4096
-#: the lanes of an `AcceptResample_v1` chunk, at most (`chunk`): the registered top-p select's chunk
-RESAMPLE_N = 32
+#: the lanes of a row of the masked logits, `topp_stages.chunk` at every vocabulary the Call takes: a mask chunk writes one
+#: row (`topp_stages.mask_plan`), and a wire reads a writer's row whole, so every unit takes its lanes as such rows, one
+#: parameter each
+ROW = TS.SELECT_N
+#: the lanes one `AcceptTileHead_v1` unit reads, at most (`head`): half a tile at the pin, 128 rows beside its five
+HEAD = 4096
+#: the lanes of a tile one `AcceptTileSum_v1` unit adds, at most (`part`): a quarter of a tile at the pin, so its exponentials
+#: and its rows' hm96 slots, one a row, fit a Flock block
+PART = 2048
+#: the lanes of an `AcceptResample_v1` chunk, at most (`chunk`): one row of each of the K + 1 rows
+RESAMPLE_N = ROW
 NEG_INF = SA.NEG_INF_BITS
 _CONF = ("model-untested: read from the PTX and SASS Triton 3.7.1 compiles for cc 9.0 from vLLM d9105ea80's "
          f"`rejection_sample` kernels at 154,880 logits and five draft tokens ({EVIDENCE['sampled_accept_ptx']['run_record']}); "
@@ -287,19 +294,42 @@ def _lanes(b: dict) -> str | None:
     return None
 
 
+def _xrows(n: int) -> tuple:
+    """A unit's ``n`` lanes of the masked row as its rows of `ROW` lanes, a parameter each (``x0``, ``x1``, ..; the last one
+    shorter where the row ends inside it)."""
+    return tuple((f"x{j}", Array(min(ROW, n - j * ROW), F32)) for j in range(-(-n // ROW)))
+
+
+def _joined(n: int, args: tuple):
+    """The lanes of a unit's leading `_xrows` parameters as one array, and its other parameters."""
+    r = len(_xrows(n))
+    return coll_concat(Array(n, F32), list(args[:r])), args[r:]
+
+
+def _head_refuse(b: dict) -> str | None:
+    if (why := _lanes(b) or _flag(b, "FIRST", "LAST")) is not None:
+        return why
+    if b["FIRST"] and b.get("AT"):
+        return f"the row's FIRST head starts its first tile, AT=0, not AT={b['AT']}"
+    return None
+
+
 def _head_sig(S):
     carry = () if S.FIRST else (("i", I32), ("at", F32))
-    return (("x", Array(S.N, F32)), ("d", I32), *carry), Tuple(F32, F32) if S.LAST else Tuple(F32, I32, F32)
+    top = (("m", F32),) if S.AT else ()
+    return (*_xrows(S.N), ("d", I32), *carry, *top), Tuple(F32, F32) if S.LAST else Tuple(F32, I32, F32)
 
 
-@composite("AcceptTileHead", 1, ["N", "FIRST", "LAST"], _head_sig, conformance=_CONF,
-           refuse=lambda b: _lanes(b) or _flag(b, "FIRST", "LAST"))
-def AcceptTileHead(B, S, x, d, *carry):
-    """A tile's N logits -> its maximum (`max.f32` over the tile, order-free), and the row's logit at draft token d as a scan
-    carried tile to tile: (the lanes before this tile, the logit at d among them, -inf when none is d), from (0, -inf) on the
-    row's FIRST tile.  The row's LAST tile returns (maximum, ``logits[d]``): -inf when d is no index of the row, as the
-    kernel's load of ``target_logits[row, token]`` is never reached for a placeholder."""
-    top = x[0]
+@composite("AcceptTileHead", 1, ["N", "AT", "FIRST", "LAST"], _head_sig, conformance=_CONF, refuse=_head_refuse)
+def AcceptTileHead(B, S, *args):
+    """Lanes AT .. AT + N of a tile (rows x0, ..) -> the tile's maximum so far (`max.f32` lane by lane, order-free), from the
+    maximum ``m`` of its lanes before AT, and the row's logit at draft token d as a scan carried head to head: (the lanes
+    before this head, the logit at d among them, -inf when none is d), from (0, -inf) on the row's FIRST head.  The row's
+    LAST head returns (maximum, ``logits[d]``): -inf when d is no index of the row, as the kernel's load of
+    ``target_logits[row, token]`` is never reached for a placeholder."""
+    x, (d, *rest) = _joined(S.N, args)
+    carry, m = (rest[:2], rest[2:]) if not S.FIRST else ((), rest)
+    top = _max(B, m[0], x[0]) if S.AT else x[0]
     for v in range(1, S.N):
         top = _max(B, top, x[v])
     c = tuple_of(B.call(const(32, 0)), B.call(const(32, NEG_INF))) if S.FIRST else tuple_of(*carry)
@@ -347,15 +377,16 @@ def _sum_refuse(b: dict) -> str | None:
 
 def _sum_sig(S):
     acc = (("acc", Array(THREADS, F32)),) if S.AT else ()
-    return (("x", Array(S.N, F32)), ("m", F32), *acc), F32 if S.LAST else Array(THREADS, F32)
+    return (*_xrows(S.N), ("m", F32), *acc), F32 if S.LAST else Array(THREADS, F32)
 
 
 @composite("AcceptTileSum", 1, ["N", "AT", "LAST"], _sum_sig, conformance=_CONF, refuse=_sum_refuse)
-def AcceptTileSum(B, S, x, m, *acc):
-    """Lanes AT .. AT + N of a tile of `_compute_local_logits_stats_kernel` and the tile's maximum m: ``tl.exp(x - m)`` of each
+def AcceptTileSum(B, S, *args):
+    """Lanes AT .. AT + N of a tile of `_compute_local_logits_stats_kernel` (rows x0, ..) and the tile's maximum m: ``tl.exp(x - m)`` of each
     lane added into the tile's 128 thread sums in the kernel's order (a thread's lanes in (r, j) order), ``acc`` the sums
     after the lanes before AT.  The tile's LAST part returns its sum: the warp's butterfly 16 .. 1, the warps' butterfly 2, 1,
     and 0 when m is -inf.  A lane past the vocabulary adds +0 on the GPU, which changes no sum, so it has no gate here."""
+    x, (m, *acc) = _joined(S.N, args)
     threads = _thread_sums(B, B.batch(AcceptExpLane, x, m, axes=(0, None)), S.AT, acc[0] if acc else None)
     return _tile_sum(B, threads, m) if S.LAST else array_of(threads)
 
@@ -370,18 +401,19 @@ def _end_refuse(b: dict) -> str | None:
 def _end_sig(S):
     acc = (("acc", Array(THREADS, F32)),) if S.AT else ()
     others = tuple(port for t in range(S.T - 1) for port in ((f"m{t}", F32), (f"s{t}", F32)))
-    return (("x", Array(S.N, F32)), ("m", F32), *acc, ("at", F32), ("seed", I64), ("pos", I64), *others), I32
+    return (*_xrows(S.N), ("m", F32), *acc, ("at", F32), ("seed", I64), ("pos", I64), *others), I32
 
 
 @composite("AcceptRowEnd", 1, ["T", "N", "AT"], _end_sig, conformance=_CONF, refuse=_end_refuse)
-def AcceptRowEnd(B, S, x, m, *rest):
+def AcceptRowEnd(B, S, *args):
     """The ratio test of one draft token against its row of T tiles, 1 or 0: ``logits[d] - lse > log(u)`` (`sub.f32`,
-    `__nv_logf`, `setp.gt.f32`).  It reads the last tile's last part (lanes AT .. AT + N, with its maximum m and the thread
-    sums ``acc`` before AT, as `AcceptTileSum_v1`'s LAST part) so that one of its rows is long enough for a proof block,
-    ``at`` the row's logit at the draft token, and the other tiles' maxima and sums m0, s0, ..  The log-sum-exp is lane 0's
+    `__nv_logf`, `setp.gt.f32`).  It reads the last tile's last part (lanes AT .. AT + N as rows x0, .., with its maximum m
+    and the thread sums ``acc`` before AT, as `AcceptTileSum_v1`'s LAST part), ``at`` the row's logit at the draft token, and
+    the other tiles' maxima and sums m0, s0, ..  The log-sum-exp is lane 0's
     of `_rejection_kernel`: tile t in lane t of 32, M the tiles' maximum, ``e_t = tl.exp(m_t - M)``, the product fused into
     the first butterfly stage (``fma(e_t, s_t, rn(e_{t+16} * s_{t+16}))`` for t < 16, a lane past the last tile holding +0),
-    `add.f32` by the stages 8, 4, 2, 1, `__nv_logf`, `add.f32` to M.  u is the uniform of `tl.randint(seed, pos)`'s word."""
+    `add.f32` by the stages 8, 4, 2, 1, `__nv_logf`, `add.f32` to M.      u is the uniform of `tl.randint(seed, pos)`'s word."""
+    x, (m, *rest) = _joined(S.N, args)
     acc, rest = (rest[0], rest[1:]) if S.AT else (None, rest)
     at, seed, pos, others = rest[0], rest[1], rest[2], rest[3:]
     last = _tile_sum(B, _thread_sums(B, B.batch(AcceptExpLane, x, m, axes=(0, None)), S.AT, acc), m)
@@ -483,6 +515,11 @@ class Unit:
     wires: tuple[tuple[str, tuple, int], ...] = field(default=())
 
 
+def head(tile: int) -> int:
+    """The lanes of a tile one `AcceptTileHead_v1` unit reads: `HEAD`, or the whole of a smaller tile."""
+    return min(HEAD, tile)
+
+
 def part(tile: int) -> int:
     """The lanes of a tile one `AcceptTileSum_v1` unit adds: `PART`, and at most half of a smaller tile in whole vectors of
     every thread, so a tile of 1,024 logits or more is two parts or more."""
@@ -491,36 +528,48 @@ def part(tile: int) -> int:
 
 
 def chunk(V: int) -> int:
-    """A resample chunk's lanes."""
-    return min(RESAMPLE_N, V)
+    """A resample chunk's lanes: a mask chunk's (`topp_stages.chunk`), `ROW` at every vocabulary the Call takes."""
+    return TS.chunk(V)
+
+
+def _rows(p: int, lo: int, n: int) -> tuple:
+    """A unit's reads of row p's lanes lo .. lo + n, one row of `ROW` lanes a parameter (`_xrows`)."""
+    return tuple((name, ("logits", p, lo + j * ROW, lo + j * ROW + ty.n)) for j, (name, ty) in enumerate(_xrows(n)))
 
 
 @cache
 def plan(K: int, V: int, tile: int = STATS_TILE) -> tuple[Unit, ...]:
-    """The units of `SampledAccept_v1{K,V,TILE}` in an order that writes each before its readers: each draft row's tiles (a
-    head, then the tile's parts; the row's last part is its `AcceptRowEnd_v1`), then the resample's chunks, whose last
-    returns the Call's outputs."""
-    T, P, out = -(-V // tile), part(tile), []
+    """The units of `SampledAccept_v1{K,V,TILE}` in an order that writes each before its readers: each draft row's tiles (its
+    heads, each carrying the tile's maximum to the next, then the tile's parts; the row's last part is its `AcceptRowEnd_v1`),
+    then the resample's chunks, whose last returns the Call's outputs.  Every read of a row's lanes is one row of `ROW`
+    lanes, so each is a mask chunk's output row whole (`pass_plan`)."""
+    if chunk(V) != ROW:
+        raise ValueError(f"V={V}: a mask chunk is {chunk(V)} lanes, not the {ROW} lanes of a row every unit reads")
+    T, H, P, out = -(-V // tile), head(tile), part(tile), []
     for p in range(K):
-        sums = {}
+        sums, tops, prev = {}, {}, None
         for t in range(T):
             lo, n = t * tile, min(tile, V - t * tile)
-            first, last = t == 0, t == T - 1
-            carry = () if first else (("i", ("head", p, t - 1), 1), ("at", ("head", p, t - 1), 2))
-            out.append(Unit(("head", p, t), bind(AcceptTileHead, N=n, FIRST=first, LAST=last),
-                            (("x", ("logits", p, lo, lo + n)), ("d", ("draft", p))), carry))
+            starts = list(range(0, n, H))
+            for a, at in enumerate(starts):
+                hn, first, last = min(H, n - at), t == 0 and a == 0, t == T - 1 and a == len(starts) - 1
+                w = (() if first else (("i", prev, 1), ("at", prev, 2))) + ((("m", prev, 0),) if at else ())
+                prev = ("head", p, t, a)
+                out.append(Unit(prev, bind(AcceptTileHead, N=hn, AT=at, FIRST=first, LAST=last),
+                                (*_rows(p, lo + at, hn), ("d", ("draft", p))), w))
+            tops[t] = prev
             starts = list(range(0, n, P))
             for a, at in enumerate(starts):
                 pn, end = min(P, n - at), a == len(starts) - 1
-                x = (("x", ("logits", p, lo + at, lo + at + pn)),)
-                w = [("m", ("head", p, t), 0)] + ([("acc", ("sum", p, t, a - 1), 0)] if a else [])
-                if not (last and end):
+                x = _rows(p, lo + at, pn)
+                w = [("m", tops[t], 0)] + ([("acc", ("sum", p, t, a - 1), 0)] if a else [])
+                if not (t == T - 1 and end):
                     out.append(Unit(("sum", p, t, a), bind(AcceptTileSum, N=pn, AT=at, LAST=end), x, tuple(w)))
                     sums[t] = ("sum", p, t, a)
                     continue
-                w.append(("at", ("head", p, t), 1))
+                w.append(("at", tops[t], 1))
                 for t2 in range(T - 1):
-                    w += [(f"m{t2}", ("head", p, t2), 0), (f"s{t2}", sums[t2], 0)]
+                    w += [(f"m{t2}", tops[t2], 0), (f"s{t2}", sums[t2], 0)]
                 out.append(Unit(("row", p), bind(AcceptRowEnd, T=T, N=pn, AT=at),
                                 (*x, ("seed", ("seed",)), ("pos", ("pos", p))), tuple(w)))
     N = chunk(V)
@@ -542,6 +591,33 @@ def cut(t) -> list[tuple[SpecializedDefinition, int]]:
 
 #: the Call's units, by family: circuit-check holds each to the Flock block in the Call's place
 CUTS = {"SampledAccept_v1": cut}
+
+
+@cache
+def pass_plan(K: int, V: int, tile: int = STATS_TILE) -> tuple[Unit, ...]:
+    """The units of a pass that verifies K draft tokens, in an order that writes each before its readers: each of the K + 1
+    rows' top-p pipeline and mask chunks (`topp_stages.mask_plan`, keyed ``("topp", row, *key)``), then `plan`'s units (keyed
+    ``("accept", *key)``), every read of the masked rows a wire from the mask chunk that writes that row (its output 0).
+    Its operands: ``logits`` the K + 1 rows of bf16 logits, ``temp``, ``top_p`` and ``splits`` (each row's), ``draft``,
+    ``seed`` and ``pos``; the last unit returns `SampledAccept_v1`'s outputs."""
+    N, out = chunk(V), []
+    for p in range(K + 1):
+        for u in TS.mask_plan(V):
+            wired = {name for name, _, _ in u.wires}
+            reads = tuple((name, ("logits", p, *u.lanes) if name == "logits" else (name,))
+                          for name, _ in u.defn.signature()[0] if name not in wired)
+            out.append(Unit(("topp", p, *u.key), u.defn, reads, tuple((name, ("topp", p, *k), j) for name, k, j in u.wires)))
+    for u in plan(K, V, tile):
+        reads, wires = [], [(name, ("accept", *k), j) for name, k, j in u.wires]
+        for name, ref in u.reads:
+            if ref[0] != "logits":
+                reads.append((name, ref))
+                continue
+            _, p, lo, hi = ref
+            assert lo % N == 0 and hi == min(lo + N, V), (u.key, name, ref)
+            wires.append((name, ("topp", p, "mask", lo // N), 0))
+        out.append(Unit(("accept", *u.key), u.defn, tuple(reads), tuple(wires)))
+    return tuple(out)
 
 
 def _operand(ops: dict, ref: tuple):
@@ -575,5 +651,5 @@ ALL_COMPOSITES = [AcceptExpLane, AcceptUniform, LogitAtStep, AcceptTileHead, Acc
 
 __all__ = ["STATS_TILE", "PADDED_TILES", "PART", "RESAMPLE_N", "AcceptExpLane", "AcceptUniform", "LogitAtStep",
            "AcceptTileHead", "AcceptTileSum", "AcceptRowEnd", "AcceptResample", "SampledAccept",
-           "ALL_COMPOSITES", "CUTS", "Unit", "part", "chunk", "plan", "cut", "thread_lanes", "tl_exp", "tile_stats", "row_lse",
-           "accept_uniform", "sampled_accept"]
+           "ALL_COMPOSITES", "CUTS", "Unit", "ROW", "HEAD", "head", "part", "chunk", "plan", "pass_plan", "cut", "thread_lanes",
+           "tl_exp", "tile_stats", "row_lse", "accept_uniform", "sampled_accept"]
