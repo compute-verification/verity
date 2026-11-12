@@ -731,12 +731,17 @@ def test_the_ask_of_a_records_run_is_its_largest_build_here_or_at_a_commit(tmp_p
     r = subprocess.run([sys.executable, str(HERE.parent / "lean_changed.py"), "--ask", P, S, "--head", sha, "--repo",
                         str(clone)], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert (r.returncode, r.stdout) == (0, f"{heavy_gb}\n"), (r.returncode, r.stdout, r.stderr[-2000:])
-    tools = tmp_path / "tools-alone" / "tools/verity/lean"
+    alone, repo = tmp_path / "tools-alone", HERE.parents[3]
+    tools = alone / "tools/verity/lean"
     tools.mkdir(parents=True)
     for f in HERE.parent.iterdir():
         if f.is_file():
             shutil.copy(f, tools / f.name)
-    r = subprocess.run([sys.executable, str(tools / "lean_changed.py"), "--ask", P], cwd=tools.parents[2],
+    for f in [*(f"tools/verity/check/{m}.py" for m in ("common", "lean_slot", "slot", "verdicts", "settings")),
+              "tools/verity/graph/verity_graph/contract.py"]:     # what the tools load beside them, as the queue copies
+        (alone / f).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(repo / f, alone / f)
+    r = subprocess.run([sys.executable, str(tools / "lean_changed.py"), "--ask", P], cwd=alone,
                        capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert (r.returncode, r.stdout) == (0, f"{heavy_gb}\n"), ("a directory of the tools alone lists no tree, so it asks "
                                                               "the largest build", r.returncode, r.stdout, r.stderr[-2000:])
