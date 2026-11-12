@@ -40,7 +40,7 @@ A step copies a state dict, never the module: where it needs the weights as they
 `{k: v.detach().clone() for k, v in model.state_dict().items()}`. A job's trace runs `step` on tensors without data
 (`training_slowdown.capture`), which have nothing a deep copy can copy, so the capture refuses a step that deep-copies
 the model, one of its parameters or an optimizer (`copy.deepcopy`), naming the line: the job stays valid and has no
-trace, so no ρ.
+trace, so its record has no slowdown.
 
 A job may stop after any checkpoint and continue in another process, which calls `build` again and then gets back
 what the job kept (`run.resume_state`): the model's `state_dict`, its buffers outside the state dict (those `build`

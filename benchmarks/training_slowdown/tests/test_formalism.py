@@ -97,7 +97,7 @@ def test_varying_token_blocks_take_the_largest_per_token_affected_count():
 
 def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
     """Training fits when compute (Δ + sτ), reduction (2Δ_grad) and update application (Δ + Δ_grad) each fit in k;
-    ρ is then c/(c − d), 1 with no decoder (d = 0); an unmeasured decoder fits no block. There Δ ≤ k bounds u and u_in
+    the record's slowdown is then c/(c − d), 1 with no decoder (d = 0); an unmeasured decoder fits no block. There Δ ≤ k bounds u and u_in
     (`capped`), so x0's bound is 1 and the token form 0."""
     c, k = 1e13, 1e6
     s_tau = c / 0.8e9 * 32
@@ -326,7 +326,7 @@ EMA = {"kind": "a Python number read back in several earlier steps", "where": "t
 ])
 def test_a_trace_the_capture_cannot_vouch_for_is_refused_never_scored(trace, e_bytes, reason):
     """A clip on a read-back estimate leaves the trace with no update (affected share 0, u(1) 0), which would score
-    ρ = 1 whatever the update. A data-dependent capture, a Python number folded over steps, a
+    the record's slowdown as 1 whatever the update. A data-dependent capture, a Python number folded over steps, a
     nonempty E with no update in its trace and a trace without the read-back lists are each refused with the
     reason."""
     row = traced({k: v for k, v in trace.items() if v is not None}, e_bytes)
@@ -457,7 +457,7 @@ STATED = {"k": policy.CONSOLE[1], "he": stated(policy.CONSOLE[1])}
 
 
 def test_the_products_term_is_the_theorem_of_records_on_m():
-    """The products kind's term is the theorem of record's ρ on M (the entry point's, on the products' `he`) and the record's
+    """The products kind's term is the slowdown the theorem of record gives on M (the entry point's, on the products' `he`) and the record's
     |C|, linear in c at a fixed k, and the published row rests on (H) at the β it took and (E) at its b_y, which
     `products_rests_on` carries wherever the term is measured. It is unmeasured at a k the products weren't
     classified at, on products that come without M (no rows), on rows that don't flag a gather's and where an
@@ -691,7 +691,7 @@ CODE_NAME = __import__("re").compile(
 
 def test_no_published_string_names_the_code():
     """Every string a panel publishes is plain words, since a reader's page prints them: what the kind and each
-    published ρ rest on, every reason the term is unmeasured (no product rows, no M, a retrace, another k, a broken
+    record's published slowdown rest on, every reason the term is unmeasured (no product rows, no M, a retrace, another k, a broken
     P-match, a trace of another program), the sensitivities' labels, the record's labels and the label. The code is
     "training's slowdown code", and a premise is named in words beside its name."""
     c, k = 1e11, policy.CONSOLE[1]
@@ -740,7 +740,7 @@ def test_published_above_1_is_the_products_term():
 
 
 def test_published_with_the_term_unmeasured_is_null_never_1():
-    """With no product rows the one kind is unmeasured: ρ is null, never the floor's 1, which would read as no
+    """With no product rows the one kind is unmeasured: the record's slowdown is null, never the floor's 1, which would read as no
     slowdown, with `why` saying no kind is measured."""
     one = F.published(one_part(), 1e11, 3600)
     assert (one["rho"], one["binding_kind"], one["rests_on"], one["partial"], one["why"]) == (
@@ -749,7 +749,7 @@ def test_published_with_the_term_unmeasured_is_null_never_1():
 
 
 def test_published_with_every_kind_measured_and_none_above_1_is_1_binding_none():
-    """The stated products' term at c = 1e8 is at most 1: ρ is 1, binding none, resting on no kind exceeding 1; the
+    """The stated products' term at c = 1e8 is at most 1: the record's slowdown is 1, binding none, resting on no kind exceeding 1; the
     floor sets it, not the term."""
     one = F.published(replace(one_part(), products=STATED), 1e8, policy.CONSOLE[1])
     assert all(t is not None and t <= 1 for t in one["terms"].values())
@@ -763,7 +763,7 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there():
     with the reason, as at every k but their own for products that keep no rows on the dial. On the 45M dense step
     the term falls with k (220,665 at the console's 65,536 bits, 160,416 at 80,000, 60,188 at the served block's
     145,568 and 2,815 at 800,000 on M, 39 at 8e6 on M without its short contractions), and from 8e7 bits up β(k) is so
-    low that the count allows fewer blocks than |C|/c, so the term is below 1, which ρ's floor reads as 1."""
+    low that the count allows fewer blocks than |C|/c, so the term is below 1, which the floor of the record's slowdown reads as 1."""
     from training_slowdown.capture import products
 
     rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
@@ -996,7 +996,7 @@ def test_reduction_update_and_the_two_forms_are_sensitivities_never_the_bound():
     """They come out labelled beside the kind: reduction and update where the step's token work fills two or more
     blocks (b = 8 at c = 1e11), unmeasured without the cuts, and Slowdown's token form and the decoding form,
     targets; asking for any of them in the max is refused. A record with no product rows has no measured kind, so
-    where Fit fails ρ is unmeasured, whatever the token form gives."""
+    where Fit fails the record's slowdown is unmeasured, whatever the token form gives."""
     m, c, k = measured(u1=1e9), 1e11, 1e5
     b = F.bound(m, c, k)
     assert b["sensitivities"]["token_form"] > 1
