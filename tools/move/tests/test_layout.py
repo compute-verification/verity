@@ -706,10 +706,10 @@ new = { verity = "verity" }
 def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_loses_its_marks(tmp_path):
     """`benchmarks/live/` was no package, and below `verity/` its modules import by name only if each directory up to the
     root is one; its tests, run by path, get no level, and neither do scripts that a package held as no module of its
-    own. `verity/core/` then holds only the `__init__.py` files that marked it and its packages: they go, and
-    `verity/__init__.py` and a package that never held more (`verity/empty/`) stay."""
+    own. `verity/core/` then holds only the `__init__.py` files that marked it and its packages, each of nothing but
+    comments and whitespace: they go, and `verity/__init__.py` and a package that never held more (`verity/empty/`) stay."""
     r, p = _run(tmp_path, {
-        "verity/__init__.py": "", "verity/core/__init__.py": '"""The trusted core."""\n', "verity/core/wire/__init__.py": "",
+        "verity/__init__.py": "", "verity/core/__init__.py": "# The trusted core.\n\n", "verity/core/wire/__init__.py": "",
         "verity/core/wire/frames.py": "X = 1\n", "verity/core/scripts/vectors.py": "Y = 1\n", "verity/core/sub/__init__.py": "",
         "verity/empty/__init__.py": "", "benchmarks/live/auditor.py": "Z = 1\n", "benchmarks/live/tests/test_auditor.py": "W = 1\n",
     }, LEVELS_MAP)
@@ -721,7 +721,80 @@ def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_lo
         "verity/configuration/scripts/vectors.py", "verity/configuration/wire/__init__.py", "verity/configuration/wire/frames.py",
         "verity/empty/__init__.py"]
     assert not (r / "verity/core").exists()
-    assert "`__init__.py` left alone in a package the move empties, deleted: 2" in p.stdout
+    assert "`__init__.py` of nothing but comments and whitespace, left in a package the move empties, deleted: 2" in p.stdout
+
+
+@pytest.mark.parametrize("text, comments", [
+    ("", True), ("\n\n", True), ("# the data sheets\n", True), ("  # indented\r\n\t\n\f\n", True),
+    ("# -*- coding: utf-8 -*-\n# one a GPU\n", True), ("#!/usr/bin/env python3\n", True),
+    ('"""The data sheets."""\n', False), ("'''x'''\n# then a comment\n", False), ("pass\n", False), ("X = 1\n", False),
+    ("from .site import Card\n", False), ("def load(:\n", False), ('"""never closed\n', False), ("# x\0\n", False), (None, False),
+])
+def test_only_comments_is_the_text_of_comments_and_whitespace_alone(text, comments):
+    """What the mover deletes with an emptied package, and what `move_check.py` reads at BASE by this same function: a
+    docstring is content, and so are code, text that doesn't parse, and text that isn't UTF-8 (None)."""
+    assert L.only_comments(text) is comments
+
+
+HELD_MAP = """[roots]
+old = { verity = "verity" }
+new = { verity = "verity" }
+
+[paths]
+"verity/hardware/cards/a100.toml" = "hardware/cards/a100.toml"
+"verity/hardware/nodes/n1.toml" = "hardware/nodes/n1.toml"
+"""
+HELD_TREE = {"verity/__init__.py": "", "verity/hardware/__init__.py": "", "verity/hardware/site.py": "S = 1\n",
+             "verity/hardware/cards/a100.toml": "peak = 1\n", "verity/hardware/nodes/n1.toml": "gpus = 8\n"}
+CODE = "from verity.hardware.site import S\n\n\ndef load(name):\n    return {name: S}\n"
+
+
+def _certify(r: Path, base: str) -> dict:
+    """`move_check.py`'s verdict on the mover's run, committed on ``base``."""
+    git(r, "commit", "-q", "-m", "move")
+    spec = importlib.util.spec_from_file_location("layout_move_check", HERE.parents[2] / "tools/verity/check/move_check.py")
+    mc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mc)
+    return mc.certify(base.strip(), git(r, "rev-parse", "HEAD").strip(), cwd=str(r))
+
+
+@pytest.mark.parametrize("held", ["", "# one data sheet a GPU\n\n   \n"])
+def test_an_emptied_packages_init_of_comments_alone_is_deleted_and_certified(tmp_path, held):
+    """The map moves only the data sheets out of `cards/` and `nodes/`; their `__init__.py` files, empty or of comments and
+    whitespace alone, go with the packages, and `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {**HELD_TREE, "verity/hardware/cards/__init__.py": held, "verity/hardware/nodes/__init__.py": held},
+                HELD_MAP)
+    assert p.returncode == 0, p.stderr
+    assert not (r / "verity/hardware/cards").exists() and not (r / "verity/hardware/nodes").exists()
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+    assert cert["rules"]["emptied"] == ["verity/hardware/cards/__init__.py", "verity/hardware/nodes/__init__.py"]
+
+
+@pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE])
+@pytest.mark.parametrize("dry", [False, True])
+def test_an_emptied_packages_init_that_holds_more_stops_the_move_naming_it_and_the_fix(tmp_path, held, dry):
+    """A docstring or code in an `__init__.py` the move would delete with its package stops the whole move, dry run or not:
+    exit 1, each such file named with the fix, and nothing written; `nodes/`, of nothing but a comment, is not named."""
+    r, p = _run(tmp_path, {**HELD_TREE, "verity/hardware/cards/__init__.py": held,
+                           "verity/hardware/nodes/__init__.py": "# the nodes\n"}, HELD_MAP, *(["--dry-run"] if dry else []))
+    assert p.returncode == 1, p.stdout
+    assert "  verity/hardware/cards/__init__.py\n" in p.stderr and "nodes/__init__.py" not in p.stderr
+    assert "give each a row in the map saying where it goes" in p.stderr
+    assert p.stderr.rstrip().endswith("or delete it in a hand commit before the move")
+    assert git(r, "status", "--porcelain") == "" and (r / "verity/hardware/cards/__init__.py").read_text() == held
+
+
+def test_an_init_that_holds_more_moves_by_its_row_and_the_move_is_certified(tmp_path):
+    """The fix: a row in the map sends the code where it goes (the package becomes a module of the same name), and the
+    range certifies."""
+    r, p = _run(tmp_path, {**HELD_TREE, "verity/hardware/cards/__init__.py": CODE, "verity/hardware/nodes/__init__.py": ""},
+                HELD_MAP.replace('[paths]\n', '[paths]\n"verity/hardware/cards/__init__.py" = "verity/hardware/cards.py"\n'))
+    assert p.returncode == 0, p.stderr
+    assert (r / "verity/hardware/cards.py").read_text() == CODE
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+    assert {"old": "verity/hardware/cards/__init__.py", "new": "verity/hardware/cards.py"} in cert["renames"]
 
 
 COVER_MAP = """[roots]

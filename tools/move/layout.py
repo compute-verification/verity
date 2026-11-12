@@ -57,8 +57,11 @@ word and a package's path (`"INLINE Security"`), [rewrite] word_ends lists the f
 name is rewritten also as the last word of a double-quoted string. A tracked file that a `.gitignore` matches stays tracked where
 it moves. A `.py` file moved below a package root from a package, or from outside every package to a directory that is
 not run by path (`tests/`, `lean/`), gets an `__init__.py` in each directory from it up to the root; and an `__init__.py`
-left where a package held more and now holds only such files is deleted with the package. It appends [paths] to research's
-`moves.json` (once), each row whose path the tree has, and never rewrites the moves recorded there.
+left where a package held more and now holds only such files is deleted with the package when it holds nothing but
+whitespace and comments (`only_comments`). One that holds more, a docstring alone included, stops the move (exit 1) before
+it writes anything, naming each such file: give it a row saying where it goes, or delete it in a hand commit before the
+move. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
+moves recorded there.
 
 It fails on a rewritten reference to a directory the map splits across destinations (`verity/ml/flock/` to
 `verity/protocols/flock/prover/` with its `verifier/` to `verity/protocols/flock/agreement/`): the rewrite follows the
@@ -76,6 +79,7 @@ import bisect
 import fnmatch
 import functools
 import hashlib
+import io
 import json
 import os
 import posixpath
@@ -83,6 +87,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tokenize
 import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -497,6 +502,32 @@ def oversize(src: Path) -> bool:
         return b"\0" not in f.read(8192)
 
 
+def only_comments(text: str | None) -> bool:
+    """Whether a file of `text` holds nothing but whitespace and comments, so that deleting it loses nothing: what an
+    `__init__.py` left in a package a move empties must be for the move to delete it (`Run._leftover`; `move_check.py`
+    reads it at BASE by this same function). A docstring is content, and so is text that is no UTF-8 (None) or doesn't
+    parse."""
+    if text is None:
+        return False
+    try:
+        if ast.parse(text).body:
+            return False
+        kinds = {t.type for t in tokenize.generate_tokens(io.StringIO(text).readline)}
+    except (SyntaxError, ValueError, tokenize.TokenError):
+        return False
+    return kinds <= {tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.ENDMARKER}
+
+
+def refuse_held(held: list[str]):
+    """Stop a move that would delete `held`, the `__init__.py` files left in packages it empties that hold more than
+    comments and whitespace (`only_comments`)."""
+    if held:
+        raise SystemExit(f"the move would delete {len(held)} `__init__.py` file{'s' * (len(held) != 1)} left in packages it "
+                         "empties, which hold more than comments and whitespace:\n" + "".join(f"  {p}\n" for p in held)
+                         + "give each a row in the map saying where it goes (a file only a branch has: a row in the branch's "
+                         f"rows file, NAME{ROWS_SUFFIX} beside the map), or delete it in a hand commit before the move")
+
+
 def refuse_unread(unread: dict[str, int]):
     """Stop a move that would leave `unread` (path -> bytes, the text files `oversize` names) with every line as it was."""
     if unread:
@@ -517,7 +548,7 @@ class Run:
         self.moved: dict[str, str] = {}             # new path -> old path, for files this run moves
         self.texts: dict[str, str] = {}             # new path -> text as it will be written
         self.dropped: list[str] = []                # old paths of the files [drop] deletes
-        self.leftover: list[str] = []               # the `__init__.py` files left alone in the packages the move empties
+        self.leftover: list[str] = []               # the `__init__.py` files left in the packages the move empties
         self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
         self.unread: dict[str, int] = {}            # old path -> bytes, for the text files left unread for their size alone
 
@@ -586,11 +617,19 @@ class Run:
         self.old_dirs = {posixpath.dirname(p) for p in tracked}
         self.old_dirs |= {d for p in (*tracked, *fetched) for d in _ancestors(p)}
         self.leftover = self._leftover(tracked, dict(moves))
+        refuse_held([p for p in self.leftover if not only_comments(self._read_old(p))])
         return moves
+
+    def _read_old(self, p: str) -> str | None:
+        try:
+            return (self.root / p).read_text()
+        except (OSError, UnicodeDecodeError):
+            return None
 
     def _leftover(self, tracked: list[str], dest: dict[str, str]) -> list[str]:
         """Each `__init__.py` that stays in a directory which held more and, after the move, holds nothing but such files,
-        or below one: the package is gone, and a file that only marked it goes with it ([create] keeps one it names)."""
+        or below one: the package is gone, and a file that only marked it goes with it ([create] keeps one it names). One
+        that holds more than comments and whitespace is no mark, and `plan` refuses the move over it (`refuse_held`)."""
         before = sorted(tracked)
         after = sorted({dest.get(p, p) for p in tracked if p not in self.L.drop} | set(self.L.data.get("create", {})))
 
@@ -618,7 +657,7 @@ class Run:
                 (self.root / p).unlink()
         self.changes["files dropped"] = len(self.dropped)
         for p in self.leftover:
-            self.note("`__init__.py` left alone in a package the move empties, deleted", p)
+            self.note("`__init__.py` of nothing but comments and whitespace, left in a package the move empties, deleted", p)
         if not self.dry:
             for d in sorted({posixpath.dirname(o) for o in (*(o for o, _ in moves), *self.dropped, *self.leftover)},
                             key=len, reverse=True):
