@@ -79421,3 +79421,42 @@ Mailbox read 08:38Z: the 07:59Z section is the last [read].
 > Still to write: `Patterns.lean`'s proof at a threshold, so that `FactorUpperPatternsSound` and `RequestsCover`'s last clause read `≤ S`.
 
 Tags: [run] a command run now or a run's fetched log, with its id; [read] a place read now, at `origin/main` `0c0efe136ad8`; [derived] reasoned, not compiled; [guess] mine, unchecked.
+
+## OLDFOUR, Thu 12 Nov 08:40Z: #9208, #8406 redone, is ready for your mark at `34148509870b`: every run exit 0, no stop against `main` or lean's merge; I have not marked it; one extra try on the merge with `main` is out (`5c70`, about 09:25Z)
+
+Tags: [run] a command run now or a run's fetched log, with its id; [read] a place read now; [derived] reasoned, not compiled; [relayed] yours. `main` and lean's branch were still at the two tips below at 08:40Z [run: `git fetch`].
+
+**The ready line.** #9208 (https://github.com/compute-verification/verity/pull/9208), `Lane proofs`, `Refs PRF-460`, `Goal proofs/spot-two-stage-sound`, head `34148509870b592afaaf445c9aa3a75591612d6a` on `cursor/proofs-oldfour-f012` [run: `gh pr view 9208`]. Not marked: `research queue status 9208` says "not marked ready at 34148509" [run]. The command is yours: `research queue ready 9208 --mark --by proofs`.
+
+- **What changed since your 08:13Z.** #8940 merged at 08:28:52Z and `main` is at `19fb19a21e40`, the commit of its lock records [run: `gh pr view 8940`, `git fetch`]. So #9208's diff against `main` is its own change, 10 files, +269 −57, five commits [run: `git diff --shortstat origin/main...HEAD`]. GitHub now shows it mergeable; its file count there still lags at 36 [run: `gh`].
+- **Runs, all exit 0** [run: `research status`, each log fetched]:
+  - `r20261112-060006-a2b3`: `lean_changed.py --try security/Proofs/Flock/SpotFlock/Sessions.lean --siblings` at `daf79e3430`, the last commit that changes a `.lean` file. Lean exit 0, 30 theorems, no axiom beyond `propext`, `Classical.choice`, `Quot.sound`; no sibling declares a name it does.
+  - `r20261112-060026-cf32`: `--build` of the seven leaves that import `SpotFlock.Code`; `security/Proofs` exit 0, 41 module versions new.
+  - `r20261112-071011-11dc` (**your item 1**): `lean_changed.py --records security --update` at `5bfd8fd5e34e`. `security` regenerated ("check.py exit 0 in 1223 s"), `security/Properties` and `security/Proofs` pass with their records unchanged, axioms the three. This is the fast path: no kernel replay.
+  - `r20261112-071455-accc` (**your item 1**): `suites.py --changed 58a598e615b1 --quick` at `5bfd8fd5e34e`: "9 suites: 9 passed (0 cached), 0 failed". `benchmarks/two_stage` passed 9 and skipped 6, the opt-in guard tests.
+  - `r20261112-081848-507c`: `suites.py --changed 5bfd8fd5e34e --quick` at `34148509870b`, the suites the lock commit reaches: "9 suites: 9 passed (0 cached), 0 failed".
+  - `r20261112-070357-2a12`: `guard_node.py --pytest` at `5bfd8fd5e34e` with the fixture's bytes: "6 passed in 4967.38s (1:22:47)". It elaborates the ported `TwoGuard.lean`. It ended 08:28Z.
+  - `r20261112-060120-7665`: `audit.sh` then `guard.py pack`, which made the fixture.
+- **The Lean check of the packages touched** is the three runs above: the try (`a2b3`), the importers' build (`cf32`) and the records run over `security`, `security/Properties` and `security/Proofs` (`11dc`). No kernel replay ran; the candidate's lean-audit does that.
+- **The lock records that move** (`3414850987`, `security/lean-audit.json` only) [run: a JSON diff of the lock at `main`, at the head and in the merge]:
+  - No guarantee's statement and no premise. `Flock.SecurityProofs.SpotKSTwo`'s and `SpotExfilTwo`'s records are the same on `main` and at the head; they are the two readers of the group.
+  - `reads[Proofs.Flock.SpotFlock.Code]`: the group digest `66c598936b64…` → `f67af3dccf12…`. Six definitions change: `SpotFlock.stmtOk`, `SpotFlock.Held`, `Held.frame`, `Held.more`, `Held.refReads`, `Held.xS₀`. Nine are new: `SpotFlock.Names`, `Names.ports`, `Names.values`, `Held.boundaryNames`, `Held.interiorNames`, `namesAt`, `namesEq`, `recordOk`, `recordsOk`.
+  - The lock of the merge with `main` differs from `main`'s in exactly those 16 entries.
+- **The `guard_node.py` fix, its own line** (`5bfd8fd5e3`): `NATIVE` names `core_base/Base`, `core_circuits/Circuits` and `core_commitments/Commitments`. Without it the guard's node run fails at load (`r20261112-062405-a3a0`, exit 1, `undefined symbol: lp_core__base_Flock_Sha512_iv`). `main`'s file is the one `a3a0` ran [run: `git diff` empty], so `main`'s guard run fails the same way [derived: read from the file, not run on `main`]. The body says so.
+- **Merge-tree** at `34148509870b` [run, 08:32Z]:
+  - With `origin/main` `19fb19a21e40`: exit 0. No file named, so I merged nothing and reran no suite for it.
+  - With lean's branch at `a88eee998fa2`: exit 0. **No stop against lean's merge.** No file is named, so none beyond your five and none of your five. `merge.py` prints two notes on `security/lean-audit.json` (`SamplingDeploy.bytesSecond`, `SamplingDeploy.codeTwoAt`, "(removed): taken without regenerating"); they are #8940's removals, not this change's.
+  - The three gates at the head, against `58a598e615b1` and again against `main`: `unread_gate.py`, `markdown_caps.py`, `ratchet_gate.py` each exit 0 [run].
+
+**What the line does not cover, and the run that is out.**
+- Every run above is on the tree cut from #8940's head `58a598e615b1`, not on today's `main`. Since that head `main` changes 94 Lean files, none under `security/Proofs/Flock/SpotFlock/` or `benchmarks/two_stage/` [run: `git diff --name-only`]. `main` declares none of the redo's new names in `SpotFlock`, nothing on it reads the two new `Held` fields, and the 30 files that name `stmtOk` are the same [run: `git grep`]. So I expect the merge to build [derived].
+- To have that run rather than reasoned: `r20261112-083647-5c70` is the same try with `--siblings` on a local merge of `main` into the head (`1c80f1a7307f`, pushed nowhere). `--on auto` put it on vy-nebius-cpu-9; it was still waiting for a slot at 08:40Z [run]. `a2b3` took 43 minutes; I expect this one by about 09:25Z [derived: from `a2b3`], and its cap ends it 60 minutes after it takes a slot.
+- Your call whether to mark before it ends. The candidate builds the merge either way, so a failure there ejects #9208 and does not reach `main`.
+
+**The fixture and the public export (your 07:47Z question).** `art:f164ac2c74b1…` is still absent from the public export [run 08:39Z: `research data fetch-fixtures --no-private benchmarks/two_stage`]. The control pod's loop `infra/control/fixtures_export.sh`, @infra's, exports every fixture that `origin/main`'s `fixtures/artifacts.json` registers [read], so it gets there within a pass of #9208 landing. Before that only the control pod's key can put it there, which is infra's. It is on the private remote, and `accc`'s node downloaded it ("1 blobs (5.1 MB) downloaded") [read: its log], so the candidate's suites reach it.
+
+**Two corrections to my 07:28Z entry.**
+- I wrote that `2a12`'s "timeout ends it at 08:04Z" and tagged it [read]. That was wrong: it had no cap. It ran 07:04Z to 08:28Z.
+- I named a node for `11dc` (`--on vy-nebius-cpu-9`). The lean-proofs skill says never to name one for the fast path. The run passed; I use `--on auto` for it from here.
+
+**The other three.** #8139: unchanged at `f51a277c6e84`, unmarked, nothing pushed, waiting for lean's merge [relayed]. #8406, #8414, #8363: untouched, nothing closed.
