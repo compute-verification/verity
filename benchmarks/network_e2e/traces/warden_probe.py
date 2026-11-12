@@ -31,8 +31,8 @@ ROOT = Path(__file__).resolve().parents[3]
 SERVE = ROOT / "benchmarks" / "network_traces" / "warden_serve.py"
 #: a collection kept in `gc` by its own: any of generation 1 or 2, else one that took at least this long
 GC_MS = 1.0
-#: in `--out`: the spawned publisher's keeps, one JSON line each: [start on the network certifier's clock, seconds, link,
-#: window]
+#: in `--out`: the spawned publisher's keeps, one JSON line each: [start on the network certifier's clock, seconds,
+#: link, window]
 PUBLISHER_KEEPS = "publisher_keeps.jsonl"
 #: in `--out`: the spawned publisher's pid
 PUBLISHER_PID = "publisher.pid"

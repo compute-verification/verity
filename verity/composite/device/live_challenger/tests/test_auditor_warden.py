@@ -154,7 +154,8 @@ def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hou
 def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
     """A warden window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     after one for the session's start, so height 12's 4096 sign the start and 819 windows, exactly, and 1031 (55 minutes
-    of the scan's 3.2 s windows) take 13; a load's heads come first, and one head more than fits takes the next height. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
+    of the scan's 3.2 s windows) take 13; a load's heads come first, and one head more than fits takes the next
+    height. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
     takes; at 12 it refuses them with the height that fits, writing nothing, rather than run a session whose signer
     runs out 819 windows in. The default height, 20, signs anything the gate takes."""
     assert [A.warden_height(w) for w in (1, 204, 205, 819, 820, 1031, 1638, 1639)] == [10, 10, 11, 12, 13, 13, 13, 14]

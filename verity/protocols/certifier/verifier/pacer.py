@@ -8,9 +8,9 @@ same process would wait on the same interpreter lock. The pacer waits on neither
 or the network certifier (`warden.Warden(paced=…)`) hands it each bucket's bytes with its time once the tick has made
 them (`Pacer.hand`), and it releases them at that time on the handing process's clock, which its starter names
 (`CLOCKS`: the proxy's is the host's monotonic clock, the network certifier's the host's raw one, `raw_clock`),
-waiting in `poll` until `SPIN_S` before it and spinning on the clock for the rest. A bucket is parts, each for one link, a socket the pacer holds by its
-key: the proxy's one link, or each of the network certifier's client connections (`Pacer.start`'s links, then each
-`Pacer.add` passes over a Unix socket of its own).
+waiting in `poll` until `SPIN_S` before it and spinning on the clock for the rest. A bucket is parts, each for one
+link, a socket the pacer holds by its key: the proxy's one link, or each of the network certifier's client
+connections (`Pacer.start`'s links, then each `Pacer.add` passes over a Unix socket of its own).
 
 A release puts each part behind whatever its link still holds and writes what the link takes without waiting for it:
 each link keeps its own pending bytes, written as `poll` finds it ready, so a reader slow on one link holds neither a
