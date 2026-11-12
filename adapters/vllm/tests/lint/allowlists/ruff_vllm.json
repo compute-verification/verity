@@ -848,7 +848,6 @@
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "I001", "symbol": "_by_calls_roots", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "I001", "symbol": "_model_roots", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
-    {"file": "verity_vllm/program/frontend/serve_families.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "I001", "symbol": "TargetProfile.tuned_gemm_arch_family", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/triton_capture.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
@@ -957,6 +956,7 @@
     {"file": "verity_vllm/target_family.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/program/predict/model_shape.py", "kind": "E741", "symbol": "ModelShape", "detail": "Ambiguous variable name: `I`"}
+    {"file": "verity_vllm/program/predict/model_shape.py", "kind": "E741", "symbol": "ModelShape", "detail": "Ambiguous variable name: `I`"},
+    {"file": "tests/check/capture_map_check.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"}
   ]
 }

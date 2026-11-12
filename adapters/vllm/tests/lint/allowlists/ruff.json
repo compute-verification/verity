@@ -26,7 +26,6 @@
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.refs.Coll` imported but unused"},
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.types.Array` imported but unused"},
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.types.RecordType` imported but unused"},
-    {"file": "tests/program/test_composition.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file"},
     {"file": "tests/program/test_derive_negative.py", "kind": "F401", "symbol": "<module>", "detail": "`json` imported but unused"},
     {"file": "tests/program/test_derive_negative.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.program.frontend.Arr` imported but unused"},
     {"file": "tests/program/test_derive_negative.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.program.frontend.batch` imported but unused"},
