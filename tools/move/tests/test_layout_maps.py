@@ -56,6 +56,20 @@ def test_a_file_goes_to_its_components_directory_under_the_name_it_has_today():
     assert "tools/t.py" not in dest
 
 
+def test_a_components_move_is_its_protocols_or_its_adapters_and_flocks_verifier_and_prover_are_each_one():
+    assert G.move_of("verity/protocols/flock/verifier") == "flock_verifier"
+    assert G.move_of("verity/protocols/flock/prover") == "flock_prover"
+    assert G.move_of("verity/protocols/flock") == "flock"
+    assert G.move_of("verity/protocols/remote/verifier") == "remote"
+    assert G.move_of("verity/protocols/interface") == "interface"
+    assert G.move_of("verity/commitments") == "commitments"
+    assert G.move_of("verity") == "verity"
+    assert G.move_of("adapters/vllm") == "vllm"
+    assert G.move_of("demos/lifecycle") == "demos"
+    components = G.json.loads((MOVE / "layout_maps.json").read_text())["components"]
+    assert {G.move_of(c["to"]) for c in components} <= {name for name, _ in G.MOVES}
+
+
 def test_a_file_or_a_component_named_in_keep_stays(monkeypatch):
     monkeypatch.setattr(G, "KEEP", {"verity/ml/gates/a.py": "a file that stays", "pous": "a component that stays"})
     dest, _ = plan()

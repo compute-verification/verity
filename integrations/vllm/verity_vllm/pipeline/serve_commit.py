@@ -34,11 +34,12 @@ yet absorbed); a request may still span windows. ``disk`` (`serve_guard.DiskFloo
 filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`Mirror`) copies the records
 into the run's ``$OUT`` after each close and each seal.
 
-With ``served`` (the compile slice's statics, `served_statics`) each close also commits the step rows the window ran
+With ``served`` (the statics of the compile slice the windows are proved by, `SERVED_SLICE`; `served_statics`) each close
+also commits the step rows the window ran
 (`verity.core.protocols.certifier.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
-binding, root, count and row width) goes into the window's ``windows.jsonl`` line, beside its run root, written at the
-close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
+binding, root, count and row width, with the statics and the slice) goes into the window's ``windows.jsonl`` line, beside
+its run root, written at the close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
 """
 from __future__ import annotations
 
@@ -54,12 +55,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity.core.protocols.certifier import charge_chain as CC
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
+#: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
+#: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
+#: only the rows v1 and v4 share, ``srv`` (the served rows); the rest of v4's are the prover's.
+SERVED_SLICE = "CompileSlice_v7"
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
 
@@ -177,12 +183,15 @@ def ingress_of(brought: Mapping[str, Any], params: Any) -> dict[str, Any]:
 
 
 def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> dict[str, int]:
-    """The compile slice's statics (`compile_slice.statics`) for the served engine's scheduler configuration
-    (`engine.step_trace.scheduler_config`) and the slice's size class (every name of `SERVED_CLASS`)."""
+    """`SERVED_SLICE`'s statics for the served engine's scheduler configuration (`engine.step_trace.scheduler_config`) and
+    the slice's size class (every name of `SERVED_CLASS`): CompileSlice_v1's (`compile_slice.statics`), refused where v4
+    refuses them (`charge_chain.check_length_slots`: an output length wider than a length slot), so a server refuses at
+    start what its windows' proofs would."""
     if missing := [k for k in SERVED_CLASS if k not in size_class]:
         raise ValueError(f"the served rows' size class needs {missing}")
     c = {k: int(size_class[k]) for k in SERVED_CLASS}
-    return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
+    return CC.check_length_slots(CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"],
+                                            K=c["K"]))
 
 
 def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tuple]], ids: Mapping[str, int], steps: int,
@@ -568,7 +577,8 @@ class CommitWindows:
 
     def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
         """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
-        statics it was packed under; the rows and salts written to ``served_rows/w<k>.json``. A failure is the window's."""
+        statics it was packed under and the slice they are `SERVED_SLICE`'s; the rows and salts written to
+        ``served_rows/w<k>.json``. A failure is the window's."""
         try:
             by_step = served_rows(com)
             ids = {rid: self.arrivals[e] for rows in by_step.values() for rid, *_ in rows
@@ -582,7 +592,7 @@ class CommitWindows:
             "window": rec["window"], "run_root": rec["run_root"], "statics": self.served, "ids": ids,
             "session": [[None if s is None else [list(r) for r in s] for s in w] for w in session],
             "salts": [s.hex() for s in served.registration.salts]}))
-        return {**served.record(), "statics": self.served}
+        return {**served.record(), "statics": self.served, "slice": SERVED_SLICE}
 
     def _seal_job(self, rec: dict[str, Any], rc: Any, c: _Closed) -> Any:
         """What the window's seal reads that the next window changes (its requests, rows and tokens from the ledgers at its

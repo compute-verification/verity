@@ -258,7 +258,7 @@ NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to t
 #: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
 NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
-MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+MODEL = {"id": "claude-fable-5-2", "params": [{"id": "effort", "value": "high"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60

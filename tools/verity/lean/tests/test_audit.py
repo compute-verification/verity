@@ -66,6 +66,22 @@ def every_failure_has_a_code(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def every_statement_change_names_its_entry(monkeypatch):
+    """Every line of any review a test here provokes that heads a statement change (`statement_changes` keeps it, and it is
+    no detail under another line) is a `Change`, so a report's `changes` lists it with its owners."""
+    review = A.review
+
+    def reviewed(*args, **kw):
+        notes = review(*args, **kw)
+        for n in A.statement_changes(notes):
+            assert n[:1] == " " or (isinstance(n, A.Change) and n.kind in A.ORDER and n.entry), \
+                f"a statement change without its kind and entry: {n!r}"
+        return notes
+
+    monkeypatch.setattr(A, "review", reviewed)
+
+
+@pytest.fixture(autouse=True)
 def seal_off_the_checkout(tmp_path_factory, monkeypatch):
     """`main` seals a run under `SEAL_BASE` (`ROOT/.lake/sealed`); here it seals under the test session's tmp instead, so a
     real-build audit never writes or reads under the checkout, which the suite's read guard would flag as undeclared."""
@@ -735,6 +751,84 @@ def test_what_settles_is_keyed_on_codes_not_text():
     assert json.loads(json.dumps([unrecorded])) == [str(unrecorded)], "a report holds its failures' text"
 
 
+def test_a_regenerated_record_s_statement_changes_are_listed_with_their_owners():
+    """`changes`, a report's list of what a regenerated record changes in what a guarantee says, for whoever rings the
+    owners: one item for each line of the review that heads a change, with its entry, the lock's section it is in, its
+    owners and the line.  A guarantee's owner and a listed premise's is its entry's; a definition's are those of the
+    guarantees that read it, each once; a guarantee the record drops is named from the lock before; a definition no
+    guarantee reads any more has the lock's `default_owner`, else none.  The items are read off each line's `Change`, never
+    its text: a reworded line names the same owners, and a bare string is no item.  No lock makes it raise."""
+    g = {"name": "P.g", "module": "P.Defs", "kind": "def", "hash": "4" * 32}
+
+    def pins(rel="=", h="00000000000000aa", f="1", more=()):
+        reads = [r | {"hash": f * 32} if r["name"] == "P.f" else r for r in fact()["reads"]]
+        return {"P.t": fact(signature=f"P.t (h : P.Hyp) (n : Nat) : P.f n {rel} n", h=h, reads=reads),
+                "P.u": fact(signature="P.u (h : P.Hyp) (n : Nat) : P.f n = n", reads=[*reads, *more])}
+
+    def heads(notes):
+        return [n for n in A.statement_changes(notes) if n[:1] != " "]
+    old = A.judge(POLICY | {"guarantees": {"P.t": {"owner": "@zed"}, "P.u": {"owner": "@amy"}}}, facts(pins=pins(more=[g])),
+                  FILES, update=True)[1]
+    now = facts(pins=pins("≤", "00000000000000bb", "9"))
+    fails = A.judge(old, now, FILES)[0]
+    assert {f.code for f in fails} == {"guarantees.signature", "guarantees.reads-changed"}
+    regen = A.regenerated(old, now, FILES, fails)
+    notes = A.review(old, regen, now, {})
+    listed = A.changes(notes, old, regen)
+    assert listed == [
+        {"entry": "P.t", "kind": "guarantees", "owners": ["@zed"], "line": "guarantee P.t: changed"},
+        {"entry": "P.f", "kind": "reads", "owners": ["@amy", "@zed"],
+         "line": "definition P.f (P.Defs), read by P.t, P.u: changed"},
+        {"entry": "P.g", "kind": "reads", "owners": [], "line": "definition P.g (P.Defs): gone"}]
+    assert [c["line"] for c in listed] == heads(notes) and json.loads(json.dumps(listed)) == listed
+    assert A.changes(notes, old, regen | {"default_owner": "@lean"})[2]["owners"] == ["@lean"]
+    assert A.changes(notes, old, regen | {"default_owner": "@lean"})[:2] == listed[:2], "an owned entry keeps its owners"
+
+    dropped = {**old, "guarantees": {"P.t": old["guarantees"]["P.t"]}}
+    notes = A.review(old, dropped, facts(pins={"P.t": pins(more=[g])["P.t"]}), {})
+    assert A.changes(notes, old, dropped)[0] == {"entry": "P.u", "kind": "guarantees", "owners": ["@amy"],
+                                                 "line": "guarantee P.u: removed"}
+
+    handed = {**old, "guarantees": old["guarantees"] | {"P.t": old["guarantees"]["P.t"] | {"owner": "@lean"}}}
+    notes = A.review(old, handed, facts(pins=pins(more=[g])), {})
+    assert notes == [f"guarantee P.t: owner @zed -> @lean: {A.OWNED}"] and A.changes(notes, old, handed) == []
+
+    reworded = A.Change("guarantees", "P.t", "P.t no longer says what its record says")
+    assert A.changes([reworded], old, regen) == [{"entry": "P.t", "kind": "guarantees", "owners": ["@zed"],
+                                                  "line": str(reworded)}]
+    assert A.changes(["guarantee P.t: changed"], old, regen) == [], "the same text without its `Change` names no entry"
+    import copy
+    back = copy.deepcopy(A.Change("reads", "P.f", "definition P.f: changed", ["P.t"]))
+    assert (back, back.kind, back.entry, back.readers) == ("definition P.f: changed", "reads", "P.f", ("P.t",))
+    odd = {"guarantees": {"P.t": {"owner": ["@zed"]}, "P.u": {"owner": "amy"}}, "assumptions": ["P.Assumptions"], "open": None,
+           "default_owner": 7}
+    assert [c["owners"] for c in A.changes(A.review(old, regen, now, {}), odd, odd)] == [[], [], []]
+
+
+def test_a_changed_premise_is_listed_under_its_section_with_its_owner():
+    """A listed premise whose record changes (here an open premise whose walk changed, `open.digest`, a record difference)
+    is an item of `changes` under the lock's section that lists it, owned by its entry's owner."""
+    pin = fact(signature="P.t (n : Nat) (h : P.Leaves n) : P.f n = n", hyps=[])
+    pin["premises"] = [{"binder": "h", "head": "P.Leaves", "module": "P.Thms"}]
+    graph = {"P.Thms": {"imports": ["Init"], "olean": "/r/Security/Proofs/.lake/build/lib/lean/P/Thms.olean"}}
+
+    def built(bound):
+        walk = [{"name": "P.Leaves", "module": "P.Thms", "kind": "def", "sha256": sha("leaves")},
+                {"name": "P.bound", "module": "P.Thms", "kind": "def", "sha256": sha(bound)}]
+        return facts(pins={"P.t": pin}, graph=graph, assumption_reads={"P.Leaves": walk})
+    seed = {"@amy": {"issue": "LEAN-1", "due": "2026-11-30"}}
+    lock = A.judge({**POLICY, "assumptions": {}, "guarantees": {"P.t": {"owner": "@amy"}}, "open_seed": seed}, built("n + 1"),
+                   FILES, update=True)[1]
+    assert lock["open"]["P.Leaves"]["owner"] == "@amy"
+    now = built("n + 2")
+    fails = A.judge(lock, now, FILES)[0]
+    assert [f.code for f in fails] == ["open.digest"]
+    regen = A.regenerated(lock, now, FILES, fails)
+    assert A.changes(A.review(lock, regen, now, {}), lock, regen) == [
+        {"entry": "P.Leaves", "kind": "open", "owners": ["@amy"],
+         "line": "open premise P.Leaves: changed (its statement or a definition it reads)"}]
+
+
 TICKET = {"issue": "LEAN-186", "due": "2026-11-14", "owner": "@lean"}
 
 
@@ -817,6 +911,41 @@ def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the
         fixed, now = fix(code)
         assert fixed["unwitnessed"]["P.sound"] == now["pins"]["P.sound"]["type_sha256"], "listed at its hashes now"
     assert "open_seed" not in fix("open.seed")[0]
+
+
+def test_each_bookkeeping_repair_is_listed_with_its_entry_its_code_and_its_owners():
+    """`bookkeeping_repairs`, a report's `repairs`, for whoever rings the owners: one item for each repair, in the failures'
+    order, with the failure's entry (None: the lock) and code, the line `bookkeeping_warnings` gives, and for owners the
+    handle that line names, or none where it says `no owner` (a lock whose guarantees name none and that gives no
+    `default_owner`).  For every code of `BOOKKEEPING`."""
+    for code, (policy, now) in bookkeeping_cases().items():
+        shaped = (lambda lock: A.shape(lock, now)) if code.startswith("shape.") else (lambda lock: [])
+        fails = A.judge(policy, now, FILES)[0] + shaped(policy)
+        fixed = A.repaired(policy, now, FILES, fails, TICKET)
+        listed = A.bookkeeping_repairs(fails, fixed, TICKET, policy)
+        assert [r["line"] for r in listed] == A.bookkeeping_warnings(fails, fixed, TICKET, policy), code
+        assert [(r["entry"], r["code"]) for r in listed] == [(f.entry, f.code) for f in fails if A.BOOKKEEPING.match(f)], code
+        assert code in {r["code"] for r in listed} and all(r["owners"] == ["@lean"] for r in listed), (code, listed)
+        assert all(set(r) == {"entry", "code", "owners", "line"} for r in listed)
+        assert json.loads(json.dumps(listed)) == listed, code
+    policy, now = bookkeeping_cases()["open.seed"]
+    (seed,) = A.bookkeeping_repairs(A.judge(policy, now, FILES)[0], policy, TICKET)
+    assert seed == {"entry": None, "code": "open.seed", "owners": ["@lean"],
+                    "line": "bookkeeping: the lock (@lean): `open_seed` consumed (open.seed)"}
+
+    now = sounded(owners=("@zed", "@amy"))
+    lock = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {"owner": "@zed"}, "P.u": {"owner": "@amy"}}}
+    ticket = A.bookkeeping_ticket(lock, "2026-11-14")
+    fails = A.judge(lock, now, FILES)[0]
+    (sound,) = (r for r in A.bookkeeping_repairs(fails, A.repaired(lock, now, FILES, fails, ticket), ticket)
+                if r["entry"] == "P.Sound")
+    assert (sound["code"], sound["owners"]) == ("open.unlisted", ["@amy"]) and " (@amy): " in sound["line"]
+
+    ownerless = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {}}}
+    fails = A.judge(ownerless, sounded(), FILES)[0]
+    listed = A.bookkeeping_repairs(fails, A.repaired(ownerless, sounded(), FILES, fails, ticket), ticket)
+    assert {(r["entry"], r["code"]) for r in listed} == {("P.t", "guarantees.no-owner"), ("P.Sound", "open.unlisted")}
+    assert all(r["owners"] == [] and " (no owner): " in r["line"] for r in listed), listed
 
 
 def test_bookkeeping_files_a_premise_on_the_locks_default_issue_and_its_guarantees_first_owner():
@@ -1043,6 +1172,58 @@ def test_the_lock_runs_flag_settles_a_repaired_package_and_lists_its_warnings(tm
     assert len(given) == 2 and len(given[1]) == 10 and given[1] > "2026-01-01"
     with pytest.raises(SystemExit):
         A.main([str(a), "--bookkeeping", "warn"])
+
+
+def test_a_lock_run_s_audit_json_lists_each_statement_change_and_each_repair_with_its_owners(tmp_path, monkeypatch):
+    """`check.py --regenerate --bookkeeping warn` itself (`main` and `audit`, the package's Lean stubbed out) on a package
+    whose lock has no record of its guarantee (a record difference) and doesn't list a premise it takes (bookkeeping):
+    audit.json's package, and its report.json, list each statement change of the regenerated record (`changes`) and each
+    repair (`repairs`) with the entry, its kind or its failure's code, its owners and the printed line; the lines are the
+    review's heads and the warnings, so whoever rings the owners reads no text.  Without `--bookkeeping warn` that package
+    fails and lists neither.  A package that fails on a record difference alone lists its changes, and no repairs unless
+    the flag ran (then none); one that passes lists neither.  The verdicts are those the run had without the lists."""
+    audit = A.audit
+    monkeypatch.setattr(A, "audit", lambda *a, seals=None, **k: audit(*a, **k))   # a seal copies a real build
+
+    def run(name, lock, now, *flags):
+        (sub := tmp_path / name).mkdir(exist_ok=True)
+        pkg, _ = bookkeeping_audit(sub, monkeypatch, lock, now)
+        code = A.main([str(pkg), "--regenerate", *flags, "--no-runs", "--out", str(sub / "out"), "--repo", str(tmp_path)])
+        doc = json.loads((sub / "out" / "audit.json").read_text())
+        (rep,) = doc["packages"]
+        assert json.loads((sub / "out" / "audit-pkg" / "report.json").read_text()).get("changes") == rep.get("changes")
+        return code, doc, rep
+    frozen = {"shape": {"frozen": {"P.t": "frozen: open"}}}
+    lock = {**POLICY, "assumptions": {}, "open_default_issue": "LEAN-186"} | frozen
+    code, doc, rep = run("both", lock, sounded(), "--bookkeeping", "warn")
+    assert code == 0 and rep["settled_codes"] == ["guarantees.unrecorded", "open.unlisted"] and rep["statement_changes"]
+    assert rep["changes"] == [
+        {"entry": "P.t", "kind": "guarantees", "owners": ["@lean"], "line": "guarantee P.t: new"},
+        {"entry": "P.Hyp", "kind": "reads", "owners": ["@lean"], "line": "definition P.Hyp (P.Assumptions), read by P.t: new"},
+        {"entry": "P.f", "kind": "reads", "owners": ["@lean"], "line": "definition P.f (P.Defs), read by P.t: new"}]
+    assert [c["line"] for c in rep["changes"]] == [n for n in A.statement_changes(rep["review"]) if n[:1] != " "]
+    (fix,) = rep["repairs"]
+    assert (fix["entry"], fix["code"], fix["owners"]) == ("P.Sound", "open.unlisted", ["@lean"])
+    assert [fix["line"]] == rep["bookkeeping"] and doc["bookkeeping"] == [f"both/pkg: {fix['line']}"]
+    assert fix["line"].startswith("bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due ")
+    assert set(doc) == {"passed", "failed", "packages", "regenerated", "bookkeeping"}, "the lists are their package's"
+
+    code, doc, rep = run("both", lock, sounded())
+    assert code == 1 and rep["failure_codes"] == ["guarantees.unrecorded", "open.unlisted"]
+    assert not {"changes", "repairs", "bookkeeping", "regenerated", "settled"} & set(rep)
+
+    was = recorded() | frozen
+    changed = facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})
+    code, _, rep = run("record", was, changed)
+    assert code == 0 and rep["settled_codes"] == ["guarantees.signature"] and "repairs" not in rep and "bookkeeping" not in rep
+    assert rep["changes"] == [{"entry": "P.t", "kind": "guarantees", "owners": ["@lean"], "line": "guarantee P.t: changed"}]
+    code, _, warned = run("record", was, changed, "--bookkeeping", "warn")
+    assert code == 0 and warned["changes"] == rep["changes"] and warned["repairs"] == warned["bookkeeping"] == []
+
+    for flags in ((), ("--bookkeeping", "warn")):
+        code, doc, rep = run("passes", was, facts(), *flags)
+        assert code == 0 and doc["regenerated"] == {} and rep["failures"] == [] and "settled" not in rep
+        assert not {"changes", "repairs", "bookkeeping", "review"} & set(rep)
 
 
 def test_reports_list_their_failures_codes_beside_them(tmp_path, monkeypatch):
