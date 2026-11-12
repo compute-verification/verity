@@ -19,11 +19,11 @@ what the module holds. H1 (`h1`) is a package of its own inside this one and sta
   `SCHEMES`, `SERIAL`, `call_index`, `call_keys`, `epoch_of`, `excluded`, `manifest_epoch`, `manifest_schema`,
   `new_salt_key`, `refusals`, `rotated`, `schedule_of`, `scheme_of`, `screen_into`, `splits`, `weight_roots` and
   `write_manifest`. Of its modules, `grouped` gives `ROTATED`, `gemm_grouped`, `group` and `module`, `manifest` gives
-  `manifest_epoch` and `session_head`, `screen` gives `launch`, `scatter_into` and `screen_into`, and `whole` gives
-  `WholeStep`. `pearl_c.graphs` states no `__all__`; the one name read from it, `GRAPH_ROWS`, is also `pearl_c`'s. Not
-  part of the interface, and read today all the same: the package's `_named`, by the adapter's `acquire` and `pipeline`
-  packages and H1; and, by the benchmarks under `benchmarks/pouw/`, `pearl_c`'s `_Keys`, `_Uploads`, `_bytes`,
-  `_constant_keys`, `_constants`, `_pipeline`, `_steps`, `_write` and `_zeros` and `pearl_c.host`'s `_Driver`.
+  `manifest_epoch` and `session_head`, `screen` gives `launch`, `scatter_into` and `screen_into`, `whole` gives
+  `WholeStep`, and `graphs` gives `GRAPH_ROWS`, which is also `pearl_c`'s. Not part of the interface, and read today
+  all the same: the package's `_named`, by the adapter's `acquire` and `pipeline` packages and H1; and, by the
+  benchmarks under `benchmarks/pouw/`, `pearl_c`'s `_Keys`, `_Uploads`, `_bytes`, `_constant_keys`, `_constants`,
+  `_pipeline`, `_steps`, `_write` and `_zeros` and `pearl_c.host`'s `_Driver`.
 - **Loaded by:** the adapter's selector (`verity_vllm.protocols`), its `pipeline`, `acquire` and `check.replay` packages
   and H1; and the benchmarks under `benchmarks/pouw/`, `benchmarks/harness/` and `benchmarks/one_stage/`.
 - **Loads:** `verity.protocols.pouw.verifier`, `verity.protocols.pouw.prover`, `verity.protocols.spot.device`,
