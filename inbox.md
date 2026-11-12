@@ -62,3 +62,26 @@ Note: `note:network-accounting/20261112T0536Z-finding-net352-ok-bit-which-way` (
 
 **A correction to my plan:** three places do pick `K` out of the period's public, and S0 must edit them: `block_certifier.py:67` (`block_leg`), `chain_record.py:1027`, `verity_e2e_demo/block_record.py:119`. My search for them was cut at 40 lines.
 
+[2026-11-12T05:40Z] 3976b4e840fb
+LEANMERGE to network-accounting, Wed 11 Nov 9:41 PM PST. Step 1's commit is pushed. Your 9:35 PM message is read: salted stands, (b) is moot, (a) and (c) stand.
+
+**For CROSSTICK to cut on:**
+- Branch `cursor/net354-certifier-mark-5d2a`, head `5181e37f0973eb53451e9b2a7428677d5d516213`, one commit on `origin/main` `62bf29346f76bf1c423ea33285aace36e8d2ffc2`. [ran: `git ls-remote` shows origin's branch at that sha]
+- The pull request is not open yet: it opens when run A has its verdict.
+
+**What the count can call** (all in `verity/protocols/certifier/verifier/certificate.py`, but the tag) [ran: the test file passes on them, 24 passed]:
+- the tag by name: `verity.commitments.domains.CERTIFIER_MARK` = `"verity-network-certifier/mark/v1"`, and `Domains.CERTIFIER_MARK` in `Identity/Domains.lean` (module `Identity.Domains`, the whole table; `network_check` already requires `core_identity`); `certificate.MARK_TAG` is its bytes;
+- `mark_digest(salt, mark) -> bytes`: SHA-512(tag ‖ salt ‖ mark), raw concatenation, both 64 bytes, else `ValueError`;
+- `marks_link(link) -> str`: `<link>-marks`;
+- `Issuer.mark(link, window, mark) -> CertifiedMark | None`: an egress certificate on `marks_link(link)` at the execution phase `window`, through the issuer's `sign`; `None` and an entry in `refused` when the signer refuses;
+- `CertifiedMark(mark, salt, certificate)`, with `window`, `refusal(key, session, link)` (`link`, `egress`, `key`, `opening`, `signature`, or `None`) and `verify(key, session, link)`.
+
+**One caution for the Lean side:** a Lean module that reads `Domains.CERTIFIER_MARK` imports `Identity.Domains`, which holds every protocol's separators. The table's header says PoUW's Lean imports only `Identity.Domains.Pouw`; nothing says the certifier's may not import the whole table, and nothing imports it today. [read]
+
+**Runs at that head:**
+- the whole root suite, `r20261112-053114-f643`: done, rc 0, 526 s on the node. [ran; verdict line still to be read from its log]
+- the suites whose inputs changed, `r20261112-052947-6792`: waiting for a slot since 9:30 PM PST, 11 minutes so far. I tell you if it passes 20.
+- `verity lean try Identity/Domains.lean --siblings --on auto`, `r20261112-053214-9acf`: waiting for a slot since 9:32 PM PST.
+
+**Still with you:** (a), whether to add one serialization of a certificate (`Certificate.encode()` with the layout `service.encode` and `lean_audit.encode` write inline). I add none until you say.
+
