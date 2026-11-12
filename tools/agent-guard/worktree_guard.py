@@ -19,6 +19,11 @@ git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothin
 It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
 after the hook has read it. A push the agent doesn't type (a script's, a tool's) meets the same push rule, `PROTECTED_REASON`
 and `owner_reason`, in git's pre-push hook (pre_push.py), branch by branch.
+The push rules (the three branches, another agent's branch, an unexpanded push) cover only a push to the repositories whose
+`main`, `checked` and `next` drive lands, QUEUE_REPOS on GitHub (`queue_remote`; `AGENT_GUARD_PUSH_REMOTES`, a regular
+expression, names others in their place): another repository's `main` is its own (the notes' `main`, which every agent's
+`research notes sync` pushes), and the registry names a branch without its repository. A push whose remote can't be told
+(`push_url`: run outside a repository) is judged as one to them; a name that is no remote is a path to git, as here.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged. Where a command names no directory (`git -C DIR`, or a `cd DIR` before it in the same command) the hook judges the
 event's cwd, else the workspace root, since the shell's remembered directory never reaches it.
@@ -27,12 +32,19 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 STATE = Path(os.environ.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
 OWNER_FILE = "agent-owner"
+
+#: the repositories whose `main`, `checked` and `next` drive's App lands, and whose branches the registry names
+QUEUE_REPOS = ("compute-verification/verity", "compute-verification/infra")
+#: a GitHub URL of one of them, whole: https or ssh (with any user, credential or port) or scp form, with or without `.git`
+QUEUE_URL = (r"(?i)^(?:(?:https?|ssh|git)://(?:[^@/\s]*@)?github\.com(?::\d+)?/|(?:[\w.-]+@)?github\.com:/?)"
+             rf"(?:{'|'.join(re.escape(r) for r in QUEUE_REPOS)})(?:\.git)?/?$")
 
 
 def git(directory: str, *args: str) -> str | None:
@@ -157,6 +169,32 @@ def push_targets(directory: str, args: list[str]) -> list[str]:
 #: Branches only drive and the lander push, from their own processes rather than an agent's shell
 PROTECTED = {"main", "checked", "next"}
 
+
+def queue_remote(url: str, given: str | None = None) -> bool:
+    """Whether a push to `url` goes to one of QUEUE_REPOS (QUEUE_URL), or, with `given` (AGENT_GUARD_PUSH_REMOTES), matches
+    that regular expression instead."""
+    return bool(re.search(given or QUEUE_URL, url))
+
+
+def push_url(directory: str, args: list[str]) -> str | None:
+    """The URL `git push ARGS` run in `directory` pushes to, as git rewrites it (`insteadOf`, `pushurl`), or None when it
+    can't be told. The remote is the first word that isn't an option, else the current branch's push remote, `remote.pushDefault`,
+    its upstream's remote or `origin`."""
+    rest = [a for a in args if not a.startswith("-")]
+    remote = rest[0] if rest else None
+    if remote is None:
+        current = git(directory, "symbolic-ref", "--short", "-q", "HEAD")
+        keys = ([f"branch.{current}.pushRemote"] if current else []) + ["remote.pushDefault"] + (
+            [f"branch.{current}.remote"] if current else [])
+        remote = next((r for k in keys if (r := git(directory, "config", "--get", k))), "origin")
+    return git(directory, "remote", "get-url", "--push", remote) or git(directory, "ls-remote", "--get-url", remote)
+
+
+def queue_push(directory: str, args: list[str]) -> bool:
+    """Whether the push rules judge `git push ARGS` run in `directory` (module doc)."""
+    url = push_url(directory, args)
+    return url is None or queue_remote(url, os.environ.get("AGENT_GUARD_PUSH_REMOTES"))
+
 #: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
 #: so even `--name-only` prints it
 CONFIG_DUMPS = {"--list", "-l", "--get-regexp", "--show-origin", "--get-all", "--get-urlmatch"}
@@ -197,7 +235,7 @@ def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_o
     values."""
     for i, d, args in invocations_:
         sub, ok = args[0], next_ok[i] if i < len(next_ok) else ""
-        if sub == "push":
+        if sub == "push" and queue_push(d, args[1:]):
             opts = {a for a in args[1:] if a.startswith("-")}
             targets = PROTECTED & set(push_targets(d, args[1:]))
             if not opts & {"--all", "--mirror"} and next_repaired(targets, ok, {"agent": agent, "dir": d, "args": args}):
@@ -221,9 +259,12 @@ UNEXPANDED = ("$", "`")
 def unexpanded_reason(commands: list[list[str]], indexed: list[tuple[int, str, list[str]]]) -> str | None:
     """Whatever agent runs it: a push, branch switch or worktree add whose words the shell has yet to expand. The hook sees
     `refs/heads/$B`, not the branch it becomes, so it can't hold that branch to its owner or to `main`, `checked` and `next`."""
-    for i, _, args in indexed:
+    for i, d, args in indexed:
         sub = args[0]
         if sub not in ("push", "checkout", "switch", "worktree") or (sub == "checkout" and "--" in args):
+            continue
+        remote = [a for a in args[1:] if not a.startswith("-")][:1]
+        if sub == "push" and not any(c in w for w in remote for c in UNEXPANDED) and not queue_push(d, args[1:]):
             continue
         if words := [w for w in commands[i][1:] if any(c in w for c in UNEXPANDED)]:
             return (f"this `git {sub}` names `{words[0]}`, which the shell expands only after the guard has read it, so the guard "
@@ -255,7 +296,7 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
                     f"../wt-<name> -b <branch>` (or `git worktree add ../wt-<name> <existing-branch>`), then run git there "
                     f"(`git -C ../wt-<name> ...`, or `cd ../wt-<name> && ...` in the same command). One agent per checkout "
                     f"(AGENTS.md).")
-        if sub == "push" and (why := owner_reason(push_targets(d, args[1:]), agent)):
+        if sub == "push" and queue_push(d, args[1:]) and (why := owner_reason(push_targets(d, args[1:]), agent)):
             return why
         if (b := created_branch(sub, args[1:])) and sub in ("checkout", "switch", "worktree"):
             register(b, agent)

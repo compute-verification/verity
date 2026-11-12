@@ -57,13 +57,15 @@ RULES = {
 
 @pytest.fixture(scope="module")
 def ask(tmp_path_factory):
-    """The shell hook's verdict on a command agent ME runs in a clone where branch `theirs` is OTHER's."""
+    """The shell hook's verdict on a command agent ME runs in a clone of verity (its origin's URL; nothing is fetched or
+    pushed) where branch `theirs` is OTHER's."""
     tmp = tmp_path_factory.mktemp("carriers")
     state, ws = tmp / "state", tmp / "ws"
     state.mkdir()
     (state / "branches.json").write_text(json.dumps({"theirs": OTHER}))
     for args in (["init", "-q", "--bare", "-b", "main", str(tmp / "o.git")], ["clone", "-q", str(tmp / "o.git"), str(ws)],
-                 ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"]):
+                 ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
+                 ["-C", str(ws), "remote", "set-url", "origin", "https://github.com/compute-verification/verity.git"]):
         subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_STATE": str(state), "AGENT_GUARD_MIN_AVAIL": "0", "AGENT_INBOX_POLL_S": "off",
            "AGENT_INBOX": str(tmp / "inbox")}

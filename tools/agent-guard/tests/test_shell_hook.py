@@ -707,7 +707,8 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     """A worker that switches its coordinator's checkout drags every editable install in it to that branch. A worktree belongs to the first
     agent that runs git in it; another agent may read it and check out files, but not switch its branch, and may not push a
     branch another agent created or holds, until it is handed over."""
-    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV,
+           "AGENT_GUARD_PUSH_REMOTES": str(tmp_path / "origin.git")}            # origin stands in for the queue's repository
     ws, origin = tmp_path / "ws", tmp_path / "origin.git"
     for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)]):
         subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
@@ -749,10 +750,55 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
 
 
+#: a GitHub installation token's shape, from parts, as the URL a Cursor VM's insteadOf rewrites to carries one
+TOKEN = "gh" "s_" "dummyDUMMYdummy0123456789abcdefABCDEF"
+QUEUE_URLS = ["https://github.com/compute-verification/verity.git", "https://github.com/compute-verification/verity",
+              "git@github.com:compute-verification/verity.git", "ssh://git@github.com/compute-verification/verity",
+              f"https://x-access-token:{TOKEN}@github.com/compute-verification/verity", "https://github.com/compute-verification/infra.git"]
+OTHER_URLS = ["https://github.com/compute-verification/research-notes.git", "https://github.com/someone/verity-fork",
+              "https://github.com/compute-verification/verity-notes", "https://github.com/someone/compute-verification/verity"]
+
+
+def test_the_push_rules_cover_the_queues_repositories_and_no_other(tmp_path):
+    """`main`, `checked` and `next` are the queue's branches of verity and infra, and the registry names a branch without its
+    repository; every agent's `research notes sync` pushes the notes' `main`, and a lane's notes branch may share a name with a
+    registered verity branch. So a typed push to any other repository meets neither the three branches' rule nor the owner rule."""
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "branches.json").write_text(json.dumps({"lanes/infra": "bc-other"}))
+    ws = tmp_path / "notes"
+    for args in (["init", "-q", "-b", "main", str(ws)], ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
+                 ["-C", str(ws), "remote", "add", "origin", OTHER_URLS[0]],
+                 *(["-C", str(ws), "remote", "add", f"q{i}", u] for i, u in enumerate(QUEUE_URLS)),
+                 *(["-C", str(ws), "remote", "add", f"o{i}", u] for i, u in enumerate(OTHER_URLS))):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+    env = {k: v for k, v in os.environ.items() if k != "AGENT_GUARD_PUSH_REMOTES"}
+
+    def ask(command):
+        event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": "bc-me", "cwd": str(ws)}
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                             env={**env, **GIT_ENV, "AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0"})
+        return json.loads(out.stdout)
+
+    for command in ("git push origin main", "git push", "git push origin HEAD:refs/heads/next", "git push origin lanes/infra",
+                    "git push origin HEAD:refs/heads/$B", *(f"git push o{i} main" for i in range(len(OTHER_URLS))),
+                    *(f"git push o{i} lanes/infra" for i in range(len(OTHER_URLS)))):
+        assert ask(command) == {"permission": "allow"}, command
+    for i in range(len(QUEUE_URLS)):
+        for command, said in ((f"git push q{i} main", "only drive and the lander move"),
+                              (f"git push q{i} HEAD:refs/heads/checked", "only drive and the lander move"),
+                              (f"git push q{i} lanes/infra", "belongs to agent bc-other"),
+                              (f"git push q{i} HEAD:refs/heads/$B", "expands only after")):
+            out = ask(command)
+            assert out["permission"] == "deny" and said in out["agent_message"] and TOKEN not in out["agent_message"], command
+    for command in ("git push https://github.com/compute-verification/verity.git main", "git push $R main"):
+        assert ask(command)["permission"] == "deny", command
+
+
 def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_are_refused_for_any_agent(tmp_path):
     """Only drive moves `main` and `next`, so an agent's push to either is refused; and git config values can hold a GitHub
     installation token, so printing them is refused."""
-    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV,
+           "AGENT_GUARD_PUSH_REMOTES": str(tmp_path / "origin.git")}            # origin stands in for the queue's repository
     ws, origin = tmp_path / "ws", tmp_path / "origin.git"
     for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)]):
         subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
