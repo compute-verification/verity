@@ -127,6 +127,52 @@ def test_a_cancel_asks_every_machine_and_refuses_a_run_two_hold(machines):
         remote.adopt(machines["local"], RUN, unique=True)
 
 
+def test_a_search_without_on_never_logs_in_to_an_auditor_host_and_says_so(machines, monkeypatch, capsys):
+    """The auditor hosts refuse lanes' keys by design, so `status|inspect|fetch|cancel RUN` without --on left a refused login in
+    each one's auth log. Both marks leave one out before any ssh: deploy.toml's `admin = true` (vy-auditor-1, the real manifest's)
+    and an entry naming its gate (`auditor`). The search says which it didn't ask, and --on still asks one."""
+    tmp, here, held = machines["tmp"], machines["local"], "r20261002-091500-a0d1"
+    ms = remote.load_machines()
+    ms["vy-auditor-1"] = {"provider": "ssh", "host": "aud1", "user": "vy-admin", "root": str(tmp / "aud1"), "project": "verity"}
+    ms["gate-c"] = {"provider": "ssh", "host": "gate", "user": "vy-admin", "root": str(tmp / "gate"), "project": "verity",
+                    "auditor": "ssh research@gate open ... (benchmarks/live_challenger/auditor.py)"}
+    _run_on(tmp / "aud1", held, "done")
+    hosts: list[str] = []
+    monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **kw: hosts.append(host) or ["sh", "-c"])
+    note = "not asked: the auditor hosts gate-c, vy-auditor-1, which refuse lanes' keys (--on NAME asks one)"
+
+    assert cli.main(["inspect", RUN, "--runs-dir", str(here)]) == 0
+    assert f"research: looking for {RUN} on 2 machines (--on NAME skips this); {note}" in capsys.readouterr().err
+    for argv in (["status", held], ["fetch", held], ["cancel", held, "--reason", "test"]):
+        assert cli.main([*argv, "--runs-dir", str(here)]) != 0, argv
+        err = capsys.readouterr().err
+        assert f"no machine holds run {held}" in err and note in err, argv
+    assert set(machines["probed"]) == set(hosts) == {"a", "b"}, "no ssh to an auditor host without --on"
+
+    assert cli.main(["status", held, "--on", "vy-auditor-1", "--runs-dir", str(here), "--json"]) == 0
+    (s,) = json.loads(capsys.readouterr().out)["runs"]
+    assert s["state"] == "done" and hosts[-1] == "aud1", "--on names it: asked"
+
+
+def test_the_auditor_hosts_are_deploy_tomls_admin_nodes_and_entries_naming_a_gate(monkeypatch, tmp_path):
+    ms = {"n": {"provider": "ssh"}, "adm": {"provider": "ssh"}, "g": {"provider": "ssh", "auditor": "its gate"}, "bad": 1}
+    manifest = tmp_path / "deploy.toml"
+    manifest.write_text("[nodes.adm]\nadmin = true\n[nodes.n]\nadmin = false\n")
+    monkeypatch.setattr(remote, "DEPLOY_MANIFEST", manifest)
+    assert remote.restricted(ms) == {"adm", "g"}
+    manifest.unlink()
+    assert remote.restricted(ms) == {"g"}, "no manifest: the entries' `auditor` alone"
+
+
+def test_every_node_deploy_toml_makes_an_auditor_host_is_restricted():
+    """A node that gets /etc/vy/auditor (lanes' keys refused) but not `admin = true` would be searched by every lookup without --on."""
+    import tomllib
+
+    doc = tomllib.loads(remote.DEPLOY_MANIFEST.read_text())
+    (marker,) = [f for f in doc["file"] if f["path"] == remote.AUDITOR_FILE]
+    assert marker["nodes"] and remote.restricted({n: {"provider": "ssh"} for n in marker["nodes"]}) == set(marker["nodes"])
+
+
 def test_a_prefix_is_never_looked_up_on_the_machines(machines, capsys):
     assert cli.main(["inspect", "r20261002", "--runs-dir", str(machines["local"])]) == 1
     assert "no run matching 'r20261002'" in capsys.readouterr().err and machines["probed"] == []

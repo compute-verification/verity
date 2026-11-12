@@ -5,6 +5,7 @@ Its output is not committed: write it anywhere with --out.
 
     cd integrations/vllm
     python tests/dead_code_census.py [--imported imported.json] [--out /tmp/census.json] [--git-dates]
+    python tests/dead_code_census.py --tests-for MODULE... [--out /tmp/tests_for.json]
 
 ROOTS (`census_roots.txt`, reviewed by hand): shell entry points (paths or globs: every sweep runner and negatives runner by rule), Python
 entry points, and directories of roots (the regression harness).  A root shell is parsed for `-m module`, `python <path>.py`,
@@ -30,6 +31,13 @@ DELETION PLAN: a non-LIVE module is kept when the keep-list names it (fixture ge
 modules import, other lanes' protected paths, next-candidate clusters), otherwise deleted.  A test file goes when it imports a deleted
 module, directly or through another deleted test (fixpoint); the harness dir never goes.  Artifacts: an unreferenced file (no tracked
 file of the whole repo names it or an ancestor directory) is deleted only inside ARTIFACT_DELETE_SCOPES, and never a `.sh`.
+
+TESTS FOR A SET (`--tests-for D`, the tests that go with a deletion): each test-tree file reaches the library modules it names
+itself (an import, a string naming a module or its path, a `verity-vllm` command's name in a file that runs the CLI) and those
+of the test-tree files it names (helpers, fixture modules), followed through them; never what a library module imports in
+turn, so a test's targets are what it tests.  A test file whose every target is in D goes, one that reaches others too is
+edited to drop D's cases, and the rest stay; a helper goes when every test reaching it goes.  After deleting, collection
+passes and this census finds no new dead helper.
 """
 
 from __future__ import annotations
@@ -56,8 +64,11 @@ CENSUS_PACKAGES = PACKAGES
 #: the Definitions that moved from the package to `verity.ml.definitions` (circuits', held to the keep-list as it stood): in the
 #: graph and the census, each file keyed by its repository path
 DEFINITIONS = REPO / "verity" / "ml" / "definitions"
+#: what of `DEFINITIONS` moved from the package: the modules at its top and these packages of it; any other package there is core's
+MOVED_OUT = frozenset({"numerics", "registry", "tests"})
 _TOPS = "|".join(PACKAGES + ("tests",))
-TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
+_DEFINITIONS_MODULE = re.escape(".".join(DEFINITIONS.relative_to(REPO).parts))
+TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS}|{_DEFINITIONS_MODULE})(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
 PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS}|verity/ml/definitions)(?:/[A-Za-z0-9_.-]+)+\.py$")
 
 #: Other lanes own these; the census reports them, the deletion plan never touches them (the keep-list names the non-live ones).
@@ -89,7 +100,7 @@ ARTIFACT_KEEP: dict[str, str] = {
 SHELL_MODULE_RE = re.compile(r"-m\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 SHELL_PY_RE = re.compile(r"(?<![\w/.-])((?:[A-Za-z0-9_./-]+/)?[A-Za-z0-9_]+\.py)(?![\w])")
 SHELL_SH_RE = re.compile(r"(?<![\w.-])((?:[A-Za-z0-9_./$-]+/)?[A-Za-z0-9_]+\.sh)(?![\w])")
-SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
+SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)}|{_DEFINITIONS_MODULE})(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- files
@@ -101,6 +112,8 @@ def py_files() -> list[Path]:
                 continue                                             # this tool names modules in string literals; it is not a consumer
             if p.name.endswith(SIDECAR) or p == DEFINITIONS / "__init__.py":
                 continue                                             # verity.ml.definitions' own __init__ is verity.ml's, not a Definition's
+            if top == DEFINITIONS and len(parts := p.relative_to(top).parts) > 1 and parts[0] not in MOVED_OUT:
+                continue                                             # core's package: neither in the graph nor in the census
             out.append(p)
     return out
 
@@ -177,15 +190,19 @@ class Graph:
             if self.exists(m) and m != src:
                 self.edges[src].add(m)
 
-    def resolve_from(self, src_mod: str, src_is_pkg: bool, node: ast.ImportFrom) -> list[str]:
+    @staticmethod
+    def from_base(src_mod: str, src_is_pkg: bool, node: ast.ImportFrom) -> str:
+        """The module a `from X import ...` reads ``X`` as, relative imports resolved."""
         if node.level == 0:
-            base = node.module or ""
-        else:
-            anchor = src_mod.split(".")
-            if not src_is_pkg:
-                anchor = anchor[:-1]
-            anchor = anchor[: len(anchor) - (node.level - 1)] if node.level > 1 else anchor
-            base = ".".join(anchor + ([node.module] if node.module else []))
+            return node.module or ""
+        anchor = src_mod.split(".")
+        if not src_is_pkg:
+            anchor = anchor[:-1]
+        anchor = anchor[: len(anchor) - (node.level - 1)] if node.level > 1 else anchor
+        return ".".join(anchor + ([node.module] if node.module else []))
+
+    def resolve_from(self, src_mod: str, src_is_pkg: bool, node: ast.ImportFrom) -> list[str]:
+        base = self.from_base(src_mod, src_is_pkg, node)
         out = [base] if base else []
         for a in node.names:
             cand = f"{base}.{a.name}" if base else a.name
@@ -457,6 +474,160 @@ def artifact_plan(arts: dict[str, dict], deleted_files: set[str]) -> dict:
             "unreferenced_shells": sorted(f for f, e in arts.items() if f.endswith(".sh") and unreferenced(e))}
 
 
+# ---------------------------------------------------------------------------------------------------------------------------- tests of a set
+CLI_MODULE = "verity_vllm.pipeline.cli"
+#: a string that names a module, maybe with a name in it (`module.attr`, `module:attr`)
+NAMED_RE = re.compile(rf"^((?:{_TOPS}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Za-z0-9_]*)+)(?::[A-Za-z_][A-Za-z0-9_.]*)?$")
+
+
+def cli_commands(g: Graph) -> dict[str, str]:
+    """`verity-vllm` command -> its module, from `cli.COMMANDS` as written (`{name: (module, help)}`), without importing it."""
+    for node in ast.parse(path_of(g.file_of[CLI_MODULE]).read_text()).body:
+        target = node.target if isinstance(node, ast.AnnAssign) else node.targets[0] if isinstance(node, ast.Assign) else None
+        if isinstance(target, ast.Name) and target.id == "COMMANDS" and isinstance(node.value, ast.Dict):
+            return {k.value: v.elts[0].value for k, v in zip(node.value.keys, node.value.values)
+                    if isinstance(k, ast.Constant) and isinstance(v, ast.Tuple) and isinstance(v.elts[0], ast.Constant)}
+    raise SystemExit(f"{g.file_of[CLI_MODULE]}: no `COMMANDS = {{name: (module, help)}}` literal to read the commands from")
+
+
+def deepest(g: Graph, name: str) -> str | None:
+    """The longest prefix of the dotted ``name`` that is a module of the graph."""
+    parts = name.split(".")
+    return next((m for m in (".".join(parts[:i]) for i in range(len(parts), 0, -1)) if g.exists(m)), None)
+
+
+def named(g: Graph, rel: str, commands: dict[str, str]) -> set[str]:
+    """The modules the file ``rel`` names itself, not the packages whose `__init__` an import runs on the way: what it imports,
+    a string naming a module (`importlib.import_module`, a `monkeypatch.setattr` target, `"mod:fn"`) or its path, the
+    modules other than packages the census graph resolves from it (a source file it reads by name), and, in a file that runs
+    the CLI (it names `pipeline.cli`, or `verity-vllm` in a string), a command's name as its module."""
+    src = g.mod_of[rel]
+    out: set[str] = set()
+    strings: set[str] = set()
+    for node in ast.walk(ast.parse(path_of(rel).read_bytes(), filename=rel)):
+        if isinstance(node, ast.Import):
+            out |= {m for a in node.names if (m := deepest(g, a.name))}
+        elif isinstance(node, ast.ImportFrom):
+            base = g.from_base(src, Path(rel).name == "__init__.py", node)
+            subs = {f"{base}.{a.name}" for a in node.names if g.exists(f"{base}.{a.name}")}
+            if len(subs) < len(node.names) and (m := deepest(g, base)):
+                out.add(m)                                   # a name the module defines, not a submodule
+            out |= subs
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            strings.add(node.value)
+    for s in strings:
+        if (hit := NAMED_RE.match(s)) and (m := deepest(g, hit[1])) and "." in m:
+            out.add(m)
+        elif PATH_LITERAL_RE.match(s) and s in g.mod_of:
+            out.add(g.mod_of[s])
+    out |= {m for m in g.edges.get(src, ()) if Path(g.file_of[m]).name != "__init__.py"}
+    if CLI_MODULE in out or "verity-vllm" in strings:
+        out |= {commands[s] for s in strings if s in commands and g.exists(commands[s])}
+    return out - {src}
+
+
+def test_map(g: Graph) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """(each test-tree file, packages' `__init__` aside -> the library modules it reaches; each -> the test-tree files it
+    names).  A file reaches the library modules it names, and those of the test-tree files it names (a helper, a fixture
+    module), followed through them; never what a library module imports in turn.  Only `verity_vllm` counts: a Definition
+    of the registry a test reads is its input, not what it tests."""
+    commands = cli_commands(g)
+    files = sorted(rel for rel in g.mod_of if is_test_file(rel) and Path(rel).name != "__init__.py")
+    direct = {rel: named(g, rel, commands) for rel in files}
+    helpers = {rel: {g.file_of[m] for m in ms} & direct.keys() for rel, ms in direct.items()}
+    targets: dict[str, set[str]] = {}
+    for rel in files:
+        seen = closure({rel}, helpers)
+        targets[rel] = {m for f in seen for m in direct[f] if is_library(g, m)}
+    return targets, helpers
+
+
+def is_library(g: Graph, m: str) -> bool:
+    return m.split(".", 1)[0] in PACKAGES and not is_test_file(g.file_of[m])
+
+
+def closure(start: set[str], edges: dict[str, set[str]]) -> set[str]:
+    seen, todo = set(start), list(start)
+    while todo:
+        for n in edges.get(todo.pop(), set()) - seen:
+            seen.add(n)
+            todo.append(n)
+    return seen
+
+
+def deleted_set(g: Graph, items: list[str]) -> set[str]:
+    """The library modules ``items`` name: a module or a package (every module under it), by dotted name or by path from
+    `integrations/vllm` (`verity_vllm/x/y.py`, a directory `verity_vllm/x/`)."""
+    out: set[str] = set()
+    for item in items:
+        if item.endswith(".py"):
+            mods = {g.mod_of[item]} if item in g.mod_of else set()
+        else:
+            pkg = item.rstrip("/").replace("/", ".")
+            mods = {m for m in g.file_of if m == pkg or m.startswith(pkg + ".")}
+        mods = {m for m in mods if is_library(g, m)}
+        if not mods:
+            raise SystemExit(f"--tests-for {item}: names no module of verity_vllm (a dotted module or package, or a "
+                             f"path from integrations/vllm)")
+        out |= mods
+    return out
+
+
+def tests_for(targets: dict[str, set[str]], helpers: dict[str, set[str]], deleted: set[str]) -> dict:
+    """What deleting the modules ``deleted`` does to the tests (``targets`` and ``helpers`` from `test_map`): a test file whose
+    every target is deleted goes with them, one that reaches others too is edited to drop the cases for the deleted ones,
+    and the rest stay.  A helper goes when every test file reaching it goes, or when none does and its every target is
+    deleted; one that stays and reaches a deleted module is edited."""
+    named_by: dict[str, set[str]] = defaultdict(set)
+    for rel, hs in helpers.items():
+        for h in hs:
+            named_by[h].add(rel)
+    tests = {rel for rel in targets if Path(rel).name.startswith("test_")}
+    goes = {rel for rel in tests if targets[rel] and targets[rel] <= deleted}
+    helpers_go = set()
+    for h in set(targets) - tests:
+        users = closure({h}, named_by) & tests
+        if users <= goes and (users or targets[h] and targets[h] <= deleted):
+            helpers_go.add(h)
+    edit = {rel: {"deleted": sorted(targets[rel] & deleted), "others": sorted(targets[rel] - deleted),
+                  "named_for": named_for(rel, targets[rel] & deleted)}
+            for rel in sorted(set(targets) - goes - helpers_go) if targets[rel] & deleted}
+    return {"deleted": sorted(deleted), "goes": sorted(goes), "helpers_go": sorted(helpers_go), "edit": edit,
+            "stay": len(tests - goes - edit.keys())}
+
+
+def named_for(rel: str, modules: set[str]) -> str | None:
+    """The module of ``modules`` a test file is named for (`test_<name>.py` or `test_<name>_<more>.py` for `....<name>`), if
+    one: such a file is mostly about it, so it may go whole although it also reaches others."""
+    stem = Path(rel).stem.removeprefix("test_")
+    return next((m for m in sorted(modules, key=len, reverse=True)
+                 if stem == m.rsplit(".", 1)[-1] or stem.startswith(m.rsplit(".", 1)[-1] + "_")), None)
+
+
+def report_tests_for(items: list[str], out: str | None) -> int:
+    g = Graph()
+    plan = tests_for(*test_map(g), deleted_set(g, items))
+    lines = {rel: loc(path_of(rel)) for rel in plan["goes"] + plan["helpers_go"]}
+    edit = plan["edit"]
+    print(f"deleting {len(plan['deleted'])} modules: {len(plan['goes'])} test files go ({sum(lines[r] for r in plan['goes'])} "
+          f"lines), {len(plan['helpers_go'])} helpers go ({sum(lines[r] for r in plan['helpers_go'])} lines), {len(edit)} files "
+          f"need edits ({sum(1 for e in edit.values() if e['named_for'])} of them named for a deleted module), {plan['stay']} "
+          f"test files stay")
+    for rel in plan["goes"]:
+        print(f"  goes  {rel} ({lines[rel]} lines)")
+    for rel in plan["helpers_go"]:
+        print(f"  goes  {rel} ({lines[rel]} lines; a helper only the deleted tests reach)")
+    for rel, e in edit.items():
+        others = e["others"] if len(e["others"]) <= 3 else [*e["others"][:3], f"{len(e['others']) - 3} more"]
+        print(f"  edit  {rel}: drop the cases for {', '.join(e['deleted'])}"
+              + (f" (named for {e['named_for']})" if e["named_for"] else "") + f"; it also reaches {', '.join(others)}")
+    if out:
+        with open(out, "w") as f:
+            json.dump(plan, f, indent=1)
+            f.write("\n")
+    return 0
+
+
 # ---------------------------------------------------------------------------------------------------------------------------- census
 def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> dict:
     g = Graph()
@@ -552,7 +723,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default=None, help="write the full census JSON here (not committed)")
     ap.add_argument("--git-dates", action="store_true", help="record last_commit_date per file (one git log per file)")
     ap.add_argument("--artifacts", action="store_true", help="index every non-.py artifact against the whole repo (git grep; needs a checkout)")
+    ap.add_argument("--tests-for", nargs="+", metavar="MODULE", default=None,
+                    help="instead of the census, what deleting these modules (dotted, or paths from integrations/vllm; a package "
+                         "or directory is every module under it) does to the tests: the files that go, and those to edit "
+                         "(--out: as JSON)")
     a = ap.parse_args(argv)
+    if a.tests_for:
+        return report_tests_for(a.tests_for, a.out)
     imported: set[str] | None = None
     if a.imported:
         with open(a.imported) as f:

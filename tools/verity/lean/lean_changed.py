@@ -331,6 +331,46 @@ def write_links(tree: Path, links: dict[str, str]) -> None:
     os.replace(tmp, tree / LINKS)
 
 
+_MOVED = None
+
+
+def _moved():
+    """`moved.py`, loaded by what carries a build and not with this file: `--inputs-key` reads no tree and no recorded
+    move, and whoever runs it from a commit's key code alone (research's records gate) needs no file for it."""
+    global _MOVED
+    if _MOVED is None:
+        _MOVED = _module(Path(__file__).resolve().parent / "moved.py", "lean_moved_for_lean_changed")
+    return _MOVED
+
+
+def carry_builds(tree: Path, log=print) -> None:
+    """Under ``tree``'s lock, before anything reads `LINKS` or syncs a package: a build directory that a layout move left
+    in ``tree`` at its package's former path moves to where this checkout has the package (`moved.carry`), with its entry
+    of `LINKS`. A tree is keyed by package paths and `.lake` is no tracked file: without this the first run after a move
+    would sync the package to its new path, find no build there and compile every module of it, the old build left beside
+    it. It reads the tree, the checkout and the recorded moves, and starts no program. A tree that is the checkout itself
+    keeps what else its former directory holds."""
+    moved = _moved()
+    moves = moved.recorded(ROOT)
+    if not moves or not tree.is_dir():
+        return
+    built = []
+    for d, dirs, _ in os.walk(tree):
+        if ".lake" in dirs and Path(d) != tree:
+            built.append(Path(d).relative_to(tree).as_posix())
+        dirs[:] = [x for x in dirs if not x.startswith(".")]
+    pkgs = sorted({q for f in built if (q := moved.now(f, moves)) != f
+                   and any((ROOT / q / n).is_file() for n in moved.LAKEFILES)})
+    got = moved.carry(tree, pkgs, moves, log, prune=tree.resolve() != ROOT.resolve()) if pkgs else {}
+    if not got:
+        return
+    links = read_links(tree)
+    for old, new in got.items():
+        if old in links:
+            links[new] = links.pop(old)
+    write_links(tree, links)
+
+
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
     fetched dependencies. The paths are resolved, as mountinfo names them: a slot tree is a link into the node's cache root."""
@@ -436,7 +476,8 @@ _sleep, _clock = time.sleep, time.monotonic
 
 def hold_tree(held, tree: Path, log=print) -> bool:
     """Take ``held``'s lock (the tree's `.lock`), waiting up to `TREE_WAIT_S` for the run that holds it, whose id `.who`
-    beside it names; False when it is still held then."""
+    beside it names; False when it is still held then. With the lock, the builds a layout move left behind in the tree
+    are brought to their packages (`carry_builds`), before the caller reads the tree."""
     who, start, told = tree / ".who", _clock(), None
     while True:
         try:
@@ -452,6 +493,7 @@ def hold_tree(held, tree: Path, log=print) -> bool:
                 told = holder
             _sleep(TREE_POLL_S)
     who.write_text(f"{os.environ.get('RESEARCH_RUN_ID') or 'a run'} (pid {os.getpid()})\n")
+    carry_builds(tree, log)
     return True
 
 
@@ -1630,6 +1672,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
         except BlockingIOError:
             log("lean-changed: skipped: another check on this machine holds the tree")
             return 0
+        carry_builds(tree, log)
         links = read_links(tree)
         failed: list[str] = []
         built: list[str] = []

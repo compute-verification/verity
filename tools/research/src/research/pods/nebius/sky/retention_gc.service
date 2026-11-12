@@ -1,9 +1,9 @@
 # /etc/systemd/system/vy-retention-gc.service on the nodes deploy.toml names (`research deploy` installs it): research's retention
-# policy, applied. Over 80% of /workspace it deletes expired paths, oldest and lowest priority first, until under 75%
-# (`research retention gc --apply`, its defaults), with the newest research tool snapshot. A node holds no store key, so a path's
-# preserved artifact is checked against the remote replica the node's store recorded as verified (RESEARCH_STORE: without it gc reads
-# an empty store and keeps every preserved path). Without it a node sits at 80% with terabytes
-# collectable while the fill runner holds every queued run. Never inside a timed window on node 2, like the
+# policy, applied. Over 80% of /workspace's blocks or inodes it deletes expired paths, oldest and lowest priority first, until under
+# 75%, at most 200 paths a pass (`research retention gc --apply`, its defaults), with the newest research tool snapshot. A node
+# holds no store key, so a path's preserved artifact is checked against the remote replica the node's store recorded as verified
+# (RESEARCH_STORE: without it gc reads an empty store, keeps every preserved path and exits 1). Without the unit a node sits at 80%
+# with terabytes collectable while the fill runner holds every queued run. Never inside a timed window on node 2, like the
 # store eviction (store_evict_timed.conf): deleting a few TB competes with a timed measurement for the disk.
 [Unit]
 Description=retention gc: delete expired research paths while /workspace is over 80%

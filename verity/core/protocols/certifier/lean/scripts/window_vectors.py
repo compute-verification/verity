@@ -15,14 +15,16 @@ writes them.
 Half the instances start from a random carry (KT counts small, at and just below the `2^KW` the book holds, or past it;
 runs up to 3 and ranks up to `INDEX_CAP + 2`, which `reference_window` refuses; positions anywhere below `2^32 − 1`),
 a window to three, and half from the book's first carry, a session of up to five windows. A window has 0 to 40 decision
-slots and 0 to 16 hit and order slots each. Books are sampled with each table's bins from 1 to 2,000, totals at the
-bins' sum or above it, and now and then a bin of 0, a total past `MAX_TOTAL` or below the bins' sum; steep books,
-frequency-1 bins at totals near `MAX_TOTAL`, whose symbols take 17 scalings; and certain books, each table's whole total
-in bin 0, under which a window with no slot that holds a value doesn't use the coder. Slots hold a value or not at a
-random density; hits are at and past `HIT_CAP`, and order entries' gaps at and past `GAP_CAP` (wide enough that their
-offsets take `_uniform`'s two steps), before the carry's position, and at `2^32 − 1`, with ranks at and past
-`INDEX_CAP`. Every instance has its windows' slot counts and its tables' bins (`window_charge._bins`), which
-`reference_window` requires (it raises otherwise).
+slots and 0 to 16 hit, order and length slots each. Books are sampled with each table's bins from 1 to 2,000, totals
+at the bins' sum or above it, and now and then a bin of 0, a total past `MAX_TOTAL` or below the bins' sum; steep
+books, frequency-1 bins at totals near `MAX_TOTAL`, whose symbols take 17 scalings; and certain books, each table's
+whole total in bin 0, under which a window with no slot that holds a value doesn't use the coder. Slots hold a value or
+not at a random density; hits are at and past `HIT_CAP`, and order entries' gaps at and past `GAP_CAP` (wide enough
+that their offsets take `_uniform`'s two steps), before the carry's position, and at `2^32 − 1`, with ranks at and past
+`INDEX_CAP`; length terms' max_tokens at 0, powers of two and one below, and at and past `MT_CAP`, each output_len at
+the top of `bitlen(max_tokens)` bits and past it. The first `EDGES` instances are the charge's edge, a window's length
+terms charging `2^CW − 1` bits and `2^CW` (`_edge`). Every instance has its windows' slot counts and its tables' bins
+(`window_charge._bins`), which `reference_window` requires (it raises otherwise).
 """
 from __future__ import annotations
 
@@ -32,9 +34,9 @@ import random
 from pathlib import Path
 
 import verity.core.protocols.certifier
-from verity.core.protocols.certifier.arith_encode import MAX_TOTAL, RUNS
-from verity.ml.protocols.certifier.window_charge import (GAP_CAP, HIT_CAP, INDEX_CAP, WindowBook, WindowCarry, _bins,
-                                                           reference_window)
+from verity.core.protocols.certifier.arith_encode import CW, MAX_TOTAL, RUNS
+from verity.ml.protocols.certifier.window_charge import (GAP_CAP, HIT_CAP, INDEX_CAP, MT_CAP, SLOTS, WindowBook,
+                                                           WindowCarry, _bins, length_bits, reference_window)
 
 COUNT = 4_000
 KW = 15
@@ -95,11 +97,11 @@ def _carry(rng: random.Random) -> WindowCarry:
     return WindowCarry(_counts(rng), run, pos, rank)
 
 
-def _slots(rng: random.Random, N: int, H: int, O: int, carry: WindowCarry,
+def _slots(rng: random.Random, N: int, H: int, O: int, L: int, carry: WindowCarry,
            empty: bool = False) -> tuple[list[int], ...]:
-    """A window's slots (en, bit, hen, short, oen, p, r): each field's slots hold a value at a density of its own (none
-    when ``empty``), the values at their caps' edges now and then and past them, the order entries' positions after the
-    last one's or before it."""
+    """A window's slots (en, bit, hen, short, oen, p, r, qen, mt, olen): each field's slots hold a value at a density of
+    its own (none when ``empty``), the values at their caps' edges now and then and past them, the order entries'
+    positions after the last one's or before it, and each output_len at the top of its max_tokens' width or past it."""
     def held(n: int) -> list[int]:
         d = 0.0 if empty else rng.choice([0.0, 0.3, 0.7, 1.0])
         return [int(rng.random() < d) for _ in range(n)]
@@ -128,14 +130,41 @@ def _slots(rng: random.Random, N: int, H: int, O: int, carry: WindowCarry,
         r.append(rr)
         if e:
             pos, rank = pp + 1, rr + 1
-    return en, bit, hen, short, oen, p, r
+    qen = held(L)
+    mt = [past([0, 1, 2, 3, 255, 256, rng.randrange(1 << 16), rng.randrange(1 << 32), MT_CAP], [MT_CAP + 1, 1 << 33])
+          for _ in range(L)]
+    olen = [past([0, (1 << m.bit_length()) - 1, rng.randrange(1 << m.bit_length())], [1 << m.bit_length()])
+            for m in mt]
+    return en, bit, hen, short, oen, p, r, qen, mt, olen
+
+
+def _edge(seed: int) -> dict:
+    """Seeds below ``EDGES``: one empty window under a certain book, so its segment charges nothing, whose length
+    terms charge `2^CW − 1` (each max_tokens `MT_CAP`, 33 bits a term), accepted, and `2^CW` (one more term, max_tokens
+    0, 1 bit), refused."""
+    rng = random.Random(seed)
+    terms = ((1 << CW) - 1) // length_bits(MT_CAP)
+    mt = [MT_CAP] * terms + [0] * (seed % 2)
+    olen = [rng.randrange(1 << 32) for _ in range(terms)] + [0] * (seed % 2)
+    book = WindowBook(tuple(_table(rng, b, "certain") for _name, b in _bins(0, 0, 0)))
+    priors = _counts(rng)
+    L = len(mt)
+    window = ([], [], [], [], [], [], [], [1] * L, mt, olen)
+    return {"N": 0, "H": 0, "O": 0, "L": L, "book": book, "priors": priors, "carry": WindowCarry(priors),
+            "windows": [window]}
+
+
+EDGES = 2
 
 
 def instance(seed: int) -> dict:
+    if seed < EDGES:
+        return _edge(seed)
     rng = random.Random(seed)
     N = rng.choice([0, 1, 2, 3, 5, 14, rng.randint(0, 40)])
     H = rng.choice([0, 0, 1, 2, 3, 6, rng.randint(0, 16)])
     O = rng.choice([0, 0, 1, 2, 3, 6, rng.randint(0, 16)])
+    L = rng.choice([0, 0, 1, 2, 3, 6, rng.randint(0, 16)])
     (book, kind), priors = _book(rng, N, H, O), _counts(rng)
     if seed % 2:
         carry, n = _carry(rng), rng.choice([1, 1, 2, 3])
@@ -143,11 +172,11 @@ def instance(seed: int) -> dict:
         carry, n = WindowCarry(priors), rng.randint(0, 5)
     windows, c = [], carry
     for _ in range(n):
-        slots = _slots(rng, N, H, O, c, kind == "certain" and rng.random() < 0.8)
+        slots = _slots(rng, N, H, O, L, c, kind == "certain" and rng.random() < 0.8)
         windows.append(slots)
-        ok, _length, nxt = reference_window(N, H, O, book, c, *slots)
+        ok, _length, nxt = reference_window(N, H, O, L, book, c, *slots)
         c = nxt if ok else c
-    return {"N": N, "H": H, "O": O, "book": book, "priors": priors, "carry": carry, "windows": windows}
+    return {"N": N, "H": H, "O": O, "L": L, "book": book, "priors": priors, "carry": carry, "windows": windows}
 
 
 def _pairs(ps) -> list[list[int]]:
@@ -156,17 +185,17 @@ def _pairs(ps) -> list[list[int]]:
 
 def lean_input(inst: dict) -> dict:
     carry = inst["carry"]
-    return {"N": inst["N"], "H": inst["H"], "O": inst["O"],
+    return {"N": inst["N"], "H": inst["H"], "O": inst["O"], "L": inst["L"],
             "book": {"tables": [[list(f), t] for f, t in inst["book"].tables], "priors": _pairs(inst["priors"])},
             "carry": {"counts": _pairs(carry.counts), "run": carry.run, "pos": carry.pos, "rank": carry.rank},
-            "windows": [dict(zip(("en", "bit", "hen", "short", "oen", "p", "r"), slots)) for slots in inst["windows"]]}
+            "windows": [dict(zip(SLOTS, slots)) for slots in inst["windows"]]}
 
 
 def _chain(inst: dict, carry: WindowCarry) -> list[tuple[int, WindowCarry] | None]:
     """`reference_window` on each window from `carry`, up to and including the first it refuses (None)."""
     out = []
     for slots in inst["windows"]:
-        ok, length, carry = reference_window(inst["N"], inst["H"], inst["O"], inst["book"], carry, *slots)
+        ok, length, carry = reference_window(inst["N"], inst["H"], inst["O"], inst["L"], inst["book"], carry, *slots)
         if not ok:
             return out + [None]
         out.append((length, carry))

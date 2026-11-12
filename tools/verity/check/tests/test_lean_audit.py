@@ -680,7 +680,9 @@ def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_arti
     assert not (tmp_path / "escape").exists() and not (tmp_path / "x.olean").exists()
 
 
-def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path):
+def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path, monkeypatch):
+    """Listed from the store's remote when it has one, as only its last `common.RECENT_S` of attempts: listing all of them took
+    half a minute a launch."""
     runs = {"r3": [("lean-audit/lean-artifacts.tar.gz", "c" * 64, True), ("verdicts.tar.gz", "v" * 64, True)],
             "r2": [("lean-audit/lean-artifacts.tar.gz", "b" * 64, False)],          # not on the remote: no node could fetch it
             "r1": [("lean-audit/lean-artifacts.tar.gz", "a" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "d" * 64, True),
@@ -691,6 +693,11 @@ def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path):
         listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
     assert LA.shared_bundles(store) == ["c" * 64, "a" * 64, "d" * 64]
     assert LA.shared_bundles(store, limit=1) == ["c" * 64]
+    refreshed: list[dict] = []
+    store.remote, store.refresh = object(), lambda **kw: refreshed.append(kw)
+    monkeypatch.setattr(LA.COMMON, "recent", lambda now: f"r-since-{now > 1.7e9}")
+    assert LA.shared_bundles(store) == ["c" * 64, "a" * 64, "d" * 64]
+    assert refreshed == [{"attempts_only": True, "since": "r-since-True"}]
 
 
 def _attempts(tmp: Path, rows: list[tuple[str, str, str, list[str]]]):
@@ -717,9 +724,10 @@ def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_
     index = _attempts(tmp_path, [("r-lean", "python3", "failed", DEFERRED), ("r-other", "python3", "done", ["python3", "x.py"]),
                                  ("r-lean-tool", "python3", "done", ["python3", "tools/verity/lean/check.py", "--build"]),
                                  ("r-check", "check", "done", ["check"]), ("r-running", "python3", "running", DEFERRED)])
-    runs = {r: [("lean-audit/lean-artifacts.tar.gz", r[2] * 64, True)] for r in ("r-lean", "r-other", "r-lean-tool", "r-check", "r-running")}
+    runs = {r: [("lean-audit/lean-artifacts.tar.gz", r[2] * 64, True), ("verdicts.tar.gz", r[3] * 64, True)]
+            for r in ("r-lean", "r-other", "r-lean-tool", "r-check", "r-running")}
     store = types.SimpleNamespace(remote=None, index=index, get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
-                                  listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
+                                  listing=lambda art: [{"path": p, "sha256": h, "remote": on, "bytes": 1} for p, h, on in runs[art[4:]]])
     assert LA.shared_bundles(store) == ["l" * 64, "c" * 64]
     monkeypatch.setattr(CHECK, "attempt_pack", lambda store, rid, d, name="verdicts.tar.gz": d / rid)
     monkeypatch.setattr(CHECK.VERDICTS, "refusal", lambda pack: None)
@@ -1125,7 +1133,7 @@ def test_the_ratchet_joins_the_facts_of_this_run_s_audits_or_of_the_passes_it_re
 
     keys = {p: LA.key(p, LA.COMMON.tracked_files(), LA.FLAGS) for p in ("Security", "Security/Proofs", "pkg/a")}
     rc, ran, doc, seen = run(1)
-    assert rc == 0 and ran == ["Security", "Security/Proofs", "pkg/a", "pkg/b"] and seen == ["Security", "Security/Proofs"]
+    assert rc == 0 and ran == sorted(["Security", "Security/Proofs", "pkg/a", "pkg/b"]) and seen == ["Security", "Security/Proofs"]
     assert doc["unread"]["failures"] == [] and sorted(p.stem for p in (cache / "unread").glob("*.json")) == sorted(
         [keys["Security"], keys["Security/Proofs"]])
     published = sorted(f"{keys[p]}.jsonl.gz" for p in LA.UNREAD_FACTS)

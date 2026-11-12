@@ -51,8 +51,8 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import runs
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.numerics.rows import ROWS
+from verity.ml.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.b1 import NEG_INF_BF16
 from verity.ml.windows import interface as IF
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
@@ -125,15 +125,9 @@ def _be_words(b: bytes) -> np.ndarray:
 
 
 def chunk_best(x: np.ndarray) -> tuple[int, int]:
-    """`TokenSelectChunk_v2{C}` on bf16 words ``x``: (best, its index), the first maximum above -inf, a NaN never taken, and
-    (-inf, 0) when there is none."""
-    x = np.asarray(x, dtype=np.uint16)
-    f = (x.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
-    f = np.where(np.isnan(f), -np.inf, f)
-    if not (f > -np.inf).any():
-        return NEG_INF_BF16, 0
-    i = int(np.argmax(f))
-    return int(x[i]), i
+    """`TokenSelectChunk_v2{C}` on one chunk of bf16 words (`numerics.token_select_rows`)."""
+    best, i = token_select_chunk_bests(x)
+    return int(best), int(i)
 
 
 def _pinned(family: str) -> str | None:

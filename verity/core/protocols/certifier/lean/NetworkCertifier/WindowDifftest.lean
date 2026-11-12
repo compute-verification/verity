@@ -14,11 +14,11 @@ reads both files and fails unless `evaluate`, which computes the same results fr
 compiled evaluation, a test and not a proof. `Proofs.NetworkCertifier.Code` (`CodeChargesWhole`) proves `charges` equal
 to the reference's (`Security/Definitions/NetworkCertifier/WindowCharge.lean`).
 
-An instance is a window's slot counts `N`, `H` and `O`, a book (each of `window_charge.SYMBOLS`' tables, its frequencies
-at the bins a window reaches and its total, and the contexts' `priors`), a carry, and windows, each its `N` decision
-slots (`en`, `bit`), `H` hit slots (`hen`, `short`) and `O` order slots (`oen`, `p`, `r`), as
-`ChargeCount_v2{N, H, O}`'s witness holds them. A window's advice is each field's values at the slots that hold one, in
-order (`advice`).
+An instance is a window's slot counts `N`, `H`, `O` and `L`, a book (each of `window_charge.SYMBOLS`' tables, its
+frequencies at the bins a window reaches and its total, and the contexts' `priors`), a carry, and windows, each its `N`
+decision slots (`en`, `bit`), `H` hit slots (`hen`, `short`), `O` order slots (`oen`, `p`, `r`) and `L` length slots
+(`qen`, `mt`, `olen`), as `ChargeCount_v2{N, H, O, L}`'s witness holds them. A window's advice is each field's values at
+the slots that hold one, in order (`advice`).
 
 `evaluate` gives, from the definitions themselves:
 * `steps`: from the instance's carry, each window's `window`, its charge and the carry it passes on (`[charge, counts,
@@ -42,12 +42,16 @@ structure Slots where
   oen : List Bool
   p : List Nat
   r : List Nat
+  qen : List Bool
+  mt : List Nat
+  olen : List Nat
 
 /-- An instance as read. -/
 structure Raw where
   N : Nat
   H : Nat
   O : Nat
+  L : Nat
   tables : List Table
   book : Book
   carry : Carry
@@ -85,20 +89,23 @@ def rawOfJson (j : Json) : Except String Raw := do
     N := ← j.getObjValAs? Nat "N"
     H := ← j.getObjValAs? Nat "H"
     O := ← j.getObjValAs? Nat "O"
+    L := ← j.getObjValAs? Nat "L"
     tables := ts
     book := ⟨a, nh, h, rs, no, g, i, l, ← pairsOfJson (← bk.getObjVal? "priors")⟩
     carry := ⟨⟨← pairsOfJson (← cy.getObjVal? "counts"), ← cy.getObjValAs? Nat "run"⟩, ← cy.getObjValAs? Nat "pos",
       ← cy.getObjValAs? Nat "rank"⟩
     windows := ← ws.mapM fun w => do
       pure ⟨← bitsOfJson w "en", ← bitsOfJson w "bit", ← bitsOfJson w "hen", ← w.getObjValAs? (List Nat) "short",
-        ← bitsOfJson w "oen", ← w.getObjValAs? (List Nat) "p", ← w.getObjValAs? (List Nat) "r"⟩ }
+        ← bitsOfJson w "oen", ← w.getObjValAs? (List Nat) "p", ← w.getObjValAs? (List Nat) "r",
+        ← bitsOfJson w "qen", ← w.getObjValAs? (List Nat) "mt", ← w.getObjValAs? (List Nat) "olen"⟩ }
 
 /-- The values at the slots that hold one, in order. -/
 def held {α : Type} (en : List Bool) (v : List α) : List α :=
   (en.zip v).filterMap fun (e, x) => if e then some x else none
 
 /-- A window's advice: each field's values at the slots that hold one. -/
-def advice (s : Slots) : Window := ⟨held s.en s.bit, held s.hen s.short, held s.oen (s.p.zip s.r)⟩
+def advice (s : Slots) : Window :=
+  ⟨held s.en s.bit, held s.hen s.short, held s.oen (s.p.zip s.r), held s.qen (s.mt.zip s.olen)⟩
 
 /-- The bins of each table a window of `N`, `H` and `O` slots reaches (`window_charge._bins`): bins `0 … bitlen v` of
 the largest value `v` it codes, 0 for n_resumes and n_lag. -/
@@ -108,25 +115,26 @@ def bins (N H O : Nat) : List Nat :=
 def pairsJson (l : List (Nat × Nat)) : Json := toJson (l.map fun p => [p.1, p.2])
 
 /-- `window` from `cy` on each window in turn, up to and including the first it refuses. -/
-def steps (bk : Book) (N H O : Nat) : Carry → List Window → List Json
+def steps (bk : Book) (N H O L : Nat) : Carry → List Window → List Json
   | _, [] => []
-  | cy, x :: ws => match window bk N H O cy x with
+  | cy, x :: ws => match window bk N H O L cy x with
     | none => [.null]
-    | some (L, cy') =>
-      .arr #[toJson L, pairsJson cy'.dec.counts, toJson cy'.dec.run, toJson cy'.pos, toJson cy'.rank] ::
-        steps bk N H O cy' ws
+    | some (c, cy') =>
+      .arr #[toJson c, pairsJson cy'.dec.counts, toJson cy'.dec.run, toJson cy'.pos, toJson cy'.rank] ::
+        steps bk N H O L cy' ws
 
 /-- What the program's definitions give on an instance, in the shape of `reference_window`'s results. -/
 def evaluate (r : Raw) : Except String Json := do
   unless r.windows.all fun s => s.en.length = r.N ∧ s.bit.length = r.N ∧ s.hen.length = r.H ∧ s.short.length = r.H ∧
-      s.oen.length = r.O ∧ s.p.length = r.O ∧ s.r.length = r.O do
-    throw "a window has N, H and O slots"
+      s.oen.length = r.O ∧ s.p.length = r.O ∧ s.r.length = r.O ∧ s.qen.length = r.L ∧ s.mt.length = r.L ∧
+      s.olen.length = r.L do
+    throw "a window has N, H, O and L slots"
   unless r.tables.map (·.freqs.length) = bins r.N r.H r.O do
     throw "the book's tables are at the bins a window reaches"
   let ws := r.windows.map advice
   pure <| Json.mkObj [
-    ("steps", .arr (steps r.book r.N r.H r.O r.carry ws).toArray),
-    ("charges", match charges r.book r.N r.H r.O ws with
+    ("steps", .arr (steps r.book r.N r.H r.O r.L r.carry ws).toArray),
+    ("charges", match charges r.book r.N r.H r.O r.L ws with
       | none => .null
       | some ls => toJson ls)]
 

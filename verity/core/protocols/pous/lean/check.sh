@@ -9,7 +9,7 @@ export PATH="$HOME/.elan/bin:$PATH"
 fail() { echo "CHECK FAILED: $1" >&2; exit 1; }
 
 echo "== the packages: Verity's Lean audit (its controls, every declaration, pins, kernel replay, leanchecker --fresh)"
-audit_py=${POUS_LEAN_AUDIT:-$PWD/../../../../../tools/verity/lean/check.py}
+audit_py=${POUS_LEAN_AUDIT:-$(dirname "$security")/tools/verity/lean/check.py}
 [ -f "$audit_py" ] || fail "no Verity tools/verity/lean/check.py at $audit_py (set POUS_LEAN_AUDIT to another copy)"
 lake build > /dev/null || fail "lake build"
 alog=$(mktemp)

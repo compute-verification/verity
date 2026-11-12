@@ -1,12 +1,16 @@
-"""The verifier's side of a window's history tables (`interface.History`): each table's rows' public strings in the
-positions its runs give (`history.order`), from its writers' public bodies (`wiring.strings`, which the leaf layer binds)
-and from the strings the verifier holds of the table's earlier windows, and the table's root over them, the placeholder
-past its length, to which it holds the root the window's registration records (`history.check`): the prover's root is
-never trusted. Its results are the verifier's pin of each table, from which `interface.registered_reads` makes the
-table's supplied values and by which `interface.input_count` counts its reads registered, and each table's strings, which
-a later window's held runs read."""
+"""The verifier's side of a window's history tables (`interface.History`). The verifier of record computes each table's
+root itself, over its rows' public strings in the positions its runs give (`history.order`), from its writers' public
+bodies, which the leaf layer binds, and from the strings it holds of the table's earlier windows, the placeholder past
+its length, and holds the root the window's registration records to it before the sample (one-stage
+`registration.check`'s ``history``, `history.roots_of`, a root both its verifiers refuse being its ``R7-history``):
+`params` is that ``history``, and the prover's root is never trusted. `pins` is the verifier's pin of each table at that
+registered root, from which `interface.registered_reads` makes the table's supplied values and by which
+`interface.input_count` counts its reads registered; `params` reads each table's root from its pin, so the root the reads
+open against is the one the verifier of record holds. `strings` is a table's strings, which a later window's held runs
+read."""
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -42,22 +46,65 @@ def strings(h: I.History, w: CS.Binding, publics: Mapping[str, bytes], held: Map
     return [bytes(mine[s[1]]) if s[0] == "unit" else bytes(held[s[1]][s[2]]) for s in srcs]
 
 
-def pins(doc: Mapping[str, Any], w: CS.Binding, publics: Mapping[str, bytes], roots: Mapping[str, str],
-         held: Mapping[str, Sequence[bytes]] | None = None) -> tuple[dict[str, dict[str, Any]], dict[str, list[bytes]]]:
-    """The verifier's pin of each of the circuit record ``doc``'s history tables in its window ``w``
-    (``{"value", "root", "leaves", "words", "domain"}``, a pinned registered parameter's, which
-    `interface.registered_reads` and `interface.input_count` take), its root the one over the table's strings (`strings`,
-    ``held`` the strings the verifier holds by value); refused (ValueError) unless the window's registration records that
-    root for it (``roots``, `interface.registered_roots`). -> (the pins, each table's strings by name)."""
+def _histories(doc: Mapping[str, Any]) -> tuple[I.History, ...]:
     reg = I.declarations(doc)[2]
-    out, tables = {}, {}
-    for h in (reg.histories if reg is not None else ()):
-        bcs = strings(h, w, publics, held or {})
-        got = roots.get(h.name)
-        if got is None:
-            raise ValueError(f"history {h.name!r}: the window's registration records no root for it")
-        HT.check(h.program, h.name, h.words, bcs, bytes.fromhex(got), h.capacity)
-        out[h.name] = {"value": h.name, "root": got.lower(), "leaves": h.capacity, "words": h.words,
-                       "domain": HT.domain(h.program, h.name, h.words, h.capacity).domain_id.hex()}
-        tables[h.name] = bcs
-    return out, tables
+    return reg.histories if reg is not None else ()
+
+
+def _root(h: I.History, roots: Mapping[str, str]) -> str:
+    got = roots.get(h.name)
+    if got is None:
+        raise ValueError(f"history {h.name!r}: the window's registration records no root for it")
+    return got.lower()
+
+
+def _pin(h: I.History, root: str) -> dict[str, Any]:
+    return {"value": h.name, "root": root, "leaves": h.capacity, "words": h.words,
+            "domain": HT.domain(h.program, h.name, h.words, h.capacity).domain_id.hex()}
+
+
+def params(doc: Mapping[str, Any], w: CS.Binding, publics: Mapping[str, bytes], pinned: Mapping[str, Mapping[str, Any]],
+           held: Mapping[str, Sequence[bytes]] | None = None) -> dict[str, Any] | None:
+    """The verifier of record's ``history`` for the circuit record ``doc``'s history tables in its window ``w``
+    (``{"digests", "tables", "held", "registered"}``, `history.roots_of`'s form): the SHA-512 of every member's public
+    body (``publics``, by member key, the digests the leaf layer is over); each table's declaration, with the units its
+    writer has in the window (``first``, ``units``) and its writer's members, each with its public body, its rows in the
+    body's order (``ports``) and its shared-row tables; by table, the strings the verifier holds of each value its held
+    runs read (``held``, by value, from the table's earlier windows); and each table's root, its pin's (``pinned``, the
+    pins the reads are made from, `pins`). None for a record with no history tables. Refused (ValueError) where a table
+    has no pin or a pin other than `pins` makes of it, its writer is no template of the window, or a member of its
+    writer has no public body."""
+    hs = _histories(doc)
+    if not hs:
+        return None
+    ranges = {t: (lo, n) for _k, t, lo, n in CS.template_partition(w.program, w.query).ranges}
+    held = held or {}
+    tables, kept, registered = [], {}, {}
+    for h in hs:
+        pin = pinned.get(h.name)
+        if pin is None or dict(pin) != _pin(h, str(pin.get("root"))):
+            raise ValueError(f"history {h.name!r}: the reads' pin of it is not the table's (`history.pins`): {pin}")
+        if h.writer not in ranges:
+            raise ValueError(f"history {h.name!r}: its writer {h.writer} is no template of the window")
+        registered[h.name] = pin["root"]
+        members = []
+        for m in sorted((m for m in w.members if m.template == h.writer), key=lambda m: m.base):
+            if m.key not in publics:
+                raise ValueError(f"history {h.name!r}: {m.key} has no public body")
+            members.append({"key": m.key, "base": m.base, "n": m.n, "ports": [q for q, _ in m.all_rows],
+                            "body": bytes(publics[m.key]).hex(), **({"tables": dict(m.tables)} if m.tables else {})})
+        first, units = ranges[h.writer]
+        tables.append({**h.doc(), "first": first, "units": units, "members": members})
+        if values := [v for v in h.held if v in held]:
+            kept[h.name] = {v: [bytes(s).hex() for s in held[v]] for v in values}
+    return {"digests": {k: hashlib.sha512(b).hexdigest() for k, b in publics.items()}, "tables": tables, "held": kept,
+            "registered": registered}
+
+
+def pins(doc: Mapping[str, Any], roots: Mapping[str, str]) -> dict[str, dict[str, Any]]:
+    """The verifier's pin of each of the circuit record ``doc``'s history tables (``{"value", "root", "leaves", "words",
+    "domain"}``, a pinned registered parameter's, which `interface.registered_reads` and `interface.input_count` take):
+    the root the window's registration records for it (``roots``, `interface.registered_roots`), which stands only beside
+    `params` of the same pins, by which the verifier of record holds it to the root over the table's strings before the
+    sample. Refused (ValueError) where the registration records none."""
+    return {h.name: _pin(h, _root(h, roots)) for h in _histories(doc)}

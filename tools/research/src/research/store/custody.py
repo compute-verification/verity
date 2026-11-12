@@ -178,8 +178,9 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
 
 #: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: check's presigned
 #: URLs of the Lean dependency bundles (`tools/verity/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
-#: and the temporary name a shipped tree's preflight writes that file under before replacing it
-CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*")
+#: and the temporary name a shipped tree's preflight writes that file under before replacing it; and those of the recorded checks'
+#: verdict packs (VERDICT_URLS) and of the agreement's pinned upstream build and inputs (AGREEMENT_URLS)
+CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*", "inputs/verdicts-urls.json", "inputs/agreement-urls.json")
 
 
 def drop_credentials(d: Path) -> None:
@@ -268,6 +269,21 @@ def has_custody(run_dir: Path) -> tuple[bool, str]:
         return True, "fetched (preserved.json)"
     why = marker_problem(d)
     return (True, "on the remote (.custody)") if why is None else (False, why)
+
+
+def custody_run(run_dir: Path) -> str | None:
+    """Why the run dir is a run launched with run custody (its runner's `.custody`, the launcher's remote.json, or the request the
+    machine's job.json names), else None.  Its attempt must name its run record: `research data custody RUN --publish` publishes
+    one, and an attempt published without one is write-once and closes custody to it."""
+    d = Path(run_dir)
+    if (d / MARKER).exists():
+        return f"its runner wrote {MARKER}"
+    if (_read(d / LAUNCHER_RECORD) or {}).get("custody"):
+        return f"{LAUNCHER_RECORD} names its custody key"
+    req = (((_read(d / "job.json") or {}).get("run") or {}).get("remote") or {}).get("request")
+    if isinstance(req, str) and (_read(Path(req)) or {}).get("custody"):
+        return f"its request {req} names its custody key"
+    return None
 
 
 # ---- verify / push / mark -----------------------------------------------------------------------------------------------------------

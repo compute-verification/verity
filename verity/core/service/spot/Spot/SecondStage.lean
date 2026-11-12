@@ -86,6 +86,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   (`window.replay_sample`, which the proof server writes) is not the verifier's own, `S`, in its order
   (`interiorOrderOk`). The record then states that its blocks are `S`'s, block `S[i]`'s cell `off_t + i·n_t`, rather
   than leaving it to convention. It is checked before any statement is read, and fails the check whatever else does.
+* **The schedule**: `second-schedule` when the boundary registration's record commits a schedule (`window.schedule`)
+  that is no schedule of its replay blocks (`Schedule.failure`): runs of positions of its requests that cover the
+  replay blocks in order, and each request's positions in order. A record that commits none passes. It is checked
+  with the interior record's order.
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
   replay block's Definition makes no links (`linksOf`) or one names a template of no part or one whose units its rows
   don't place (`placed`), `second-wires` when it makes no wires (`wiresOf`) or one names a template of no part, one
@@ -108,9 +112,11 @@ module
 public import Flock.FV3
 public import Flock.Program
 public import Spot.Record
+public import Spot.Schedule
 meta import Flock.FV3
 meta import Flock.Program
 meta import Spot.Record
+meta import Spot.Schedule
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -1008,12 +1014,17 @@ def interiorOrderOk (own : Own) : Bool :=
   | .arr bs => bs.toList.map nat? == own.sample.toList.map some
   | _ => false
 
-/-- `second-interior-order` unless the interior record names the replay sample in its order (`interiorOrderOk`). -/
+/-- `second-interior-order` unless the interior record names the replay sample in its order (`interiorOrderOk`), then
+`second-schedule` where the schedule the boundary registration's record commits is not one of its replay blocks
+(`Schedule.failure`). -/
 def interiorFailures (own : Own) : List (String × Json) :=
-  if interiorOrderOk own then [] else [("second-interior-order", Json.str INTERIOR_ORDER_WHY)]
+  (if interiorOrderOk own then [] else [("second-interior-order", Json.str INTERIOR_ORDER_WHY)]) ++
+    match Schedule.failure own.boundary with
+    | some why => [("second-schedule", Json.str why)]
+    | none => []
 
-/-- Every failure of statements `ss` over parts `ps`, the interior record's order's first, then, when there is none
-and the form isn't allowed, its refusal. -/
+/-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, then,
+when there is none and the form isn't allowed, its refusal. -/
 def failures (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   let found := interiorFailures own ++ (List.range ss.length).flatMap (stmtFailures own ps ss) ++
     orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss
@@ -1029,8 +1040,8 @@ def designFailures (ps : Array Part) (own : Own) : List (String × Json) :=
     if wiresOk ps own then [] else [("second-wires", Json.str WIRES_WHY)]
 
 /-- **Round 2's statement check** (module docstring) of statements `stmts`, the two-stage form allowed when `allow`
-(`FORM` in the run): each code once, with the detail it first failed with. The interior record's order is checked
-before any statement is read (`interiorFailures`). -/
+(`FORM` in the run): each code once, with the detail it first failed with. The interior record's order and the
+boundary's schedule are checked before any statement is read (`interiorFailures`). -/
 def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
   let found := match own.parts, stmts with
     | none, _ => interiorFailures own ++ [("second-cells", Json.str CELLS_WHY)]
@@ -1041,6 +1052,11 @@ def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
       if designOk ps own then failures allow own ps ss.toList
       else interiorFailures own ++ designFailures ps own
   found.foldl (fun c x => c.fail x.1 x.2) {}
+
+-- `check`'s equation lemmas are made here, on the command thread: Lean names a binder of theirs in the hygiene context
+-- of the declaration that first asks for them, and the theorems below that unfold `check` elaborate in parallel, so
+-- without this, whichever of them asks first decides the module's `.olean`.
+example := @check.eq_1
 
 /-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, and the reads
 `reads` that rest on the interior's own values (`interiorReads`) as `interior_reads` where there are any. It fails where
@@ -1140,9 +1156,19 @@ theorem orderFailures_nil {ps : Array Part} {ss : List Json} (h : orderFailures 
 /-- With no `second-interior-order`, the interior record names the replay sample in its order. -/
 theorem interiorFailures_nil {own : Own} (h : interiorFailures own = []) : interiorOrderOk own = true := by
   unfold interiorFailures at h
+  have h := (List.append_eq_nil_iff.1 h).1
   split at h
   · assumption
   · simp at h
+
+/-- With no `second-schedule`, the boundary registration's record commits no schedule, or one of its replay blocks. -/
+theorem interiorFailures_schedule {own : Own} (h : interiorFailures own = []) :
+    Schedule.failure own.boundary = none := by
+  unfold interiorFailures at h
+  have h := (List.append_eq_nil_iff.1 h).2
+  split at h
+  · simp at h
+  · assumption
 
 /-- **A passing `second-interior-order`**: the interior record's `window.replay_sample` is a list whose entries are the
 verifier's own replay sample's blocks, in its order. -/

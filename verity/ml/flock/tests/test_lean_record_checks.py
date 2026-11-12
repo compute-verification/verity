@@ -31,7 +31,7 @@ DRAWLESS = "refused: a session without a draw: every soundness claim is about a 
 def sessions(tmp_path_factory):
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    sys.path.insert(0, str(FLOCK / "verifier"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "verity/ml/flock/verifier"))
     import ci
 
     store = tmp_path_factory.mktemp("store")

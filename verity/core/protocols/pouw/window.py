@@ -28,8 +28,8 @@ tiles, so a sample of K′ without replacement misses it with probability at mos
 **The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
 `length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
-(`window-form: length-mismatch`).  A registration made before the rule carries `LEGACY_REGISTERED`, without the item,
-and is not of record.
+(`window-form: length-mismatch`).  A window commitment record made before the rule carries `LEGACY_REGISTERED`, without
+the item, and is not of record.
 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
 an `Entry` row committed in one execution phase root registered before the sample.  A call's sides are dense: each side tree holds only
@@ -104,10 +104,10 @@ PUBLIC = (
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
-#: the items a registration carries; the verdict and the sample come after it
+#: the items an execution phase's window commitment record carries; the verdict and the sample come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-#: what a registration made before the fixed-length rule carries: no `length`, so not of record
-LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
+#: what a window commitment record made before the fixed-length rule carries, `REGISTERED` without `length`: not of record
+LEGACY_REGISTERED = tuple(i for i in REGISTERED if i != "length")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"

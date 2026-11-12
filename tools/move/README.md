@@ -8,6 +8,7 @@ root, and refuses a dirty worktree; a second run changes nothing.
 |---|---|
 | `stage.py` | Stages a move on a base: one commit per map, each certified by `move_check.py` and rerun to check it changes nothing, for its lander (`MAP...`, `--base`, `--branch`, `--push`, `--certificate`). |
 | `layout.py` | Moves the paths a layout map names and rewrites every path, module name, import, pyproject and anchor that pointed at them (`--dry-run`, `--modules`, `--resolve M`). |
+| `layout_maps.py` | Writes the layout as one map, `layout_one_map.toml` (or, by `--form moves`, as one map a move in the order they run, `layout_NN_NAME_map.toml`), from `layout_maps.json` (each moved component's new directory and files) and the files HEAD tracks; it fails on a tracked file with no destination, so it is the one rerun when `main` moves (`--form`, `--ref`, `--targets`, `--created`). |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` and sorting again a sorted JSON object whose keys it renames (`--map MAP`, `--dry-run`, `--moves`). |
 | `restack.py` | Carries an open branch across every move `main` has and it lacks, by rerunning each move's script on it, then merging the moved `main` (`BRANCH`, `--push-to`). |
 
@@ -91,14 +92,17 @@ with each path's first offending hunk, every change its docstring doesn't list a
 
 Once the moves have landed, each open branch crosses all of them with one command:
 
-    python3 tools/move/restack.py BRANCH --push-to NEWBRANCH
+    python3 tools/move/restack.py BRANCH --push-to NEWBRANCH --kept
 
 It finds each move `origin/main` (`--main`; fetch it first) has and the branch lacks by its move line, oldest first, reruns that move's
 script and map on the branch, its own additions included, and merges the moved `main` last. It changes no branch: the
 result is pushed to the new branch, never over one. It reports `clean`, or where it stopped: a conflict of the branch's
 own, a script that failed, or pins or Lean locks to regenerate. Its first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
-merge's conflicts, which are the branch's own. A word move that renames declarations a lock records leaves
+merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
+is what its script writes on its base, which takes as long as the script. With `--kept` a check that passed is kept in the
+check's cache (under `~/.cache/verity-check/restack-generated/`), so on one machine only the first restack across a move
+runs it. A word move that renames declarations a lock records leaves
 those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
 prints.
 

@@ -28,7 +28,7 @@ from verity.core.protocols.remote_bandwidth import p2_case, p2_lean, p2_party, r
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 PACKAGE = Path(__file__).resolve().parents[1]
-SIGNER = PACKAGE.parents[1] / "pous" / "tests" / "pous_test_signer.py"
+SIGNER = Path(__file__).resolve().parents[6] / "verity/core/protocols/pous/tests/pous_test_signer.py"
 COINS = hashlib.sha512(b"the period's live coins").digest()
 
 

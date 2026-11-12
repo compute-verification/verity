@@ -11,7 +11,6 @@
     {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "generate", "detail": "random.Random"},
     {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "make_workload", "detail": "random.Random"},
     {"file": "verity_vllm/program/twins_check.py", "kind": "rng", "symbol": "check_log", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/program/twins_check.py", "kind": "rng", "symbol": "main", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/pipeline/prefix_cache.py", "kind": "rng", "symbol": "prefix_requests", "detail": "numpy.random.default_rng"}
+    {"file": "verity_vllm/program/twins_check.py", "kind": "rng", "symbol": "main", "detail": "numpy.random.default_rng"}
   ]
 }

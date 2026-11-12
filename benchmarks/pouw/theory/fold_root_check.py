@@ -98,7 +98,7 @@ def main() -> int:
     checks = Checks()
     quick = "--quick" in checks.args
     rng = random.Random(20261017)
-    sys.path.insert(0, str(HERE.parents[0] / "receipts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/receipts"))
     sys.path.insert(0, str(HERE.parents[0] / "edited_gemm"))
     import egemm_depthr_check as fold_ref
     import receipt_folds as rf

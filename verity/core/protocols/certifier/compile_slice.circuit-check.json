@@ -1,16 +1,20 @@
 {
  "definitions": {
   "CompileSliceRowGroups_v1{R=2,W=1,A=2,M=2,T=16,L=64,B=4,H=0,CH=1,WM=0,FULL=1,PC=0,NB=20,IW=3,AS=1,EW=0,Q=3,D=2,P=6,K=3,CN=0,CTW=0,CU=0,G=2}": {
-   "and": 32236
+   "and": 32236,
+   "type": "cb06f048012d2c4d39c527dd607bd34245d1411f7300d5443df0ef4b3170cd50f788cc5d83ff4edf9564b98a3a51c15b9205be98dca90d4373c24357e46e8828"
   },
   "CompileSliceRowGroups_v1{R=2,W=1,A=2,M=4,T=16,L=64,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=20,IW=3,AS=0,EW=0,Q=3,D=5,P=4,K=3,CN=6,CTW=4,CU=4,G=2}": {
-   "and": 59341
+   "and": 59341,
+   "type": "a2116f36ffc1b7366d95f4018519eece5e1c11e17690a2f1fb16e6581e3568ec5df28c7c822313f938da14046c746cc9bbb05323ec83d62d7917cd069043318b"
   },
   "CompileSlice_v1{R=2,W=1,A=2,M=2,T=16,L=64,B=4,H=0,CH=1,WM=0,FULL=1,PC=0,NB=20,IW=3,AS=1,EW=0,Q=3,D=2,P=6,K=3,CN=0,CTW=0,CU=0}": {
-   "and": 32236
+   "and": 32236,
+   "type": "11696c0596f6ea12225ae871c03bb8614d5d40886fe08e1139a4e6f15b064b1ffd2df79f6e38d8e4711beef7fd12e816855f8b104edd2d6531c761b91b45b38d"
   },
   "CompileSlice_v1{R=2,W=1,A=2,M=4,T=16,L=64,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=20,IW=3,AS=0,EW=0,Q=3,D=5,P=4,K=3,CN=6,CTW=4,CU=4}": {
-   "and": 59341
+   "and": 59341,
+   "type": "1215f5199731340cba98e81e89a5d7439e2f97e36a7cc9639894dfc77c35087b36f235d00101a3a1c288f6c5580e037fd29609e8c17e168a45475c1d269d8129"
   }
  }
 }

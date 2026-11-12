@@ -14,10 +14,12 @@ public import PouwWindow.Length
 * `Params`: the verifier's own parameters of the execution phase: the check item, ε and δ, the grid's bits, the declared range
   of tile counts, the execution phase's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
   that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
-* `Registration`: one-stage's record of the execution phase (`registration.record`), canonical JSON, with what PoUW's rule reads;
-  its digest is the record's own, `registration.digest`.
-* `Evidence`: the proof system's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
-  registration it is for, and what it said (on acceptance, the integrity profile and the verifier's sample as one-stage's
+* `WindowCommitmentRecord`: the execution phase's window commitment record, one-stage's record of it
+  (`registration.record`), canonical JSON, with what PoUW's rule reads; its digest is the record's own,
+  `registration.digest`. It is the execution phase's commitment, not the registration log (`Core.Registration`), which
+  registers the Site, θ and the registered compiler and declares each day's circuit.
+* `Evidence`: the proof system's answer for a window commitment record, read by `Core.Answer.ofJson`: the protocol, the
+  record it is for, and what it said (on acceptance, the integrity profile and the verifier's sample as one-stage's
   `draw.py` writes it).
 
 Each decoder refuses with `core_check.py`'s message, and `Core.Protocol.answer` prefixes it with the input's name.
@@ -155,8 +157,9 @@ structure Window where
   activations : Option Json
   registered : Option Json
 
-/-- The registration: the canonical bytes its digest hashes, and the record's fields PoUW's rule reads. -/
-structure Registration where
+/-- The execution phase's window commitment record: the canonical bytes its digest hashes, and the record's fields
+PoUW's rule reads. -/
+structure WindowCommitmentRecord where
   bytes : ByteArray
   format : String
   program : String
@@ -168,7 +171,7 @@ structure Registration where
   roots : Array Root
   window : Window
 
-def registrationOf (b : ByteArray) : V Registration := do
+def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
   let rec_ ← Core.canonicalJson b
   let some format := (str? (get rec_ "format")).filter (formats.contains ·)
     | throw s!"format is not {" or ".intercalate formats}"
@@ -199,7 +202,8 @@ def registrationOf (b : ByteArray) : V Registration := do
 
 /-- `registration.digest`: the execution phase record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
 bytes it was read from. -/
-def Registration.digest (c : Registration) : ByteArray := Flock.WindowRecord.digestOf c.format c.bytes
+def WindowCommitmentRecord.digest (c : WindowCommitmentRecord) : ByteArray :=
+  Flock.WindowRecord.digestOf c.format c.bytes
 
 /-! The service's sample, as one-stage's `draw.py` writes it. -/
 

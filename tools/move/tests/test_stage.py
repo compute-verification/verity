@@ -189,6 +189,21 @@ def test_a_map_a_second_run_changes_again_is_refused(tmp_path, monkeypatch, caps
     assert "tools/move/zorble_map.toml isn't idempotent" in capsys.readouterr().err
 
 
+def test_a_path_map_that_acknowledges_a_split_reference_stages(tmp_path, monkeypatch, capsys):
+    """A map that splits a directory acknowledges each reference to it in [split], and `layout.py` refuses an
+    acknowledgement no reference needs. On the move's own commit every reference is rewritten, so none needs one: the
+    second run takes the map as `restack.py` runs it on a branch (`--report-splits`), and still must change nothing."""
+    split = PATHS.replace('"alpha/" = "beta/"\n', '"alpha/" = "beta/"\n"alpha/sub/" = "gamma/"\n').replace(
+        '"alpha" = "beta"\n', '"alpha" = "beta"\n"alpha.sub" = "gamma"\n') + '\n[split]\n"gates.toml: alpha" = "the gate"\n'
+    files = {**TREE, "alpha/sub/__init__.py": "", "alpha/sub/z.py": "Z = 1\n", "gates.toml": 'requires = ["alpha/"]\n',
+             "tools/move/alpha_map.toml": split}
+    repo, base = _repo(tmp_path, files)
+    assert _stage(monkeypatch, repo, "tools/move/alpha_map.toml", "--base", base, "--no-lock", "--branch", "staged") == 0, \
+        capsys.readouterr().err
+    assert _show(repo, "staged", "gates.toml") == 'requires = ["beta/"]'
+    assert _show(repo, "staged", "gamma/z.py") == "Z = 1"
+
+
 def test_a_map_that_renames_nothing_is_refused(tmp_path, monkeypatch, capsys):
     repo, base = _repo(tmp_path, {**TREE, "tools/move/none_map.toml": WORDS.replace("zorble", "frobnitz")})
     assert _stage(monkeypatch, repo, "tools/move/none_map.toml", "--base", base) == 1

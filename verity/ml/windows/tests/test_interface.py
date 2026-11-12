@@ -768,9 +768,9 @@ def history_window(table: HT.HistoryTable, seed: int = 0) -> tuple[I.Window, CS.
 def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     """A history table's writer's output rows, and the rows a wire fills from them, are ``hm96-sha512/row-seg/v1`` rows,
     each unit's under the table's salt at its position, so its public string is the table's leaf and the wiring check
-    holds; the record states them so, and the verifier derives the same members from it, stated or listed, and pins the
-    table's root itself from its writers' public bodies, the root the window registers; a later window's positions
-    follow the rows it holds of the earlier ones."""
+    holds; the record states them so, and the verifier derives the same members from it, stated or listed, and the same
+    history tables, whose root the verifier of record computes from its writers' public bodies, the root the window
+    registers and the verifier pins; a later window's positions follow the rows it holds of the earlier ones."""
     table = HT.HistoryTable("program", "latent", 8, 16)
     win, got, publics = history_window(table)
     ms = win.window.members
@@ -785,42 +785,59 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     resolve = {GID: GEMM, G8ID: G8}.__getitem__
     mine = I.window_of_record(doc, LAW, resolve)
     assert mine.members == ms
-    pins, strings = HW.pins(doc, mine, publics, {"latent": table.root.hex()})
-    assert pins == {"latent": table.entry()} and strings == {"latent": table.bcs}
+    roots = {"latent": table.root.hex()}
+    pinned = HW.pins(doc, roots)
+    hist = HW.params(doc, mine, publics, pinned)
+    assert HT.roots_of(CS.leaf_layer(publics), hist) == {"latent": (table.root, table.domain.domain_id)}
+    assert pinned == {"latent": table.entry()} and hist["registered"] == {"latent": pinned["latent"]["root"]}
+    strings = {"latent": HW.strings(win.circuit.registered.histories[0], mine, publics, {})}
+    assert strings == {"latent": table.bcs}
     listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "sliced", [(G8ID, 6), (GID, 3)], doc["statements"],
                                                          declared={"registered": doc["registered"]})))
     assert I.window_of_record(listed, LAW, resolve).members == ms
-    assert HW.pins(listed, mine, publics, {"latent": table.root.hex()})[0] == pins
+    assert HW.params(listed, mine, publics, HW.pins(listed, roots)) == hist and HW.pins(listed, roots) == pinned
     later, _, bodies = history_window(table, seed=1)
     doc2 = json.loads(I.circuit_bytes(later.circuit_record()))
-    pins2, strings2 = HW.pins(doc2, I.window_of_record(doc2, LAW, resolve), bodies, {"latent": table.root.hex()}, strings)
-    assert len(table.rows) == 12 and pins2 == {"latent": table.entry()} and strings2 == {"latent": table.bcs}
+    roots2, mine2 = {"latent": table.root.hex()}, I.window_of_record(doc2, LAW, resolve)
+    hist2 = HW.params(doc2, mine2, bodies, HW.pins(doc2, roots2), strings)
+    assert len(table.rows) == 12 and hist2["held"] == {"latent": {"latent": [s.hex() for s in strings["latent"]]}}
+    assert HT.roots_of(CS.leaf_layer(bodies), hist2) == {"latent": (table.root, table.domain.domain_id)}
+    assert HW.strings(later.circuit.registered.histories[0], mine2, bodies, strings) == table.bcs
     assert table.bcs[:6] == strings["latent"]
     with pytest.raises(ValueError, match="holds no rows of"):
-        HW.pins(doc2, later.window, bodies, {"latent": table.root.hex()})
+        HT.roots_of(CS.leaf_layer(bodies), HW.params(doc2, later.window, bodies, HW.pins(doc2, roots2)))
 
 
-def test_the_verifier_holds_the_registered_history_root_to_the_writers_strings():
-    """The verifier's pin of a history table is the root over its writers' public strings: a registered root over other
-    rows, a body whose strings another unit wrote, a registration naming no root for it and a writer member's missing
-    body are each refused."""
+def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_strings():
+    """The verifier's history tables (`history.params`) hold the window's registered root to the root over its writers'
+    public strings, the root of the pin the reads are made from (`history.pins`): a registered root over other rows, a
+    body whose strings another unit wrote (under the leaf layer over it, or the window's), a registration naming no root
+    for the table, a table without a pin or with another table's, and a writer member's missing body are each refused."""
     table = HT.HistoryTable("program", "latent", 8, 16)
     win, _got, publics = history_window(table)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
-    assert HW.pins(doc, win.window, publics, {"latent": table.root.hex()})[0] == {"latent": table.entry()}
+    roots, leaf = {"latent": table.root.hex()}, CS.leaf_layer(publics)
+    pinned = HW.pins(doc, roots)
+    assert HT.roots_of(leaf, HW.params(doc, win.window, publics, pinned))["latent"][0] == table.root
     other = HT.HistoryTable("program", "latent", 8, 16)
     other.append(np.stack(table.rows[::-1]), table.salts[::-1])
     with pytest.raises(ValueError, match="not the table's root"):
-        HW.pins(doc, win.window, publics, {"latent": other.root.hex()})
+        HT.roots_of(leaf, HW.params(doc, win.window, publics, HW.pins(doc, {"latent": other.root.hex()})))
     m0 = win.window.members[0]
     body = bytearray(publics[m0.key])
     body[-1] ^= 1
+    flipped = {**publics, m0.key: bytes(body)}
     with pytest.raises(ValueError, match="not the table's root"):
-        HW.pins(doc, win.window, {**publics, m0.key: bytes(body)}, {"latent": table.root.hex()})
+        HT.roots_of(CS.leaf_layer(flipped), HW.params(doc, win.window, flipped, pinned))
+    with pytest.raises(ValueError, match="not the leaf layer"):
+        HT.roots_of(leaf, HW.params(doc, win.window, flipped, pinned))
     with pytest.raises(ValueError, match="records no root"):
-        HW.pins(doc, win.window, publics, {})
+        HW.pins(doc, {})
+    for wrong in ({}, {"latent": {**pinned["latent"], "words": 16}}, {"latent": {**pinned["latent"], "value": "other"}}):
+        with pytest.raises(ValueError, match="is not the table's"):
+            HW.params(doc, win.window, publics, wrong)
     with pytest.raises(ValueError, match="no public body"):
-        HW.pins(doc, win.window, {k: v for k, v in publics.items() if k != m0.key}, {"latent": table.root.hex()})
+        HW.params(doc, win.window, {k: v for k, v in publics.items() if k != m0.key}, pinned)
 
 
 def test_a_history_tables_window_refuses_rows_it_cant_commit_as_the_tables():

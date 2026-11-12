@@ -42,13 +42,13 @@ credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.Activatio
 lean = "Nci.Assumptions.ActivationChainedAt"
 standing = "supported"
 beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ActivationChainedAt docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
+credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
 
 [premise.upstream]
 lean = "Nci.Cover.MulBlocks.Upstream"
 standing = "supported"
 beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.MulBlocks.Upstream docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
+credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
 
 [premise.baseline-registered]
 lean = "Nci.Assumptions.ThetaRegistered"
@@ -94,3 +94,21 @@ lean = "draft:no-straddle"
 standing = "assumed"
 beyond = "assumed"
 credible_bits = { value = inf, unit = "bit", source = "a property of the circuit's operations, not of a block's bits", status = "derived" }
+
+# The min-cut bound's two conjectures, keyed by their ids in the claims registry (verity/core/claims,
+# Security/Definitions/Assumptions.lean), which the class min-cut takes (rho/min_cut.py, which reads `beta` from this
+# file itself: it is standard library only, loaded by path).
+# `beta`: (H)'s β for an activation by block size, rows (k bits, β bits a value), k rising. Past the last row there is
+# no β, and the class bounds no block.
+[premise.training-cut-hardness]
+lean = "Nci.Cut.Assumptions.Hardness"
+standing = "assumed"
+beyond = "contested"
+credible_bits = { value = 8e8, unit = "bit", source = "beta's last k: no β is stated past it, and the min-cut class bounds no block there", status = "derived" }
+beta = { value = [[145568, 15.9], [800000, 15.3], [8e6, 10.8], [8e7, 2.7], [8e8, 0.37]], unit = "(bit, bit/value)", source = "measured: the least ratio κ(S) / |val(S ∩ X)| a red team of (H) found over its sets S with κ(S) ≤ k, on one traced step of a small dense model in bf16. (H) is refuted there at any β above a row, and a row is not evidence (H) holds at it; between rows rho/min_cut.py takes β linear in log k. The red team's generator is not in the tree", status = "assumed" }
+
+[premise.training-cut-exports]
+lean = "Nci.Cut.Assumptions.Exports"
+standing = "assumed"
+beyond = "assumed"
+credible_bits = { value = inf, unit = "bit", source = "a property of the work's MACs and outputs (a set of computed gates pays b cut gates for each output it finishes), not of a block's bits", status = "derived" }

@@ -4,15 +4,16 @@ public import Definitions.NetworkCertifier.AdviceV1
 import Mathlib.Tactic.Finiteness.Attr
 
 /-!
-# Advice v1's whole window charged (`ChargeCount_v2`): decisions, hits and order entries, as `code_v1` codes them
+# Advice v1's whole window charged (`ChargeCount_v2`): every term, as `code_v1` codes it
 
 Definitions only. They mirror `verity/ml/protocols/certifier/window_charge.py`'s `reference_window` one for one, with
-each Python name in its docstring: `ChargeCount_v2{N, H, O}`'s charge, the length of `window_code.code_window`'s segment for
-the whole window, counted by advice v1's counting encoder (`AdviceV1.countStep` and `AdviceV1.finish`, from
-`arith_encode.py`'s references).
+each Python name in its docstring: `ChargeCount_v2{N, H, O, L}`'s charge, the length of `window_code.code_window`'s
+segment for the whole window, counted by advice v1's counting encoder (`AdviceV1.countStep` and `AdviceV1.finish`, from
+`arith_encode.py`'s references), and of the length terms' tail after it.
 
-A window sends its decisions, its hits (v1's sent shortfalls, in hit units) and its order entries (each deviating
-arrival's position and rank). Its symbols, in `window_code.code_window`'s order, all in one segment with one finish:
+A window sends its decisions, its hits (v1's sent shortfalls, in hit units), its order entries (each deviating
+arrival's position and rank) and its length terms (each request's output_len and finish, for the requests whose body
+lands in it). Its symbols, in `window_code.code_window`'s order, all in one segment with one finish:
 1. n_arrived, then each decision at the book's KT estimate for its context `min(run, 2)`, as in v1;
 2. n_hits, then each hit's value;
 3. n_resumes, 0;
@@ -20,19 +21,22 @@ arrival's position and rank). Its symbols, in `window_code.code_window`'s order,
 5. n_lag, 0.
 
 Each count and each value is an integer under its table (`binned`): its Exp-Golomb bin, then its offset in the bin,
-uniform (`uniform`). The window's charge is the scalings the coder takes for them, and 2 more at the finish of a window
-that used the coder. The carry is the decisions' (`AdviceV1.Carry`) and the last order entry's position and rank, each
-`+ 1` (0 before the session's first entry), chained from window to window under `window-charge`
-(`window_charge.check_chain`).
+uniform (`uniform`). The segment's charge is the scalings the coder takes for them, and 2 more at the finish of a window
+that used the coder. Then the length terms (`codec.Registered.send_lengths`, on until a proof holds the length rule),
+each a plain tail after the segment (`window_code.Encoder.raw`, `lengths.tails`): its output_len in
+`width(max_tokens + 1) = bitlen(max_tokens)` bits, then its finish in 1 (`tailBits`). The carry is the decisions'
+(`AdviceV1.Carry`) and the last order entry's position and rank, each `+ 1` (0 before the session's first entry),
+chained from window to window under `window-charge` (`window_charge.check_chain`); the length terms carry nothing.
 
-**Scope.** Every advice v1 window: v1 sends hits and order entries, and never resumes or lag bits (`v1.py` refuses a
-window that sends either), so the two are coded as 0. With no hits and no order entries the symbols are
-`ChargeCount_v1`'s, with the n_hits, n_resumes, n_order and n_lag tables' bin 0 for its `zeros`.
+**Scope.** Every advice v1 window: v1 sends hits, order entries and length terms, and never resumes or lag bits (the
+`codec.py` refuses a window that sends either), so the two are coded as 0. With no hits, no order entries and no
+length terms the symbols are `ChargeCount_v1`'s, with the n_hits, n_resumes, n_order and n_lag tables' bin 0 for its
+`zeros`. A registration that sends no length terms gives every window none.
 
 **What is left.** That `ChargeCount_v2`'s circuit computes `window` is not proved in Lean. circuit-check holds the
 circuit to the Python reference, and these definitions are held to that reference by the window charge's difftest
 (the certifier program's `NetworkCertifier.WindowCharge`, which `Proofs.NetworkCertifier.Code` proves equal to these
-(`CodeChargesWhole`), against `reference_window`).
+(`CodeChargesWhole`), against `reference_window`). The length terms go once a proof holds the length rule.
 
 **Refusals.** The reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here
 returns `none` there.
@@ -55,6 +59,9 @@ def INDEX_CAP : ℕ := 2 ^ 24
 
 /-- `ZIG_CAP`: a rank step's cap, `2·index + 1`. -/
 def ZIG_CAP : ℕ := 2 * INDEX_CAP + 1
+
+/-- `MT_CAP`: a request's max_tokens is a u32 of its certified body. -/
+def MT_CAP : ℕ := 2 ^ 32 - 1
 
 /-- `_CHUNK`: a wide offset's last step is uniform over `2^CHUNK` values. -/
 def CHUNK : ℕ := 15
@@ -120,13 +127,15 @@ structure Carry where
   pos : ℕ
   rank : ℕ
 
-/-- **One window's advice**: the decisions of the slots that hold one, in order (`ds`); the hits' values (`hits`); and
-the order entries, each the arrival's position and rank `(p, r)` (`order`). A disabled slot changes nothing, so the
-charge is a function of these. -/
+/-- **One window's advice**: the decisions of the slots that hold one, in order (`ds`); the hits' values (`hits`); the
+order entries, each the arrival's position and rank `(p, r)` (`order`); and the length terms, each the request's
+max_tokens and output_len `(m, n)` (`lens`; its finish is one bit whatever it is). A disabled slot changes nothing, so
+the charge is a function of these. -/
 structure Window where
   ds : List Bool
   hits : List ℕ
   order : List (ℕ × ℕ)
+  lens : List (ℕ × ℕ)
 
 /-- **The decisions' symbols** (`reference_window`'s loop over the decision slots): each decision `b` at the book's KT
 estimate `(f0, f1)` for its context, `(f0 if b else 0, f1 if b else f0, f0 + f1)` (`AdviceV1.bitStep`'s), and the
@@ -167,32 +176,42 @@ def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) : Option (List Sym 
           (hs ++ (binned bk.resumes 0 0 ++ (binned bk.nOrder (countHi O) x.order.length ++
             (e.1 ++ binned bk.lag 0 0)))))), ⟨d.2, e.2.1, e.2.2⟩)
 
-/-- **One window's charge** (`reference_window`, `ChargeCount_v2{N, H, O}`): of a window of `N` decision slots, `H` hit
-slots and `O` order slots, under the book `bk` and the carry `cy`, the charge and the next window's carry. It refuses a
-carry whose run is past 2 or whose rank is past `INDEX_CAP + 1`. -/
-def window (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) : Option (ℕ × Carry) :=
-  if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ cy.dec.run < 3 ∧ cy.rank ≤ INDEX_CAP + 1 then
-    (syms bk N H O cy x).bind fun q => ((codeAll Tally.fresh q.1).bind finish).map fun L => (L, q.2)
+/-- **The length terms' tail** (`length_bits`, `window_code.Encoder.raw`): each term `(m, n)` an output_len in
+`bitlen m` bits and a finish in 1. A term whose max_tokens is past `MT_CAP`, or whose output_len doesn't fit
+`bitlen m` bits, is refused. -/
+def tailBits : List (ℕ × ℕ) → Option ℕ
+  | [] => some 0
+  | t :: ts => if t.1 ≤ MT_CAP ∧ t.2 < 2 ^ t.1.size then (tailBits ts).map fun b => t.1.size + 1 + b else none
+
+/-- **One window's charge** (`reference_window`, `ChargeCount_v2{N, H, O, L}`): of a window of `N` decision slots, `H`
+hit slots, `O` order slots and `L` length slots, under the book `bk` and the carry `cy`, the charge (the segment's,
+then the length terms' tail) and the next window's carry. It refuses a carry whose run is past 2 or whose rank is past
+`INDEX_CAP + 1`, and a charge of `2^CW` bits or more. -/
+def window (bk : Book) (N H O L : ℕ) (cy : Carry) (x : Window) : Option (ℕ × Carry) :=
+  if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
+      cy.rank ≤ INDEX_CAP + 1 then
+    (syms bk N H O cy x).bind fun q => ((codeAll Tally.fresh q.1).bind finish).bind fun c =>
+      (tailBits x.lens).bind fun t => if c + t < 2 ^ AdviceV1.CW then some (c + t, q.2) else none
   else none
 
 /-- **A run's charges**: each window's, the carry passed along. -/
-def session (bk : Book) (N H O : ℕ) : Carry → List Window → Option (List ℕ)
+def session (bk : Book) (N H O L : ℕ) : Carry → List Window → Option (List ℕ)
   | _, [] => some []
-  | cy, x :: ws => (window bk N H O cy x).bind fun p => (session bk N H O p.2 ws).map fun ls => p.1 :: ls
+  | cy, x :: ws => (window bk N H O L cy x).bind fun p => (session bk N H O L p.2 ws).map fun ls => p.1 :: ls
 
 /-- The session's first carry (`first_carry`): the book's priors, run 0, and no order entry yet. -/
 def Book.first (bk : Book) : Carry := ⟨⟨bk.priors, 0⟩, 0, 0⟩
 
 /-- **The run's charges per window**, from the session's first carry, for the advice of `W` windows. -/
-def charges (bk : Book) (N H O : ℕ) {W : ℕ} (a : Fin W → Window) : Option (List ℕ) :=
-  session bk N H O bk.first (List.ofFn a)
+def charges (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Fin W → Window) : Option (List ℕ) :=
+  session bk N H O L bk.first (List.ofFn a)
 
 /-- **Advice v1's whole windows**: the advice of `W` windows whose charge no window refuses. A refused window fails its
 unit, so no accepted run has other advice. -/
-def Streams (bk : Book) (N H O W : ℕ) : Type := {a : Fin W → Window // (charges bk N H O a).isSome}
+def Streams (bk : Book) (N H O L W : ℕ) : Type := {a : Fin W → Window // (charges bk N H O L a).isSome}
 
 /-- **The whole window's charge** (I1's `bits(advice, w)`): window `w`'s. -/
-def bits (bk : Book) (N H O : ℕ) {W : ℕ} (a : Streams bk N H O W) (w : Fin W) : ℕ :=
-  ((charges bk N H O a.1).getD []).getD w 0
+def bits (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Streams bk N H O L W) (w : Fin W) : ℕ :=
+  ((charges bk N H O L a.1).getD []).getD w 0
 
 end NetTiming.WindowCharge
