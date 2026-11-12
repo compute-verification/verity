@@ -15,9 +15,9 @@ Each arm of `ARMS` is one speculative config (``off`` has none). Each phase is a
   request put back before the step the trace says it arrived before; the scheduler decides the rest. It writes the same.
 
 Without ``--phase`` it runs the serve and the replay of each of ``--runs`` (`RUNS`: weights and arm), compares each replay
-with its serve (steps, draft counts, tokens) and each draft arm's tokens with ``off``'s under the same weights, writes
-OUT/specdec_replay.json and exits 0 only if every draft arm scheduled draft tokens and every replay equals its serve. A
-phase that fails is recorded and the rest go on.
+with its serve (steps, prefix-cache hits, draft counts, tokens) and each draft arm's tokens with ``off``'s under the same
+weights, writes OUT/specdec_replay.json and exits 0 only if every arm took a prefix-cache hit, every draft arm scheduled
+draft tokens and every replay equals its serve. A phase that fails is recorded and the rest go on.
 
 In the pod venv, on one idle card, from the tree's root:
 
@@ -48,11 +48,13 @@ ARMS: dict[str, dict[str, Any] | None] = {
     "off": None,
     "mtp1": {"method": "mtp", "num_speculative_tokens": 1},
     "mtp3": {"method": "mtp", "num_speculative_tokens": 3},
+    "mtp5": {"method": "mtp", "num_speculative_tokens": 5},
     "synthetic3": {"method": "mtp", "num_speculative_tokens": 3, "rejection_sample_method": "synthetic",
                    "synthetic_acceptance_rates": [0.8, 0.6, 0.4]},
 }
-#: the default ``--runs``: vLLM's dummy weights first, whose answer stands if redrawing the weights fails
-RUNS = "dummy:off,dummy:mtp1,dummy:synthetic3,scaled:off,scaled:mtp1,scaled:mtp3,scaled:synthetic3"
+#: the default ``--runs``: vLLM's dummy weights first, whose answer stands if redrawing the weights fails; ``off`` leads
+#: each weights' arms, since a draft arm's tokens are compared with it
+RUNS = "dummy:off,dummy:mtp1,dummy:synthetic3,scaled:off,scaled:mtp5,scaled:mtp3,scaled:synthetic3,scaled:mtp1"
 #: the served engine's settings; the replay's are the trace header's
 SERVE = {"max_model_len": 4096, "max_num_seqs": 8, "max_num_batched_tokens": 512, "enable_chunked_prefill": True,
          "enable_prefix_caching": True, "async_scheduling": None, "block_size": None, "num_gpu_blocks": 8192}
@@ -82,10 +84,11 @@ def plan(default_seed: int) -> list[dict[str, Any]]:
         n = rng.choice((24, 70, 150, 330, 610))
         prompt = shared + ids(max(n - len(shared), 8)) if i % 3 == 2 else ids(n)
         sampling: dict[str, Any] = {"temperature": 0.0, "seed": default_seed}
-        if i % 2:
-            sampling = {"temperature": 0.8, "seed": 1000 + i}
+        if i % 4 == 1:
+            sampling = {"temperature": 0.8, "top_k": 50, "seed": 1000 + i}
         if i % 4 == 3:
-            sampling.update(top_p=0.95, top_k=50)
+            # GLM-5.3's own generation config
+            sampling = {"temperature": 1.0, "top_p": 0.95, "seed": 1000 + i}
         out.append({"id": f"specdec-{i:02d}", "iteration": 2 * i, "prompt_ids": prompt, "sampling": sampling,
                     "max_tokens": rng.choice((24, 40, 56))})
     return out
@@ -101,7 +104,8 @@ def engine(model: Path, cfg: dict[str, Any], eager: bool) -> Any:
                       max_num_batched_tokens=cfg["max_num_batched_tokens"], enable_chunked_prefill=cfg["enable_chunked_prefill"],
                       enable_prefix_caching=cfg["enable_prefix_caching"], async_scheduling=cfg["async_scheduling"],
                       block_size=cfg["block_size"], num_gpu_blocks_override=cfg["num_gpu_blocks"], disable_log_stats=True,
-                      speculative_config=cfg.get("speculative"))
+                      speculative_config=cfg.get("speculative"),
+                      **{k: cfg[k] for k in ("long_prefill_token_threshold", "kv_cache_dtype") if k in cfg})
     return LLMEngine.from_engine_args(args)
 
 
@@ -116,14 +120,15 @@ def rescale(eng: Any) -> dict[str, int]:
     gen = torch.Generator(device=runner.device)
     gen.manual_seed(1234)
     seen: set[int] = set()
-    count = {"norm": 0, "scale": 0, "fp8": 0, "float": 0}
-    models = [runner.model, getattr(runner.speculator, "model", None)]
+    count = {"norm": 0, "scale": 0, "fp8": 0, "float": 0, "draft_only": 0}
+    models = [runner.model, getattr(getattr(runner, "speculator", None), "model", None)]
     with torch.no_grad():
         for model in models:
             for name, p in (model.named_parameters() if model is not None else ()):
                 if id(p) in seen or not torch.is_floating_point(p):
                     continue
                 seen.add(id(p))
+                count["draft_only"] += model is not runner.model
                 if "scale" in name:
                     p.fill_(FP8_SCALE)
                     count["scale"] += 1
@@ -233,7 +238,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
 def acceptance(doc: dict[str, Any]) -> dict[str, Any]:
     """Over the rows that verified draft tokens: the draft tokens scheduled, those accepted (a row's emitted tokens less the
-    one the target samples), and how many rows accepted each count."""
+    one the target samples), and how many rows accepted each count; and the prefix-cache tokens each request started from."""
     emitted = {s["step"]: s["emitted"] for s in doc["steps"]}
     rows = scheduled = accepted = 0
     by_count: dict[str, int] = {}
@@ -247,6 +252,7 @@ def acceptance(doc: dict[str, Any]) -> dict[str, Any]:
             accepted += e - 1
             by_count[str(e - 1)] = by_count.get(str(e - 1), 0) + 1
     return {"rows_with_drafts": rows, "draft_tokens": scheduled, "accepted": accepted, "rows_by_accepted": by_count,
+            "cache_hits": {rid: n for s in doc["steps"] for rid, n in s["cache_hit"].items()},
             "distinct_tokens": len({t for ids in doc["tokens"].values() for t in ids})}
 
 
@@ -322,7 +328,7 @@ def main() -> int:
             if entry["serve"]["rc"] == 0:
                 serve = docs[arm] = json.loads((d / "serve.json").read_text())
                 entry.update(config=serve["config"], redrawn=serve["redrawn"], drafts=acceptance(serve))
-                ok = ok and (ARMS[arm] is None or entry["drafts"]["draft_tokens"] > 0)
+                ok = ok and bool(entry["drafts"]["cache_hits"]) and (ARMS[arm] is None or entry["drafts"]["draft_tokens"] > 0)
                 if arm != "off" and "off" in docs:
                     entry["tokens_against_off"] = token_diff(docs["off"]["tokens"], serve["tokens"], serve["sampling"])
             if entry.get("replay", {}).get("rc") == 0:
