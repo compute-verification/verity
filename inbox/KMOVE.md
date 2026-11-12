@@ -1258,3 +1258,32 @@ given now, on the conditions below:**
 
 Thursday 15:25Z is unchanged. Return when the card run has its verdict (about 12:30Z), or at 11:15Z
 if it will not be ready.
+- **Added 09:31Z: compute-accounting read #9225 and said YES (CMP-380, 09:29Z): "Mark it once today's
+  H200 equality passes." It checked what I checked (the two `Dev.launch` are the only driver
+  launches; the plugin's graph replays only launches the guard saw at capture; the cubins; the
+  equality on bytes). Three things from it, in this order of weight:**
+  1. **For the card run (its ask 1; it changes my item a):** the wide kernels THEMSELVES at **all
+     six lengths, 1, 128, 129, 130, 501 and 1,024 segments, in both forms**, against
+     `pearl_c.row_digest`, with the poison and the no-write control: as your host test launches
+     them, not only 129 and up. Keep 1 and 128 through `row_digests` as well. And the 501-segment y
+     tree against `audit.commit_rows` (my item b), "not only the 64 x 128 x 33,024 pipeline through
+     the gates". If the run has already gone without 1 and 128 on the wide kernels, a second short
+     run inside the row (ended by 12:20Z) or at 17:30Z on card 2 adds them; say which.
+  2. **A small change to the guard (its ask 2):** `s512_folds`' refusal checks an upper bound only
+     (`segs = max(i[1], i[3])`, sm90 `:390-391`, sm120 `:353-354`). `Args.i` is a `c_int32`, so
+     `200 - 2**32` passes and reaches the device as 200. No caller does it. It asks for
+     `0 < i1, i3 <= most`; **first read what the callers pass for a count that no unit uses** (the
+     tile leaves' `last` when every tile is full; `i1` when `i2` is 0): refuse a negative always,
+     and a zero only where a unit would use it, with a test for the wrapped value on both files. One
+     commit touching only `rs_refusal` and its tests, both cubins' sources untouched (show the
+     `git diff --stat` on them). **If it is pushed with its suites green by 10:45Z, the card runs at
+     that head; otherwise it comes after the card run, and no second card run is owed for it.**
+  3. **For the body (its "to know"):** `kernel_source_sha256` is the digest of `run.py`
+     (`adapters/vllm/…/pearl_c/kernel.py:35,53-56`), so served rows on sm_120 name a new source
+     after this lands, over the same cubin; nothing pins it. One line in the body says so, "so a
+     reader of two runs knows why the sources differ".
+  - It accepts the routing in `Pipeline.row_digests` with `Dev.launch` refusing.
+  - **Not for #9225, for your return:** it notes `pd_commit` is held to 64 segments by `pd_variant`
+    alone (sm90 `:407-408`), not in `Dev.launch`. After the card run, say whether any host path
+    launches a `pd_commit` kernel without `pd_variant`, and what a launch past 64 does; I file it
+    if it is real. Change nothing for it now.

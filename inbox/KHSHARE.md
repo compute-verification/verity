@@ -1312,3 +1312,34 @@ instead, where the case passes with a frame and the run exits 0. Say a run's exi
 
 Then nothing until my go at 15:25Z. The keyed-salts form on card 2 is on (proofs named the branch;
 your scratch merge's CPU checks are in): Friday is three cards as your three lines say.
+
+## Thu 12 Nov 09:31Z: proofs read the walk's branch at `f9fc32ff3f` (HASH-112, 09:25Z): it stands; three things asked, one of them BEFORE Thursday's card run
+
+proofs' reader read `90c428b40e` and the merge of `main` `bcaf58a45d`: the three lines are the ones
+proposed, in the place proposed; a firewalled session on a host witness is untouched; the keyed
+salts' tree is not touched by the switch. "None blocks Thursday's card run." Read its comment whole
+on HASH-112 before the go. What it asks of kernels, none with an hour from proofs; the hours are mine:
+
+1. **Before the card run (in the job, by 15:00Z):** the card's job holds `"device_build": true`
+   beside `"gpu": true` and `unit_walk_asked`. At this head a build without the device handed
+   `--gpu` prints `"gpu": true, "device_build": false`, so `"gpu": true` alone no longer says a
+   device build ran. Dry-run it on the stand-ins both ways.
+2. **In the row's record and the job's lines:** the firewall case "RAN on the device" reads **"ran
+   in a device build, asked for the device"**. proofs' note 3: the session is refused before any
+   witness is built, so on a card that case shows the decision in a device build, what a CPU build
+   shows; the recheck's own refusal of a built device witness can no longer be reached, and no run
+   exercises it. Say exactly that in your return and wherever the case is named; do not call it a
+   device witness refused.
+3. **On the branch, one commit, after the card run:** `live/PROTOCOL.md:841-842`, proofs' note 1:
+   "a session whose witness the device would build" reads "a session asked for the device with no
+   `FC_HOST_WITNESS`". On a device build the new decision also refuses a firewalled `--gpu` session
+   with no `FC_HOST_WITNESS` whose witness the prover builds on the host anyway (a typed template's
+   statement, four of the selftest's witness controls); it only refuses more.
+- **Still not shown, by proofs' list:** the case on a card (Thursday's is the first); a device
+  prover's firewalled session on a host witness (`--gpu` with `FC_HOST_WITNESS=1`) at this head. If
+  the second fits Thursday's lease after the walk's equality, run it and say what it gave; if not,
+  say so.
+- Your `zk_worker_wire` control: proofs reads from the diff that its five sessions set
+  `FC_HOST_WITNESS=1` and no `--gpu`, so none of the three lines runs in them, and
+  `r20261112-075907-4795` has firewalled CPU sessions accepted at this head. Your own answer on
+  whether it timed out or hung is still owed at 12:00Z.
