@@ -62,14 +62,14 @@ from typing import Any, Mapping, Sequence
 from verity.circuits import partition_object as PO
 from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
+from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
 from verity.definitions import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
 from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
-__all__ = ["SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "collective_kind",
+__all__ = ["SAMPLING_EVENTS", "collective_kind",
            "member_name", "shared_instances", "collective_sites", "request_manifest", "BridgeResult", "under",
            "CallMember", "Population", "population", "Q_WORD_ID", "Q_WORD_TEXT", "QUERY_OF_RECORD", "QUERIES", "partition_of"]
 
@@ -95,8 +95,6 @@ def partition_of(program_digest: str) -> dict[str, Any]:
 
 #: the sampling event that ends an engine step for one request (verity_vllm.program.sampling_event + the explicit-argmax selector)
 SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
-#: the sampling events that consume a registered runtime input (seed / splits) beside the logits
-STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - set(GREEDY_SELECTS)
 #: the parameters of a `registered_values` Program's supplied inputs (`Population.supplied`): `values`, and `run` / `run_<i>` per request
 SUPPLIED_PARAM = re.compile(r"^(values|run(_\d+)?)$")
 

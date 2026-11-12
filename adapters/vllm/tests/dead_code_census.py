@@ -50,7 +50,7 @@ import os
 import re
 import subprocess
 import sys
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -273,7 +273,6 @@ class Graph:
 
     def why(self, roots: set[str], target: str) -> list[str] | None:
         """Shortest import path root -> ... -> target (BFS), or None."""
-        from collections import deque
         prev: dict[str, str | None] = {r: None for r in roots if self.exists(r)}
         q = deque(prev)
         while q:

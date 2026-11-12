@@ -17,11 +17,14 @@ p0 on the B=1 rows (the same run root, seed and code): the partition is p0's; th
 """
 from __future__ import annotations
 
-import gzip
+import argparse
 import json
 import os
 from collections import Counter
-from typing import Any
+
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import population as POP
+from verity_vllm.check.replay import sample as SM
 
 from .. import resolver
 
@@ -39,7 +42,8 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def _body(doc: dict) -> dict:
-    return doc.get("sampled_replay") if isinstance(doc.get("sampled_replay"), dict) else doc
+    body = doc.get("sampled_replay")
+    return body if isinstance(body, dict) else doc
 
 
 def lift(sr: dict) -> dict:
@@ -74,18 +78,12 @@ def expected(row: resolver.Row) -> dict:
     return out
 
 
-def _load_program(p: str) -> dict:
-    with gzip.open(p, "rt") as f:
-        return json.load(f)
-
-
 def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] | None = None) -> dict:
     """The partition over `programs` (request label -> Program instances doc) with the record's stated parameters -- `sampled_replay`'s
     population / split / sample, without the evaluations, under the v2 query's address rule (`program_dirs` = the Build dirs whose
     correspondence the manifest is built with).  A record that predates the v2 rule (no `addresses.rule`: every reference record) was
     addressed by the retired v1 rule; its partition is recomputed under v2 here (decision `retire-v1` where that moves a count).  Returns a
     `sampled_replay`-shaped document (`lift` reads it)."""
-    from verity_vllm.check.replay import index as IX, population as POP, sample as SM
     smp, sk = sr.get("sample") or {}, sr.get("strata_keys") or {}
     seed, per_stratum = int(smp["seed"]), int(smp.get("per_stratum") or 2)
     max_evaluate = int(smp.get("max_evaluate") or 2000)
@@ -95,7 +93,10 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
     ranks = [int(r) for r in (sr.get("applicability") or {}).get("ranks") or [0]]
     facts = ((sr.get("executed_prefix_of_record") or {}).get("facts_of_record") or {})
     executed_prefix = {rid: POP.executed_prefix_of_record(rid, **{k: v for k, v in f.items() if k in FACT_KEYS}) for rid, f in facts.items() if isinstance(f, dict)} or None
-    all_vus, not_ev, not_ev_fam, indices, anchors = [], Counter(), Counter(), {}, {}
+    all_vus, anchors = [], {}
+    not_ev: Counter = Counter()
+    not_ev_fam: Counter = Counter()
+    indices: dict = {}
     for rid, inst in programs.items():
         pi = indices.get(id(inst))
         if pi is None:
@@ -134,7 +135,7 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
 def actual(row: resolver.Row) -> dict:
     cand = row.candidate("commit/sampled_replay_p0.json")
     if cand is not None:
-        sr = _body(json.load(open(cand)))
+        sr = _body(resolver.read_json(cand))
         out = lift(sr)
         out["record"] = {"result": sr.get("result"), "grade": sr.get("grade")}
         out["source"] = "candidate"
@@ -152,7 +153,7 @@ def actual(row: resolver.Row) -> dict:
         if not os.path.isfile(p):
             raise resolver.NotResolvable(f"{row.key}: request {rid}'s Program {base}/instances.json.gz not under {progs_root}")
         if p not in loaded:
-            loaded[p] = _load_program(p)
+            loaded[p] = resolver.read_json(p)
         programs[str(rid)] = loaded[p]
         dirs[str(rid)] = str(progs_root / base)
     doc = recompute(sr, programs, dirs)
@@ -164,7 +165,6 @@ def actual(row: resolver.Row) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     """`python -m tests.regression.checks.replay_partition <row-key|row-number> [--out FILE]`: expected vs actual, differences named."""
-    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("row")
     ap.add_argument("--out")
@@ -174,7 +174,8 @@ def main(argv: list[str] | None = None) -> int:
     act = actual(row)
     diff = resolver.diff(exp, act)
     if a.out:
-        json.dump({"row": row.key, "equal": not diff, "differences": diff, "actual": act, "expected": exp}, open(a.out, "w"), indent=1, default=str)
+        with open(a.out, "w") as f:
+            json.dump({"row": row.key, "equal": not diff, "differences": diff, "actual": act, "expected": exp}, f, indent=1, default=str)
     print(json.dumps({"row": row.key, "equal": not diff, "n_differences": len(diff), "differences": diff[:30], "source": act.get("source"),
                       "population": (act.get("population") or {}).get("vus"), "strata_n": (act.get("population") or {}).get("strata_n"),
                       "picked": (act.get("sample") or {}).get("picked")}, default=str))
