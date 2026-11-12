@@ -102565,3 +102565,99 @@ Branch `cursor/proofs-certstop-request-certified-9fe8`, head `c2835594f104`, pus
 - The rehearsal has not run. Two things in it are untried: whether the stager and `flock-verify` take a registered port whose value is no parameter of the program's registration, and whether the `words` negative reaches Lean's verdict rather than failing in the prover.
 - The certified-words entry is the driver's Python, not of record, and its premise says so: the head and the key are the driver's parameters, held to no registered certifier.
 - My branch does not hold today's `main` (`5f0c008aa040`); its merge base with `main` is `4a90174415b7`.
+
+## FIXEDCOST, Thu 12 Nov 21:30Z: Friday's launcher now asks for 100 GB with a 300 s wait and ships only tree `774b31eca17c`; its dry run is below; the kit as changed passed its rehearsal (`r20261112-211938-7969`, exit 0, 0 of 5 parts failed); one finding changes the label: it is true only if the run shows the host built the units, so the reader now decides it from the run
+
+Nothing here runs on the served engine, and nothing was launched on node A. Each sentence ends with its source. Your points 1, 2, 3 and 5 are answered here; point 4, the reading for NET-329, is started and comes as its own entry.
+
+**1. The tree Friday ships from**
+
+- **Tree hash: `774b31eca17c1495fd4451f615540a44ab305ed2`.** It is the tree of commit `c6cadd0e325f` with one file replaced: `tools/verity/check/slot.py` is the one on `main` at `5f0c008aa040` (blob `bc6005eeae4f989fa247dc879d39b693892cde17`). [run: `git diff --stat` names that one file]
+- **Recipe**, in any checkout that has both commits, with a scratch index:
+  `git read-tree c6cadd0e325f`; `git update-index --cacheinfo 100644,bc6005eeae4f989fa247dc879d39b693892cde17,tools/verity/check/slot.py`; `git write-tree`. It prints the hash above. [run, after a restart had removed the first copy]
+- **The run's record holds the tree by name, not by its bytes.** `job.json` has the tree hash (`store.conditions`, key `source.tree`), the commit, and the SHA-256 and file count of the archive that shipped (`run.remote.source_archive_sha256`, `source_files`). [read: both rehearsals' `job.json`]
+  - The bytes are the recipe's: a git tree hash names every file's content, so a tree rebuilt to that hash is the shipped one. [derived]
+  - The machine also keeps the tree, at `/workspace/research/src/COMMIT`, and the commit in its own bare repository; that is where I read the commit back from. [run: vy-nebius-cpu-8]
+- **The commit is rebuilt byte for byte:** `ba470f98b8bc`, parents `c6cadd0e325f` and `5f0c008aa040`, written from its own 975 bytes, kept beside the kit. `git archive` of it hashes to `342949a9b5f0…`, the archive digest in both rehearsals' records. [run]
+- It is on no branch, here or on the remote, and `724617692f8` is among its ancestors. [run: `git branch -a --contains` empty; `git merge-base --is-ancestor`]
+- `scratch-tree.sh`, beside the launcher in the notes, does the recipe and refuses any other result. [run]
+
+**2. `launch-pair.sh`: what changed, and its dry run**
+
+- **Memory:** `--mem-gb 100 --mem-wait 300` (`MEM_GB`, `MEM_WAIT_S`). [run: the dry run]
+  - Why 100: it is what the job's lease asks as its cap, and node A cannot apply that cap ("this user's systemd can't make a scope here") [run: `r20261112-110333-4c33`'s `stderr.log`, read this morning]. The head block at one prover peaked at 42.8 GiB for the prover and 26.6 GiB for the verifier, 74.5 GB together [run: the same run]. The fused block type's peak is not measured.
+  - Node A at 21:08Z: 1,949.6 GB available of 2,013, no live reservation [run: `research mem` there, read only].
+- **The tree:** it refuses any `SRC` whose tree is not `774b31eca17c…`, whatever its commit. [run: a checkout at `c6cadd0e325f` and one at `main` are both refused, exit 2]
+- **The run's first line of output** is the tree hash and the recipe; the launcher prints the same line. [run: line 1 of `7969`'s `stdout.log`]
+- **One consequence, which the dry run prints.** The run tool's kill counts from the run's start, and a wait for memory comes before the start. So a wait of w seconds moves that kill w seconds later: 16:18Z at the latest, three minutes past the row's end. [read: `research/remote.py`, `admit` before the runner starts]
+  - The card is not held by that kill. The lease ends its command by itself, at 16:12Z at the latest, from a time the job reads on the node. [read: `gpu_lease.sh`, `--max-min`; `fused.sh`, `END`]
+  - What could outlive the row is a hung shell on cores 82-91, and only if memory was short and the job hung as well. After the launch the launcher prints the latest time the kill can fall, and the cancel to run if it is past the row. [run: local]
+  - `MEM_WAIT_S=120` would keep the kill inside the row in every case. Your word was 300, so it is 300; say if you want 120.
+- **I launch by 15:39Z,** so a wait ends before the row opens at 15:46Z; later than that the dry run prints `LATE`. [run: local]
+
+The dry run, Thu 12 Nov 21:27Z, exit 0 (`KIT` is the kit's directory in the notes; `--timeout` and `--custody-ttl` count from the minute of the dry run):
+
+```
+source: tree 774b31eca17c1495fd4451f615540a44ab305ed2 = the tree of commit c6cadd0e325f with tools/verity/check/slot.py replaced by the one on main at 5f0c008aa040 (blob bc6005eeae4f989fa247dc879d39b693892cde17); rebuild: git read-tree c6cadd0e325f; git update-index --cacheinfo 100644,bc6005eeae4f989fa247dc879d39b693892cde17,tools/verity/check/slot.py; git write-tree
+source: commit ba470f98b8bc8bced82cdcddf29ed654d82d9179, on no branch of the repository; the run's record names the tree (job.json: store.conditions.source.tree)
+# a fetch of 60 s: the start check at 15:47:00Z; one lease of 24 min, to about 16:11:00Z; no session submitted after 16:09:00Z; the step stopped at 16:10:15Z
+# a fetch of 240 s: the start check at 15:50:00Z; one lease of 22 min, to about 16:12:00Z; no session submitted after 16:10:00Z; the step stopped at 16:11:15Z
+# the fetch starts at 15:46:00Z; the run is killed at 16:13:00Z; the row ends 16:15:00Z
+# memory: 100 GB reserved on the node for the run; if they are not free the launch waits up to 300 s in the node's line, then is refused; a wait of w s moves the run tool's kill w s later, to 16:18:00Z at the latest; the lease's end does not move
+# one prover on 10 cores (82-91), the loopback verifier inside them; blocks 256x60,1024x60,256x60,1024x60,256x60,1024x60; the cores the run counts as others': 0-81,92-95
+
+research run --as proofs --on vy-spot-glm53 --mem-gb 100 --mem-wait 300 --project verity --source /tmp/fx/src-c6ca-slot --cwd source
+  --campaign exfiltration-under-300gb --send KIT/pair/pair.sh --send KIT/four/fused.sh --send KIT/four/k_hook.sh --send KIT/four/four_split.py
+  --send KIT/four/slim_logs.py --env ALONE=0 --env BLOCK_S=170 --env BLOCKS=256x60,1024x60,256x60,1024x60,256x60,1024x60
+  --env CHAIN_DIR=/workspace/jobs/proofs-headprof/chain --env CPUS=82-91 --env DATA=/dev/shm/proofs-headprof --env END=1794586440
+  --env EXPECT_PIN=1fd651999b36433d --env FC_WITNESS_TIMES=1 --env FETCH_S=240 --env FIRST_NEED_S=420
+  --env FLOCK_WORK=/workspace/jobs/proofs-headprof --env FOUR_NEED_S=400 --env GPU_ON=7 --env LEASE_MEM_GB=100 --env LEASE_MIN=24
+  --env LEASE_WHO=proofs-prf589 --env MIN_SESSIONS=32 --env N=full --env NAME=MoeExpertFp8ReadGemmW_v1_H4096_K256_N32_SWAP_true
+  --env NEED_MIN=22 --env OPEN=1794584760 --env OTHER_CPUS=0-81,92-95 --env PROVERS=1 --env RATE_STEP=0 --env RESERVE_S=45
+  --env RUN_CPUS=82-91 --env SESSIONS=48 --env SLEEP_CPU=91
+  --env STAGED_ART=art:964c87d8409e60673b215e611a52f3b7712a60cc71d94113a127abc83a67e172 --env STAGED_ART_PATH=out/staged
+  --env STAGED_NAMED_BY_PIN=1 --env TAIL_S=75 --env TYPE=MoeExpertFp8ReadGemmW_v1_H4096_K256_N32_SWAP_true --env WARM=1
+  --no-sampler --store-read --custody-ttl 21h --timeout 67557 --
+  taskset -c 91 bash -c "echo 'source: tree 774b31eca17c… (the line above)'; exec bash \"\$RESEARCH_RUN_DIR/inputs/pair.sh\""
+```
+
+**3. The label, and one finding that changes it**
+
+- **The label is true only where the host built the units, and for the fused block type nobody knows yet.** The launch tree builds a unit's values on the host when the unit has 2,048 AND-levels or more, or is committed at a position map; otherwise the card's unit kernel builds them. [read: `gpu_circuit.rs` 305 to 308 and 385 to 396 at `c6cadd0e325f`]
+  - The head block is deep, and this morning's run showed the host building it. [run: `r20261112-110333-4c33`, its WITNESS lines]
+  - The fused type's level count is not in its kept `stage.json`, which gives 10,680,491 ANDs a unit and no depth. [run: the file, fetched alone]
+- **So the reader decides the label from the run.** The prover prints a WITNESS line with the units' part only on the path where the host builds them. [read: `flock-circuit.rs` 1074 to 1131 at `c6cadd0e325f`]
+  - Every session has one: the line reads `fixed … s a statement (host-built, walk off)`.
+  - Otherwise: `(not shown host-built, walk off)`, and a line `built` says why.
+  - If Friday prints the second, the fixed seconds are the card's and the session's, and the walk has nothing to remove from them. [derived]
+- **Whether the fused type has a walk, in one line:** one CPU run with no card: build `flock-circuit` at the walk's head `f9fc32ff3fc4` and run `flock-circuit unit-levels --circuit circuit.txt` on the kept statement; it prints `levels`, `one_pass` and `position_map`, and under `FC_UNIT_WALK=1` the walk applies when `levels` is 2,048 or more, `one_pass` is true and `position_map` is false. Not started. [read: `flock-circuit.rs` and `gpu_circuit.rs` at `f9fc32ff3fc4`]
+
+**4. The rehearsal of the kit as changed** [run: `r20261112-211938-7969`, its `stdout.log`, `status.json`, `slot.json`, `job.json`]
+
+- Sent with `--on vy-nebius-cpu-8 --pool proofs --as proofs --mem-gb 8`, from the rebuilt tree. Exit 0 after 196 s, 86 s of it waiting for memory in the pool. Its last line is `== 0 failed`.
+- P1 to P5 all PASS. P4 now also requires the stand-in's fixed seconds, which have no WITNESS line, to print `not shown host-built`; P5 requires `host-built` once every session has its line. Both held.
+- Its record names tree `774b31eca17c…` and archive `342949a9b5f0…`, as the 20:15Z rehearsal's does.
+- These are a stand-in prover's sleeps on CPU. They show the kit reads a split and labels it; they say nothing of any block's cost.
+
+| file | before (`r20261112-201501-096a`) | after (`r20261112-211938-7969`) |
+|---|---|---|
+| `kit.sha256` | `538e652d68c4…` | the same |
+| `steady.py` | `05a8c350e428…` | the same |
+| `pair.sha256` | `485f306b28af…` | `8aa3ff8ad567…`: `read_pair.py` and `rehearse-pair.sh` changed for the label; `pair.sh`, which is what runs on node A, did not (`860a94aba1db…`) |
+
+**5. #9251: FOLD's 20:59Z entry covers it, and I touch nothing of it.**
+
+- FOLD has its quick tier and four tries passed at `8a5aebc549a6` and its records run out; FOLD writes its line. I relaunch nothing. [read: FOLD's entry]
+- One fact for the line FOLD marks "not run" (the merged `FlockVerify.lean` against #9375): it was run. My 19:46Z entry has `FlockVerify.lean` (`r20261112-192855-0efd`, exit 0, 9 theorems) and `Flock/ZkOnePass.lean` (`r20261112-192855-3fd4`, exit 0, 3 theorems) on a trial merge with #9375 at `e122d8e38121`. [run, then]
+- #9375's head is now `bafae2eaec2e`. From `e122d8e38121` to it 12 files change, none under the verifier's package or the three base Lean packages. So those two tries judged the same files a merge with today's head holds. [run: `git diff --name-only`]
+
+**Giving way, and what I touched**
+
+- The rehearsal ran in the proofs pool on vy-nebius-cpu-8, not on vy-nebius-cpu-13. Nothing of mine is on a card. [run]
+- Node A: two looks, read only (the memory reading; a listing of the reservations' directory). No lock, no lease, no run. [run]
+- If the served run's audit asks for card 7 or cores 82-91 in Friday's row, I do not launch, and I say so here.
+
+**Open**
+
+- The kit's rehearsed scripts print lines that begin with an issue's id, and the lease is named with one (`LEASE_WHO`). They are held by checksum, so I left them; the lines added today carry no id. Changing them is new checksums and one more rehearsal: say if you want it.
+- The reading for NET-329: `r20261112-135528-7404` is fetched whole (2.0 GB); the entry headed `FOR NET-329` is next.
