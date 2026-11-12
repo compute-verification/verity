@@ -47,7 +47,7 @@ def _released(extra: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-@pytest.mark.parametrize("stated", [{}, {"errors": []}])
+@pytest.mark.parametrize("stated", [{}, {"errors": None}, {"errors": []}])
 def test_a_rank_whose_committer_states_no_errors_releases_none(stated):
     assert _released({**COUNTS, **stated}) == {"lo": 3, "run_root": bytes(CT.ROOT_BYTES).hex(), "commit_scheme": CT.SCHEME,
                                                "name": "stand-in", **COUNTS, "errors": []}
@@ -95,10 +95,11 @@ def test_the_first_ranks_acquisitions_are_the_windows_and_its_ids_the_steps():
     assert (tap.took, tap.refused) == ([("site/0", 2, None), ("ids", 2, 2)], [])
 
 
-def test_a_rank_that_shipped_no_acquisitions_feeds_nothing_and_is_still_the_first_rank():
+@pytest.mark.parametrize("none", [{}, {"acquired": None}, {"acquired": []}])
+def test_a_rank_that_shipped_no_acquisitions_feeds_nothing_and_is_still_the_first_rank(none):
     """The rank holding linear 0 answers with no ``acquired`` (it has no Commit): the tap takes nothing of it, and the
     next rank's ids are still not the first rank's."""
-    tap = _pulled(_rank(0), _rank(4, acquired=SHIPPED))
+    tap = _pulled(_rank(0, **none), _rank(4, acquired=SHIPPED))
     assert (tap.took, tap.refused) == ([("site/0", 2, None)], ["engine step 2: a rank's input ids are not the first rank's"])
 
 
