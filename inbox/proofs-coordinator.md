@@ -108003,3 +108003,40 @@ def LoggedTree.linkFirst (t : LoggedTree) : Bool :=
 - That an accept of the form with a later tree's link not first exists as bytes: derived from the checks' text, no log built, no run.
 - That a play with a second family's release is accepted; and that soundness's trace needs the link first for a reason beyond its statement.
 - D's count; file C's `WindowPasses` (your question to soundness, no answer in my mailbox).
+
+## SESSIONCOINS, Thu 12 Nov 23:13Z: started on piece E (each second-stage session's coins are its own member tree's, opened in the log's order); branch made from TWOLEG's base, nothing written or compiled yet
+
+**In plain words.** I am the worker for TWOLEG's piece E. I prove two things about the two-round form's check. First, on a play the check accepts whose log is the device's, the coin the check read for each second-stage proof session is the coin the device released for that session's round. Second, the statements' round reads no coin. The second is a short fact about which rounds count as read. The first is the substance. Nothing is written or compiled yet.
+
+Agent id `bc-85e56ea3-57e1-5b92-87a2-c2a92e333887`; mailbox `inbox/bc-85e56ea3-57e1-5b92-87a2-c2a92e333887.md` (not yet created; read at 23:12Z). Branch `cursor/proofs-sessioncoins-e4a0` at `506b009d58`, the base's head at 23:10Z [run: `git push`]. `AGENTS.md` and the lean-proofs skill reread from `origin/main` at 23:11Z.
+
+### Plan in five lines
+
+1. `SampledTwo/SessionCoins.lean`, a new root on its own line: `stmtReadsNone` first. It holds at any `C`, `S` and `dev`, because `readsAt` excludes round `stage + 1` [read: `Reading.lean`, `readsAt` and `groupOf`, at `506b009d58`].
+2. `SessionReading.coin` and `.agree` at a session's round, defined as what the form read from the interior evidence: session `t`'s coin from its own member tree (`OneStageZk.membersRun`, `treesOf`). I will agree the one structure with MESSAGES, who defines `stmts` and `msg`; whoever is first writes it in one file.
+3. `coinsRead_sessions` stated over COINMAP's `dev` as a parameter (COMMON.md's 22:49Z point 3), with CUT's `LogIsDevice` as `Good`. Its content is that, where the check accepts, the bytes it read for session `t` are what the device's releases for that round carry. I reuse `opens_in_order`, `closing_read`, `evidence_before` (`MemberForm/Order.lean`) and `evidenceBytes_inj`, by import only.
+4. Statements as signatures that elaborate, in a try on vy-nebius-2, by 01:10Z Fri.
+5. One session's coins in a run by 07:00Z Fri. My word on all sessions by 15:00Z Fri.
+
+### What I read already
+
+- The prover's coins at a session's round are, in `formReading`, `S.coin o t (n - off A.h t)` when `slotOf A.h (n + 1) = some t`, else none [read: `Reading.lean:130-138` at `506b009d58`]. So `coinsRead_sessions` asks: `S.coin o t (n - off t) = dev o.log n` at every read session round, and `none = dev o.log n` at a read round past the stage with no slot.
+- COINMAP's `dev` is `CoinMap.dev L log i`, for a locator `L` that maps each release to a run round [read: `CoinMap.lean` on `cursor/proofs-coinmap-8b0c` at `4ff653f494`]. The locator for the sessions' rounds therefore fixes what I have to prove. **COINMAP: which locator puts a session's releases on its rounds, and is it yours or mine to define?**
+
+### STOP RULE
+
+Nothing.
+
+### NEEDS
+
+None yet.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- Nothing written or compiled.
+- Whether `coinsRead_sessions` holds at a read round past the stage that has no slot (the `none` case) depends on COINMAP's locator putting nothing there [guess].
+- The sizes are TWOLEG's guess (1,000 to 2,000 lines). My own size comes by my third entry.
