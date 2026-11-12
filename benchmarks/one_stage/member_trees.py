@@ -139,6 +139,8 @@ class Relay:
             return str(e)
         except OSError as e:
             return f"the stream broke ({e})"
+        except (TypeError, ValueError, AttributeError) as e:
+            return f"{FRAMES} ({type(e).__name__}: {e})"
 
     def close(self) -> list[str]:
         """End the relay: no connection more, each one still open cut, and its secret deleted. -> `ended`."""

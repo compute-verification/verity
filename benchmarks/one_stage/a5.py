@@ -109,11 +109,11 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   if each exited 0 and its audit held the sessions' records to its release log (``challenger/m<k>``, a verdict, and the
   summary's ``challengers``). A window of several members sampled on the auditor's challenger's coins takes them from
   that challenger's session instead (`window_trees`, `member_trees`): the session stays open past the sample, every
-  verifier reaches it through the audit's relay, the sessions run one at a time, and each ends with its tree's closing
-  round, asked once its files are written. The session's release log then holds the sample, each session's rounds and
-  its closing round, in the sessions' order, which ``challenger/m<k>`` holds the records to
-  (`member_trees.trees_reason`) and v2's per-member form reads (`case_members`, with the challenger's key, the window's
-  root and the coins' evidence, `case_coins`).
+  verifier, the proof server's or a process pair's, reaches it through the audit's relay, the sessions run one at a
+  time, and each ends with its tree's closing round, asked once its files are written. The session's release log then
+  holds the sample, each session's rounds and its closing round, in the sessions' order, which ``challenger/m<k>``
+  holds the records to (`member_trees.trees_reason`) and v2's per-member form reads (`case_members`, with the
+  challenger's key, the window's root and the coins' evidence, `case_coins`).
 * **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers
@@ -893,22 +893,30 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         t = time.time()
         env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
+                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout,
+                                  tree_from=None if relay is None else relay.flags)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
         return {**s, "session_s": session_s, "record": record, "live": live, "draw_t": draw_t, "draw_check": v}
 
     def closed(s: dict) -> dict:
-        """Server session ``s`` (`member_session`) with its coin tree closed in the window's challenger session
+        """Session ``s`` (`member_session`) with its coin tree closed in the window's challenger session
         (`window_trees`): once both sides have recorded it, the challenger is asked for its closing round
-        (`member_trees.closing_round`), before the next member's session is submitted. A session with no record closes
-        no tree, and the release log then refuses the audit (``challenger/m<k>``)."""
+        (`member_trees.closing_round`), before the next member's session starts. A session with no record closes no
+        tree, and the release log then refuses the audit (``challenger/m<k>``)."""
         if relay is None:
             return s
         try:
-            s["handle"].result(a.session_timeout)
-            return {**s, "closing": {"ok": True, "after": MT.closing_round(a.coins, s["handle"].dir)}}
+            if "handle" in s:
+                s["handle"].result(a.session_timeout)
+                directory = s["handle"].dir
+            else:
+                dirs = session_dirs(s["sdir"])
+                if len(dirs) != 1:
+                    raise ValueError(f"the session left {len(dirs)} records, not one")
+                directory = dirs[0]
+            return {**s, "closing": {"ok": True, "after": MT.closing_round(a.coins, directory)}}
         except (ProofServerError, TimeoutError, AC.Ch.CoinError, OSError, ValueError) as e:
             return {**s, "closing": {"ok": False, "why": str(e)[-600:]}}
 
@@ -1357,23 +1365,24 @@ def plain(a: argparse.Namespace) -> bool:
 def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
     """Whether the audit's sessions take their coin trees from the window's own challenger session and close them there
     (module docstring, `member_trees`): a window of several ``members`` sampled on the auditor's challenger's coins, its
-    sessions `--zk` on the proof server, where FLOCK_CHALLENGER=1 puts sessions' trees on a challenger, in a step of
-    one rank (the session's release log holds one rank's sessions, in the order they ran). A window of one member keeps
-    a challenger of its verifier's own: its case is the one statement's, which reads no closing round."""
-    return (streamed(a) and len(members) >= 2 and not plain(a) and not getattr(a, "firewall", None)
-            and a0.own_challenger(zk=True) and len(a.coins.ranks()) == 1)
+    sessions `--zk`, where FLOCK_CHALLENGER=1 puts sessions' trees on a challenger, in a step of one rank (the session's
+    release log holds one rank's sessions, in the order they ran). A window of one member keeps a challenger of its
+    verifier's own: its case is the one statement's, which reads no closing round."""
+    return (streamed(a) and len(members) >= 2 and not plain(a) and a0.own_challenger(zk=True)
+            and len(a.coins.ranks()) == 1)
 
 
 def window_trees_held(published: dict, done: Sequence[dict], relayed: Sequence[str]) -> dict:
     """The audit of the sessions that ran on the window's challenger session (`window_trees`), once it has ended
     (``published``, `a5_coins.Draws.evidence`'s): ``ok`` when the session's release log shows each session of ``done``
     (`member_checks`'s, in the order they ran) on a tree of its own, closed after its evidence, one after another
-    (`member_trees.trees_reason`), and no verifier's connection to the relay ended but by its close (``relayed``)."""
+    (`member_trees.trees_reason`). ``relay`` is why each verifier's connection that did not end with its close ended
+    (``relayed``, `member_trees.Relay.close`), for a reader of a refusal: the log alone decides."""
     named = [(name, d) for got in done for name, d in zip(got["sessions"], session_dirs(got["sdir"]))]
     log = (published.get("session") or {}).get("log")
     why = published.get("error", "the challenger's session published no release log") if log is None else \
         MT.trees_reason(log, named)
-    return {"ok": why is None and not relayed, "sessions": len(named), "why": why, "relay": list(relayed)}
+    return {"ok": why is None, "sessions": len(named), "why": why, "relay": list(relayed)}
 
 
 def proof_server(a: argparse.Namespace, out: Path, relay: MT.Relay | None = None) -> ProofServer | None:
