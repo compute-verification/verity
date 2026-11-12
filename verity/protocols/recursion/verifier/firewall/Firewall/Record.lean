@@ -88,6 +88,10 @@ inductive Event where
   | admitted (session part : String) (n : Nat)
   /-- registration `n` skipped by the outer session of `session` at `part`: never admitted, a failure of its stream -/
   | skipped (session part : String) (n : Nat)
+  /-- a tree of the statement of the outer session of `session` at `part` passed as known content on the verifier's
+  word, the table of no registration: its entry in the list the verifier's answer to `Register` carried, whole
+  (`Salts.Known`: its domain, leaf count, schema and root) -/
+  | known (session part : String) (tree : ByteArray)
   deriving Inhabited
 
 abbrev Events := Array Event
@@ -120,6 +124,7 @@ def Event.line (seq : Nat) : Event → String
       [kv "n" (toString n), kv "record" (pyStr (Flock.hexOf r)), kv "seq" (toString seq)]
   | .admitted s p n => numbered "admit" s p n
   | .skipped s p n => numbered "skip" s p n
+  | .known s p t => tail "known" s p [kv "tree" (pyStr (Flock.hexOf t))]
 where
   tail (event s p : String) (rest : List String) : String :=
     obj ([kv "event" (pyStr event), kv "part" (pyStr p), kv "seq" (toString seq), kv "session" (pyStr s)] ++ rest)
@@ -201,8 +206,13 @@ private def eventOf (j : Json) : V (Event × Nat) := do
     | "wait" => pure (.wait session (← part))
     | "admit" => pure (.admitted session (← part) (← Flock.J.nat j "n" ctx))
     | "skip" => pure (.skipped session (← part) (← Flock.J.nat j "n" ctx))
+    | "known" => pure (.known session (← part) (← Flock.unhex (← Flock.J.str j "tree" ctx)))
     | k => throw s!"no event {k} in {KIND}"
   pure (ev, seq)
+
+/-- The bytes of a known tree's entry on the record (`Salts.Known`): its 64-byte domain, `be64` leaf
+count, schema byte and 64-byte root. -/
+def KNOWN_TREE_BYTES : Nat := 64 + 8 + 1 + 64
 
 /-- The number a registration's record begins with, its `be64 n`; none for a record shorter than it. -/
 def recordNumber (r : ByteArray) : Option Nat :=
@@ -249,6 +259,9 @@ def Record.read (text : String) : V Record := do
       if n != next || n ≥ regs then
         throw s!"the record's line {k + 1} is not the firewall's own (registration {n} admitted or skipped where the next is {next} of {regs})"
       next := next + 1
+    | .known _ _ t =>
+      if t.size != KNOWN_TREE_BYTES then
+        throw s!"the record's line {k + 1} is not the ZK server's own (a known tree of {t.size} bytes, not {KNOWN_TREE_BYTES})"
     | _ => pure ()
     evs := evs.push ev
   return { text, events := evs }
