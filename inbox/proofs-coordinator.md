@@ -80293,3 +80293,128 @@ Mailbox read at 09:14Z: the newest section is yours of 08:05Z [read]. My VM was 
 **The body** [read: `research queue edit`'s reply, 09:15Z]: figures still marked as computed at `979ebf0a18`; the line on the try now names its run and scratch commit; the merge-tree line names lean's new tip. Title unchanged.
 
 **Next.** Resume me when one ends. For the try I report lean's exit, the axiom probe's last line, and the module if a dependency fails.
+
+## FOLD, Thu 12 Nov 09:16Z: the head's row: of a session's line of 41.2 s the two walks are 20.0 s, the scaling 5.8 s, the projection 5.5 s, the tensor 3.4 s, the fold's other loops 2.4 s, everything outside the fold 1.7 s and the setup 2.4 s; two of the three figures read 5 to 6% apart on another node; `f29b` is still running
+
+**Two of the three figures moved when I looked again, by the node and not by the build** [run]: the head's line read
+40.80 and 41.57 s on `vy-nebius-cpu-7` (38.89 s on `vy-nebius-cpu-14` at 08:22Z, so 5.9% higher) and MoE's 11.209 s
+(11.838 s on `vy-nebius-cpu-3`, 5.3% lower), the same binary (sha256 `1c1f6a26ee38…`), the same sessions, the runners'
+allocator setting, the core idle in today's two runs. GEMM was not run again. That the node is the cause is [guess]; I did not
+run the two nodes side by side.
+
+Every figure below is [run] unless tagged. Machine: `vy-nebius-cpu-7` (AMD EPYC-Genoa), the job under `nice -n 19` in a
+check slot and pinned with `taskset` to the slot's last core, `MIMALLOC_PURGE_DELAY=-1`, the verifier of `a62f144764f7`
+(#9209's head).
+
+### A. The head's row (session `38d6`, run `r20261112-085857-f758`, core 99, 0 to 1% busy before and after)
+
+Two plain calls (session's line 40.804 and 41.574 s, its setup 2.372 and 2.346 s, read 106.96 and 102.95 s, peak
+45.575 GiB), then one call under `perf record --call-graph dwarf` at 99 Hz with the verifier's stderr lines stamped on
+the samples' clock (its line 40.897 s, 3,803 samples between the setup's line and the session's). A sample is put in the
+first class one of its frames names. Seconds are the class's share of those samples times a plain call's check, 38.83 s
+(the median line 41.19 s less its setup 2.36 s) [derived]; the last column is the same shares on the 08:22Z figure.
+
+| part of the session's line | samples | share of the check | seconds of 41.19 | ± 1σ of sampling [derived] | seconds of 38.89 [derived] |
+|---|---|---|---|---|---|
+| the setup at the sample (before `Zk.verify`) | | | 2.36 | | 2.23 |
+| the two walks (`Sparse.foldRowsFast`, A and B, both repetitions) | 1,958 | 51.5% | 19.99 | 0.31 | 18.88 |
+| the coins' tensor (`Stmt.tensorFast`) | 331 | 8.7% | 3.38 | 0.18 | 3.19 |
+| the scaling (`Stmt.baseOfFast`'s map and the release of its two inputs) | 569 | 15.0% | 5.81 | 0.22 | 5.49 |
+| the projection (`Stmt.project`, with `sumUpTo`'s loop) | 539 | 14.2% | 5.50 | 0.22 | 5.19 |
+| the fold's other loops (below) | 237 | 6.2% | 2.42 | 0.15 | 2.28 |
+| everything outside the lincheck fold (below) | 169 | 4.4% | 1.73 | 0.13 | 1.63 |
+| the session's line | | | 41.19 | | 38.89 |
+
+- **The lincheck fold is 37.1 s of the check's 38.8 s (95.6%)**; the three per-column functions are 14.7 s, the walks
+  20.0 s [derived: sums of the rows].
+- **The rest, named.** The fold's other loops, 2.42 s: Δ's entries (the two list folds of `foldedPartial`) 1.34 s; the
+  mask slot's map and the small slots (`slotBase`'s own) 0.41 s; the eq tables (`eqTable`, `mulMap`) 0.26 s; the rest
+  0.4 s. Outside the fold, 1.73 s: `Zk.ligerito` 1.41 s (of it `basisForClaim` 0.76 s, the inverses of `whatsGo`
+  0.47 s); region values 0.10 s; the inner proof, the replay's own lines, the scope and record checks 0.22 s together.
+  The setup's 2.36 s is `RecResiduals.readInsFast`'s walk of the rows (1.6 of the profiled call's 2.38 s).
+- **What each of the three is made of** (seconds by the function the sample was in):
+  - the scaling 5.81: the map's own loop 2.85; releasing cells 2.37 (`lean_dec_ref_cold` 1.09, `lean_del_core` 0.56,
+    `mi_free` 0.49, others): the map writes 33.5 M new cells a repetition, then `fa`'s and `fb`'s 67 M die.
+  - the projection 5.50: the 67 M multiplications themselves (`F128.mulW`) 2.32; the closure's call and `sumUpTo`'s loop
+    2.24 (`lean_apply_1` 0.69, the loop 0.72, the closure 0.83); a cell a product and its release 0.67.
+  - the tensor 3.38: its closure 3.08, that is the 16 table lookups a value, each value from another of 64 tables
+    (10 MB together [derived: 64 × 4,096 × 40 bytes]); allocation 0.11.
+  - the walks 19.99: the loop itself 18.4; the kernel 1.09 (first touches); allocation 0.39.
+
+**The same on the fold alone, a repetition at a time** (run `r20261112-085917-57e8`, core 55, 0% busy, two repeats; the
+changed package; the unit net has 2^25 columns, 31.98 M rows, 606.5 M and 761.9 M entries):
+
+| a repetition | seconds | an element | twice, beside the profile's row |
+|---|---|---|---|
+| A's walk, B's walk | 3.79 to 4.02, 4.79 to 5.11 | 6.2 to 6.7 ns an entry | 17.2 to 18.3 beside 19.99 |
+| the tensor | 1.90, 1.91 | 56.6 ns | 3.80 beside 3.38 |
+| the scaling map alone | 1.72 to 1.78 | 51 to 53 ns | 3.44 to 3.55; with the inputs' release, 5.62 beside 5.81 [derived: `baseOf` 11.39 less its walks 8.58 and its map 1.72 is 1.09 a repetition] |
+| the projection | 2.73, 2.73 | 81.4 ns | 5.47 beside 5.50 |
+| `folded` whole | 17.13, 17.13 | | 34.26 beside 37.10 |
+
+The two agree on the three functions within sampling; the profile gives the walks and `folded` 8 to 16% more than the
+bench [guess at why: the verifier holds 45 GiB while it folds, the bench less of it live].
+
+### B. MoE beside it (session `bb7c-a`, run `r20261112-085907-b5ce`, core 187, 0% busy, three plain calls, 199 Hz, 2,244 samples)
+
+Session's line 11.209, 11.201, 11.223 s; its setup 0.614 s; so a check of 10.60 s.
+
+| part | seconds of 11.21 | share of the check |
+|---|---|---|
+| the setup | 0.61 | |
+| the two walks | 1.94 | 18.3% |
+| the tensor | 2.03 | 19.2% |
+| the scaling | 1.32 | 12.5% |
+| the projection | 2.61 | 24.6% |
+| the fold's other loops | 0.61 | 5.8% |
+| outside the fold (`Zk.ligerito` 1.44, region values 0.48, the rest 0.16) | 2.08 | 19.6% |
+
+On MoE the three per-column functions are 5.96 s of 11.21 s and larger than the walks [FIXEDCOST had 6.4 s for them,
+relayed].
+
+### C. What the row says about what is next [derived and guess, as tagged]
+
+- The three functions hold 14.7 s on the head and 6.0 s on MoE; the walks 20.0 s and 1.9 s.
+- What a twin of each can take, from the lines above [guess, none built]: the projection up to about 3 s on the head
+  (everything but the multiplications: one loop on words, no closure, no cell a product); the scaling about 4 to 5 s if
+  A's walk adds `α·e[i]` straight into B's folded array (the fold is linear, so `α·Aᵀe = Aᵀ(αe)`: no `fa`, no map, no
+  release, at the price of one table product a row); the tensor 1 to 2 s (one table at a time instead of 64 in
+  turn). Together 8 to 10 s on the head and about 3 s on MoE [guess].
+- FIXEDCOST's one pass is 7.2 s on the head and about 1.0 s on MoE [relayed, its 08:32Z entry]. So on the head the two
+  are about equal and they add; on MoE the per-column loops are three times the one pass.
+- **One place where the two meet:** the scaling twin by linearity rewrites `baseOfFast`'s body (A's walk starts from
+  B's result). If FIXEDCOST's one pass replaces `baseOfFast` too, one of us builds on the other. I build the projection
+  and the tensor first, which touch neither walk, and the scaling third; say if FIXEDCOST should own it.
+
+### D. Two things my 08:22Z tables did not say
+
+- **The session's line holds its setup.** [read, `FlockVerify.lean:1157-1168` and `:1241` at `a62f144764f7`] `t1` is
+  read before `setupOf draw`, and both `setup (drawn): N ms` and `{dir}: N ms` are counted from it. So what I called "a
+  session's check" (118.76 to 38.89 s, 20.19 to 11.84 s, 3.650 to 3.202 s) includes the setup at the sample: 2.2 to
+  2.4 s on the head, 0.61 to 0.65 s on MoE, about 0.42 s on GEMM. No figure moves; the name was loose.
+- **Each timed call is a refusal after `Zk.verify`, not an acceptance**, as FIXEDCOST's 05:25Z entry says of the same
+  sessions [relayed] and as I now read in my own outputs [read, `perf.out` of `f758` and `b5ce`]: `"accepted":false`,
+  `"why":"refused: a session without the verifier's program (--program)…"`, exit 1. That refusal is the eighth of
+  `refusals` and runs only where `checked` is `ok` [read, `FlockVerify.lean:1182-1213`], so `Zk.verify` passed in
+  every call, before and after my change; `RecordText.check` and `KsScope.checkOf`, which come after it, did not run
+  and are in no figure of mine.
+
+### E. #9209's ready line, so far
+
+- **`r20261112-073043-f29b`: running** at 09:16:33Z [run: `research fetch`], on `vy-nebius-cpu-5`, 11 cores, since
+  08:15:46Z. Not cancelled. The first paragraph of the body is not corrected yet.
+- **The merge-tree step** [run, 09:00Z, git objects only]: lean's branch is at `f3837f57d113` now (your message had
+  `a88eee998fa2`). By your command, `main` at `19fb19a21e40` stops against it in 12 files; my head `a62f144764f7`
+  stops in none (exit 0). **My head's stops beyond `main`'s: none.** I run it again on the merged head.
+- **Nothing under `verity/protocols/flock/verifier/` changed on `main` since my base** `d6075b75d2` [run:
+  `git diff --name-only d6075b75d2 origin/main -- verity/protocols/flock/verifier`, 0 files; 541 commits]; nor under
+  `verity/circuits/base`, `verity/circuits/lean`, `verity/commitments/lean`, which it requires.
+- The merge of `main` and the changed suites wait for `f29b`, as you said. FIXEDCOST's read is not in the file yet.
+
+### F. Next, and what I wait on
+
+- Now: a new branch cut from `a62f144764f7` for the per-column twins, the projection first; `FlockVerify.lean` untouched.
+- Waiting: `r20261112-073043-f29b`, no ETA I can read (earlier recorded checks took 25 to 56 minutes on larger slots;
+  this one has 11 cores and has run 60 minutes) [guess: before 10:30Z].
+- The kit is in the notes, `lanes/proofs/20261112T0650Z-fold/`: `phase_job.sh`, `phases.py`, `rephase.py`,
+  `launch_phase.sh` (one command a statement: `bash launch_phase.sh head 8 64 3600 2 1 99`).
