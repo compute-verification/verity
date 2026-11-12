@@ -2,6 +2,7 @@ module
 
 public import Flock
 public import Flock.CircuitType
+public import Flock.KnownTrees
 public import Flock.Layout
 public import Flock.JsonParse
 
@@ -1948,32 +1949,6 @@ def recComposeCmd (args : List String) : IO UInt32 := do
   IO.println s!"REC-COMPOSE {line.compress}"
   return (if res.toBool then 0 else 1)
 
-/-- `known-trees --registered F --public P --out LIST`: **the verifier's list of a statement's known trees**
-(`Registered.knownTreesOf`, `Registered.knownList`), from the verifier's own registered reads `F` and the header of
-the statement's public file `P`: each port `F` names at known content, held to its content's root, with the tree the
-statement publishes for it. The verifier's challenger sends `LIST` after the draw in its answer to the session's
-`Register` (`flock-circuit serve --known-trees LIST`), where the ZK server's release side holds the statement's trees
-to it (`Firewall.Salts.readsKnown`). One `KNOWN-TREES` line names each listed port with its entry, in hex. A file
-that names a key twice in one object is refused, as `registeredFile` refuses it. -/
-def knownTreesCmd (args : List String) : IO UInt32 := do
-  let (some rf, some pf, some out) := (argOf args "--registered", argOf args "--public", argOf args "--out")
-    | IO.eprintln "usage: flock-verify known-trees --registered F --public P --out LIST"; return 2
-  let registered ← IO.FS.readBinFile rf
-  let pub ← IO.FS.readBinFile pf
-  let listed : V (Array (String × ByteArray)) := do
-    let some text := String.fromUTF8? registered | throw "registered reads: not UTF-8"
-    if let some k := JsonKeys.dupKey text then
-      throw s!"registered reads: an object of the file names the key {k} twice, which a JSON parser would read as once"
-    let some nl := findByte pub 10 | throw "public file: no header line"
-    let some head := String.fromUTF8? (pub.extract 0 nl) | throw "public file: its header is not UTF-8"
-    Registered.knownTreesOf (← Flock.JsonParse.parse text) (← Flock.JsonParse.parse head)
-  match listed with
-  | .error why => IO.println s!"KNOWN-TREES {(Lean.Json.mkObj [("error", Lean.Json.str why)]).compress}"; return 1
-  | .ok ts =>
-    IO.FS.writeBinFile out (Registered.knownList (ts.map (·.2)))
-    IO.println s!"KNOWN-TREES {(Lean.Json.mkObj (ts.toList.map fun (name, e) => (name, Lean.Json.str (hexOf e)))).compress}"
-    return 0
-
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
@@ -1990,7 +1965,7 @@ def main (args : List String) : IO UInt32 := do
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths
-  | "known-trees" :: rest => knownTreesCmd rest
+  | "known-trees" :: rest => KnownTrees.cmd (argOf rest "--registered") (argOf rest "--public") (argOf rest "--out")
   | "draw" :: rest => drawCmd rest
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
