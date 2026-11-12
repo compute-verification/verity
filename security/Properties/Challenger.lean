@@ -20,6 +20,8 @@ what that record shows, for every input: the coins the challenger device drew, o
 * `FamilyOneCommitment`: that run's own log shows every coin of the family released after `after`, so the coins read
   are every coin the family released, from its first, and no other root stands in the family.
   `FamilyOneCommitmentRead` is the same of the bytes `Challenger.coinsReason` passes, the reader of a stream's run.
+  Their nontrivial lemmas (security_proofs) are stated at the device that ran nothing (`idle`) and a key with no
+  public key bytes (`noKey`).
 
 **The device's history** (`History`) is the proof system's challenger as `challenger.py` runs it. Under its key it runs
 sessions, each a run (`Run`): it flips each coin and its salt by position, commits to the frame-v3 root over their live
@@ -533,5 +535,13 @@ def oneStageZkReads (bs : Array ByteArray) :
   record e := Spot.OneStage.Evidence.coins (Spot.OneStageZk.Evidence.base e)
   decode := id
   reads := oneStageZk_reads
+
+/-! ## Where the nontrivial lemmas are stated -/
+
+/-- The device that ran nothing and signed nothing. -/
+def idle : History := ⟨fun _ => [], fun _ => []⟩
+
+/-- A key of the deployed parameters with no public key bytes. -/
+def noKey : Spot.Challenger.ChallengerKey := ⟨Lms.deployed, ByteArray.empty⟩
 
 end Properties.Challenger

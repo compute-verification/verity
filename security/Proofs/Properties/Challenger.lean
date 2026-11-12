@@ -90,12 +90,6 @@ theorem FamilyOneCommitment.drawn (h : FamilyOneCommitment) : DrawnByDevice :=
   fun dev key w label after coins ξ hr =>
     (h dev key w label after coins ξ hr).imp (fun ⟨s, hs, ho, e, _⟩ => ⟨s, hs, ho, e⟩) id
 
-/-- The device that ran nothing and signed nothing. -/
-def idle : History := ⟨fun _ => [], fun _ => []⟩
-
-/-- A key of the deployed parameters with no public key bytes. -/
-def noKey : Spot.Challenger.ChallengerKey := ⟨Lms.deployed, ByteArray.empty⟩
-
 /-- **`FamilyOneCommitment`'s nontrivial lemma**: its conclusion fails at the device that ran nothing (`idle`) and the
 record `null`: no run of it released anything, and the finder finds no break in a record that holds nothing. A reader
 that accepts every record reads there, so the statement is not one every reader has. -/
