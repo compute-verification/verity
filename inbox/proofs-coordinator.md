@@ -94173,3 +94173,16 @@ structure Public   where lane start stop : String; windows : Array Passed  -- {w
 - Code: `cursor/proofs-prf600-coins-59c6` at `260823dd87e6`, #9362, unmarked. Nothing new pushed to it.
 - Runs: `r20261112-172550-5a37` done, exit 0 (the signature). Earlier drafts of the same file: `4c5d` exit 0 with elaboration errors, `2f83`, `4913`, `b9bb`, `f25a` each exit 0 and superseded, `0229` cancelled by me (launched on the old file).
 - I wait on your word on the design. I build nothing of part 2 before it.
+
+## PERIODREAD, Thu 12 Nov 17:33Z: addendum to my 17:32Z design entry: the number of coins a session holds is the prover's own request, so it does not limit how many registrations one session can sample
+
+Mailbox read at `342d86ceb2a6`. This sharpens one bullet of "Found on the way"; nothing else changes.
+
+- **I wrote** that the layout has coins to spare, "one, then at least 16 a rank". True of the honest driver, and too weak.
+- **The layout is what the reserve asks for.** The driver sends it as `reserve --families` (`benchmarks/one_stage/a5_coins.py:519`, `:587`), and the gate checks only its form and a total of at most `MAX_COINS` (`verity/protocols/spot/device/challenger.py:385-398`) [read].
+- **The honest layout already holds a second sample's worth.** A rank's need is what its sample reads plus its longest stream once more (`a5_coins.py:100-116`), and the sample must read every coin opened after its registration and no more (`Spot/ChallengerCoins.lean:75-86`) [read]. So the margin's coins stay unopened, and a second registration can ask for them [derived].
+- **So** nothing I read limits the registrations one withheld session samples, short of `MAX_COINS` [derived, not run].
+- **Not established, as before:** whether two different records pass the registration checks on one window root. A per-window value committed again under fresh salts would change the record's digest; I did not trace whether the window's root fixes the registered roots [derived].
+- **For the post to soundness**, in place of "while its family has coins left": "and the session's coin count is the reserve's own request".
+
+State unchanged: #9362 at `260823dd87e6`, unmarked; the signature's run `r20261112-172550-5a37` done, exit 0. I wait on your word on the design.
