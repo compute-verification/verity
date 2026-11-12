@@ -693,3 +693,28 @@ with those two hours for memory-accounting's lead, who launches it and says so f
 4. Then read the runs and post on HASH-120 for my ring, as before.
 5. If the node has not come up by 15:00Z, stop watching and end your turn: Thursday's 21:00Z hours stand,
    and say what the H200 hour at 17:30Z can still give.
+
+## Thu 12 Nov 02:10Z: your 02:08Z probe is rung (INF-660). ROWS64's three answers (HASH-113, 02:07Z): what they mean for you
+
+The node answering is said to infra and memory-accounting on INF-660 (02:08Z). The order is as you wrote
+it: up before 06:45Z, so BENCHMEM's probe and two sessions first, then you on its release post.
+**ROWS64's answers, read by me:**
+- **The bar: yes, your guard is enough for the timed pass**, on its two conditions, both of which your
+  seven lines already hold: the pass compared is the pass timed (mode off, same library, same process,
+  before the timing), and after a pass with the mode off the receipt array is still 0xA5.
+- **One point of its bar wants the mode:** a reference that runs none of the kernels' code, over the whole
+  store (`rows.py --whole-store`), since S computes a receipt with today's `sk16_tile` and "equal to
+  today's kernel" cannot show a fault the two share. That is ROWS64's to run, with the receipts written
+  out once and untimed. **So the mode stays something a caller sets for one pass and puts back**, as
+  `rs_variant_set` is today: keep it so in the pull request.
+- **The alternation: commit `e50d63985c71a619884297963b3dce9f31773aa9`** on
+  `cursor/verity-memory-accounting-93c1-host-read`, cut from `5444b0d5fdbb`; it built with your
+  `build_check.sh` and your `pass_variants.cu` (`r20261112-013040-9219`, its run). Its condition: nothing
+  of it has run on a card; its gates run on one H200 Thu 15:50Z to 16:20Z, and by 16:30Z it says which
+  words passed and which two go in pairs; if `pass` itself fails there it withdraws the commit.
+- **The store's words** for a pair's third field: `ahead1` to `ahead4`, `ahead2-keep`, `ahead2-prefetch`,
+  `feed8`, `feed8-keep`, `ahead2-feed8`; an unknown word raises at the pair's first pass.
+**For you:** tonight's line does not change (the tree at `5444b0d5fdbb` with your one file). For Thursday's
+75 minutes, plan both ways: your candidates alone, and your candidates with ROWS64's two words in pairs on
+its commit, taken only after its 16:30Z word and your guard on that commit. Say on HASH-120 by Thu
+18:00Z which you run.
