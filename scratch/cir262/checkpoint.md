@@ -9,3 +9,4 @@
 2026-11-12T18:18:52Z FP8READ: quick card run r20261112-180535-23a8 read (6,619,136 words compared, 0 differ; SASS stage fixed after it); full card run r20261112-181549-6fce launched on head 1f6f0969a9
 2026-11-12T18:57:04Z FP8READ: two full card runs read (r20261112-181549-6fce, r20261112-183549-43fa: 48,234,496 words, 0 differ; same bytes saved); second CIR-262 comment posted; evaluator over all tokens queued (r20261112-183708-9a9a)
 2026-11-12T19:51:18Z FP8READ: second CIR-262 comment posted 18:57Z; evaluator over all 1472 tokens (r20261112-185922-3b8c) waiting for a check slot since 19:00Z; then the final suites; PR after
+2026-11-12T20:49:17Z FP8READ: evaluator over all tokens (r20261112-185922-3b8c) in its slot since 19:41Z, 496 of 1472 tokens held, 0 differ so far; final suites and the PR after it
