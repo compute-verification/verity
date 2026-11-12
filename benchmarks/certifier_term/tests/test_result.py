@@ -4,14 +4,17 @@
 - the result is the harness kit's: its schema, one measurement a name, each in the kit's fields under the run and
   the host stamp, and the directory holds nothing else;
 - the names are regular and every one says modeled: the term of record, and for each scope and monitoring period its
-  row's free, capacity, verified and eps, in bits, bits, bits and a probability;
-- free is the document's term for the scan at two release schedules, eps its execution phases' scans' δ summed, and
-  the metric the document's value, each held to the calculator's table too;
+  row's free, capacity, verified and error, in bits, bits, bits and a probability;
+- free is the document's term for the scan at two release schedules, the error its execution phases' scans' δ summed,
+  and the metric the document's value, each held to the calculator's table too;
 - the metric and free stand against the document's target as the document's own multiple of it says, and no other
   measurement has a target or a verdict;
 - capacity is read from a registered uplink's `beta`, one way: the scope's machines times it times the period's
   ticks, and verified is capacity less free; with no registration both have no value and say why;
-- every measurement's inputs name the class the term is at, as the document states it;
+- a row whose error is 1 or more has no bound at its period: its free and verified, and the metric where the row is
+  the term of record's, have no value and say why, and its error is written. At the calculator's default δ those are
+  the datacenter's and the world's rows; at the δ of the result of record every row carries its amounts;
+- every measurement's inputs name the class the term is at and the scan's δ its error is at;
 - a registration that isn't the model's machine, a file that is no log, and a second result in one directory are
   refused."""
 from __future__ import annotations
@@ -37,8 +40,16 @@ RUN = "r20000101-000000-aaaa"
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "c" * 40}
 #: a document that reads no planner and asks git nothing: the world's requests given, and its commit named
 GIVEN = ["--commit", "c0ffee", "--world-requests", "1e16"]
-#: each amount's unit, by its name's last word; the error's last word is the runner's `ERROR`
-AMOUNTS = {"free": "bit", "capacity": "bit", "verified": "bit", R.ERROR: "probability"}
+#: each scope and monitoring period's execution phases, as the calculator's table counts them
+PHASES = {(r.scope.name, r.period): r.phases for r in LB.table(LB.inputs(world_requests=1e16)) if r.name == "scan"}
+#: the error the result of record is run at over the world's year, and the scan's δ that gives it: that error over
+#: the world year's execution phases
+AT_MOST = Fraction(1, 2 ** 20)
+DELTA = AT_MOST / PHASES["world", "year"]
+#: `GIVEN` at that δ, under which every row is bounded
+BOUNDED = [*GIVEN, "--scan-delta", str(DELTA)]
+#: each amount's unit, by its name's last word
+AMOUNTS = {"free": "bit", "capacity": "bit", "verified": "bit", "error": "probability"}
 #: the measurements of a result with every scope and monitoring period: the term of record, and each row's amounts
 EVERY = 1 + len(LB.SCOPES) * len(LB.PERIODS) * len(AMOUNTS)
 #: the uplink's two halves' capacities in bits a tick: the host's side, which is the boundary link, and the outside's
@@ -65,10 +76,20 @@ def result(out: Path) -> dict[str, dict]:
     return {m["name"]: m for m in doc["measurements"]}
 
 
-def document(capsys, *argv: str, given: tuple[str, ...] = tuple(GIVEN)) -> dict:
-    """The calculator's own document on ``given`` and ``argv``, as it prints it."""
-    assert LB.main([*given, *argv, "--json"]) == 0
+def document(capsys, *argv: str) -> dict:
+    """The calculator's own document on ``argv``, as it prints it."""
+    assert LB.main([*argv, "--json"]) == 0
     return json.loads(capsys.readouterr().out)
+
+
+def scans(doc: dict) -> dict[tuple[str, str], dict]:
+    """The document's rows of the scan, by scope and monitoring period."""
+    return {(r["scope"], r["period"]): r for r in doc["rows"] if r["row"] == "scan"}
+
+
+def absent(m: dict) -> list[str]:
+    """Why a measurement has no value, as its inputs say it."""
+    return [i for i in m["inputs"] if i.startswith("absent: ")]
 
 
 def log(tmp_path: Path, beta: int = BETA, *more: registration.Entry, composite: str = "onsite",
@@ -89,7 +110,8 @@ def log(tmp_path: Path, beta: int = BETA, *more: registration.Entry, composite: 
 
 def test_what_the_command_prints_is_the_calculators_to_the_character(tmp_path, capsys, monkeypatch):
     for i, argv in enumerate(([], ["--json"], ["--scope", "node", "--period", "week", "--failure-rate", "1/1000"],
-                              ["--json", "--requests", "census", "--lanes", "512", "--target-gb", "150"])):
+                              ["--json", "--requests", "census", "--lanes", "512", "--target-gb", "150"],
+                              ["--scan-delta", str(DELTA), "--response-ids", str(LB.RESPONSE_IDS // 2)])):
         assert LB.main([*GIVEN, *argv]) == 0
         alone = capsys.readouterr()
         assert bench(capsys, *GIVEN, *argv) == alone.out
@@ -100,7 +122,7 @@ def test_what_the_command_prints_is_the_calculators_to_the_character(tmp_path, c
     monkeypatch.setattr(sys, "argv", ["run.py", "--json", *GIVEN, "--out", str(tmp_path / "main")])
     with pytest.raises(SystemExit) as done:
         runpy.run_path(str(HERE.parent / "run.py"), run_name="__main__")
-    assert done.value.code == 0 and json.loads(capsys.readouterr().out) == document(capsys)
+    assert done.value.code == 0 and json.loads(capsys.readouterr().out) == document(capsys, *GIVEN)
     assert list(result(tmp_path / "main")) == list(result(tmp_path / "1"))
 
 
@@ -108,14 +130,16 @@ def test_the_result_is_the_kits_and_nothing_else_is_written(tmp_path, capsys, mo
     written = []
     measurement = kit.Writer.measurement
     monkeypatch.setattr(kit.Writer, "measurement", lambda self, **m: written.append(measurement(self, **m)) or written[-1])
-    out = tmp_path / "out"
-    bench(capsys, "--out", str(out), *GIVEN)
-    # every measurement of the file is one the kit's writer returned, in its fields, under this run and its stamp
-    assert json.loads((out / kit.RESULT).read_text())["measurements"] == written and len(written) == EVERY
     fields = set(kit.writer(tmp_path / "another").measurement(name="a measurement", value=1, unit="bit"))
-    for m in result(out).values():
-        assert set(m) == fields and (m["run"], m["commit"], m["host"], m["ci95"]) == (RUN, STAMP["commit"], STAMP, None)
-    assert sorted(p.name for p in out.iterdir()) == [kit.RESULT]
+    for at, argv in enumerate((GIVEN, BOUNDED)):
+        out = tmp_path / str(at)
+        del written[:]
+        bench(capsys, "--out", str(out), *argv)
+        # every measurement of the file is one the kit's writer returned, in its fields, under this run and its stamp
+        assert json.loads((out / kit.RESULT).read_text())["measurements"] == written and len(written) == EVERY
+        for m in result(out).values():
+            assert set(m) == fields and (m["run"], m["commit"], m["host"], m["ci95"]) == (RUN, STAMP["commit"], STAMP, None)
+        assert sorted(p.name for p in out.iterdir()) == [kit.RESULT]
 
 
 def test_the_names_are_regular_and_every_one_says_modeled(tmp_path, capsys):
@@ -126,29 +150,35 @@ def test_the_names_are_regular_and_every_one_says_modeled(tmp_path, capsys):
                            for scope in LB.SCOPES for period in LB.PERIODS for amount in AMOUNTS)]
     assert all(name.split("/")[:2] == ["certifier_term", "modeled"] for name in got)
     assert all(m["unit"] == AMOUNTS.get(name.rsplit("/", 1)[1], "GB") for name, m in got.items())
+    # the shared fields' last words, the error's among them
+    assert R.ERROR == "error"
+    assert {name.rsplit("/", 1)[1] for name in got} == {"metric", "free", "capacity", "verified", "error"}
     # only the rows the command was asked for, with the term of record
     bench(capsys, "--out", str(tmp_path / "one"), *GIVEN, "--scope", "datacenter", "--period", "month")
     assert list(result(tmp_path / "one")) == ["certifier_term/modeled/metric",
                                               *(f"certifier_term/modeled/datacenter/month/{amount}" for amount in AMOUNTS)]
 
 
-def test_free_is_the_documents_term_and_eps_its_phases_deltas_summed(tmp_path, capsys):
-    bench(capsys, "--out", str(tmp_path), *GIVEN)
-    got, doc = result(tmp_path), document(capsys)
-    rows = {(r["scope"], r["period"]): r for r in doc["rows"] if r["row"] == "scan"}
-    exact = {(r.scope.name, r.period): r for r in LB.table(LB.inputs(world_requests=1e16)) if r.name == "scan"}
+def test_free_is_the_documents_term_and_the_error_its_phases_deltas_summed(tmp_path, capsys):
+    bench(capsys, "--out", str(tmp_path), *BOUNDED)
+    got, doc = result(tmp_path), document(capsys, *BOUNDED)
+    rows = scans(doc)
+    table = LB.table(LB.inputs(world_requests=1e16, scan_delta=DELTA))
+    exact = {(r.scope.name, r.period): r for r in table if r.name == "scan"}
     assert list(rows) == [(scope, period) for scope in LB.SCOPES for period in LB.PERIODS] and LB.OF_RECORD == 2
     for (scope, period), r in rows.items():
         name, row = f"certifier_term/modeled/{scope}/{period}", exact[scope, period]
         # the term at two release schedules, and the union of the scans' δ, as the table has them
         assert got[f"{name}/free"]["value"] == r["term"]["2"]["bits"] == float(row.terms[2].certifier)
-        error = got[f"{name}/{R.ERROR}"]
-        assert error["value"] == r["eps"] == float(row.eps) == float(row.phases * LB.SCAN_DELTA)
+        error = got[f"{name}/error"]
+        assert error["value"] == r["eps"] == float(row.eps) == float(row.phases * DELTA) < 1
+        # the error's inputs name the calculator's own key for it
         assert error["inputs"][1] == R.UNION and "eps, the calculator's key: a union bound over the period's" in R.UNION
         assert got[f"{name}/free"]["inputs"][0].startswith("modeled: benchmarks/network_traces/leak_bounds.py's row scan "
                                                            f"at D_j = 2, scope {scope}, period {period}, ")
-        # the document's inputs, each with its value, its mark and its source
-        assert got[f"{name}/free"]["inputs"][1:] == [R.stated(k, i) for k, i in doc["inputs"].items()]
+        # the document's inputs, each with its value, its mark and its source, the scan's δ as the command gives it
+        assert got[f"{name}/free"]["inputs"][1:] == [R.at_delta(LB, doc) if k == "scan_delta" else R.stated(k, i)
+                                                     for k, i in doc["inputs"].items()]
     # the term of record: the world's year's, in GB
     metric, year = got["certifier_term/modeled/metric"], got["certifier_term/modeled/world/year/free"]
     assert (metric["value"], metric["unit"]) == (doc["value"], "GB")
@@ -159,10 +189,9 @@ def test_free_is_the_documents_term_and_eps_its_phases_deltas_summed(tmp_path, c
 def test_the_metric_and_free_stand_against_the_documents_target(tmp_path, capsys):
     for at, target_gb in enumerate((LB.TARGET_GB, 1e-3, 1e12)):
         argv = [] if target_gb == LB.TARGET_GB else ["--target-gb", str(target_gb)]
-        bench(capsys, "--out", str(tmp_path / str(at)), *GIVEN, *argv)
+        bench(capsys, "--out", str(tmp_path / str(at)), *BOUNDED, *argv)
         got = result(tmp_path / str(at))
-        doc = document(capsys, *argv)
-        said = {(r["scope"], r["period"]): r["term"]["2"]["of_target"] for r in doc["rows"] if r["row"] == "scan"}
+        said = {at: r["term"]["2"]["of_target"] for at, r in scans(document(capsys, *BOUNDED, *argv)).items()}
         for (scope, period), multiple in said.items():
             free = got[f"certifier_term/modeled/{scope}/{period}/free"]
             assert free["target"] == target_gb * LB.GB
@@ -173,13 +202,14 @@ def test_the_metric_and_free_stand_against_the_documents_target(tmp_path, capsys
         # a target under every row's term, and one over every row's
         assert at == 0 or {m["verdict"] for m in got.values()} == {None, "over target" if at == 1 else "within target"}
         assert all((m["target"], m["verdict"]) == (None, None) for name, m in got.items()
-                   if name.rsplit("/", 1)[1] in ("capacity", "verified", R.ERROR))
+                   if name.rsplit("/", 1)[1] in ("capacity", "verified", "error"))
 
 
 def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_less_free(tmp_path, capsys):
     path = log(tmp_path)
-    bench(capsys, "--out", str(tmp_path / "out"), "--registration", str(path), *GIVEN)
-    got, klass = result(tmp_path / "out"), R.at_class(document(capsys))
+    bench(capsys, "--out", str(tmp_path / "out"), "--registration", str(path), *BOUNDED)
+    got, doc = result(tmp_path / "out"), document(capsys, *BOUNDED)
+    basis = [R.at_class(doc), R.at_delta(LB, doc)]
     composite, entries = registration.log_of(json.loads(path.read_text()))
     scopes = LB.scopes(LB.inputs(world_requests=1e16))
     assert TICK == Fraction(1, 10 ** 9) and [s.name for s in scopes] == list(LB.SCOPES) and scopes[0].machines == 1
@@ -190,15 +220,15 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
             # each machine's one certified boundary link, the host's side of its uplink, over the period's nanoseconds
             assert capacity["value"] == scope.machines * BETA * seconds * 10 ** 9 and type(capacity["value"]) is int
             assert verified["value"] == capacity["value"] - free["value"]
-            assert verified["inputs"] == [f"{name}/capacity", f"{name}/free", klass]
+            assert verified["inputs"] == [f"{name}/capacity", f"{name}/free", *basis]
             assert capacity["inputs"] == [
                 f"registration {registration.head(composite, entries)}, read as given: host node0's certified boundary "
                 f"link(s) uplink0 at beta {BETA}, in bits each way a tick of 1/1000000000 s (verity.hardware.site)",
                 R.SCALED, f"modeled: benchmarks/network_traces/leak_bounds.py's row scan at D_j = 2, scope {scope.name}, "
-                f"period {period}, request count given", klass]
+                f"period {period}, request count given", *basis]
     assert "beta is each way and the term is egress, so one direction" in R.SCALED
     # the registration's own number: another beta is another capacity, and nothing else moves
-    bench(capsys, "--out", str(tmp_path / "twice"), "--registration", str(log(tmp_path, 2 * BETA)), *GIVEN)
+    bench(capsys, "--out", str(tmp_path / "twice"), "--registration", str(log(tmp_path, 2 * BETA)), *BOUNDED)
     for name, m in result(tmp_path / "twice").items():
         if name.endswith("/capacity"):
             assert m["value"] == 2 * got[name]["value"]
@@ -207,47 +237,128 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
 
 
 def test_with_no_registration_capacity_and_verified_have_no_value_and_say_why(tmp_path, capsys):
-    bench(capsys, "--out", str(tmp_path), *GIVEN)
-    got, klass = result(tmp_path), R.at_class(document(capsys))
+    bench(capsys, "--out", str(tmp_path), *BOUNDED)
+    got, doc = result(tmp_path), document(capsys, *BOUNDED)
+    basis = [R.at_class(doc), R.at_delta(LB, doc)]
     for scope in LB.SCOPES:
         for period in LB.PERIODS:
             name = f"certifier_term/modeled/{scope}/{period}"
             capacity, verified = got[f"{name}/capacity"], got[f"{name}/verified"]
-            assert (capacity["value"], capacity["inputs"][0], capacity["inputs"][2:]) == (None, R.NO_REGISTRATION, [klass])
+            assert (capacity["value"], capacity["inputs"][0], capacity["inputs"][2:]) == (None, R.NO_REGISTRATION, basis)
             assert capacity["inputs"][1].startswith("modeled: benchmarks/network_traces/leak_bounds.py's row scan at ")
             assert verified["value"] is None
-            assert verified["inputs"] == [f"{name}/capacity", f"{name}/free", R.NO_REGISTRATION, klass]
+            assert verified["inputs"] == [f"{name}/capacity", f"{name}/free", R.NO_REGISTRATION, *basis]
     assert R.NO_REGISTRATION.startswith("absent: no registration is given")
     assert sum(m["value"] is None for m in got.values()) == 2 * len(LB.SCOPES) * len(LB.PERIODS)
 
 
-def test_every_measurement_names_the_class_the_term_is_at(tmp_path, capsys):
-    """The most ids a response holds, read from the document: the default's, and another's where the command is given
-    one, whose terms are another class's."""
-    paths, another = {}, LB.RESPONSE_IDS // 2
-    for ids in (None, another):
-        argv = [] if ids is None else ["--response-ids", str(ids)]
-        paths[ids] = tmp_path / str(ids)
-        bench(capsys, "--out", str(paths[ids]), "--registration", str(log(tmp_path)), *GIVEN, *argv)
-        entry = document(capsys, *argv)["inputs"][R.CLASS]
-        klass = f"response_ids = {entry['value']} id ({entry['mark']}): {entry['source']}"
-        assert R.CLASS == "response_ids" and entry["value"] == (LB.RESPONSE_IDS if ids is None else ids)
-        assert all(klass in m["inputs"] for m in result(paths[ids]).values())
-    default, other = result(paths[None]), result(paths[another])
-    assert all((default[name]["value"] == m["value"]) == name.endswith(("/capacity", f"/{R.ERROR}")) for name, m in other.items())
-
-
-def test_the_result_of_the_commands_defaults(tmp_path, capsys):
-    """The term of record's row at the sampling plan's request count, which the default command counts."""
-    text = bench(capsys, "--out", str(tmp_path), "--commit", "c0ffee")
-    assert LB.main(["--commit", "c0ffee"]) == 0 and capsys.readouterr().out == text
-    got, doc = result(tmp_path), document(capsys, given=("--commit", "c0ffee"))
-    assert doc["request_count"] == "plan" and len(got) == EVERY
-    assert got["certifier_term/modeled/metric"]["value"] == doc["value"]
-    rows = {(r["scope"], r["period"]): r for r in doc["rows"] if r["row"] == "scan"}
-    assert all(got[f"certifier_term/modeled/{scope}/{period}/free"]["value"] == r["term"]["2"]["bits"]
-               for (scope, period), r in rows.items())
+def test_a_row_whose_error_is_1_or_more_carries_no_amount(tmp_path, capsys):
+    """At the calculator's default δ the union bound over a datacenter's or the world's execution phases is over 1, so
+    those rows have no bound at their period, the term of record's among them; a node's rows carry their amounts."""
+    assert R.NO_BOUND == "no bound at this period"
+    for at, argv in enumerate((GIVEN, ["--commit", "c0ffee"])):
+        text = bench(capsys, "--out", str(tmp_path / str(at)), "--registration", str(log(tmp_path)), *argv)
+        # what is printed is the calculator's still, its terms for those rows among it
+        assert LB.main(argv) == 0 and capsys.readouterr().out == text
+        got, doc = result(tmp_path / str(at)), document(capsys, *argv)
+        assert doc["inputs"]["scan_delta"]["value"] == float(LB.SCAN_DELTA) and len(got) == EVERY
+        none = set()
+        for (scope, period), r in scans(doc).items():
+            name = f"certifier_term/modeled/{scope}/{period}"
+            free, capacity, verified, error = (got[f"{name}/{amount}"] for amount in AMOUNTS)
+            # the error and the capacity are written whatever the error is
+            assert error["value"] == r["eps"] and capacity["value"] > 0 and not absent(error) and not absent(capacity)
+            if r["eps"] < 1:
+                assert free["value"] == r["term"]["2"]["bits"] and free["verdict"] in ("within target", "over target")
+                assert verified["value"] == capacity["value"] - free["value"] and not absent(free) and not absent(verified)
+                continue
+            none.add(scope)
+            why = [f"absent: no bound at this period: the row's error, {r['eps']}, is 1 or more"]
+            assert (free["value"], free["verdict"], absent(free)) == (None, None, why)
+            assert (verified["value"], absent(verified)) == (None, why)
+        assert none == {"datacenter", "world"}
+        # the term of record's row is the world's year's, so the metric has no value either
+        metric, year = got["certifier_term/modeled/metric"], scans(doc)["world", "year"]
+        assert (metric["value"], metric["verdict"], metric["unit"]) == (None, None, "GB")
+        assert absent(metric) == [f"absent: no bound at this period: the row's error, {year['eps']}, is 1 or more"]
     assert "request count plan" in got["certifier_term/modeled/world/year/free"]["inputs"][0]
+
+
+def test_a_row_at_error_exactly_1_has_no_bound(tmp_path, capsys):
+    """The boundary: at a scan's δ of one over a node's year's execution phases the node's year is at error 1 exactly,
+    which bounds nothing, and its month, under 1, carries its amounts."""
+    delta = 1 / PHASES["node", "year"]
+    bench(capsys, "--out", str(tmp_path), *GIVEN, "--scan-delta", str(delta), "--scope", "node")
+    got = result(tmp_path)
+    year, month = (f"certifier_term/modeled/node/{period}" for period in ("year", "month"))
+    assert got[f"{year}/error"]["value"] == 1 and got[f"{year}/free"]["value"] is None
+    assert absent(got[f"{year}/free"]) == ["absent: no bound at this period: the row's error, 1.0, is 1 or more"]
+    assert 0 < got[f"{month}/error"]["value"] < 1 and got[f"{month}/free"]["value"] > 0 and not absent(got[f"{month}/free"])
+
+
+def test_the_metric_follows_the_world_s_year_whatever_rows_the_command_asks_for(tmp_path, capsys):
+    """A command that asks for a node's week alone still writes the term of record, whose row it didn't ask for: the
+    metric has a value where the world's year is bounded and none where it isn't, though the node's week is."""
+    asked = ["--scope", "node", "--period", "week"]
+    for at, (argv, bounded) in enumerate(((GIVEN, False), (BOUNDED, True))):
+        text = bench(capsys, "--out", str(tmp_path / str(at)), *argv, *asked)
+        assert LB.main([*argv, *asked]) == 0 and capsys.readouterr().out == text
+        got, doc = result(tmp_path / str(at)), document(capsys, *argv)
+        metric, year = got["certifier_term/modeled/metric"], scans(doc)["world", "year"]
+        assert list(got) == ["certifier_term/modeled/metric", *(f"certifier_term/modeled/node/week/{a}" for a in AMOUNTS)]
+        assert got["certifier_term/modeled/node/week/free"]["value"] > 0
+        assert (year["eps"] < 1) is bounded and metric["value"] == (doc["value"] if bounded else None)
+        assert absent(metric) == ([] if bounded else [f"absent: no bound at this period: the row's error, {year['eps']}, "
+                                                      "is 1 or more"])
+    # a document whose term of record isn't that row's is refused
+    with pytest.raises(SystemExit, match="isn't its row scan's over the world's year at D_j = 2"):
+        R.record(LB, GIVEN, {**doc, "value": doc["value"] + 1})
+
+
+def test_the_result_of_record_s_command_bounds_every_row(tmp_path, capsys):
+    """The command the README gives for the result of record: the class given, and the scan's δ the error it is run at
+    over the world's year, divided by the world year's execution phases as the calculator's own document counts them.
+    Every row then carries its amounts, and the world's year's error is that error and no more."""
+    ids = str(LB.RESPONSE_IDS // 2)
+    asked = ["--commit", "c0ffee", "--response-ids", ids]
+    year = scans(document(capsys, *asked, "--scope", "world", "--period", "year"))["world", "year"]
+    assert Fraction(year["phases"]) == PHASES["world", "year"]
+    delta = AT_MOST / Fraction(year["phases"])
+    argv = [*asked, "--scan-delta", str(delta)]
+    bench(capsys, "--out", str(tmp_path), "--registration", str(log(tmp_path)), *argv)
+    got, doc = result(tmp_path), document(capsys, *argv)
+    assert len(got) == EVERY and all(m["value"] is not None and not absent(m) for m in got.values())
+    assert got["certifier_term/modeled/metric"]["value"] == doc["value"]
+    errors = {at: got[f"certifier_term/modeled/{at[0]}/{at[1]}/error"]["value"] for at in scans(doc)}
+    assert errors["world", "year"] == max(errors.values()) <= float(AT_MOST) and min(errors.values()) > 0
+    assert all(got[f"certifier_term/modeled/{scope}/{period}/free"]["value"] == r["term"]["2"]["bits"]
+               for (scope, period), r in scans(doc).items())
+
+
+def test_every_measurement_names_the_class_and_the_scans_delta(tmp_path, capsys):
+    """The most ids a response holds and each execution phase's scan's δ, read from the document: the defaults', and
+    another's where the command gives one, whose terms are another class's and whose errors another δ's."""
+    another = LB.RESPONSE_IDS // 2
+    got = {}
+    asked = {"default": [], "class": ["--response-ids", str(another)], "delta": ["--scan-delta", str(DELTA)]}
+    for at, argv in asked.items():
+        bench(capsys, "--out", str(tmp_path / at), "--registration", str(log(tmp_path)), *GIVEN, *argv)
+        doc, got[at] = document(capsys, *GIVEN, *argv), result(tmp_path / at)
+        ids, delta = doc["inputs"]["response_ids"], doc["inputs"]["scan_delta"]
+        klass = f"response_ids = {ids['value']} id ({ids['mark']}): {ids['source']}"
+        # the default δ as the document states it; one the command gives as given and assumed, no scan having run at it
+        given = (f"scan_delta = {float(DELTA)} (assumed): each execution phase's scan's δ as the command gives it "
+                 "(--scan-delta), to the document's float; no scan has run at it")
+        said = given if at == "delta" else f"scan_delta = {float(LB.SCAN_DELTA)} (assumed): {delta['source']}"
+        assert ids["value"] == (another if at == "class" else LB.RESPONSE_IDS) and delta["mark"] == "assumed"
+        assert all(klass in m["inputs"] and said in m["inputs"] for m in got[at].values())
+        assert all(sum(i.startswith(("response_ids = ", "scan_delta = ")) for i in m["inputs"]) == 2 for m in got[at].values())
+    # another class moves a bounded row's term and nothing of its capacity or its error
+    node = [name for name in got["default"] if "/node/" in name]
+    assert all((got["default"][name]["value"] == got["class"][name]["value"]) == name.endswith(("/capacity", "/error"))
+               for name in node)
+    # another δ moves every row's error, and no term the default δ bounds
+    assert all((got["default"][name]["value"] == got["delta"][name]["value"]) != name.endswith("/error") for name in node)
 
 
 def test_refusals(tmp_path, capsys):

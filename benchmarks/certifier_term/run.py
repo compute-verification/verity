@@ -7,18 +7,22 @@ nothing else: the fields every resource's benchmark reports (`measurements`), fo
 from, the scan at two release schedules, at each scope and monitoring period the calculator's document holds. Every
 figure is the model's and its name says so (`MODELED`); none is computed from a run's K.
 
-- `metric`: the term of record as the document gives it, in GB, beside the document's target.
+- `metric`: the term of record as the document gives it, in GB, beside the document's target. Its row is the scan's
+  over the world's year (`RECORD`).
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
 - `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
   link of its host that a network certifier splits (`uplink`), at its `beta` bits a tick. `beta` is each way and the
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
   no value, and its `inputs` say why.
-- `verified`: capacity less free, where capacity has a value.
-- `eps` (`ERROR`): the row's ε, a union bound over the period's execution phases.
+- `verified`: capacity less free, where both have a value.
+- `error` (`ERROR`): the row's ε, the calculator's `eps`, a union bound over the period's execution phases.
+
+A row whose error is 1 or more has no bound at its period (`NO_BOUND`): its `free` and `verified`, and `metric` where
+the row is the term of record's, are written with no value and that reason in their `inputs`; its `error` is written.
 
 Each measurement's `inputs` name what it was computed from, and among them the class the term is at, the most ids a
-response holds, as the document states it (`at_class`).
+response holds, and the scan's δ its error is at, as the document states them (`at_class`, `at_delta`).
 """
 from __future__ import annotations
 
@@ -40,16 +44,24 @@ CALCULATOR = Path(__file__).resolve().parents[1] / "network_traces"
 MODELED = "certifier_term/modeled"
 #: the row the term of record is read from: the scan, as `main` charges it
 ROW = "scan"
-#: the last word of the error's name: the calculator's key for a row's ε
-ERROR = "eps"
+#: the scope and monitoring period of that row, the document's `value`: the world's year
+RECORD = ("world", "year")
+#: the last word of the error's name, the field every resource's benchmark reports its error under
+ERROR = "error"
+#: the calculator's key for a row's ε, which the error is
+EPS = "eps"
 #: the document's input that is the class the term is at: the most ids a response holds
 CLASS = "response_ids"
+#: the document's input that is the δ of each execution phase's scan, which a row's ε sums
+DELTA = "scan_delta"
+#: why a row whose error is 1 or more carries no amount
+NO_BOUND = "no bound at this period"
 NO_REGISTRATION = ("absent: no registration is given (--registration FILE), and capacity is read only from a "
                    "registered link's beta")
 SCALED = ("modeled: each machine of the scope registered as this one, so the scope's machines times beta times the "
           "period's ticks; beta is each way and the term is egress, so one direction")
-UNION = (f"{ERROR}, the calculator's key: a union bound over the period's execution phases, their number times "
-         "scan_delta; at 1 or more it bounds nothing")
+UNION = (f"{EPS}, the calculator's key: a union bound over the period's execution phases, their number times "
+         f"{DELTA}; at 1 or more it bounds nothing")
 
 
 class Uplink(NamedTuple):
@@ -104,39 +116,82 @@ def at_class(doc: dict) -> str:
     return stated(CLASS, doc["inputs"][CLASS])
 
 
-def measurements(lb: Any, doc: dict, up: Uplink | None = None) -> list[dict]:
+def at_delta(lb: Any, doc: dict) -> str:
+    """The scan's δ the document's ε are at (`DELTA`): as the document states it where it is the calculator's default,
+    and where the command gives another, that it is given and assumed, no scan having run at it."""
+    entry = doc["inputs"][DELTA]
+    if entry["value"] == float(lb.SCAN_DELTA):
+        return stated(DELTA, entry)
+    return (f"{DELTA} = {entry['value']} ({entry['mark']}): each execution phase's scan's δ as the command gives it "
+            "(--scan-delta), to the document's float; no scan has run at it")
+
+
+def unbounded(row: dict) -> list[str]:
+    """Why a row of the document carries no amount, as a measurement's inputs say it: nothing where its error is under
+    1, and where it is 1 or more that it has no bound at its period (`NO_BOUND`), a union bound there bounding nothing."""
+    return [] if row[EPS] < 1 else [f"absent: {NO_BOUND}: the row's error, {row[EPS]}, is 1 or more"]
+
+
+def document(lb: Any, argv: Sequence[str]) -> dict:
+    """The calculator ``lb``'s document on ``argv``, as its `main` prints it under `--json`."""
+    with contextlib.redirect_stdout(io.StringIO()) as text:
+        lb.main([*argv, "--json"])
+    return json.loads(text.getvalue())
+
+
+def record(lb: Any, argv: Sequence[str], doc: dict) -> dict:
+    """The row the term of record is read from (`ROW`, `RECORD`): ``doc``'s where the command ``argv`` asks for its
+    scope and monitoring period, and else the same command's document once it asks for them too. It is the row whose
+    term the document gives as its `value`, or the runner refuses."""
+
+    def of(d: dict) -> dict | None:
+        return next((r for r in d["rows"] if (r["row"], r["scope"], r["period"]) == (ROW, *RECORD)), None)
+
+    row = of(doc) or of(document(lb, [*argv, "--scope", RECORD[0], "--period", RECORD[1]]))
+    if row is None or row["term"][str(lb.OF_RECORD)]["GB"] != doc["value"]:
+        raise SystemExit(f"certifier_term: the calculator's document gives a term of record, {doc['value']} "
+                         f"{doc['unit']}, that isn't its row {ROW}'s over the {RECORD[0]}'s {RECORD[1]} at D_j = "
+                         f"{lb.OF_RECORD}: the runner writes no result it can't name the row of")
+    return row
+
+
+def measurements(lb: Any, doc: dict, head: dict, up: Uplink | None = None) -> list[dict]:
     """The calculator ``lb``'s document ``doc`` in the fields every resource's benchmark reports, as the kit writer's
-    measurements, each named under `MODELED`: the term of record (`metric`), and for each scope and monitoring period
-    the document holds, that row's `free`, `capacity`, `verified` and error (`ERROR`), the row being the scan's at
-    the release schedules of record (`ROW`). `metric` and `free` stand against the document's target, in their own
-    units. Capacity is the scope's machines times a machine's uplink ``up`` one way over the period, rounded up; with
-    no uplink, capacity and verified have no value and their inputs say why. Every measurement's inputs name the class
-    the term is at (`at_class`), `metric`'s and `free`'s among the document's inputs."""
-    at, target, klass = str(lb.OF_RECORD), doc["target"]["value"], at_class(doc)
-    said = [stated(k, i) for k, i in doc["inputs"].items()]
+    measurements, each named under `MODELED`: the term of record (`metric`), whose row is ``head`` (`record`), and for
+    each scope and monitoring period the document holds, that row's `free`, `capacity`, `verified` and error (`ERROR`),
+    the row being the scan's at the release schedules of record (`ROW`). `metric` and `free` stand against the
+    document's target, in their own units. Capacity is the scope's machines times a machine's uplink ``up`` one way over
+    the period, rounded up; with no uplink, capacity and verified have no value and their inputs say why. A row whose
+    error is 1 or more carries no `free`, no `verified` and, where it is ``head``, no `metric`, and their inputs say
+    why (`unbounded`); its error is written. Every measurement's inputs name the class the term is at and the scan's δ
+    its error is at (`at_class`, `at_delta`), `metric`'s and `free`'s among the document's inputs."""
+    at, target = str(lb.OF_RECORD), doc["target"]["value"]
+    basis = [at_class(doc), at_delta(lb, doc)]
+    said = [basis[1] if k == DELTA else stated(k, i) for k, i in doc["inputs"].items()]
 
-    def stands(value: float, ceiling: float) -> str:
-        return "over target" if value > ceiling else "within target"
+    def stands(value: float, ceiling: float, none: list[str]) -> str | None:
+        return None if none else "over target" if value > ceiling else "within target"
 
-    out = [{"name": f"{MODELED}/metric", "value": doc["value"], "unit": doc["unit"], "target": target,
-            "verdict": stands(doc["value"], target), "inputs": [f"modeled: {doc['name']}", *said]}]
+    none = unbounded(head)
+    out = [{"name": f"{MODELED}/metric", "value": None if none else doc["value"], "unit": doc["unit"], "target": target,
+            "verdict": stands(doc["value"], target, none), "inputs": [f"modeled: {doc['name']}", *none, *said]}]
     for r in doc["rows"]:
         if r["row"] != ROW:
             continue
         name = f"{MODELED}/{r['scope']}/{r['period']}"
         row = (f"modeled: benchmarks/network_traces/leak_bounds.py's row {ROW} at D_j = {at}, scope {r['scope']}, "
                f"period {r['period']}, request count {r['request_count']}")
-        free, ceiling = r["term"][at]["bits"], target * lb.GB
+        free, ceiling, none = r["term"][at]["bits"], target * lb.GB, unbounded(r)
         capacity = None if up is None else math.ceil(r["machines"] * up.beta * Fraction(lb.PERIODS[r["period"]]) / up.tick)
         absent = [NO_REGISTRATION] if up is None else []
         out += [
-            {"name": f"{name}/free", "value": free, "unit": "bit", "target": ceiling, "verdict": stands(free, ceiling),
-             "inputs": [row, *said]},
+            {"name": f"{name}/free", "value": None if none else free, "unit": "bit", "target": ceiling,
+             "verdict": stands(free, ceiling, none), "inputs": [row, *none, *said]},
             {"name": f"{name}/capacity", "value": capacity, "unit": "bit",
-             "inputs": [*(absent or [up.said, SCALED]), row, klass]},
-            {"name": f"{name}/verified", "value": None if capacity is None else capacity - free, "unit": "bit",
-             "inputs": [f"{name}/capacity", f"{name}/free", *absent, klass]},
-            {"name": f"{name}/{ERROR}", "value": r[ERROR], "unit": "probability", "inputs": [row, UNION, klass]},
+             "inputs": [*(absent or [up.said, SCALED]), row, *basis]},
+            {"name": f"{name}/verified", "value": None if absent or none else capacity - free, "unit": "bit",
+             "inputs": [f"{name}/capacity", f"{name}/free", *absent, *none, *basis]},
+            {"name": f"{name}/{ERROR}", "value": r[EPS], "unit": "probability", "inputs": [row, UNION, *basis]},
         ]
     return out
 
@@ -150,7 +205,7 @@ def main(argv: Sequence[str]) -> int:
     group.add_argument("--out", type=Path, metavar="DIR",
                        help="also write DIR/result.json through the harness kit's writer: for the scan at two release "
                             f"schedules, each scope and monitoring period's free, capacity, verified and {ERROR}, and "
-                            "the term of record, every one modeled")
+                            "the term of record, every one modeled; a row whose error is 1 or more carries no amount")
     group.add_argument("--registration", type=Path, metavar="FILE",
                        help="with --out: the registration log a machine's certified boundary link is read from, for "
                             "capacity and verified (default: none, and they are written with no value and why)")
@@ -165,15 +220,14 @@ def main(argv: Sequence[str]) -> int:
             if asked and not done.code:
                 print("\n" + ap.format_help(), end="")
             raise
-    with contextlib.redirect_stdout(io.StringIO()) as text:
-        lb.main([*rest, "--json"])
-    doc = json.loads(text.getvalue())
+    doc = document(lb, rest)
+    head = record(lb, rest, doc)
     up = None if own.registration is None else uplink(own.registration, doc["inputs"]["links"]["value"])
     from verity_bench import kit
 
     try:
         writer = kit.writer(own.out)
-        for m in measurements(lb, doc, up):
+        for m in measurements(lb, doc, head, up):
             writer.measurement(**m)
     except ValueError as e:
         raise SystemExit(f"certifier_term: {e}") from e
