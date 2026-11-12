@@ -4,9 +4,9 @@ The measuring side of `verity/protocols/pouw/verifier`: Pearl-C's kernels on the
 harness, the served vLLM path and its audits, and the CPU accounting. How a kernel is designed, gated, timed and landed is
 the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 
-Compute accounting's standards are in `machine_model/README.md`: the design registry (one file a design under decision
-79's names, Dither-1S, Dither-2S and Dither-C, which `eps_budget.py` prices and `machine-model eps` reads), the ε
-vocabulary, how a facet is measured (gates, noise, margins, clocks, row status), and the per-device data layout.
+Compute accounting's standards are in `benchmarks/machine_model/README.md`: the design registry (one file a design under
+decision 79's names, Dither-1S, Dither-2S and Dither-C, which `eps_budget.py` prices and `machine-model eps` reads), the
+ε vocabulary, how a facet is measured (gates, noise, margins, clocks, row status), and the per-device data layout.
 
 `uv run python benchmarks/pouw/contents.py` prints what is here as a table: each directory or file, the hardware it runs
 on, and what it is, one entry a file in `contents/paths/` (`order` places it). A new benchmark adds its own entry and edits
