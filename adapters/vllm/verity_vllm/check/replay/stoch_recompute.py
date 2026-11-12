@@ -78,15 +78,17 @@ def _stated(k: str, default: Any, request: dict, per_request: dict, sampling: di
 
 def _request_facts(header) -> dict[str, dict]:
     wl = header.workload or {}
-    s = dict(wl.get("sampling") or {})
-    per = {p["request_id"]: p for p in s.get("per_request", []) or []}
+    sampling, requests, children = wl.get("sampling"), wl.get("requests"), wl.get("children")   # each may be left out, and then declares nothing
+    s = dict(sampling if sampling else {})
+    entries = s.get("per_request")
+    per = {p["request_id"]: p for p in (entries if entries else [])}
     out: dict[str, dict] = {}
-    for r in wl.get("requests", []) or []:
+    for r in requests if requests else []:
         p = per.get(r["request_id"], {})
         out[r["request_id"]] = {"seed": None if r.get("seed") is None else int(r["seed"]),
                                 "temperature": float(_stated("temperature", 0.0, r, p, s)),
                                 "top_p": float(_stated("top_p", 1.0, r, p, s)), "top_k": int(_stated("top_k", 0, r, p, s) or 0)}
-    for c in wl.get("children", []) or []:
+    for c in children if children else []:
         base = dict(out.get(c["parent"], {}))
         base["seed"] = None if c.get("seed") is None else int(c["seed"])
         out[c["request_id"]] = base
@@ -196,8 +198,8 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
             continue
         if not r.get("ok", True) or r.get("wrapper") != "request":
             continue
-        smp = r.get("sampling") or {}
-        if smp.get("splits") is not None:
+        smp = r.get("sampling")                                                    # a result that states no sampling declares no split count
+        if smp and smp.get("splits") is not None:
             by_shape[(int(r["LP"]), int(r["T"]))] = smp["splits"]
     out: dict[str, Any] = {}
     for q in Workload.load(workload_file(workload)).requests:
@@ -221,7 +223,8 @@ def _stop_rule(build_dir: str | Path | None) -> dict:
                 gp = json.loads(p.read_text())
         except (OSError, ValueError) as e:
             return {"source": str(p), "error": f"{type(e).__name__}: {e}"[:200]}
-        return dict(gp.get("stop_rule") or {}) | {"source": str(p)}
+        rule = gp.get("stop_rule")                                                 # a workload Program without one states its source alone
+        return dict(rule if rule else {}) | {"source": str(p)}
     return {}
 
 
@@ -725,6 +728,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
                       f"(device-tied) at {n_dev} of {checked} checked rows via the kernel-consumed seeds_ptr/pos_ptr/temp_ptr/P snapshots"
                       + (f"; S: kernel constexpr == Program TopPMask S at {s_checked} of {checked} rows" if program_S else
                          "; S: kernel constexpr only (no --build given: the Program's S is checked by cb_a.compare spec equality, not here)"))
+    given = (header.workload or {}).get("sampling")        # the sampling the run was given; a header that states none has an empty one
     return {"schema": STOCH_RECOMPUTE_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
             "workload": None if workload is None else str(workload), "build": None if build_dir is None else str(build_dir),
             "declared_facts": facts, "run_header_facts": run_facts, "program_splits": program_S,
@@ -745,7 +749,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
                                     "at every value-checked row (device_facts_checked); the draw LEDGER below (rng_advances_iff_run)",
                     # R5's record half, MEASURED per request: the ledger of every sampled row (snapshot or not)
                     "rng_advances_iff_run": ledger},
-            "sampling": dict((header.workload or {}).get("sampling") or {}),
+            "sampling": dict(given if given else {}),
             "summary": {"engine_steps_in_record": engine_steps, "sampled_steps_in_log": steps_seen, "steps_chain_absent": len(chain_absent),
                         "sampled_rows_total": sampled_rows_total, "rows_checked": checked, "complete": complete,
                         "rows": tally, "device_facts_all_match": device_ok, "device_facts_rows": n_dev,

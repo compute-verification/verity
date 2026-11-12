@@ -460,9 +460,10 @@ def _guard_line(man: RequiredManifest | None, refused: RecordError | None) -> st
     # the one-release cross-check (traversal of record, inventory beside it) travels onto the record and the scope line
     cc = man.cross_check if man is not None else None
     if cc is not None:
+        counted = cc.get("identities")                         # each engine's count of identities; a cross-check that states none counts neither
         guard_line += ("; cross-check " + ("AGREED" if cc.get("agree") else "DISAGREED") +
-                       f" ({cc.get('primary_engine')} vs {cc.get('other_engine')}: {(cc.get('identities') or {}).get(cc.get('primary_engine'))} / "
-                       f"{(cc.get('identities') or {}).get(cc.get('other_engine'))} identities)")
+                       f" ({cc.get('primary_engine')} vs {cc.get('other_engine')}: {(counted if counted else {}).get(cc.get('primary_engine'))} / "
+                       f"{(counted if counted else {}).get(cc.get('other_engine'))} identities)")
     elif man is not None:
         guard_line += f"; no cross-check on the manifest (one engine asked for by name: {_manifest_engine_name(man)})"
     return guard_line

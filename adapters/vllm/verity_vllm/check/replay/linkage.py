@@ -164,7 +164,8 @@ def arrivals_of_record(declared: dict[str, int], schedule: dict[str, Any] | None
     out = {str(k): int(v) for k, v in (declared or {}).items()}
     if not isinstance(schedule, dict) or schedule.get("use") != "observed":
         return out, False
-    obs = {str(k): int(v) for k, v in (schedule.get("observed_arrive_steps") or {}).items() if str(k) in out}
+    observed = schedule.get("observed_arrive_steps")                            # a schedule that states none moves no arrival
+    obs = {str(k): int(v) for k, v in (observed if observed else {}).items() if str(k) in out}
     moved = any(out[k] != v for k, v in obs.items())
     out.update(obs)
     return out, moved

@@ -19,10 +19,11 @@ from verity_vllm.check.replay.index import (
     SAMPLER_OP,
     ProgramIndex,
     const_word,
+    file_args,
     node_runs,
     plane_copies,
 )
-from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.opening import CommittedStore, bound_identity
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.query.manifest import format as RM
@@ -105,7 +106,7 @@ def moe_plane_alias_check(store: CommittedStore) -> dict[str, Any]:
             continue
         rng = None
         for e in es:                                                            # the bound request-local range (every invocation under the key)
-            r = (e.get("identity") or {}).get("element_range") or [0, None]
+            r = bound_identity(e).get("element_range") or [0, None]
             if r[1] is not None:
                 rng = (int(r[0]), int(r[1])) if rng is None else (min(rng[0], int(r[0])), max(rng[1], int(r[1])))
         if rng is not None:
@@ -158,7 +159,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
     composable interior whose own inputs have that defect (bounded by INTERIOR_DEPTH).  Derived from the Program rows alone (families +
     member claims), never from the collector's emissions.  Empty when every interior input composes (Gemm_v1 under BiasAdd_v1)."""
     out: set[str] = set()
-    for group in r.get("args") or []:
+    for group in file_args(r):
         for sl in node_runs(group):
             a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
             if pi.member_at(a, lo, hi) is not None:

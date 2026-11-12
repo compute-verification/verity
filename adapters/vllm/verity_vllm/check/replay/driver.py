@@ -81,13 +81,17 @@ from verity_vllm.check.replay.coverage import (
 )
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
 from verity_vllm.check.replay.fork import WorkerDied
-from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
+from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, file_args, node_runs
 from verity_vllm.check.replay.linkage import (
     arrivals_of_record,
     boundary_linkage,
     linkage_horizon,
 )
-from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
+from verity_vllm.check.replay.opening import (
+    CommittedStore,
+    bound_identity,
+    model_weights_provider,
+)
 from verity_vllm.check.replay.population import (
     executed_prefix_of_record,
     moe_plane_alias_check,
@@ -157,7 +161,7 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
 
     def walk(pi: ProgramIndex, r: dict, depth: int) -> None:
         wp = pi.pnames.index("weights") if "weights" in pi.pnames else None
-        for group in r.get("args") or []:
+        for group in file_args(r):
             if wp is not None:
                 for it in group:
                     span = p_item_weight_span(it, wp)                              # a "P" progression's span, never its runs
@@ -500,7 +504,8 @@ def _kept(split: tuple[list[dict], list[dict]], indices: dict, all_vus: list[dic
 
 def manifest_query(manifest: dict[str, Any] | None) -> str | None:
     """The query the manifest was built under, when it is one the population knows (`required.QUERIES`); else None (the query of record)."""
-    q = ((manifest or {}).get("query") or {}).get("query_id")
+    query = (manifest or {}).get("query")                                       # a manifest that names none was built under the query of record
+    q = query.get("query_id") if query else None
     return q if q in QUERIES else None
 
 
@@ -641,7 +646,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     t_start = time.perf_counter()
     store = CommittedStore.of_record(bmap, committed, manifest)                 # reads through the manifest's alias table
     arrivals = arrivals or {}
-    ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
+    entries = bmap.get("entries")                                               # as the store reads them: a map that states none binds nothing
+    ranks = sorted({int(bound_identity(e).get("rank", 0) or 0) for e in (entries if entries else [])}) or [0]
     all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec = populate(
         programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo,
         cached_prefixes=cached_prefixes)
