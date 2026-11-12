@@ -399,11 +399,11 @@ class Serving:
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, pool: tuple[Any, int] | None = None) -> None:
+                 arm: Any = None, pool: tuple[Any, int] | None = None, no_slice: str | None = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks,
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,
                                        arm=arm(self.runner) if arm is not None else None,
                                        **({"pool": pool[0], "pool_block": pool[1]} if pool else {})) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
@@ -916,9 +916,10 @@ def recommit(statics: dict, by_step: dict, ids: dict, steps: int, run_root: str,
     return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]])
 
 
-def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict], list[dict], list[dict]]:
+def served_run(out: Path, statics: dict, marks: Any = None,
+               no_slice: str | None = None) -> tuple[list[dict], list[dict], list[dict]]:
     bodies = [dict(CERTIFIER_BODY, prompt=[128000, 10 + i, 20 + i], max_tokens=3 + i, min_tokens=3 + i) for i in range(4)]
-    with Serving(out, window_steps=4, served=statics, marks=marks) as s:
+    with Serving(out, window_steps=4, served=statics, marks=marks, no_slice=no_slice) as s:
         serve_concurrently(s, bodies)
         assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2, 3, 4]))[0] == 200
     return records(out, "windows.jsonl"), records(out, "requests.jsonl"), records(out, "step_trace.jsonl")
@@ -960,6 +961,36 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
             assert SRW.leaf_ok(rec, bytes.fromhex(w["run_root"]), k, served.bc(k), served.registration.open(k).path)
         text = json.dumps(w)
         assert not any(s in text for s in priv["salts"])
+
+
+def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
+    """No compile slice replays the certified tick's admission. So under ``--admit tick`` (`serve_openai.no_slice`) each
+    window's served rows record has a null ``slice`` and says why in ``no_slice``, and serve.json says it once
+    (`serve_openai.no_slice_record`). Its rows are committed as under any other admission, where the record is, byte
+    for byte, the commitment's with the statics and `SERVED_SLICE`, and serve.json has no field more."""
+    def opts(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+
+    why = so.no_slice(opts("--admit", "tick", "--tick-sat-ms", "30", "--tick-free-ms", "40"))
+    assert why == sc.NO_TICK_SLICE and sc.SERVED_SLICE in why
+    assert [so.no_slice(o) for o in (opts(), opts("--admit", "arrival"), opts("--admit", "release-order"))] == [None] * 3
+    statics = served_statics()
+    for name, no_slice, named in (("named", None, {"slice": "CompileSlice_v7"}), ("tick", why, {"slice": None, "no_slice": why})):
+        (out := tmp_path / name).mkdir()
+        wins, reqs, trace = served_run(out, statics, no_slice=no_slice)
+        arrival = {rid: r["arrival"] for r in reqs for rid in r["runner_ids"]}
+        full = [w for w in wins if not w.get("empty")]
+        assert len(full) > 1 and all(w["passed"] for w in wins)
+        for w in full:
+            by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
+            ids = {rid: arrival[rid] for rows in by_step.values() for rid, *_ in rows}
+            served, _ = recommit(statics, by_step, ids, w["steps"], w["run_root"], private(out, w["window"]))
+            assert json.dumps(w["served_rows"]) == json.dumps({**served.record(), "statics": statics, **named})
+    com = SimpleNamespace(_step_index=0, reset=lambda: None, install=lambda: None)
+    ticked = sc.CommitWindows(com, tmp_path, run_id="t", window_steps=4, served=statics, no_slice=why)
+    assert so.no_slice_record(ticked) == {"served_rows_no_slice": why}
+    assert so.no_slice_record(sc.CommitWindows(com, tmp_path, run_id="t", window_steps=4, served=statics)) == {}
+    assert so.no_slice_record(None) == {}
 
 
 def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
