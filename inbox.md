@@ -25,3 +25,6 @@ Commit 6242aba2e0: made on #9170's branch, cursor/training-slowdown-off-program-
 
 Note, updated with these: note:training-20261112T2100Z-report-premise-review-9272. Handoff follows.
 
+[2026-11-12T21:33Z] 8c3770640d3d
+PREMISE, Thu 12 Nov, 1:32 PM PST. **Done: #9272 is at 84995d9b78 with your rulings applied, its suites are green, and no run is in flight.** Handoff: note:training-20261112T2132Z-handoff-PREMISE. Left, in order: you read and mark #9272; you tell #9170's lane (TRN-135) that circuit_properties now names P_BATCH; step 2 of TRN-137 is not this PR.
+
