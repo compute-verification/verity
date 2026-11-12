@@ -1435,7 +1435,6 @@
     {"file": "verity_vllm/glue.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/observe/capture.py", "kind": "E741", "symbol": "Capture._emit_step", "detail": "Ambiguous variable name: `l`"},
     {"file": "verity_vllm/observe/capture.py", "kind": "E741", "symbol": "Capture._snap_tensor", "detail": "Ambiguous variable name: `l`"},
-    {"file": "verity_vllm/observe/capture.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/observe/capture.py", "kind": "ISC002", "symbol": "make_header", "detail": "Implicitly concatenated string literals over multiple lines", "count": 2},
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "E741", "symbol": "_Fold._token_refs", "detail": "Ambiguous variable name: `l`"},
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "E741", "symbol": "_Fold._write_tokens", "detail": "Ambiguous variable name: `l`"},

@@ -41,24 +41,49 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 import torch
 
-from verity_vllm.observe.capture_types import ObserverConfig, _Step
-from verity_vllm.observe.events import (SCHEMA, Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
-                                        StorageAlloc, ViewDesc)
-from verity_vllm.observe.log import LogWriter
-from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recorder, reenter_impl_name
-from verity_vllm.observe.storage import StorageAdapter
-from verity_vllm.observe import triton_adapter
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
-from verity_vllm.observe.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
 from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
+from verity_vllm.observe import triton_adapter
+from verity_vllm.observe.capture_types import ObserverConfig, _Step
+from verity_vllm.observe.events import (
+    SCHEMA,
+    Event,
+    Note,
+    Root,
+    RunEnd,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    ViewDesc,
+)
+from verity_vllm.observe.log import LogWriter
+from verity_vllm.observe.observer import (
+    EmptyMode,
+    ModuleNamer,
+    Observer,
+    Recorder,
+    reenter_impl_name,
+)
+from verity_vllm.observe.pinned import (
+    DEVICE_BACKED,
+    IDENTITY_ALIAS_OPS,
+    PinnedArena,
+    device_backed,
+    spanned_bytes,
+    storage_bytes_view,
+)
+from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.records.schema_ids import CAPTURE_SNAPSHOTS_SCHEMA
 
 
@@ -666,6 +691,7 @@ class Capture:
         src = storage_bytes_view(t, off, nbytes)
         assert self._arena is not None
         if self._snap_pending and not self._arena.fits(nbytes):
+            assert self._cur is not None
             self._flush_snapshots(self._cur)
         host = self._arena.take(nbytes)
         host.copy_(src, non_blocking=True)
