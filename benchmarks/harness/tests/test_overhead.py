@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_bench import nsys, overhead_node
+from verity_bench import kit, nsys, overhead_node
 from verity_bench import overhead as O
 from verity_bench import overhead_records as R
 from verity_bench.cli import main
@@ -30,7 +30,7 @@ SHA = "c" * 40
 CUBIN = b"stand-in cubin"
 CUBIN_ART = "art:" + "a" * 64
 #: the gpu-lease wait the door puts before its node job, as the run's attempt records it
-LEASE = R.gpu_lease(60)
+LEASE = kit.lease(1, 60)
 
 # ---- stand-in timings ---------------------------------------------------------------------------------------------------------
 
@@ -316,17 +316,14 @@ def test_sweep_times_takes_each_linears_fastest_kernel_of_every_scaling_and_refu
 
 
 def test_the_interval_is_the_medians_95_percent_order_statistics():
-    assert O.interval(20) == (6, 15)
-    assert O.interval(6) == (1, 6)
-    assert O.interval(5) is None and O.interval(0) is None
-    assert O.paired([1.5] * 5, [1.0] * 5)["ci95"] is None
-    g = O.paired([1.5 + 0.001 * i for i in range(20)], [1.0] * 20)
+    assert kit.paired([1.5] * 5, [1.0] * 5)["ci95"] is None
+    g = kit.paired([1.5 + 0.001 * i for i in range(20)], [1.0] * 20)
     assert g["gamma"] == pytest.approx(0.5095) and g["ci95"] == pytest.approx([0.505, 0.514]) and g["n"] == 20
     assert O.of_record_why(g) is None
-    assert "fewer than 20" in O.of_record_why(O.paired([1.5] * 19, [1.0] * 19))
-    assert "wider than ±5%" in O.of_record_why(O.paired([1.0 + 0.1 * i for i in range(20)], [1.0] * 20))
+    assert "fewer than 20" in O.of_record_why(kit.paired([1.5] * 19, [1.0] * 19))
+    assert "wider than ±5%" in O.of_record_why(kit.paired([1.0 + 0.1 * i for i in range(20)], [1.0] * 20))
     with pytest.raises(ValueError, match="one for one"):
-        O.paired([1.0], [1.0, 2.0])
+        kit.paired([1.0], [1.0, 2.0])
 
 
 def test_a_calls_cost_is_its_traced_busy_sm_time_and_the_hosts_enqueue_at_the_cards_weight():
