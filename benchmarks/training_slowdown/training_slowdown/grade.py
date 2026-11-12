@@ -589,9 +589,10 @@ def text(s: dict) -> str:
         "the spread of |C|: " + ("none" if not C else f"{C['min']:.4g} to {C['max']:.4g} gates over {C['n']} seeds"
                                   + (f", sd {C['sd']:.3g}" if C["sd"] is not None else "")))
     r = s["rests_on"]
+    no_code = rho.get("blank", {}).get("capture_code", "rho is unmeasured")
     add("rests on", f"rho: {r['rho'] or 'nothing: it is unmeasured'}",
         f"capture: {r['capture'] or 'none'}, its code "
-        + (r["capture_code"] or f"blank: {rho.get('blank', {}).get('capture_code', 'rho is unmeasured')}")
+        + (r["capture_code"] or f"blank: {no_code}")
         + (f"; the record's provenance: {_said(r['provenance'])}" if r["provenance"] is not None else ""),
         f"p: {r['p']}", f"gain: {r['gain']}")
     add("bound of record", *([bound["why"]] if not bound["available"] else [
