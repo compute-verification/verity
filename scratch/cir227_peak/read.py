@@ -229,6 +229,19 @@ def one(run: str, name: str, res) -> dict:
     elif build is not None:
         del build["key"]
     out["build"] = build
+    # the whole session at once (the controller and all under it), against what suites.py gave it: its workers' shares
+    cpid = ctrl[0]["pid"] if ctrl else None
+    ckey = next((k for t, k in reversed(seen_at.get(cpid, ()))), None)
+    if ckey is not None and t0 and t1:
+        everything = [ckey, *subtree(kids, ckey)]
+        spans = {"session": (t0, t1)}
+        if build:
+            spans.update(build=(build["t0"], build["t1"]), after_build=(build["t1"], t1))
+        out["session_pss"] = {}
+        for name_, (a, b) in spans.items():
+            hi, when, lo, rounds, unread = pss_at_once(pss, everything, a, b)
+            out["session_pss"][name_] = {"at_most": round(hi / G, 2), "at": when and hms(when), "at_least": round(lo / G, 2), "rounds": rounds,
+                                         "rounds_with_one_unread": unread}
     if t0 and t1:
         cg = [c for c in cgroup if t0 <= c[0] <= t1]
         if cg:
@@ -260,6 +273,7 @@ def main() -> None:
               f"at {o.get('cgroup_current_max_at')}; the controller's largest waited-for process {o.get('controller_kids_maxrss')} GiB")
         if o["build"]:
             print("   build apart:", json.dumps(o["build"]))
+        print("   the session's processes at once (PSS; a process not read at its RSS):", json.dumps(o.get("session_pss")))
         print(table(o))
         for w in o["workers"]:
             print(f"   {w['worker']} pid {w['pid']}: sampled own hwm {w.get('sampled_own_hwm')}, started {w.get('started')} (sampled), the largest sampled "
