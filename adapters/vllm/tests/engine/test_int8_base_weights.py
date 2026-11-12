@@ -81,3 +81,6 @@ def test_expert_base_names_an_experts_projection_by_layer_expert_and_part(snapsh
         base.weight(EXPERTS, 1, X.DOWN)
     with pytest.raises(KeyError, match="layer 13 expert 0 gate_proj: 0 base tensors"):
         base.weight("model.layers.13.mlp.experts", 0, X.GATE_UP)
+    # a module path with no layer in it names no expert
+    with pytest.raises(AssertionError, match="model.mlp.experts"):
+        base.weight("model.mlp.experts", 0, X.DOWN)
