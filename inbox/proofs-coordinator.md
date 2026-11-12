@@ -86979,3 +86979,70 @@ Places are on `origin/main` `e52d53383d7f` (fetched 11:53Z); the probes ran at `
 - [read] It is step 1 only: `ProvedScope.programBound` refuses, in every mode, a handed Program whose digest is not META's `program_sha512` where META binds a `verity/partition/v1` partition; under the provisional unit cover it refuses nothing and changes only the verdict's fields. Step 2, the refusal of the provisional unit cover under `--zk`, is not written and not mine.
 
 Mailbox read 11:55Z: last section 11:29Z.
+
+## FOLD, Thu 12 Nov 11:56Z: #9264 is open, unmarked, stacked on #9209: the projection and tensor twins at `1997812848a4`, the tensor in the array's order by the rule; the buckets do not pay (measured 18% slower than the twin on MoE, where I guessed 0.6 s a call faster), so I withdraw them; the head's row for #9264 and `f29b` are still running
+
+**The pull request.** https://github.com/compute-verification/verity/pull/9264, base `cursor/proofs-fold-7540`
+(#9209's head branch), head `cursor/proofs-fold-columns-7d9a` at `1997812848a4`, 282 lines added and 9 removed in 3
+files, linked to PRF-587, not marked [run, `research queue open`, `gh pr view`]. `FlockVerify.lean` untouched. The
+command warned that PRF-587 has no label naming a live goal of the Goals page (its labels: `from:proofs`); that label
+is yours.
+
+**The tensor: the array's order landed, by the rule.** `7a9f` did not show the blocks ahead by more than the rounds'
+spread, and it is not a clean run either [run `r20261112-110929-7a9f`, `cpu-11`, 3 rounds]: blocks 46.89 s (45.09 to
+48.15), array order 50.28 s (45.38 to 58.75), with reads of 119 to 202 s where 103 s is usual and the pinned core 95%
+and 86% busy at two of its four samples. Three head runs in a row shared their cores with other jobs (`8259`, `7a9f`,
+`5c71`), so **the head has no clean comparison of the two loops**; the quietest calls of `8259` read 36.20 and 36.44 s
+for the blocks and 36.45 s for the array's order [run]. MoE's comparison is clean: 10.226 s against 10.174 s [run
+`1d58`]. The blocks stay in the branch's history (`0ee255d7fa`, replaced by `1997812848`).
+
+**What is measured at the final head** (before = `Flock/Statement.lean` as #9209's head has it; one pinned core, the
+two builds in turn; `MIMALLOC_PURGE_DELAY=-1`; medians with the range; same verdict bytes in every call) [run]:
+
+| statement | before, s | after, s | before/after | rounds | run | node, core |
+|---|---|---|---|---|---|---|
+| MoE | 11.266 (11.189 to 11.323) | 10.128 (10.109 to 10.197) | 1.112 | 5 | `r20261112-111136-ee57` | `cpu-14`, 79, idle but for one sample at 12% |
+| GEMM K=512 | 3.346 (3.304 to 3.399) | 3.292 (3.259 to 3.366) | 1.016 | 7 | `r20261112-114309-6609` | `cpu-9`, 121, idle |
+| head block | | | | 5 | `r20261112-114224-9b5c`, running | `cpu-4` |
+
+- `Flock/Statement.lean`: lean exit 0, none of its 20 theorems uses an axiom beyond the three, no built sibling
+  declares a name it does [run `r20261112-111137-9b6d`]. The test module: lean exit 0 in 8 s [run
+  `r20261112-111137-bbac`]. Both are of commit `8ee9ec5b7a`, whose tree (`47402b2ce77b`) is the head's [run, `git
+  rev-parse`].
+- The quick tier: 60 suites, 60 passed (5 cached), 0 failed on `0ee255d7fa`, the commit before the tensor's loop was
+  replaced [run `r20261112-105331-bc80`]; on the final tree it is running [run `r20261112-113824-3c48`].
+- The twins alone, as compiled, on MoE's unit net [run `r20261112-113157-6630`, `cpu-7` core 121, 3 repeats]: tensor
+  0.631 s a call (37.6 ns an element; `main`'s twin 0.884 s in `5497`), the walk of A after it 0.635 s (0.629 s after
+  the reference's); projection 1.056 s (reference 1.519 s on that core). Equal results on every net.
+- The recorded check of this branch has not run. One root added to the verifier's `lean-audit.json`; no record
+  expected to move, no `verifier.allow` entry expected [derived, as at 11:16Z].
+
+**The buckets, sized: they do not pay, and I withdraw them.**
+
+- Measured [run `r20261112-114055-4ff4`, MoE's unit net of 16.8 M elements, 3 repeats, `cpu-11` core 146, which was 28%
+  and 96% busy at its two samples, so read the ratio and not the seconds]: the buckets 1.547 s a call (92.2 ns an
+  element) against the twin's shape 1.308 s (78.0 ns) on the same core: **18% slower**. On the two small nets (262,144
+  elements) they are 3 times slower (0.064 s against 0.020 s), since the 262,144 products at the end are then as many
+  as the entries. The result equals the function's on all three nets.
+- Why [derived]: it trades one product an entry for sixteen additions into bucket cells. An addition into a boxed
+  cell through `Array.modify` cost 5.8 ns here (92.2 / 16), so sixteen cost more than the product they replace (about
+  60 ns). My 0.6 s assumed under 3 ns an addition, which I had not measured.
+- Its size, had it paid: 25 lines of definitions (the bucket loops and the 4096 products a sum); the proof is an
+  invariant on the 262,144 buckets by induction on the blocks, closed with the base's `F128.bytes_sum` and
+  distributivity, about 120 to 150 lines [guess], three times `projectFast`'s.
+- The head's bench of it is running (`r20261112-114546-2e9d`); I report it only if it contradicts MoE's.
+- Nothing of it is in the tree. The candidate is `projK` in my notes kit (`cols/FoldCands.lean`).
+
+**#9209.** `r20261112-073043-f29b` is still running at 11:55Z [run, `research fetch`]. Nothing else has changed since
+my 11:16Z entry: the body holds your clause, section D's two things and the issue; the merge of `main` waits for `f29b`
+unless you say otherwise.
+
+**What I wait on.**
+
+| run | what | ETA |
+|---|---|---|
+| `r20261112-114224-9b5c` | the head's before and after for #9264, 5 rounds | about 12:15Z [guess: 10 calls of about 2.5 minutes after a build] |
+| `r20261112-113824-3c48` | the quick tier on #9264's tree | about 12:20Z [guess: the same tier took 42 minutes at 10:55Z] |
+| `r20261112-073043-f29b` | #9209's recorded check | unknown |
+
+When `9b5c` and `3c48` are back I put the head's and GEMM's rows and the tier's verdict into #9264's body in one edit.
