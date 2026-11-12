@@ -45,7 +45,7 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -243,22 +243,29 @@ class _Side:
         return 0
 
 
-def relay_run(out: Path, key: Path, failed: Mapping[int, int], params: WardenParams = RELAY) -> list[dict]:
+def relay_run(out: Path, key: Path, failed: Mapping[int, int], params: WardenParams = RELAY, *,
+              requests: Sequence[bytes] | None = None,
+              served: Sequence[tuple[bytes, bool]] | None = None) -> list[dict]:
     """`REQUESTS` connections through the relay for one window on a `VirtualClock`, every server answering
     `relay_response` whole but those of `failed` (by connect order), which send that many whole cells' bytes of it and
-    withhold the rest. Published in `out` as `warden_serve`'s `serve` and `client` publish a run (lifts
-    `test_warden_serve._run`), each bucket ticked once the relay has read what its servers sent (as the relay's own
-    tests settle a bucket). Returns the relay's log, an entry a connection."""
+    withhold the rest. With `requests` and `served` the connections are those requests instead, the k-th server to be
+    connected sending `served[k]`'s bytes and, when its flag says so, ending; a request that has the id form's head is
+    logged as an id request. Published in `out` as `warden_serve`'s `serve` and `client` publish a run (lifts
+    `test_warden_serve._run`), with the relay's log (`warden.json`), each bucket ticked once the relay has read what
+    its servers sent (as the relay's own tests settle a bucket). Returns the relay's log, an entry a connection."""
     out.mkdir(parents=True, exist_ok=True)
     tau, B, P = params.bucket_ms / 1000, params.cell_bytes, params.payload
-    response = relay_response(MERGED_TOKENS)
-    whole = len(response) // P
-    if whole + 1 > params.egress_cells or any(not 0 <= at <= whole for at in failed.values()):
-        raise ValueError(f"a response of {whole + 1} cells doesn't fit the relay's {params.egress_cells} egress cells, "
-                         f"or a connection of {dict(failed)} fails past its last whole cell")
-    requests = [ws.http_request({"model": "glm-5.3", "prompt": f"request {k}", "max_tokens": MERGED_TOKENS,
-                                 "stream": True, "stream_options": {"include_usage": True}}, "stand-in:1")
-                for k in range(REQUESTS)]
+    if served is None:
+        response = relay_response(MERGED_TOKENS)
+        whole = len(response) // P
+        if whole + 1 > params.egress_cells or any(not 0 <= at <= whole for at in failed.values()):
+            raise ValueError(f"a response of {whole + 1} cells doesn't fit the relay's {params.egress_cells} egress "
+                             f"cells, or a connection of {dict(failed)} fails past its last whole cell")
+        served = [(response[:failed[k] * P], False) if k in failed else (response, True) for k in range(REQUESTS)]
+    if requests is None:
+        requests = [ws.http_request({"model": "glm-5.3", "prompt": f"request {k}", "max_tokens": MERGED_TOKENS,
+                                     "stream": True, "stream_options": {"include_usage": True}}, "stand-in:1")
+                    for k in range(REQUESTS)]
     signer = cs.signer(key, 4)
     public = signer.public_key()
     publisher = ws.Publisher(out, Issuer(signer, SESSION), params, WR.Cells.of)
@@ -267,7 +274,7 @@ def relay_run(out: Path, key: Path, failed: Mapping[int, int], params: WardenPar
     async def connect():
         side, k = _Side(), len(servers)
         servers.append(side)
-        side.feed(response[:failed[k] * P] if k in failed else response, k not in failed)
+        side.feed(*served[k])
         return side.reader, side
 
     def settled(w: Warden) -> bool:
@@ -317,8 +324,10 @@ def relay_run(out: Path, key: Path, failed: Mapping[int, int], params: WardenPar
         kinds = [k for _, k in shim.arrivals]
         shim.outcome = ("refused" if REFUSED in kinds else "end" if END in kinds else "fail" if FAIL in kinds
                         else "cut")
-        log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0))
+        log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0,
+                                     P if request.startswith(active.ID_REQUEST_HEAD) else None))
     (out / "client.json").write_text(json.dumps({"connections": log}))
+    (out / "warden.json").write_text(json.dumps({"connections": warden.log}))
     return warden.log
 
 
