@@ -11,6 +11,9 @@
                    ``wires`` once the last gate that reads it is lowered.  The last reader of every gate is read off the gates
                    in one pass before the lowering (`_last_readers`); the words the caller reads after (the call's returns)
                    stay.  What the change to `lower_gates` itself would be: that pass, and a `del` after each step.
+    ctl-piece      no change to the circuit (the pin must be the one without): `DsaButterflyCtl_v1` gets the builder its
+                   neighbours have (`_piece`: ``d.build = own_gates(d)``), so the lowering keeps a word for what a switch
+                   returns and none for each Xor and Select inside it
 
 A commit is a row of the lowered unit and no gate of the Definition (`trace.TracingCircuit.commit` returns the word), so the
 Definition, its description and its id stay as they are, and the unit's circuit and pin change.
@@ -158,6 +161,8 @@ def apply(names: str, rec: dict) -> None:
             BM.DsaCountSplit.build = _committing(BM.DsaCountSplit.build)
         elif name == "commit-tag":
             BM.DsaButterflyTag.build = _committing(BM.DsaButterflyTag.build)
+        elif name == "ctl-piece":
+            BM.DsaButterflyCtl.build = BM.own_gates(BM.DsaButterflyCtl)
         elif name == "last-use":
             inner = IL.lower_gates
             depth = [0]
