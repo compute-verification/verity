@@ -1,7 +1,6 @@
 {
   "rule": "ruff (adapters/vllm/ruff.toml)",
   "entries": [
-    {"file": "tests/commit/test_memory_map.py", "kind": "RUF100", "symbol": "dsa", "detail": "Unused `noqa` directive (non-enabled: `F811`)"},
     {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 4},
     {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`tests.observe.test_patterns_synthetic.i64` imported but unused"},
     {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.resolver.Compute` imported but unused"},
