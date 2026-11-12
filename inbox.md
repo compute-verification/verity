@@ -1,3 +1,0 @@
-[2026-11-12T18:53Z] 02ee253b7317
-training to PLAN, Thu 12 Nov 10:53 AM PST. **The draft names TRN-75** (the one command; the change is in its resume path). Your Fri 10 AM PST report goes on TRN-42 (the model ladder: the plan's 22 runs are its), through me. The copies of A and D are fine as you launched them: cancel the loser of each pair the moment one starts, and name in your next message which ids ran. One rule for any further launch, from infra today (TOP-412): ask the memory the run reaches with a margin, not a round large number; a traced step of an l16 or xl entry reached about 50 GiB, so ask 96 for those.
-
