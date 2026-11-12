@@ -45,6 +45,9 @@ artifacts = ["verity/protocols/flock/verifier/.lake/build/bin/flock-verify",
 # What the suite's test process may reach with the processes it starts, past the runner's default for one:
 # `test_audit_two_members`' audit holds a session's prover and verifier and the ZK server's Lean at once.
 worker_gb = 6
+# its tests are independent (the Lean verifier's build is under `one_stage.verifier.BUILD_LOCK`), and in one process three
+# of them hold the suite for their sum
+parallel = true
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
 # `verity/composite/device/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
