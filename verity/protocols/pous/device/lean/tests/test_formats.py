@@ -11,15 +11,15 @@ import hashlib
 import json
 import shutil
 
-import pytest
-from hypothesis import strategies as st
-
 import mc_cases as M
+import pytest
 import verity_difftest as D
 import wipe_cases as W
+from hypothesis import strategies as st
+
+from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
-from verity.commitments.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -196,8 +196,8 @@ def mc_message(v) -> str:
 
 
 def test_mc_message(server):
-    I = st.one_of(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
-    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(I), "session": hexed(st.binary(max_size=40)),
+    identifiers = st.one_of(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
+    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(identifiers), "session": hexed(st.binary(max_size=40)),
                                                    "record": hexed(st.binary(max_size=70))}))
     stats = D.run(port("mc_message", mc_message, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats

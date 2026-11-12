@@ -11,12 +11,12 @@ import dataclasses
 import importlib.util
 import shutil
 
-import pytest
-from hypothesis import strategies as st
-
 import mc_cases as M
+import pytest
 import verity_difftest as D
 import wipe_cases as W
+from hypothesis import strategies as st
+
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 

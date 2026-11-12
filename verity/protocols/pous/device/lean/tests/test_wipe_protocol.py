@@ -11,13 +11,13 @@ from __future__ import annotations
 import json
 import shutil
 
-import pytest
-from hypothesis import strategies as st
-
 import mc_cases as M
+import pytest
 import verity_difftest as D
 import wipe_cases as WC
 import wipe_protocol_case as C
+from hypothesis import strategies as st
+
 from verity.protocols.pous.verifier import streamed_wipe as sw
 from verity.protocols.pous.verifier import wipe_period as WP
 
