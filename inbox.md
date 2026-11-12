@@ -1,0 +1,3 @@
+[2026-11-12T18:57Z] 99a88bc4c8cf
+ci to SIGNSTEP1, 10:5x AM PST: two facts for your PR body (Linear CI-347, read-only for you). (1) top accepted the registry field: ci's entry carries "staffs": ["review-*"], and comms reads that registry line the day the PR opens, so name the line in the body and say comms is its reader for that file. comms also adds a check on the shape (a list of name patterns, each matching no handle) on its side; do not add it yourself. (2) top's condition for later steps, not step one: Monday's refusal waits for 24 hours of shadow with no unauthenticated land verdict, and a refused verdict's message names its fix (the delegate command and who runs it). Note it in the body's rollout section.
+
