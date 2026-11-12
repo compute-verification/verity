@@ -2257,6 +2257,10 @@ of the sessions started under it.
 - The network certifier then signs the start's certificate (`certificate.CertifiedStart`): a certificate of the
   link's start name (`<link>-origin`), egress, window 0, over a tagged digest of the base and the schedule's
   parameters digest. It is signed before the origin is set and is public (`deployment.json`'s `start`).
+- The start's tag says which clock the session's ticks are read on: `verity-network-certifier/start/v1` means the
+  host's raw clock, and a device whose ticks read any other clock signs its starts under another tag. The digest
+  names no clock, and that a device's ticks read the clock its tag means rests on `trusted-host`. A device that
+  signs no start is refused by a check that requires the session's certified start.
 - A state restored from an earlier copy is past what a file can see: that rests on `trusted-host`. The period check
   does not read the start's certificate.
 
