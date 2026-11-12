@@ -149,7 +149,7 @@ class Response:
 
 
 @pytest.mark.parametrize("body,payload", [
-    (b"<html>Bad gateway</html>", {"raw": "<html>Bad gateway</html>"}), (b'["a", 1]', {"raw": '["a", 1]'}),
+    (b"<html>Service unavailable</html>", {"raw": "<html>Service unavailable</html>"}), (b'["a", 1]', {"raw": '["a", 1]'}),
     (b'"steered"', {"raw": '"steered"'}), (b"", {}), (b'{"delivery": "queued"}', {"delivery": "queued"})])
 def test_call_returns_an_object_for_any_2xx_body(monkeypatch, body, payload):
     seen = []
