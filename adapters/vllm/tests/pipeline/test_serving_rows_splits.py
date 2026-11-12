@@ -54,6 +54,7 @@ from verity_vllm.query.program_view import spec_statics
 from verity.protocols.spot.verifier.one_stage import draw as D
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Tuple, field_types
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
@@ -682,3 +683,50 @@ def test_a_window_of_scores_and_values_units_commits_and_its_wires_hold():
     bad = [dict(g, rows={**g["rows"], "in3": g["rows"]["in3"] ^ np.uint16(1)}) if i == j else g for i, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=re.escape(f"{m.key}: a in3 row is not the o0 row")):
         CS.commit(w, bad, salt_key=bytes(32))
+
+
+def test_a_values_unit_on_other_keys_than_its_block_s_scores_unit_passes_every_check():
+    """A known gap, stated so that it is not a silence.  A key block's scores unit and each of its values units commit their own
+    row of the block's keys; no unit writes those rows and nothing registered holds them, so nothing holds two copies equal.
+    Here head 0's values unit of split 1's first block commits, as its column block of the keys, the keys' other 32 columns, and
+    its O, its split's end and the combine are recomputed from them.  The window commits, the wiring check passes on the public
+    bodies and every unit's outputs are its Definition's on its own rows, and the combines' row is not the served one.  Once a
+    unit writes the key rows and every key port is wired to it, this window is refused, and this test asserts the refusal."""
+    s = Served(row(HALF))
+    w = window(s, UNITS, UNITS_CHUNK)
+    got = [g for g, _e in read(s, w.members, UNITS)]
+    unit = units(w.members, UNITS, UNITS_PLACES)
+
+    def held(t: str, at: int) -> tuple[int, int]:
+        u = unit[(0, 0, UNITS_PLACES[t][at])]
+        k = next(k for k, m in enumerate(w.members) if m.base <= u < m.base + m.n)
+        return k, u - w.members[k].base
+
+    def put(k: int, i: int, **ports) -> None:
+        for q, a in ports.items():
+            x = "rows" if q.startswith("in") else "outs"
+            got[k] = {**got[k], x: {**got[k][x], q: got[k][x][q].copy()}}
+            got[k][x][q][i] = np.asarray(a).reshape(-1)
+
+    def f32(a) -> np.ndarray:
+        return np.ascontiguousarray(a).view("<u4")
+
+    (sc, i), (va, j), (en, e), (co, c) = held(UNITS[2], 0), held(UNITS[5], 0), held(UNITS[6], 2), held(UNITS[7], 0)
+    keys = got[sc]["rows"]["in2"][i].reshape(8, -1)
+    assert np.array_equal(got[va]["rows"]["in1"][j].reshape(8, 32), keys[:, :32])
+    other = keys[:, 32:64]
+    o = evaluate_batch(SRW.template(UNITS[5]).fn, got[va]["rows"]["in0"][j:j + 1], other.reshape(1, -1)).astype(np.uint32)
+    part, _lse = TW.split_end_rows(f32(got[en]["rows"]["in0"][e]), f32(got[en]["rows"]["in1"][e]).reshape(1, 4), o,
+                                   scale=HALF["SCALE"])
+    y = TW.combine_rows(np.stack([f32(got[co]["rows"][f"in0.{sp}"][c]) for sp in range(2)], axis=1),
+                        np.stack([f32(got[co]["rows"]["in1.0"][c]).reshape(1, 32), part], axis=1))
+    put(va, j, in1=other, o0=words(o))
+    put(en, e, in2=words(o), o0=words(part))
+    put(co, c, **{"in1.1": words(part), "o0": y})
+    sealed = CS.commit(w, got, salt_key=bytes(32))
+    assert WI.check(w.members, {m.key: sealed.public_body(k) for k, m in enumerate(w.members)}) == {}
+    for m, g in zip(w.members, got):
+        stager(m.template).reference_check(g["rows"], g["outs"])
+    assert not np.array_equal(got[va]["rows"]["in1"][j].reshape(8, 32), got[sc]["rows"]["in2"][i].reshape(8, -1)[:, :32])
+    served = np.concatenate([g["outs"]["o0"].reshape(-1) for m, g in zip(w.members, got) if m.template == UNITS[7]])
+    assert served.tolist() != s.y.tolist()
