@@ -4,17 +4,21 @@ steps accept the honest window, and refuse each prover-side negative by name."""
 from __future__ import annotations
 
 import hashlib
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1window as HW  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.verifier import credit as CR
 
-from tests.protocols import pouw_h1_credit as PC  # noqa: E402
+from tests.protocols import pouw_h1_credit as PC
 
 SALT = hashlib.sha512(b"salt").digest()
 

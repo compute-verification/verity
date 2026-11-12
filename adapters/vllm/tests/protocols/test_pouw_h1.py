@@ -14,33 +14,36 @@ import json
 import random
 from fractions import Fraction
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.circuits.refs import runs  # noqa: E402
-from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.pouw.verifier.coins import Challenger  # noqa: E402
-from verity.protocols.spot.device import challenger as LC  # noqa: E402
-from verity.protocols.spot.device import remote as R  # noqa: E402
-from verity.protocols.spot.device.challenger import CoinError, LiveRecord  # noqa: E402
+from verity.circuits.refs import runs
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.coins import Challenger
+from verity.protocols.spot.device import challenger as LC
+from verity.protocols.spot.device import remote as R
+from verity.protocols.spot.device.challenger import CoinError, LiveRecord
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import hooks  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
+from tests.protocols import challenger_host as CH
+from verity_vllm import protocols as PO
+from verity_vllm.engine import hooks
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 K = 64
 ROW = K * PH.I8_BITS

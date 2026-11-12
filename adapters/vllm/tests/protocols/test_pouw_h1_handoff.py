@@ -10,14 +10,18 @@ import shlex
 import socket
 import subprocess
 import sys
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols.test_pouw_h1 import (  # noqa: E402
+from tests.protocols import challenger_host as CH
+from tests.protocols.test_pouw_h1 import (
     Int8Arm,
     K,
     Linear,
@@ -28,16 +32,16 @@ from tests.protocols.test_pouw_h1 import (  # noqa: E402
     _remote,
     _so,
 )
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import int8_ops  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import handoff as HO  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import kept as KP  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import window as PHW  # noqa: E402
+from verity_vllm import protocols as PO
+from verity_vllm.engine import int8_ops
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import handoff as HO
+from verity_vllm.protocols.pouw.h1 import kept as KP
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1 import window as PHW
 
 
 @pytest.fixture(autouse=True)
