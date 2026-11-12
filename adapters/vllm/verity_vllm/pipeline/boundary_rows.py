@@ -185,14 +185,15 @@ def egress_row(span: Span, output_cap: int) -> np.ndarray:
     return _words([len(span.served), finish, *span.served] + [0] * (output_cap - len(span.served)))
 
 
-def id_rows(span: Span, output_cap: int) -> np.ndarray:
-    """Span's rows of its replay block's return at output cap O, (O, 2) u16: row j the id of output j, and past the ids
-    served the last one again, as the block's instances past them are copies of its last (`interior_rows.Span.padded`).
-    A span served no id has no instance to copy, and its rows are zero: no replay reproduces it."""
-    if len(span.served) > output_cap:
-        raise ValueError(f"{span.engine_id}: {len(span.served)} ids served past the class's {output_cap}")
+def id_rows(span: Span, outputs: int) -> np.ndarray:
+    """Span's rows of its replay block's return in a class of O outputs, (O, 2) u16: row j the id of output j, and past
+    the ids served the last one again, as the block's instances past them are copies of its last
+    (`interior_rows.Span.padded`). A span served no id has no instance to copy, and its rows are zero: no replay
+    reproduces it."""
+    if len(span.served) > outputs:
+        raise ValueError(f"{span.engine_id}: {len(span.served)} ids served past the class's {outputs}")
     last = span.served[-1] if span.served else 0
-    return _words([*span.served] + [last] * (output_cap - len(span.served))).reshape(output_cap, 2)
+    return _words([*span.served] + [last] * (outputs - len(span.served))).reshape(outputs, 2)
 
 
 def return_port(block: str, ports: Iterable[str]) -> str:
