@@ -32,6 +32,7 @@ from typing import Any
 
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.records.schema_ids import RANK_COMMIT_BINDING_SCHEMA, RANK_MATCH_SCHEMA
 
 __all__ = ["commit_binding", "cross_rank_check", "load_recorder", "own_producers_from_record"]
 
@@ -226,7 +227,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
     specs (`own_producers*`); `fold_errors[r]` = the rank fold's error count (a fold with errors never passes: an Unresolved own part is a
     collective input nobody computed); `recorder[r]` = coll.rank<r>.jsonl rows; `links[r]` = tp_links.json `links` of rank r's Program
     (B1) or {request_id: links of that request's Program} (B>1); `provenance` = tp2_match.json's `provenance` (the stored-step value leg)."""
-    res: dict[str, Any] = {"schema": "tp2/rank_match/v1", "ranks": sorted(colls), "checks": [], "verdict": None}
+    res: dict[str, Any] = {"schema": RANK_MATCH_SCHEMA, "ranks": sorted(colls), "checks": [], "verdict": None}
     ranks = sorted(colls)
     world = len(ranks)
     # any world >= 2: the ranks must be exactly 0..world-1; every pairwise check below runs rank r against rank 0 and the
@@ -557,7 +558,7 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: Mappi
     collective-level only, ◐) unless `require`, then a named FAIL.  CPU only, digests only (no tensors re-read)."""
     md = Path(match_dir)
     fm, rm = md / "fold_match" / "tp2_fold_match.json", md / "fold_match" / "tp2_rank_match.json"
-    res: dict[str, Any] = {"schema": "verity/tp2/commit-binding/v1", "fold_match": str(fm), "rank_match": str(rm), "failures": [], "n_bindings": 0, "n_recorder": {}}
+    res: dict[str, Any] = {"schema": RANK_COMMIT_BINDING_SCHEMA, "fold_match": str(fm), "rank_match": str(rm), "failures": [], "n_bindings": 0, "n_recorder": {}}
     if not fm.exists() or not rm.exists():
         res["result"] = False if require else None
         res["why"] = ("fold Match record missing (tp2_fold_match.json / tp2_rank_match.json): the peer leaves have no Match-stage binding" + (" -- REQUIRED" if require else "; Match is collective-level only (◐)"))

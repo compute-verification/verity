@@ -17,9 +17,10 @@ from verity_vllm.config import workload_file
 from verity_vllm.observe import capture_log as CL
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.schema_ids import GLOBAL_PROGRAM_SCHEMA
 from verity_vllm.records.workload import Workload
 
-GP_SCHEMA = "cb-a/global-program/v1"
+GP_SCHEMA = GLOBAL_PROGRAM_SCHEMA
 
 
 def request_id_of(index: int) -> str:
