@@ -48,7 +48,7 @@ def test_hash_labelled_and_noise_lines():
 def test_bf16_ops():
     """Each BF16 operation is the pinned word, and where Pearl's own refuses (a pinned null) it raises `Reject`."""
     for (a, b, c), want in zip(IN["bf16_ops"], OUT["bf16_ops"]):
-        for f, args, word in zip((P.bf16_mul, P.bf16_div, P.bf16_fma), ((a, b), (a, b), (a, b, c)), want):
+        for f, args, word in zip((P.bf16_mul, P.bf16_div, P.bf16_fma), ((a, b), (a, b), (a, b, c)), want, strict=True):
             if word is None:
                 with pytest.raises(P.Reject):
                     f(*args)
