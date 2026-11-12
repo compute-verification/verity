@@ -194,6 +194,34 @@ def test_the_kept_priced_taxes_are_the_generators():
     assert kept["tokens"]["tax"] < kept["layer_of_token"]["tax"] < kept["every_block"]["tax"]
 
 
+def test_a_priced_tax_is_the_sum_of_its_named_parts():
+    """Each priced configuration of the kept card is the sum of its parts, each with how it got its share; (A)'s names
+    the step record, the two-stage boundary commitment and the history tables beside the tick, the edge snapshot and
+    the top-k; and a card whose total is not its parts', or with a part that doesn't say how it was priced, is
+    refused."""
+    kept = t.taxes(cards.load("serve_tax", "GLM-5.3"))
+    for name, e in kept.items():
+        assert e["status"] == "priced" and {p["status"] for p in e["parts"]} <= set(cards.PART_STATUS), name
+        for total, key in (("tax", "share"), ("low", "low"), ("high", "high")):
+            assert e[total] == pytest.approx(sum(p[key] for p in e["parts"]), rel=1e-12), (name, total)
+    assert {p["part"]: p["status"] for p in kept["tokens"]["parts"]} == {
+        "certified-tick rule": "simulated", "step record": "modeled", "two-stage boundary commitment": "modeled",
+        "history tables": "modeled", t.EDGE: "measured", "deterministic top-k": "modeled"}
+    assert kept["tokens_bi"]["parts"][:-1] == kept["tokens"]["parts"]
+
+    def changed(**part) -> dict:
+        card = t.priced_card("GLM-5.3")
+        card["value"]["configurations"][0]["parts"][1] |= part
+        return card
+
+    with pytest.raises(ValueError, match="tax: .* but its parts' shares add to .*: a priced configuration is the sum"):
+        cards.check(changed(share=.01))
+    with pytest.raises(ValueError, match="status: 'guessed', but it is one of 'modeled', 'simulated', 'measured'"):
+        cards.check(changed(status="guessed"))
+    with pytest.raises(ValueError, match="'certified-tick rule' given 2 times"):
+        cards.check(changed(part="certified-tick rule"))
+
+
 def test_a_card_without_every_configuration_is_refused():
     card = t.priced_card("GLM-5.3")
     card["value"]["configurations"] = card["value"]["configurations"][:-1]

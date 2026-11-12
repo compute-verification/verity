@@ -72,8 +72,11 @@ class LM(nn.Module):
         hd = size.d_model // size.n_head
         freqs = 1.0 / (ROPE_THETA ** (torch.arange(0, hd, 2, dtype=torch.float32) / hd))
         angles = torch.outer(torch.arange(ctx, dtype=torch.float32), freqs)
-        self.register_buffer("cos", angles.cos(), persistent=False)
-        self.register_buffer("sin", angles.sin(), persistent=False)
+        # One position's row at a time, so each in the calling thread. torch cuts a larger cos or sin across its
+        # threads, and the first one a process computes can come back with a thread's share at low accuracy: the
+        # model would then be another function in one process than in the next.
+        self.register_buffer("cos", torch.stack([row.cos() for row in angles]), persistent=False)
+        self.register_buffer("sin", torch.stack([row.sin() for row in angles]), persistent=False)
 
     @classmethod
     def of(cls, shape: dict) -> LM:
