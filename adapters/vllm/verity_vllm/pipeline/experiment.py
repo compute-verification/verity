@@ -34,6 +34,7 @@ from pathlib import Path
 
 from verity_vllm.config import RowEngine
 from verity_vllm.pipeline import research_tools
+from verity_vllm.pipeline.row_json import load_json
 
 __all__ = ["build_spec", "code_version", "write_experiment", "write_spec"]
 
@@ -75,13 +76,9 @@ def _ref(run: Path, rel: str, *, sha: bool = True) -> dict:
 
 
 def _load(run: Path, rel: str):
+    """The run's document at ``rel``, None when it is absent or unreadable."""
     p = run / rel
-    if not p.exists():
-        return None
-    try:
-        return json.loads(p.read_text())
-    except (OSError, ValueError):  # an unreadable report is reported as absent
-        return None
+    return load_json(p) if p.exists() else None
 
 
 def code_version(repo: Path) -> dict:
