@@ -204,8 +204,8 @@ private def uplinks : List Link :=
 #guard !decide (Entry.Kinds empty { locs := [root, host, { inVm with parent := some "node0" }], links := uplinks })
 #guard !decide (Entry.Kinds empty { locs := [root, vm, { gpu with parent := some "vm0" }] })
 #guard !decide (Entry.Kinds empty { locs := [root, vm, { dram none with parent := some "vm0" }] })
-#guard !decide (Entry.Kinds empty { locs := [root, host, vm],
-  links := [{ id := "l0", ends := ("node0", "vm0"), β := some 1, latency := 0 }] })
+private def toVm : Link := { id := "l0", ends := ("node0", "vm0"), β := some 1, latency := 0 }
+#guard !decide (Entry.Kinds empty { locs := [root, host, vm], links := [toVm] })
 private def vmKeyed : Registration.Auditor :=
   { keyed [] with key := fun i => if i == "vm0" then some "k1" else (keyed []).key i,
                   scheme := fun i => if i == "vm0" then some root2 else (keyed []).scheme i }
