@@ -4,7 +4,7 @@ The circuit and public files `verify --zk` holds to the form the sampled audit's
 scope check reads them (`rowsOk`), each of its own name, no two ports whose registered frame-v3 roots over the public
 file's population are one root under different domains (`collides`), every row under `2^64` bits (`wordsOk`), and the
 published tree's domains each 64 bytes and of their own port (`idsSized`, `dupId`), with no two ports' published roots
-one root under different domains (`collidesPub`).
+one root under different domains (`collidesPub`), and every port's published tree of at least two leaves (`leavesOk`).
 
 * `rootOf c pub nl q`: port `q`'s registered root, `FV3.root` over its domain (its name, `domOf`) and its `nl` rows'
   frame leaves at its leaf schema (`schemaOf`, `Registered.portSchema`) of the public file's `b ‖ c` (`leafOf`).
@@ -15,12 +15,14 @@ one root under different domains (`collidesPub`).
   (`collidesBy`). Each root is SHA-512 of a frame whose first part is its domain, so such a pair is a SHA-512
   collision, which a file exhibits only by holding one. With no two published domains one (`dupId`) and no
   `collidesPub`, no two ports' published roots are one (`pubRoot_ne`).
+* `leavesOk c pub`: every port's published tree has at least two leaves (`countOf`), so an opening's path in it has a
+  level. The sampled audit's knowledge soundness reads a row's opening off such a path, and covers no tree of one leaf.
 * `checkOf parsed tags publicFile`: on the circuit `parsed` it is handed, `rowsOk` and no port name twice
   (`Registered.dupName`), then on the public file as `HmOut.loadPublic` reads it over that circuit the refusals of
-  `loadedWhy`: `collides` at its population (`pub.n`), `wordsOk`, `idsSized`, `dupId` and `collidesPub`. At hidden
-  outputs `verify --zk` hands it the circuit `ProvedScope.circuitOf` reads (`HmOut.parseCommit`), which for a templated
-  statement is the template's parse (`HmOut.parseTmpl`) and for a flat one the circuit `HmOut.parse` reads, as `check`
-  does. It refuses every session whose files fail it, after every other check (`Main.verifyCmd`).
+  `loadedWhy`: `collides` at its population (`pub.n`), `wordsOk`, `idsSized`, `dupId`, `collidesPub` and `leavesOk`.
+  At hidden outputs `verify --zk` hands it the circuit `ProvedScope.circuitOf` reads (`HmOut.parseCommit`), which for
+  a templated statement is the template's parse (`HmOut.parseTmpl`) and for a flat one the circuit `HmOut.parse`
+  reads, as `check` does. It refuses every session whose files fail it, after every other check (`Main.verifyCmd`).
 -/
 module
 
@@ -114,6 +116,11 @@ def collidesPubWith (H : ByteArray → ByteArray) (c : Circuit) (pub : Public) :
 /-- **Two ports' published roots are one root under different published domains.** -/
 def collidesPub (c : Circuit) (pub : Public) : Bool := collidesPubWith Sha512.hash c pub
 
+/-- **Every port's published tree has at least two leaves** (`countOf`): two rows of its table at a shared-row file,
+else two instances. An opening's path in such a tree has a level; a tree of one leaf is its leaf alone. -/
+def leavesOk (c : Circuit) (pub : Public) : Bool :=
+  (List.range c.ports.size).all fun q => decide (2 ≤ countOf pub q)
+
 def ROWS_WHY : String :=
   "a port that is not a sha512/row/v1, sha512/row/v2 or sha512/row-seg/v1 row the scope check reads"
 
@@ -135,14 +142,19 @@ def DUP_IDS_WHY : String :=
 def PUB_ROOTS_WHY : String :=
   "two ports whose published frame-v3 roots are one root under different domains (a SHA-512 collision)"
 
+def LEAVES_WHY : String :=
+  "a port whose published frame-v3 tree has fewer than two leaves (an opening's path in it has no level): give " ++
+    "every port two rows or more, a second instance in a statement of one, a second row in a shared-row table of one"
+
 /-- `checkWith`'s refusals on the loaded public file, at the roots `H` makes: `collidesWith` at its population,
-`wordsOk`, `idsSized`, `dupId` and `collidesPubWith`, in that order. -/
+`wordsOk`, `idsSized`, `dupId`, `collidesPubWith` and `leavesOk`, in that order. -/
 def loadedWhy (H : ByteArray → ByteArray) (c : Circuit) (pub : Public) : Option String :=
   if collidesWith H c pub pub.n then some ROOTS_WHY
   else if !wordsOk c then some WORDS_WHY
   else if !idsSized c pub then some IDS_WHY
   else if dupId c pub then some DUP_IDS_WHY
   else if collidesPubWith H c pub then some PUB_ROOTS_WHY
+  else if !leavesOk c pub then some LEAVES_WHY
   else none
 
 /-- `checkOf` at the roots `H` makes. -/
@@ -163,8 +175,8 @@ def checkWith (H : ByteArray → ByteArray) (parsed : V Circuit) (tags : Tags) (
 the circuit `parsed` (`ProvedScope.circuitOf`'s under `verify --zk`, `HmOut.parse`'s under `check`) parses, every port
 is a `rowsOk` row and no two ports share a name
 (`Registered.dupName`), the public file loads (`HmOut.loadPublic`), and `loadedWhy` refuses nothing: no two ports'
-roots over its population `collides`, every row is under `2^64` bits, and the published domains are 64 bytes, pairwise
-distinct, and fixed by their roots. -/
+roots over its population `collides`, every row is under `2^64` bits, the published domains are 64 bytes, pairwise
+distinct, and fixed by their roots, and every port's published tree has at least two leaves. -/
 def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) : Except String Unit :=
   checkWith Sha512.hash parsed tags publicFile
 
@@ -188,6 +200,15 @@ theorem loadedWhy_none {H : ByteArray → ByteArray} {c : Circuit} {pub : Public
           · simp [h1, h2, h3, h4, h5] at h
         · simp [h1, h2, h3, h4] at h
   · simp [h1] at h
+
+/-- **Where `loadedWhy` refuses nothing, every port's published tree has at least two leaves.** -/
+theorem loadedWhy_leaves {H : ByteArray → ByteArray} {c : Circuit} {pub : Public} (h : loadedWhy H c pub = none) :
+    leavesOk c pub = true := by
+  unfold loadedWhy at h
+  cases hl : leavesOk c pub
+  · cases h1 : collidesWith H c pub pub.n <;> cases h2 : wordsOk c <;> cases h3 : idsSized c pub <;>
+      cases h4 : dupId c pub <;> cases h5 : collidesPubWith H c pub <;> simp [h1, h2, h3, h4, h5, hl] at h
+  · rfl
 
 /-- **`checkOf` passing at a circuit loads the public file** (`HmOut.loadPublic`). -/
 theorem checkOf_load {tags : Tags} {c : Circuit} {pf : ByteArray} (h : checkOf (.ok c) tags pf = .ok ()) :
@@ -244,6 +265,19 @@ theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × Byt
     rowsOk c = true ∧ Registered.dupName c = none ∧ collides c pub pub.n = false :=
   have hl := check_loaded h hc hpub
   ⟨hl.1, hl.2.1, (loadedWhy_none hl.2.2).1⟩
+
+/-- **Every port's published tree has at least two leaves** at `leavesOk`. -/
+theorem two_le_countOf_of_leavesOk {c : Circuit} {pub : Public} (h : leavesOk c pub = true) {q : Nat}
+    (hq : q < c.ports.size) : 2 ≤ countOf pub q := by
+  unfold leavesOk at h
+  simpa using List.all_eq_true.mp h q (List.mem_range.2 hq)
+
+/-- **What `checkOf` passing at a circuit says of the published trees' sizes**: at the public file `HmOut.loadPublic`
+loads, every port's published tree has at least two leaves. -/
+theorem checkOf_leaves {tags : Tags} {c : Circuit} {pf : ByteArray} {pub : Public}
+    (h : checkOf (.ok c) tags pf = .ok ()) (hpub : HmOut.loadPublic tags c pf = .ok pub) {q : Nat}
+    (hq : q < c.ports.size) : 2 ≤ countOf pub q :=
+  two_le_countOf_of_leavesOk (loadedWhy_leaves (checkOf_loaded h hpub).2.2) hq
 
 /-- **What `check` passing says of the published tree**: at the circuit `HmOut.parse` reads and the public file
 `HmOut.loadPublic` loads, every row is under `2^64` bits, every port's published domain is 64 bytes, no two are one, and

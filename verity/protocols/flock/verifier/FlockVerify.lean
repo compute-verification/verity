@@ -937,12 +937,12 @@ cannot know what it verifies), then a record not in its canonical text (`RecordT
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
 different domains, a row of `2^64` bits or more, a published domain (`frame_v3.domain_ids`) missing or not 64 bytes, two
-ports of one published domain, or two ports whose published roots are one root under different domains;
-`Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
-is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the recursion's)
-tags, files and a sample outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
-without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit
-reading several input groups or a tail stage returning the outputs is, and a templated statement's outside
+ports of one published domain, two ports whose published roots are one root under different domains, or a port whose
+tree has fewer than two leaves; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to
+turn this on, is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the
+recursion's) tags, files and a sample outside the rest of that form (`KsScope.checkOf`: a typed statement, one with
+public outputs, without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`,
+which a unit reading several input groups or a tail stage returning the outputs is, and a templated statement's outside
 `ProvedScope.scopeOkT`, read off its template (`KsScope.unitWhy`); a shared-row public file, with or without
 `--registered F`, outside the form `Flock.Guarantees.SampledKSLiveV5` covers (`KsScope.sharedWhy`: one whose circuit's
 public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
@@ -1192,11 +1192,11 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     -- short of every unit, then a session's over an inner record without a sample, then a session's at a holo or sparse
     -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
     -- the program,
-    -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
-    -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
-    -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
-    -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`), then under `agree` upstream's
-    -- plain files, which `verify` refuses whatever else holds
+    -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains, port
+    -- roots or leaf counts the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk
+    -- tags, a circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other
+    -- than `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`), then under `agree`
+    -- upstream's plain files, which `verify` refuses whatever else holds
     let refusals : String × Array Setup → Except String Unit := fun (record, tabs) => do
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)

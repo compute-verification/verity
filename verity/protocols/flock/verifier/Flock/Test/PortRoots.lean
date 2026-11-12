@@ -9,7 +9,10 @@ under one domain, neither a collision; under a hash with one value every pair of
 On the loaded public file: three ports at distinct 64-byte published domains pass, and their published roots are
 distinct and not their registered ones; a short domain, a missing one, one that is not hex and a header without
 `frame_v3` are refused (`IDS_WHY`), and so are two ports of one domain (`DUP_IDS_WHY`) and a row of `2^64` bits
-(`WORDS_WHY`). At shared rows each port's published tree is over its table's rows.
+(`WORDS_WHY`). At shared rows each port's published tree is over its table's rows. A port whose published tree has one
+leaf is refused last (`LEAVES_WHY`): a statement of one instance, or a shared-row table of one row beside a table of
+three; two leaves pass, a circuit with no port passes at any population, and a file an earlier check refuses keeps that
+check's reason.
 -/
 module
 
@@ -105,15 +108,33 @@ def ids3 : List (String × ByteArray) := [("x", id64 1), ("y", id64 2), ("z", id
 #guard loadedWhy Sha512.hash (circ #[v1 "x", { v1 "y" with words := 2 ^ 60 }])
   (pubIds 2 [("x", id64 1), ("y", id64 2)]) == some WORDS_WHY
 
-/-- `pubIds 2` at shared rows: port `x`'s table three rows from digest 0, port `y`'s one row from digest 3. -/
+/-- `pubIds 2` at shared rows: port `x`'s table three rows from digest 0, port `y`'s two rows from digest 3. -/
 def tabled : Public :=
   { pubIds 2 [("x", id64 1), ("y", id64 2)] with
-    digests := (Array.range 4).map fun i => ByteArray.mk #[(i + 10).toUInt8],
-    tables := some { counts := #[3, 1], starts := #[0, 3], refs := #[0, 0, 2, 0] } }
+    digests := (Array.range 5).map fun i => ByteArray.mk #[(i + 10).toUInt8],
+    tables := some { counts := #[3, 2], starts := #[0, 3], refs := #[0, 0, 2, 1] } }
 
-#guard countOf tabled 0 == 3 && countOf tabled 1 == 1 && countOf (pub 2) 1 == 2
+#guard countOf tabled 0 == 3 && countOf tabled 1 == 2 && countOf (pub 2) 1 == 2
 #guard digOf (circ #[v2 "x", v2 "y"]) tabled 1 0 == ByteArray.mk #[13]
+#guard digOf (circ #[v2 "x", v2 "y"]) tabled 1 1 == ByteArray.mk #[14]
 #guard digOf (circ #[v2 "x", v2 "y"]) (pub 2) 1 1 == ByteArray.mk #[3]
 #guard loadedWhy Sha512.hash (circ #[v2 "x", v2 "y"]) tabled == none
+
+/-- `tabled` with port `y`'s table one row: a published tree of one leaf, beside port `x`'s of three. -/
+def tabledOne : Public :=
+  { tabled with tables := some { counts := #[3, 1], starts := #[0, 3], refs := #[0, 0, 2, 0] } }
+
+-- a port whose published tree has one leaf: a shared-row table of one row, a statement of one instance
+#guard leavesOk (circ #[v2 "x", v2 "y"]) tabled && !leavesOk (circ #[v2 "x", v2 "y"]) tabledOne
+#guard countOf tabledOne 0 == 3 && countOf tabledOne 1 == 1
+#guard loadedWhy Sha512.hash (circ #[v2 "x", v2 "y"]) tabledOne == some LEAVES_WHY
+#guard leavesOk three (pubIds 3 ids3) && !leavesOk three { pubIds 3 ids3 with n := 1 }
+#guard loadedWhy Sha512.hash three { pubIds 3 ids3 with n := 1 } == some LEAVES_WHY
+-- a file an earlier check refuses keeps that check's reason at one leaf
+#guard loadedWhy Sha512.hash three { pub 3 with n := 1 } == some IDS_WHY
+#guard loadedWhy Sha512.hash three { pubIds 3 [("x", id64 1), ("y", id64 2), ("z", id64 1)] with n := 1 } ==
+  some DUP_IDS_WHY
+-- a circuit with no port has no tree to open, at any population
+#guard leavesOk (circ #[]) { pub 0 with n := 1 } && loadedWhy Sha512.hash (circ #[]) { pub 0 with n := 1 } == none
 
 end Flock.Test.PortRoots
