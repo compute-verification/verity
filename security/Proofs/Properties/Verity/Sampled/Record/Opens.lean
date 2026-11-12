@@ -405,8 +405,10 @@ theorem revealRec_eq {u : ℕ} (hun : u < A.n) {v : Seen} {d : Msg} (hdv : drawO
 /-! ## The openings make the proof block correct -/
 
 /-- **A witness satisfying unit `u`'s table reveals openings that make `u`'s proof block correct**, at one table
-(`tabOfZHJP_one`, `wit_packZ`, `correct_of_revealV5`). -/
-theorem correct_revealAt (hc1 : A.I.count ≤ 1) {u : Fin A.n} {J : Json} {kd : ℕ}
+(`tabOfZHJP_one`, `wit_packZ`, `correct_of_revealV5`), where equal roots at the session's leaf map have one domain
+(`hroots`). -/
+theorem correct_revealAt (hc1 : A.I.count ≤ 1) (hroots : Flock.Bridge.RootFixesDomainL A.D.unroll A.Lm)
+    {u : Fin A.n} {J : Json} {kd : ℕ}
     (y : DrawSetupZHJP (inputsJ A.I 0) none (mPtsOf A.D.unroll.g (kd / nTab A.I)) {u} J) {wF : Claims.Flock.Wit}
     (hsat : y.table.S.Satisfies (Flock.Readable.zOf 1 wF 0 y.table.S.m)) (val : ℕ → Option Bool) (ι : ℕ → Bool)
     (hval : ∀ q ∈ revealAt A u J y wF, A.Cd.Opens Claims.Sampling.sha512Msg q.1 q.2 = true → q.1 = A.roots →
@@ -420,7 +422,7 @@ theorem correct_revealAt (hc1 : A.I.count ≤ 1) {u : Fin A.n} {J : Json} {kd : 
     exact hsat
   have h2 := Flock.Bridge.wit_packZ (unitTab A u J y) (Flock.Readable.zOf 1 wF 0 (unitTab A u J y).S.m)
   exact Flock.Bridge.correct_of_revealV5 A.n Unit A.I none A.ht A.D A.hD A.hU _ A.hpi A.pub A.hpub A.hscope A.hdup
-    A.hroots kd (fun _ => J) {u} J y {u} () u (Finset.mem_singleton_self u)
+    hroots kd (fun _ => J) {u} J y {u} () u (Finset.mem_singleton_self u)
     (Flock.Bridge.packZ (unitTab A u J y) (Flock.Readable.zOf 1 wF 0 (unitTab A u J y).S.m))
     (Eq.mpr (congrArg (fun z => (unitTab A u J y).S.Satisfies z) h2) hM) val ι hval
 
@@ -431,7 +433,7 @@ correct, whatever its interior values. At a session v2 sets up (`SetsUp`, one ta
 (`sessionIns_of`); where the public file's `units.indices` are the population's units in order, as v2 holds them
 (`units_of_checkBlobsAt`), the kept draw file proves every drawn unit (`provedIn_of_range`); and where the record's
 commitment is the deployed one (`hcd`; `record_commit` at a circuit of `sha512/row/v2` rows), an opening under it is
-one under `A`'s. -/
+one under `A`'s, whose equal roots have one domain (`hroots`). -/
 theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
     {p : _root_.Spot.OneStageZk.Params} {bs : Core.Blobs}
@@ -440,7 +442,7 @@ theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι}
     (hpart : A.I.partition = some p.own.partition)
     (hidx : _root_.Spot.FilePart.indicesOf A.pub.header = .ok (Array.range A.n))
     (hcd : (record A o e).commit = A.Cd)
-    (he : e.reveal = revealRec A)
+    (he : e.reveal = revealRec A) (hroots : Flock.Bridge.RootFixesDomainL A.D.unroll A.Lm)
     (iroots : Msg → Seen → ℕ → List Msg) : SessionOpens FlockDeploy.sha512 (record A o e) iroots := by
   have hc1 := hsu.count
   have hpr := provedIn_of_range A o hidx
@@ -464,7 +466,7 @@ theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι}
       revealAt A ⟨u, hun⟩ (Flock.norm J) (Classical.choice hne).2 wF := by
     rw [record_reveal, he]
     exact revealRec_eq A hun (drawOf_of hl) hJ hne _ wF
-  refine correct_revealAt A (by omega) (Classical.choice hne).2
+  refine correct_revealAt A (by omega) hroots (Classical.choice hne).2
     (table_satisfies A (Classical.choice hne).2 (hy (Classical.choice hne)) hsat) val ι fun q hq ho hr => ?_
   exact (hval q (by rw [hrev]; exact hq) (by rw [hcd, sha512_msg]; exact ho)).1 hr
 
