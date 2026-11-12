@@ -502,14 +502,16 @@ def oversize(src: Path) -> bool:
         return b"\0" not in f.read(8192)
 
 
-def only_comments(text: str | None) -> bool:
-    """Whether a file of `text` holds nothing but whitespace and comments, so that deleting it loses nothing: what an
-    `__init__.py` left in a package a move empties must be for the move to delete it (`Run._leftover`; `move_check.py`
-    reads it at BASE by this same function). A docstring is content, and so is text that is no UTF-8 (None) or doesn't
-    parse."""
+def only_comments(text: str | bytes | None) -> bool:
+    """Whether a file of `text` (its text, or its bytes, read as UTF-8) holds nothing but whitespace and comments, so that
+    deleting it loses nothing: what an `__init__.py` left in a package a move empties must be for the move to delete it
+    (`Run._leftover`; `move_check.py` reads it at BASE by this same function). A docstring is content, and so are bytes
+    that aren't UTF-8 (or None, a text that wasn't) and text that doesn't parse."""
     if text is None:
         return False
     try:
+        if isinstance(text, bytes):
+            text = text.decode("utf-8")
         if ast.parse(text).body:
             return False
         kinds = {t.type for t in tokenize.generate_tokens(io.StringIO(text).readline)}
@@ -620,11 +622,9 @@ class Run:
         refuse_held([p for p in self.leftover if not only_comments(self._read_old(p))])
         return moves
 
-    def _read_old(self, p: str) -> str | None:
-        try:
-            return (self.root / p).read_text()
-        except (OSError, UnicodeDecodeError):
-            return None
+    def _read_old(self, p: str) -> bytes:
+        """The bytes of `p`, a tracked file of the tree being moved: one that can't be read stops the move."""
+        return (self.root / p).read_bytes()
 
     def _leftover(self, tracked: list[str], dest: dict[str, str]) -> list[str]:
         """Each `__init__.py` that stays in a directory which held more and, after the move, holds nothing but such files,

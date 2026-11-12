@@ -673,12 +673,12 @@ def test_a_brace_list_whose_paths_go_two_ways_is_split(tmp_path):
     assert (r / "boundary.toml").read_text() == want
 
 
-def _run(tmp_path: Path, files: dict[str, str], layout: str, *args: str) -> tuple[Path, subprocess.CompletedProcess]:
+def _run(tmp_path: Path, files: dict[str, str | bytes], layout: str, *args: str) -> tuple[Path, subprocess.CompletedProcess]:
     """The mover's run by the map ``layout`` on a new repository of ``files``."""
     r = tmp_path / "repo"
     for p, t in {"tools/research/src/research/store/moves.json": '{"moves": []}\n', **files}.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
-        (r / p).write_text(t)
+        (r / p).write_bytes(t) if isinstance(t, bytes) else (r / p).write_text(t)
     (tmp_path / "map.toml").write_text(layout)
     git(r, "init", "-q", "-b", "main")
     git(r, "add", "-A")
@@ -729,10 +729,12 @@ def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_lo
     ("# -*- coding: utf-8 -*-\n# one a GPU\n", True), ("#!/usr/bin/env python3\n", True),
     ('"""The data sheets."""\n', False), ("'''x'''\n# then a comment\n", False), ("pass\n", False), ("X = 1\n", False),
     ("from .site import Card\n", False), ("def load(:\n", False), ('"""never closed\n', False), ("# x\0\n", False), (None, False),
+    (b"", True), (b"# the data sheets\n", True), (b'"""The data sheets."""\n', False), (b"# caf\xe9\n", False),
 ])
 def test_only_comments_is_the_text_of_comments_and_whitespace_alone(text, comments):
     """What the mover deletes with an emptied package, and what `move_check.py` reads at BASE by this same function: a
-    docstring is content, and so are code, text that doesn't parse, and text that isn't UTF-8 (None)."""
+    docstring is content, and so are code, text that doesn't parse, and bytes that aren't UTF-8 (or None, a text that
+    wasn't)."""
     assert L.only_comments(text) is comments
 
 
@@ -771,11 +773,12 @@ def test_an_emptied_packages_init_of_comments_alone_is_deleted_and_certified(tmp
     assert cert["rules"]["emptied"] == ["verity/hardware/cards/__init__.py", "verity/hardware/nodes/__init__.py"]
 
 
-@pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE])
+@pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE, b"# caf\xe9\n"])
 @pytest.mark.parametrize("dry", [False, True])
 def test_an_emptied_packages_init_that_holds_more_stops_the_move_naming_it_and_the_fix(tmp_path, held, dry):
-    """A docstring or code in an `__init__.py` the move would delete with its package stops the whole move, dry run or not:
-    exit 1, each such file named with the fix, and nothing written; `nodes/`, of nothing but a comment, is not named."""
+    """A docstring, code, or bytes that aren't UTF-8 in an `__init__.py` the move would delete with its package stop the
+    whole move, dry run or not: exit 1, each such file named with the fix, and nothing written; `nodes/`, of nothing but a
+    comment, is not named."""
     r, p = _run(tmp_path, {**HELD_TREE, "verity/hardware/cards/__init__.py": held,
                            "verity/hardware/nodes/__init__.py": "# the nodes\n"}, HELD_MAP, *(["--dry-run"] if dry else []))
     assert p.returncode == 1, p.stdout
@@ -784,7 +787,8 @@ def test_an_emptied_packages_init_that_holds_more_stops_the_move_naming_it_and_t
                      "and whitespace: verity/hardware/cards/__init__.py")
     assert fix.startswith("give each a row in the map saying where it goes")
     assert p.stderr.rstrip().endswith("or delete it in a hand commit before the move")
-    assert git(r, "status", "--porcelain") == "" and (r / "verity/hardware/cards/__init__.py").read_text() == held
+    kept = (r / "verity/hardware/cards/__init__.py").read_bytes()
+    assert git(r, "status", "--porcelain") == "" and kept == (held if isinstance(held, bytes) else held.encode())
 
 
 def test_an_init_that_holds_more_moves_by_its_row_and_the_move_is_certified(tmp_path):
