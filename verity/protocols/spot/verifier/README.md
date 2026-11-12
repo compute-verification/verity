@@ -144,7 +144,9 @@ unit on 16-bit words of its own) and a two-stage registration carries (`WindowCo
 `plancheck.two` refuses a cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
-refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`).
+refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
+block returns is read only at the boundary record's port for it: an interior registration that registers a value of
+that name is refused (`second-return`).
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
