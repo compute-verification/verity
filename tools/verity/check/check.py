@@ -133,7 +133,7 @@ each shard runs `suites.py SUITE:K/M@DIGEST --timings` of the planner's partitio
 part of a suite runs it whole (`suites.py`), and that pass is its verdict.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
-tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
+tree's own tests (`LINTS`: Markdown sizes, report-genre names, secret-like literals, blob and data budgets). The groups start only
 once it passes, so a check that one of them fails ends in seconds, not hours.
 
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
@@ -1711,7 +1711,7 @@ def opt_in(out: Path, step: str, args: list[str]) -> int:
 
 
 #: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: pytest and lean-audit have held 160 to 350
-#: between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
+#: between them, and circuit-check, given the slot's whole mem=, took the run's scope to its memory limit (an OOM kill)
 SIBLINGS_GB = 350
 
 
