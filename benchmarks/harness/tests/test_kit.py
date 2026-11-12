@@ -238,9 +238,11 @@ def test_the_writer_writes_the_validation_block_a_benchmarks_own_result_holds(tm
         "status": "failed", "checker": "pearlc-k256-gate", "detail": "2 of 4 parts hold", "evidence": []}
     check = research_result.check(other, RUN)
     assert check.valid and check.validation_status == "failed" and check.doc == _result(other)
-    # a detail that only holds one of a verdict of record's words inside another, and one that says nothing
-    for i, plain in enumerate(("", "acceptable drift at every point", "0 of 12 points over the threshold")):
-        assert kit.writer(tmp_path / str(i)).validation("passed", "", plain, ("a/b.json",))["detail"] == plain
+    # the status is the whole guard: a detail says what passed or failed in the gates' own words, and one may say nothing
+    for i, said in enumerate(("", "3/4 gates passed", "every part passes", "failing: the k256 part", "FAIL: gate 3",
+                              "worst accepted fragment share 0.0012", "12 inputs, 0 rejected tiles", "1 failure")):
+        assert kit.writer(tmp_path / str(i)).validation("failed", "", said, ("a/b.json",)) == {
+            "status": "failed", "checker": "", "detail": said, "evidence": ["a/b.json"]}
 
 
 def test_a_validation_and_the_measurements_share_a_result_in_either_order(tmp_path, no_gpu):
@@ -283,11 +285,6 @@ def test_the_writer_refuses_a_second_validation_and_one_that_isnt_a_runs_own_gat
         for text in (None, 3, b"bytes", ["4 of 4 gates hold"]):
             with pytest.raises(ValueError, match=f"a validation's {what} is a string"):
                 w.validation(**ok | {what: text})
-    for detail in ("all gates passed", "the verifier accepts every session", "FAIL: gate 3", "sealed", "1 failure",
-                   "every part passes", "failing: the k256 part", "worst accepted share 0.0012", "the proof's rejection"):
-        with pytest.raises(ValueError, match="reads as a verdict of record or a seal .* nothing under benchmarks/ writes: "
-                                             "say what the run's own gates found"):
-            w.validation(**ok | {"detail": detail})
     for evidence in ("out/gates.json", b"out/gates.json", None, 5, {"out/gates.json"}, iter(["out/gates.json"])):
         with pytest.raises(ValueError, match="evidence is a list of paths relative to"):
             w.validation(**ok | {"evidence": evidence})
@@ -365,6 +362,10 @@ def test_the_writer_refuses_what_isnt_a_measurement_of_this_run(tmp_path, no_gpu
         with pytest.raises(ValueError, match=f"isn't (a {kit.RESULT_SCHEMA} result|JSON)"):
             kit.writer(other).measurement("b", 1, "s")
         assert (other / kit.RESULT).read_text() == text
+
+
+def test_the_shared_measurement_names_are_these_five_in_this_order():
+    assert kit.SHARED == ("metric", "verified", "capacity", "free", "error")
 
 
 def test_overhead_paired_is_the_kits_by_overheads_name_until_serving_cost_names_the_kit():

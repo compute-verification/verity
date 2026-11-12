@@ -356,9 +356,12 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
 verdict of record or a seal, so the writer refuses a value that isn't a number, a verdict with no target, and a verdict in
 a verifier's or a seal's words (accept, reject, pass, fail, seal, in any form: passing, failure, rejection). A validation
-is the run's own gates, never a protocol's security verdict: its status is `passed` or `failed` and nothing else, and its
-detail says what the gates found ("3 of 4 gates hold"), which the writer refuses in the same verifier's or seal's words. A
-result holds one run's measurements, one a name, and one validation.
+is the run's own gates, never a protocol's security verdict: its status is `passed` or `failed` and nothing else, which is
+the whole guard, and its detail says in the gates' own words what passed or failed. A result holds one run's measurements,
+one a name, and one validation.
+
+`kit.SHARED` is the five measurement names each resource's front door writes: `metric`, `verified`, `capacity`, `free`
+and `error`. A protocol's own name for its error (`delta_s`, `eps`) goes in that measurement's `inputs`.
 
 ## Out of scope here
 

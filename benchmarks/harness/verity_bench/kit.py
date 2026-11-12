@@ -19,8 +19,8 @@ measurements, one a name, and one validation, so a rerun writes a fresh director
 a seal: a verdict of record is its protocol's verifier's, and a seal its Commit's. So the writer refuses a value that isn't
 a number, a verdict with no target, and a verdict in a verifier's or a seal's words (`OF_RECORD`); a target check says
 where the value stands against its target (``"within target"``). **A validation is the run's own gates**, never a
-protocol's security verdict: its `status` is the schema's ``"passed"`` or ``"failed"`` and nothing else, and its
-`detail` says what the gates found (``"3 of 4 gates hold"``), which the writer refuses in a verifier's or a seal's words.
+protocol's security verdict: its `status` is the schema's ``"passed"`` or ``"failed"`` and nothing else, which is the
+whole guard, and its `detail` says in the gates' own words what passed or failed.
 
 Standard library and `verity_bench.settings` only, so a kernel's runner imports it without vLLM or torch.
 """
@@ -59,6 +59,8 @@ OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejec
 #: the statuses of a validation the writer writes: whether the run's own gates held (the schema's third, ``not_run``, is a
 #: result with no validation)
 VALIDATION_STATUSES = ("passed", "failed")
+#: the measurement names each resource's front door writes; a protocol's name for its error (`delta_s`, `eps`) goes in `inputs`
+SHARED = ("metric", "verified", "capacity", "free", "error")
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -198,12 +200,6 @@ def _number(what: str, x: Any) -> int | float:
     return int(x) if isinstance(x, numbers.Integral) else float(x)
 
 
-def _of_record(text: str) -> list[str]:
-    """The words of `text` that are a verdict of record's or a seal's (`OF_RECORD`)."""
-
-    return sorted(set(re.findall(r"[a-z]+", text.casefold())) & OF_RECORD)
-
-
 def _target_check(verdict: Any, target: Any) -> str | None:
     """A measurement's verdict, or ValueError where it isn't the check of its value against its target."""
 
@@ -211,7 +207,7 @@ def _target_check(verdict: Any, target: Any) -> str | None:
         return None
     if not isinstance(verdict, str) or not verdict.strip():
         raise ValueError(f"a measurement's verdict says in words where its value stands against its target, not {verdict!r}")
-    if words := _of_record(verdict):
+    if words := sorted(set(re.findall(r"[a-z]+", verdict.casefold())) & OF_RECORD):
         raise ValueError(f"the verdict {verdict!r} reads as a verdict of record or a seal ({', '.join(words)}), which "
                          "nothing under benchmarks/ writes: say where the value stands against its target (\"within "
                          "target\")")
@@ -280,9 +276,9 @@ class Writer:
         """Writes the run's validation into `out/result.json` and returns it: `status`, ``"passed"`` or ``"failed"``, whether
         the run's own gates held; the `checker` that says so, by name; its `detail` in words; and the `evidence`, the files
         it stands on, as paths relative to `out`, in a list. It refuses a second validation in one result, any other status,
-        a checker or a detail that isn't a string, evidence that isn't a list of relative paths inside `out`, a detail in a
-        verdict of record's or a seal's words, and a result of another run: a run's gates are its own, and a protocol's
-        security verdict is its verifier's to write."""
+        a checker or a detail that isn't a string, evidence that isn't a list of relative paths inside `out`, and a result
+        of another run. The status is the whole guard against a protocol's security verdict, which is its verifier's to
+        write: a detail says what passed or failed in the gates' own words, and the writer takes any."""
 
         if not isinstance(status, str) or status not in VALIDATION_STATUSES:
             raise ValueError(f"a validation's status is {' or '.join(map(repr, VALIDATION_STATUSES))}, whether the run's own "
@@ -291,9 +287,6 @@ class Writer:
         for what, text in (("checker", checker), ("detail", detail)):
             if not isinstance(text, str):
                 raise ValueError(f"a validation's {what} is a string, not {text!r}")
-        if words := _of_record(detail):
-            raise ValueError(f"the detail {detail!r} reads as a verdict of record or a seal ({', '.join(words)}), which "
-                             "nothing under benchmarks/ writes: say what the run's own gates found (\"3 of 4 gates hold\")")
         if not isinstance(evidence, (list, tuple)):
             raise ValueError(f"a validation's evidence is a list of paths relative to {self.out}, not {evidence!r}")
         for rel in evidence:
