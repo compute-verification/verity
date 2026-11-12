@@ -13,7 +13,7 @@ figure is the model's and its name says so (`MODELED`); none is computed from a 
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
 - `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
-  link of its host that a network certifier splits (`uplink`), at its `beta` bits a tick. `beta` is each way and the
+  link of its host that a network certifier splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
   no value, and its `inputs` say why.
 - `verified`: capacity less free, where both have a value.
@@ -60,17 +60,15 @@ NO_BOUND = "no bound at this period"
 NO_REGISTRATION = ("absent: no registration is given (--registration FILE), and capacity is read only from a "
                    "registered link's beta")
 SCALED = ("modeled: each machine of the scope registered as this one, so the scope's machines times beta times the "
-          "period's ticks; beta is each way and the term is egress, so one direction")
+          "period's seconds; beta is each way and the term is egress, so one direction")
 UNION = (f"{EPS}, the calculator's key: a union bound over the period's execution phases, their number times "
          f"{DELTA}; at 1 or more it bounds nothing")
 
 
 class Uplink(NamedTuple):
-    """A machine's certified boundary links as a registration registers them: their `beta` summed, in bits a tick each
-    way, of which the term's, egress, is one; a tick's seconds; and what a measurement's inputs say of where they were
-    read."""
+    """A machine's certified boundary links as a registration registers them: their `beta` summed, in bits a second
+    each way, of which the term's, egress, is one; and what a measurement's inputs say of where they were read."""
     beta: int
-    tick: Fraction
     said: str
 
 
@@ -87,7 +85,7 @@ def uplink(path: Path, links: int) -> Uplink:
     split by a network certifier (`Site.is_boundary`, `Site.certified`), ``links`` of them, the model's links a machine.
     The log is read as given: its check is its verifier's."""
     from verity.hardware import registration
-    from verity.hardware.site import TICK, Entry, Site
+    from verity.hardware.site import Entry, Site
 
     try:
         composite, log = registration.log_of(json.loads(path.read_text()))
@@ -96,14 +94,14 @@ def uplink(path: Path, links: int) -> Uplink:
     site = Site.of_log([e for e in log if isinstance(e, Entry)])
     hosts, boundary = [x.id for x in site.locs if x.kind == "host"], site.boundary()
     split = [k for k in boundary if site.certified(k)]
-    if len(hosts) != 1 or len(split) != links or len(boundary) != len(split):
+    if len(hosts) != 1 or len(split) != links or len(boundary) != len(split) or any(k.beta is None for k in split):
         raise SystemExit(f"certifier_term: {path} doesn't register the model's machine, one host whose {links} boundary "
                          f"link(s) a network certifier splits: it registers the hosts {hosts}, whose boundary links are "
-                         f"{[k.id for k in boundary]}, {[k.id for k in split]} of them certified")
-    return Uplink(sum(k.beta for k in split), TICK,
+                         f"{[k.id for k in boundary]}, {[k.id for k in split]} of them certified, each at a capacity")
+    return Uplink(sum(k.beta for k in split),
                   f"registration {registration.head(composite, log)}, read as given: host {hosts[0]}'s certified "
-                  f"boundary link(s) {', '.join(f'{k.id} at beta {k.beta}' for k in split)}, in bits each way a tick of "
-                  f"{TICK} s (verity.hardware.site)")
+                  f"boundary link(s) {', '.join(f'{k.id} at beta {k.beta}' for k in split)}, in bits a second each way "
+                  "(verity.hardware.site)")
 
 
 def stated(key: str, entry: dict) -> str:
@@ -183,7 +181,7 @@ def measurements(lb: Any, doc: dict, head: dict, up: Uplink | None = None) -> li
         row = (f"modeled: benchmarks/network_traces/leak_bounds.py's row {ROW} at D_j = {at}, scope {r['scope']}, "
                f"period {r['period']}, request count {r['request_count']}")
         free, ceiling, none = r["term"][at]["bits"], target * lb.GB, unbounded(r)
-        capacity = None if up is None else math.ceil(r["machines"] * up.beta * Fraction(lb.PERIODS[r["period"]]) / up.tick)
+        capacity = None if up is None else math.ceil(r["machines"] * up.beta * Fraction(lb.PERIODS[r["period"]]))
         absent = [NO_REGISTRATION] if up is None else []
         out += [
             {"name": f"{name}/free", "value": None if none else free, "unit": "bit", "target": ceiling,

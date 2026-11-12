@@ -10,7 +10,7 @@
 - the metric and free stand against the document's target as the document's own multiple of it says, and no other
   measurement has a target or a verdict;
 - capacity is read from a registered uplink's `beta`, one way: the scope's machines times it times the period's
-  ticks, and verified is capacity less free; with no registration both have no value and say why;
+  seconds, and verified is capacity less free; with no registration both have no value and say why;
 - a row whose error is 1 or more has no bound at its period: its free and verified, and the metric where the row is
   the term of record's, have no value and say why, and its error is written. At the calculator's default δ those are
   the datacenter's and the world's rows; at the δ of the result of record every row carries its amounts;
@@ -32,7 +32,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import run as R  # noqa: E402
 from verity.hardware import registration  # noqa: E402
-from verity.hardware.site import OUTSIDE, TICK, Link, Loc  # noqa: E402
+from verity.hardware.site import OUTSIDE, Link, Loc  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
 LB = R.calculator()
@@ -52,8 +52,8 @@ BOUNDED = [*GIVEN, "--scan-delta", str(DELTA)]
 AMOUNTS = {"free": "bit", "capacity": "bit", "verified": "bit", "error": "probability"}
 #: the measurements of a result with every scope and monitoring period: the term of record, and each row's amounts
 EVERY = 1 + len(LB.SCOPES) * len(LB.PERIODS) * len(AMOUNTS)
-#: the uplink's two halves' capacities in bits a tick: the host's side, which is the boundary link, and the outside's
-BETA, BEYOND = 400, 100
+#: the uplink's two halves' capacities in bits a second: the host's side, which is the boundary link, and the outside's
+BETA, BEYOND = 400 * 10 ** 9, 100 * 10 ** 9
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +97,7 @@ def absent(m: dict) -> list[str]:
 def log(tmp_path: Path, beta: int = BETA, *more: registration.Entry, composite: str = "onsite",
         links: tuple[Link, ...] | None = None, name: str = "registration") -> Path:
     """A committed registration log, in the file ``name``, of one host behind a network certifier that splits its
-    uplink, the host's side at ``beta`` bits a tick, with a memory challenger's link, which is no boundary link, and
+    uplink, the host's side at ``beta`` bits a second, with a memory challenger's link, which is no boundary link, and
     a day's declaration, which is no site entry; or of ``links`` in place of those three."""
     links = links or (Link("uplink0", ("node0", "cert0"), beta, 100_000), Link("uplink0-out", ("cert0", OUTSIDE), BEYOND, 0),
                       Link("chal0-link", ("chal0", "node0"), 7, 1_000_000))
@@ -214,18 +214,18 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
     basis = [R.at_class(doc), R.at_delta(LB, doc)]
     composite, entries = registration.log_of(json.loads(path.read_text()))
     scopes = LB.scopes(LB.inputs(world_requests=1e16))
-    assert TICK == Fraction(1, 10 ** 9) and [s.name for s in scopes] == list(LB.SCOPES) and scopes[0].machines == 1
+    assert [s.name for s in scopes] == list(LB.SCOPES) and scopes[0].machines == 1
     for scope in scopes:
         for period, seconds in LB.PERIODS.items():
             name = f"certifier_term/modeled/{scope.name}/{period}"
             capacity, free, verified = (got[f"{name}/{amount}"] for amount in ("capacity", "free", "verified"))
-            # each machine's one certified boundary link, the host's side of its uplink, over the period's nanoseconds
-            assert capacity["value"] == scope.machines * BETA * seconds * 10 ** 9 and type(capacity["value"]) is int
+            # each machine's one certified boundary link, the host's side of its uplink, over the period's seconds
+            assert capacity["value"] == scope.machines * BETA * seconds and type(capacity["value"]) is int
             assert verified["value"] == capacity["value"] - free["value"]
             assert verified["inputs"] == [f"{name}/capacity", f"{name}/free", *basis]
             assert capacity["inputs"] == [
                 f"registration {registration.head(composite, entries)}, read as given: host node0's certified boundary "
-                f"link(s) uplink0 at beta {BETA}, in bits each way a tick of 1/1000000000 s (verity.hardware.site)",
+                f"link(s) uplink0 at beta {BETA}, in bits a second each way (verity.hardware.site)",
                 R.SCALED, f"modeled: benchmarks/network_traces/leak_bounds.py's row scan at D_j = 2, scope {scope.name}, "
                 f"period {period}, request count given", *basis]
     assert "beta is each way and the term is egress, so one direction" in R.SCALED
