@@ -191,3 +191,23 @@ def test_salts_of_names_one_salt_for_each_row_of_a_port_of_the_window(run):
         AW.CS.commit(mine, data, salts_of={mine.members[0].port("row"): bytes(AW.CS.SALT_BYTES)})
     with pytest.raises(ValueError, match="one 192-byte salt for each row"):
         AW.CS.commit(mine, data, salts_of={"no-such/row": bytes(AW.CS.SALT_BYTES * N)})
+
+
+def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_module(tmp_path, monkeypatch):
+    """This audit's process holds `network_traces`' `replay` under that name (its imports reach `active_replay`, which
+    imports it), a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its
+    path, so the case is written and no error stands in its place."""
+    import a5
+
+    theirs = AW.ws.ar.replay
+    monkeypatch.setitem(sys.modules, "replay", theirs)
+    assert Path(theirs.__file__).parent.name == "network_traces" and not hasattr(theirs, "params")
+    RP = a5.own_replay()
+    assert Path(RP.__file__) == HERE / "replay.py"
+    monkeypatch.setattr(RP, "descriptor", lambda program: {"program": "p"})
+    monkeypatch.setattr(RP, "evidence", lambda *a, **k: {})
+    monkeypatch.setattr(RP, "python", lambda c: {"verdict": "accept"})
+    a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
+                  session_roots={}, served=[])
+    assert sorted(f.name for f in tmp_path.iterdir()) == ["case-python.json", "case.json"]
+    assert json.loads((tmp_path / "case.json").read_text())["params"]["program"] == {"program": "p"}

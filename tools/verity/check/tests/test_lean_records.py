@@ -449,23 +449,20 @@ def test_a_run_waits_for_the_one_that_holds_its_tree_and_then_runs(repo, tmp_pat
 
 
 def test_it_refuses_a_tree_outside_its_own(repo, tmp_path, capsys):
-    """`--tree` naming check's lean-changed tree, whose links.json says its dependencies are linked: the fast path kept those
-    hard links to check's lean-deps and built on them unsandboxed (red team). Only a tree under lean-records/ is its own."""
+    """`--tree` naming a tree outside `lean-records/`, or a link under it to one: only a tree under lean-records/ is the fast
+    path's own, whose dependencies are copies it took."""
     deps, cache = tmp_path / "deps", tmp_path / "cache"
     k = LC.LA.deps_key(repo / "a")
     (deps / k / "dep").mkdir(parents=True)
     (deps / k / "dep" / "Dep.olean").write_text("olean")
-    checks = cache / "lean-changed"
-    LC.sync(LC.closure("a"), LC.LA.COMMON.tracked_files(), checks)
-    links = {}
-    assert LC.link("a", checks, deps, links, print)
-    (checks / LC.LINKS).write_text(json.dumps(links))
+    other = cache / "elsewhere"
+    LC.sync(LC.closure("a"), LC.LA.COMMON.tracked_files(), other)
     (cache / "lean-records").mkdir()
-    (cache / "lean-records" / "elsewhere").symlink_to(checks)
-    for tree in (checks, cache / "lean-records", cache / "lean-records" / "elsewhere", tmp_path / "tree"):
+    (cache / "lean-records" / "elsewhere").symlink_to(other)
+    for tree in (other, cache / "lean-records", cache / "lean-records" / "elsewhere", tmp_path / "tree"):
         assert LC.audit_records("a", deps, tree) == 2
         assert f"lean-records: {tree} is not under {(cache / 'lean-records').resolve()}" in capsys.readouterr().out
-    assert _calls(tmp_path) == [] and LC.main(["--records", "a", "--tree", str(checks)]) == 2
+    assert _calls(tmp_path) == [] and LC.main(["--records", "a", "--tree", str(other)]) == 2
     assert LC.audit_records("a", deps, cache / "lean-records" / "mine") == 0
 
 

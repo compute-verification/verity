@@ -7,6 +7,7 @@ public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
 public import NciCheck.Desc
+public import NciCheck.DefinitionDigest
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
 meta import CoreProtocol.Profile
@@ -14,6 +15,7 @@ meta import Flock.Program
 meta import Flock.Public
 meta import Flock.WindowRecord
 meta import NciCheck.Desc
+meta import NciCheck.DefinitionDigest
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
@@ -241,6 +243,7 @@ open Lean (Json toJson)
 open Flock (V)
 open NetworkCertifier (ClockSync)
 open NetworkCheck.Check (Certificate ratOf)
+open NciCheck.DefinitionDigest (closureDigest)
 
 def protocolId : String := "verity/certifier/v0"
 def commitmentTag : String := "verity-network-certifier/period/v0"
@@ -271,7 +274,7 @@ def maxTokensEnd : Nat := 130
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
 templates (`entries`: each root template node calling a `SlotEntry_v1` Definition, by its descriptor id, members and
-closure digest, `slotEntryDigest`). -/
+closure digest, `closureDigest`). -/
 structure Audit where
   free : Nat
   steps : Nat
@@ -575,91 +578,7 @@ def ingressTemplates : List (Flock.Program.Node × Flock.Program.Defn) →
 entry the scan's ingress reads at that slot (its `o0`). -/
 def slotEntryId : String := "SlotEntry_v1"
 
-/-- The parts reference sequence `j` stands for, flat (PROTOCOL.md §4.8): an alias's are the parts of argument `a` of node
-`k` (`rows`, the nodes before the one `j` is in), a concatenation's are its parts' spliced in, and any other is its one
-part. Concatenations nest at most `fuel` deep. -/
-def flatParts (rows : Array (Array (Array Json))) : Nat → Json → V (Array Json)
-  | 0, _ => throw "program: references nest deeper than this verifier follows"
-  | fuel + 1, j => do
-    if let .ok a := j.getObjVal? "alias" then
-      let ps := match a with
-        | .arr #[k, x] => match k.getNat?, x.getNat? with
-          | .ok k, .ok x => rows[k]?.bind (·[x]?)
-          | _, _ => none
-        | _ => none
-      let some ps := ps | throw s!"program: alias {a.compress} names no argument of an earlier node"
-      return ps
-    if let .ok (.arr ps) := j.getObjVal? "concat" then
-      return (← ps.mapM (flatParts rows fuel)).foldl (· ++ ·) #[]
-    return #[j]
-
-/-- A flat sequence as the canonical entry writes it: its one part, or `{"concat": parts}`. -/
-def written (ps : Array Json) : Json := match ps with
-  | #[p] => p
-  | ps => Json.mkObj [("concat", .arr ps)]
-
-/-- A Definition's canonical entry (`codec.canonical_entry`, PROTOCOL.md §4.8), from its descriptor entry `e` and the
-descriptor's interning (`callees`, `types`): each node's callee id (`fn`), output type (`out`) and argument types inline,
-every alias replaced by the parts it stands for and every reference sequence flat, so one Definition has one entry in any
-Program, whichever aliases its writer chose. -/
-def canonicalEntry (callees types : Array Json) (e : Json) : V Json := do
-  let set := fun (j : Json) (k : String) (v : Json) => match j with
-    | .obj kvs => Json.obj (kvs.insert k v)
-    | j => j
-  let at_ := fun (xs : Array Json) (i : Json) => match i.getNat? with
-    | .ok i => xs.getD i .null
-    | .error _ => .null
-  unless e.getObjValD "form" == .str "composite" do return e
-  let body := e.getObjValD "body"
-  let .arr nodes := body.getObjValD "nodes" | return e
-  let mut rows : Array (Array (Array Json)) := #[]
-  let mut out : Array Json := #[]
-  for n in nodes do
-    let .arr args := n.getObjValD "args" | throw "program: a node's arguments are not a list"
-    let row ← args.mapM fun a => flatParts rows Flock.Steps.FUEL (a.getObjValD "refs")
-    rows := rows.push row
-    let args := (args.zip row).map fun (a, ps) => set (set a "type" (at_ types (a.getObjValD "type"))) "refs" (written ps)
-    out := out.push (set (set (set n "fn" (at_ callees (n.getObjValD "fn"))) "out" (at_ types (n.getObjValD "out"))) "args"
-      (.arr args))
-  let ret ← flatParts rows Flock.Steps.FUEL (body.getObjValD "ret")
-  return set e "body" (set (set body "nodes" (.arr out)) "ret" (written ret))
-
-/-- `codec.definition_digest`: the SHA-512, in hex, of a Definition's canonical entry (`canonicalEntry`). -/
-def definitionDigest (callees types : Array Json) (e : Json) : V String := do
-  pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (← canonicalEntry callees types e)).toUTF8))
-
-/-- The closure digest of Definition `key` of the Program whose descriptor is `j`: the SHA-512, in hex, of the
-canonical JSON object that maps each Definition `key` reaches (itself, its nodes' callees, theirs, …), by descriptor
-id, to its `definitionDigest`. It digests the template's whole body, so another Definition under its id has another
-digest. -/
-def slotEntryDigest (j : Json) (key : String) : V String := do
-  let defs := j.getObjValD "definitions"
-  let tab := fun (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
-  let (callees, types) := (tab "callees", tab "types")
-  let nodesOf := fun (e : Json) => match (e.getObjValD "body").getObjValD "nodes" with | .arr xs => xs | _ => #[]
-  let fuel := match defs with
-    | .obj kvs => kvs.foldl (fun n _ e => n + (nodesOf e).size) 1
-    | _ => 1
-  let mut seen : Array (String × Json) := #[]
-  let mut todo : List String := [key]
-  for _ in [0:fuel] do
-    match todo with
-    | [] => break
-    | k :: rest =>
-      todo := rest
-      if seen.any (·.1 == k) then continue
-      let e := defs.getObjValD k
-      if let .null := e then throw s!"program: {key} reaches {k}, no Definition of its descriptor"
-      seen := seen.push (k, .str (← definitionDigest callees types e))
-      if e.getObjValD "form" == .str "composite" then
-        for n in nodesOf e do
-          match (n.getObjValD "fn").getNat?.toOption.bind (callees[·]?) with
-          | some (.str c) => todo := c :: todo
-          | _ => throw s!"program: {k}: a node's callee is outside callees"
-  unless todo.isEmpty do throw s!"program: {key}'s callees outrun its descriptor's nodes"
-  pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (Json.mkObj seen.toList)).toUTF8))
-
-/-- The slot entry's Definitions the check takes, by closure digest (`slotEntryDigest`): `io_shell.SlotEntry_v1` at
+/-- The slot entry's Definitions the check takes, by closure digest (`closureDigest`): `io_shell.SlotEntry_v1` at
 its circuit-check rows, `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`
 (a Llama-3 tokenizer's 17-bit ids and end-of-text id), in that order. A template under `SlotEntry_v1`'s name with
 another body has neither digest, so its entries are no slot entries (`wired`); a new binding or body of `SlotEntry_v1`
@@ -675,7 +594,7 @@ def slotEntryPins : List String :=
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
 template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1`, each
-with its closure digest (`slotEntryDigest`). -/
+with its closure digest (`closureDigest`). -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
   exactly a ["free", "program", "steps"] ctx
   let pj ← Flock.J.get a "program" ctx
@@ -691,7 +610,7 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | some d => if !d.prim && d.id == slotEntryId then some (d.key, x.members) else none
     | none => none
   let entries ← slots.mapM fun (k, n) => do
-    pure (k, n, ← (slotEntryDigest pj k).mapError (s!"{ctx}: " ++ ·))
+    pure (k, n, ← (closureDigest pj k).mapError (s!"{ctx}: " ++ ·))
   pure { free := ← Flock.J.nat a "free" ctx, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
          units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0, entries }
 
