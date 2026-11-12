@@ -218,7 +218,7 @@ def _owners(lock: dict, line: str) -> tuple[str, ...]:
 
 def same_inputs(repo: Path, a: str, b: str) -> bool:
     """Whether commits ``a`` and ``b`` have the same Lean inputs (`vqueue_slim.lean_key`), so the same lock records."""
-    from .vqueue_slim import lean_key      # not at the top: vqueue_slim imports this module (`FAULT_RE`)
+    from .vqueue_slim import lean_key
     return (key := lean_key(repo, a)) is not None and key == lean_key(repo, b)
 
 
