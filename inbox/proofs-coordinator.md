@@ -77189,3 +77189,190 @@ The smallest mend, as you expected: `coinsReason` and `coins_reason` take the ve
 **Runs.** [run] None launched; the stand-in cases ran on my VM in under two seconds each. [read] Read: `r20261112-064104-4f7a` (exit 0), `r20261111-115454-5832` (exit 0), `r20261112-051717-6edf` (exit 0), `r20261112-050050-6f72` (exit 0).
 
 For the table: no new row and no figure. `server_rate.py --wide-leaf` is on a branch (#9077 at `194a194824f5`), not on `main`; no row has been run with the flag, on a card or off it.
+
+## SESSREAD, Thu 12 Nov 07:51Z: PRF-580's two open things: the patterns' factor is monotone in the requests' thresholds (a one-file try compiled), but "at most S" needs `Patterns.lean`'s proof at a threshold too, not only a lemma over the listed theorem; and at F = 2 on the tests' smallest points the patterns' bits equal the capped sets', not below
+
+Mailbox read 07:51Z: no section after 07:17Z [read]. Nothing built: one scratch file, compiled once, in no pull request.
+
+### 1. Is the bound monotone in S, so that "at most S" replaces "exactly S" by a lemma?
+
+**Half yes.** The factor is monotone, and that is a lemma that compiled. But `FactorUpperPatternsSound` as listed cannot be applied at a threshold above the requests' own, so its proof is restated at a threshold as well. Neither the factor's definition nor the executable bound changes.
+
+- **Compiled** [run `r20261112-074115-0a8e`: `lean_changed.py --try security/Proofs/Flock/SamplingGeneric/TwoRankinThreshold.lean`, exit 0 in 148 s, none of its 5 theorems uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`]:
+  - `rankinFactorPatternsAt s Pt d req n q θ ρ`: `rankinFactorPatterns` with request `r`'s class read at `n r` in place of `servedBits req r`; at `n = servedBits req` it is `rankinFactorPatterns`, by `rfl`.
+  - `rankinFactorPatternsAt_mono`: for `q ≤ 1`, if `n r ≤ n' r` at every request that reads in `ρ`, the factor at `n` is at most the factor at `n'`.
+  - `rankinFactorPatterns_le_at`: if every request that reads in `ρ` serves at most `S` bits, `rankinFactorPatterns s Pt d req q θ ρ ≤ rankinFactorPatternsAt s Pt d req (fun _ => S) q θ ρ`.
+  - The argument: a class at the lower thresholds is the union of the classes at the higher ones that coarsen to it; its bits `min(b(U_r), n_r)` are at most each of theirs, and the largest pass probability over its sets is the largest over theirs, at most their sum.
+  - Compiled, not proved: no kernel replay, no second reader. It reads only what `main` has (`lightBits_lightOf`, `blocksTo_mono`, `Design.Two.passes_nonneg`) [read: `git grep` on `origin/main`]; I compiled it on #9173's head only.
+- **Why the lemma is not enough** [read]: the conclusion of `FactorUpperPatternsSound` (`security/Properties/Spot/FactorUpper.lean:59-69`) names `rankinFactorPatterns … req`, whose thresholds are `servedBits req` itself (`security/Definitions/Claims/SamplingTwoRankin.lean:57-64`). The factor has no `S` of its own, so the listed theorem says nothing of the factor at `S` for requests that serve less. Its proof uses `servedBits req r = S` only to rewrite the threshold to `S`, at eleven hypotheses of `security/Proofs/Properties/Spot/FactorUpper/Patterns.lean` (`pat_mem_all` :770, `pat_touch` :787, `pat_y_le` :848, `pat_bound` :887, `first_le` :947, `all_le` :970, `touch_le` :988, `patterns_le` :1027, `chord_term` :1162, `whole_term` :1213, `patterns_core` :1329).
+- **And `=` cannot be made `≤` in place** [read `pat_mem_all` :770-783 and `allOf` :683]: a request's classes there hold the heavy class only when its proof blocks hold `S` bits or more, and a request serving `n < S` is heavy from `n` bits on.
+- **What the planner's pull request needs beside the lemma** [derived, not built]: `Patterns.lean`'s proof at a threshold. `patOf` (:695) and `Wof` (:927) take `n r` for `servedBits req r`, the eleven hypotheses read `n r = S`, and the conclusion is `rankinFactorPatternsAt … n … ≤ exp v`. Thirty-five lines of the file's 1,404 name `servedBits` [run: `rg -c servedBits`]. Then at `n = fun _ => S` with the lemma above: the bound under `servedBits req r ≤ S`.
+- **What moves in the locks then** [derived]: `FactorUpperPatternsSound` and `RequestsCover`'s last clause each go from `= S` to `≤ S`, one hypothesis weaker each, a notice of #9173's kind. `rankinFactorPatterns`, `AdmissibleTwoRankinPatterns`, the text of `TwoStageCheckPatternsSound` and the executable `lnFactorUpperPatterns` do not change. `rankinFactorPatternsAt` is a proof-only definition, in the proofs tree.
+- **Not checked:** whether the executable's number `lnFactorUpperPatterns cs reads N S P` is itself monotone in `S`. It is not needed: the chain is factor at `servedBits req` ≤ factor at `S` ≤ `e^v` at `S` [derived].
+- **Where the file is:** commit `6f03f3185ea3` on #9173's head, local to my VM and not pushed (your "push only to it and to your entries"); its whole text is at the end of this entry, and I push it to a branch you name on your word.
+
+### 2. At F = 2 on the smallest point the tests enumerate, are the patterns' bits below the capped sets'?
+
+**No: equal**, on both points of `test_plancheck.SMALL` at the tests' own parameters (two replay blocks, q = 0.9, δ = 0.3, served 3, so S = F × served = 6).
+
+| point | served | S | capped sets' bits, `fanout=2` | patterns' bits, one request at S | count, capped sets | count, patterns |
+|---|---|---|---|---|---|---|
+| `[Cell(3, 2)]`, `k = {0: 1}` | 3 | 6 | 13.9316 | 13.9316 | 265 | 265 |
+| `[Cell(2, 1), Cell(1, 4, stratum=1)]`, `k = {0: 1, 1: 1}` | 3 | 6 | 11.3128 | 11.3128 | 25 | 25 |
+| the first | 2 | 4 | 13.9316 | 13.3842 | 265 | 201 |
+| the second | 2 | 4 | 11.2610 | 11.3461 | 25 | 25 |
+| the first | 1 | 2 | 10.0000 | 8.1749 | 193 | 25 |
+| the second | 1 | 2 | 10.0000 | 7.4009 | 25 | 25 |
+
+- [run: a local script, 0.4 s] The bits are the Python planner's: `two_stage_exfil(cells, k, 2, .9, .3, served, fanout=2)`, which equals `two_stage_exfil(…, 2 × served)`, against `two_stage_exfil(…, 2 × served, union=True)`, reading 1 of PRF-580 (the group is one request, N = 1). The counts are by enumeration, each replay block capped at S against the patterns of one request a replay block serving S; my enumeration equals `test_plancheck._admissible_count` at S = 1, 2, 3, 4, 6, 9 on both points [run].
+- **Why equal at the tests' point** [derived from the numbers]: a replay block of either point commits exactly 6 bits (3 × 2, and 2 × 1 + 4). At S = 6 the cap binds on no set but the whole replay block, where both forms charge 6, and both equal the bound with no cap (13.9316 and 11.3128 [run]). At F = 1 the same points give 12.0000 against 8.7846 and 11.2344 against 8.1749 [run].
+- **So these points cannot show a gain at F = 2.** A test in the planner's pull request needs a served bound of at most 2 on the first point (S = 4: 13.3842 against 13.9316, counts 201 against 265) or a replay block that commits more than F × served bits [derived].
+- **The patterns' bits are not always the lower:** on the second point at S = 4 they are 11.3461 against 11.2610, with equal counts. A planner that takes the patterns' form at F > 1 would take the lesser of the two bounds [derived; the choice is the planner's pull request's].
+- **Not run:** the bits Lean certifies (`plancheck.check`); its binary is not on this VM. These are the planner's own numbers.
+
+### The scratch file, whole
+
+`security/Proofs/Flock/SamplingGeneric/TwoRankinThreshold.lean` at `6f03f3185ea3` [run `r20261112-074115-0a8e`]:
+
+```lean
+module
+
+public import Proofs.Flock.SamplingGeneric.TwoRankin
+
+/-!
+# The patterns' factor is monotone in the requests' thresholds
+
+`rankinFactorPatterns` (`Definitions.Claims.SamplingTwoRankin`) reads request `r`'s class at the threshold
+`servedBits req r`. `rankinFactorPatternsAt` is the same sum at any thresholds `n : R → ℕ`, and it only grows when the
+thresholds of the requests that read in the replay block grow.
+
+* `coarsen`, `coarsen_lightOf`: a set's class at a threshold fixes its class at any lower one.
+* `lightBits_lightOf_mono`: a class's bits `min(b(U), n)` grow with the threshold.
+* `rankinFactorPatternsAt_mono`: **the factor is monotone in the thresholds**. A class `c` at the lower thresholds is
+  the union of the classes `c'` at the higher ones that coarsen to it. Its bits are at most each `c'`'s, and the
+  largest pass probability over its sets is the largest over those `c'`, at most their sum.
+* `rankinFactorPatterns_le_at`: the patterns' factor of requests each serving at most `S` bits is at most the factor
+  at the threshold `S`.
+-/
+
+@[expose] public section
+
+namespace Claims.Sampling
+
+open Finset
+
+/-- **The patterns' factor at thresholds `n`**: `rankinFactorPatterns` with request `r`'s class read at `n r` in place of
+`servedBits req r`. -/
+noncomputable def rankinFactorPatternsAt (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
+    [DecidableEq R] (req : Fin s.prog.outs.length → R) (n : R → ℕ) (q θ : ℝ) (ρ : ℕ) : ℝ :=
+  ∑ c ∈ (blocksIn Pt d.part ρ).powerset.image
+      (fun U r => lightOf s Pt (n r) (blocksTo s.prog Pt req U r)),
+    (2 : ℝ) ^ (∑ r, lightBits s Pt (n r) (c r)) *
+      ⨆ U : ((blocksIn Pt d.part ρ).powerset.filter
+          fun U => (fun r => lightOf s Pt (n r) (blocksTo s.prog Pt req U r)) = c),
+        d.passes Pt q (counts Pt d.part U.1) ρ ^ θ
+
+theorem rankinFactorPatternsAt_servedBits (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type}
+    [Fintype R] [DecidableEq R] (req : Fin s.prog.outs.length → R) (q θ : ℝ) (ρ : ℕ) :
+    rankinFactorPatternsAt s Pt d req (servedBits req) q θ ρ = rankinFactorPatterns s Pt d req q θ ρ := rfl
+
+/-- A class at a higher threshold, read at the threshold `n`. -/
+def coarsen (s : AuditStatement) (Pt : Partition) (n : ℕ) : Option (Option (Finset ℕ)) → Option (Option (Finset ℕ))
+  | none => none
+  | some none => some none
+  | some (some A) => if n ≤ bitsOf s Pt A then some none else some (some A)
+
+/-- **A set's class at a threshold fixes its class at a lower one.** -/
+theorem coarsen_lightOf (s : AuditStatement) (Pt : Partition) {n n' : ℕ} (V : Finset ℕ)
+    (h : V.Nonempty → n ≤ n') : coarsen s Pt n (lightOf s Pt n' V) = lightOf s Pt n V := by
+  unfold lightOf
+  by_cases h0 : V = ∅
+  · simp [h0, coarsen]
+  · have hle := h (nonempty_iff_ne_empty.2 h0)
+    by_cases h2 : n' ≤ bitsOf s Pt V
+    · have h1 : n ≤ bitsOf s Pt V := hle.trans h2
+      simp [h0, h1, h2, coarsen]
+    · by_cases h1 : n ≤ bitsOf s Pt V <;> simp [h0, h1, h2, coarsen]
+
+/-- **A class's bits grow with the threshold.** -/
+theorem lightBits_lightOf_mono (s : AuditStatement) (Pt : Partition) {n n' : ℕ} (V : Finset ℕ)
+    (h : V.Nonempty → n ≤ n') :
+    lightBits s Pt n (lightOf s Pt n V) ≤ lightBits s Pt n' (lightOf s Pt n' V) := by
+  rw [lightBits_lightOf, lightBits_lightOf]
+  rcases V.eq_empty_or_nonempty with h0 | h0
+  · subst h0
+    simp [bitsOf]
+  · exact min_le_min le_rfl (h h0)
+
+/-- **The patterns' factor is monotone in the thresholds** of the requests that read in the replay block. -/
+theorem rankinFactorPatternsAt_mono (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
+    [DecidableEq R] (req : Fin s.prog.outs.length → R) {n n' : R → ℕ} {q θ : ℝ} (ρ : ℕ) (hq1 : q ≤ 1)
+    (hn : ∀ r, (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty → n r ≤ n' r) :
+    rankinFactorPatternsAt s Pt d req n q θ ρ ≤ rankinFactorPatternsAt s Pt d req n' q θ ρ := by
+  classical
+  let P : Finset (Finset ℕ) := (blocksIn Pt d.part ρ).powerset
+  let pat : (R → ℕ) → Finset ℕ → R → Option (Option (Finset ℕ)) := fun m U r =>
+    lightOf s Pt (m r) (blocksTo s.prog Pt req U r)
+  let wt : (R → ℕ) → (R → Option (Option (Finset ℕ))) → ℕ := fun m c => ∑ r, lightBits s Pt (m r) (c r)
+  let cls : (R → ℕ) → (R → Option (Option (Finset ℕ))) → Finset (Finset ℕ) := fun m c =>
+    P.filter fun U => pat m U = c
+  let g : (R → ℕ) → (R → Option (Option (Finset ℕ))) → ℝ := fun m c =>
+    ⨆ U : cls m c, d.passes Pt q (counts Pt d.part U.1) ρ ^ θ
+  let co : (R → Option (Option (Finset ℕ))) → R → Option (Option (Finset ℕ)) := fun c r =>
+    coarsen s Pt (n r) (c r)
+  have hf0 : ∀ U : Finset ℕ, 0 ≤ d.passes Pt q (counts Pt d.part U) ρ ^ θ := fun U =>
+    Real.rpow_nonneg (d.passes_nonneg Pt hq1 _ _) θ
+  have hg0 : ∀ m c, 0 ≤ g m c := fun m c => Real.iSup_nonneg fun U => hf0 U.1
+  have hV : ∀ U ∈ P, ∀ r, (blocksTo s.prog Pt req U r).Nonempty → n r ≤ n' r := fun U hU r h =>
+    hn r (h.mono (blocksTo_mono req (mem_powerset.1 hU) r))
+  have hco : ∀ U ∈ P, co (pat n' U) = pat n U := fun U hU =>
+    funext fun r => coarsen_lightOf s Pt _ (hV U hU r)
+  have hsup : ∀ c, g n c ≤ ∑ c' ∈ (P.image (pat n')).filter (fun c' => co c' = c), g n' c' := by
+    intro c
+    show (⨆ U : cls n c, d.passes Pt q (counts Pt d.part U.1) ρ ^ θ) ≤ _
+    refine Real.iSup_le (fun U => ?_) (sum_nonneg fun c' _ => hg0 n' c')
+    obtain ⟨U, hU⟩ := U
+    obtain ⟨hUP, hUc⟩ := mem_filter.1 hU
+    have hmem : pat n' U ∈ (P.image (pat n')).filter (fun c' => co c' = c) :=
+      mem_filter.2 ⟨mem_image_of_mem _ hUP, (hco U hUP).trans hUc⟩
+    have hmemU : U ∈ cls n' (pat n' U) := mem_filter.2 ⟨hUP, rfl⟩
+    have hle : d.passes Pt q (counts Pt d.part U) ρ ^ θ ≤ g n' (pat n' U) :=
+      le_ciSup (f := fun V : cls n' (pat n' U) => d.passes Pt q (counts Pt d.part V.1) ρ ^ θ)
+        (Set.finite_range _).bddAbove ⟨U, hmemU⟩
+    exact hle.trans (single_le_sum (f := fun c' => g n' c') (fun c' _ => hg0 n' c') hmem)
+  have hw : ∀ c' ∈ P.image (pat n'), (2 : ℝ) ^ wt n (co c') ≤ (2 : ℝ) ^ wt n' c' := by
+    intro c' hc'
+    obtain ⟨U, hU, rfl⟩ := mem_image.1 hc'
+    refine pow_le_pow_right₀ one_le_two (sum_le_sum fun r _ => ?_)
+    show lightBits s Pt (n r) (coarsen s Pt (n r) (lightOf s Pt (n' r) (blocksTo s.prog Pt req U r))) ≤
+      lightBits s Pt (n' r) (lightOf s Pt (n' r) (blocksTo s.prog Pt req U r))
+    rw [coarsen_lightOf s Pt _ (hV U hU r)]
+    exact lightBits_lightOf_mono s Pt _ (hV U hU r)
+  show ∑ c ∈ P.image (pat n), (2 : ℝ) ^ wt n c * g n c ≤ ∑ c' ∈ P.image (pat n'), (2 : ℝ) ^ wt n' c' * g n' c'
+  calc ∑ c ∈ P.image (pat n), (2 : ℝ) ^ wt n c * g n c
+      ≤ ∑ c ∈ P.image (pat n), ∑ c' ∈ (P.image (pat n')).filter (fun c' => co c' = c),
+          (2 : ℝ) ^ wt n' c' * g n' c' := by
+        refine sum_le_sum fun c _ => ?_
+        have h2 : (0 : ℝ) ≤ (2 : ℝ) ^ wt n c := pow_nonneg zero_le_two _
+        refine (mul_le_mul_of_nonneg_left (hsup c) h2).trans ?_
+        rw [mul_sum]
+        refine sum_le_sum fun c' hc' => ?_
+        obtain ⟨hc'I, hc'c⟩ := mem_filter.1 hc'
+        rw [← hc'c]
+        exact mul_le_mul_of_nonneg_right (hw c' hc'I) (hg0 n' c')
+    _ = ∑ c' ∈ P.image (pat n'), (2 : ℝ) ^ wt n' c' * g n' c' :=
+        sum_fiberwise_of_maps_to (g := co) (fun c' hc' => by
+          obtain ⟨U, hU, rfl⟩ := mem_image.1 hc'
+          exact mem_image.2 ⟨U, hU, (hco U hU).symm⟩) fun c' => (2 : ℝ) ^ wt n' c' * g n' c'
+
+/-- **Requests serving at most `S` bits**: the patterns' factor is at most the factor at the threshold `S`. -/
+theorem rankinFactorPatterns_le_at (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
+    [DecidableEq R] (req : Fin s.prog.outs.length → R) {q θ : ℝ} (ρ : ℕ) (hq1 : q ≤ 1) {S : ℕ}
+    (hS : ∀ r, (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty → servedBits req r ≤ S) :
+    rankinFactorPatterns s Pt d req q θ ρ ≤ rankinFactorPatternsAt s Pt d req (fun _ => S) q θ ρ :=
+  rankinFactorPatternsAt_mono s Pt d req (n := servedBits req) (n' := fun _ => S) ρ hq1 hS
+
+end Claims.Sampling
+```
+
+Tags: [run] a command run now or a run's fetched log, with its id; [read] a place read now; [derived] reasoned, not compiled.
