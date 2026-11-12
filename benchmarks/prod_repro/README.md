@@ -1,11 +1,11 @@
 # vLLM at its serving settings, replayed
 
 One command serves vLLM at the settings vLLM publishes for serving the model (prefix caching on, speculative decoding
-on, the context limit the cards hold) with and without our changes, replays the window it served, and prints
-what the serve turned on and three lines: whether the replay's tokens are the served ones, what our changes cost over
-stock, and the advice a request. It measures nothing of its own. The serve, the load, the cost and the replay are the
-serving cost benchmark's (`benchmarks/serve_tax/`: `run.sh`, `serve_tax.py`, `replay.py`); this directory is the runner
-that calls them (`run.sh`) and the reader of what they leave (`prod_repro.py report`).
+on, the context limit its recipe sets for the cards) with and without our changes, replays the window it served, and
+prints what the serve turned on and three lines: whether the replay's tokens are the served ones, what our changes
+cost over stock, and the advice a request. It measures nothing of its own. The serve, the load, the cost and the
+replay are the serving cost benchmark's (`benchmarks/serve_tax/`: `run.sh`, `serve_tax.py`, `replay.py`); this
+directory is the runner that calls them (`run.sh`) and the reader of what they leave (`prod_repro.py report`).
 
 ## The command
 
@@ -38,14 +38,16 @@ ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
   not keep. `--pass-prompts`, `--sampled` and `--stop-at` are the benchmark's `PASS_PROMPTS` (the prompts a pass
   sends), `SAMPLED` (each request sampled at the recipe's temperature and top-p, under its user's seed) and `STOP_AT`
   (an arm starts no pass it can't finish by then; no replay starts after it either).
-- **The replay** is a step of its own after the arms: the benchmark's runner once more, in its replay-only form, so
-  the job leases the cards a second time (`MAX_MIN` is the job's minutes in all: the replay's lease gets what the
-  arms left of it). `replay.py` rebuilds the engine from the step trace's header and re-runs
-  the pass under its recorded schedule. The step runs under what ours' engine has on that the job's environment has
-  not: the arm's own vLLM general plugins and environment (`prod_repro.py replay-env`; today the canonical DSA
-  top-k's, for an arm that has it). They are set for the replay alone, since the benchmark builds every server's path
-  from the job's and a stock arm's server must not inherit them. The plugins' site and the files they keep are in a
-  directory outside the run's, removed when the step ends.
+- **The context limit** is `--max-model-len`'s, for every arm. Where the job names none it is the one `limits.json`
+  holds for the model (262,144 tokens for GLM-5.3, its recipe's for these cards), else the benchmark's. The file also
+  says what is known of leaving the limit to vLLM (`--max-model-len auto`), with the run that showed it, and the
+  report's first line repeats it beside the limit the arms were started at.
+- **The replay** runs after the arms, under their lease: `replay.py` rebuilds the engine from the step trace's header
+  and re-runs the pass under its recorded schedule. An arm that served on the canonical DSA top-k (`prod-record`) is
+  replayed on it: the replay loads the arm's other vLLM plugins under the arm's environment before it builds the
+  engine (`replay.served_under`), and its record says so. Such an arm keeps files on the node: `PRIVATE` names a
+  directory for them outside every run's, which the corpus client needs for it; a job of vLLM's client without one
+  serves all the same and keeps no counters of the top-k.
 - **The third form** reads an earlier job's `out/` again and needs no GPU; where it names no arm, the job is read as
   the arms it served.
 - `ADVICE_TRACE` names the trace directory of a certified serve, which the advice line is read from; no arm of the
@@ -54,24 +56,27 @@ ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
 
 The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. The job fails where an arm or the replay
 fails, where a replay was asked for and its tokens were not compared, and where a replayed token or step differs from
-the served one. A job that ends early still has its report, also one whose time ended (SIGTERM: the arm stops, no
-replay starts, and the report is of what was served): it says which arm failed and on what, which stopped
-before a pass, whether the replay ended and how its log ends; and for a replay that differs, the first token that
-does and the first step.
+the served one. A job that ends early still has its report, also one whose time ended (SIGTERM: the arm or the
+replay stops, and the report is of what was served and replayed by then): it says which arm failed and on what,
+which stopped before a pass, whether the replay ended and how its log ends; and for a replay that differs, the first
+token that does and the first step.
 
 ## What each line means
 
+- **the first line**: the context limit the launch lines of ours and stock name, and for a model `limits.json` says
+  so of, that vLLM does not start with the limit left to it, why, and the run that showed it.
 - **model**: the model as the benchmark names it and the checkpoint the engines loaded; they are two things where
   `CHECKPOINT` names another model's directory.
 - **what ran**: each arm from its own record (`meta.json`): the seconds its server took to come up, how many times it
   served the load and how many requests it left unfinished; `FAILED` with the record's error, `STOPPED` before the
   pass `STOP_AT` left no time for, `NOT SERVED` for an arm with no record. Then the replay: whether it ended, and where
-  it did not, the last line of its log (`out/replay-<mode>.log`); and the replay's engine (`out/replay_engine.json`):
-  the plugins and environment of ours it ran under, or that ours turns nothing on in its engine beside its record.
-  For the canonical DSA top-k, what its own counters say of the replay's processes and, where the job kept the arms'
-  own files (`PRIVATE`), of serving's: the processes that kept counters, the calls of the indexer's top-k and the
-  rows past its keys that were rewritten. The counters are lower bounds (a process writes them every few thousand
-  calls and when it exits), and a replay in which no process kept any shows nothing of the top-k having run there.
+  it did not, the last line of its log (`out/replay-<mode>.log`); and the replay's engine, as the replay's own
+  record says: the plugins and environment of ours it ran under, or that ours serves with no plugin beside its record.
+  For the canonical DSA top-k, what its own counters say of the replay's processes and of serving's: the processes
+  that kept counters, the calls of the indexer's top-k and the rows of more than its keys that were rewritten. The
+  processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in
+  `out/topk_counters.json`. The counts are lower bounds (a process writes them every few thousand calls and when it
+  exits), and a replay in which no process kept any shows nothing of the top-k having run there.
 - **settings**: what ours ran with, stock's beside it, each with what says so (the launch line, the engine's own
   configuration in the step trace's header, the engine's counters): prefix caching, speculative decoding with the
   share of draft tokens accepted where the benchmark counts them, the context limit beside the model's own (the
@@ -94,8 +99,10 @@ does and the first step.
   emitted in the earliest step (its request, its position, the id served and the id replayed there, and that step),
   and the first step whose rows differ, with the rows only serving ran and the rows only the replay ran.
 - **cost**: stock's output tokens a second over ours, less one: the share of stock's serving time our changes add at
-  equal tokens, with its 95% interval over reps. Beside it, the same figure for stock served a second time, the noise
-  floor, and whether the interval, widened by the floor, is under the target. By the corpus client the figure is
+  equal tokens, with its 95% interval and the reps it is over. Beside it, the same figure for stock served a second
+  time, the noise floor. `under 1%: yes` is printed only where the interval's upper end, widened by the floor, is under
+  the target; otherwise `not shown`, as for a cost of too few reps for an interval: the estimate alone shows nothing.
+  By the corpus client the figure is
   `serve_tax.tax` and is a cost only where stock did not keep up with the arrivals; where it kept up, the line is not
   measured. By vLLM's client it is `serve_tax.serving_cost`, the paired ratio at the rung where stock serves most (for
   a sessions load, at its users), which needs six reps for an interval.
@@ -116,8 +123,9 @@ the measured ones and names the arms that were not served whole.
   has no field for speculative decoding, so a certified serve at these settings would be refused.
 - **The recipe's settings are GLM-5.3's alone.** For every other model the arms are the benchmark's own: speculative
   decoding off and a context limit of 4,096 tokens unless `--max-model-len` is given.
-- **The context limit is not the model's own.** At the recipe's settings it is the longest the cards' KV cache
-  holds, which vLLM fits when the engine starts; the report prints it beside the model's own.
+- **The context limit is not the model's own.** At the recipe's settings it is the recipe's number for the cards,
+  given outright: with the limit left to it, vLLM at the benchmark's pin does not start this model on them
+  (`limits.json`). The report prints the limit beside the model's own.
 - **`prod` is not the recipe's line whole.** It is behind vLLM's Python front end, with the engine's seed set, and
   its requests are token ids sent to the completions endpoint (`benchmarks/serve_tax/README.md` lists each
   departure). Every engine, stock too, starts with Python's hash seed and Inductor's block choice pinned.

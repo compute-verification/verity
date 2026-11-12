@@ -1,0 +1,10 @@
+{
+ "glm53": {
+  "max_model_len": 262144,
+  "auto": {
+   "starts": false,
+   "why": "it builds the model at its own limit before it fits one, and the kernel warm-up then runs out of memory on every card",
+   "run": "r20261112-051200-3770"
+  }
+ }
+}

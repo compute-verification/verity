@@ -79,7 +79,7 @@ def corpus_arm(out: Path, name: str, tok_per_s: list[float], *, argv: tuple[str,
 def replayed(out: Path, ours: str = "record", *, tokens: dict[str, list[int]] | None = None, steps: list[dict] | None = None,
              load: str = LOAD, keep_steps: bool = True, **over: object) -> Path:
     """A replay's directory as `replay.py` leaves it for rep 1 of ``ours``'s pass ``load``: by default every step and
-    token as served."""
+    token as served, by an engine under nothing of the arm's (``served_under``)."""
     w = R.window(out / ours, load, 1)
     got = {"steps": steps if steps is not None else [dict(s) for s in w["steps"]],
            "tokens": {r["engine_id"]: list(r["served"]) for r in w["requests"]} | (tokens or {})}
@@ -88,7 +88,7 @@ def replayed(out: Path, ours: str = "record", *, tokens: dict[str, list[int]] | 
     (d / "replay.json").write_text(json.dumps({
         "arm_dir": str(out / ours), "served_run_id": "r-1", "run_id": "r-1", "load": load, "rep": 1, "mode": "compiled",
         "served_mode": "compiled", "served_window_s": 0.2, "replay_wall_s": 0.3, "engine_ready_s": 9.0,
-        **R.compare(w, got), **over}))
+        "served_under": None, **R.compare(w, got), **over}))
     R.write_tokens(d, got["tokens"])
     if keep_steps:
         (d / "replay_steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in got["steps"]))
@@ -114,7 +114,9 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
     replayed(out)
     rc, txt, r = run(out)
     assert rc == 0 and capsys.readouterr().out == txt and r["failed"] == []
-    assert txt.startswith("prod_repro: load burst; stock compiled, stock again compiled-again, ours record; run r-1, commit "
+    # first the context limit the arms were started at
+    assert txt.startswith("prod_repro: context limit 4,096 tokens, given outright to record and compiled\n"
+                          "prod_repro: load burst; stock compiled, stock again compiled-again, ours record; run r-1, commit "
                           + "c" * 40 + f"\nmodel: repo@rev, as the benchmark names it; the checkpoint served: {out / 'ck'}\n")
     # how far each arm and the replay got comes first, from their own records
     assert ("what ran:\n"
@@ -122,6 +124,7 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
             "  compiled-again: up in 12.5 s; the load served 3 times, 6 requests, every one finished\n"
             "  record: up in 12.5 s; the load served 3 times, 6 requests, every one finished\n"
             "  the replay: ended in 0 s, its engine ready in 9 s; the served window took 0 s\n"
+            "  the replay's engine: vLLM's own (record serves with no other vLLM plugin of ours than its record)\n"
             "settings of record, with compiled's beside:\n") in txt
     assert ("tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 requests\n"
             "  2 engine steps, 0 with other rows than the served schedule; 1 requests began from a prefix-cache hit, the "
@@ -133,8 +136,10 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
     want = S.tax(ref, mine)
     assert r["cost"]["value"] == pytest.approx(want["value"]) and r["cost"]["ci95"] == pytest.approx(want["ci95"])
     assert r["cost"]["how"]["client"] == "corpus" and r["cost"]["noise_floor"]["arm"] == "compiled-again"
-    assert f"cost: record over compiled {100 * want['value']:+.2f}% of stock's serving time [" in txt
-    assert "]; under 1%: cannot tell\n  95% interval over 3 and 3 reps, at 1000 requests a second, which stock did not keep up with" in txt
+    # about +1% with an interval that passes 1%: the estimate alone shows nothing
+    assert f"cost: record over compiled {100 * want['value']:+.2f}% of stock's serving time, 95% interval [" in txt
+    assert "]; under 1%: not shown\n  over 3 and 3 reps, at 1000 requests a second, which stock did not keep up with" in txt
+    assert r["cost"]["verdict"] == "not shown" and r["cost"]["ci95"][1] > 0.01
     assert "\n  noise floor: compiled-again over compiled" in txt
     assert "advice: not measured: no trace directory of a certified serve was given (ADVICE_TRACE=DIR)" in txt
     assert txt.endswith("prod_repro: 2 of 3 lines measured\n")
@@ -317,12 +322,12 @@ def test_a_setting_the_serve_did_not_turn_on_is_off(tmp_path: Path):
             "(config.json max_position_embeddings); compiled: 4,096 tokens (--max-model-len 4096), BELOW the model's own "
             "131,072 (config.json max_position_embeddings)\n") in txt
     assert "  circuit compiled ahead of serving: no: nothing in this job compiles the settings' circuit" in txt
-    # a cost between arms at different settings is printed, and no verdict is given on it
-    assert "; under 1%: not said, the arms are not at the same settings\n" in txt
+    # a cost between arms at different settings is printed, and shows nothing of our changes
+    assert "; under 1%: not shown, the arms are not at the same settings\n" in txt
     assert ("  NOT at the same settings: record and compiled differ in prefix caching, torch.compile and CUDA graphs, so "
             "the figure is not our changes' cost\n") in txt
     assert r["cost"]["settings_differ"] == ["prefix caching", "torch.compile and CUDA graphs"]
-    assert r["cost"]["verdict"] == P.UNLIKE
+    assert r["cost"]["verdict"] == "not shown"
 
 
 def test_speculative_decoding_and_the_models_own_limit_are_read_from_the_launch_line(tmp_path: Path):
@@ -435,7 +440,8 @@ def result(tok: float) -> dict:
             "median_itl_ms": 29.0, "p99_itl_ms": 70.0}
 
 
-def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | None = None) -> None:
+def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | None = None,
+              argv: tuple[str, ...] = ("--max-model-len", "4096")) -> None:
     """An arm's directory as `serve_tax.py run` leaves it under vLLM's client, which keeps no request's ids; with
     ``ids``, the arm's server kept them for rep 1 of that pass (a line a request, gzipped as the runner leaves them),
     beside its step trace."""
@@ -443,7 +449,7 @@ def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | N
     d.mkdir(parents=True)
     (d / "meta.json").write_text(json.dumps({
         "arm": name, "parent": None, "what": name, "model_id": "glm53", "model": "repo@rev", "client": "vllm-bench", "rates": {},
-        "run_id": "r-1", "commit": "c" * 40, "server_argv": ["--max-model-len", "4096"], "startup_s": 300.0,
+        "run_id": "r-1", "commit": "c" * 40, "server_argv": list(argv), "startup_s": 300.0,
         "passes": {p: {"load": p.rpartition("@")[0], "concurrency": int(p.rpartition("@")[2])} for p in passes},
         "loads": [{"load": p, "rep": i, "rate": None, "requests": 200, "unfinished": 0}
                   for p, toks in passes.items() for i in range(1, len(toks) + 1)]}))
@@ -474,9 +480,13 @@ def test_by_vllms_client_the_cost_is_the_benchmarks_paired_cost_and_nothing_is_r
     assert rc == 0 and r["cost"]["value"] == pytest.approx(0.004) == pytest.approx(want["value"]) and r["cost"]["ci95"] == want["ci95"]
     assert r["cost"]["how"] == {"client": "vllm-bench", "rung": 16, "reps": 6, "saturated": True, "sessions": False,
                                 "by": r["cost"]["how"]["by"]}
-    assert r["cost"]["verdict"] == "meets"
-    assert ("cost: record over compiled +0.40% of stock's serving time [+0.40%, +0.40%]; under 1%: yes\n"
-            "  95% interval over 6 paired reps, at concurrency 16, where stock's rungs show it saturated: ") in txt
+    assert r["cost"]["verdict"] == "under"
+    assert ("cost: record over compiled +0.40% of stock's serving time, 95% interval [+0.40%, +0.40%]; under 1%: yes\n"
+            "  over 6 paired reps, at concurrency 16, where stock's rungs show it saturated: ") in txt
+    # under the target only where the interval's upper end is, widened by the noise floor; no interval shows nothing
+    assert P.under({"value": 0.004, "ci95": [0.001, 0.0099]}, 0.01, 0.0) == "under"
+    assert P.under({"value": 0.004, "ci95": [0.001, 0.0099]}, 0.01, 0.0002) == "not shown"
+    assert P.under({"value": 0.004, "ci95": [0.001, 0.01]}, 0.01, 0.0) == P.under({"value": 0.004}, 0.01, 0.0) == "not shown"
     assert "tokens: not measured: no replay ran: none was asked for (--replay PASS names the pass of vLLM's client" in txt
 
 
@@ -517,53 +527,90 @@ def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, int, int]) -> None:
         "rows": {"cuda:0": dict(zip(("rows_long", "rows_tied", "rows_bisected"), rows))}}))
 
 
-def test_the_replay_runs_under_what_ours_engine_has_on_and_nothing_else(tmp_path: Path):
-    # an arm with nothing on beside its record replays in the job's own environment
-    assert P.replay_env("record", tmp_path) == {} == P.replay_env("no-such-arm", tmp_path)
-    assert not (tmp_path / "site").exists()
-    # an arm with the canonical top-k: its switch, its counters under the step's own directory, and its plugin alone in
-    # the site, ahead of the job's path; the benchmark's own plugin, which records the serve, is not there
-    env = P.replay_env("two-stage", tmp_path, "/job/path")
-    assert env == {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{tmp_path}/private/topk-log",
-                   "PYTHONPATH": os.pathsep.join([str(tmp_path / "site"), str(P.ROOT / "benchmarks/dsa_topk"), "/job/path"])}
-    assert (tmp_path / "site/verity_prod_repro-0.0.dist-info/entry_points.txt").read_text() == (
-        "[vllm.general_plugins]\nverity_dsa_topk = dsa_topk:register\n")
-    # it loads as vLLM would load it, and one that doesn't is said, not run without
-    assert P.plugins_load("two-stage", env) is None
-    assert "dsa_topk" in P.plugins_load("two-stage", env | {"PYTHONPATH": str(tmp_path / "site")})
-    assert P.main(["replay-env", "--ours", "record", "--kept", str(tmp_path / "kept")]) == 0
+#: what a replay of an arm that served on the canonical top-k says its engine ran under (`replay.served_under`)
+TOPK_UNDER = {"plugins": ["verity_dsa_topk = dsa_topk:register"], "env": {"VERITY_DSA_TOPK": "canonical"}}
 
 
 def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_counted(tmp_path: Path):
-    out, kept, private = job(tmp_path), tmp_path / "kept", tmp_path / "private"
-    replayed(out)
-    assert run(out)[2]["ran"]["replay"]["engine"] is None        # a job whose replay step left no word of it
-    assert P.main(["replay-ran", "--ours", "record", "--kept", str(kept), "--out", str(out)]) == 0
-    _, txt, r = run(out)
-    assert r["ran"]["replay"]["engine"] == {"arm": "record", "plugins": [], "env": {}, "topk": None}
-    assert "  the replay's engine: the job's own environment (record turns nothing on in its engine beside its record)\n" in txt
-    # the canonical top-k: what the replay's processes counted; serving's are the job's to keep
-    topk_log(kept / "private/topk-log", 11, 5000, (40, 2, 1))
-    topk_log(kept / "private/topk-log", 12, 3000, (10, 0, 0))
-    ran = P.replay_ran("two-stage", kept, None)
-    assert ran["plugins"] == ["verity_dsa_topk = dsa_topk:register"] and ran["topk"] == {
-        "replay": {"processes": 2, "calls": 8000, "launches": 4000, "rows": {"rows_long": 50, "rows_tied": 2, "rows_bisected": 1}},
-        "served": None, "served_kept": False}
-    (out / P.REPLAY_ENGINE).write_text(json.dumps(ran))
-    assert ("  the replay's engine: under two-stage's own changes to the engine: the vLLM plugin verity_dsa_topk; "
+    out, private = tmp_path / "out", tmp_path / "private"
+    stock = [300.0, 301.0]
+    bench_arm(out, "prod", {"chat@16": stock})
+    bench_arm(out, "prod-record", {"chat@16": stock}, ids="chat@16")
+    argv = ["report", str(out), "--load", "chat", "--stock", "prod", "--again", "", "--ours", "prod-record", "--replayed", "chat@16"]
+
+    def said(*more: str) -> tuple[str, dict]:
+        assert P.main([*argv, *more]) == 0
+        return (out / "prod_repro.txt").read_text(), json.loads((out / "prod_repro.json").read_text())["ran"]["replay_engine"]
+
+    # a replay that does not say (an earlier build of the benchmark's) is given no line
+    d = replayed(out, "prod-record", load="chat@16")
+    rec = json.loads((d / "replay.json").read_text())
+    (d / "replay.json").write_text(json.dumps({k: v for k, v in rec.items() if k != "served_under"}))
+    txt, engine = said()
+    assert engine == {"engine": None} and "the replay's engine" not in txt
+    # the arm's is what `serve_tax` gives it: the plugin and the switch the replay's own record names
+    assert S.ARMS["prod-record"].env["VERITY_DSA_TOPK"] == "canonical" and "{private}" in S.ARMS["prod-record"].env["VERITY_DSA_TOPK_LOG"]
+    (d / "replay.json").write_text(json.dumps(rec | {"served_under": TOPK_UNDER}))
+    txt, engine = said()
+    assert engine == {"engine": {"arm": "prod-record", "under": TOPK_UNDER, "topk": {"kept": False, "replay": None, "served": None}}}
+    assert ("  the replay's engine: under what prod-record served with beside its record: the vLLM plugin verity_dsa_topk; "
             "VERITY_DSA_TOPK=canonical\n"
-            "  the canonical top-k in the replay: 2 processes kept counters: at least 8,000 calls of the indexer's top-k, "
-            "50 rows past its keys rewritten (2 with a tie at the last key kept, 1 bisected)\n"
-            "  the canonical top-k while serving: its counters were not kept (the job named no PRIVATE directory)\n") in run(out)[1]
-    # serving's counters where the job kept the arm's files, and a replay none of whose processes kept any
-    topk_log(private / "two-stage/topk-log", 21, 9000, (60, 0, 0))
-    assert P.main(["replay-ran", "--ours", "two-stage", "--kept", str(tmp_path / "empty"), "--private", str(private),
-                   "--out", str(out)]) == 0
-    txt = run(out)[1]
-    assert "  the canonical top-k in the replay: NO process kept its counters: nothing shows it ran there\n" in txt
-    assert ("  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
-            "60 rows past its keys rewritten (0 with a tie at the last key kept, 0 bisected)\n") in txt
-    assert P.replay_ran("two-stage", kept, tmp_path / "nothing-kept")["topk"]["served"] is None
+            "  the canonical top-k's counters were not kept (the job named no PRIVATE directory): nothing here shows how "
+            "many rows it rewrote\n") in txt
+    # with the job's private directory: serving's processes kept theirs under the arm's name, the replay's under its
+    # directory's; a replay none of whose processes kept any shows nothing of the top-k having run there
+    topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1))
+    txt, engine = said("--private", str(private))
+    assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}
+    assert ("  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n"
+            "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
+            "60 rows of more than its keys rewritten\n") in txt
+    topk_log(private / "replay-compiled/topk-log", 11, 5000, (40, 2, 1))
+    topk_log(private / "replay-compiled/topk-log", 12, 3000, (10, 0, 0))
+    txt, engine = said("--private", str(private))
+    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50}
+    assert ("  the canonical top-k in the replay: 2 processes kept counters: at least 8,000 calls of the indexer's top-k, "
+            "50 rows of more than its keys rewritten\n") in txt
+    # the report keeps the counts in OUT, where a later reading of the job finds them once the node's directory is gone
+    kept = json.loads((out / P.TOPK_KEPT).read_text())
+    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50}, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}
+    shutil.rmtree(private)
+    assert said()[1]["engine"]["topk"] == {"kept": True, **kept}
+    # counters that can't be read end that part alone
+    (out / P.TOPK_KEPT).write_text("not json")
+    assert P.main(argv) == 0 and "  the replay's engine: the replay's engine can't be read from the job's files: JSONDecodeError" in (
+        out / "prod_repro.txt").read_text()
+
+
+def test_the_first_line_says_the_limit_and_what_is_known_of_leaving_it_to_vllm(tmp_path: Path, capsys: pytest.CaptureFixture):
+    held = json.loads(P.LIMITS.read_text())
+    assert held["glm53"]["max_model_len"] == 262144 and held["glm53"]["auto"]["starts"] is False
+    assert P.limits("glm53") == held["glm53"] and P.limits("moonlight") == P.limits(None) == {}
+    assert P.main(["limit", "--model", "glm53"]) == 0 and capsys.readouterr().out == "262144\n"
+    assert P.main(["limit", "--model", "moonlight"]) == 0 and capsys.readouterr().out == "\n"
+    # a job on a model the file holds: its first line says the limit its arms were given and that auto does not start
+    out = tmp_path / "out"
+    bench_arm(out, "prod", {"chat@16": [300.0]}, argv=("--max-model-len", "262144"))
+    bench_arm(out, "prod-record", {"chat@16": [299.0]}, argv=("--max-model-len", "262144"))
+    argv = ["report", str(out), "--load", "chat", "--stock", "prod", "--again", "", "--ours", "prod-record"]
+    assert P.main(argv) == 0
+    auto = held["glm53"]["auto"]
+    assert (out / "prod_repro.txt").read_text().startswith(
+        "prod_repro: context limit 262,144 tokens, given outright to prod-record and prod; with the limit left to it "
+        f"(--max-model-len auto) vLLM does not start this model on these cards at the pin: {auto['why']} (run {auto['run']})\n"
+        "prod_repro: load chat; stock prod, stock again not served, ours prod-record; run r-1, commit ")
+    # arms given different limits, or one left to vLLM, are said as they were started
+    shutil.rmtree(out / "prod")
+    bench_arm(out, "prod", {"chat@16": [300.0]}, argv=("--max-model-len", "auto"))
+    assert P.main(argv) == 0
+    assert (out / "prod_repro.txt").read_text().startswith(
+        "prod_repro: context limit: prod-record --max-model-len 262144, prod --max-model-len auto; with the limit left")
+    shutil.rmtree(out / "prod-record")
+    assert P.main(argv) == 0
+    assert (out / "prod_repro.txt").read_text().startswith("prod_repro: context limit left to vLLM by prod (--max-model-len auto)\n")
+    shutil.rmtree(out / "prod")
+    assert P.main(argv) == 0
+    assert (out / "prod_repro.txt").read_text().startswith("prod_repro: context limit: not read (no record of ours or of stock)\n")
 
 
 def test_the_tokens_line_counts_the_requests_past_the_indexers_top_k(tmp_path: Path):
@@ -684,21 +731,15 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
 
 # --------------------------------------------------------------------------------------------------------- the runner
 
-#: a stand-in for benchmarks/serve_tax/run.sh: it says what it was started with, the arms' call in ``started`` and
-#: the replay's (no arms, a replay named) in ``started.replay``, and ends as told; a replay under the canonical top-k
-#: leaves one process's counters where the plugin would, and an arms' call told to ends the job's time (SIGTERM)
+#: a stand-in for benchmarks/serve_tax/run.sh: it says what it was started with and ends as told; told to, it leaves
+#: one process's counters where a replay on the canonical top-k keeps them, or ends the job's time (SIGTERM)
 STAND_IN = """#!/usr/bin/env bash
-f=started; [ -n "${ARMS:-}$*" ] || [ -z "${REPLAY:-}" ] || f=started.replay
 { echo "argv=$*"; for k in ARMS RATES REPS REQUESTS SPAN_S REPLAY REPLAY_FROM REPLAY_MODES MODEL_ID CLIENT MAX_MODEL_LEN \\
-    PASS_PROMPTS STOP_AT SAMPLED VERITY_DSA_TOPK VERITY_DSA_TOPK_LOG PYTHONPATH VLLM_PLUGINS MAX_MIN; do
-    echo "$k=${!k-unset}"; done; } > "$RESEARCH_RUN_DIR/$f"
-if [ $f = started.replay ]; then
-  if [ -n "${VERITY_DSA_TOPK_LOG:-}" ]; then
-    mkdir -p "$VERITY_DSA_TOPK_LOG"
-    echo '{"pid": 1, "calls": {"persistent_topk": 7}, "launches": {"persistent_topk": 3}, "rows": {"cuda:0": {"rows_long": 5}}}' \\
-      > "$VERITY_DSA_TOPK_LOG/dsa_topk.1.json"
-  fi
-  exit "${STAND_IN_REPLAY_RC:-0}"
+    PASS_PROMPTS STOP_AT SAMPLED PRIVATE; do echo "$k=${!k-unset}"; done; } > "$RESEARCH_RUN_DIR/started"
+if [ -n "${STAND_IN_TOPK:-}" ]; then
+  mkdir -p "$PRIVATE/replay-compiled/topk-log"
+  echo '{"pid": 1, "calls": {"persistent_topk": 7}, "launches": {"persistent_topk": 3}, "rows": {"cuda:0": {"rows_long": 5}}}' \\
+    > "$PRIVATE/replay-compiled/topk-log/dsa_topk.1.json"
 fi
 [ -z "${STAND_IN_TERM:-}" ] || kill -TERM "$PPID"
 exit "${STAND_IN_RC:-0}"
@@ -706,17 +747,14 @@ exit "${STAND_IN_RC:-0}"
 
 
 def runner(tmp_path: Path) -> Path:
-    """A tree with this directory's files and, in the serving cost benchmark's place, its two modules and the stand-in,
-    with the canonical top-k's plugin where an arm names it."""
-    here, tax, topk = (tmp_path / "tree/benchmarks" / d for d in ("prod_repro", "serve_tax", "dsa_topk"))
+    """A tree with this directory's files and, in the serving cost benchmark's place, its two modules and the stand-in."""
+    here, tax = tmp_path / "tree/benchmarks/prod_repro", tmp_path / "tree/benchmarks/serve_tax"
     here.mkdir(parents=True)
     tax.mkdir()
-    topk.mkdir()
-    for f in ("run.sh", "prod_repro.py"):
+    for f in ("run.sh", "prod_repro.py", "limits.json"):
         shutil.copy(Path(P.__file__).parent / f, here / f)
     for f in ("serve_tax.py", "replay.py"):
         (tax / f).symlink_to(Path(S.__file__).parent / f)
-    (topk / "dsa_topk.py").symlink_to(P.ROOT / "benchmarks/dsa_topk/dsa_topk.py")
     (tax / "run.sh").write_text(STAND_IN)
     return here / "run.sh"
 
@@ -725,45 +763,37 @@ def bash(script: Path, *argv: str, run_dir: Path | None = None, **env: str) -> s
     base = {k: v for k, v in os.environ.items() if k not in (
         "RESEARCH_RUN_DIR", "LOAD", "REPS", "REQUESTS", "MODEL_ID", "STOCK", "AGAIN", "OURS", "RATE", "SPAN_S", "TARGET",
         "MAX_MODEL_LEN", "REPLAY", "REPLAY_FROM", "REPLAY_MODES", "PASS_PROMPTS", "STOP_AT", "ADVICE_TRACE", "ADVICE_STOPS",
-        "SAMPLED", "PRIVATE", "ARMS", "VLLM_PLUGINS", "VERITY_DSA_TOPK", "VERITY_DSA_TOPK_LOG", "MAX_MIN")}
-    for f in ("started", "started.replay"):
-        if run_dir:
-            (run_dir / f).unlink(missing_ok=True)
+        "SAMPLED", "PRIVATE", "ARMS")}
+    if run_dir:
+        (run_dir / "started").unlink(missing_ok=True)
     return subprocess.run(["bash", str(script), *argv], capture_output=True, text=True, check=False, env={
         **base, "VENV": str(Path(sys.executable).parents[1]), **({"RESEARCH_RUN_DIR": str(run_dir)} if run_dir else {}), **env})
 
 
-def started(run_dir: Path, call: str = "") -> dict[str, str]:
-    """What the stand-in was started with: the arms' call, or with ``call`` "replay" the replay's."""
-    return dict(x.split("=", 1) for x in (run_dir / f"started{'.' + call if call else ''}").read_text().splitlines())
+def started(run_dir: Path) -> dict[str, str]:
+    return dict(x.split("=", 1) for x in (run_dir / "started").read_text().splitlines())
 
 
 def test_the_runner_serves_the_three_arms_a_burst_and_replays_ours_then_reports(tmp_path: Path):
     script, run_dir = runner(tmp_path), tmp_path / "run"
     replayed(job(run_dir))
-    p = bash(script, *ARMS, "--max-model-len", "8192", run_dir=run_dir, VLLM_PLUGINS="another")
+    p = bash(script, *ARMS, "--max-model-len", "8192", run_dir=run_dir)
     assert p.returncode == 0, p.stdout + p.stderr
-    # the arms' call replays nothing: the replay is a call of its own, with no arms
-    s, r = started(run_dir), started(run_dir, "replay")
-    assert s | {"PYTHONPATH": ""} == {
+    # one call of the benchmark's runner: the arms, then the replay of ours under the same lease
+    assert started(run_dir) == {
         "argv": "", "ARMS": "compiled compiled-again record", "RATES": "burst=1000", "REPS": "3", "REQUESTS": "800",
-        "SPAN_S": "unset", "REPLAY": "unset", "REPLAY_FROM": "unset", "REPLAY_MODES": "unset",
+        "SPAN_S": "unset", "REPLAY": "burst", "REPLAY_FROM": str(run_dir / "out/record"), "REPLAY_MODES": "compiled",
         "MODEL_ID": "moonlight", "CLIENT": "corpus", "MAX_MODEL_LEN": "8192", "PASS_PROMPTS": "unset", "STOP_AT": "unset",
-        "SAMPLED": "unset", "VERITY_DSA_TOPK": "unset", "VERITY_DSA_TOPK_LOG": "unset", "PYTHONPATH": "",
-        "VLLM_PLUGINS": "another", "MAX_MIN": "unset"}
-    assert (r["argv"], r["ARMS"], r["RATES"], r["CLIENT"], r["MODEL_ID"]) == ("", "unset", "unset", "corpus", "moonlight")
-    assert (r["REPLAY"], r["REPLAY_FROM"], r["REPLAY_MODES"]) == ("burst", str(run_dir / "out/record"), "compiled")
-    # record turns nothing on in its engine: its replay runs in the job's environment, less a filter on vLLM's plugins
-    assert (r["VERITY_DSA_TOPK"], r["VLLM_PLUGINS"], r["PYTHONPATH"]) == ("unset", "unset", s["PYTHONPATH"])
-    assert json.loads((run_dir / "out/replay_engine.json").read_text()) == {"arm": "record", "plugins": [], "env": {}, "topk": None}
-    assert "the replay's engine: the job's own environment (record turns nothing on" in p.stdout
+        "SAMPLED": "unset", "PRIVATE": "unset"}
+    assert "the replay's engine: vLLM's own (record serves with no other vLLM plugin of ours" in p.stdout
     assert "tokens: reproduced: 2 requests replayed" in p.stdout and p.stdout.endswith("prod_repro: 2 of 3 lines measured\n")
     assert (run_dir / "out/prod_repro.txt").read_text() in p.stdout
+    # a model the command holds no limit for is served at the benchmark's, and its arms are the benchmark's own
+    p = bash(script, run_dir=run_dir)
+    assert p.returncode == 0 and started(run_dir)["MAX_MODEL_LEN"] == "unset" and started(run_dir)["ARMS"] == "compiled compiled-again record"
     # an arm or a replay that failed fails the job, and the report still says what the files hold
     p = bash(script, *ARMS, run_dir=run_dir, STAND_IN_RC="1")
     assert p.returncode == 1 and "the serving cost benchmark's runner ended 1" in p.stdout and "tokens: reproduced" in p.stdout
-    p = bash(script, *ARMS, run_dir=run_dir, STAND_IN_REPLAY_RC="3")
-    assert p.returncode == 3 and "the replay step ended 3" in p.stdout and "tokens: reproduced" in p.stdout
     # a replayed token that differs fails a job whose serve and replay ended well
     shutil.rmtree(run_dir / "out/replay-compiled")
     replayed(run_dir / "out", tokens={rid(f"{LOAD}1", 0): [8, 0]})
@@ -773,9 +803,9 @@ def test_the_runner_serves_the_three_arms_a_burst_and_replays_ours_then_reports(
     shutil.rmtree(run_dir / "out/replay-compiled")
     p = bash(script, *ARMS, run_dir=run_dir)
     assert p.returncode == 1 and "the replay: DID NOT END: it left no log, so it did not start" in p.stdout
-    (run_dir / "out/replay_engine.json").unlink()
     p = bash(script, *ARMS, "--replay", "none", "--again", "none", run_dir=run_dir)
-    assert p.returncode == 0 and started(run_dir)["ARMS"] == "compiled record" and not (run_dir / "started.replay").exists()
+    s = started(run_dir)
+    assert p.returncode == 0 and (s["ARMS"], s["REPLAY"], s["REPLAY_FROM"]) == ("compiled record", "unset", "unset")
     assert "the replay: none was asked for" in p.stdout and "stock again not served" in p.stdout
     assert "the replay's engine" not in p.stdout
 
@@ -790,62 +820,58 @@ def test_the_runner_hands_vllms_client_the_load_and_asks_for_no_replay(tmp_path:
     s = started(run_dir)
     assert s["argv"] == "--model glm53 --arms compiled compiled-again record --loads chat=16 --reps 6"
     assert (s["REPLAY"], s["REPLAY_FROM"], s["CLIENT"], s["SAMPLED"]) == ("unset", "unset", "vllm-bench", "unset")
-    assert not (run_dir / "started.replay").exists()
+    # the limit is the one the command holds for the model, for every arm, unless the job names one
+    assert s["MAX_MODEL_LEN"] == "262144"
     assert "tokens: not measured: no replay ran" in p.stdout and "cost: record over compiled +0.00%" in p.stdout
+    p = bash(script, *ARMS, "--client", "vllm-bench", "--load", "chat=16", "--model", "glm53", "--max-model-len", "131072",
+             run_dir=run_dir)
+    assert p.returncode == 0 and started(run_dir)["MAX_MODEL_LEN"] == "131072"
 
 
-def test_the_runner_replays_a_named_pass_of_vllms_client_under_ours_own_top_k_and_reads_the_advice_trace(tmp_path: Path):
+def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms_and_reads_the_advice_trace(tmp_path: Path):
     script, run_dir, private = runner(tmp_path), tmp_path / "run", tmp_path / "private"
-    bench_arm(run_dir / "out", "prod", {"chat@16": [300.0]})
-    bench_arm(run_dir / "out", "two-stage", {"chat@16": [299.0]}, ids="chat@16")
-    arms = ("--stock", "prod", "--again", "none", "--ours", "two-stage")
-    argv = ("--client", "vllm-bench", "--model", "glm53", *arms, "--load", "chat=16", "--reps", "1", "--replay", "chat@16",
-            "--pass-prompts", "chat=8", "--sampled", "--stop-at", "9999-01-01T00:00Z")
-    replayed(run_dir / "out", "two-stage", load="chat@16")
-    topk_log(private / "two-stage/topk-log", 21, 9000, (60, 0, 0))
-    p = bash(script, *argv, run_dir=run_dir, ADVICE_TRACE=str(tmp_path / "nowhere"), PRIVATE=str(private), MAX_MIN="90")
+    limit = ("--max-model-len", "262144")
+    bench_arm(run_dir / "out", "prod", {"chat@16": [300.0]}, argv=limit)
+    bench_arm(run_dir / "out", "prod-record", {"chat@16": [299.0]}, ids="chat@16", argv=limit)
+    # the arms are the recipe's by default for a model whose recipe the benchmark holds
+    argv = ("--client", "vllm-bench", "--model", "glm53", "--again", "none", "--load", "chat=16", "--reps", "1",
+            "--replay", "chat@16", "--pass-prompts", "chat=8", "--sampled", "--stop-at", "9999-01-01T00:00Z")
+    replayed(run_dir / "out", "prod-record", load="chat@16", served_under=TOPK_UNDER)
+    topk_log(private / "prod-record/topk-log", 21, 9000, (60, 0, 0))
+    p = bash(script, *argv, run_dir=run_dir, ADVICE_TRACE=str(tmp_path / "nowhere"), PRIVATE=str(private), STAND_IN_TOPK="1")
     assert p.returncode == 0, p.stdout + p.stderr
-    s, r = started(run_dir), started(run_dir, "replay")
-    # the replay's lease is given the minutes the arms left of the job's
-    assert s["MAX_MIN"] == "90" and 1 <= int(r["MAX_MIN"]) <= 90
-    assert s["argv"] == "--model glm53 --arms prod two-stage --loads chat=16 --reps 1"
+    s = started(run_dir)
+    assert s["argv"] == "--model glm53 --arms prod prod-record --loads chat=16 --reps 1"
+    assert (s["REPLAY"], s["REPLAY_FROM"], s["REPLAY_MODES"]) == ("chat@16", str(run_dir / "out/prod-record"), "compiled")
     assert (s["PASS_PROMPTS"], s["STOP_AT"], s["SAMPLED"]) == ("chat=8", "9999-01-01T00:00Z", "1")
-    # stock's server inherits nothing of ours: the arms' call has neither the top-k's switch nor a path to it
-    assert (s["REPLAY"], s["VERITY_DSA_TOPK"], s["PYTHONPATH"]) == ("unset", "unset", os.environ.get("PYTHONPATH", "unset"))
-    # the replay's call has both, the plugin's site first on its path, and keeps its counters outside the run's directory
-    assert (r["argv"], r["ARMS"], r["CLIENT"]) == ("", "unset", "corpus")
-    assert (r["REPLAY"], r["REPLAY_FROM"], r["REPLAY_MODES"]) == ("chat@16", str(run_dir / "out/two-stage"), "compiled")
-    kept = Path(r["VERITY_DSA_TOPK_LOG"]).parents[1]
-    assert r["VERITY_DSA_TOPK"] == "canonical" and r["VERITY_DSA_TOPK_LOG"] == f"{kept}/private/topk-log"
-    assert r["PYTHONPATH"].startswith(f"{kept}/site{os.pathsep}{tmp_path / 'tree/benchmarks/dsa_topk'}")
-    assert run_dir not in kept.parents and not kept.exists()
-    engine = json.loads((run_dir / "out/replay_engine.json").read_text())
-    assert engine["topk"] == {"replay": {"processes": 1, "calls": 7, "launches": 3, "rows": {"rows_long": 5}},
-                              "served": {"processes": 1, "calls": 9000, "launches": 4500,
-                                         "rows": {"rows_long": 60, "rows_tied": 0, "rows_bisected": 0}}, "served_kept": True}
+    assert (s["MAX_MODEL_LEN"], s["PRIVATE"]) == ("262144", str(private))
+    assert p.stdout.startswith("prod_repro: context limit 262,144 tokens, given outright to prod-record and prod; with the "
+                               "limit left to it (--max-model-len auto) vLLM does not start this model")
+    # the job's report reads the top-k's counters where its processes kept them, and keeps the counts in the run's
     assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
-            "past its keys rewritten") in p.stdout and "  the canonical top-k while serving: 1 process kept counters" in p.stdout
-    assert "stock prod, stock again not served, ours two-stage" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
+            "of more than its keys rewritten\n"
+            "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 "
+            "rows of more than its keys rewritten\n") in p.stdout
+    assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {"processes": 1, "calls": 7, "rows_long": 5}
+    assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert f"advice: not measured: ADVICE_TRACE={tmp_path / 'nowhere'} is not a directory on this machine" in p.stdout
+    # read again without a GPU and without the node's directory, the earlier job says the same
+    shutil.rmtree(private)
+    again = bash(script, "--report", str(run_dir / "out"), "--load", "chat=16", "--replay", "chat@16", "--again", "none",
+                 ADVICE_TRACE=str(tmp_path / "nowhere"), PRIVATE=str(private))
+    assert again.returncode == 0 and again.stdout == p.stdout
     # the serve ended well and the replay left nothing: the job fails, and says the replay did not end
     shutil.rmtree(run_dir / "out/replay-compiled")
     (run_dir / "out/replay-compiled.log").write_text("serve-tax: no arrival of load chat@16 rep 1\n")
     p = bash(script, *argv, run_dir=run_dir)
     assert p.returncode == 1 and "the replay: DID NOT END; its log ends: serve-tax: no arrival of load chat@16 rep 1" in p.stdout
     assert p.stdout.endswith("FAILED: a replay was asked for and the tokens line is not measured\n")
-    # read again without a GPU, the earlier job fails the same way
-    p = bash(script, "--report", str(run_dir / "out"), *arms, "--load", "chat=16", "--replay", "chat@16")
+    p = bash(script, "--report", str(run_dir / "out"), "--load", "chat=16", "--replay", "chat@16", "--again", "none")
     assert p.returncode == 1 and "FAILED: a replay was asked for and the tokens line is not measured" in p.stdout
-    # no replay starts after the time the cards are another's, nor of a pass ours did not serve
-    p = bash(script, *argv[:-1], "1970-01-02T00:00Z", run_dir=run_dir)
-    assert p.returncode == 1 and "no replay: --stop-at 1970-01-02T00:00Z has passed" in p.stdout
-    assert not (run_dir / "started.replay").exists()
-    p = bash(script, *argv[:14], "--replay", "chat@32", run_dir=run_dir)
-    assert p.returncode == 1 and "no replay: two-stage served no rep of chat@32" in p.stdout
-    # a job whose time ends (SIGTERM) starts no replay and still reports what was served
+    # a job whose time ends (SIGTERM) still reports what was served and replayed by then
     p = bash(script, *argv, run_dir=run_dir, STAND_IN_TERM="1", TERM_WAIT_S="0")
-    assert p.returncode == 143 and "ended early (SIGTERM): no replay starts" in p.stdout
-    assert not (run_dir / "started.replay").exists() and "  prod: up in 300 s; the load served 1 time, 200 requests" in p.stdout
+    assert p.returncode == 143 and "ended early (SIGTERM): the report is of what was served and replayed by then" in p.stdout
+    assert "  prod: up in 300 s; the load served 1 time, 200 requests" in p.stdout and "the replay: DID NOT END" in p.stdout
 
 
 def test_the_runner_reads_an_earlier_job_again_and_refuses_what_it_cannot_run(tmp_path: Path):
