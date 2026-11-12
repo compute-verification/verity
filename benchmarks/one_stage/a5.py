@@ -163,19 +163,34 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   registration is chained right after), so R1-R7 run with W as the log, each value's words, W's entry of it and its row
   format (`tie`), on the stream too, which takes the values and W as its log (`stream_of`). Its proof blocks read the values
   as registered reads at W's roots (``registered``).
+* **The negatives at once.** The negatives that ask the verifier again once the audit record is decided (the coins',
+  the registration's R2 to R4 and its history root's, the transfer gates', the audit record's) run one after another in
+  the audit's process, or with ``--negative-workers N`` up to N at once, each in a worker process forked from the audit
+  with a Lean verifier process of its own, started only while its memory estimate, read when the workers start, fits
+  the audit's memory (`NegativeWorkers`); Lean's on a sampled chunk's session (`registered_negatives`) then run that
+  many at once too. The negatives' file is the same for any N; a negative that isn't refused fails the audit as before;
+  a worker that raises or dies fails the audit, nothing retried and none run in the audit's process instead. The
+  summary's ``negative_workers`` is each negative's own seconds and, for a worker, its memory and what it un-shared of
+  the audit's (`process_memory`).
 """
 from __future__ import annotations
 
 import argparse
+import ctypes
+import functools
+import gc
 import hashlib
 import inspect
 import json
 import multiprocessing
+import multiprocessing.connection
 import os
 import shutil
+import signal
 import sys
 import threading
 import time
+import traceback
 from collections.abc import Iterator, Sequence
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
@@ -403,7 +418,8 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
 
 def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Binding,
                   members: list[dict], want: dict, leaf_layer: str | None, read: bytes, segment: dict, sessions: list[str],
-                  verdicts: dict, statement: dict, given: dict, history: dict | None = None) -> tuple[dict | None, dict, dict]:
+                  verdicts: dict, statement: dict, given: dict, workers: NegativeWorkers,
+                  history: dict | None = None) -> tuple[dict | None, list[Negative], dict]:
     """The sample's outcome of record once the challenger's session has ended (`a5_coins.Draws.evidence`), each stream
     registering with the window's history tables (``history``): its proof delivered
     (`Stream.deliver`) and its outcome (`Stream.outcome`, ``given`` its proved units, instances, served units and session
@@ -411,8 +427,9 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     (`Run.run`, its window the TP run root) is the Python's; and `coins.coins_reason` (Python's
     `read_reason`) on the evidence, the audit record failing `coins` where it refuses. Then each negative (`a5_coins.negatives`,
     and the evidence for another window) as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused
-    where `coins_reason` refuses and the Lean's run refuses at its select (`coins`). -> (the audit record, None for a late
-    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
+    where `coins_reason` refuses and the Lean's run refuses at its select (`coins`), each a task of ``workers``
+    (`NegativeWorkers`: run here with one worker, else when the audit runs its workers). -> (the audit record, None for
+    a late proof or an outcome the stream refuses or holds pending; the negatives' tasks; the coins' record)."""
     after, root = bytes.fromhex(R.digest(rec)), a.window_root
     published = a.coins.evidence()
     ev = AC.evidence(published, segment)
@@ -440,9 +457,8 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     if result is not None and why is not None:
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                   "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
-    neg: dict[str, dict] = {}
-    bad = {**AC.negatives(ev, a.coins.pre()), "coins-for-another-window": ev} if ev is not None else {}
-    for name, coins in bad.items():
+
+    def negative(name: str, coins: dict | None) -> dict[str, dict]:
         window = "00" * 64 if name == "coins-for-another-window" else root
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
         try:
@@ -456,8 +472,11 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
             accepted, side = None, {"refused": refusal(e)}
         py = reason(coins, window)
         at = ((side or {}).get("step"), (side or {}).get("codes"))
-        neg[name] = {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted, "python": py,
-                     "lean": side}
+        return {name: {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted,
+                       "python": py, "lean": side}}
+
+    bad = {**AC.negatives(ev, a.coins.pre()), "coins-for-another-window": ev} if ev is not None else {}
+    neg = [workers.submit(name, functools.partial(negative, name, coins)) for name, coins in bad.items()]
     checks = (result or {}).get("checks") or {}
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
@@ -517,12 +536,14 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     return neg
 
 
-def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
+def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: int = 1) -> dict[str, dict]:
     """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
     registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
     value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
     ports' reads as registered; and its last port committed afresh, left out of both its header's registered rows and the
-    verifier's reads (`Flock.Registered.checkComplete`)."""
+    verifier's reads (`Flock.Registered.checkComplete`). Each verify is a process of its own (`a0.lean_verify`): one after
+    another, or with more ``workers`` up to that many at once on a `LeanPool` within the audit's memory, the session's
+    archive put under the members' one claim (`a0.archiving`)."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
@@ -547,15 +568,22 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
                                          + b"\n" + body)
         cases["registered-reads-leaving-a-port-committed-afresh"] = (
             {q: e for q, e in honest["ports"].items() if q != last}, "registered reads (complete)", d)
-    out = {}
-    for name, (ports, why, d) in cases.items():
+
+    def verify(name: str) -> dict:
+        ports, why, d = cases[name]
         alt = {x: y for x, y in st.items() if x != "registered_file"} | ({"dir": d} if d else {})
         if ports is not None:
             alt["registered_file"] = sdir / f"{name}.json"
             alt["registered_file"].write_text(json.dumps({**honest, "ports": ports}, sort_keys=True))
         v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
-        out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
-    return out
+        return {"refused": a0.lean_refused(v, why), "why": v.get("why")}
+
+    if workers == 1:
+        return {name: verify(name) for name in cases}
+    with LeanPool(workers, audit_memory(a, available_memory), available_memory) as pool:
+        for name in cases:
+            pool.submit(verify, name, lean_need(st))
+        return dict(zip(cases, pool.results()))
 
 
 def compose_key(compose: Callable, defn: object, template: str) -> str | None:
@@ -987,7 +1015,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         sessions += got["sessions"]
         if got["challenger"] is not None:
             summary.setdefault("challengers", {})[f"m{mm['k']}"] = got["challenger"]
-    coin_neg: dict[str, dict] = {}
+    coin_neg: list[Negative] = []
+    workers = NegativeWorkers(getattr(a, "negative_workers", 1), audit_memory(a, available_memory), available_memory)
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
                                 sessions=sessions, served=sorted(served_units), session_roots=session_roots)
@@ -1006,10 +1035,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                  "session_roots": session_roots}
         result, coin_neg, summary["coins"] = coins_outcome(
             a, stream, draw, counts_of, rec, mine, members, want, leaf_layer, read, segment, sessions, verdicts, statement,
-            given, hist)
+            given, workers, hist)
         if result is None:
             summary.update(audit={"accepted": False, "outcome": summary["coins"]["outcome"]}, draw=union_draw["units"],
-                           negatives={x: y["refused"] for x, y in coin_neg.items()})
+                           negatives={x: y["refused"] for x, y in workers.entries(coin_neg).items()})
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
             print("A5 " + json.dumps({"no_audit_record": summary["coins"]["outcome"]}, default=str))
             return summary, False
@@ -1029,10 +1058,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
     # negatives: each re-decides one input altered (``a.skip_negatives``: not this audit; a run of several audits runs them
-    # once, in its first)
+    # once, in its first). Those that ask the verifier again are tasks of ``workers`` (`NegativeWorkers`: with one worker
+    # each runs here as it is reached; with more, side by side once all are submitted), and ``neg`` takes every entry in
+    # the order below, however the tasks ended
     neg: dict[str, dict] = dict(more_negatives or {})
     if getattr(a, "skip_negatives", False):
-        neg.update(coin_neg)
+        neg.update(workers.entries(coin_neg))
         summary["negatives_skipped"] = True
     else:
         by_template: dict[str, list] = {}
@@ -1040,35 +1071,50 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
         defs = [tuple(x) for x in by_template.values()]
         taken = program_values(program)
-        fewer = R2.program(defs, mixed=len(defs) > 1 or bool(taken), values=taken)
-        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **tie(a))
-        neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-        other = CS.expected_ports(replace(mine, run="00" * 32))
-        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **tie(a))
-        neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-        first = members[0]["m"].key
-        flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a))
-        neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-        if hist is not None:
-            name = min(hist["registered"])
-            root = hist["registered"][name]
-            wrong = {**hist, "registered": {**hist["registered"], name: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
+
+        def registration(name: str, program_: Program, ports: dict, layer: str | None) -> dict[str, dict]:
+            v = V.check(rec, program_, query, law, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **tie(a))
+            return {name: {"refused": not v.ok, "codes": list(v.codes)}}
+
+        def history_root(name: str, wrong: dict) -> dict[str, dict]:
             v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
                         **tie(a))
-            neg["history-root-not-its-writers-strings"] = {"refused": v.codes == (R.HISTORY,), "codes": list(v.codes)}
+            return {name: {"refused": v.codes == (R.HISTORY,), "codes": list(v.codes)}}
+
+        parts: list[dict[str, dict] | Negative] = []
+        fewer = R2.program(defs, mixed=len(defs) > 1 or bool(taken), values=taken)
+        name = "registration-partition-mismatch (R2)"
+        parts.append(workers.submit(name, functools.partial(registration, name, fewer, want, leaf_layer)))
+        other = CS.expected_ports(replace(mine, run="00" * 32))
+        name = "domains-bound-to-another-run-root (R3)"
+        parts.append(workers.submit(name, functools.partial(registration, name, program, other, leaf_layer)))
+        first = members[0]["m"].key
+        flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
+        name = "public-body-not-the-registered-leaf-layer (R4)"
+        parts.append(workers.submit(name, functools.partial(registration, name, program, want, CS.leaf_layer(flipped))))
+        if hist is not None:
+            written = min(hist["registered"])
+            root = hist["registered"][written]
+            wrong = {**hist, "registered": {**hist["registered"], written: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
+            name = "history-root-not-its-writers-strings"
+            parts.append(workers.submit(name, functools.partial(history_root, name, wrong)))
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
-        neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-        neg.update(wiring_negatives(mine.members, publics))
+        parts.append({"draw-outside-the-partition": {"refused": not v.ok, "codes": list(v.codes)}})
+        parts.append(wiring_negatives(mine.members, publics))
         if proved:
             v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
-            neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
-        neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
-                                           tie(a)))
-        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
-        neg.update(coin_neg)
+            parts.append({"proved-set-short-of-the-draw": {"refused": not v.ok, "codes": list(v.codes)}})
+        parts.append(workers.submit("transfer gates", functools.partial(
+            transfer_gate_negatives, getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
+            tie(a))))
+        parts.append(workers.submit("audit record", functools.partial(
+            a0.audit_negatives, result, drawn_law, a.delta, session_roots, served=sorted(served_units))))
+        parts += coin_neg
+        workers.run()
+        for part in parts:
+            neg.update(workers.entries([part]) if isinstance(part, Negative) else part)
         if linked is not None:
-            neg.update(registered_negatives(a, *linked))
+            neg.update(registered_negatives(a, *linked, workers=workers.workers))
             key = next(iter(row_verdicts))
             other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
             neg["verdict-reports-another-registered-root"] = {
@@ -1083,6 +1129,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary.update(draw=union_draw["units"], draw_counts=counts, served_is_lean_draw=sorted(served_units) == sorted(union_draw["units"]),
                    timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
     summary["verifier_checks"] = AM.counts()
+    summary["negative_workers"] = workers.timing()
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
         and all(c["ok"] for c in summary.get("challengers", {}).values())
@@ -1415,10 +1462,180 @@ def session_need(circuit: Path) -> int:
     return SESSION_BYTES_PER_CIRCUIT_BYTE * circuit.stat().st_size if circuit.is_file() else 0
 
 
+def process_memory(pid: int | str = "self") -> dict[str, int]:
+    """A process's memory now, in bytes, from /proc: ``rss`` (resident), ``peak`` (its most resident so far) and
+    ``private`` (the resident pages no other process shares: for a forked worker, what it un-shared of the audit's
+    memory and what it allocated itself)."""
+    status = {x.split(":")[0]: x.split()[1] for x in Path(f"/proc/{pid}/status").read_text().splitlines() if x.split()[1:]}
+    rollup = {x.split(":")[0]: x.split()[1] for x in Path(f"/proc/{pid}/smaps_rollup").read_text().splitlines()[1:]}
+    return {"rss": int(status["VmRSS"]) << 10, "peak": int(status["VmHWM"]) << 10,
+            "private": (int(rollup["Private_Clean"]) + int(rollup["Private_Dirty"])) << 10}
+
+
+def lean_server_memory() -> dict[str, int]:
+    """`process_memory` of this process's Lean verifier process (`verifier._Server`), zeros where none runs."""
+    proc = V._server._proc
+    return process_memory(proc.pid) if proc is not None and proc.poll() is None else {"rss": 0, "peak": 0, "private": 0}
+
+
+def worker_need() -> float:
+    """A negative's worker's memory estimate in bytes, read now: the audit's own resident memory, as if the worker
+    un-shared all of it, plus its Lean verifier process's peak so far, the worker's own Lean process's at most."""
+    return process_memory()["rss"] + lean_server_memory()["peak"]
+
+
+def audit_own() -> float:
+    """What the audit's process and its Lean verifier process hold now, in bytes: resident memory the workers' budget
+    is less (`NegativeWorkers`)."""
+    return process_memory()["rss"] + lean_server_memory()["rss"]
+
+
+class NegativeFailed(RuntimeError):
+    """A negative's worker raised or died: the audit ends with it, nothing retried."""
+
+
+class Negative:
+    """A negative's task (`NegativeWorkers.submit`): its ``label``, and once it ran its entries by name and its own
+    seconds and memory."""
+
+    def __init__(self, label: str, fn: Callable[[], dict[str, dict]]):
+        self.label, self.fn = label, fn
+        self.got: dict[str, dict] | None = None
+        self.stats: dict[str, Any] = {}
+
+
+def _checks_since(before: dict[str, dict] | None) -> dict[str, dict] | None:
+    """The memo's checks asked and reused (`a5_memo.counts`) since ``before``; None outside the memo."""
+    now = AM.counts()
+    if now is None or before is None:
+        return None
+    return {kind: {name: n - before[kind].get(name, 0) for name, n in now[kind].items() if n != before[kind].get(name, 0)}
+            for kind in ("asked", "reused")}
+
+
+def die_with(parent: int) -> None:
+    """This process is killed when ``parent``, the process that forked it, ends, however it ends: the kernel's signal
+    at the parent's death (Linux's ``PR_SET_PDEATHSIG``), and at once where the parent ended before it was set."""
+    if ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGKILL, 0, 0, 0) != 0:  # 1: PR_SET_PDEATHSIG
+        raise OSError(ctypes.get_errno(), "prctl(PR_SET_PDEATHSIG)")
+    if os.getppid() != parent:
+        os.kill(os.getpid(), signal.SIGKILL)
+
+
+def _work(fn: Callable[[], dict[str, dict]], send: Any, audit: int) -> None:
+    """A worker's whole life, in a process forked from the audit (the process ``audit``), which it never outlives
+    (`die_with`: an audit killed outright takes its workers with it, and each worker's Lean verifier process then
+    stops at the end of its input): a Lean verifier process of its own (the audit's is never written to: the worker's
+    handle to the verifier's server is a new one before any check), the task, and its entries or its error sent to
+    the audit with its seconds, its memory and, under the memo, the checks it asked and reused (it reuses what the
+    audit kept before the fork, and what it keeps ends with it: the audit's own ``verifier_checks`` count none of a
+    worker's)."""
+    die_with(audit)
+    t0, checks = time.time(), AM.counts()
+    V._server = V._Server()
+    try:
+        try:
+            out: tuple[str, Any] = ("ok", fn())
+        except BaseException as e:  # noqa: BLE001
+            out = ("raised", "".join(traceback.format_exception(e))[-4000:])
+        send.send((*out, {"own_s": round(time.time() - t0, 1), "worker": process_memory(), "lean": lean_server_memory(),
+                          "verifier_checks": _checks_since(checks)}))
+    finally:
+        send.close()
+        V._server.close()
+
+
+class NegativeWorkers:
+    """The audit's negatives that re-decide with one input altered (the coin negatives, the registration's, the audit
+    record's), each a task: a function of no arguments that returns its entries by name. With one worker, the default,
+    a task runs where it is submitted, in the audit's own process, so the negatives run in the order the audit reaches
+    them. With more, the tasks wait for `run`, which gives each a worker process of its own forked from the audit, at
+    most ``workers`` at once, with its own Lean verifier process (`_work`). A worker starts, in the order submitted,
+    only while its memory estimate ``need()`` (`worker_need`, read when `run` starts) fits: with the running workers'
+    and what the audit holds (``own()``) within ``budget`` bytes, and ``available()`` bytes free now; with none
+    running the next starts whatever its estimate, so one over the budget runs alone. A task's `entries` are its own,
+    and `entries` of several are in the order given, whatever order they ended in. Nothing is retried and nothing
+    falls back to the audit's process: a worker that raises or dies ends `run` with `NegativeFailed`, the others
+    killed. No worker outlives the audit: one killed outright takes its workers with it (`die_with`). `timing` is each task's own seconds and, for a worker, its memory, beside the audit's and its Lean verifier
+    process's as the workers started (``memory``), which a worker's ``private`` is to be read against."""
+
+    def __init__(self, workers: int, budget: float, available: Callable[[], float],
+                 need: Callable[[], float] = worker_need, own: Callable[[], float] = audit_own):
+        self.workers, self.budget, self.available, self.need, self.own = workers, budget, available, need, own
+        self.tasks: list[Negative] = []
+        self.waiting: list[Negative] = []
+        self.stage: dict[str, Any] = {"workers": workers, "wall_s": 0.0}
+
+    def submit(self, label: str, fn: Callable[[], dict[str, dict]]) -> Negative:
+        task = Negative(label, fn)
+        self.tasks.append(task)
+        if self.workers == 1:
+            t0 = time.time()
+            task.got = fn()
+            task.stats = {"own_s": round(time.time() - t0, 1)}
+            self.stage["wall_s"] = round(self.stage["wall_s"] + task.stats["own_s"], 1)
+        else:
+            self.waiting.append(task)
+        return task
+
+    def run(self) -> None:
+        """Every task still waiting, each in its worker; returns once all ended, or raises `NegativeFailed`."""
+        if not self.waiting:
+            return
+        ctx = multiprocessing.get_context("fork")
+        t0, need, own = time.time(), self.need(), self.own()
+        self.stage.update(need=need, audit=own, memory={"audit": process_memory(), "lean": lean_server_memory()})
+        running: dict[Any, tuple[Negative, Any]] = {}
+        gc.freeze()  # the audit's objects stay out of a worker's collections, which would write to, and so un-share, each
+        try:
+            while self.waiting or running:
+                while self.waiting and len(running) < self.workers and (not running or (
+                        own + (len(running) + 1) * need <= self.budget and self.available() >= need)):
+                    task = self.waiting.pop(0)
+                    recv, send = ctx.Pipe(duplex=False)
+                    worker = ctx.Process(target=_work, args=(task.fn, send, os.getpid()), daemon=True)
+                    worker.start()
+                    send.close()
+                    running[recv] = (task, worker)
+                for recv in multiprocessing.connection.wait(list(running)):
+                    task, worker = running.pop(recv)
+                    try:
+                        kind, body, task.stats = recv.recv()
+                    except EOFError:
+                        kind, body = "died", None
+                    recv.close()
+                    worker.join()
+                    if kind != "ok":
+                        raise NegativeFailed(f"the negative {task.label!r}'s worker " + (
+                            f"died (exit {worker.exitcode})" if kind == "died" else f"raised:\n{body}") +
+                            "; nothing is retried, and no negative runs in the audit's process instead")
+                    task.got = body
+        finally:
+            for recv, (_task, worker) in running.items():
+                worker.kill()
+                worker.join()
+                recv.close()
+            gc.unfreeze()
+            self.stage["wall_s"] = round(self.stage["wall_s"] + time.time() - t0, 1)
+
+    def entries(self, tasks: Sequence[Negative]) -> dict[str, dict]:
+        """The tasks' entries, in the tasks' order; `run` first where one still waits."""
+        self.run()
+        out: dict[str, dict] = {}
+        for task in tasks:
+            if task.got is None:
+                raise NegativeFailed(f"the negative {task.label!r} did not run")
+            out.update(task.got)
+        return out
+
+    def timing(self) -> dict[str, Any]:
+        return {**self.stage, "negatives": {t.label: t.stats for t in self.tasks if t.got is not None}}
+
+
 def positive(s: str) -> int:
-    """``--lean-workers``: at least 1."""
+    """``--lean-workers``, ``--negative-workers``: at least 1."""
     if int(s) < 1:
-        raise argparse.ArgumentTypeError(f"{s}: Lean checks at once is at least 1")
+        raise argparse.ArgumentTypeError(f"{s}: workers at once is at least 1")
     return int(s)
 
 
@@ -1430,6 +1647,10 @@ def lean_options(p: argparse.ArgumentParser) -> None:
                    help=f"the audit's memory: a Lean check starts only within it beside the running session, estimated at "
                         f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks, each at "
                         f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available as the sessions start)")
+    p.add_argument("--negative-workers", type=positive, default=1,
+                   help="the negatives after the audit record at once (`NegativeWorkers`): 1, one after another in the "
+                        "audit's own process; more, each in a worker process forked from the audit with its own Lean "
+                        "verifier process, started only while its memory estimate, read then, fits the audit's memory")
 
 
 def plain(a: argparse.Namespace) -> bool:

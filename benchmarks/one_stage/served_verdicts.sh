@@ -94,7 +94,9 @@
 #     `v3c_audit`), its sessions one at a time and Lean's checks of finished members beside them, V3C_LEAN_WORKERS at a
 #     time: on a node it shares default 1, within V3C_AUDIT_MEM_GB beside the running session's estimate
 #     (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`), a follow-on's default a5's LEAN_WORKERS, 3, within what its node has free
-#     beside that estimate (`a5.LeanPool`); then
+#     beside that estimate (`a5.LeanPool`); its negatives after the audit record one after another, or with
+#     V3C_NEGATIVE_WORKERS that many at once, each in a worker process with its own Lean verifier process, started only
+#     while its memory estimate, read then, fits (`a5.NegativeWorkers`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -422,6 +424,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   fi
   local pool=(${V3C_LEAN_WORKERS:+--lean-workers "$V3C_LEAN_WORKERS"})
   [ -n "$FOLLOW" ] || pool=(--lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB")
+  pool+=(${V3C_NEGATIVE_WORKERS:+--negative-workers "$V3C_NEGATIVE_WORKERS"})
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${cache[@]}" \
@@ -780,6 +783,10 @@ if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
     || { say "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a positive integer, not $V3C_WARM_JOBS"; exit 3; }
   grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py warm, which this tree's records_audit.py doesn't have"; exit 3; }
+fi
+if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by side
+  [[ $V3C_NEGATIVE_WORKERS =~ ^[1-9][0-9]*$ ]] \
+    || { say "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not $V3C_NEGATIVE_WORKERS"; exit 3; }
 fi
 if [ -n "${H1_TIE:-}" ]; then  # V3c's audit tied to H1's W, in the serve's run and in `served_verdicts.sh v3c` alike
   grep -q -- '"--tie"' "$TREE/benchmarks/prove_path/records_audit.py" \

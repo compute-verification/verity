@@ -1050,7 +1050,8 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     before the window) is counted by `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json``
     carry the run figure, the window ingress still free in it, and beside it the window figure with its premise
     (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
-    is the records' alone."""
+    is the records' alone. a5's workers' flags (`a5.lean_options`) reach the stub as given, a5's defaults otherwise, and
+    the summary carries a5's ``negative_workers``."""
     import a5 as A5
     import a5_coins as AC
 
@@ -1065,12 +1066,19 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     assert "cap" not in doc and IF.of_records(written.dir, D.parse_design(LAW), IF.resolve)[0].members == mine.members
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
-    monkeypatch.setattr(A5, "audit", lambda *a, **kw: ({"audit": {"accepted": True}}, True))
+    workers = {}
+
+    def audit(a, *rest, **kw):
+        workers.update(lean_workers=a.lean_workers, audit_mem_gb=a.audit_mem_gb, negative_workers=a.negative_workers)
+        return {"audit": {"accepted": True}, "negative_workers": {"workers": a.negative_workers}}, True
+
+    monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     capsys.readouterr()
-    assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", rec["window"]["circuit"], "--run", RUN,
-                    "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
-                    "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
+    argv = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+            "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
+    assert RA.main(argv) == 1
     rows = dict(IF.layout(COORD).rows)
     inputs, window = 5 * 16 * sum(rows.values()), 5 * 16 * (rows["x"] + rows["sx"])
     figure = {"ingress": window, "free": inputs - window, "other_inputs": inputs - window, "bound": "vacuous",
@@ -1080,6 +1088,12 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
                                              "bound": "vacuous", "window": figure}]
     summary = json.loads((tmp_path / "out" / "summary.json").read_text())
     assert summary["leak"] == RA.declared_count(doc, 0) and summary["leak"]["window"] == figure
+    assert workers == {"lean_workers": A5.LEAN_WORKERS, "audit_mem_gb": None, "negative_workers": 1}
+    assert summary["negative_workers"] == {"workers": 1}
+    assert RA.main([*argv, "--out", str(tmp_path / "several"), "--lean-workers", "1", "--audit-mem-gb", "290",
+                    "--negative-workers", "5"]) == 1
+    assert workers == {"lean_workers": 1, "audit_mem_gb": 290.0, "negative_workers": 5}
+    assert json.loads((tmp_path / "several" / "summary.json").read_text())["negative_workers"] == {"workers": 5}
 
 
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):

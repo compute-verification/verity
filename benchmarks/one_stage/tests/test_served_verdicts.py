@@ -1338,6 +1338,24 @@ def test_the_preflight_refuses_a_warm_at_no_positive_number_of_jobs_or_on_a_tree
     assert (rc, lines, order) == (3, [line], [])
 
 
+@pytest.mark.parametrize("given, want, line", [
+    (None, None, None), ("7", "7", None),
+    ("0", None, "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not 0"),
+    ("all", None, "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, "
+                  "not all"),
+])
+def test_v3cs_audit_runs_its_negatives_side_by_side_only_where_v3c_negative_workers_says(tmp_path, given, want, line):
+    """V3C_NEGATIVE_WORKERS reaches the audit as a5's --negative-workers; unset, the audit gets no such flag, so its
+    negatives run one after another as before; one that isn't a positive integer is refused before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, **({"V3C_NEGATIVE_WORKERS": given} if given else {}))
+    if line:
+        assert (rc, lines, order) == (3, [line], [])
+        return
+    assert rc == 0 and "audit" in order, (lines, order)
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    assert (audit[audit.index("--negative-workers") + 1] if "--negative-workers" in audit else None) == want
+
+
 @pytest.mark.parametrize("given", ["MAIN_FILE", "MAIN_SHA"])
 def test_v3cs_audit_samples_on_a_local_challenger_session_pinned_on_mains_first_parent_line(tmp_path, given):
     """records_audit samples only on the auditor's challenger's coins, so V3c's audit takes a local development session's
