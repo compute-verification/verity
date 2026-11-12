@@ -71,13 +71,13 @@ REPORT = "verity/pouw/pearl-c4-replay/v0"
 DRAW_BEACON_TAG = "verity/pouw/pearl-c4-replay/draw-beacon/v0"
 COMMITTED_ROUND = 0
 SHORTCUTS = (
-    "the draws' beacon is Fiat-Shamir over the transcript root and the records root (draw_beacon), not a public beacon "
-    "round after the commitment",
+    ("the draws' beacon is Fiat-Shamir over the transcript root and the records root (draw_beacon), not a public beacon "
+     "round after the commitment"),
     "the epoch beacon is a label of the benchmark's operand set, not a public beacon round after the weights",
-    "the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
-    "timing",
-    "verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
-    "(development shortcut; the protocol's check is a ZK proof, PouwCheck)",
+    ("the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
+     "timing"),
+    ("verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
+     "(development shortcut; the protocol's check is a ZK proof, PouwCheck)"),
 )
 
 
