@@ -1,7 +1,7 @@
-"""`PouwCallCheck_v1`'s word view (`segment.call_check`) is cgemm.cu's served H1 receipt: on a random 128 x 128 tile it
-accepts the receipts `cgemm_ref` derives (`checked_strip.co32c_words`, then `derive.tile_receipts` over T_1 .. T_last, O',
-D_1 .. D_(m-1); for fx1, over those words times `fx1_key`), thread by thread from the thread's leaves, coin and sample, and
-refuses each with one bit changed."""
+"""`PouwCallCheck_v1`'s word view (`segment.call_check`) is `edited_gemm/cgemm.cu`'s served H1 receipt: on a random
+128 x 128 tile it accepts the receipts `cgemm_ref` derives (`checked_strip.co32c_words`, then `floored_gemm/derive.py`'s
+`tile_receipts` over T_1 .. T_last, O', D_1 .. D_(m-1); for fx1, over those words times `fx1_key`), thread by thread
+from the thread's leaves, coin and sample, and refuses each with one bit changed."""
 from __future__ import annotations
 
 import importlib.util
