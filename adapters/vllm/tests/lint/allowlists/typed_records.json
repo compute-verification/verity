@@ -276,7 +276,6 @@
     {"file": "verity_vllm/pipeline/tp/serving_rows.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 10},
     {"file": "verity_vllm/pipeline/tp/warmup.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/pipeline/tp/xrank_dump.py", "kind": "schema-literal", "symbol": "dump", "detail": "verity/tp2/xrank-picks/v1"},
-    {"file": "verity_vllm/pipeline/vu_export.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/vllm-vu-export/select/v1"},
     {"file": "verity_vllm/pipeline/vu_store.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/pipeline/window_advice.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/window-advice/v1"},
     {"file": "verity_vllm/pipeline/workload.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/workload/v1"},
