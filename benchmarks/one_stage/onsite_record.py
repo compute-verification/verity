@@ -295,10 +295,11 @@ REGISTRATION = "registration.json"
 #: K's terms over the period, each a symbol of the notation table and the rows form's public fields it sums
 TERMS = {"k_{sched}": ("schedules",), "k_{fail}": ("cells",)}
 #: K's terms of each execution phase j, each summing its scan's public fields
-PHASE_TERMS = {"\\ell_{a,j}": ("free", "entries"), "k_{skip,j}": ("faulty_sets", "faulty_bits", "faulty_entries"),
-               "T_j \\log_2 d_{jit}": ("jitter",)}
-#: a scan's public fields that a period check charging no slot entries once doesn't state, each read as 0 where absent
-UNSTATED = ("entries",)
+PHASE_TERMS = {"\\ell_{a,j}": ("free", "entries", "view"),
+               "k_{skip,j}": ("faulty_sets", "faulty_bits", "faulty_entries"), "T_j \\log_2 d_{jit}": ("jitter",)}
+#: a scan's public fields that a period check charging no slot entries once, or no view rows, doesn't state, each read
+#: as 0 where absent
+UNSTATED = ("entries", "view")
 ADVICE = ("not in this record: the realized advice length |a_j| is a value. The run's published registration copies state "
           "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "

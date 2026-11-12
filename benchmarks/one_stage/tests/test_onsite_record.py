@@ -1296,6 +1296,21 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
     assert rec["periods"]["egress"]["capacity_bits_per_phase"] == 4 * 4 * 32 * 512 * 8
 
 
+def test_a_scans_view_rows_are_among_its_phases_free_inputs():
+    """A period check that charges a phase its scan's view rows states them as its scan's ``view``, which K's
+    ℓ_{a,j} sums beside ``free`` and ``entries``: w63k4's 32 view rows of 800 bits, with the schedule's and the
+    jitter's 800, are the check's 26,400 a phase, and a K that leaves them out is refused by its sum."""
+    scan = dict(SCAN, delta=f"1/{2 ** 64}", drawn=64, units=64, free=0, jitter=32, entries=0, view=25600, whole=True)
+    public = dict(PUBLIC, K=26400, cells=384, schedules=384, scans=[scan], eps=f"1/{2 ** 64}",
+                  scan_bits={"entries": 896, "view": 25600})
+    b = OR.bound(public)
+    (free,) = [t for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"]
+    assert (b["K"], free["bits"], free["lean"]) == (
+        26400, 25600, ["scans[0].free", "scans[0].entries", "scans[0].view"])
+    with pytest.raises(ValueError, match="K is 1696, and its terms sum to 26400"):
+        OR.bound(dict(public, K=1696))
+
+
 @pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("once", [True, False])
 def test_w63k4s_slot_entries_are_charged_once_under_its_scan_proved_whole_and_else_in_k_skip(tmp_path, once):
