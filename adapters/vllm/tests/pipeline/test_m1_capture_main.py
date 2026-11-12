@@ -462,6 +462,14 @@ def test_the_option_names_the_manifest_before_the_environment_does(world: World,
     assert world.called("stage") == [("the runner", "/given/manifest.json", world.out, "m1_capture")]
 
 
+@pytest.mark.parametrize("held", [None, ""])
+def test_a_variable_that_is_unset_or_empty_names_no_manifest(world: World, monkeypatch: pytest.MonkeyPatch, held: str | None) -> None:
+    if held is not None:
+        monkeypatch.setenv(stage.MANIFEST_ENV, held)
+    M1.main(options(world, no_observer=True))
+    assert world.called("stage") == [("the runner", None, world.out, "m1_capture")]
+
+
 def test_a_plan_with_an_unsupported_value_refuses_before_any_run(world: World, said: Lines) -> None:
     world.plan_refusal = "1 unsupported Value(s): v0: no site"
     refused(lambda: M1.main(options(world)))
