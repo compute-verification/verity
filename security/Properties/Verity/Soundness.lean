@@ -53,9 +53,10 @@ strategy in one game.
 
 Each target is a hypothesis until its subprotocol's piece proves it at its compiled check, and `Vocab`'s fields are given
 until each piece defines its own: v2's reading of the committed files, the positions, the coin commitment's families and
-the device's log each subprotocol read, the extractor and the finders, the gates computed, the world, the declaration's
-registered inputs, the wipe and the play read at its boundary, and the published certificates, thresholds, errors and
-collision terms.
+the device's log each subprotocol read, the extractor and the finders, the gates computed, the world, the wipe and the
+play read at its boundary, and the published certificates, thresholds, errors and collision terms. The inference-only
+policy's target reads none of them: its claim is on its own case in the play's messages, and
+`Proofs.Properties.Verity.InferenceOnly` proves it.
 -/
 
 @[expose] public section
@@ -78,7 +79,7 @@ def SoundnessOf : Prop :=
 inference-only policy, PoUS, PoUB-P2, the network certifier and the wipe each meet their target at onsite, then the
 probability that onsite's compiled verifier accepts files that passed the commit phase's check while one of the
 period's claims fails (more than an `ε` share of the units unbound in the extractor's transcript, fewer than `W` gates
-computed after their coin, a declaration that doesn't comply with the policy, fewer than `S` bits held on average,
+computed after their coin, a case of the policy whose Program doesn't meet the policy, fewer than `S` bits held on average,
 fewer than `Q` bits read, more than `K` bits through the network certifiers, or foreign content kept across the wipe past
 its survivor threshold) is at most the seven errors at that strategy summed. -/
 def Soundness : Prop :=

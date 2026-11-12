@@ -14,6 +14,7 @@ public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
 public import Lms.Verify
+public import Properties.Remote
 public import Properties.Verity.Sha512
 
 /-!
@@ -87,10 +88,16 @@ The statement's form is the causal game, the committed files, one fixed extracto
   chosen adaptively by the strategy's moves. Where it meets `Hash.Assumptions.LmsUnforgeable` at the compiled LMS
   verifier (`lmsVerify`), the error adds the published `ε_forge(t, Q)` (`epsForge`).
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the five period claims are its `Holds`.
-  The inference-only policy's claim is `Nci.CompliesRate` at the published `Γ` and `α` of the declaration over the committed
-  circuit (`declaration`: its registered inputs `θ`, `theta`). The wipe's claim is that the run, read at the wipe's
-  boundary as the wipe's game (`Verity.Wipe.OfRun`, `wipeRun`), doesn't keep foreign content past the survivor threshold
-  the wipe publishes (`Verity.Wipe.OfRun.Kept` at `foreignBits`).
+  The wipe's claim is that the run, read at the wipe's boundary as the wipe's game (`Verity.Wipe.OfRun`, `wipeRun`),
+  doesn't keep foreign content past the survivor threshold the wipe publishes (`Verity.Wipe.OfRun.Kept` at
+  `foreignBits`).
+* **The inference-only policy's claim is on the Program its check judges.** Every case of the policy in what the prover
+  sent (`PolicyCase`: its parameters, its record and its evidence as they decode) is
+  `Properties.Remote.PolicyHeld`: the record names the Program the parameters carry by its SHA-512, θ holds what the
+  log's first record registers, and the Program lays out a registered circuit whose inference blocks each have at most
+  `Γ` gates and read at most `α` fresh input bits per gate, `Γ` and `α` the policy's own parameters. The claim reads
+  the play's messages alone: no field of the vocabulary enters it, and it says nothing of the committed files' circuit
+  (`Vocab.Holds` lists what it leaves unsaid).
 * **Each compiled check's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   subprotocols whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
@@ -107,10 +114,10 @@ verdict at `k` accepts while its claim fails is at most its error there. `Verity
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
 `programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the
-forgers, `computed`, `world` (the runs PoUS, PoUB-P2 and the network certifier realize), the declaration's registered
-inputs and the policy's budgets, the wipe at the period's boundary and the run read as its game, and `certOf`,
-`foreignBits`, `signatures`, `delta`, `epsForge` and `loss` (what the composite publishes, functions of the parameters
-alone).
+forgers, `computed`, `world` (the runs PoUS, PoUB-P2 and the network certifier realize), the wipe at the period's
+boundary and the run read as its game, and `certOf`, `foreignBits`, `signatures`, `delta`, `epsForge` and `loss` (what
+the composite publishes, functions of the parameters alone). The inference-only policy defines none: its claim reads
+its own case in the play's messages.
 -/
 
 @[expose] public section
@@ -219,6 +226,18 @@ def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent
   ∃ ps c ev, Decoded s ps c ev ∧
     ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = P.onBlobs (Blobs.ofArray s.blobs) ∧
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
+
+/-- **The inference-only policy's case in what the prover sent composite `k`**, decoded: the three byte strings decode
+under the composition's formats, one of the subprotocols' cases is the policy's (`NciCheck.Protocol.protocol`, which
+reads no blobs, as one of `k`'s subprotocols), and under the parameters `k` names for it that case decodes to the
+policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k NciCheck.Protocol.protocol s`
+without the check's acceptance. -/
+def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : NciCheck.Protocol.Params)
+    (c : NciCheck.Protocol.Commitment) (e : NciCheck.Protocol.Evidence) : Prop :=
+  ∃ ps cm ev, Decoded s ps cm ev ∧
+    ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = NciCheck.Protocol.protocol ∧
+      (canonicalJson x.2.1.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
+      NciCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
 
 /-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
@@ -641,9 +660,8 @@ the device's signature, with their SHA-512 calls bounded by the strategy's (`fin
 device's messages in a play and the forger's on each of its coins bounded by the published `Q` (`signs_le`,
 `forger_signed`), and the other finders each subprotocol's bound reads,
 each with its budget in the strategy's calls (`finders`); the committed circuit's gates a play computed after
-their window's coin; the world each play realizes; the declaration's registered inputs and the inference-only policy's
-budgets; the wipe that opens the period, at a boundary of a schedule of the committed circuit's blocks, and each play
-read at that boundary as the wipe's game;
+their window's coin; the world each play realizes; the wipe that opens the period, at a boundary of a schedule of the
+committed circuit's blocks, and each play read at that boundary as the wipe's game;
 the deployment's honest prover; and the certificates, survivor threshold, errors, forgery bounds and losses the
 composite publishes, from the parameters and the strategy's SHA-512 calls alone.
 
@@ -712,13 +730,6 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   world_window : ∀ θ F c σ o, (world θ F c σ o).win = window θ
   /-- every play's world charges device memory to the parameters' account, never one PoUS's own coins chose -/
   world_capacity : ∀ θ F c σ o, (world θ F c σ o).acct Accounting.Resource.capacity = capacity θ
-  /-- the declaration's registered inputs `θ`, input gates of the committed files' circuit -/
-  theta : (θ : ByteArray) → (F : Array ByteArray) → Finset (Fin (read θ F).circuit.N)
-  theta_input : ∀ θ F, ∀ g ∈ theta θ F, (read θ F).circuit.isInput g = true
-  /-- the inference-only policy's maximum inference block size `Γ`, in gates -/
-  gates : ByteArray → ℕ
-  /-- the inference-only policy's limit `α` on fresh input, in bits per gate -/
-  fresh : ByteArray → ℝ
   /-- the number of blocks of the committed circuit's schedule -/
   spans : ByteArray → Array ByteArray → ℕ
   /-- the schedule of the committed circuit's blocks the wipe sits in -/
@@ -769,10 +780,6 @@ noncomputable def units (θ : ByteArray) (F : Array ByteArray) : ℕ := (V.read 
 noncomputable def partsOf (θ : ByteArray) (F : Array ByteArray) : Verity.Partition (V.circuitOf θ F) (V.units θ F) :=
   (V.read θ F).parts
 
-/-- **The declaration the inference-only policy judges**: the committed circuit, with its registered inputs. -/
-noncomputable def declaration (θ : ByteArray) (F : Array ByteArray) : RegisteredCircuit :=
-  .ofCircuit (V.circuitOf θ F) (V.theta θ F) (V.theta_input θ F)
-
 /-- **The commit phase's file check**: the committed files hold a file with each digest the parameters hold, the
 circuit file's and the public file's. -/
 def Registered (θ : ByteArray) (F : Array ByteArray) : Prop :=
@@ -814,9 +821,31 @@ transcript at `σ` (at most an `ε` share of the units unbound in it under the c
 least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
 network certifiers), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
-own coins choose neither. The inference-only policy's: the declaration complies with `Nci.CompliesRate` at the published `Γ` and
-`α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
-published survivor threshold (`Verity.Wipe.OfRun.Kept`). -/
+own coins choose neither. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign
+content past the published survivor threshold (`Verity.Wipe.OfRun.Kept`).
+
+The inference-only policy's is on the Program its compiled check judges: every case of the policy in the play's
+messages (`PolicyCase`) is `Properties.Remote.PolicyHeld`. The record names, by its SHA-512, the Program the parameters
+carry; θ holds what the log's first record registers; and that Program lays out a registered circuit whose inference
+blocks each have at most `Γ` gates and read at most `α` fresh input bits per gate, on every parse and layout, with
+`Γ` and `α` the parameters the composite names for the policy. It reads no field of the vocabulary.
+
+What it does not say:
+
+* **That the committed values follow the Program.** The circuit it speaks of is the Program's own layout. Sampled
+  proofs' claim is on the committed files' units, and nothing here holds the rows a unit commits to the Program's gates
+  or a wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled units, and no
+  protocol calls it.
+* **`Γ` in PoUW's unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the committed files' circuit
+  (`computed`). No statement gives how many of those a Program gate is.
+* **That the Program is the registered compiler's output.** No compiled check runs the registered compiler or holds
+  the record to the registration log's builder item, so the Program and the record are the ones the prover sent under
+  the digests the composite ties, not the compiler's output on committed advice. This is a check the verifier lacks,
+  not a premise of the claim.
+* **Who declared the day.** Where sampled proofs' parameters carry a day and the log's declarations
+  (`Properties.Spot.DeclaredDay`), the record's program is held to that day's declared one. The day and the
+  declarations are read from the parameters as they were sent, with no device's signature on them: where they come from
+  the prover's own log, the Program is held to what the prover declared, and the claim says nothing of who wrote it. -/
 def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
     Subprotocol → Exchange → Prop
   | .sampled, o => (V.live k θ F c).Holds (V.certOf θ) σ .sampled o
@@ -824,7 +853,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
-  | .inferenceOnly, _ => Nci.CompliesRate (V.gates θ) (V.fresh θ) (V.declaration θ F)
+  | .inferenceOnly, o => ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other
@@ -916,8 +945,10 @@ def SpotSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 /-- **PoUW's target**: at least `W` gates of the committed circuit computed after their window's coin. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
 
-/-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.CompliesRate`
-at the published `Γ` and `α`. -/
+/-- **The inference-only policy's target**: every case of the policy in the play's messages is
+`Properties.Remote.PolicyHeld`, the policy on the Program its compiled check judges, at the policy's own `Γ` and `α`
+(`Holds`, which lists what that leaves unsaid). `Proofs.Properties.Verity.InferenceOnly` proves it of every vocabulary
+at both composites: the composite's acceptance holds each of its cases to its check's, so the event is empty. -/
 def InferenceOnlySound (k : Verity.Registration.Composite) : Prop := V.Target k .inferenceOnly
 
 /-- **PoUS's target**: at least `S` bits of device memory held on average. -/

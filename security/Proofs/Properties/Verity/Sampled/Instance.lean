@@ -774,8 +774,6 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     world := fun _ _ _ _ _ => Verity.Idle.world
     world_window := fun _ _ _ _ _ => rfl
     world_capacity := fun _ _ _ _ _ => rfl
-    theta := fun _ _ => ∅
-    theta_input := fun _ _ _ h => absurd h (Finset.notMem_empty _)
     schedule := fun θ F => blocks (readOf θ F).circuit
     wipe := fun θ F => wipe (readOf θ F).circuit
     wipeRun := fun θ F c _ => ofRun (readOf θ F).circuit (Verity.play [] (signer θ) θ F c)
