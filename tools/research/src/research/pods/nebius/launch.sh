@@ -65,9 +65,9 @@ ssh_pubkey() {
 
 # render_user_data PUBKEY LEASE_EPOCH: the cloud-init document (scripts gzip+base64 so no YAML quoting can bend them)
 render_user_data() {
-  VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch VY_FS=${FS_ID:+vy-fs} \
+  VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_NAME=$VM_NAME VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch VY_FS=${FS_ID:+vy-fs} \
     VY_CLOCKS=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0) python3 - "$here" "$src/research/pods/sh" <<'PY'
-import base64, gzip, os, re, sys
+import base64, gzip, os, re, sys, tomllib
 nebius, sh = sys.argv[1], sys.argv[2]
 LIMIT = 32768  # Nebius refuses a longer spec.cloud_init_user_data
 def shipped(path):
@@ -101,6 +101,9 @@ files = [("/etc/vy/vy.env", "0644", base64.b64encode(gzip.compress(env.encode(),
          ("/usr/local/share/vy/lease.sh", "0755", blob(f"{sh}/lease.sh")),
          ("/usr/local/share/vy/gpu_adopt.py", "0755", blob(f"{nebius}/gpu_adopt.py")),
          ("/usr/local/bin/gpu-lease", "0755", blob(f"{sh}/gpu_lease.sh"))]
+userns = next(f for f in tomllib.load(open(f"{nebius}/deploy.toml", "rb"))["file"] if f["path"] == "/etc/sysctl.d/61-vy-userns.conf")
+if os.environ["VY_NAME"] in userns["nodes"]:  # what deploy installs there, from the same source; vm_setup.sh applies it
+    files.append((userns["path"], "0644", blob(os.path.join(nebius, "../../../../../..", userns["src"]))))
 out = ["#cloud-config", "users:", f"  - name: {os.environ['VY_USER']}", "    sudo: ALL=(ALL) NOPASSWD:ALL", "    shell: /bin/bash",
        "    ssh_authorized_keys:", f"      - {os.environ['VY_PUBKEY']}", "write_files:"]
 for path, mode, data in files:
