@@ -85437,3 +85437,66 @@ Tags as before. Mailbox read 11:24Z: 33 sections, nothing new. A read only; noth
 - [run] Its body carries all of this (`research queue edit`, 11:27Z).
 
 Nothing marked, nothing closed, no push to #8139's branch or any branch but `cursor/proofs-siblings-exempt-e2de`. [run]
+
+## WIRED, Thu 12 Nov 11:32Z: pull request 2 is started on `cursor/proofs-wired-6bf7` at `2b77dc50d89f`; a run at a file with a wired or linked parameter on rows `π#0`, `π#1` is refused today by two checks `V h` already asks, so no verifier change and no lock record for it; `rewires_wireMap` compiles without the size bound (`d800`, exit 0); the records run and the quick suites are running
+
+**1. The refusal's finding: refused today, at the run and not at the registration.** Nothing was run for it; these are reads at `b2585b1f5bb6`.
+
+- [read] Round 2's statement check asks that the session's registered reads name every port a wire or a link names for its template: `wiredRead` and `linkedRead`, `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean:887-888` and `:883-884`, two conjuncts of `stmtCodes`' `second-read` (`:966-967`). A wire's and a link's port is the template's parameter name as its Definition gives it (`nodeWires` `:574`, `nodeLinks` `:488`, both from `params[a]`), never a row's name. The refusal's text is the code `second-read`.
+- [read] The session's verifier asks that each port of its registered reads is a port of the circuit file, by that name: `Flock.Registered.checkPort`, `verity/protocols/flock/verifier/Flock/Registered.lean:270-273`, text "registered reads: {reg.name} is not a row of the circuit (an input port, or an output port's row)". `Registered.check` (`:303-316`) calls it for every port of the verifier's own registered reads, and `checkRegistered` (`:651-654`) runs that for every statement of a setup.
+- [derived] Together: at a member file whose rows are `π#0`, `π#1` with no port named `π`, and a wire or a link at `π`, no session statement passes both. Its registered reads either leave `π` out (`second-read`) or name a port the file doesn't have (`checkPort`). A session without registered reads has none, and `second-read` refuses it alone.
+- [read] Both are inside what the modelled verifier accepts. `stmtOk` (`security/Proofs/Flock/SpotFlock/Code.lean:513`) asks `sessionOk` (`:330`, through `zkOk` `:102`: the statement sets up, and `setup_checkRegistered`, `Reads.lean:46`, says every statement of a setup passes `checkRegistered`) and `readsOk` (`:484`, through `codesOk` `:474`: `stmtCodes` is empty). `stmtJsonOf` (`:435`) hands round 2 the session's own registered-reads file, and `registered_of_ins` (`EntriesAt.lean:367`) says the session's registered ports are that file's.
+- [read] What holds each today: `#guard !wiredRead exWired "Triple_v0" #[("out", .null)]` (`Spot/SecondStageExamples.lean:672`: reads that leave the wire's port out); the Python mirror `_wired_read` and `_linked_read` (`verity/protocols/spot/verifier/second_stage.py:1010-1017`, asked at `:1097`), which the difftest holds to the Lean on the second stage's statements; and `verity/protocols/flock/prover/tests/test_lean_registered_reads.py:249`, which asserts the session verifier's text for a registered port the circuit doesn't have. No one test builds a `π#0` file and runs both; say if you want a `#guard` with reads `x#0`, `x#1` beside the one at `:672` (one line in the verifier's examples file, which then changes spot's Lean package in this pull request).
+- [read] Which parameters this covers, in `V h`: every port a wire of `h.wires` or a link of `h.links` names. Those are the auditor's held copies (`Code.lean:125-126`), handed to round 2 by `ownOf` (`:463`), and `wireMap h` reads the same `h.wires` (`WireMap.lean:68`). So every wire the map has names a port the file must have in an accepted run.
+- [read] In the deployed check the links and wires are derived from the replay block's registered Definition: every argument of a template's call that reads a parameter of the replay block or another node's output is a link's or a wire's (`nodeLinks`, `nodeWires`), or nothing is derived and `second-links` or `second-wires` refuses (`linksOk` `:626`, `wiresOk` `:641`, `designFailures` `:1087-1089`). `V h`'s `stmtOk` asks neither `linksOk` nor `wiresOk`: with `h.wires` none, `wiredRead` holds of any reads. [read] That is PRF-570's title in Linear (the modelled verifier asks round 2's design check), not this pull request's.
+- [read] Besides, the deployed check passes no two-stage run today: `FORM = false` (`SecondStage.lean:142`), `check_refused` (`:1180`).
+- [derived] So pull request 2 changes no verifier. Nothing changes for an honest file on `main` or for a served run. No lock record and no guarantee moves for the refusal. The work is smaller than I planned, not larger: there is no statement of a refusal to give before and after.
+
+**What those two checks do not refuse**, for you to rule on. None of it is needed by `rewires_wireMap`, which holds at any file; all of it bears on `SpotFlock.WiresMove h` and `SpotFlock.SourcesNamed h` (PRF-571, PRF-572).
+
+- [read] The registration: `two h s` evaluates at such a design. The refusal is `stmtOk`'s, and no theorem states it. [derived] The lemma would read "in an accepted run, each port a wire or a link names for a template is a port of that template's circuit file", from `stmtCodes_nil` (`SecondStage.lean:1306`), `registered_of_ins` and `setup_checkRegistered`. I would put it where it is first read, in pull request 3 or with `SecondWiresMove`'s proof, not in 2. Say if you want it in 2.
+- [read] A file with a port named `π` and further rows `π#1`, …: those rows are ports no wire or link names, and `readOk`'s last case (`:873-879`) lets each read the member's own port of the interior record or a registered value. The prover's naming never makes that file (`row_name`, `verity/commitments/windows/interface.py:277-279`: the port's own name on one row, `port#j` for every `j` on several).
+- [read] A wire's port that is the name of an output row of the reader's own file: `checkPort` takes an input port or an output row. [guess] Round 2's `readOk` then holds that row to the writer's port like any wired port; I did not follow it further.
+- [read] Nothing the verifier runs holds a file's rows to its template's parameters. `Spot.Bits.check` (`Spot/Bits.lean:773`) does, and accepts `π#j` rows (`paramOf` `:703`), but it has no caller in the verifier or the proofs: only its own `#guard`s and two docstrings name it (`Spot/Returned.lean:9`, `second_stage.py:659`).
+
+**A sentence of mine in #9043's body is wrong.** [read] "Not shown", second bullet, ends: "No check on `main` refuses that design." A run of that design is refused by the two checks above. What is true: no check refuses its registration, and no theorem states the refusal. Offered in its place: "A run at such a file is refused: round 2 asks the session's registered reads to name `π` (`second-read`), and the session's verifier refuses a registered port the file doesn't have (`Flock.Registered.checkPort`). No check refuses the design's registration, and no theorem states the refusal yet." #9043 is marked and I have not touched its body.
+
+**#9043's body also lost its issue line, by my edits.** [run] `research queue status` at 11:29Z shows #9043 `ready` at `b2585b1f`, "admitted", and lists it among the pull requests that name no Linear issue. [read] It was opened with `--issue PRF-528`; `research queue edit` replaces the whole body, and the body file I sent left the `Refs PRF-528` line out (#9215's body has its `Refs` line). One body edit would mend both this and the sentence above: `research queue edit 9043 --body-file`, words only, the head stays. I do not know whether an edit of a marked pull request's body touches its mark, so I have not made it: say if I should.
+
+**2. `rewires_wireMap` as it reads at `2b77dc50d89f`.** It compiles, so item 5's form is no longer "proposed".
+
+Before (on the scratch branches):
+
+```lean
+theorem rewires_wireMap (hfit : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfirst : writersFirst h = true) :
+    (bitsProgs h.ms).Rewires (membersPart h.ms) (wireMap h) (returned h)
+```
+
+After:
+
+```lean
+theorem rewires_wireMap (hbuilt : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit)
+    (hlog : ∀ ci ∈ h.ms, ci.1.unit.unitLog ≤ 32)
+    (hrow : ∀ ci ∈ h.ms, 0 < ci.2.size → 0 < (Flock.Bridge.bitsRows ci.1).nComp)
+    (hfirst : writersFirst h = true) :
+    (bitsProgs h.ms).Rewires (membersPart h.ms) (wireMap h) (returned h)
+```
+
+- [read] `MemberFits ci` is `Built ci.1.unit ∧ ci.1.unit.unitLog ≤ 32 ∧ 0 < (bitsRows ci.1).nComp ∧ (memberProg ci.1 ci.2.size).gates.length ≤ unitClassMax` (`ScopeOf.lean:506`). The last conjunct, the bound of 262,144 gates on a member's program, is what left, as you ruled at 04:43Z. `gateMember_touches` changed the same way.
+- [run] `r20261112-111528-d800`, the one-file try of `WireMapRewires.lean` at `2b77dc50d89f` (vy-nebius-cpu-8, 11:15:51Z to 11:19:49Z), exit 0: lean exit 0 in 208 s; "none of its 23 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Its imports built at this head first, `Rewire`, `WiredScope` and `WiredAt` among them.
+- [derived] Two ways it differs from your 04:43Z wording, both smaller:
+  - `hrow` asks a computed row only of a member that has a unit (`0 < ci.2.size →`). The proof reads it only at a unit's proof block, so the premise is weaker than "a computed row a unit" for every member and the theorem says more. Say if you want it for every member.
+  - `partitions_keyProg` keeps its statement, bound and all, as on `main`. `gateMember_touches` read one part of its conclusion, that a block's gates are under the member's length. The new `lt_length_blockOf_keyProg` gives that part alone from `blockOf_bitsKeyProg`, `lt_length_blockOf` and `progOf_keyProg`, none of which takes the bound. So no file of `main` changes and no copy of `partitions_keyProg` is added.
+- [read] `Prog.Rewires` also lost its field `inj` (the map sends no two gates of a proof block to one gate), in the first commit, `cbe9a0fc1d55`; `Prog.exists_correct_wired`, `Prog.Rewires.exists_correct`, `decoded_wired` and `decoded_rewired` take instead that the block's values agree where the map sends two of its gates to one. Those are #9043's files changed in this pull request; nothing on `main` reads them.
+
+**3. The plan, and where it stands.**
+
+- [run] Branch `cursor/proofs-wired-6bf7`, from #9043's head `b2585b1f5bb6`, pushed at `2b77dc50d89f`: two commits. Against #9043: `WireMapRewires.lean` new (524 lines, 26 declarations: 23 theorems and 3 definitions); `Rewire.lean`, `WiredScope.lean` and `WiredAt.lean` changed (their declaration counts unchanged); one import line in `security/Proofs/Flock.lean`; the cap for `Proofs/Flock` from 272 modules and 2,283 declarations to 273 and 2,309.
+- [run] At that head, locally: `unread_gate.py origin/main HEAD` says 0 areas above the cap; the three text lints (`tests/lint/test_repo_retired_terms.py`, `test_repo_lane_text.py`, `test_lean_bar.py`) 25 passed, no warning naming a file of this change. No other module declares a name the new file declares (a grep by keyword, not the sibling check).
+- [run] Running: `r20261112-112325-ffaa`, the records run (`lean_changed.py --records security/Proofs --update`), launched 11:24Z on vy-nebius-cpu-5; `r20261112-112506-f89a`, the changed suites at quick tier (`suites.py --changed 33faab2be81c --quick`), launched 11:25Z on vy-nebius-cpu-13. [guess] `f89a` ends about 11:45Z and `ffaa` between 11:50Z and 12:10Z, by the last two of each.
+- [run] Merge-trees at 11:26Z, `main` at `33866d93e66e`: `git merge-tree --write-tree --name-only origin/main HEAD` exit 0, no file named. Against `origin/cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`): the head stops on 23 paths and `main` alone on the same 23; none beyond `main`'s own.
+- [read] #9043 and #9215 are not on `main` (`33866d93e66e`). So I open pull request 2 with #9043's branch as its base and say so in the body; that is two deep, the most the team skill's Landing now allows. Pull request 3 on top would be three deep: it waits for #9043 on `main`, or goes in as one head with 2.
+- [derived] Lock records: I expect none to move against `main`, since no listed guarantee reads these modules; `ffaa` says. The body's notice line will say what it shows.
+- Next: read `f89a` and `ffaa`; open the pull request (`research queue open --base cursor/proofs-wired-7ac3 --issue PRF-528`); its ready line. I mark nothing.
+
+[read] Mailbox at 11:31Z: 164 lines, newest section 10:17Z; nothing since your 10:55Z message. [run] Checkpoint note `proofs/20261112T1116Z-report-wired` synced at 11:16Z.
