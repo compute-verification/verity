@@ -3,7 +3,10 @@
 caller's own value where it does, with the rest of the environment as it is. A run's kept verifier
 (`a0.VerifyMembers`, its ``verify-members``) starts in this process's environment as it is: under the allocator's
 default where the caller sets no value, and under the caller's own where it does. The children are stand-ins that record
-the environment they were given."""
+the environment they were given.
+
+Environments are compared by name (`differing`), and no assertion names one: a failure prints the names that differ and
+no value of the environment."""
 from __future__ import annotations
 
 import io
@@ -35,6 +38,13 @@ def caller(monkeypatch, own: str | None) -> None:
         monkeypatch.setenv(NAME, own)
 
 
+def differing(got, want) -> list[str]:
+    """The names whose values differ between two environments, a name only one of them has among them. Its caller holds
+    the list in a variable before asserting on it: a failed assertion prints what its expression names, and pieces of an
+    environment's values with it."""
+    return sorted(k for k in got.keys() | want.keys() if got.get(k) != want.get(k))
+
+
 @CASES
 def test_a0s_lean_verify_runs_under_the_allocator_setting_unless_the_caller_sets_its_own(tmp_path, monkeypatch, own, want):
     children = {}
@@ -51,7 +61,8 @@ def test_a0s_lean_verify_runs_under_the_allocator_setting_unless_the_caller_sets
     (out / "sessions" / "s").mkdir(parents=True)
     (out / "sessions" / "s" / "session.json").write_text("{}")
     assert a0.lean_verify(EXE, st, 8, out, zk=True)["accepted"]
-    assert children["verify"] == {**os.environ, NAME: want}
+    names = differing(children["verify"], {**os.environ, NAME: want})
+    assert names == []
 
 
 @pytest.mark.parametrize("own", [None, "0", "-1"], ids=["unset", "the caller's own", "the caller's -1"])
@@ -66,10 +77,9 @@ def test_a0s_kept_verifier_runs_under_the_allocators_default_unless_the_caller_s
     caller(monkeypatch, own)
     monkeypatch.setattr(a0.subprocess, "Popen", child)
     a0.VerifyMembers("lean", tmp_path / "archive", "0" * 128, tmp_path / "verify-members.log")
-    got = children["verify-members"]
-    # compared by name, so a failure prints no value of the environment
-    assert sorted(k for k in got.keys() | os.environ.keys() if got.get(k) != os.environ.get(k)) == []
-    assert got.get(NAME) == own
+    names, value = differing(children["verify-members"], os.environ), children["verify-members"].get(NAME)
+    assert names == []
+    assert value == own
 
 
 @CASES
@@ -93,4 +103,7 @@ def test_server_rates_lean_runs_under_the_allocator_setting_unless_the_caller_se
         assert lean(SimpleNamespace(dir=tmp_path / "s", label="t/0"))["accepted"]
     finally:
         lean.close()
-    assert children == [{**os.environ, NAME: want}]
+    count = len(children)
+    assert count == 1
+    names = differing(children[0], {**os.environ, NAME: want})
+    assert names == []
