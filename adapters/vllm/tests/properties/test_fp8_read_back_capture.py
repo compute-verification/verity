@@ -114,3 +114,27 @@ def test_sass_counts_by_opcode():
     c = X.sass_counts(SASS)
     assert (c["F2FP.F16.E4M3.UNPACK_B"], c["HADD2.F32"], c["FMUL"], c["FMUL.FTZ"], c["F2FP.BF16.F32.PACK_AB"]) == (1, 1, 1, 1, 1)
     assert (c["FFMA"], c["FFMA*"], c[".FTZ outside F2I"], c["instructions"]) == (0, 1, 1, 7)
+
+
+def test_read_back_layer_is_the_layer_whose_impl_reads_the_context_back():
+    """The pin keeps the route on the layer and the read-back on its impl: a layer with the read-back on itself, an
+    indexer's key cache and a layer without an impl are not it."""
+    from types import SimpleNamespace as NS
+
+    def f(*a, **k):
+        return None
+
+    indexer = NS(prefix="indexer")
+    on_layer = NS(_use_sparse_mha=f, _compute_prefill_context=f)
+    no_read_back = NS(_use_sparse_mha=f, impl=NS())
+    first = NS(_use_sparse_mha=f, impl=NS(_compute_prefill_context=f))
+    second = NS(_use_sparse_mha=f, impl=NS(_compute_prefill_context=f))
+    assert X.read_back_layer([indexer, on_layer, no_read_back, first, second]) is first
+    assert X.read_back_layer([indexer, on_layer, no_read_back]) is None
+
+
+def test_kernel_symbols_finds_the_page_kernel_by_name():
+    stub = b"_Z101__device_stub__ZN4vllm41cp_gather_and_upconvert_fp8_kv_cache_pageEPKh"
+    data = b"\x00".join([b"junk", X.KERNEL.encode(), stub, b"cp_gather_and_upconvert_fp8_kv_cache", b"cp_gather_and_upconvert_nvfp4_kv_cache"])
+    assert X.kernel_symbols(data) == sorted([X.KERNEL, "cp_gather_and_upconvert_fp8_kv_cache"])
+    assert X.kernel_symbols(b"cp_gather_cache") == []

@@ -208,6 +208,14 @@ def set_gains(model: Any) -> dict[str, Any]:
     return {"layers": len(hit), "first": hit[0], "gains": [x if isinstance(x, str) else float(x) for x in GAINS]}
 
 
+def read_back_layer(layers: Any) -> Any:
+    """The first of `layers` that decides the route (``MLAAttention._use_sparse_mha``, mla_attention.py:1113) and whose
+    ``impl`` reads cached context back (``MLACommonBaseImpl._compute_prefill_context``, mla_attention.py:2806, which the
+    impl's own ``forward_mha`` calls); None where there is none."""
+    return next((m for m in layers if callable(getattr(m, "_use_sparse_mha", None))
+                 and callable(getattr(getattr(m, "impl", None), "_compute_prefill_context", None))), None)
+
+
 def serve(out: Path) -> dict[str, Any]:
     sys.path.insert(0, str(ADAPTER))
     import torch
@@ -226,9 +234,9 @@ def serve(out: Path) -> dict[str, Any]:
     runner = handle.model_runner(eng)
     redrawn = R.rescale(runner)
     gains = set_gains(runner.model)
-    layer = next((m for m in R.kv_layers(runner.model).values() if callable(getattr(m, "_compute_prefill_context", None))), None)
+    layer = read_back_layer(R.kv_layers(runner.model).values())
     if layer is None:
-        raise SystemExit("fp8-read-back: no attention layer with _compute_prefill_context")
+        raise SystemExit("fp8-read-back: no attention layer with _use_sparse_mha whose impl has _compute_prefill_context")
     d = out / "calls"
     d.mkdir(parents=True, exist_ok=True)
     st: dict[str, Any] = {"step": -1, "in_step": False, "first_layer": False}
@@ -312,7 +320,7 @@ def serve(out: Path) -> dict[str, Any]:
 
     hooks = Hooks(tag="fp8-read-back")
     hooks.wrap(ops, "cp_gather_and_upconvert_fp8_kv_cache", gather)
-    hooks.wrap(layer, "_compute_prefill_context", context)
+    hooks.wrap(layer.impl, "_compute_prefill_context", context)
     hooks.wrap(layer, "_use_sparse_mha", route)
     hooks.wrap(runner, "execute_model", execute_model)
     rng = random.Random(0)
@@ -364,6 +372,8 @@ def serve(out: Path) -> dict[str, Any]:
         x["by_step"] = [per_step(s) for s in range(x["steps"][0], x["steps"][1] + 1)]
     real = [c for c in calls if c["in_step"]]
     doc = {"chosen": R.chosen(eng, runner), "redrawn": redrawn, "gains": gains, "steps": len(steps),
+           "first_layer": {"layer": getattr(layer, "layer_name", None), "module": type(layer).__name__,
+                           "impl": type(layer.impl).__name__},
            "device": {"name": torch.cuda.get_device_name(0), "capability": list(torch.cuda.get_device_capability(0))},
            "vllm": __import__("vllm").__version__, "calls": calls, "routes": routes, "batches": steps, "sweep": sweep_runs,
            "plan_steps": [per_step(s) for s in range(0, (sweep_runs[0]["steps"][0] if sweep_runs else st["step"] + 1))],
@@ -423,14 +433,24 @@ def sass_counts(text: str) -> dict[str, int]:
     return counts
 
 
+def kernel_symbols(data: bytes) -> list[str]:
+    """The names in a library's bytes that hold ``gather_and_upconvert_fp8``, without the host's device stubs: where
+    `KERNEL` is among them the library registers the page kernel under the name its SASS was read by."""
+    names = {m.group(0).decode() for m in re.finditer(rb"[A-Za-z0-9_]*gather_and_upconvert_fp8[A-Za-z0-9_]*", data)}
+    return sorted(n for n in names if "__device_stub__" not in n)
+
+
 def sass(lib: Path) -> dict[str, Any]:
-    """The kernel's sm_90 SASS in ``lib`` by `cuobjdump`, where one is found, and its `sass_counts`."""
+    """The kernel's sm_90 SASS in ``lib`` by `cuobjdump`, where one is found, and its `sass_counts`. `cuobjdump` runs
+    ``nvdisasm``, so its own directory leads the PATH; what it wrote to stderr is kept."""
     tools = [shutil.which("cuobjdump"), *sorted(glob.glob("/usr/local/cuda*/bin/cuobjdump"))]
     tool = next((t for t in tools if t), None)
     if tool is None:
         return {"cuobjdump": None}
-    p = subprocess.run([tool, "-sass", "-arch", "sm_90", "-fun", KERNEL, str(lib)], capture_output=True, text=True)
-    return {"cuobjdump": tool, "rc": p.returncode, "counts": sass_counts(p.stdout), "text": p.stdout}
+    env = {**os.environ, "PATH": f"{Path(tool).parent}{os.pathsep}{os.environ.get('PATH', '')}"}
+    p = subprocess.run([tool, "-sass", "-arch", "sm_90", "-fun", KERNEL, str(lib)], capture_output=True, text=True, env=env)
+    return {"cuobjdump": tool, "nvdisasm": shutil.which("nvdisasm", path=env["PATH"]), "rc": p.returncode,
+            "stderr": p.stderr[-2000:], "counts": sass_counts(p.stdout), "text": p.stdout}
 
 
 def compare(out: Path, library: bool = True, expect_sha256: str | None = None) -> int:
@@ -459,9 +479,12 @@ def compare(out: Path, library: bool = True, expect_sha256: str | None = None) -
             import vllm
 
             lib = Path(vllm.__file__).parent / "_C_stable_libtorch.abi3.so"
-            sha = hashlib.sha256(lib.read_bytes()).hexdigest()
-            doc["library"] = {"path": str(lib), "sha256": sha, "vllm": vllm.__version__, "expected": expect_sha256,
-                              "matches": None if expect_sha256 is None else sha == expect_sha256}
+            data = lib.read_bytes()
+            sha = hashlib.sha256(data).hexdigest()
+            names = kernel_symbols(data)
+            doc["library"] = {"path": str(lib), "sha256": sha, "bytes": len(data), "vllm": vllm.__version__,
+                              "expected": expect_sha256, "matches": None if expect_sha256 is None else sha == expect_sha256,
+                              "kernel_symbol": KERNEL in names, "symbols": names}
             s = sass(lib)
             if s.get("text"):
                 (out / "sass_sm90.txt").write_text(s.pop("text"))
