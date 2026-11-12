@@ -26,21 +26,28 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
-
 from verity.circuits.codec import definition_digest
 from verity.circuits.defs import bind
+from verity.definitions import word as word_query
+from verity.definitions.encoding import encode_specialization, word_values
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity.definitions.encoding import encode_specialization, word_values
-from verity.definitions import word as word_query
-from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
+from verity_vllm.query.program_view import (
+    ProgramView,
+    _read_instance_header,
+    from_instances,
+    iter_instance_rows,
+    spec_base,
+    spec_statics,
+)
 
 SCHEMA = "vllm-program-graph/v1"
 VARYING_MAX = 8
@@ -275,9 +282,9 @@ class _Acc:
         for key in sorted(self.groups, key=lambda k: self.groups[k]["first"]):
             g = self.groups[key]
             spec0 = g["specs"].most_common(1)[0][0]
-            t, p, _m = template_of(spec0)
+            t, params, _m = template_of(spec0)
             if g["varying"]:
-                p = {a: v for a, v in p.items() if a not in g["varying"]}
+                params = {a: v for a, v in params.items() if a not in g["varying"]}
             varying_calls: dict[str, int] = {}
             for sp, k in g["specs"].items():
                 st = spec_statics(sp)
@@ -285,7 +292,7 @@ class _Acc:
                 varying_calls[vk] = varying_calls.get(vk, 0) + k
             out_groups.append({"id": gid[key], "module": g["module"], "definition": g["family"], "statics": g["statics"],
                                "varying": g["varying"], "varying_calls": varying_calls if g["varying"] else None, "specs": len(g["specs"]), "spec": spec0 if len(g["specs"]) == 1 else None,
-                               "calls": g["calls"], "template": t, "template_params": p, "instances": g["instances"],
+                               "calls": g["calls"], "template": t, "template_params": params, "instances": g["instances"],
                                "units_in_run": (units or {}).get(key), "exported_vus": (exported or {}).get(key),
                                "prescribed_reads": {pn: c for (gk, pn), c in sorted(self.param_reads.items()) if gk == key},
                                "param_inputs": _param_inputs(self.param_inputs.get(key))})
@@ -370,8 +377,8 @@ def units_from_strata(strata: dict[str, dict], acc: _Acc, prefix: str) -> dict[t
         if not tot:
             continue
         share = {k: n * acc.groups[k]["calls"] // tot for k in cand}
-        for k in sorted(cand, key=lambda k: -(n * acc.groups[k]["calls"] % tot))[: n - sum(share.values())]:
-            share[k] += 1
+        for key in sorted(cand, key=lambda k: -(n * acc.groups[k]["calls"] % tot))[: n - sum(share.values())]:
+            share[key] += 1
         out.update({k: c for k, c in share.items() if c})
     return dict(out)
 
@@ -532,7 +539,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
     the run's gate limits (`word_query.gate_limits`)."""
     memo: dict = {}
     limits = word_query.gate_limits(max_gates)
-    tot = Counter()
+    tot: Counter = Counter()
     by_template: dict[str, Counter] = {}
     viol: Counter = Counter()
     taps: dict[tuple[str, str], list[float]] = {}
@@ -559,10 +566,10 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                     ys = [cw[v].get(k, (0.0, 0.0))[j] for v in pts]
                     taps.setdefault(k, [0.0, 0.0])[j] += sum(_interp(pts, ys, v) * calls[v] for v in vals)
             rep, lo = rules[pts[-1]], rules[pts[0]]
-            entry = {"per_call": {str(a): {"min": vals[0], "max": vals[-1]}, **{f: {"min": lo[f], "max": rep[f]} for f in per}},
-                     "interpolated": ("between key-block boundaries: units exact, gates and committed words within 0.1 %" if bn else "sampled")
-                     if len(pts) < len(vals) else False,
-                     "partitioned_at": len(pts)}
+            entry: dict[str, Any] = {"per_call": {str(a): {"min": vals[0], "max": vals[-1]}, **{f: {"min": lo[f], "max": rep[f]} for f in per}},
+                                     "interpolated": ("between key-block boundaries: units exact, gates and committed words within 0.1 %" if bn else "sampled")
+                                     if len(pts) < len(vals) else False,
+                                     "partitioned_at": len(pts)}
         else:
             try:
                 rep = word_query.unit_rule(spec(x, x["statics"]), X, W, extras, memo=memo, max_gates=limits)
@@ -634,7 +641,8 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         row = f.name[: -len(".program.json")]
         g = json.loads(f.read_text())
         g.pop("definitions", None)
-        roots, spans = [], []
+        roots: list[tuple[str, dict[str, Any]]] = []
+        spans = []
         for x in g["groups"]:
             reps = _full_roots(x)
             spans.append((x, len(roots), len(reps)))
@@ -652,7 +660,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
             ks = ids[lo:lo + n]
             ops.append({"module": x["module"], "group": x["id"], "definition": x["definition"], "calls": x["calls"], "template": x["template"],
                         "specs_recorded": x.get("specs"), "specs_enumerated": n, "varying": x.get("varying") or {},
-                        "definitions": [{"id": k, "digest": dig.get(k)} for k in ks]})
+                        "definitions": [{"id": k, "digest": dig.get(k) if k is not None else None} for k in ks]})
         g["definitions_index"] = {k: dig.get(k) for x in g["groups"] for k in x.get("definition_ids") or [] if k}
         f.write_text(json.dumps(g, separators=(",", ":"), default=str) + "\n")
         (root / f"{row}.ops.json").write_text(json.dumps({"schema": f"{SCHEMA}/ops", "row": row, "ops": ops}, separators=(",", ":")) + "\n")
