@@ -2,7 +2,7 @@
 #
 # What a party is, what two parties exchange messages over, the registered hardware, what a protocol declares and the
 # configuration become five files directly under `verity/`, and what runs parties over channels becomes `verity/runtime/`.
-# `verity/configuration/` and `verity/hardware/site/` hold nothing after it.
+# `verity/hardware/site/` holds nothing after it, and `verity/configuration/` nothing but `config/`.
 #
 # - `verity/configuration/deploy/`: `party.py` to `verity/party.py`, `manifest.py` to `verity/protocol.py`, `config.py`
 #   to `verity/config.py`, and the rest to `verity/runtime/` (its suite: `pyproject.toml`, `tests/`). `runtime.py` is
@@ -15,10 +15,10 @@
 #   `pyproject.toml` to `verity/tests/pyproject.toml` and its test to `verity/tests/tests/test_device.py`. The flat files'
 #   suite is laid out as `verity/protocols/tests/` is: a `pyproject.toml` directly under `verity/` would be the nearest
 #   project file above every workspace member under `verity/`, and uv would no longer find them in the workspace.
-# - `verity/configuration/__init__.py` is deleted with the package this move empties.
-# No Python class, Lean name or lock record changes. The format is `layout_map.toml`'s. This map runs after the map that
-# moves `verity/configuration/config/` to `tools/config/`, on the commit that one makes, so `verity_config`'s root is
-# `tools/config/verity_config` on both sides.
+# - `verity/configuration/__init__.py` is deleted with the package once nothing else is left in it: after the map that
+#   moves `verity/configuration/config/` to `tools/config/`.
+# No Python class, Lean name or lock record changes. The format is `layout_map.toml`'s. `verity_config`'s root is where
+# that map leaves it, `tools/config/verity_config`; this map moves nothing under it, so it runs before that map or after.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
