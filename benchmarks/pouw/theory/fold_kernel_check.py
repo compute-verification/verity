@@ -23,11 +23,14 @@ import collections
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 from exact_kit import search, wrap
 from exact_kit.checks import Checks
+
+__all__ = ["build", "enumerate_kernels", "fold", "g3_ok", "key_ok_r11", "main", "mitm_k1"]
 
 HERE = Path(__file__).resolve().parent
 
@@ -38,7 +41,8 @@ def build(tmp: Path) -> Path:
     return exe
 
 
-def enumerate_kernels(exe: Path, n, r1, r2, rmax, word, keys):
+def enumerate_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, word: Sequence[int],
+                      keys: Sequence[tuple[int, int]]) -> dict[tuple[int, int], dict[int, set[tuple[int, ...]]]]:
     """{(a0, a1): {R: set of words w' != word in K_R}} from the C enumerator."""
     inp = "".join(f"{a0} {a1}\n" for a0, a1 in keys)
     out = subprocess.run([str(exe), str(n), str(r1), str(r2), str(rmax), *(str(x) for x in word)],
@@ -56,7 +60,7 @@ def enumerate_kernels(exe: Path, n, r1, r2, rmax, word, keys):
     return res
 
 
-def fold(y, word, a0, a1, n, r1, r2, rounds):
+def fold(y: np.ndarray | int, word: Sequence[int], a0: int, a1: int, n: int, r1: int, r2: int, rounds: int) -> np.ndarray:
     m = np.uint64((1 << n) - 1)
     d0, d1, d2, d3 = (np.asarray(x, dtype=np.uint64) for x in word)
     y = np.asarray(y, dtype=np.uint64)
@@ -67,17 +71,17 @@ def fold(y, word, a0, a1, n, r1, r2, rounds):
     return y
 
 
-def g3_ok(word, other, n):
-    """(G₃) at width n: XOR limbs d0, d2 keep or complement their low three bits; add limbs d1, d3 keep bit 0."""
+def g3_ok(word: Sequence[int], other: Sequence[int]) -> bool:
+    """(G₃): XOR limbs d0, d2 keep or complement their low three bits; add limbs d1, d3 keep bit 0."""
     return all(((word[i] ^ other[i]) & 7) in (0, 7) for i in (0, 2)) and all(((word[i] ^ other[i]) & 1) == 0 for i in (1, 3))
 
 
-def kj19_bad(a, n):
+def kj19_bad(a: int, n: int) -> bool:
     t = 1 << (n - 2)
     return (a % t) in (1, t - 1)
 
 
-def near_inverse(a0, a1, n):
+def near_inverse(a0: int, a1: int, n: int) -> bool:
     m = (1 << n) - 1
     prod = (a0 * a1) & m
 
@@ -86,16 +90,19 @@ def near_inverse(a0, a1, n):
     return v2((prod - 1) & m) >= n - 5 or v2((prod + 1) & m) >= n - 5
 
 
-def key_ok_r11(a0, a1, n):
+def key_ok_r11(a0: int, a1: int, n: int) -> bool:
     """The reduced key_ok_r11 (egemm_depthr_check.key_ok_r11)."""
     return bool(a0 & 1 and a1 & 1 and not kj19_bad(a0, n) and not kj19_bad(a1, n) and not near_inverse(a0, a1, n))
 
 
-def key_sets(n, rng, per):
+def key_sets(n: int, rng: np.random.Generator, per: int) -> dict[str, list[tuple[int, int]]]:
     """Structured key pairs at width n: KJ19-bad, g3-chains' open-shape condition (a1 = +-1 mod 2^(r+2), r the smaller
     rotation, which the reduced KJ19 at mod 2^(n-2) still admits when r + 2 < n - 2), key_ok_r11, near-inverse."""
     m = (1 << n) - 1
-    odd = lambda: int(rng.integers(0, 1 << n)) | 1
+
+    def odd():
+        return int(rng.integers(0, 1 << n)) | 1
+
     t = 1 << (n - 2)
     near1 = sorted({(s * t + e) & m for s in range(4) for e in (1, -1)})
     sets = {"kj19-bad": [], "open-shape a1": [], "key_ok_r11": [], "near-inverse": []}
@@ -116,7 +123,7 @@ def key_sets(n, rng, per):
     return sets
 
 
-def mitm_k1(word, a0, a1, n, r1, r2):
+def mitm_k1(word: Sequence[int], a0: int, a1: int, n: int, r1: int, r2: int) -> set[tuple[int, ...]]:
     """K_1 by exact_kit.search.meet_kernel: G_{d0',d1'}(y) == H_{d2',d3'}^{-1}(F_w(y)) on every state."""
     m = (1 << n) - 1
     xs = np.arange(1 << n, dtype=np.uint64)
@@ -165,7 +172,7 @@ def main() -> int:
             same = all(bool((fold(states, word32, a0, a1, 32, 13, 19, R) == fold(states, w2, a0, a1, 32, 13, 19, R)).all())
                        for R in range(1, 6))
             checks.check(f"32-bit (13,19), key {a0:#x},{a1:#x}: {name} leaves the R-fold fixed, R = 1..5 (2^14 states)",
-                         same, f"changed limbs {[i for i in range(4) if w2[i] != word32[i]]}; (G3) kept: {g3_ok(word32, w2, 32)}")
+                         same, f"changed limbs {[i for i in range(4) if w2[i] != word32[i]]}; (G3) kept: {g3_ok(word32, w2)}")
 
     with tempfile.TemporaryDirectory() as tmp:
         exe = build(Path(tmp))
@@ -222,10 +229,10 @@ def main() -> int:
                         if e:
                             extra[r] += len(e)
                             extra_keys[r].append((k, key_ok_r11(*k, n), kj19_bad(k[0], n) or kj19_bad(k[1], n)))
-                        g3bad[r] += sum(not g3_ok(word, w2, n) for w2 in res[k][r])
+                        g3bad[r] += sum(not g3_ok(word, w2) for w2 in res[k][r])
                 r11keys = [k for k in ks if key_ok_r11(*k, n)]
                 size1_r11 = collections.Counter(len(res[k][1]) + 1 for k in r11keys)
-                g3bad_r11 = sum(not g3_ok(word, w2, n) for k in r11keys for r in range(1, rmax + 1) for w2 in res[k][r])
+                g3bad_r11 = sum(not g3_ok(word, w2) for k in r11keys for r in range(1, rmax + 1) for w2 in res[k][r])
                 checks.check(f"n{n} {label} ({len(ks)} keys, {r11} key_ok_r11): |K_1| = 16 (the P/X/N group, 3S-2 = 4 "
                              "involutions) at every key_ok_r11 key", set(size1_r11) <= {16},
                              f"|K_1| histogram, key_ok_r11 keys {dict(size1_r11)}, all keys {dict(size1)}")

@@ -1,12 +1,14 @@
 """A served window's boundary commitment (`pipeline.boundary_rows`): each span's `b.ingress` and `b.egress` rows word for
 word, the size classes, one class's commitment under core's window domains registering by both verifiers, its files
-recommitting to its roots, the serving path's hook on a stand-in for vLLM's V1 scheduler committing each window's
+recommitting to its roots, the replay block's return as one more value of a class that says it is verdicts, named and
+laid out as round 2 links it, the serving path's hook on a stand-in for vLLM's V1 scheduler committing each window's
 finished requests by class as it closes, and a serve's stop rule: a stop class's rows, its stop word the stop block's
-output over the committed rows, the stop blocks' own registration over the class's boundary record, and a response one
-id shorter or longer than the rule's refused."""
+output over the committed rows, the stop blocks' own registration over the class's boundary record, a response one id
+shorter or longer than the rule's refused, and a class that holds the rule and verdicts together."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import struct
 from types import SimpleNamespace as NS
@@ -14,12 +16,16 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 
+from verity.protocols.spot.verifier import second_stage as SS
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R, verifier as V
+from verity.circuits.codec import definitions
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.population import population
 from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
+from verity.commitments import history as HT
 from verity.commitments.windows import rows as CS
 from verity.definitions.registry import stop_check, stop_rule
 from verity_vllm.engine.hooks import Hooks
@@ -36,6 +42,19 @@ NOT = bind(CompositeDefinition("BoundaryRowsTestNot", 0, (), lambda S_: ((("a", 
 #: a check template whose body calls two templates, as one too large for a proof block calls its pieces
 CHAIN = bind(CompositeDefinition("BoundaryRowsTestChain", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
                                  lambda B, S_, x: B.call(NOT, B.call(PAIR, x)), register=False))
+SAME8 = PrimitiveDefinition("BoundaryRowsTestSame8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(1), lambda a, b: int(a == b),
+                            register=False)
+#: a check template that returns a verdict, one bit
+SAME = bind(CompositeDefinition("BoundaryRowsTestSame", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(1)),
+                                lambda B, S_, x: B.call(SAME8, x[0], x[1]), register=False))
+#: one that returns two
+BOTH = bind(CompositeDefinition("BoundaryRowsTestBoth", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Array(2, Bits(1))),
+                                lambda B, S_, x: coll_concat(Array(2, Bits(1)), [B.call(SAME8, x[0], x[1]),
+                                                                                 B.call(SAME8, x[1], x[0])]),
+                                register=False))
+#: one whose body calls a template and returns its verdict, as a check too large for a proof block returns its pieces'
+VERDICT = bind(CompositeDefinition("BoundaryRowsTestVerdict", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(1)),
+                                   lambda B, S_, x: B.call(SAME, x), register=False))
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 DESIGN = {"law": "subset", "k": 2}
@@ -90,10 +109,12 @@ def test_a_class_commits_under_core_window_domains_and_registers_by_both_verifie
     copies. Fresh salts give fresh roots over the same rows."""
     spans, L = _spans(), _layout()
     c = BR.commit(spans, L, 0)
+    assert L.verdict_rows is None and L.values == BR.PORTS == tuple(c.roots)
     for p in BR.PORTS:
         assert L.ports()[p]["domain"] == R.window_domain(L.partition["program"], P.digest(L.partition), p, BR.SCHEMA, 5, L.run)
     assert (L.n_rho, P.units(L.program, L.grain)) == (4, 5)
     pub = json.loads(json.dumps(c.public()))
+    assert "verdicts" not in pub
     mine = BR.layout_of(pub, PAIR)
     rec = BR.record(pub, PAIR, DESIGN)
     assert rec == c.record(DESIGN) and rec["window"]["kind"] == "served" and rec["window"]["index"] == c.index_leaf
@@ -147,6 +168,123 @@ def test_an_inlined_check_is_checked_by_the_templates_its_body_calls(tmp_path):
     assert bw.inline and not BW.BoundaryWindows.of({"check": "c"}, tmp_path / "of2").inline
 
 
+def _fixed(L: BR.Layout) -> BR.Committed:
+    """The class's commitment of `_spans` at salts and a clock of this test's, so what it writes is its layout's alone."""
+    salts = {p: bytes([k + 1]) * (CS.SALT_BYTES * L.leaves(p)) for k, p in enumerate(L.values)}
+    return BR.commit(_spans(), L, 0, salts=salts, index_salt=bytes(CS.SALT_BYTES), clock=lambda: 0.0)
+
+
+@pytest.mark.parametrize("check, inline, commit, registration", [
+    (PAIR, False, "cc5e1cf02bda5916045bf921053142ed", "7daf5f83558aba34b0e3f64220109d48"),
+    (CHAIN, True, "69705bf25879e4b3b06c4e51ed19065a", "dcd0f0222ebc4ebc5f08dd64cfb5328c")])
+def test_a_class_without_verdicts_writes_and_registers_its_two_values_alone(tmp_path, check, inline, commit, registration):
+    """A class that doesn't say its block returns verdicts is untouched by the return's value: at fixed salts its
+    ``commit.json``, byte for byte, and its registration record are the ones of the two values alone, pinned by the
+    first 32 hex digits of the file's SHA-512 and of the record's digest; neither names ``verdicts``."""
+    c = _fixed(BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline))
+    raw = (BR.write(c, tmp_path / "w0" / "p4-o4") / BR.COMMIT).read_bytes()
+    rec = BR.record(json.loads(raw), check, DESIGN)
+    assert (hashlib.sha512(raw).hexdigest()[:32], R.digest(rec)[:32]) == (commit, registration), (
+        "a class without verdicts writes another commit.json or registers another record than the pinned ones: pin again "
+        "only where changing every such class's record is the change's purpose")
+    assert b"verdicts" not in raw and "verdicts" not in rec["window"] and len(rec["roots"]) == 2
+
+
+def _return_links(L: BR.Layout, ports) -> list[tuple[str, str, str, int]]:
+    """Round 2's own links to the replay block's return, in a record of ports ``ports``: each one's template, its output
+    port, the value it reads as that record names it, and that value's rows a block."""
+    key = P.template_id(L.replay)
+    per = {(x.template, x.port): n for x, n, _runs in SS.link_runs(definitions(L.program), key)}
+    links = SS.replay_links(L.program, key, {"roots": [{"port": p} for p in ports]})
+    return [(x.template, x.port, x.value, per[x.template, x.port]) for x in links if x.value.rpartition("/")[2] == BR.RETURN]
+
+
+@pytest.mark.parametrize("check, inline, bits", [(SAME, False, 1), (BOTH, False, 2), (VERDICT, True, 1)])
+def test_a_class_of_verdicts_commits_its_blocks_return_as_a_third_value(tmp_path, check, inline, bits):
+    """A class that says its replay block returns its check's verdicts (``verdicts``), as a population of the check's
+    instances or with each one's body in place, commits the return as a third value: under the name, and with the rows
+    a block, that round 2's own derivation on the registered replay block links its proof blocks' output to; every bit
+    a one, which is what the block returns on operands its check accepts; under core's window domain at its own leaves;
+    and in the record's roots after the two values, which one-stage's R1-R7 and the Lean verifier accept against the
+    challenger's copies from public items alone, and refuse against copies without it. Its files hold its leaves' salts
+    and reopen to its roots, and a commitment without it is no record of the class. The same check in a class that
+    doesn't say so keeps its two values."""
+    spans, L = _spans(), BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline, verdicts=True)
+    assert L.verdict_rows == (4, bits) and L.values == (*BR.PORTS, BR.RETURN)
+    assert BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline).values == BR.PORTS
+    assert _return_links(L, L.values) == [(P.template_id(L.templates[0]), "o0", BR.RETURN, 4)]
+    ones = (1 << bits) - 1
+    out = evaluate(L.replay, [7, 7] * 4)
+    assert [sum(b << k for k, b in enumerate(out[j * bits:(j + 1) * bits])) for j in range(4)] == [ones] * 4
+    rows = BR.port_rows(spans, L)
+    assert list(rows) == list(L.values) and rows[BR.RETURN].shape == (20, 1) and (rows[BR.RETURN] == ones).all()
+    c = BR.commit(spans, L, 0)
+    alone = CS.commit_ports({BR.RETURN: L.domain(BR.RETURN)}, {BR.RETURN: np.full((20, 1), ones, dtype=np.uint16)}, {},
+                            {BR.RETURN: c.salts[BR.RETURN]}, schemas={BR.RETURN: BR.SCHEMA})[0]
+    assert c.roots[BR.RETURN] == alone[BR.RETURN] and len(c.salts[BR.RETURN]) == 20 * CS.SALT_BYTES
+    pub = json.loads(json.dumps(c.public()))
+    assert pub["verdicts"] is True and pub["values"][BR.RETURN]["words"] == 1
+    mine = BR.layout_of(pub, check)
+    assert mine == L
+    rec = BR.record(pub, check, DESIGN)
+    assert [(r["port"], r["leaves"]) for r in rec["roots"]] == [(BR.INGRESS, 5), (BR.EGRESS, 5), (BR.RETURN, 20)]
+    assert rec["roots"][2]["root"] == c.roots[BR.RETURN].hex() and rec["roots"][2]["domain"] == R.window_domain(
+        L.partition["program"], P.digest(L.partition), BR.RETURN, BR.SCHEMA, 20, L.run)
+    assert rec["window"]["verdicts"] is True
+    assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    two = {p: mine.ports()[p] for p in BR.PORTS}
+    assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, two).codes != ()
+    assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, two).codes != ()
+    with pytest.raises(ValueError, match="not its layout's"):
+        BR.record({**pub, "values": {p: pub["values"][p] for p in BR.PORTS}}, check, DESIGN)
+    d = BR.write(c, tmp_path / "w0" / "p4-o4")
+    assert (d / BR.SALTS).stat().st_size == (5 + 5 + 20) * CS.SALT_BYTES
+    assert BR.reopen(d, check).roots == c.roots
+    (d / BR.SALTS).write_bytes((d / BR.SALTS).read_bytes()[:10 * CS.SALT_BYTES])
+    with pytest.raises(ValueError, match="bytes of salts"):
+        BR.reopen(d, check)
+
+
+def test_the_returns_name_is_round_twos_in_a_record_of_either_form():
+    """`return_port` names the return as round 2 names the value its return link reads (`second_stage.replay_links`):
+    bare in a record none of whose ports has a ``/``, and under the replay block's id in one that has such a port. A
+    class whose block returns anything but bits can't say they are verdicts, in either form of its block."""
+    L = BR.Layout(SAME, 0, 1, 4, 4, 5, "a" * 128, verdicts=True)
+    key, template = P.template_id(L.replay), P.template_id(SAME)
+    for others, name in ((BR.PORTS, "o0"), ((*BR.PORTS, f"{key}/table"), f"{key}/o0")):
+        assert BR.return_port(key, others) == name
+        assert _return_links(L, (*others, name)) == [(template, "o0", name, 4)]
+    assert BR.RETURN == "o0"
+    for check, inline in ((PAIR, False), (CHAIN, True)):
+        with pytest.raises(ValueError, match="as verdicts where it is bits"):
+            BR.commit(_spans(), BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline, verdicts=True), 0)
+
+
+def test_beside_a_history_table_the_return_is_named_under_its_replay_block():
+    """A class with history tables, whose names have a ``/``, names its return ``<replay block's id>/o0``, the name round
+    2 gives its return link's value on that record. The record lists it after the two values and before the tables, the
+    challenger's copy from ``commit.json`` alone has it, and both verifiers take the record against that copy and refuse
+    it against the copy of the same class without verdicts."""
+    L = BR.Layout(SAME, 0, 1, 4, 4, 5, "a" * 128, layers=(0,), verdicts=True)
+    name = f"{P.template_id(L.replay)}/{BR.RETURN}"
+    assert len(L.tables) == 5 and all("/" in t for t in L.tables)
+    assert L.values == (*BR.PORTS, name) and list(L.ports()) == [*L.values, *L.tables] == list(L.schemas())
+    assert _return_links(L, L.ports()) == [(P.template_id(SAME), "o0", name, 4)]
+    c = BR.commit(_spans(), L, 0, tables={t: bytes([i + 1]) * HT.DIGEST_BYTES for i, t in enumerate(L.tables)})
+    pub = json.loads(json.dumps(c.public()))
+    assert list(pub["values"]) == list(L.ports()) and pub["verdicts"] is True and pub["tables"]["layers"] == [0]
+    mine = BR.layout_of(pub, SAME)
+    assert mine == L
+    rec = BR.record(pub, SAME, DESIGN)
+    assert [(r["port"], r["leaves"]) for r in rec["roots"]] == [(BR.INGRESS, 5), (BR.EGRESS, 5), (name, 20),
+                                                                 *((t, L.capacity) for t in L.tables)]
+    off = BR.Layout(SAME, 0, 1, 4, 4, 5, "a" * 128, layers=(0,))
+    for check in (R.check, V.check):
+        assert check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+        assert check(rec, off.program, off.grain, DESIGN, CS.SCHEME, off.ports()).codes != ()
+
+
 class Request:
     def __init__(self, rid: str, prompt: list[int], max_tokens: int = 4, **sampling):
         self.request_id, self.prompt_token_ids = rid, prompt
@@ -185,7 +323,7 @@ def _step(sched: Scheduler, served: dict[str, tuple[list[int], str | None]]) -> 
 def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(tmp_path):
     """Three requests: at the first schedule a window's length after it opened, window 0 closes with the two finished,
     by class, and carries the third; the third's finish, the only one running, closes window 1; each class's files
-    reopen to the roots its sink line holds; an abort finishes a request; and prefix caching is refused."""
+    reopen to the roots its sink line holds; and an abort finishes a request."""
     now, lines = [0.0], []
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows")
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: now[0], serve="s").install(sched, hooks)
@@ -218,8 +356,59 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
     finally:
         bw.stop()
         hooks.uninstall()
-    with pytest.raises(ValueError, match="prefix caching off"):
-        BW.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, clock=lambda: 0.0).install(Scheduler(caching=True), Hooks())
+
+
+def test_a_scheduler_that_caches_prefixes_commits_the_same_spans(tmp_path):
+    """A request served from the prefix cache commits what one served without it commits: its whole prompt, the cached
+    part too, and the ids it was served. The boundary holds nothing of the request whose pages it read."""
+    spans = {}
+    for caching in (False, True):
+        sched, hooks = Scheduler(caching=caching), Hooks(tag=f"test-boundary-rows-caching-{caching}")
+        bw = BW.BoundaryWindows(tmp_path / str(caching), PAIR, 0, 1, 10.0, clock=lambda: 0.0, serve="s")
+        try:
+            bw.install(sched, hooks)
+            first, hit = Request("a", [1, 2, 3, 4, 5]), Request("b", [1, 2, 3, 4, 9])
+            hit.num_cached_tokens = 4 if caching else 0       # vLLM's count of the prompt ids its prefill skipped
+            sched.add_request(first)
+            sched.add_request(hit)
+            _step(sched, {"a": ([7], "length"), "b": ([8, 9], "stop")})
+            bw.stop()
+            spans[caching] = BR.reopen(tmp_path / str(caching) / "w0" / "p8-o2", PAIR).spans
+        finally:
+            bw.stop()
+            hooks.uninstall()
+    assert spans[True] == spans[False]
+    assert [(x.engine_id, x.prompt, x.served, x.finish) for x in spans[True]] == [
+        ("a", (1, 2, 3, 4, 5), (7,), "length"), ("b", (1, 2, 3, 4, 9), (8, 9), "stop")]
+
+
+def test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts(tmp_path):
+    """A serve configured with ``verdicts`` (`BoundaryWindows.of`): a class's ``commit.json`` holds its replay block's
+    return as a third value, and its files reopen to the roots its sink line holds. A serve without it holds the two
+    values. A check that returns no verdicts commits nothing and says why on the sink."""
+    for cfg, want in (({"verdicts": True}, True), ({}, False)):
+        bw = BW.BoundaryWindows.of({"check": "c", **cfg}, tmp_path / f"of{want}")
+        bw.stop()
+        assert bw.verdicts is want
+    got = {}
+    for name, check, verdicts in (("on", SAME, True), ("off", SAME, False), ("refused", PAIR, True)):
+        lines, sched, hooks = [], Scheduler(), Hooks(tag=f"test-boundary-verdicts-{name}")
+        bw = BW.BoundaryWindows(tmp_path / name, check, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
+                                verdicts=verdicts).install(sched, hooks)
+        try:
+            sched.add_request(Request("a", [1, 2, 3]))
+            _step(sched, {"a": ([7, 8, 9], "length")})
+        finally:
+            bw.stop()
+            hooks.uninstall()
+        (got[name],) = lines
+    on, off = got["on"], got["off"]
+    assert on["verdicts"] is True and list(on["values"]) == [*BR.PORTS, BR.RETURN] and on["values"][BR.RETURN]["leaves"] == 4
+    c = BR.reopen(tmp_path / "on" / "w0" / "p4-o4", SAME)
+    assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in on["values"].items()}
+    assert "verdicts" not in off and list(off["values"]) == list(BR.PORTS)
+    assert got["refused"]["error"].startswith("ValueError") and "verdicts" in got["refused"]["error"]
+    assert not (tmp_path / "refused" / "w0").exists()
 
 
 #: a serve's stop rule: two stop ids, a model of 64 ids, responses of at most 4
@@ -526,6 +715,93 @@ def test_no_class_holds_both_a_stop_rule_and_history_tables(tmp_path):
         BW.BoundaryWindows.of({"check": "x", "stop": RULE.to_json(), "tables": {"layers": [1]}}, tmp_path / "y")
 
 
+@pytest.mark.parametrize("held", [True, False])
+def test_a_class_under_a_stop_rule_commits_its_blocks_return_after_its_three_parts(tmp_path, held):
+    """A class under a stop rule that says its replay block returns verdicts holds both. Its row values are the three
+    parts and then the return, under the bare name round 2 links (a class under a rule has no tables) and with the rows a
+    block that link reads; the parts keep the leaves and domains of the same class without verdicts, and so does a stop
+    class's `b.stop`, which stays last of what it commits and the stop record's one port. Its ``commit.json`` names the
+    rule, whether it is a stop class and ``verdicts``, and the challenger's copy from it alone is the layout. The
+    boundary record lists the parts and the return; both verifiers take it against that copy and refuse it against the
+    copy of the same class without verdicts; a commitment without ``verdicts`` or without the return is no record of the
+    class; and its files reopen to its roots. A stop class's stop blocks register over that record by both verifiers,
+    their inputs its `b.request` and `b.egress`, and a class the rule doesn't end has no stop record."""
+    spans = HELD[:3] if held else [_ended("abort", (9, 9), "abort"), _ended("running", (9,), None)]
+    n, outputs, last = len(spans), RULE.outputs if held else 2, (BR.STOP,) if held else ()
+    L = BR.Layout(SAME, 0, 1, 4, outputs, n, "a" * 128, stop=RULE, held=held, verdicts=True)
+    off = BR.Layout(SAME, 0, 1, 4, outputs, n, "a" * 128, stop=RULE, held=held)
+    assert L.verdict_rows == (outputs, 1) and L.values == (*BR.PARTS, BR.RETURN) and L.committed == (*L.values, *last)
+    assert off.values == BR.PARTS and {p: L.ports()[p] for p in BR.PARTS} == off.ports()
+    assert L.stop_ports() == off.stop_ports() and list(L.stop_ports()) == list(last)
+    assert _return_links(L, L.values) == [(P.template_id(SAME), "o0", BR.RETURN, outputs)]
+    rows, without = BR.port_rows(spans, L), BR.port_rows(spans, off)
+    assert list(rows) == list(L.committed) and all((rows[p] == without[p]).all() for p in without)
+    assert rows[BR.RETURN].shape == (n * outputs, 1) and (rows[BR.RETURN] == 1).all()
+    c = BR.commit(spans, L, 0)
+    pub = json.loads(json.dumps(c.public()))
+    assert list(pub["values"]) == list(L.committed) and pub["values"][BR.RETURN]["words"] == 1
+    assert (pub["stop"], pub["stopped"], pub["verdicts"]) == (RULE.to_json(), held, True)
+    mine = BR.layout_of(pub, SAME, RULE)
+    rec = BR.record(pub, SAME, DESIGN, stop=RULE)
+    assert mine == L and rec == c.record(DESIGN)
+    assert [(r["port"], r["leaves"]) for r in rec["roots"]] == [*((p, n) for p in BR.PARTS), (BR.RETURN, n * outputs)]
+    assert rec["roots"][3]["root"] == c.roots[BR.RETURN].hex() and rec["roots"][3]["domain"] == R.window_domain(
+        L.partition["program"], P.digest(L.partition), BR.RETURN, BR.SCHEMA, n * outputs, L.run)
+    assert (rec["window"]["stop"], rec["window"]["stopped"], rec["window"]["verdicts"]) == (RULE.to_json(), held, True)
+    for check in (R.check, V.check):
+        assert check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+        assert check(rec, off.program, off.grain, DESIGN, CS.SCHEME, off.ports()).codes != ()
+    for doc in ({k: v for k, v in pub.items() if k != "verdicts"},
+                pub | {"values": {k: v for k, v in pub["values"].items() if k != BR.RETURN}}):
+        with pytest.raises(ValueError, match="are not its layout's"):
+            BR.layout_of(doc, SAME, RULE)
+    d = BR.write(c, tmp_path / "w0" / "class")
+    assert (d / BR.SALTS).stat().st_size == sum(L.leaves(p) for p in L.committed) * CS.SALT_BYTES
+    again = BR.reopen(d, SAME, stop=RULE)
+    assert again.roots == c.roots and again.layout == L and again.spans == c.spans
+    if not held:
+        with pytest.raises(ValueError, match="only a stop class has stop blocks"):
+            BS.stop_record(pub, SAME, RULE, STOP_DESIGN, rec)
+        return
+    reg, srec = BS.stop_registration(pub, SAME, RULE, rec), BS.stop_record(pub, SAME, RULE, STOP_DESIGN, rec)
+    assert srec["roots"] == [{"port": BR.STOP, "root": pub["values"][BR.STOP]["root"], **mine.stop_ports()[BR.STOP]}]
+    assert srec["previous"] == R.digest(rec)
+    assert reg.outputs == {v: {"record": R.digest(rec), "port": p} for v, p in BS.STOP_READS.items()}
+    for verifier in (R, V):
+        assert verifier.check(srec, mine.stop_program, mine.stop_query, STOP_DESIGN, CS.SCHEME, mine.stop_ports(), log=[rec],
+                              registered=reg.values, outputs=reg.outputs, schemas=reg.schemas).codes == ()
+    assert rows[BR.STOP].ravel().tolist() == [RULE.word(s) for s in spans]
+
+
+def test_the_hook_commits_the_return_in_each_class_of_a_serve_with_a_stop_rule_and_verdicts(tmp_path):
+    """A serve configured with a stop rule and ``verdicts`` (`BoundaryWindows.of`): a span the rule ends is filed in a
+    stop class and one it doesn't under ``-nostop``, as without verdicts, and each class's ``commit.json`` holds the
+    return after its three parts, a stop class's `b.stop` after it, and reopens to its sink line's roots."""
+    of = BW.BoundaryWindows.of({"check": "c", "stop": RULE.to_json(), "verdicts": True}, tmp_path / "of")
+    of.stop()
+    assert of.stop_rule == RULE and of.verdicts is True
+    lines: list[dict] = []
+    sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows-stop-verdicts")
+    bw = BW.BoundaryWindows(tmp_path, SAME, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s", stop=RULE,
+                            verdicts=True)
+    bw.install(sched, hooks)
+    try:
+        for rid in "af":
+            sched.add_request(Request(rid, [1, 2, 5], ignore_eos=False))
+        _step(sched, {"a": ([9, 7], "stop"), "f": ([9, 9, 9, 9], "stop")})
+        bw.stop()
+        got = {x["stopped"]: x for x in lines}
+        assert sorted(got) == [False, True] and all("error" not in x and x["verdicts"] is True for x in lines)
+        for held, x in got.items():
+            assert list(x["values"]) == [*BR.PARTS, BR.RETURN, *([BR.STOP] if held else [])]
+            assert (x["spans"], x["values"][BR.RETURN]["leaves"]) == (1, RULE.outputs)
+            c = BR.reopen(tmp_path / "w0" / f"p4-o4{'' if held else '-nostop'}", SAME, stop=RULE)
+            assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in x["values"].items()}
+    finally:
+        bw.stop()
+        hooks.uninstall()
+
+
 def test_a_response_one_id_shorter_or_longer_than_the_stop_rules_is_refused():
     """For each way the rule ends a response (a stop id, ``max_tokens``, the model's length): the stop block's output on
     the span's committed rows is its `b.stop` word, whose n is the ids it was served. With its `b.egress` row one id
@@ -629,3 +905,157 @@ def test_a_request_the_certifier_did_not_release_is_in_no_stop_class(tmp_path):
     released = BR.Span("x", span.prompt, span.sampling, span.served, "stop", ("run", 7))
     assert list(BS.filed([released], RULE, released=True)) == [(4, 4, True)]
     assert BR.Span.from_json(json.loads(json.dumps(released.to_json()))) == released and "release" not in span.to_json()
+
+
+#: three drained windows, each request (name, prompt ids, ids served, which is its ``max_tokens``): classes (4, 4) of two
+#: spans and (16, 2) of one, twice; then (4, 4) of three spans and (16, 4), another class of (4, 4)'s four instances a
+#: replay block, of two. Under `RULE` every one is a stop class at the rule's T, 4, so all share one replay block
+WINDOWS = ([("a", 3, 4), ("b", 9, 2), ("c", 4, 4)], [("a", 3, 4), ("b", 9, 2), ("c", 4, 4)],
+           [("a", 3, 4), ("b", 4, 3), ("c", 3, 3), ("d", 9, 4), ("e", 12, 3)])
+BUILDERS = ("population", "inlined", "population_program", "template_instance_query", "partition")
+#: a serve's check template, whether its replay block inlines it, and its stop rule
+SERVES = [pytest.param(PAIR, False, None, id="population"), pytest.param(CHAIN, True, None, id="inlined"),
+          pytest.param(PAIR, False, RULE, id="stop-rule")]
+
+
+def _salts(layout: BR.Layout, window: int) -> dict[str, bytes]:
+    """Each leaf's salt and the index's as a function of the window, the class and the value, for a commitment a test
+    makes twice."""
+    def fill(tag: str, n: int) -> bytes:
+        return (f"{window}/{layout.prompt}-{layout.outputs}/{tag}/".encode() * n)[:n]
+    return {**{p: fill(p, CS.SALT_BYTES * layout.spans) for p in layout.committed}, "index": fill("index", CS.SALT_BYTES)}
+
+
+def _served(monkeypatch, out, check, inline: bool, stop: BS.Stop | None) -> list[tuple[dict, dict[str, int]]]:
+    """`WINDOWS` served on the stand-in scheduler under the hook, each window drained by one step; every commitment
+    with `_salts` and a clock that stands still. Each class's sink line, with how often each of `BUILDERS` had been
+    called by then."""
+    calls, lines, commit = dict.fromkeys(BUILDERS, 0), [], BW.commit
+
+    def counted(name: str, real):
+        def call(*a, **kw):
+            calls[name] += 1
+            return real(*a, **kw)
+        return call
+    for name in BUILDERS:
+        mod = BR if name in ("population", "inlined") else P
+        monkeypatch.setattr(mod, name, counted(name, getattr(mod, name)))
+
+    def salted(spans, layout, window, **kw):
+        y = _salts(layout, window)
+        return commit(spans, layout, window, salts={p: y[p] for p in layout.committed}, index_salt=y["index"],
+                      clock=lambda: 0.0, **kw)
+    monkeypatch.setattr(BW, "commit", salted)
+    sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows-kept")
+    bw = BW.BoundaryWindows(out, check, 0, 1, 10.0, inline=inline, sink=lambda x: lines.append((x, dict(calls))),
+                            clock=lambda: 0.0, serve="s", stop=stop).install(sched, hooks)
+    try:
+        for w, requests in enumerate(WINDOWS):
+            for name, prompt, n in requests:
+                sched.add_request(Request(f"{name}{w}", [1 + w] * prompt, n))
+            _step(sched, {f"{name}{w}": ([20 + w] * n, "length") for name, _prompt, n in requests})
+            assert bw.window == w + 1
+    finally:
+        bw.stop()
+        hooks.uninstall()
+    assert [x.get("error") for x, _ in lines] == [None] * 6
+    return lines
+
+
+@pytest.mark.parametrize("check, inline, stop", SERVES)
+def test_a_later_window_builds_no_part_of_a_class_that_an_earlier_one_built(monkeypatch, tmp_path, check, inline, stop):
+    """The first window builds each class's replay block, program, grain and partition once. The second, of the same
+    classes at the same counts of spans, calls no builder. In the third, another count of spans of a class builds its
+    program, grain and partition and not its replay block, and a class new to the serve whose replay block holds the
+    instances of one served before, at a count of spans that one had, calls none. Under a stop rule, where each count of
+    spans has the stop population's program, query and partition too, each of those is built once as well."""
+    lines = _served(monkeypatch, tmp_path, check, inline, stop)
+    short, replays, each = (2, [1, 2, 2, 2, 2, 2], 1) if stop is None else (4, [1] * 6, 2)
+    assert [(x["window"], x["prompt"], x["outputs"], x["spans"]) for x, _ in lines] == [
+        (0, 4, 4, 2), (0, 16, short, 1), (1, 4, 4, 2), (1, 16, short, 1), (2, 4, 4, 3), (2, 16, 4, 2)]
+    assert [x.get("stopped") for x, _ in lines] == [None if stop is None else True] * 6
+    assert [tuple(n[k] for k in BUILDERS) for _, n in lines] == [
+        (0, r, *[each * counts] * 3) if inline else (r, 0, *[each * counts] * 3)
+        for r, counts in zip(replays, [1, 2, 2, 2, 3, 3])]
+
+
+@pytest.mark.parametrize("check, inline, stop", SERVES)
+def test_a_class_commits_byte_for_byte_what_a_layout_built_for_its_window_alone_commits(monkeypatch, tmp_path, check, inline,
+                                                                                     stop):
+    """Every file of every class of three windows (``commit.json`` with each value's root and domain id and the
+    program's and the partition's digests; the index, its salt and the leaves' salts) and every sink line are what a
+    `Layout` made for that window and class alone, with nothing kept, commits and writes under the same salts: two
+    classes in two windows each, one of them again at another count of spans, and a third class; under a stop rule,
+    with each stop class's `b.stop` under its stop population's domain. No two of them share a domain: the run is each
+    window's own."""
+    lines = _served(monkeypatch, tmp_path / "served", check, inline, stop)
+    classes: dict[tuple[int, int, int, bool], list[BR.Span]] = {}
+    for w, requests in enumerate(WINDOWS):
+        spans = [BR.Span(f"{name}{w}", (1 + w,) * p, BR.sampling_of(Request("", [], n).sampling_params), (20 + w,) * n,
+                         "length") for name, p, n in requests]
+        classes |= {(w, *k): mine for k, mine in BS.filed(spans, stop).items()}
+    assert [(x["window"], x["prompt"], x["outputs"]) for x, _ in lines] == [k[:3] for k in classes]
+    for (line, _), ((w, p, o, held), mine) in zip(lines, classes.items()):
+        alone = BR.Layout(check, 0, 1, p, o, len(mine), BR.run_root("s", w), inline, stop=stop, held=held)
+        ref = BR.write(BW.commit(mine, alone, w), tmp_path / "alone" / f"w{w}" / f"p{p}-o{o}")
+        got = tmp_path / "served" / f"w{w}" / f"p{p}-o{o}"
+        assert sorted(f.name for f in got.iterdir()) == sorted([BR.COMMIT, BR.INDEX, BR.SALTS, CS.INDEX_SALT])
+        for f in ref.iterdir():
+            assert (got / f.name).read_bytes() == f.read_bytes(), (w, p, o, f.name)
+        pub = json.loads((ref / BR.COMMIT).read_text())
+        assert {k: line[k] for k in pub} == pub and list(pub["values"]) == list(alone.committed)
+        assert (pub["program"], pub["partition"]) == (alone.partition["program"], P.digest(alone.partition))
+        assert {v: x["domain"] for v, x in pub["values"].items()} == {
+            v: x["domain"] for v, x in {**alone.ports(), **alone.stop_ports()}.items()}
+    for v in BR.PORTS if stop is None else (*BR.PARTS, BR.STOP):
+        assert len({x["values"][v]["domain"] for x, _ in lines}) == len({x["values"][v]["root"] for x, _ in lines}) == 6
+
+
+def test_what_a_serve_keeps_built_is_bounded_and_the_least_recently_used_leaves_first(monkeypatch):
+    """`_built` keeps replay blocks of `KEEP` instances at most in all, the least recently used leaving first, and for
+    each its programs at the `COUNTS` counts of spans used last; a replay block past `KEEP` is built for its layout alone
+    and moves nothing; and a part it hands over is the one a layout of its own builds."""
+    monkeypatch.setattr(BW, "KEEP", 12)
+    monkeypatch.setattr(BW, "COUNTS", 2)
+    kept: dict = {}
+
+    def at(outputs: int, spans: int = 1) -> BR.Layout:
+        return BW._built(BR.Layout(PAIR, 0, 1, 4, outputs, spans, "a" * 128), kept)
+
+    four, eight = at(4), at(8)
+    assert list(kept) == [4, 8] and at(4).program is four.program and list(kept) == [8, 4]
+    two = at(2)
+    assert list(kept) == [4, 2] and sum(kept) <= BW.KEEP and at(2).replay is two.replay
+    assert at(8).replay is not eight.replay and list(kept) == [2, 8]
+    wide = at(16)
+    assert list(kept) == [2, 8] and wide.partition == BR.Layout(PAIR, 0, 1, 4, 16, 1, "a" * 128).partition
+    for n in (1, 2, 3):
+        mine, alone = at(2, n), BR.Layout(PAIR, 0, 1, 4, 2, n, "a" * 128)
+        assert mine.replay is two.replay and P.template_id(mine.replay) == P.template_id(alone.replay)
+        assert (mine.partition, mine.grain, mine.ports()) == (alone.partition, alone.grain, alone.ports())
+    assert list(kept[2][1]) == [2, 3] and at(2, 2).program is kept[2][1][2]["program"]
+    assert at(2, 1).program is not two.program
+
+
+def test_a_stop_class_is_handed_its_stop_population_and_a_class_without_a_stop_block_none():
+    """Under a stop rule `_built` keeps a stop class's stop population's program, query and partition beside its
+    program, by its count of spans: a later stop class of that count, of another prompt size, is handed them, and they
+    are what a layout of its own builds. A class without a stop block at the same sizes and count shares the program
+    and is handed no stop population, before a stop class built one and after: it still has none."""
+    kept: dict = {}
+
+    def at(prompt: int, held: bool = True, spans: int = 2) -> BR.Layout:
+        return BW._built(BR.Layout(PAIR, 0, 1, prompt, RULE.outputs, spans, "a" * 128, stop=RULE, held=held), kept)
+
+    before, first, again, after = at(4, held=False), at(4), at(16), at(4, held=False)
+    alone = BR.Layout(PAIR, 0, 1, 16, RULE.outputs, 2, "a" * 128, stop=RULE)
+    assert first.program is before.program and again.program is first.program and after.program is first.program
+    assert again.stop_program is first.stop_program and again.stop_partition is first.stop_partition
+    assert (again.stop_partition, again.stop_query, again.stop_ports(), again.ports()) == (
+        alone.stop_partition, alone.stop_query, alone.stop_ports(), alone.ports())
+    assert list(kept) == [4] and set(kept[4][1][2]) == {*BW._PARTS, *BW._STOP_PARTS}
+    for unheld in (before, after):
+        assert not set(vars(unheld)) & set(BW._STOP_PARTS) and unheld.stop_ports() == {}
+        with pytest.raises(ValueError, match="only a stop class has stop blocks"):
+            _ = unheld.stop_program
+    assert at(4, spans=3).stop_program is not first.stop_program

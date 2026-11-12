@@ -70,6 +70,7 @@ untraced = [
     "tests/migrate/test_superseded_quarantine.py",
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
+    "tests/ops/test_vllm_env.py",
     "tests/pipeline/test_boundary_plan.py",
     "tests/pipeline/test_commit_tree_of_record.py",
     "tests/pipeline/test_experiment_index.py",
@@ -139,7 +140,7 @@ inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_conf
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
           "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
-          "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
+          "tools/research/src/research/treelock.py", "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py",
           "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
@@ -154,8 +155,10 @@ parallel = true
 # its job's CPUs (a sixth on 4 workers: 8.5, 6.2, 6.0 and 3.5 GB)
 worker_gb = 8
 # the full suite takes about 10,000 s on 5 workers, past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the tests over 5 s
-# (their `slow` marks)
+# (their `slow` marks). On fewer workers the bound stretches in proportion (suites.py's `bound`): a whole check on an 11-core
+# slot runs it on 2 or 3
 timeout_s = 14400
+timeout_workers = 5
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

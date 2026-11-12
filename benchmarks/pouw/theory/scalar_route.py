@@ -35,14 +35,16 @@ Run: `python scalar_route.py [--mutations] [--verdict PATH]`. Stdlib + exact_kit
 """
 from __future__ import annotations
 
+import math
 import sys
+from collections.abc import Iterator
 
 from exact_kit.checks import Checks
 
 M32 = 0xFFFFFFFF
 
 
-def lcg(seed: int):
+def lcg(seed: int) -> Iterator[int]:
     s = seed & M32
     while True:
         s = (1664525 * s + 1013904223) & M32
@@ -72,13 +74,12 @@ ESCAPES = [
 ]
 
 
-# ---- joint non-radix packing: overflow caps rows at 2, so SWAR costs k/2 a word ------------------------------------------
+# ---- joint non-radix packing: overflow holds rows to 2, so SWAR costs k/2 a word -----------------------------------------
 
 def rows_that_fit(k: int, umax: int, total_bits: int = 32) -> int:
     """How many rows' length-k dot products pack into `total_bits` without a lane overflowing into the next. A lane must
     hold a signed sum of k terms each in [-umax, umax-1], i.e. magnitude up to k*umax, needing ceil(log2(2*k*umax)) + 1
     bits (sign + magnitude)."""
-    import math
     reach = k * umax
     lane_bits = math.ceil(math.log2(2 * reach + 1)) + 1  # signed lane that never wraps over the k adds
     return total_bits // lane_bits
@@ -133,7 +134,7 @@ def main() -> int:
     for e in ESCAPES:
         checks.check(f"escape addressed: {e['shape']}", bool(e["excluded_by"]), e["cost"])
 
-    # (1) joint non-radix packing: overflow caps the rows at 2, so SWAR costs k/2 a word.
+    # (1) joint non-radix packing: overflow holds the rows to 2, so SWAR costs k/2 a word.
     k, umax = 32, 64
     fit = rows_that_fit(k, umax)
     checks.check("joint packing: at most 2 rows fit a full k=32 dot product in 32 bits", fit == 2, f"rows={fit}")

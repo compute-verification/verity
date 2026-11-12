@@ -790,11 +790,13 @@ def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
 
 
 def _registered() -> list[Any]:
-    """The catalog's first roots: every registered primitive and static-free composite (bound)."""
+    """The catalog's first roots: every registered primitive and static-free composite (bound), by id, never in the order the
+    registry's modules were imported in: `units.registered_entries` cuts this list into records by position, and a process that
+    imports a test module before the registries (a session of circuit-check's suite) must cut the records circuit-check stored."""
     from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
     roots: list[Any] = []
-    for d in list(REGISTRY.defs.values()):
+    for d in sorted(REGISTRY.defs.values(), key=lambda d: d.id):
         if isinstance(d, PrimitiveDefinition):
             roots.append(d)
         elif isinstance(d, CompositeDefinition) and not d.statics:
