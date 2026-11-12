@@ -2,6 +2,8 @@
 under a made-up /data/infra, an origin with pull request heads that the script clones without blobs, as the pod's clone is,
 and directories for the private store's remote and for the public export. `research data export` is a stub that records
 what it was given, except in the tests that say the real one runs."""
+import fcntl
+import hashlib
 import json
 import os
 import re
@@ -41,6 +43,9 @@ INTERLOPER = """#!/bin/sh
 [ "$1" = -C ] && case " $* " in *" fetch "*) {git} -C "$2" fetch -q origin pull/7/head ;; esac
 exit $rc
 """
+#: how the queue's loop takes the bucket's name from the deployed script, whose path is $1
+QUEUE_GREP = "grep -o 'RESEARCH_EXPORT_BUCKET=[^ ]*' \"$1\""
+QUEUE_READS = QUEUE_GREP + " | head -1 | cut -d= -f2"
 
 
 def git(*args, cwd):
@@ -213,6 +218,28 @@ def test_neither_the_script_nor_its_helper_reads_the_clones_last_fetch():
     assert script.count(" checkout -") == 1 and helper.count('"checkout"') == 1, "one checkout in each, by name"
 
 
+def test_what_the_queues_loop_takes_from_the_script_is_as_it_takes_it(pod):
+    """The queue's loop runs an export of its own on the pod with three things of this script's. The bucket: it reads the
+    name from the deployed script's text, so the script holds one line of that form, and what the loop reads there is what
+    the script's own exports are given. The export store's path. And the clone's checkout, whose `research` it runs: main's
+    after a pass and after a one-off."""
+    pod.commit("main", {REGISTRY: A})
+    pod.pr(7, {REGISTRY: A | C})
+    assert pod.run("once").returncode == 0 and pod.run("pr", "7").returncode == 0
+    sh = ["sh", "-c"]
+    forms = len(subprocess.run([*sh, QUEUE_GREP, "sh", str(pod.script)], capture_output=True, text=True, check=True).stdout.splitlines())
+    name = subprocess.run([*sh, QUEUE_READS, "sh", str(pod.script)], capture_output=True, text=True, check=True).stdout.strip()
+    read, nothing = hashlib.sha256(name.encode()).hexdigest(), hashlib.sha256(b"").hexdigest()
+    del name
+    assert forms == 1 and read != nothing, "one line names the bucket in the form the queue's loop reads"
+    given = [c["bucket_sha256"] for c in pod.calls()]
+    assert given == [read, read], "main's export and the one-off's are given the name the queue's loop reads"
+    assert all(c["argv"][:6] == ["-m", "research", "data", "export", "--store", str(pod.store)] for c in pod.calls())
+    script = text_of(SCRIPT)
+    assert "\nREPO=/data/infra/fixtures-export-repo\n" in script and "\nSTORE=/data/infra/fixtures-export-store\n" in script
+    assert pod.clean() and (pod.clone / "tools" / "research" / "src").is_dir()
+
+
 def test_a_dry_pass_passes_the_dry_run_on_and_leaves_mains_checkout_as_it_is(pod):
     """`once --dry-run` after main moved: the export gets --dry-run, and the clone stays on the main it had."""
     pod.commit("main", {REGISTRY: A})
@@ -285,6 +312,24 @@ def test_a_head_whose_new_entries_lead_out_of_its_worktree_is_refused_whole(pod)
         p = pod.run("pr", str(n))
         assert p.returncode == 1 and f"pr {n} at {at[:9]}: 2 new id(s)" in p.stdout and f"pr {n} at {at[:9]}: {why}" in p.stdout, p.stdout
     assert pod.pr_calls() == [] and pod.clean()
+
+
+def test_a_one_off_waits_for_the_pass_that_holds_the_lock(pod):
+    """While something holds the pass lock, as a pass of the loop does, `pr N` says that it waits and starts no export;
+    once the lock is free it runs."""
+    pod.commit("main", {REGISTRY: A})
+    assert pod.run("once").returncode == 0
+    pod.pr(7, {REGISTRY: A | C})
+    held = os.open(pod.root / "fixtures-export-pass.lock", os.O_WRONLY | os.O_CREAT)
+    fcntl.flock(held, fcntl.LOCK_EX)
+    with subprocess.Popen([str(pod.script), "pr", "7"], env=pod.env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as p:
+        try:
+            first = p.stdout.readline()
+            waited = "waiting for the pass that holds" in first and pod.pr_calls() == []
+        finally:
+            os.close(held)                                  # the lock is free
+        rest = p.stdout.read()
+    assert waited and p.returncode == 0 and len(pod.pr_calls()) == 1, first + rest
 
 
 def test_the_one_offs_dry_run_names_the_ids_and_sends_nothing(tmp_path):
