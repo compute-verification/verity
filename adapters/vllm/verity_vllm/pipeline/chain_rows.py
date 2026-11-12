@@ -525,7 +525,7 @@ def _held(ms: list[CS.Member], held: set[str]) -> list[CS.Member]:
     at = WI.bases(ms)
 
     def tables(m: CS.Member) -> tuple[tuple[str, int], ...]:
-        of = {p: WI._writers(ms, ws, at)[0][0].n for p, _o, ws in m.wired}
+        of = {p: WI.writers(ms, ws, at)[0][0].n for p, _o, ws in m.wired}
         return tuple((p, of.get(p, m.n)) for p, _w in m.rows)
 
     return [replace(m, wired_trees=False, tables=tables(m)) if m.template in held and m.wired else m for m in ms]

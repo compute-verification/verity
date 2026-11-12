@@ -594,7 +594,7 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
         assert bool(m.wired) == (m.template not in (UNITS[0], UNITS[2])) or kind == "scores"
         assert m.wired_trees == (kind not in ("scores", "values"))
         if not m.wired_trees:
-            mine = {p: WI._writers(ms, ws, bases) for p, _o, ws in m.wired}
+            mine = {p: WI.writers(ms, ws, bases) for p, _o, ws in m.wired}
             assert all(len(x) == 1 for x in mine.values())
             assert m.tables == tuple((p, mine[p][0][0].n if p in mine else m.n) for p, _w in m.rows)
     later = [m.key for m in ms if m.template == UNITS[4]]
@@ -869,7 +869,7 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
     s, design = Served(row(HALF)), D.parse_design("stratified:1")
     w = window(s, UNITS, UNITS_CHUNK, design)
     at, keyed = WI.bases(w.members), {m.key for m in w.members if is_keys(m.template)}
-    copies = replace(w, members=tuple(replace(m, wired=tuple(x for x in m.wired if WI._writers(w.members, x[2], at)[0][0].key
+    copies = replace(w, members=tuple(replace(m, wired=tuple(x for x in m.wired if WI.writers(w.members, x[2], at)[0][0].key
                                                               not in keyed), wired_trees=True, tables=()) for m in w.members))
     assert sum(len(m.wired) for m in copies.members) < sum(len(m.wired) for m in w.members)
 

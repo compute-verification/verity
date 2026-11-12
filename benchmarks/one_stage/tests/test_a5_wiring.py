@@ -61,7 +61,7 @@ def held(members, publics: dict[str, bytes]) -> tuple[list, dict[str, bytes]]:
     each table, the writer unit's row for a held port and its own for the rest."""
     at, out, bodies = WI.bases(members), [], dict(publics)
     for m in members:
-        writer = {p: (o, WI._writers(members, ws, at)) for p, o, ws in m.wired}
+        writer = {p: (o, WI.writers(members, ws, at)) for p, o, ws in m.wired}
         if not writer:
             out.append(m)
             continue

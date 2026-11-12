@@ -360,7 +360,7 @@ class Binding:
         at = WI.bases(self.members)
         for m in self.members:
             for p, _o, ws in () if m.wired_trees else m.wired:
-                got = WI._writers(self.members, ws, at)
+                got = WI.writers(self.members, ws, at)
                 if len(got) != 1:
                     raise ValueError(f"{m.key}: its wired {p!r} rows are several members' outputs, which no one tree holds: "
                                      "give its wired ports trees of their own (Member.wired_trees)")
@@ -445,7 +445,7 @@ class Binding:
         wire = None if m.wired_trees else next((w for w in m.wired if w[0] == port), None)
         if wire is None:
             return m.port(port), tuple(range(m.n))
-        (wm, _mine, theirs), = WI._writers(self.members, wire[2], WI.bases(self.members))
+        (wm, _mine, theirs), = WI.writers(self.members, wire[2], WI.bases(self.members))
         return wm.port(wire[1]), tuple(int(x) for x in theirs)
 
 
@@ -601,10 +601,10 @@ def _by_reference(members: Sequence[Member], bases: np.ndarray, src: Any, ys: Ma
     m, port = src
     _p, o, ws = _wire(m, port)
     if not m.wired_trees:
-        (wm, _mine, _theirs), = WI._writers(members, ws, bases)
+        (wm, _mine, _theirs), = WI.writers(members, ws, bases)
         return ys[wm.port(o)], bc[wm.port(o)]
     y, s = np.empty((m.n, SALT_BYTES), dtype=np.uint8), np.empty((m.n, BC_BYTES), dtype=np.uint8)
-    for wm, mine, theirs in WI._writers(members, ws, bases):
+    for wm, mine, theirs in WI.writers(members, ws, bases):
         y[mine] = np.frombuffer(ys[wm.port(o)], dtype=np.uint8).reshape(wm.n, SALT_BYTES)[theirs]
         s[mine] = np.frombuffer(bc[wm.port(o)], dtype=np.uint8).reshape(wm.n, BC_BYTES)[theirs]
     return y.tobytes(), s.tobytes()
@@ -627,10 +627,10 @@ class _Rows(Mapping):
         m, p = src
         _p, o, ws = _wire(m, p)
         if not m.wired_trees:
-            (wm, _mine, _theirs), = WI._writers(self._members, ws, self._bases)
+            (wm, _mine, _theirs), = WI.writers(self._members, ws, self._bases)
             return self[wm.port(o)]
         out = np.empty((m.n, dict(m.rows)[p]), dtype=np.uint16)
-        for wm, mine, theirs in WI._writers(self._members, ws, self._bases):
+        for wm, mine, theirs in WI.writers(self._members, ws, self._bases):
             out[mine] = self[wm.port(o)][theirs]
         return out
 
