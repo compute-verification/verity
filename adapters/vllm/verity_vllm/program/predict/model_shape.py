@@ -84,12 +84,14 @@ def model_shape(hf: dict) -> ModelShape:
     ff = FAMILY_FACTS.get(family)
     if ff is None:
         raise Unexpressible(f"model_type {family!r}: not in the family facts table")
-    rules = dict(ff["rules"])
+    stated_rules = ff.get("rules")
+    rules = dict(stated_rules) if stated_rules else {}    # a family that states no rules has none
     facts = []
     arch = ff.get("arch")
     if arch not in ("dense", "moe"):
         facts.append(f"family {family!r} constructor {arch!r} (the dense and MoE blocks only)")
-    other = sorted(set(ff["facts"]) - set(_FACTS_READ))
+    stated_facts = ff.get("facts")
+    other = sorted(set(stated_facts if stated_facts else {}) - set(_FACTS_READ))    # and one that states no facts, none
     if other or rules.get("qk_norm") not in (None, "head"):
         facts.append(f"family {family!r} per-family facts {other}, q/k norm {rules.get('qk_norm')}")
     try:
