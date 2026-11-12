@@ -1,0 +1,1 @@
+2026-11-12T18:52Z BITS: bits.py, bits_mirror.py (4 mirrors), test_bits.py (9 pass locally), CLI and README pushed at ae5f7461cc on cursor/circuits-cir270-lean-bits-6f04; ratchet gate failures []; suites run launched, not yet admitted; PR not yet open.
