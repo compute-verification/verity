@@ -82298,3 +82298,841 @@ Mailbox read at 10:04Z: nothing after your 09:12Z section. [read]
 - [derived] Exit other than 0: the failing line, whose file it is, and nothing committed.
 
 **Other.** [read] `AGENTS.md` on `main` `33faab2be81c` against `19fb19a21e40`: the map's wording on `remote` and `onsite` as configurations and on the deleted `archive/`; nothing that bears on this work. [run] My VM was reset before this turn; the checkout, tools and run lists came back from the notes.
+
+## ACCOUNTS, Thu 12 Nov 10:13Z: the site's one move to v2 is written as Lean and compiles in a scratch tree (the leaf's rate and bytes, the unit of time, every rate a second, the link's mark); one registered figure a capacity is enough and the card keeps two; a scheme id goes before the certifier's key; the branch is at `0ac9c966a129` with `main` merged in
+
+Mailbox read 10:13Z: the 09:50Z section is the last [read]. Part **A** is written to be posted on MEM-279. Part **B** is for you.
+
+**What you can act on**
+
+- **Items 5 to 8 are one change, and it compiles.** I wrote all of it into a scratch copy of the three files (never pushed) and the package's guards hold with it. [run: `r20261112-095421-a07f` (`Site.lean` and 34 new guards), `r20261112-095501-a9b3` (`Registration.lean` in place), `r20261112-095639-db52` (`Account.lean` in place), each exit 0] Nothing of it is on the branch: it is built after lean's remote merge is on `main`.
+- **Your eleven items, in one line each:**
+
+| Item | Answer |
+|---|---|
+| 1, 2, 3 | done and pushed (09:35Z entry); the chain's guard is in, and the docstring now says why the total is sound (`b869acd3c4`) |
+| 4 | prefer the public output for a sampled protocol: a head in the profile is a new field of `Core.Integrity`, whose module 47 records read (1 of `security`, 46 of `Properties`), 2 of them deployed [read: `report.json` of `r20261112-082204-a895`, tree `5d9bf917788b`; per module, so "up to 47"] |
+| 5 | the field is `timeUnit` (JSON `time_unit`), a number of seconds, on the location of kind `site` |
+| 6 | β in bits a second, a natural number: yes. A link's latency stays a count of the Site's units of time. A sheet's `bw` should move to bits a second in the same move, which moves the sheet's tag too |
+| 7 | yes: the leaf's bytes are held equal in the same conjunct at the same key |
+| 8 | it joins the move. My pick of type and place: `unmediated : Option String` on the link no certifier splits |
+| 9 | one registered figure a capacity, the largest reading, and the card keeps both. No reader of a sheet's `mem` reads it from below. One reader of the **card** does, and it must keep reading the smaller entry |
+| 10 | #9214 meets the three asks. One line of it should change with item 9, and three things follow with v2 |
+| 11 | yes, a scheme id before the hex: the key's bytes hold no type code |
+
+- **The pull request waits on two runs** at the merged head: the records run `r20261112-100213-96fe` and the quick tier `r20261112-100327-af54` (63 suites). I open it when both have ended, by 13:00Z, or say what stops it.
+
+### A. For MEM-279: the Site's one move of its tag, as Lean text
+
+Everything below is one change to `verity/protocols/interface/CoreProtocol/Site.lean` and its Python mirror. It is built after lean's remote merge is on `main`. Nothing in it waits for Daniel. The text compiled, with the package's own guards and 34 new ones, in a scratch copy at `c962872c9231`. [run: the three runs above]
+
+**A1. What a site entry states that it does not state today**
+
+| What | Type | Where | JSON | The check that holds it (refusal `figures` unless said) |
+|---|---|---|---|---|
+| A host memory leaf's read rate | a natural number of bits a second, optional | `Loc.bw` | `"bw"` on a location, `null` where absent | required present, not 0 and equal to the auditor's figure on a memory leaf directly under a host, a disk's leaf included; required absent on every other location (`Rates`) |
+| The same leaf's bytes | as today | `Loc.bytes` | as today | equal to the auditor's figure for that leaf, in the same conjunct (`Rates`) |
+| The auditor's figures for that leaf | `MemoryFigures`: `bw`, `bytes` | `Auditor.memory`, keyed by the leaf's id | `"memory": [{"bw", "bytes", "id"}]` in the auditor's parameters | it is the other side of `Rates` |
+| The Site's unit of time | a positive rational of seconds, optional | `Loc.timeUnit` | `"time_unit"` on a location, `null` where absent | required present and not 0 on a location of kind `site`, and equal to the first such location's; required absent on every other (`Timed`) |
+| A link no certifier splits | a reason, optional | `Link.unmediated` | `"unmediated"` on a link, `null` where absent | `uncertified`, onsite: a boundary link is certified or says why none splits it (`Covered`) |
+| Every registered rate, a second | natural numbers | `Link.β`, `Sheet.bw`, `Loc.bw` | the same keys | β stays held positive; a sheet's `bw` stays held equal to the auditor's sheet's |
+
+The site's tag moves to `verity/registration/site/v2` once, and the sheet's to `verity/registration/sheet/v2` because a sheet's `bw` changes its unit. The genesis tag does not move. [read: `Site.lean:528-530` at `0ac9c966a129`]
+
+**A2. The Lean text** [run: compiled in `r20261112-095421-a07f`]
+
+```lean
+structure Loc where
+  id : String
+  kind : Kind
+  parent : Option String := none
+  owner : Owner := .prover
+  sheet : String := ""
+  tier : Option Tier := none
+  bytes : Nat := 0
+  key : String := ""
+  bw : Option Nat := none
+  timeUnit : Option Figure := none
+  deriving DecidableEq
+
+/-- The auditor's figures for one memory leaf directly under a host: the bits a second readable from it and the bytes
+it holds. -/
+structure MemoryFigures where
+  bw : Nat
+  bytes : Nat
+  deriving DecidableEq, Repr
+
+/-- A link between two ends, with its capacity `β` in bits a second each way and its latency in the Site's units of
+time. `unmediated` is, on a boundary link no certifier splits, the reason none does; none on every other link. -/
+structure Link where
+  id : String
+  ends : String × String
+  β : Nat
+  latency : Nat
+  unmediated : Option String := none
+  deriving DecidableEq, Repr
+
+structure Auditor where
+  sheet : String → Option Sheet
+  tolerance : Figure
+  key : String → Option String
+  memory : String → Option MemoryFigures := fun _ => none
+
+/-- The Site's unit of time in seconds: the one its first location of kind `site` states. Its views round a rate at it,
+and its links' latency is counted in it. -/
+def timeUnit : Option Figure := (S.locs.find? (·.kind = .site)).bind (·.timeUnit)
+
+/-- No link of the Site says that no certifier splits it. -/
+def mediated : Bool := S.links.all fun k => k.unmediated.isNone
+
+/-- `figures`, a host's memory: each new memory leaf directly under a host states the auditor's figures for it, a read
+rate that is not 0 and its bytes; every other new location states no read rate. -/
+def Rates : Prop :=
+  ∀ x ∈ e.locs,
+    if x.kind = .memory ∧ x.parent.bind (S.add e).kind? = some .host then
+      ∃ f ∈ A.memory x.id, x.bw = some f.bw ∧ 0 < f.bw ∧ x.bytes = f.bytes
+    else x.bw = none
+
+/-- `figures`, the unit of time: each new location of kind `site` states the Site's unit of time, which is not 0 and is
+the one the Site states; every other new location states none. -/
+def Timed : Prop :=
+  ∀ x ∈ e.locs,
+    if x.kind = .site then ∃ u ∈ x.timeUnit, 0 < u.1 ∧ (S.add e).timeUnit = some u else x.timeUnit = none
+
+/-- `uncertified`, onsite: every boundary link is certified, or says why no certifier splits it. -/
+def Covered : Prop :=
+  c = .onsite → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k ∨ k.unmediated.isSome
+
+-- in `refusal`, the one line that changes:
+  else if ¬(Figures A e ∧ Rates A S e ∧ Timed S e) then some .figures
+
+/-- The bits a second readable from the memory leaves `xs`: each leaf directly under a host at its own registered rate,
+and each device with a leaf among them at its sheet's `bw`, once. `none` when a leaf states no rate and is under no
+device with a registered sheet. -/
+def readRate (digest : Sheet → String) (xs : List String) : Option Nat := do
+  let ys ← xs.mapM S.loc?
+  let devices ← (ys.filter fun y => y.bw.isNone).mapM fun y => y.parent
+  let sheets ← devices.eraseDups.mapM fun d => (S.sheetOf digest d).map fun k => k.bw
+  pure ((ys.filterMap fun y => y.bw).sum + sheets.sum)
+
+/-- What a rate of `rate` a second carries over `ticks` of the Site's units of time, rounded up once. `none` when the
+Site states no unit of time. -/
+def over (rate ticks : Nat) : Option Nat := S.timeUnit.map fun (u : Figure) => (u.1 * (rate * ticks : Nat)).ceil.toNat
+```
+
+`Site.device` loses its `tick` argument and reads `S.timeUnit`; its memory bandwidth a tick becomes `(tick.1 * k.bw).ceil.toNat`, as its tensor-core MACs a tick already are. [run: the same run; a guard in `r20261112-095639-db52` reads 3,200 bits a tick from a sheet of 3.2 × 10^12 bits a second at a nanosecond]
+
+**A3. The answers, with the reason for each**
+
+- **The name is `timeUnit`, `time_unit` in JSON, never "tick".** "Tick" is the engine's bucket in the vLLM adapter [relayed: your 09:02Z item 5], and `clock` is already a device's tensor clock (`DeviceFigures.clock`, `Site.lean:100-105` at `0ac9c966a129`) [read]. Prose keeps "a tick" for one unit of it, as the Glossary's device model does [read: `ARCHITECTURE.md:153, 157` at `0ac9c966a129`].
+- **It sits on the location of kind `site`, not on the entry.** [derived] Three reasons:
+  - Every other location is under a site (`Kind.parents`, `Site.lean:47-54`), so a Site with anything to view has one. [read]
+  - A second site's location must state the same unit, so one log has one. [run: a guard of `a07f`]
+  - `Site` and `Site.Entry` keep three fields. A fourth would rewrite about 20 literals written `⟨sheets, locs, links⟩` in five files (`Registration.lean` 12, `Site.lean` 3, `Account.lean` 2, the spec 2, the maps 1). [run: `rg`, 09:45Z; a count I did not repeat for this entry] The other way is a field of `Site.Entry` and of `Site` with a rule that the first entry states it; it gives the same bytes at that price.
+- **The check holds the unit positive and single, and to no figure of the auditor's.** [derived] It is a unit, not a claim about hardware: every view rounds a rate up at it, so any positive unit gives rows that are sound, and a unit far from a nanosecond only loosens the developer's own rows. Say if you want it held to the auditor's too: it is one more field of `Auditor` and one more equality in `Timed`.
+- **β in bits a second: yes.** [derived] It stays a natural number, so a link's JSON keeps its shape. A view reads `⌈β × ticks × unit⌉`, rounded once over the ticks it is read at: 1.31 Mbit/s over a millisecond of nanoseconds is 1,310 bits, and over one nanosecond 1. [run: guards of `a07f` and `db52`]
+- **A link's latency does not move.** No check, view or theorem reads a registered link's latency: it is held a natural number, written and mapped, nothing else. [run: `git grep -n latency origin/main -- verity/ security/Properties security/Proofs` at `33faab2be81c`; its readers are the JSON (`Site.lean:583, 657, 661`; Python `site/__init__.py:357-368`) and the two maps (`security/Properties/Core/Site.lean:115, 135`); the lifecycle demo reads its own layout's (`demos/lifecycle/onsite.py:166`)] It stays a count of the Site's units of time, which now has a registered length.
+- **A sheet's `bw` should move with β, to bits a second.** [derived] Three reasons, then its price:
+  - A part of the read rate over two tiers sums device sheets' rates and host leaves' rates (`readRate`). In one unit that is a sum of natural numbers.
+  - A host leaf's rate cannot be a whole number of bits a nanosecond: a disk at 100 MB/s is 0.8 of a bit a nanosecond, so it would register at 1, a quarter over. So the leaf's rate is a second's either way, and a sheet's a tick's beside it is two units under one name.
+  - A sheet then depends on no tick, so `Sheet.of_file` and `Auditor.of_files` lose their `tick` argument and two parties cannot make two sheets of one card. With `Site.device` reading the Site's unit, all three defaults of the Python constant go. [read: `verity/hardware/site/__init__.py:75, 275, 456, 581` at `33faab2be81c`]
+  - The price: the sheet's tag moves (two places: `Site.lean:529`, `site/__init__.py:54`), and the spec's device model changes one line, `bw := k.bw` to the rate over a tick rounded up (`security/Definitions/Core/Site.lean:419`), with the proof that the code's model is the spec's. [read]
+  - If you say no: β and the leaf's rate are a second's and a sheet's `bw` stays a tick's. The view then adds `sheets × ticks` to `⌈leaves × ticks × unit⌉`. [derived] I did not compile that form; the earlier scratch text, with the leaf's field alone and every rate a tick's, compiled. [run: `r20261112-091140-8f16`, `r20261112-092850-00b0`, each exit 0]
+- **The leaf's bytes are held equal in the same move: yes.** [derived] Today a host leaf's bytes are held to nothing but "more than 0" (`Capacity`, `Site.lean:360-363`). [read] Memory's capacity in the rows is the leaves' bytes, so a host registered with one byte of DRAM would have one byte of capacity. The check is the same conjunct at the same key, as you asked.
+- **The key is the leaf's id**, as `Auditor.key` is keyed by the id of one of the auditor's devices (`Site.lean:296-301, 365-368`). [read] The auditor's JSON gains one key, `memory`, a list of `{"bw", "bytes", "id"}`. [run: a guard of `a07f`]
+- **`egress_mediated` joins the move.** [derived] Wherever it sits, it is in the bytes a site entry is digested over, and an entry's, a location's and a link's readers each refuse a key they do not know (`Site.lean:645, 657, 664`) [read], so a field that follows moves the tag a second time.
+  - **My pick of type and place:** `Link.unmediated : Option String`, the reason, on the node's own interface that no certifier splits. `Covered` takes a boundary link that is certified or says why not; without the mark `uncertified` refuses as today. [run: three guards of `a07f`: refused onsite with no mark, taken with one, taken for `remote` either way]
+  - **Why on the link:** it says what is so of that interface, which is soundness's condition [relayed: soundness, MEM-279, 08:49Z]; a site whose every boundary link is certified cannot carry it by mistake; and what the period check reads is one view, `Site.mediated`.
+  - **The other place:** one field on the location of kind `site`, soundness's own words ("a site may carry one explicit field"). It needs the same check and says nothing of which interface.
+  - **Left to network-accounting, as agreed:** the period check's reading, the negative test, and a rule that only a boundary link no certifier splits may carry the mark, which my text does not hold.
+  - **Ours in the same change:** where a Site is not mediated, `Account.rows` prints a link's rows with no amount, under a status of its own. Not written yet.
+- **A capacity with two readings: the registration carries one figure, the largest, and the card keeps both.** [derived, from the readers in B2]
+  - Every reader of a registered sheet's `mem` reads it as a bound from above or as an equality: none reads it as what a program can use. So a sheet needs one field, not two.
+  - One reader of the **card file** does read memory from below: the exported machine model's witness, which proves a kernel's stores fit in `card.size .dram` (`security/Proofs/Core/Accel/Witness.lean:358, 395, 403, 751-758`). [read at `33faab2be81c`] So the exporter keeps reading the card's `store.dram`, the memory a program reaches (`verity/hardware/lean.py:73, 77`), and only `Sheet.of_file` reads the new, larger entry (`site/__init__.py:285`). [read]
+  - What moves: that one line of `Sheet.of_file`, and the cards. The exported Lean cards and the machine model do not. [derived]
+  - Where the difference shows: a device whose sheet states more memory than its leaves hold now has a row of its own, "not audited: charged at capacity", in `Account.rows`. With a sheet of 144 GiB and a leaf of 141 GiB that row is 3 GiB. [run: `r20261112-093008-f5fe`; the example's row is 63 GiB]
+  - The same rule fits a rate (memory-accounting's host memory at 1.1264 × 10^12 B/s, and `memory.write`): the registration and the auditor carry the larger reading; anything that needs what honest hardware reaches reads the card's other entry, never the registration. [derived; relayed: the figure and the ask, your 09:19Z section]
+- **A certifier's registered key: a scheme id, a colon, then the hex.** [derived] An LMS public key here is `I ‖ T[1]` with "no type fields" (`verity/commitments/crypto/lms.py:33-34, 309-311` at `33faab2be81c`), and a check sees only its length (`:354-358`). [read] The deployed set `(64, 1, 20)` and the lifecycle demo's `(64, 4, 4)` both give 80 bytes (`lms.py:112`; `demos/lifecycle/onsite.py:37`), so the bare hex cannot say which set verifies it. [read] The memory challenger already names the id `lms-sha512/n64-w1-h20/v0` (`verity/protocols/pous/device/lean/MemoryChallenger/Verdict.lean:46`). [read] `Owners` compares two strings, so no check and no tag moves for this. [read: `Site.lean:365-368`]
+
+**A4. What each lane does differently after the move**
+
+| Lane | What changes for it |
+|---|---|
+| network-accounting | β is bits a second; the unit of time is read from the Site (`Site.timeUnit`), no argument; the node's own interface is a boundary link with `unmediated` set, and the stand-in's two links as today |
+| memory-accounting | a host leaf states `bw` and its bytes, both equal to the auditor's figures for that leaf id; `Part.capacity (.read tiers)` then has a number for a part that holds a host's leaf |
+| compute-research | each `memory.NAME` of a node file needs a rate, a disk's too; `Auditor.of_files` builds `memory` from the same files; the site's location states the unit of time; the `tick` arguments go |
+| proofs (ours) | `Account.Part.capacity` returns an amount over ticks, not a rate a tick, and `Account.rows` reads the Site's unit. `Account.Amount` does not move, so no lane's account value moves. [run: `db52`] |
+
+### B. For you
+
+**B1. What changed on the branch since the 09:35Z entry.** [run: `git log c962872c9231..0ac9c966a129`]
+
+- `b869acd3c4`: the docstring of `Amount.rows` says why the largest total over disjoint spans is sound, in your words. The chain's guard was already there (700, 900, 500 gives 1,200).
+- `0ac9c966a129`: `main` at `33faab2be81c` merged in, no conflict; no file of `main`'s 319 since `19fb19a21e40` is one of my 8. [run: `comm -12` of the two name lists] The file compiles on the merge with its 44 guards. [run: `r20261112-095951-4d2a`, exit 0; its sibling check read 3 built modules and left 9 unchecked, which had no build on the merged tree yet]
+
+**B2. Item 9: every reader of a sheet's `mem`, and of the card entry it comes from** [read at `0ac9c966a129` and `33faab2be81c`]
+
+| Reader | Place | Reads it as |
+|---|---|---|
+| `Figures` | `CoreProtocol/Site.lean:358`; spec `security/Definitions/Core/Site.lean:457`; Python `site/__init__.py:684` | an equality with the auditor's sheet |
+| `Capacity` | `Site.lean:363`; spec `:462`; Python `:691-692` | from above: a device's leaves hold at most it |
+| `Site.device` | `Site.lean:478`; spec `:414`; Python `:595` | from above: the device model's memory |
+| `Account.unregistered` | `Account.lean`, at my head | from above: what no leaf holds is charged |
+| JSON and the maps | `Site.lean:574, 642`; `security/Properties/Core/Site.lean:105, 108`; Python `:293-299` | copies |
+| `Sheet.of_file` | `site/__init__.py:285`, from the card's `store.dram` | the one place the figure enters |
+| #9214's `node_entry` | `site/__init__.py:478` at `9954c21f96f4` | a leaf's size: each GPU's `hbm` leaf holds `sheet.mem`, whole |
+| The card exporter, `size .dram` | `verity/hardware/lean.py:73, 155`; `Accel/H200.lean:26`, `Sm120.lean:23` | the card's `store.dram`, not the sheet |
+| `Card.toDevice.mem`, `Machine.bits` | `Accel/Card.lean:100`, `Machine.lean:49` | from above; `fits_toDevice` reads rates only (`security/Proofs/Core/Accel/Model.lean:100-106`) |
+| `Card.text`, in `Fits` | `lean.py:77, 171`; `Machine.lean:152` | from above: the code a run may hold |
+| The witness | `security/Proofs/Core/Accel/Witness.lean:358, 395, 403, 751-758` | **from below**: a kernel's stores fit in `size .dram` |
+| Measurements | `benchmarks/pouw/theory/scope_offload.py:94, 344` (a stock an adversary stores); `benchmarks/pouw/machine_model/tests/test_theta.py:170` | the card's `store.dram`: from above; a test of equality |
+| The compute benchmark's capacity | `benchmarks/compute/run.py:392-410` | a sheet's SKU only, never its `mem` |
+
+The lifecycle demo has its own card type and reads no sheet (`demos/lifecycle/lifecycle.py:358, 495`). [read] Outside `verity/hardware/` and tests, the only Python that imports the site module is that benchmark; no protocol, adapter or tool does. [run: `git grep -n -E "hardware\.site|hardware import site" origin/main -- '*.py'` at `33faab2be81c`]
+
+**B3. Item 10: #9214 against the three asks** [read: its diff of `verity/hardware/site/__init__.py` at `9954c21f96f4`]
+
+| Ask | #9214 |
+|---|---|
+| It takes the node's and the card's tables as mappings | yes (`node_entry`, `:443`) |
+| No check and no view calls it | yes: outside its own file it is named only in tests (16 lines), two READMEs and the node files' docstring [run: `git grep -n node_entry 9954c21f96f4`] |
+| A host leaf's rate rounded as a device's | not yet in play: it states no rate for a host leaf, and v1 has no field for one. The GPU's sheet is `Sheet.of_file`'s (`:470`) |
+
+Nothing is off against the Site as it is on `main`. Four things to tell compute-research now:
+
+1. **With item 9, change one line.** `node_entry` gives each GPU's `hbm` leaf the sheet's `mem`, whole (`:478`). If a sheet's `mem` becomes the installed memory, that leaf is 144 GiB on an H200, 3 GiB of which no program reaches, and a protocol that addresses the leaf cannot fill or sample it. The leaf should hold the card's `store.dram`; the 3 GiB then shows in the row of device memory no leaf holds. [derived]
+2. **With v2, each host leaf needs a rate**, the 1 MiB disk `vdb` included, and the auditor needs the same figures keyed `host/NAME`. The node file says "no rate, clock or peak is here: those are the cards'" (`nodes/__init__.py:6-7`), so either the file gains one or the host card states one a tier. [read]
+3. **With v2, the site's location states the unit of time**; `node_entry` writes it bare (`:474`). [read]
+4. `node_entry` adds a fourth `tick` default (`:444`). It goes with the other three if a sheet's `bw` is a second's.
+
+**B4. What the move changes, measured: the 07:41Z entry's section 5 table, corrected**
+
+| Place | What changes | How known |
+|---|---|---|
+| `CoreProtocol/Site.lean` | 114 lines: two fields of `Loc`, one of `Link`, `MemoryFigures`, `Auditor.memory`, the checks `Rates` and `Timed`, one disjunct of `Covered`, one line of `refusal`, `device`, `readRate`, `over`, the JSON of a location (10 keys, 8 today), of a link (5, 4 today) and of the auditor (4, 3 today), two tags | [run: `git diff --stat` of the scratch tree; `a07f`] |
+| `CoreProtocol/Registration.lean` | the example only, four edits: the site's location states the unit, the sheet's and the links' rates are a second's, the auditor's JSON gains `memory`. No guard's expected value changes | [run: `a9b3`, exit 0; before the `memory` key, 7 guards failed, each one that reads the auditor's parameters: `r20261112-090219-e93a`, exit 1] |
+| `CoreProtocol/Account.lean` | 77 lines: `Part.capacity` over ticks, `rows` reads the Site's unit, `tensorRate` and `unaudited` lose `tick`. No guard's expected number changes | [run: `db52`, exit 0] |
+| The spec and its maps | `Verity.Site.Loc`, `Link`, `Auditor`, the checks and `device` in `security/Definitions/Core/Site.lean`; the four maps written as `⟨…⟩` in `security/Properties/Core/Site.lean:112-135`, which gain arguments; the proofs in `security/Proofs/Properties/Core/Site.lean` and `security/Proofs/Core/Site.lean` | [read]; not attempted |
+| Python | `Loc`, `Link`, `Auditor`, `check`, `device`, `Sheet.of_file`; the constant `TICK` and its defaults | [read]; not written |
+| Tags | the site's in five places, the sheet's in two; genesis stays | [run: `git grep` at `0ac9c966a129`] |
+| Lock records | 151 of `security`'s 1,121 and 53 of `Properties`' 465 read a definition of the spec's site module; 13 of `Properties`' read the code's. One deployed guarantee is among them and reads only `Composite` | [read: `report.json` of `a895`, tree `5d9bf917788b`; per module] |
+
+`Loc` no longer derives `Repr` in the scratch text, since I gave `Figure` none; nothing in the package asked for it. [run: the three runs]
+
+**B5. The word move (your 08:34Z ask).** ONSITE's 09:02Z entry, sections 7 and 8, answers this with file and line for the whole code side, and I would take its list. [read: `inbox/proofs-coordinator.md`, lines 79974-79996] I cannot rebuild top's list of 16 lines: my working notes on it did not survive a compaction of my context, so I give only what I checked again, for the one directory I work in.
+
+| Site | Take or leave | Reason |
+|---|---|---|
+| `interface/CoreProtocol/Registration.lean:22, 40, 284, 286` ("subprotocol") | take | docstrings only; no declaration, string or test name carries the word |
+| `interface/README.md:104, 115, 124` ("subprotocol"; `:104` also "both composites") | take | prose; the same commit as the four above |
+| `remote/verifier/composition/README.md:3` | take, with the move | `main` now warns on "composite protocol" and excepts this one line by name, "which the protocols' word move rewrites" [read: `tests/test_retired_terms.py:236-237` at `33faab2be81c`] |
+| The Lean names (`Composite`, `remote_soundness_of_subprotocols`) | leave | they follow soundness's rename in `security/`, never ahead of it [relayed: ONSITE, 09:02Z] |
+| "Compose" as a protocol's name | leave | `main` states it as a target, not yet (`AGENTS.md`); nothing of mine names it [read] |
+
+My pull request adds none of these words. [run: `git diff origin/main` of my 8 files, no match]
+
+**B6. The merges** [run: `git merge-tree --write-tree --name-only`, 10:12Z]
+
+- Lean's branch `cursor/lean-remote-merge-landing-fc8d` is at `f3837f57d113` now, not `a88eee998fa2`.
+- My head `0ac9c966a129` against it: stops in 23 files. `main` `33faab2be81c` against it: stops in the same 23, name for name. So my head's stops beyond `main`'s: none.
+- Before I merged `main`, my head `c962872c9231` met lean's tip with no stop at all. [run: 09:45Z] The 23 are `main`'s since `19fb19a21e40`; `NetworkCheck/Period.lean`, `PouwCheck/Difftest.lean` and `adapters/vllm/tests/dead_code_keep.json` are the ones the merge drivers name.
+- None of my 8 files is among the 23. [run: `comm -12`]
+
+**B7. Runs** [run]
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-100213-96fe` | the interface's records run at `0ac9c966a129` | running; launched 10:02Z on `vy-nebius-cpu-7`, my guess 10:45Z |
+| `r20261112-100327-af54` | quick tier of the suites the change touches (63), `--changed 33faab2be81c`, at `0ac9c966a129` | running; launched 10:03Z, my guess 11:45Z |
+| `r20261112-095951-4d2a` | `Account.lean` on the merged head | exit 0, 63 s |
+| `r20261112-095421-a07f`, `-095501-a9b3`, `-095639-db52` | scratch: the v2 text in `Site.lean`, `Registration.lean`, `Account.lean` | each exit 0 |
+| `r20261112-094913-4b9c`, `-094958-2c3a`, `-095208-18c7`, `-095248-b605` | scratch, earlier texts | exit 1: one helper's arithmetic read a rational as a natural number; fixed by naming the type |
+| `r20261112-092850-00b0` | scratch: the leaf's field alone, in `Account.lean` | exit 0 |
+| `r20261112-093720-4b97`, `r20261112-093854-6747` | records run and quick tier at `c962872c9231` | cancelled by me at 10:02Z when you said to merge `main` first; 20 and 17 minutes into their slots |
+| `r20261112-085551-1e04` | quick tier at `3de0f5cb2319` | cancelled by me at 09:39Z, superseded, 43 minutes into its slot |
+
+**B8. What I could not establish**
+
+- That the v2 text compiles on lean's merge branch or with the spec: only the interface's three files were built.
+- Which of the 151 + 53 records reach `Loc`, `Link` or `Sheet` themselves: the reports are per module.
+- Top's 16 lines, as said in B5.
+- Whether a host card states a read rate for a disk today: I did not read the host cards again.
+
+**B9. Next.** The pull request when the two runs end, by 13:00Z. Then every three hours.
+
+**Appendix: the scratch diff** (four files, against `c962872c9231`; `SiteV2Guards.lean` is a scratch file of guards and would fold into `Registration.lean`)
+
+```diff
+diff --git a/verity/protocols/interface/CoreProtocol/Account.lean b/verity/protocols/interface/CoreProtocol/Account.lean
+index 22baebafe6..6cfb373f4b 100644
+--- a/verity/protocols/interface/CoreProtocol/Account.lean
++++ b/verity/protocols/interface/CoreProtocol/Account.lean
+@@ -138,30 +138,27 @@ def leavesAt (p : Part) (S : Site) (place : Option String) : List String :=
+   | some i, _ => (p.leaves S).filter fun x => (S.loc? x).any (S.within i (S.locs.length + 1))
+ 
+ /-- Device `d`'s tensor-core MACs a tick, the device model's (`Site.device`) under auditor `A`. -/
+-def tensorRate (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure) (d : String) :
+-    Option Nat :=
+-  (S.device digest A d tick 0 0 (fun (e : Empty) => nomatch e)).map fun m => m.rate .tc
++def tensorRate (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (d : String) : Option Nat :=
++  (S.device digest A d 0 0 (fun (e : Empty) => nomatch e)).map fun m => m.rate .tc
+ 
+ /-- **The registered capacity** of the leaves `xs` of a part, at each reading of the registration it can be read at: a
+ rate a tick for a flow, an amount for memory. Compute has two readings: `stated`, the registered sheets' own figures,
+ and `bound`, the larger of those and the auditor's estimate, which is the device model's rate. A read rate is the
+ `bw` of the sheets of the devices its leaves are under; no sheet states one for a leaf under a host, so the list is
+ empty where a leaf has none: the registration holds no rate for the part. -/
+-def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
++def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (ticks : Nat)
+     (xs : List String) : List (String × Nat) :=
+   match p with
+   | .compute =>
+     let stated : Option (List Nat) := xs.mapM fun d => (S.sheetOf digest d).bind fun k =>
+-      tensorRate S digest { A with sheet := fun _ => some k } tick d
+-    let bound : Option (List Nat) := xs.mapM fun d => tensorRate S digest A tick d
+-    (stated.map fun ns => ("stated", ns.sum)).toList ++ (bound.map fun ns => ("bound", ns.sum)).toList
++      tensorRate S digest { A with sheet := fun _ => some k } d
++    let bound : Option (List Nat) := xs.mapM fun d => tensorRate S digest A d
++    (stated.map fun ns => ("stated", ns.sum * ticks)).toList ++ (bound.map fun ns => ("bound", ns.sum * ticks)).toList
+   | .memory _ => [("registered", 8 * (xs.filterMap fun x => (S.loc? x).map fun y => y.bytes).sum)]
+-  | .read _ =>
+-    let parents : Option (List String) := xs.mapM fun x => (S.loc? x).bind fun y => y.parent
+-    let rates : Option (List Nat) := parents.bind fun ds =>
+-      ds.eraseDups.mapM fun d => (S.sheetOf digest d).map fun k => k.bw
+-    (rates.map fun ns => ("registered", ns.sum)).toList
+-  | .link => [("registered", (xs.filterMap fun i => (S.links.find? (·.id == i)).map fun k => k.β).sum)]
++  | .read _ => (((S.readRate digest xs).bind fun n => S.over n ticks).map fun n => ("registered", n)).toList
++  | .link =>
++    ((S.over (xs.filterMap fun i => (S.links.find? (·.id == i)).map fun k => k.β).sum ticks).map fun n =>
++      ("registered", n)).toList
+ 
+ end Part
+ 
+@@ -447,7 +444,7 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
+     (ticks : Nat) (place : Option String) (rs : List Reading) : List Row :=
+   let xs := m.part.leavesAt S place
+   let totals : List (String × Option Nat) :=
+-    match m.part.capacity S digest A tick xs with
++    match m.part.capacity S digest A ticks xs with
+     | [] => [("", none)]
+     | cs => cs.map fun c => (c.1, some c.2)
+   let at_ : String := place.getD ""
+@@ -468,10 +465,11 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
+         ((named.map fun g => ticksOf (stepsCovered (g.map fun x => (x.1, x.2.1))) seconds tick).foldl max 0)
+         ((unnamed.map fun r => r.ticks).foldl max 0)
+       let uncovered : Nat := ticks - cover
++      let charged : Nat := ((m.part.capacity S digest A uncovered xs).lookup reading).getD 0
+       let n : Nat := match m.side with
+         | .verified => max ((named.map disjointMost).foldl max 0) ((unnamed.map fun r => r.amount).foldl max 0)
+-        | .free => (good.map fun r => r.amount).sum + total.getD 0 * uncovered
+-      let row : Row := certifiedRow m at_ reading (total.map fun c => c * ticks) n error rs.length none
++        | .free => (good.map fun r => r.amount).sum + charged
++      let row : Row := certifiedRow m at_ reading total n error rs.length none
+       if m.side = .free ∧ total = none ∧ 0 < uncovered then
+         [{ row with status := .notAudited, verified := none, free := none }]
+       else [row]
+@@ -505,15 +503,15 @@ def readings (head : String) (tick : Figure) (accounts : List Account) (answers
+ 
+ /-- The rows of what no accepted answer covers: for each part, the leaves under no reading's place, charged at capacity
+ over the period. Their capacity is none where the registration holds none. -/
+-def unaudited (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure) (ticks : Nat)
++def unaudited (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (ticks : Nat)
+     (cs : List (Amount × Reading)) : List Row :=
+   Part.all.flatMap fun p =>
+     let covered : List String := (cs.filter fun x => x.1.part.same p).flatMap fun x => x.1.part.leavesAt S x.2.place
+     let rest : List String := (p.leaves S).filter fun x => !covered.contains x
+     let totals : List (String × Option Nat) :=
+-      match p.capacity S digest A tick rest with
++      match p.capacity S digest A ticks rest with
+       | [] => [("", none)]
+-      | ks => ks.map fun k => (k.1, some (if p.flow then k.2 * ticks else k.2))
++      | ks => ks.map fun k => (k.1, some k.2)
+     if rest.isEmpty then [] else totals.map fun (reading, total) =>
+       { metric := "not audited", part := p, place := ", ".intercalate rest, reading, status := .notAudited,
+         capacity := total, verified := some 0, free := total }
+@@ -532,13 +530,16 @@ def unregistered (S : Site) (digest : Sheet → String) : List Row :=
+ the protocols' `answers` read by their `accounts`: the rows of each amount at each place its answers name, then the rows
+ of what none covers and of the device memory no leaf holds. `digest` and `A` are the registration's: the sheets' digest
+ and the auditor, whose estimate compute's `bound` reading reads. -/
+-def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (head : String) (tick : Figure)
++def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (head : String)
+     (ticks : Nat) (accounts : List Account) (answers : List Answer) : List Row :=
+-  let cs := readings head tick accounts answers
+-  let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.place)).eraseDups
+-  (groups.flatMap fun g =>
+-      g.1.rows S digest A tick ticks g.2 ((cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2)) ++
+-    unaudited S digest A tick ticks cs ++ unregistered S digest
++  match S.timeUnit with
++  | none => []
++  | some tick =>
++    let cs := readings head tick accounts answers
++    let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.place)).eraseDups
++    (groups.flatMap fun g =>
++        g.1.rows S digest A tick ticks g.2 ((cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2)) ++
++      unaudited S digest A ticks cs ++ unregistered S digest
+ 
+ /-- A row as JSON, under the shared column names: `metric`, `verified`, `capacity`, `free` and `error`, with the part,
+ its unit, the place, the reading, the session, the count of answers, the standing and the terms not priced. An amount
+@@ -666,7 +667,7 @@ private def credit : Answer :=
+ 
+ private def table (accounts : List Account) (answers : List Answer) (A : Site.Registration.Auditor := auditor)
+     (ticks : Nat := 1000) : List Row :=
+-  rows site digest A "h" tick ticks accounts answers
++  rows site digest A "h" ticks accounts answers
+ 
+ private def cells (rs : List Row) :
+     List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
+@@ -678,7 +679,25 @@ private def hosted : Site :=
+     locs ++ [{ id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes := 1 <<< 31 }],
+     links⟩
+ 
+-private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacity S digest auditor tick (p.leaves S)
++private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacity S digest auditor 1 (p.leaves S)
++
++/-- The example's site with a DRAM leaf under its host that states its read rate, in bits a second. -/
++private def hostRated : Site :=
++  let leaf : Site.Loc :=
++    { id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes := 1 <<< 31,
++      bw := some 6554000000000 }
++  ⟨[sheet], locs ++ [leaf], links⟩
++
++#guard registered (.read [.dram]) hostRated == [("registered", 6554)]
++#guard registered (.read [.hbm, .dram]) hostRated == [("registered", 3200 + 6554)]
++#guard registered (.read [.hbm]) hostRated == [("registered", 3200)]
++-- the device model's memory bandwidth a tick, from its sheet's bits a second at the Site's unit of time
++#guard (site.device digest auditor "gpu0" 0 0 (fun (e : Empty) => nomatch e)).map (fun m => m.bw) == some 3200
++-- a rate a second is rounded up once over the ticks it is read at: 1.31 Mbit/s over a millisecond of nanoseconds
++#guard hostRated.over 1310000 1000000 == some 1310 ∧ hostRated.over 1310000 1 == some 1
++#guard ((rows hostRated digest auditor "h" 1000 [spare] [unread 3000 400]).take 1).map
++    (fun r => (r.status, r.capacity, r.verified, r.free)) ==
++  [(.certified, some (9754 * 1000), some (9754 * 1000 - (3000 + 9754 * 600)), some (3000 + 9754 * 600))]
+ 
+ #guard account.Formed ∧ held.Formed ∧ wiped.Formed ∧ sent.Formed ∧ worked.Formed ∧ ranged.Formed
+ #guard account.amounts.all fun m => ¬ ({ m with time := .moment } : Amount).Formed
+@@ -692,9 +711,9 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
+ -- a free amount with ticks no answer covers and no registered capacity to charge them at prints no amount; it prints
+ -- its amount, against no capacity, when its answers cover the period
+ #guard spare.Formed
+-#guard ((rows hosted digest auditor "h" tick 1000 [spare] [unread 3000 400]).take 1).map
++#guard ((rows hosted digest auditor "h" 1000 [spare] [unread 3000 400]).take 1).map
+     (fun r => (r.status, r.capacity, r.verified, r.free)) == [(.notAudited, none, none, none)]
+-#guard ((rows hosted digest auditor "h" tick 1000 [spare] [unread 3000 1000]).take 1).map
++#guard ((rows hosted digest auditor "h" 1000 [spare] [unread 3000 1000]).take 1).map
+     (fun r => (r.status, r.capacity, r.verified, r.free)) == [(.certified, none, none, some 3000)]
+ -- the example protocol's own answer reads by its account: two units at its profile's error
+ #guard (account.amounts.map fun m => (m.read tick passed).map fun r => (r.amount, r.error.toString)) ==
+diff --git a/verity/protocols/interface/CoreProtocol/Registration.lean b/verity/protocols/interface/CoreProtocol/Registration.lean
+index f0bb1203f7..7cebc97357 100644
+--- a/verity/protocols/interface/CoreProtocol/Registration.lean
++++ b/verity/protocols/interface/CoreProtocol/Registration.lean
+@@ -386,7 +386,7 @@ def sheet : Sheet :=
+                    | .uniformS8 => fig 1000000000000000 | .uniformS2 => fig 2000000000000000
+                    | .uniformU2 => fig 2000000000000000 | .uniformU4 => fig 1500000000000000
+                    | .zero => fig 4000000000000000 },
+-    bw := 3200, chip := 1 <<< 25, mem := 64 <<< 30 }
++    bw := 3200000000000, chip := 1 <<< 25, mem := 64 <<< 30 }
+ 
+ /-- `sheet` with its clock at `n` Hz. -/
+ def clocked (n : Nat) : Sheet := { sheet with figures := { sheet.figures with clock := fig n } }
+@@ -403,16 +403,17 @@ def auditor : Auditor :=
+ def hex (c : Char) : String := String.ofList (List.replicate 128 c)
+ 
+ def locs : List Loc :=
+-  [{ id := "site0", kind := .site }, { id := "node0", kind := .host, parent := some "site0" },
++  [{ id := "site0", kind := .site, timeUnit := some (fig 1 1000000000) },
++   { id := "node0", kind := .host, parent := some "site0" },
+    { id := "gpu0", kind := .device, parent := some "node0", sheet := Site.Registration.sha512.sheet sheet },
+    { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := 1 <<< 30 },
+    { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "k0" },
+    { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor, key := "k1" }]
+ 
+ def links : List Link :=
+-  [{ id := "up0", ends := ("node0", "cert0"), β := 100, latency := 1 },
+-   { id := "up1", ends := ("cert0", outside), β := 100, latency := 1 },
+-   { id := "mc0", ends := ("chal0", "node0"), β := 10, latency := 1 }]
++  [{ id := "up0", ends := ("node0", "cert0"), β := 100000000000, latency := 1 },
++   { id := "up1", ends := ("cert0", outside), β := 100000000000, latency := 1 },
++   { id := "mc0", ends := ("chal0", "node0"), β := 10000000000, latency := 1 }]
+ 
+ def weights : Theta :=
+   { value := "weights", root := hex 'a', leaves := 4, words := 64, domain := hex 'b', checkpoint := some (hex 'c') }
+@@ -503,7 +504,8 @@ private def bytes (j : Json) : ByteArray := ((Flock.canon j).toOption.getD "").t
+ 
+ private def params (c : Composite) : Json :=
+   Json.mkObj [("auditor", Json.mkObj [("keys", .arr #[Json.mkObj [("id", "cert0"), ("key", "k0")],
+-      Json.mkObj [("id", "chal0"), ("key", "k1")]]), ("sheets", .arr #[sheet.toJson]), ("tolerance", "1/20")]),
++      Json.mkObj [("id", "chal0"), ("key", "k1")]]), ("memory", .arr #[]), ("sheets", .arr #[sheet.toJson]),
++      ("tolerance", "1/20")]),
+     ("composite", .str c.name)]
+ 
+ private def answer (c : Composite) (log : Committed) : Answer :=
+diff --git a/verity/protocols/interface/CoreProtocol/Site.lean b/verity/protocols/interface/CoreProtocol/Site.lean
+index a986b0557e..3b8d556006 100644
+--- a/verity/protocols/interface/CoreProtocol/Site.lean
++++ b/verity/protocols/interface/CoreProtocol/Site.lean
+@@ -145,8 +145,8 @@ def DeviceFigures.bounding (est : DeviceEstimate) (d : DeviceFigures) : DeviceFi
+   peakRate c := Figure.max (d.peakRate c) (est.figures.peakRate c)
+ 
+ /-- A sheet, a card: the figures the prover states for an SKU. Its compute figures (`figures`), and its memory figures
+-in the device model's terms: bits from device memory to the chip a tick (`bw`), bits of on-chip state (`chip`) and bytes
+-of device memory (`mem`). -/
++in the device model's terms: bits from device memory to the chip a second (`bw`), bits of on-chip state (`chip`) and
++bytes of device memory (`mem`). -/
+ structure Sheet where
+   figures : DeviceFigures
+   bw : Nat
+@@ -157,7 +157,9 @@ structure Sheet where
+ /-- A sheet's SKU, its figures'. -/
+ def Sheet.sku (k : Sheet) : String := k.figures.sku
+ 
+-/-- A location, and who owns it. -/
++/-- A location, and who owns it. `bw` is the bits a second readable from a memory leaf directly under a host, and none
++on every other location: a memory leaf under a device reads at its device's sheet's `bw` (`Site.readRate`). `timeUnit`
++is the Site's unit of time in seconds, on a location of kind `site` and none on every other (`Site.timeUnit`). -/
+ structure Loc where
+   id : String
+   kind : Kind
+@@ -167,14 +169,25 @@ structure Loc where
+   tier : Option Tier := none
+   bytes : Nat := 0
+   key : String := ""
++  bw : Option Nat := none
++  timeUnit : Option Figure := none
++  deriving DecidableEq
++
++/-- The auditor's figures for one memory leaf directly under a host: the bits a second readable from it and the bytes
++it holds. -/
++structure MemoryFigures where
++  bw : Nat
++  bytes : Nat
+   deriving DecidableEq, Repr
+ 
+-/-- A link between two ends, with its capacity `β` in bits a tick each way and its latency in ticks. -/
++/-- A link between two ends, with its capacity `β` in bits a second each way and its latency in the Site's units of
++time. `unmediated` is, on a boundary link no certifier splits, the reason none does; none on every other link. -/
+ structure Link where
+   id : String
+   ends : String × String
+   β : Nat
+   latency : Nat
++  unmediated : Option String := none
+   deriving DecidableEq, Repr
+ 
+ /-- The rest of the world: an end every Site has, whose id no location may take. -/
+@@ -243,6 +256,13 @@ def ids : List String := S.locs.map (·.id) ++ S.links.map (·.id) ++ [outside]
+ /-- A device's sheet: the registered sheet under the digest it names. -/
+ def sheet? (digest : Sheet → String) (x : Loc) : Option Sheet := S.sheets.find? (digest · == x.sheet)
+ 
++/-- The Site's unit of time in seconds: the one its first location of kind `site` states. Its views round a rate at it,
++and its links' latency is counted in it. -/
++def timeUnit : Option Figure := (S.locs.find? (·.kind = .site)).bind (·.timeUnit)
++
++/-- No link of the Site says that no certifier splits it. -/
++def mediated : Bool := S.links.all fun k => k.unmediated.isNone
++
+ /-- The bytes of the memory leaves directly under `i`. -/
+ def held (i : String) : Nat := ((S.locs.filter fun x => x.kind = .memory ∧ x.parent = some i).map (·.bytes)).sum
+ 
+@@ -294,11 +314,13 @@ structure Digests where
+   genesis : Composite → String
+ 
+ /-- What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
+-SKU's; the tolerance registration allows around an estimate; and the key of each of its own devices. -/
++SKU's; the tolerance registration allows around an estimate; the key of each of its own devices, by the device's id; and
++its figures for each memory leaf directly under a host, by the leaf's id. -/
+ structure Auditor where
+   sheet : String → Option Sheet
+   tolerance : Figure
+   key : String → Option String
++  memory : String → Option MemoryFigures := fun _ => none
+ 
+ /-- The auditor's estimate its sheet `a` states: `a`'s figures, at the auditor's tolerance. -/
+ def Auditor.estimate (A : Auditor) (a : Sheet) : DeviceEstimate := ⟨a.figures, A.tolerance⟩
+@@ -357,6 +379,20 @@ estimate, and its memory figures exactly `a`'s. -/
+ def Figures : Prop :=
+   ∀ k ∈ e.sheets, ∀ a ∈ A.sheet k.sku, k.figures.Accepted (A.estimate a) ∧ k.bw = a.bw ∧ k.chip = a.chip ∧ k.mem = a.mem
+ 
++/-- `figures`, a host's memory: each new memory leaf directly under a host states the auditor's figures for it, a read
++rate that is not 0 and its bytes; every other new location states no read rate. -/
++def Rates : Prop :=
++  ∀ x ∈ e.locs,
++    if x.kind = .memory ∧ x.parent.bind (S.add e).kind? = some .host then
++      ∃ f ∈ A.memory x.id, x.bw = some f.bw ∧ 0 < f.bw ∧ x.bytes = f.bytes
++    else x.bw = none
++
++/-- `figures`, the unit of time: each new location of kind `site` states the Site's unit of time, which is not 0 and is
++the one the Site states; every other new location states none. -/
++def Timed : Prop :=
++  ∀ x ∈ e.locs,
++    if x.kind = .site then ∃ u ∈ x.timeUnit, 0 < u.1 ∧ (S.add e).timeUnit = some u else x.timeUnit = none
++
+ /-- `capacity`: each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory. -/
+ def Capacity : Prop :=
+   (∀ x ∈ e.locs, x.kind = .memory → 0 < x.bytes) ∧
+@@ -368,8 +404,9 @@ def Owners : Prop :=
+   ∀ x ∈ e.locs, (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key) ∧
+     (x.kind.auditor = false → x.owner = .prover)
+ 
+-/-- `uncertified`, onsite: every boundary link is certified. -/
+-def Covered : Prop := c = .onsite → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
++/-- `uncertified`, onsite: every boundary link is certified, or says why no certifier splits it. -/
++def Covered : Prop :=
++  c = .onsite → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k ∨ k.unmediated.isSome
+ 
+ /-- `challengerReach`, onsite: the host of every memory leaf is at an end of a memory challenger's link. -/
+ def Reached : Prop :=
+@@ -380,6 +417,8 @@ instance instDecidableRefs : Decidable (Refs S e) := by unfold Refs; infer_insta
+ instance instDecidableKinds : Decidable (Kinds S e) := by unfold Kinds; infer_instance
+ instance instDecidableSheets : Decidable (Sheets D A S e) := by unfold Sheets; infer_instance
+ instance instDecidableFigures : Decidable (Figures A e) := by unfold Figures; infer_instance
++instance instDecidableRates : Decidable (Rates A S e) := by unfold Rates; infer_instance
++instance instDecidableTimed : Decidable (Timed S e) := by unfold Timed; infer_instance
+ instance instDecidableCapacity : Decidable (Capacity D S e) := by unfold Capacity; infer_instance
+ instance instDecidableOwners : Decidable (Owners A e) := by unfold Owners; infer_instance
+ instance instDecidableCovered : Decidable (Covered c S e) := by unfold Covered; infer_instance
+@@ -391,7 +430,7 @@ def refusal : Option Refusal :=
+   else if ¬Refs S e then some .unknownRef
+   else if ¬Kinds S e then some .kind
+   else if ¬Sheets D A S e then some .sheetDigest
+-  else if ¬Figures A e then some .figures
++  else if ¬(Figures A e ∧ Rates A S e ∧ Timed S e) then some .figures
+   else if ¬Capacity D S e then some .capacity
+   else if ¬Owners A e then some .owner
+   else if ¬Covered c S e then some .uncertified
+@@ -464,14 +503,15 @@ structure DeviceModel (ι : Type) where
+   bw : Nat
+   cap : ι → Nat
+ 
+-/-- **Device `d`'s model** (`Site.device`), read off its sheet `k` and the auditor's sheet `a` for `k`'s SKU: `k`'s
+-on-chip state and bandwidth, `k`'s device memory in bits, and as its tensor-core MACs a tick the highest peak rate of
+-the figures the bound reads (`DeviceFigures.bounding`) over a tick of `tick` seconds, rounded up. No sheet states CUDA-core
+-ops or oracle queries a tick, or side channels, so they are parameters. `none` when `d` names no registered sheet or the
+-auditor has none for its SKU. -/
+-def device (digest : Sheet → String) (A : Registration.Auditor) (d : String) (tick : Figure) {ι : Type}
++/-- **Device `d`'s model** (`Site.device`), at ticks of the Site's unit of time, read off its sheet `k` and the
++auditor's sheet `a` for `k`'s SKU: `k`'s on-chip state, `k`'s device memory in bits, and a tick's bits from device
++memory to the chip and tensor-core MACs, each a rate a second over one tick, rounded up: `k`'s `bw`, and the highest
++peak rate of the figures the bound reads (`DeviceFigures.bounding`). No sheet states CUDA-core ops or oracle queries a
++tick, or side channels, so they are parameters. `none` when the Site states no unit of time, `d` names no registered
++sheet or the auditor has none for its SKU. -/
++def device (digest : Sheet → String) (A : Registration.Auditor) (d : String) {ι : Type}
+     (cuda oracle : Nat) (cap : ι → Nat) : Option (DeviceModel ι) :=
+-  (S.sheetOf digest d).bind fun k => (A.sheet k.sku).map fun a =>
++  S.timeUnit.bind fun (tick : Figure) => (S.sheetOf digest d).bind fun k => (A.sheet k.sku).map fun a =>
+     let f := k.figures.bounding (A.estimate a)
+     let peak := OperandClass.all.foldl (fun m c => max m (f.peakRate c).1) 0
+     { chip := k.chip
+@@ -480,7 +520,7 @@ def device (digest : Sheet → String) (A : Registration.Auditor) (d : String) (
+         | .tc => (tick.1 * peak).ceil.toNat
+         | .cuda => cuda
+         | .oracle => oracle
+-      bw := k.bw
++      bw := (tick.1 * k.bw).ceil.toNat
+       cap := cap }
+ 
+ /-- The host a location is in: itself when it is a host. -/
+@@ -512,6 +552,19 @@ def tiers (digest : Sheet → String) (h : String) : List (Tier × Nat) :=
+   let p := S.part digest h
+   [.hbm, .dram, .disk].map fun t => (t, ((p.locs.filter fun x => x.kind = .memory ∧ x.tier = some t).map (·.bytes)).sum)
+ 
++/-- The bits a second readable from the memory leaves `xs`: each leaf directly under a host at its own registered rate,
++and each device with a leaf among them at its sheet's `bw`, once. `none` when a leaf states no rate and is under no
++device with a registered sheet. -/
++def readRate (digest : Sheet → String) (xs : List String) : Option Nat := do
++  let ys ← xs.mapM S.loc?
++  let devices ← (ys.filter fun y => y.bw.isNone).mapM fun y => y.parent
++  let sheets ← devices.eraseDups.mapM fun d => (S.sheetOf digest d).map fun k => k.bw
++  pure ((ys.filterMap fun y => y.bw).sum + sheets.sum)
++
++/-- What a rate of `rate` a second carries over `ticks` of the Site's units of time, rounded up once. `none` when the
++Site states no unit of time. -/
++def over (rate ticks : Nat) : Option Nat := S.timeUnit.map fun (u : Figure) => (u.1 * (rate * ticks : Nat)).ceil.toNat
++
+ /-- The boundary links with an end at host `h`, or every boundary link. -/
+ def boundary (h : Option String) : List Link :=
+   S.links.filter fun k => S.Boundary k ∧ (h.all fun h => h = k.ends.1 ∨ h = k.ends.2)
+@@ -525,8 +578,8 @@ namespace Site
+ open Lean (Json)
+ open Flock (V)
+ 
+-def SITE : String := "verity/registration/site/v1"
+-def SHEET : String := "verity/registration/sheet/v1"
++def SITE : String := "verity/registration/site/v2"
++def SHEET : String := "verity/registration/sheet/v2"
+ def GENESIS : String := "verity/registration/genesis/v1"
+ 
+ /-- `SHA-512(tag ‖ 0 ‖ canon(j))` as hex. Every JSON these types write holds integers and strings only, which
+@@ -574,13 +627,14 @@ def Sheet.toJson (k : Sheet) : Json :=
+     ("mem", Lean.toJson k.mem)]
+ 
+ def Loc.toJson (x : Loc) : Json :=
+-  Json.mkObj [("bytes", Lean.toJson x.bytes), ("id", .str x.id), ("key", .str x.key), ("kind", .str x.kind.name),
++  Json.mkObj [("bw", optJson Lean.toJson x.bw), ("bytes", Lean.toJson x.bytes), ("id", .str x.id), ("key", .str x.key),
++    ("kind", .str x.kind.name),
+     ("owner", .str x.owner.name), ("parent", optJson .str x.parent), ("sheet", .str x.sheet),
+-    ("tier", optJson (fun t : Tier => .str t.name) x.tier)]
++    ("tier", optJson (fun t : Tier => .str t.name) x.tier), ("time_unit", optJson Figure.toJson x.timeUnit)]
+ 
+ def Link.toJson (k : Link) : Json :=
+   Json.mkObj [("beta", Lean.toJson k.β), ("ends", .arr #[.str k.ends.1, .str k.ends.2]), ("id", .str k.id),
+-    ("latency", Lean.toJson k.latency)]
++    ("latency", Lean.toJson k.latency), ("unmediated", optJson .str k.unmediated)]
+ 
+ def Registration.Entry.toJson : Registration.Entry → Json
+   | .site p s => Json.mkObj [("format", .str SITE), ("links", .arr (s.links.map Link.toJson).toArray),
+@@ -642,7 +696,7 @@ def Sheet.ofJson (j : Json) : V Sheet := do
+          chip := ← Flock.J.nat j "chip" "a sheet", mem := ← Flock.J.nat j "mem" "a sheet" }
+ 
+ def Loc.ofJson (j : Json) : V Loc := do
+-  exactly j ["bytes", "id", "key", "kind", "owner", "parent", "sheet", "tier"] "a location"
++  exactly j ["bw", "bytes", "id", "key", "kind", "owner", "parent", "sheet", "tier", "time_unit"] "a location"
+   let get := fun k => Flock.J.get j k "a location"
+   pure { id := ← Flock.J.str j "id" "a location",
+          kind := ← byName [.site, .host, .device, .memory, .certifier, .challenger, .outside] Kind.name (← get "kind")
+@@ -651,14 +705,17 @@ def Loc.ofJson (j : Json) : V Loc := do
+          owner := ← byName [.prover, .auditor] Owner.name (← get "owner") "a location's owner",
+          sheet := ← Flock.J.str j "sheet" "a location",
+          tier := ← optOf (byName [.hbm, .dram, .disk] Tier.name · "a location's tier") (← get "tier"),
+-         bytes := ← Flock.J.nat j "bytes" "a location", key := ← Flock.J.str j "key" "a location" }
++         bytes := ← Flock.J.nat j "bytes" "a location", key := ← Flock.J.str j "key" "a location",
++         bw := ← optOf (Flock.J.asNat · "a location's bw") (← get "bw"),
++         timeUnit := ← optOf (Figure.ofJson · "a location's time unit") (← get "time_unit") }
+ 
+ def Link.ofJson (j : Json) : V Link := do
+-  exactly j ["beta", "ends", "id", "latency"] "a link"
++  exactly j ["beta", "ends", "id", "latency", "unmediated"] "a link"
+   let ends ← Flock.J.arr j "ends" "a link"
+   let #[a, b] := ends | throw "a link: ends: not two ends"
+   pure { id := ← Flock.J.str j "id" "a link", ends := (← Flock.J.asStr a "a link's end", ← Flock.J.asStr b "a link's end"),
+-         β := ← Flock.J.nat j "beta" "a link", latency := ← Flock.J.nat j "latency" "a link" }
++         β := ← Flock.J.nat j "beta" "a link", latency := ← Flock.J.nat j "latency" "a link",
++         unmediated := ← optOf (Flock.J.asStr · "a link's unmediated") (← Flock.J.get j "unmediated" "a link") }
+ 
+ def Registration.Entry.ofJson (j : Json) : V Registration.Entry := do
+   exactly j ["format", "links", "locs", "previous", "sheets"] "an entry"
+@@ -688,12 +745,17 @@ def Registration.ofJson (j : Json) : V (Registration.Composite × Registration)
+ /-- The auditor as `Auditor.to_json` writes it: its devices' keys, its data sheets, the first under an SKU or a device
+ being the one the check reads, and its tolerance. -/
+ def Registration.Auditor.ofJson (j : Json) : V Registration.Auditor := do
+-  exactly j ["keys", "sheets", "tolerance"] "the auditor"
++  exactly j ["keys", "memory", "sheets", "tolerance"] "the auditor"
+   let keys ← (← Flock.J.arr j "keys" "the auditor").toList.mapM fun k => do
+     exactly k ["id", "key"] "a key"
+     pure (← Flock.J.str k "id" "a key", ← Flock.J.str k "key" "a key")
++  let memory ← (← Flock.J.arr j "memory" "the auditor").toList.mapM fun m => do
++    exactly m ["bw", "bytes", "id"] "a memory leaf's figures"
++    pure (← Flock.J.str m "id" "a memory leaf's figures",
++      (⟨← Flock.J.nat m "bw" "a memory leaf's figures", ← Flock.J.nat m "bytes" "a memory leaf's figures"⟩ : MemoryFigures))
+   let sheets ← (← Flock.J.arr j "sheets" "the auditor").toList.mapM Sheet.ofJson
+   pure { sheet := fun sku => sheets.find? (·.sku == sku),
++         memory := fun i => (memory.find? (·.1 == i)).map (·.2),
+          tolerance := ← Figure.ofJson (← Flock.J.get j "tolerance" "the auditor") "the auditor's tolerance",
+          key := fun i => (keys.find? (·.1 == i)).map (·.2) }
+ 
+diff --git a/verity/protocols/interface/CoreProtocol/SiteV2Guards.lean b/verity/protocols/interface/CoreProtocol/SiteV2Guards.lean
+new file mode 100644
+index 0000000000..b71510de52
+--- /dev/null
++++ b/verity/protocols/interface/CoreProtocol/SiteV2Guards.lean
+@@ -0,0 +1,100 @@
++module
++
++public import CoreProtocol.Site
++meta import CoreProtocol.Site
++meta import Lean.Data.Json
++
++@[expose] public section
++
++namespace Core
++
++namespace Site
++
++open Lean (Json)
++
++namespace Scratch
++
++private def host : Loc := { id := "node0", kind := .host, parent := some "site0" }
++private def ns : Figure := if h : 0 ≤ mkRat 1 1000000000 then ⟨_, h⟩ else ⟨0, by decide⟩
++private def us : Figure := if h : 0 ≤ mkRat 1 1000000 then ⟨_, h⟩ else ⟨0, by decide⟩
++private def root : Loc := { id := "site0", kind := .site, timeUnit := some ns }
++private def dram (bw : Option Nat) (bytes : Nat := 1 <<< 31) : Loc :=
++  { id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes, bw }
++private def gpu : Loc := { id := "gpu0", kind := .device, parent := some "node0", sheet := "s" }
++private def hbm (bw : Option Nat) : Loc :=
++  { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := 1 <<< 30, bw }
++private def auditor : Registration.Auditor :=
++  { sheet := fun _ => none, tolerance := ⟨0, by decide⟩, key := fun _ => none,
++    memory := fun i => if i == "dram0" then some ⟨6554, 1 <<< 31⟩ else none }
++private def empty : Site := ⟨[], [], []⟩
++private def entry (xs : List Loc) : Entry := { locs := [root, host, gpu] ++ xs }
++
++-- a host's leaf states the auditor's rate and bytes; a device's leaf states none
++#guard decide (Entry.Rates auditor empty (entry [dram (some 6554), hbm none]))
++-- refused: a host's leaf with no rate, with another rate, with a rate of 0 the auditor does not state, with other
++-- bytes; a device's leaf with a rate; a host's leaf the auditor has no figures for
++#guard !decide (Entry.Rates auditor empty (entry [dram none]))
++#guard !decide (Entry.Rates auditor empty (entry [dram (some 6553)]))
++#guard !decide (Entry.Rates auditor empty (entry [dram (some 6554) 1]))
++#guard !decide (Entry.Rates auditor empty (entry [hbm (some 3200)]))
++#guard !decide (Entry.Rates { auditor with memory := fun _ => none } empty (entry [dram (some 6554)]))
++#guard !decide (Entry.Rates { auditor with memory := fun _ => some ⟨0, 1 <<< 31⟩ } empty (entry [dram (some 0)]))
++-- the JSON round trip, with and without a rate
++#guard [dram (some 6554), hbm none].all fun x => (Loc.ofJson x.toJson).toOption == some x
++#guard (dram (some 6554)).toJson.compress ==
++  "{\"bw\":6554,\"bytes\":2147483648,\"id\":\"dram0\",\"key\":\"\",\"kind\":\"memory\",\"owner\":\"prover\"," ++
++  "\"parent\":\"node0\",\"sheet\":\"\",\"tier\":\"dram\",\"time_unit\":null}"
++#guard ((Registration.Auditor.ofJson (Json.mkObj [("keys", .arr #[]), ("memory", .arr #[Json.mkObj
++    [("bw", (6554 : Nat)), ("bytes", (2147483648 : Nat)), ("id", "dram0")]]), ("sheets", .arr #[]), ("tolerance", "0")])
++  ).toOption.map fun A => A.memory "dram0") == some (some ⟨6554, 2147483648⟩)
++-- the read rate of a host's leaf alone; with a device's leaf whose sheet is not registered there is none
++#guard (⟨[], (entry [dram (some 6554), hbm none]).locs, []⟩ : Site).readRate (fun _ => "s") ["dram0"] == some 6554
++#guard (⟨[], (entry [dram (some 6554), hbm none]).locs, []⟩ : Site).readRate (fun _ => "s") ["dram0", "hbm0"] == none
++
++-- a disk's leaf under a host is held as a DRAM leaf is: the check reads no tier
++private def disk (bw : Option Nat) : Loc :=
++  { id := "disk0", kind := .memory, parent := some "node0", tier := some .disk, bytes := 1 <<< 40, bw }
++private def withDisk : Registration.Auditor :=
++  { auditor with memory := fun i => if i == "disk0" then some ⟨28, 1 <<< 40⟩ else auditor.memory i }
++#guard decide (Entry.Rates withDisk empty (entry [dram (some 6554), disk (some 28)]))
++#guard !decide (Entry.Rates withDisk empty (entry [dram (some 6554), disk none]))
++-- a host, a device, a certifier or a link's end states no rate
++#guard !decide (Entry.Rates auditor empty { locs := [root, { host with bw := some 1 }] })
++-- the refusal an entry gets is `figures`' own
++#guard decide (Entry.Rates auditor empty { locs := [root] })
++
++-- the unit of time: a location of kind `site` states it, and it is not 0; a second one states the same; no other
++-- location states one
++#guard decide (Entry.Timed empty { locs := [root, host] })
++#guard decide (Entry.Timed empty { locs := [root, { root with id := "site1" }] })
++#guard !decide (Entry.Timed empty { locs := [{ root with timeUnit := none }] })
++#guard !decide (Entry.Timed empty { locs := [{ root with timeUnit := some ⟨0, by decide⟩ }] })
++#guard !decide (Entry.Timed empty { locs := [root, { host with timeUnit := some ns }] })
++#guard !decide (Entry.Timed ⟨[], [root], []⟩ { locs := [{ root with id := "site1", timeUnit := some us }] })
++#guard (⟨[], [root, host], []⟩ : Site).timeUnit == some ns ∧ empty.timeUnit == none
++-- a rate a second over ticks, rounded up once: 1.31 Mbit/s over a millisecond of nanoseconds, and over one
++#guard (⟨[], [root], []⟩ : Site).over 1310000 1000000 == some 1310
++#guard (⟨[], [root], []⟩ : Site).over 1310000 1 == some 1 ∧ empty.over 1 1 == none
++-- a boundary link no certifier splits: refused onsite, taken where it says why, and the Site then is not mediated
++private def bare (why : Option String) : Link :=
++  { id := "eth0", ends := ("node0", outside), β := 1000000000, latency := 0, unmediated := why }
++#guard !decide (Entry.Covered .onsite empty { locs := [root, host], links := [bare none] })
++#guard decide (Entry.Covered .onsite empty { locs := [root, host], links := [bare (some "a stand-in")] })
++#guard decide (Entry.Covered .remote empty { locs := [root, host], links := [bare none] })
++#guard (⟨[], [root, host], [bare (some "a stand-in")]⟩ : Site).mediated == false
++#guard (⟨[], [root, host], [bare none]⟩ : Site).mediated
++-- the JSON of a location that states the unit of time and of a link that says why it is not split
++#guard [root, host].all fun x => (Loc.ofJson x.toJson).toOption == some x
++#guard root.toJson.compress ==
++  "{\"bw\":null,\"bytes\":0,\"id\":\"site0\",\"key\":\"\",\"kind\":\"site\",\"owner\":\"prover\"," ++
++  "\"parent\":null,\"sheet\":\"\",\"tier\":null,\"time_unit\":\"1/1000000000\"}"
++#guard [bare none, bare (some "a stand-in")].all fun k => (Link.ofJson k.toJson).toOption == some k
++#guard (bare (some "a stand-in")).toJson.compress ==
++  "{\"beta\":1000000000,\"ends\":[\"node0\",\"outside\"],\"id\":\"eth0\",\"latency\":0," ++
++  "\"unmediated\":\"a stand-in\"}"
++
++end Scratch
++
++end Site
++
++end Core
+```
