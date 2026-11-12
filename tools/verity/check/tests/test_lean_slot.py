@@ -209,7 +209,19 @@ def test_a_pool_the_file_doesn_t_list_takes_from_any_or_is_refused_by_name(slots
         LS.main(["--fast", "--", "true"])
 
 
-def test_the_steward_can_change_n_while_requests_wait(slots):
+def _proc_locks(proc: Path, holders: dict[Path, int]) -> Path:
+    """A /proc whose `locks` lists exactly these flocks. The node's own is read in pieces that other processes' locks shift
+    meanwhile, so a lock held throughout can be missing from one reading."""
+    proc.mkdir(exist_ok=True)
+    rows = []
+    for i, (lock, pid) in enumerate(holders.items(), 1):
+        st = lock.stat()
+        rows.append(f"{i}: FLOCK  ADVISORY  WRITE {pid} {os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino} 0 EOF\n")
+    (proc / "locks").write_text("".join(rows))
+    return proc
+
+
+def test_a_waiter_takes_the_slot_the_steward_adds_and_a_held_slot_past_n_is_listed(slots, tmp_path):
     held = _hold(slots / "lean-audit-0.lock")
     LS.SLOTS.write_text("audit 1\n")
 
@@ -218,11 +230,12 @@ def test_the_steward_can_change_n_while_requests_wait(slots):
 
     got = LS.wait("audit", now=lambda: NOW, sleep=sleep, log=lambda s: None)
     assert got[:2] == ("audit", 1)
-    LS.SLOTS.write_text("audit 1\n")                             # lowered while slot 1 is held: still listed, past N
-    assert any(ln.startswith("audit/1 (past N)  held by pid") for ln in LS.status(LS.parse("audit 1"), slots, NOW))
+    proc = _proc_locks(tmp_path / "proc", {slots / "lean-audit-0.lock": 4242, slots / "lean-audit-1.lock": 4343})
+    lowered = LS.status(LS.parse("audit 1"), slots, NOW, proc)                    # while slot 1 is held: listed, past N
+    assert lowered == ["audit/0  held by pid 4242: (gone)", "audit/1 (past N)  held by pid 4343: (gone)"]
     os.close(held)
     os.close(got[2])
-    assert LS.status(LS.parse("audit 1"), slots, NOW) == ["audit/0  free"]
+    assert LS.status(LS.parse("audit 1"), slots, NOW, _proc_locks(proc, {})) == ["audit/0  free"]
 
 
 def test_who_asked_is_the_lane_else_the_check_slot_s_holder(slots, monkeypatch, tmp_path):
