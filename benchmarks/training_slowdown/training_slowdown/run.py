@@ -541,8 +541,8 @@ class Harness:
         rec |= meta | {
             "schema": SCHEMA, "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
             "split": self.split, "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
-            "threads": torch.get_num_threads(), "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
-            "checkpoints": self.checkpoints,
+            "threads": torch.get_num_threads(), "forward_macs_per_token": self.forward_macs_per_token, "c": c,
+            "planned_steps": self.n_steps, "checkpoints": self.checkpoints,
             "flags": flags(rec["totals"], float(meta.get("peak_macs_per_s", 0))) + list(notes or []),
             "invalid": problems, "families": [],
         }
