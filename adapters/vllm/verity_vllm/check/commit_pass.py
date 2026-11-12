@@ -277,6 +277,6 @@ def _after_release_verdict(commit: dict, min_openings: int) -> tuple[bool, str] 
 
 
 def _population_openings(bnd: dict | None) -> dict:
-    """The binding's record of the openings drawn from the population: empty with no binding, or one that records none."""
+    """The binding's record of the openings sampled from the population: empty with no binding, or one that records none."""
     stated = bnd.get("openings_population") if bnd else None
     return stated if stated else {}

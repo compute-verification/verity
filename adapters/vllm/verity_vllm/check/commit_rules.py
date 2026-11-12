@@ -113,7 +113,7 @@ def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int =
                        f"(first: step {miss.get('step')} {miss.get('op_path')}/{miss.get('output_member')} inv {miss.get('invocation')} req {miss.get('request_id')} rank {miss.get('rank')})")
     po = b.entry.get("openings_population")
     if not po:
-        po = {}   # a binding that records no openings drawn from the population: none unbound, none opened
+        po = {}   # a binding that records no openings sampled from the population: none unbound, none opened
     if int(po.get("unbound_n") or 0) > 0:
         return False, f"{po['unbound_n']} population-drawn openings had no binding (first: {json_short((po.get('unbound') or [{}])[0])})"
     if not po.get("skipped"):
