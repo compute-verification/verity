@@ -39,7 +39,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "replay-plan": ("verity_vllm.pipeline.replay_plan", "a slim replay bundle's planner process (started by a `--replay-deferred slim` Commit)"),
-    "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
+    "compiled": ("verity_vllm.acquire.compiled", "hold the Build an Execution=compiled row's treatment ran with to the one it rederived (verify)"),
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
@@ -101,6 +101,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "advice-windows": ("verity_vllm.pipeline.advice_windows", "a deferred tensor-parallel Commit's stand-in windows over a compiler's Programs for the advice"),
     "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
     "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
+    "weights-tie": ("verity_vllm.program.predict.weights_tie", "the weights registration's checkpoint tie: its window (commit), the verifier's (verify), the pins (pins)"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }

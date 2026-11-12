@@ -16,7 +16,7 @@ from verity_vllm.program.prune import (_read, _renumbered, batched_form, dead_fr
 from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import b1, gemm_bias, topp_words as TW
 
-from verity.circuits.defs import Body, Node, bind
+from verity.circuits.defs import Body, BodyNode, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.definitions.ops import gemm as G
@@ -102,7 +102,7 @@ def test_the_dead_free_form_binds_the_top_p_select_to_v3():
     binds it to v3 at the same V and S, with v2's arguments and output and none of its dead gates."""
     sd = bind(TW.GumbelTopPTokenSelectV2, V=3, S=2)
     args = tuple(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(sd.body.params))
-    body = Body(sd.body.params, sd.body.ret_type, [Node("call", sd, args, sd.body.ret_type)], Affine("n", 0, 0, 1), [0, sd.gates])
+    body = Body(sd.body.params, sd.body.ret_type, [BodyNode("call", sd, args, sd.body.ret_type)], Affine("n", 0, 0, 1), [0, sd.gates])
     (a,), (b,) = body.nodes, swapped(body).nodes
     assert (a.fn.id, b.fn.id) == ("GumbelTopPTokenSelect_v2{V=3,S=2}", "GumbelTopPTokenSelect_v3{V=3,S=2}")
     assert (b.form, b.args, b.out) == (a.form, a.args, a.out)
@@ -114,7 +114,7 @@ def test_the_dead_free_form_passes_a_batch_of_a_primitive_through():
     `swapped` leaves it as it is rather than reading one."""
     from verity.definitions.ops.prims import const
     c = const(16, 0)
-    body = Body((), Array(4, c.ret), [Node("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
+    body = Body((), Array(4, c.ret), [BodyNode("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
     assert swapped(body) is body
 
 
@@ -237,7 +237,7 @@ def _linears() -> Body:
     and Gemm_v1 (read whole)."""
     fns = [bind(G.Gemm, K=16, N=6, DOT=DOT), bind(gemm_bias.GemmBiasV2, K=16, N=6, DOT=DOT), bind(b1.Gemm, K=16, N=6)]
     params = tuple(fns[1].body.params)
-    nodes = [Node("call", fn, tuple(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(fn.body.params)), fn.body.ret_type)
+    nodes = [BodyNode("call", fn, tuple(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(fn.body.params)), fn.body.ret_type)
              for fn in fns]
     ret = Concat([Affine("n", 0, 2, 2), Strided("n", 1, 1, 2, 3, 1, 4), Explicit((("n", 0, 3), ("n", 1, 1))), Affine("n", 2, 0, 6)])
     offsets = [0]

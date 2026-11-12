@@ -157,7 +157,10 @@ class NativeCollectCommitter(NativeHostCommitter):
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
+    commit_scheme, rows = step_rows.NAME, True
     ends_source_steps = True
+    #: set by the first sampling step that binds a seed (`install`'s `sample`)
+    seed_bound_steps: int
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
@@ -318,8 +321,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         for src in self.sources:
             src.install()
         if getattr(self, "external_acquisition", False):
-            # compiled execution: the module boundaries are acquired by record ops inside the compiled graphs (compiled_source.CompiledGraphSource,
-            # installed before vLLM compiled the model); wrapping the forwards here would never be traced and never run under graph replay
+            # compiled execution: the attached source acquires the values itself (`ServedCompiledSource`); forwards wrapped here would
+            # never be traced and never run under graph replay
             pass
         elif self.wrap:
             for name, m in self._modules:
@@ -745,11 +748,11 @@ class NativeCollectCommitter(NativeHostCommitter):
         return metas
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:  # type: ignore[override]
-        """The base class's function, computed once per plan: nothing changes a field it reads once the plan's record is built."""
+        """``step_rows.layout_digest``, computed once per plan: nothing changes a field it reads once the plan's record is built."""
         if not isinstance(metas, PlanMetas):
-            return NativeHostCommitter.layout_digest(metas)
+            return step_rows.layout_digest(metas)
         if metas.digest is None:
-            metas.digest = NativeHostCommitter.layout_digest(metas.scan())
+            metas.digest = step_rows.layout_digest(metas.scan())
         return metas.digest
 
     def _commit_step(self, job: _StepJob) -> None:

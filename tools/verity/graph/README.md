@@ -39,7 +39,7 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | `verity_graph/runners/__init__.py` | dispatch by kind, `call` (a command, logged and bounded by the task's timeout) and `execute` |
 | `verity_graph/local.py` | the serial reference executor |
 | `verity_graph/families/build.py` and its kinds' runners (`runners/lean_build.py`, `lean_unit_cut.py`, `lean_agreement.py`, `lean_suites.py`, `flock_circuit_build.py`, `flock_rust_tests.py`) | the build family (below) |
-| `tasks.toml` | `[env.<name>]` and `[family.<name>]` tables |
+| `tasks.toml` | `[slot]`, `[env.<name>]` and `[family.<name>]` tables |
 | `tests/key_vectors.json` | the vectors Verity and the executor both reproduce |
 
 In a module's name a family's or kind's `-` is written `_`: family `test-file` is `families/test_file.py`, kind
@@ -184,7 +184,7 @@ runs them, one task a step:
 
 | task | env | runs | inputs | outputs |
 | --- | --- | --- | --- | --- |
-| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the files of the package and of the packages of the tree it requires by path, but each one's `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
+| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the files of the package and of the packages of the tree it requires by path, but each one's `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>`; `lake-build`, each of those packages' `.lake/build` but the executables, in one archive |
 | `lean-unit-cut:verity/protocols/flock/agreement/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/protocols/flock/agreement` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
 | `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits by test file, or of one that declares `parts`, by test id; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
@@ -193,7 +193,11 @@ runs them, one task a step:
 
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
 `artifacts`); `lean-unit-cut` and `lean-agreement` read `flock-verify` and get its path as their var `verify`, and
-`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
+`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`), and unpacks
+`lake-build` into the tree and runs `lake build` there under check's lock (its var `tree`), once a tree (the stamp
+`.lake/graph-build.sha512`, which lean-build writes in its own), so the tree is as check's lean-build step leaves it: the
+suites' own `lake build`s of the verifier, at once in every test process, find every module built, where on the executables
+alone each built the whole verifier in one `.lake` and the links broke. A part's task
 (its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
 file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
 failed suite with its failed tests (`detail.failed`), which the verified queue names, allows and blames as that suite's red. A
@@ -213,7 +217,8 @@ train.sh run beside the executor's check (`research.landing.SLIM_STEPS`, `resear
 A family's lister returns graph/v2 tasks without `priority` and `key`, for the tree at `root`, reading nothing but files under
 `root` (its `files` is the tree's file list). The core fills what a task leaves out from its table, `about` from the table's
 template over the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars`, and refuses a field outside graph/v2, an
-input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, and a path two things land on.
+input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, a path two things land on, and
+resources (a table's or a task's) past `[slot]`, the largest slot an executor leases a task, which no slot would ever take.
 `graph.covered(root, family, files)` is the files the table's `files` globs cover. Test it on a toy checkout
 (`tests/conftest.py`'s `toy_tree`, which writes a `tasks.toml`, runner stubs and files into a fresh git repository), and the
 whole tree's invariants (`tests/test_invariants.py`) cover it once it lists.

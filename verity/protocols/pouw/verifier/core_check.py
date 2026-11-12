@@ -87,8 +87,9 @@ from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.spot.verifier.one_stage import registration as R
 from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.spot.verifier.profile import Work, WorkStratum
 from verity.protocols.pouw.verifier.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
-from verity.protocols.pouw.verifier.protocol import U64, tagged
+from verity.protocols.pouw.verifier.protocol import U64, fold_roots, tagged
 from verity.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
@@ -408,17 +409,25 @@ def _exactly(written: Any, j: Any, ctx: str) -> None:
 
 
 def _core_draw(j: Any, ctx: str) -> dict:
-    """`Core.Draw.ofJson`, as `Draw.toJson` writes it."""
+    """`Core.SamplingDesign.ofJson`, as `SamplingDesign.toJson` writes it."""
     if _has(j, "bernoulli"):
-        d: dict = {"bernoulli": str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
+        d: dict = {"bernoulli": Wd.ratio_str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
     elif _has(j, "subset"):
         d = {"subset": _nat_at(j, "subset", ctx)}
+    elif _has(j, "strata") and isinstance(j, dict) and j.get("law") == "work":
+        k, c = _nat_at(j, "k", ctx), f"{ctx}.strata"
+        strata = [WorkStratum(_str_at(s, "name", c), _nat_at(s, "size", c), _nat_at(s, "k", c), _nat_at(s, "work", c),
+                              _nat_at(s, "floor", c)) for s in _arr_at(j, "strata", ctx)]
+        try:
+            d = Work(k, tuple(strata)).to_json()
+        except ValueError as e:
+            raise Refused(f"{ctx}: {e}") from None
     elif _has(j, "strata"):
         c = f"{ctx}.strata"
         d = {"law": "stratified", "strata": [{"name": _str_at(s, "name", c), "size": _nat_at(s, "size", c),
                                               "k": _nat_at(s, "k", c)} for s in _arr_at(j, "strata", ctx)]}
     else:
-        raise Refused(f"{ctx}: not a bernoulli, subset or stratified draw")
+        raise Refused(f"{ctx}: not a bernoulli, subset, stratified or work draw")
     _exactly(d, j, ctx)
     return d
 
@@ -458,7 +467,8 @@ def integrity(j: Any, ctx: str = "profile") -> dict:
 def integrity_json(p: dict) -> dict:
     """`Core.Integrity.toJson`."""
     return {"programs": p["programs"], "prescribed": sorted(p["prescribed"]), "linked": p["linked"],
-            "covered": sorted(p["covered"]), "levels": p["levels"], "delta": str(p["delta"]), "drawn": dict(p["drawn"])}
+            "covered": sorted(p["covered"]), "levels": p["levels"], "delta": Wd.ratio_str(p["delta"]),
+            "drawn": dict(p["drawn"])}
 
 
 def answer_of(j: Any, ctx: str = "answer") -> dict:
@@ -517,6 +527,14 @@ def _strata(work: bool, j: Any, ctx: str) -> list[dict]:
     return out
 
 
+def _num_den(p: str, ctx: str) -> str:
+    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.Law.bernoulli`'s), kept as written."""
+    parts = p.split("/")
+    if len(parts) == 2 and all(t and all(c in "0123456789" for c in t) and str(int(t)) == t for t in parts):
+        return p
+    raise Refused(f"{ctx}.p: not num/den")
+
+
 def unit_draw(j: Any) -> dict:
     """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` laws with exactly its keys (`check_draw`'s),
     and a live execution phase's ``salt``, an object (`window_salt` reads it)."""
@@ -529,7 +547,7 @@ def unit_draw(j: Any) -> dict:
     _keys_are(d, (["closure"] if law == "work" and "closure" in d else []) + _DRAW_KEYS[law], ctx)
     out: dict[str, Any] = {"law": law, "population": _nat_at(d, "population", ctx)}
     if law == "bernoulli":
-        out["p"] = _str_at(d, "p", ctx)
+        out["p"] = _num_den(_str_at(d, "p", ctx), ctx)
     else:
         out["k"] = _nat_at(d, "k", ctx)
     if law in ("stratified", "work"):
@@ -568,7 +586,7 @@ def expected_items(p: dict, ell: int, w: Wd.Work, k: int, root_w: Any) -> dict:
     """The registered items as the verifier computes them at level `ell` (`served_commit.items_of`)."""
     tw = p["check"]["tile_work"]
     return {"check": check_item(p), "root_W": root_w, "work": w.to_json(tw),
-            "sampling": {"delta": str(p["delta"]), "eps": str(p["eps"]), "grid_bits": p["grid_bits"],
+            "sampling": {"delta": Wd.ratio_str(p["delta"]), "eps": Wd.ratio_str(p["eps"]), "grid_bits": p["grid_bits"],
                          "law": {"k": k, "law": "subset"}}}
 
 
@@ -637,7 +655,8 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     if prof["levels"] != [{"name": LEVEL, "query": rec["partition"], "size": w.n, "draw": {"subset": k}}]:
         return "reject", f"profile: its levels are not the registered partition's {w.n} units drawn subset:{k}", None
     if prof["delta"] != p["delta"]:
-        return "reject", f"profile: delta {prof['delta']}, not the window's {p['delta']}", None
+        return ("reject", f"profile: delta {Wd.ratio_str(prof['delta'])}, not the window's {Wd.ratio_str(p['delta'])}",
+                None)
     if prof["drawn"] != [(LEVEL, k)]:
         return "reject", f"profile: drawn {_canon(dict(prof['drawn']))}, not {k} units", None
     if not (draw["law"] == "subset" and draw["k"] == k) or draw["population"] != w.n:
@@ -1041,7 +1060,7 @@ def weights_root(scheme: str, roots: dict[int, bytes]) -> bytes:
     """`audit.weights_root`, an execution phase's weights' root, under a coin commitment's scheme (`COIN_VERSIONS`); a live H1
     execution phase's open root binds `weights.weights_root` instead (`salt`)."""
     n, tag = COIN_VERSIONS[scheme]
-    return tagged(tag, *(p for w in sorted(roots) for p in (w, roots[w])))[:n]
+    return fold_roots(tag, roots)[:n]
 
 
 def _manifest(raw: bytes) -> dict:

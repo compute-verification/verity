@@ -3,7 +3,9 @@
 One implementation for both places it runs: the Commit, in process, right after the committed run (`pipeline.commit`), and the CPU
 replay of a deferred Commit's bundle (`pipeline.replay_bundle`, `row stage replay`).  What differs between them is passed in on the
 `ReplaySources`: the committed store to read (the committer, or the bundle's `commit.store_dump`), the weights provider (the live model, or the
-checkpoint opened against the committed weights root), the weights check and the VU export hook.
+checkpoint opened against the committed weights root), the weights check and the VU export hook.  In both places it's the prover's
+pre-flight check: it reads committed values in the clear, so it's no verifier's check.  A verifier checks the sampled proof
+blocks' proofs (`sampled_proofs.one_stage`).
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
 the COMMITTED bytes of the row's inputs (the Program's dataflow -> the manifest's member rule -> the binding map), evaluate the registered
@@ -375,6 +377,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
     from verity_vllm.commit import executed_prefix as EPX
+    from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
@@ -440,6 +443,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
         s.reads.update(SR.sampled_replay(_progs, _bm, _rd, _wp, plan=True, **_kw))
     sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
     sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
+    if _premises := DF.premises(r for v in _progs.values() for r in v["rows"]):
+        sr["premises"] = _premises                    # what an equal row leaves unshown, read beside the verdict (`c2_rules`)
     sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
                                        for k, v in _epr_r["requests"].items()} | {"lag": _epr_r["lag"], "ok": _epr_r["ok"], "problems": _epr_r["problems"][:3],
                                                                                   "facts_of_record": _ep_facts, "mechanism": ("population.not_executed_by_rule" if "executed_prefix" in _sr_kw else "none in this tree (rows past the stop sampled as ordinary strata)")}

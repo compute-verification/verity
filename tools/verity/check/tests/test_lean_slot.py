@@ -9,7 +9,7 @@ import os
 import signal
 import subprocess
 import sys
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,13 +28,16 @@ class Exec(Exception):
 
 @pytest.fixture
 def slots(tmp_path, monkeypatch):
-    """A node whose steward set `audit 2` and `check 2`, with no slot held and nobody asking from a check slot."""
+    """A node whose steward set `audit 2` and `check 2`, with no slot held and nobody asking from a check slot; its /proc is
+    `slots / "proc"` (`_proc_locks`)."""
     f = tmp_path / "lean-slots"
     f.write_text("# vy-nebius-1: 4, split for proofs and the lander\naudit 2\ncheck 2   # check's lean-audit step\n")
     monkeypatch.setattr(LS, "SLOTS", f)
     for v in (LS.HELD, "LEAN_SLOT_POOL", "CHECK_SLOT", "RESEARCH_LANE", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR", "RESEARCH_AGENT_URL",
               LS.SLOT.RUN_MEM_ENV, LS.SLOT.MIN_MEM_ENV):       # a run launched with --mem-gb sets them, and a slot's who names the GB
         monkeypatch.delenv(v, raising=False)
+    proc, holding = _proc_locks(tmp_path / "proc", {}), LS.SLOT.holding                  # wait's log and main read it too
+    monkeypatch.setattr(LS.SLOT, "holding", lambda lock, who, now, _proc=None: holding(lock, who, now, proc))
     return tmp_path
 
 
@@ -55,6 +58,23 @@ def _held(path: Path) -> bool:
         return True
     finally:
         os.close(fd)
+
+
+def _proc_locks(proc: Path, holders: dict[Path, int], started: datetime | None = None) -> Path:
+    """A /proc whose `locks` lists exactly these flocks, and with ``started``, when each holder started. The node's own is
+    read in pieces that other processes' locks shift meanwhile, so a lock held throughout can be missing from one reading."""
+    proc.mkdir(exist_ok=True)
+    rows = []
+    for i, (lock, pid) in enumerate(holders.items(), 1):
+        st = lock.stat()
+        rows.append(f"{i}: FLOCK  ADVISORY  WRITE {pid} {os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino} 0 EOF\n")
+        if started:
+            (proc / str(pid)).mkdir(exist_ok=True)
+            (proc / str(pid) / "stat").write_text(f"{pid} (python3) S {'0 ' * 18}0\n")      # starttime: 0 ticks after boot
+    (proc / "locks").write_text("".join(rows))
+    if started:
+        (proc / "stat").write_text(f"btime {int(started.timestamp())}\n")
+    return proc
 
 
 def test_n_requests_take_the_n_slots_and_the_next_waits_until_one_frees(slots):
@@ -102,6 +122,7 @@ def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots
     held = [_hold(slots / f"lean-audit-{i}.lock", {"pid": me, "run": f"r-{i}", "tree": "/src/740daff33", "by": by,
                                                     "took": "2026-10-03T16:40Z"})
             for i, by in enumerate(("zk-cz", "pc-interp"))]
+    _proc_locks(slots / "proc", {slots / f"lean-audit-{i}.lock": me for i in range(2)})
     lines, polls = [], []
 
     def sleep(_s):
@@ -116,10 +137,34 @@ def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots
                          f"every {LS.POLL_S} s ({LS.SLOTS})"] * 3                                # at once, then every 3 min
     assert heads[3] == f"lean-slot: Lean audit slot audit/1 of 2 ({LS.SLOTS})" and len(heads) == 4
     a0, a1 = lines[1:3]
-    assert a0.startswith(f"lean-slot:   audit/0  held by pid {me} since ")
-    assert "(run r-0, tree 740daff33, by zk-cz, slot taken 2026-10-03T16:40Z): " in a0 and "by pc-interp" in a1
+    assert a0.startswith(f"lean-slot:   audit/0  held by pid {me} since 2026-10-03T16:40Z (20 min) (run r-0, tree 740daff33, by zk-cz): ")
+    assert "by pc-interp" in a1
     who = json.loads((slots / "lean-audit-1.who").read_text())
-    assert who == {"pid": me, "run": "r-me", "tree": os.getcwd(), "by": None, "took": "2026-10-03T17:00Z"}
+    assert who == {"pid": me, "run": "r-me", "tree": os.getcwd(), "by": None, "joined": "2026-10-03T17:00:00Z",
+                   "took": "2026-10-03T17:00:00Z"}
+    os.close(held.pop())
+    os.close(got[2])
+
+
+def test_holders_a_minute_older_are_the_same_list_to_a_waiter(slots):
+    """A waiter repeats the list when it changes and every REPORT_EVERY polls, not each minute its holders' times grow: of a
+    holder whose record says when it took the slot and how long it waited, and of one with no record of the taking."""
+    me = os.getpid()
+    held = [_hold(slots / "lean-audit-0.lock", {"pid": me, "run": "r-0", "joined": "2026-10-03T16:30:00Z", "took": "2026-10-03T16:40:00Z"}),
+            _hold(slots / "lean-audit-1.lock", {"pid": me, "run": "r-1"})]
+    _proc_locks(slots / "proc", {slots / f"lean-audit-{i}.lock": me for i in range(2)}, NOW - timedelta(minutes=30))
+    lines, t = [], [NOW]
+
+    def sleep(_s):
+        t[0] += timedelta(minutes=1)
+        if t[0] == NOW + timedelta(minutes=3):
+            os.close(held.pop())
+
+    got = LS.wait("audit", now=lambda: t[0], sleep=sleep, log=lines.append)
+    assert got[:2] == ("audit", 1) and len(lines) == 4, "listed once in three polls, each a minute on"
+    assert lines[1].startswith(f"lean-slot:   audit/0  held by pid {me} since 2026-10-03T16:40Z (20 min; waited 10 min) (run r-0): ")
+    assert lines[2].startswith(f"lean-slot:   audit/1  held by pid {me} for a time not recorded (its process started ")
+    assert json.loads((slots / "lean-audit-1.who").read_text())["took"] == "2026-10-03T17:03:00Z"
     os.close(held.pop())
     os.close(got[2])
 
@@ -209,7 +254,7 @@ def test_a_pool_the_file_doesn_t_list_takes_from_any_or_is_refused_by_name(slots
         LS.main(["--fast", "--", "true"])
 
 
-def test_the_steward_can_change_n_while_requests_wait(slots):
+def test_a_waiter_takes_the_slot_the_steward_adds_and_a_held_slot_past_n_is_listed(slots):
     held = _hold(slots / "lean-audit-0.lock")
     LS.SLOTS.write_text("audit 1\n")
 
@@ -218,10 +263,12 @@ def test_the_steward_can_change_n_while_requests_wait(slots):
 
     got = LS.wait("audit", now=lambda: NOW, sleep=sleep, log=lambda s: None)
     assert got[:2] == ("audit", 1)
-    LS.SLOTS.write_text("audit 1\n")                             # lowered while slot 1 is held: still listed, past N
-    assert any(ln.startswith("audit/1 (past N)  held by pid") for ln in LS.status(LS.parse("audit 1"), slots, NOW))
+    _proc_locks(slots / "proc", {slots / "lean-audit-0.lock": 4242, slots / "lean-audit-1.lock": 4343})
+    lowered = LS.status(LS.parse("audit 1"), slots, NOW)                          # while slot 1 is held: listed, past N
+    assert lowered == ["audit/0  held by pid 4242: (gone)", "audit/1 (past N)  held by pid 4343: (gone)"]
     os.close(held)
     os.close(got[2])
+    _proc_locks(slots / "proc", {})
     assert LS.status(LS.parse("audit 1"), slots, NOW) == ["audit/0  free"]
 
 
@@ -237,10 +284,11 @@ def test_who_asked_is_the_lane_else_the_check_slot_s_holder(slots, monkeypatch, 
 
 
 def test_status_lists_each_pool_s_slots_and_waiters(slots, monkeypatch, capsys):
-    held = _hold(slots / "lean-check-1.lock", {"pid": os.getpid(), "run": "r-train", "by": "lander"})
+    held = _hold(slots / "lean-check-1.lock", {"pid": os.getpid(), "run": "r-train", "by": "lander", "took": "2026-10-03T16:40Z"})
+    _proc_locks(slots / "proc", {slots / "lean-check-1.lock": os.getpid()})
     lines = LS.status(LS.parse(LS.SLOTS.read_text()), slots, NOW)
     assert lines[:3] == ["audit/0  free", "audit/1  free", "check/0  free"]
-    assert lines[3].startswith(f"check/1  held by pid {os.getpid()} since ") and "(run r-train, by lander): " in lines[3]
+    assert lines[3].startswith(f"check/1  held by pid {os.getpid()} since 2026-10-03T16:40Z (20 min) (run r-train, by lander): ")
     assert LS.main(["--status"], now=lambda: NOW) == 0 and "check/1  held by pid" in capsys.readouterr().out
     os.close(held)
 
@@ -254,6 +302,7 @@ def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch
     waiter.write_text(json.dumps({"pid": 77, "run": "r-audit", "by": "proofs"}))
     wfd = _hold(waiter)
     past = _hold(slots / "lean-audit-2.lock")                                  # the steward lowered N while it ran
+    _proc_locks(slots / "proc", {slots / "lean-check-1.lock": os.getpid(), slots / "lean-audit-2.lock": os.getpid()})
     assert LS.main(["--status", "--json"], now=lambda: NOW) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["file"] == str(LS.SLOTS) and list(doc["pools"]) == ["audit", "check"]
@@ -263,6 +312,7 @@ def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch
     assert check["n"] == 2 and check["slots"][0] == {"index": 0, "past_n": False, "holder": None} and check["waiters"] == []
     h = check["slots"][1]["holder"]
     assert h["pid"] == os.getpid() and (h["run"], h["by"], h["took"]) == ("r-train", "lander", "2026-10-03T16:40Z")
+    assert h["held_minutes"] == 20 and "waited_minutes" not in h, "held since it took the slot; its record names no wait"
     for fd in (held, wfd, past):
         os.close(fd)
     monkeypatch.setattr(LS, "SLOTS", slots / "absent")

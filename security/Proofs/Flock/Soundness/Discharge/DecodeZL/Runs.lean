@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
-public import Proofs.Flock.Soundness.Discharge.PlaysCoin
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -19,6 +18,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin
 
 /-!
 # A rep's run, from its rounds' frames (`DecodesOn`'s message half)

@@ -8,9 +8,10 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-SPOT (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
-`verity/protocols/remote/verifier/`) composes it with PoUW (`verity/pouw/period/v1`) and the inference-only
-policy, and onsite (`verity/protocols/onsite/verifier/`) with the other subprotocols. Each composite's verifier runs
+SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,
+`verity/protocols/remote/verifier/`) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development executable
+`verity/remote/v0`, with PoUW's period `verity/pouw/period/v1`) and the inference-only policy, and onsite
+(`verity/protocols/onsite/verifier/`) with the other protocols. Each configuration's verifier runs
 `VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
 One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
 evidence name no `proofs`), and so is the recursive audit (`verity/sampled-proofs/recursive/v1`, `RECURSIVE_REFUSED` at
@@ -38,7 +39,7 @@ verifier draws the second stage on fresh coins (`Second`). The proof server then
 blocks, one session a template, and the verifier audits both stages.
 
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
-network certification, in the remote and onsite deployments) wrap SPOT[Flock] in the recursion layer and the ZK server
+network certification, in the remote and onsite configurations) wrap SPOT[Flock] in the recursion layer and the ZK server
 (`parties.PROTOCOL`). The network certifier is a layer of its own: it stamps each request's release order and bucket at
 ingress, and SPOT[Flock] reads that stamp as a certified input. Neither imports the other (`tests/test_boundaries.py`),
 and they compose only above both.
@@ -137,7 +138,10 @@ holds of that code (`SamplingDeploy.ksTwo_code`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
 A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
-1 when every replay block is closed.
+1 when every replay block is closed. S is at least the bits one replay block returns, which the verifier counts from its
+Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
+unit on 16-bit words of its own) and a two-stage registration carries (`WindowCommitmentRecord.returned`);
+`plancheck.two` refuses a cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`).
@@ -245,7 +249,7 @@ from verity.protocols.spot.costfit import fit
 ~~~
 
 - `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law` and
-  `Sequential`.
+  `TwoStage`.
   - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
     to before the audit record (the Python; a `Stream` runs each by the verifier, `verifier.check_public` and
     `verifier.check_verdicts`).
@@ -295,10 +299,14 @@ from verity.protocols.spot.costfit import fit
   with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per proof block, commitment, serve-time
-  `Commitment`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
+  `TensorCommit`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
-  and `work_law` registers it as `work:1`.
+  and `work_law` registers it as `work:1`. Two modes: `CostModel.commit_weight` is 0 (`PROVING_ONLY`, Lean's
+  `GranularityOptimum`) or w on the serve-time commitment, paid on every proof block, sampled or not. `Grain`,
+  `grain_costs` and `grain_optimum` price n equal proof blocks under the free-compute law (`Achievability`) or the
+  exfiltration law (`ExfiltrationOptimum`, `leak_count`, `loc_bits`) with the commitment term n·b·h, and `sqrt_grain`
+  is the work target's optimum √(wβhC/(oΛ)).
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
@@ -362,6 +370,13 @@ A program's weights, constants and tables are values: committed once, under hidi
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
   (`verity/protocols/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
+- **Reads.** Every port of a statement is either a registered port of the `--registered` file
+  (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows' root and
+  domain as the registration holds them, and the public header's must be the same (`bind_ports`; `Flock.RegBound`). No
+  port that reads a registered input of the verifier's own program is ever bound, and nor is any port the window's
+  registered circuit record declares registered for the statement's template (its registered reads, table reads and
+  openings' verdicts, outputs included: `RegBound.declaredOf`), which must be a registered port of the file. A file
+  that binds ports is verified with that record (`flock-verify --interface`), and refused without it.
 - **Served trees.** A served path registers each tree a proof block reads as a registered value. `served.register_served`
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.

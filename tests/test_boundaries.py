@@ -71,6 +71,9 @@ ALLOWED = {
     # commits in a `verity.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
+    # Ticks, spans and the monitoring period, stdlib only: the mirror of the code's `CoreProtocol.Period`, which a
+    # protocol's periods read rather than define.
+    "core.periods": set(),
     "core.claims": set(),
     # An auditor party's signed period roots and liveness records,
     # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
@@ -94,8 +97,8 @@ ALLOWED = {
     "core.protocols.spot": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # The wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's.
-    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
+    # deployment layer (`wipe_parties`), their messages the wire's. The wipe's monitoring periods are the core's.
+    "core.protocols.pous": {"core.periods", "core.claims", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
                             "ml.randomness", "core.protocols.reporting"},
     # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier; its party is a party of the
     # deployment layer, its messages the wire's.
@@ -135,6 +138,7 @@ PLACE: dict[str, tuple[str, ...]] = {
     "core.attest": ("commitments/attest",),
     "core.claims": ("claims",),
     "core.deploy": ("configuration/deploy",),
+    "core.periods": ("periods",),
     "core.devices.memory_challenger": ("protocols/pous/device",),
     "core.protocols.certifier": ("protocols/certifier/verifier",),
     "core.protocols.pous": ("protocols/pous/verifier", "protocols/pous/device/challenger_session.py",
@@ -192,7 +196,7 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "protocols/poub/prover", "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
 CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
-              "protocols/certifier/device", "protocols/flock/sigma", "protocols/inference_only/verifier",
+              "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/inference_only/verifier",
               "protocols/recursion", "protocols/remote", "protocols/tests")
 _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
@@ -986,8 +990,8 @@ def _path_loads(nodes: Iterable[ast.AST], reaches: Callable[[ast.AST], bool], lo
 
 
 def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str, list[str]]:
-    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` (and ``archive/``, which has rules of its
-    own) that imports a module of ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
+    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` that imports a module of
+    ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
     files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
@@ -998,7 +1002,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
     quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.startswith(("benchmarks/", "archive/"))}
+    ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
     constants: set[str] = set()
 

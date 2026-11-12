@@ -49,7 +49,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
   Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
   `lean-audit/record/`. No merge check accepts its result. It repairs a slot tree another run left mid-way: never
-  delete or copy one.
+  delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
+  (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
 - **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
   at `lean-audit/audit-TAG/lean-audit.json`.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
@@ -61,6 +62,10 @@ the lock's sections, each naming the docstring with the detail. This is the work
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`.
+- **A timeout at `whnf` reported at a theorem's first line** is a term's elaboration, not one tactic. A common cause:
+  an argument states at a definition (`saltOf o`) what the lemma asks at a structure's field (`c.salt o`), and the
+  unifier unfolds the definition and walks everything `o` holds. Prove the field is the function once
+  (`(code …).salt = saltOf := rfl`), rewrite with it, and hand the lemma each premise in the form it states.
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -117,6 +122,9 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 ## Before the PR
 
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
+- A PR that adds proof modules no guarantee reads yet sets its area's entry in the unread ratchet's file to the
+  check's count in its own diff, with no room (`unread.py`'s `ratchet`, whose failure names the file and prints the
+  entry), and lists in its body each module, the guarantee that will read it and the date that guarantee is listed by.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
@@ -133,15 +141,17 @@ Their history is in the decisions log.
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
 - Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
-  `assumptions_module`; any other premise is `domain` or `open` (the README's lock sections). A named `Prop` counted only as an
-  antecedent inside a premise an honest witness concludes is that premise's scope: `domain`, its `why` saying what it
-  restricts there, and no witness is asked to conclude it.
+  `assumptions_module`; any other premise is `domain` or `open`, and a `Prop` a statement only reads is `open` by its
+  entry's `why` (the README's lock sections). A named `Prop` counted only as an antecedent inside a premise an honest
+  witness concludes is that premise's scope: `domain`, its `why` saying what it restricts there, and no witness is
+  asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
   bounded by what the run carries. No assumed advantage bounds but PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtractedAt`, in the lock) and the sampled audits' per-finder bound below. An input
-  condition is a verifier refusal, not a hypothesis.
+  (`StraightLineExtraction`, `SeedExtractedAt`), SHA-512 as a PRF, `Hash.Assumptions.Sha512Prf`, whose advantage
+  `ε(t, Q)` is a parameter each bound that takes it adds per test (PoUS's `PeriodHeldSha512`), all in the lock, and
+  the sampled audits' per-finder bound below. An input condition is a verifier refusal, not a hypothesis.
 - One adversary class: every prover strategy τ, no budget class.
   `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision

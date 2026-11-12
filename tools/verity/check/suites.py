@@ -125,9 +125,10 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 `--jobs` is how many test processes run at once, by default the CPUs this process may use but at most one per
 `TEST_PROCESS_GB` of available memory. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
-kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run one at a
-time, beside the others, which run side by side on as few of the processes as let them finish about when the longest of them
-does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
+kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run in two
+lanes, the longest of them alone beside the rest one at a time, which split the processes and memory the parallel suites have in
+proportion to their last durations (`wide_lanes`); beside them the others run side by side on as few of the processes as let
+them finish about when the longest of them does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
 `--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of every
 lane would run a thread per core, and the node's load would reach several times its cores. Each test process also starts with
@@ -144,9 +145,9 @@ still running then has its process group killed and fails as timed out (`timed_o
 an hour, not its slot until the run's own timeout.
 
 `--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, at most
-half of it beside parallel suites (`serial_slots`), and the parallel suites share the rest, each with as many xdist workers as
-it holds at its `[tool.verity.tests] worker_gb`, what one of them may reach, else at `TEST_PROCESS_GB`; one that overlaps
-another waits for its workers' GB (`wide_gb`).
+half of it beside parallel suites (`serial_slots`), and the parallel suites' lanes split the rest (`wide_gb`, `wide_lanes`), each
+suite with as many xdist workers as its lane's share holds at its `[tool.verity.tests] worker_gb`, what one of them may reach,
+else at `TEST_PROCESS_GB`; one that overlaps another of its lane waits for its workers' GB.
 """
 from __future__ import annotations
 
@@ -208,15 +209,16 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
-              "verity-core-evaluate", "verity-core-firewall",
+              "verity-core-periods", "verity-core-evaluate", "verity-core-firewall",
               "verity/protocols/recursion/verifier/vstar_cli", "verity/protocols/flock/sigma", "verity-core-sampled-proofs",
               "verity/protocols/poub/verifier/lean",
               "verity/protocols/certifier/verifier/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "verity/protocols/pouw/verifier/lean/commit", "memory-challenger-lean", "benchmarks/pous",
+              "verity-pouw-check-difftest", "verity/protocols/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
+              "memory-challenger-lean", "benchmarks/pous",
               "verity/protocols/spot/verifier", "verity/protocols/certifier/verifier", "verity-pouw-benchmarks",
               "verity/definitions/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
-              "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm")
+              "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -2296,9 +2298,36 @@ def wide_gb(mem_gb: float | None, serial: int) -> float | None:
     return None if mem_gb is None else max(0.0, mem_gb - serial * TEST_PROCESS_GB)
 
 
+@dataclass
+class Lane:
+    """Parallel suites run one at a time, each on as many xdist workers as ``procs`` processes and ``gb`` hold (`wide_workers`)."""
+    suites: list[Suite]
+    procs: int
+    gb: float | None
+
+
+def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
+    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: each one's last duration, None when none is
+    recorded): the longest recorded in a lane of its own beside the rest, the two splitting both in proportion to their
+    recorded seconds, so that they end about together (a lane that ran past the other has the larger share the next run). One
+    lane for fewer than two suites, none recorded, a single process, or a share too small for one worker of a suite at its
+    `worker_gb`."""
+    timed = [i for i, x in enumerate(seconds) if x]
+    if len(wide) < 2 or not timed or procs < 2:
+        return [Lane(wide, procs, gb)]
+    i = max(timed, key=lambda j: seconds[j])
+    big, rest = wide[i], wide[:i] + wide[i + 1:]
+    f = seconds[i] / sum(seconds[j] for j in timed)
+    p = min(procs - 1, max(1, round(f * procs)))
+    g = None if gb is None else f * gb
+    if g is not None and (g < worker_gb(big) or gb - g < max(map(worker_gb, rest))):
+        return [Lane(wide, procs, gb)]
+    return [Lane([big], p, g), Lane(rest, procs - p, None if gb is None else gb - g)]
+
+
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: float | None = None) -> int:
     """How many of the ``jobs`` slots the suites that run in one process share (``seconds``: each one's last duration, None when
-    none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
+    none is recorded), the rest going to the ``parallel`` suites' lanes (`wide_lanes`). The fewest that let
     the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
     up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
     every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (a job sized
@@ -2583,12 +2612,18 @@ def main(argv: list[str] | None = None) -> int:
     wide = [t[0] for t in todo if t[0].parallel and spread > 1]
     one = [t[0] for t in todo if t[0] not in wide]
     r = serial_slots([last(s) for s in one], len(wide), jobs, a.mem_gb)
-    lanes = {False: Slots(r), True: Slots(jobs - r)}
-    turns = {s: lane.index(s) for lane in (wide, one) for s in lane}
-    shared_gb = wide_gb(a.mem_gb, r)
-    memory = Slots(int(shared_gb)) if shared_gb is not None else None
-    if wide and one:
-        print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes, beside {len(one)} others on {r}")
+    lanes = [Lane(one, r, None), *(wide_lanes(wide, [last(s) for s in wide], jobs - r, wide_gb(a.mem_gb, r)) if wide else [])]
+    lane_of = {s: k for k, lane in enumerate(lanes) for s in lane.suites}
+    procs = [Slots(lane.procs) for lane in lanes]
+    memory = [Slots(int(lane.gb)) if lane.gb is not None else None for lane in lanes]
+    turns = {s: lane.suites.index(s) for lane in lanes for s in lane.suites}
+    beside = f", beside {len(one)} others on {r}" if one else ""
+    if len(lanes) == 3:
+        big, rest = lanes[1:]
+        print(f"suites: {big.suites[0].name} on {big.procs} processes beside {len(rest.suites)} parallel suites one at a time on "
+              f"{rest.procs}{beside}")
+    elif wide and one:
+        print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes{beside}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(SETTINGS.get(MIN_S_ENV) or 0)
     per = {s: pt for s, pt in per.items() if any(t[0] is s for t in todo)}
     reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
@@ -2596,9 +2631,10 @@ def main(argv: list[str] | None = None) -> int:
     stopping = threading.Event()
 
     def start(s: Suite, paths: list[str]) -> Result:
-        n = wide_workers(s, jobs - r, shared_gb) if s in wide else 1
-        gb = min(int(shared_gb), math.ceil(n * worker_gb(s))) if memory and s in wide else 0
-        with lanes[s in wide].take(turns[s], n), (memory.take(turns[s], gb) if memory and s in wide else nullcontext()):
+        lane, mem = lanes[lane_of[s]], memory[lane_of[s]]
+        n = wide_workers(s, lane.procs, lane.gb) if s in wide else 1
+        gb = min(int(lane.gb), math.ceil(n * worker_gb(s))) if mem else 0
+        with procs[lane_of[s]].take(turns[s], n), (mem.take(turns[s], gb) if mem else nullcontext()):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args_of[s], logs, n, [m for m in meta if not covered(m, paths, cuts[s])],

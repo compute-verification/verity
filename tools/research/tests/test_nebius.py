@@ -1,6 +1,7 @@
 """The Nebius server (pods/nebius/): an ssh machine `research run --on` reaches by the host its registry file names, the lease loop
-stopping a non-RunPod machine through its own command, gpu-lease sharing the GPUs, launch.sh's rendered cloud-init and VM spec,
-and the weight list's pins.  No cloud: nothing here calls Nebius; the ssh probe is stubbed."""
+stopping a non-RunPod machine through its own command, which sends its stop without the null device, gpu-lease sharing the GPUs,
+launch.sh's rendered cloud-init and VM spec, and the weight list's pins.  No cloud: nothing here calls Nebius; the ssh probe and the
+CLI are stubbed."""
 from __future__ import annotations
 
 import base64
@@ -100,6 +101,50 @@ def test_an_ssh_entry_without_a_usable_host_is_refused(reg):
         remote.pod_target({"provider": "ssh", "name": "x"})
     with pytest.raises(remote.Refused, match="runpod or ssh"):
         remote.pod_target({"provider": "aws", "name": "x"})
+
+
+# ---- the stop command ----------------------------------------------------------------------------------------------------------------------
+
+VM = "computeinstance-e00fake"
+
+
+def stop_vm(tmp_path: Path, *args: str, can_read: bool = True) -> tuple[subprocess.CompletedProcess, list[str]]:
+    """vm_stop.sh on a machine whose null device cannot be opened (every `/dev/null` in it names a path whose parent is a regular
+    file), beside a metadata service that hands out a token and a `nebius` that prints as the CLI does; and the CLI's calls."""
+    bin_dir, tmp, calls = tmp_path / "bin", tmp_path / "tmp", tmp_path / "calls"
+    for d in (bin_dir, tmp):
+        d.mkdir(exist_ok=True)
+    (tmp_path / "file").write_text("")
+    script = tmp_path / "vy-nebius-stop"
+    script.write_text((NEBIUS / "vm_stop.sh").read_text().replace("/dev/null", str(tmp_path / "file" / "null")))
+    (bin_dir / "curl").write_text("#!/bin/sh\nprintf token-from-metadata\n")
+    (bin_dir / "nebius").write_text(f'#!/bin/sh\necho "$*" >> {calls}\necho "what the CLI prints"\n'
+                                    f'case "$*" in *"instance get"*) exit {0 if can_read else 1};; esac\n')
+    for shim in bin_dir.iterdir():
+        shim.chmod(0o755)
+    calls.unlink(missing_ok=True)
+    r = subprocess.run(["sh", str(script), *args], env={"PATH": f"{bin_dir}:/usr/bin:/bin", "TMPDIR": str(tmp)},
+                       capture_output=True, text=True)
+    assert list(tmp.iterdir()) == [], "the token's directory is removed however the script ends"
+    return r, calls.read_text().splitlines() if calls.exists() else []
+
+
+def test_the_stop_command_sends_the_stop_though_the_null_device_cannot_be_opened(tmp_path):
+    """Catches a redirect to the null device before the stop: under `set -e` it ends the script with the stop never sent, and the
+    machine runs on past its lease."""
+    r, calls = stop_vm(tmp_path, VM)
+    assert (r.returncode, r.stdout) == (0, f"TERMINATED {VM} (nebius compute instance stop)\n"), r.stderr
+    profile, stop = calls
+    assert re.search(rf" --token-file {re.escape(str(tmp_path / 'tmp'))}/[^/ ]+/token --skip-auth$", profile), "the token goes by file"
+    assert stop.endswith(f"compute instance stop --id {VM} --async") and "token-from-metadata" not in profile + stop
+
+
+def test_the_stop_commands_probe_says_whether_the_account_can_read_the_vm_though_the_null_device_cannot_be_opened(tmp_path):
+    r, calls = stop_vm(tmp_path, "--probe", VM)
+    assert (r.returncode, r.stdout) == (0, f"the attached service account can read {VM}\n"), r.stderr
+    assert calls[-1].endswith(f"compute instance get --id {VM}") and not any("instance stop" in c for c in calls)
+    r, calls = stop_vm(tmp_path, "--probe", VM, can_read=False)
+    assert r.returncode == 4 and r.stdout.startswith(f"the attached service account cannot read {VM}") and len(calls) == 2
 
 
 # ---- gpu-lease -----------------------------------------------------------------------------------------------------------------------------
@@ -858,6 +903,24 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
 
 
+def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nodes_deploy_gives_it():
+    """A node deploy.toml gives /etc/sysctl.d/61-vy-userns.conf has it from its first boot, from the same source, so a check
+    or a training job sandboxed there doesn't fail before the first install; a node it doesn't name gets none."""
+    manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
+    entry = next(f for f in manifest["file"] if f["path"] == "/etc/sysctl.d/61-vy-userns.conf")
+    src = (NEBIUS / "../../../../../.." / entry["src"]).read_bytes()
+    for name in ("vy-nebius-cpu-14", "vy-nebius-2", "vy-nebius-1", "vy-auditor-1"):
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME=name)
+        assert r.returncode == 0, r.stderr
+        ud = r.stdout.split("# instance create request (ids are placeholders)\n")[0]
+        assert len(ud.split("\n", 1)[1].rstrip("\n")) <= 32768, name
+        embedded = {m[0]: gzip.decompress(base64.b64decode(m[1]))
+                    for m in re.findall(r"  - path: (\S+)\n    permissions: '0644'\n    encoding: gz\+b64\n    content: (\S+)", ud)}
+        assert embedded.get(entry["path"]) == (src if name in entry["nodes"] else None), name
+    assert name not in entry["nodes"] and "vy-nebius-cpu-14" in entry["nodes"]
+    assert "sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf" in (NEBIUS / "vm_setup.sh").read_text()
+
+
 def test_a_vm_can_boot_on_another_ones_kept_data_disk():
     """n1's replacement may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
     r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",
@@ -867,6 +930,19 @@ def test_a_vm_can_boot_on_another_ones_kept_data_disk():
     assert json.loads(r.stdout.split("(ids are placeholders)\n")[1])["metadata"]["name"] == "vy-nebius-cpu-4"
     for script in ("launch.sh", "teardown.sh"):
         assert 'disk_id "$DATA_NAME"' in (NEBIUS / script).read_text() and '"$VM_NAME-data"' not in (NEBIUS / script).read_text()
+
+
+def test_a_data_disk_of_a_type_that_comes_in_93_gib_units_is_refused_at_another_size_before_anything_is_created():
+    """Nebius refuses such a data disk only after launch.sh has created the boot disk, which then stays behind, billed."""
+    cpu = {"NEBIUS_SSH_PUBKEY": "ssh-ed25519 dummy", "NEBIUS_VM_NAME": "vy-nebius-cpu-14", "NEBIUS_PLATFORM_PREFIX": "cpu-d3",
+           "NEBIUS_PRESET": "192vcpu-768gb"}
+    for kind in ("network_ssd_io_m3", "network_ssd_non_replicated"):
+        r = launch("--dry-run", NEBIUS_DATA_TYPE=kind, NEBIUS_DATA_GIB="1280", **cpu)
+        assert r.returncode == 1 and f"not a multiple of 93, the unit {kind} disks come in: 1209 is the next size down" in r.stderr
+        r = launch("--dry-run", NEBIUS_DATA_TYPE=kind, NEBIUS_DATA_GIB="1209", **cpu)
+        assert r.returncode == 0 and f"else created (1209 GiB {kind})" in r.stdout, r.stderr
+    r = launch("--dry-run", NEBIUS_DATA_TYPE="network_ssd", NEBIUS_DATA_GIB="1280", **cpu)
+    assert r.returncode == 0 and "else created (1280 GiB network_ssd)" in r.stdout, r.stderr
 
 
 @pytest.mark.parametrize("path, nodes", [("now", 2), ("quota", 2), ("reattach", 1)])

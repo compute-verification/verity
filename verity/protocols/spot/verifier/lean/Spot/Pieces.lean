@@ -19,7 +19,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   `Produced.opened`, `Produced.shared`);
 * `known_port`: the root and opening of a port the verifier registers at known content (`Produced.known`);
 * `check_draw`, `check_proved`: the sample's checks, each `{"ok", "codes", "detail"}`;
-* `draw`: the sample from given bytes of the challenger's coins;
+* `draw`: the sample from given bytes of the challenger's coins; `ran_out`: whether that sample runs out of them;
 * `select`: the challenger's sample from a Spec's selection rule on, over a program and query, from given bytes of its
   coins, with the number of bytes it read (`Select.select`);
 * `select_second`: a two-stage rule's second stage, `ks[t]` proof blocks of each cell (a sampled replay block's
@@ -33,10 +33,14 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `replay_wires`: the design's wires, from the replay block's Definition in a program (`SecondStage.replayWires`);
 * `replay_rows`: the rows the design's links' and wires' units read, from the replay block's Definition in a program
   (`SecondStage.replayRows`);
+* `replay_returned`: the bits a replay block returns, from its Definition in a program
+  (`SecondStage.replayReturned`);
 * `second_schedule`: why round 2 refuses the boundary record's schedule, and each replay block's request and positions
   under it (`Schedule.failure`, `Schedule.at?`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
+* `pop_order`: the run's `population-order` check as it runs (`Slots.popOk`, from the ranges: `Slots.popOkRanges`) and
+  as `popOk` states it, off the layout's population;
 * `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
   more (`OneStageZk.fitsWhy`, `OneStageZk.drawFitsWhy`), which v2 refuses at `2^64`;
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
@@ -90,6 +94,11 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
   wired row's public string its writer's) and on the reference's entries whose unit is sampled.
+* `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
+  which the per-member form holds each statement's file to.
+* `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
+  link points differ between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the per-member form's registration
+  refuses.
 * `history_root`, `history_check`, `history_order`, `history_strings`, `history_roots`: a history table
   (`HistoryTable`): its domain, placeholder and root over its writers' `b ‖ c` at a capacity, the registered root held
   to that root, each position's source from the program's runs, the strings at those sources from the writer's members'
@@ -119,9 +128,12 @@ public import Spot.ChallengerInnerTrees
 public import Spot.Produced
 public import Spot.HiddenDraw
 public import Spot.PartitionRef
+public import Spot.Returned
 public import Spot.WiresDrawn
 public import Spot.OneStageZk
 public import Spot.HistoryTable
+public import Spot.PublicUnits
+public import Spot.LinkPoints
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -316,6 +328,14 @@ def draw (j : Json) : V Json := do
   let some n := nat? (getD j "population") | throw "population is not a natural number"
   Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
 
+/-- `draw`'s input to `{"ran_out"}`: whether that sample runs out of the source's bytes (`Draw.ranOutOf`,
+`coins.ran_out`); refused, as `draw`, where it refuses otherwise. -/
+def ranOut (j : Json) : V Json := do
+  if !(getD j "law" matches .obj _) then throw "law is not an object"
+  let some n := nat? (getD j "population") | throw "population is not a natural number"
+  let b ← Draw.ranOutOf (Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw")))
+  return Json.mkObj [("ran_out", Json.bool b)]
+
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's sample
 (`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
 law's `subset:k`), from the source's bytes,
@@ -336,6 +356,13 @@ def select (j : Json) : V Json := do
   let rule ← Select.resolve rule p (getD j "query")
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
+
+/-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of Flock's law of the challenger's
+sample, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
+def design (j : Json) : V Json := do
+  let d ← Flock.Draw.UnitDraw.ofJson (getD (← select j) "draw")
+  let some design := Core.SamplingDesign.ofFlock d.law | throw "the draw's law has no sampling design"
+  return Json.mkObj [("design", design.toJson)]
 
 /-- `{"sample", "ns", "ks", "source"}` to `{"draw", "read"}`: a two-stage rule's second stage (`Select.selectSecond`)
 over the proof blocks of the replay sample `sample`, `ns[t]` of template `t` in each replay block, its cell, and `ks[t]`
@@ -367,6 +394,20 @@ def slots (j : Json) : V Json := do
   let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun v => Json.arr #[Lean.toJson v, Lean.toJson (0 : Nat)]))]
+
+/-- `{"program", "query", "population"}` to `{"ranges", "layout"}`: `Slots.popOk`, which runs as `Slots.popOkRanges`,
+and `popOk`'s own statement read off `Slots.layout`'s population; refused where the program, query or population isn't
+one. -/
+def popOrder (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .obj _ := getD j "query" | throw "query is not an object"
+  let some n := (getD j "population").getNat?.toOption | throw "population is not a natural number"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let q := getD j "query"
+  let layout : Bool := match Slots.layout p q with
+    | .error _ => false
+    | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
+  return Json.mkObj [("ranges", Lean.toJson (Slots.popOk p q n)), ("layout", Lean.toJson layout)]
 
 /-- `{"draw", "proved_units", "instances"}`, a sample whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do
@@ -790,6 +831,16 @@ def replayRows (j : Json) : V Json := do
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   return Json.arr ((SecondStage.replayRows p.prog key).map SecondStage.Rows.toJson)
 
+/-- `second_stage.replay_returned`'s input to the bits a replay block returns (`SecondStage.replayReturned`): a program
+object and the replay block's descriptor id in it (`replay`); null for none. -/
+def replayReturned (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .str key := getD j "replay" | throw "replay is not a string"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  return match SecondStage.replayReturned p.prog key with
+    | some n => Lean.toJson n
+    | none => .null
+
 /-- `schedule.failure` and `schedule.at`'s input to the boundary record's schedule (`Schedule.failure`, `Schedule.at?`):
 a record and replay blocks (`blocks`), to `{"failure", "at"}`: why round 2 refuses the record's schedule, null for
 none, and each block's `[request, a, b]` under it, null where no run holds the block or the record commits no list of
@@ -840,18 +891,21 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
    ("fanout", fanout), ("registration", registration),
    ("registered", registered),
-   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
+   ("select", select), ("design", design), ("slots", slots),
    ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
-   ("replay_wires", replayWires), ("replay_rows", replayRows), ("second_schedule", secondSchedule),
+   ("replay_wires", replayWires), ("replay_rows", replayRows), ("replay_returned", replayReturned),
+   ("second_schedule", secondSchedule),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
    ("fits", fits),
+   ("pop_order", popOrder),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
@@ -868,6 +922,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_inner_trees", Challenger.innerTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
+   ("public_units", PublicUnits.piece),
+   ("link_points", LinkPoints.piece),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),
    ("history_order", HistoryTable.orderPiece), ("history_strings", HistoryTable.stringsPiece),
    ("history_roots", HistoryTable.rootsPiece)]

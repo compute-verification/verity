@@ -19,7 +19,7 @@ uv run tools/verity/check/suites.py benchmarks/torch_gpu/DIR
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through
 `gpu-lease`, and an `OUT` directory for what it writes. Some build on a CPU node first, into a ship the GPU run unpacks:
-those builds (`attn_bf16`, `s8_linear`, `units` and `p2_stage`) source `ship.sh`, the one statement of a
+those builds (`attn_bf16`, `s8_linear` and `p2_stage`) source `ship.sh`, the one statement of a
 ship's toolkit, cubin flags and layout (`toolchain.txt`, `source.txt`, `MANIFEST.sha256`). nvcc's PTX can depend on its
 heap layout, on the lengths of the paths it reads and on how long its passes take, so they build with address randomization
 off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
@@ -45,9 +45,7 @@ doesn't follow its place either, and nothing holds a rebuild to the same bytes f
 - `p2_stage/`: the store's load: P2's decode of the encoded weights store into GPU memory, with PoUB's
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
-  The served path and `archive/examples/h200` load through it.
-- `units/`: the H200 demo's non-matmul proof blocks, each word for word its CPU twin. `session.sh` sweeps their
-  helpers over every operand word and holds each kernel's words to its twin's, on an H200 or an RTX PRO 6000.
+  The served path loads through it.
 - `attn_bf16/`: attention's QK^T and PV, a fast path and a reference path, each word `GemmCoordinate_v2`'s. `run.sh`
   runs every case under poison in each tiling of both paths, on an H200.
 - `s8_linear/`: the exact W8A8 linear that `ScaledMmS8Coordinate_v1` defines, three backends under one gate.
@@ -66,7 +64,7 @@ without a word to another directory.
 | `p2_stage/stage.py` | the store's load on the GPU: `EncodedRows` (`decode_into`, `check`), `decode_matrix`, and the modules it binds as `L` (`layout.py`) and `gpu` | `adapters/vllm/verity_vllm/protocols/pous.py`, as the package `p2_stage`; `benchmarks/pous/p2_v1/bandwidth.py` |
 | `p2_stage/layout.py` | `StoreLayout`, `open_store`, `segment_rows`, `R`, `ROW` | the same two |
 | `p2_stage/full.py` | `Segments`, `sync`, `DEVICE` | `benchmarks/pous/p2_v1/bandwidth.py` |
-| `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_case.sh` and `served_piece.sh`; `adapters/vllm/tests/protocols/pous_gpu.sh` |
+| `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_piece.sh`; `adapters/vllm/tests/protocols/pous_gpu.sh` |
 | `benchmarks/torch_gpu/p2_stage/served_weights.py` | the seeded weights' generator, by its module name `benchmarks.torch_gpu.p2_stage.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `verity/protocols/pous/prover/p2/p2_store/store.py` |
 | `commit_slots/slots.py` | the commit call's layout, domains and trees: `CommitShape`, `Group`, `Part`, `Row`, `ROW_SCHEMA`, `layout_digest`, `row_salts`, `slot_domain`, `step_domain`, `unit_domain`, `step_tree` | `benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py` |
 

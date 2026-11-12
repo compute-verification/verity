@@ -9,7 +9,6 @@ public import Proofs.Flock.EndToEndHidden
 public import Proofs.Flock.EndToEnd.Period
 public import Proofs.Flock.EndToEnd.Blocks
 public import Proofs.Flock.EndToEnd.Carry
-public import Proofs.Flock.EndToEnd.Joint
 public import Proofs.Flock.EndToEnd.Joint.MT.Bound
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 public import Proofs.Flock.EndToEndRegistered
@@ -41,7 +40,6 @@ public import Proofs.Flock.SessionLoop.SampledAuditNontrivial
 public import Proofs.Flock.Recursive
 public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3
-public import Proofs.Flock.Claims.Complete
 public import Proofs.Flock.Claims.Complete.ZkTables
 public import Proofs.Flock.VBridge
 public import Proofs.Flock.Sampled
@@ -54,6 +52,8 @@ public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbersTables
+public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.Refused
@@ -70,10 +70,13 @@ public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
 public import Proofs.Flock.SpotFlock.FirstHitClassCaps
+public import Proofs.Flock.SpotFlock.OffClassAt
 public import Proofs.Flock.SpotFlock.OpensClass
 public import Proofs.Flock.SpotFlock.OpensWhole
 public import Proofs.Flock.SpotFlock.RevealAt
 public import Proofs.Flock.SpotFlock.SlotsAt
+public import Proofs.Flock.SpotFlock.WiredAt
+public import Proofs.Flock.SpotFlock.WireMap
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.Format
 public import Proofs.Flock.SpotFlock.Reads
@@ -104,6 +107,11 @@ public import Proofs.Flock.Bridge.TransportsRefs
 public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
 public import Proofs.Flock.ZkAny
+public import Proofs.Flock.Claims.Complete.Zk
+public import Proofs.Flock.EndToEnd.Joint.Bound
+public import Proofs.Flock.Soundness.Audit.StratifiedProj
+public import Proofs.Flock.Claims.Complete
+public import Proofs.Flock.EndToEnd.Joint
 
 /-! Flock's proofs: the verifier's, level3's and soundness's. -/
 

@@ -1,6 +1,6 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`archive/examples/h200/e2e_h200/plan.py`'s
-`Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
+commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (the `Map` of the H200 demo's `plan.py`, in history
+at `5c095bb4ab70`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 
 **Harm.** A unit's work is its subcircuit's own ANDs (`Candidate.ands`, not its rows' openings), every subcircuit alike,
@@ -82,8 +82,6 @@ BUDGET_SHARE = 0.01
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
 TILE = "PouwH1LaneZy_v2"
-#: Flock's largest statement (it refuses k_log 28)
-K_LOG_MAX = 27
 #: M3's live sample: a uniform subset of this many of one block's units
 M3_UNITS = 8
 #: PoUW's proof block: J10-R's per-call lane unit `PouwH1LaneZy_v2` over

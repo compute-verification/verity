@@ -22,6 +22,7 @@ from verity.protocols.certifier.verifier import active as A, compile_slice as CS
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
+from verity_vllm.engine.step_trace import scheduler_config
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
@@ -146,7 +147,8 @@ def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifi
 
 
 @pytest.mark.parametrize("precision, parts, scope", [("verity_int8", ("linears",), "linears"),
-                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None)])
+                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None),
+                                                     ("bfloat16", ("linears",), None)])
 def test_every_precision_registers_the_verity_int8_method_before_the_engine(precision, parts, scope):
     got: list = []
     assert so.register_int8(precision, got.append) == scope
@@ -394,13 +396,15 @@ class Tokenizer:
 
 
 class Serving:
-    """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it."""
+    """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it; ``runner`` the model runner
+    (a `Runner`, by default a fresh one)."""
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, pool: tuple[Any, int] | None = None, no_slice: str | None = None) -> None:
-        self.runner = Runner()
+                 arm: Any = None, runner: Runner | None = None, pool: tuple[Any, int] | None = None,
+                 no_slice: str | None = None) -> None:
+        self.runner = runner if runner is not None else Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,
@@ -830,7 +834,7 @@ HOT = dict(CERTIFIER_BODY, temperature=0.8, user="u-hot")
 
 def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_derived_seed_and_a_seeded_one_its_own(tmp_path):
     """The derived seed is the one `engine.served_seed.derived` makes of the coin the request's window names and its user,
-    never `DEFAULT_SEED` or one the engine draws."""
+    never `DEFAULT_SEED` or one of the engine's own."""
     with Serving(tmp_path) as s:
         serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6], seed=1234), dict(HOT, prompt=[7, 8])])
     by_rule = {r["ingress"]["seed_rule"]: r for r in records(tmp_path, "requests.jsonl")}
@@ -845,12 +849,12 @@ def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_deri
     assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 
-def test_each_busy_period_draws_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
+def test_each_busy_period_flips_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
     """One user's two requests, each into an idle engine, are seeded under two coins, so differently; the windows
     ``--window-steps`` cuts from a request's run keep the coin of the one before them, so every window holding one of its
     rows names the coin it was seeded under."""
-    draws = iter(range(1, 100))
-    monkeypatch.setattr(served_seed, "in_process", lambda: (next(draws).to_bytes(64, "big"), "test"))
+    flips = iter(range(1, 100))
+    monkeypatch.setattr(served_seed, "in_process", lambda: (next(flips).to_bytes(64, "big"), "test"))
     with Serving(tmp_path, window_steps=2) as s:
         for _ in range(2):
             assert s.post("/v1/completions", dict(HOT, max_tokens=5, min_tokens=5))[0] == 200
@@ -865,7 +869,7 @@ def test_each_busy_period_draws_a_fresh_seed_coin_that_every_window_cut_from_it_
 
 
 def test_a_committed_seed_other_than_the_one_admitted_fails(tmp_path):
-    """The engine sampling under a seed of its own (vLLM's drawn one) rather than the default or the derived one fails the
+    """The engine sampling under a seed of its own (vLLM's, from ``np.random``) rather than the default or the derived one fails the
     request's check, naming the seed it committed."""
     for i, body in enumerate((CERTIFIER_BODY, HOT)):
         (tmp_path / str(i)).mkdir()
@@ -1009,6 +1013,29 @@ def test_the_served_statics_refuse_an_output_length_past_a_length_slot():
                                                                        "IW": 6})["L"] == 2**32 - 1
 
 
+def test_a_serve_launched_with_the_context_limit_left_to_vllm_gets_its_served_statics():
+    """What a committing serve hands the binding at start, the step trace's config of its scheduler, for a launch at
+    ``--max-model-len -1``: ``max_model_len_auto`` beside the limit vLLM fitted. It binds, and to the statics of a
+    launch that stated the fitted limit."""
+    class Scheduler(SimpleNamespace):
+        pass
+
+    def config(launch: int) -> dict:
+        return scheduler_config(Scheduler(
+            scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=8, enable_chunked_prefill=True,
+                                             long_prefill_token_threshold=0, max_num_partial_prefills=1, policy="fcfs",
+                                             async_scheduling=False),
+            cache_config=SimpleNamespace(block_size=16, enable_prefix_caching=True, num_gpu_blocks=64, cache_dtype="auto"),
+            max_model_len=1008, vllm_config=SimpleNamespace(speculative_config=None, model_config=SimpleNamespace(
+                max_model_len=1008, original_max_model_len=launch))))
+
+    size_class = {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6}
+    auto, stated = config(-1), config(1008)
+    assert auto == {**stated, "max_model_len_auto": True}
+    assert sc.served_statics(auto, size_class) == sc.served_statics(stated, size_class)
+    assert sc.served_statics(auto, size_class)["L"] == 1008
+
+
 def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--max-num-seqs", "8", "--window-steps", "16", *more],
@@ -1053,7 +1080,9 @@ def test_the_pool_row_setting_is_a_token_width_and_needs_the_prefix_cache(tmp_pa
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more], environ={})
 
-    ninja = lambda _: "/v/bin/ninja"  # noqa: E731
+    def ninja(_: str) -> str:
+        return "/v/bin/ninja"
+
     so.preflight(opts(), which=ninja)
     monkeypatch.setenv("VERITY_POOL_ROW", "18")
     with pytest.raises(cli.UsageError, match="needs --prefix-caching and the Commit"):

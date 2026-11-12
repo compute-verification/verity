@@ -75,6 +75,12 @@ is a run Input whose rows a later check ties to the registrations that computed 
 a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes (`R8-tied`),
 and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
 acceptance rests on that later check.
+
+A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
+proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
+sampling design the sample runs on, over the samples that end, give different link points, a sampling design it can't sample on, or one no sample of
+which ends (`link-points`, `linkRefused`): some sample ends, a sample that ends gives each member one count, and one that
+runs out of coins fails the window (`OneStageZk.RAN_OUT`).
 -/
 module
 
@@ -82,6 +88,7 @@ public import Flock.WindowRecord
 public import Spot.Draw
 public import Spot.Registered
 public import Spot.Supplied
+public import Spot.LinkPoints
 public import Std.Data.HashMap
 
 @[expose] public section
@@ -201,6 +208,9 @@ structure Verifier where
   /-- run Inputs, by parameter name, whose rows a later check ties to the registrations that computed them, which R8 lets
   through though several proof blocks read them, on that later check alone (`tiedThrough`) -/
   tied : Array String := #[]
+  /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, whose
+  link points `link-points` holds to one count (`linkRefused`); none in the one-statement form -/
+  members : Array (Array (Nat × Nat) × Nat) := #[]
 
 /-- The programs the declarations declare for `day`, in the log's order. -/
 def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
@@ -498,6 +508,16 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
+/-- `registration.link_refused`: the verifier names members, and the sampling design the sample runs on doesn't derive, no sample under
+it ends, or some member's fewest and most sampled proof blocks under it, over the samples that end, give different link points
+(`LinkPoints.refused`). -/
+def linkRefused (v : Verifier) : Bool :=
+  !v.members.isEmpty &&
+    match LinkPoints.lawOf v.program v.query v.law v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
+    | .ok rs => !rs.isEmpty
+    | .error _ => true
+
+
 /-- The codes `c`, with `code` added unless `ok`. It names `c` once, where `if ok then c else addCode c code` names it
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
@@ -520,7 +540,8 @@ def r8Codes (v : Verifier) (c : Array String) : Array String :=
   kept (Partition.readAlone v.program v.query (heldGates v ++ tiedGates v)) (kept (tiedBad v).isEmpty c "R8-tied")
     "R8-shared-input"
 
-/-- `registration.check`'s failure codes, R1–R8 in order: empty when the record holds. -/
+/-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
+holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
@@ -590,7 +611,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (poolChained rec v) c "R7-pool-chain"
   -- R8
   c := r8Codes v c
-  return c
+  return if linkRefused v then addCode c "link-points" else c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
 before it and every verifier port with every root. The reference `check` is proved equal to (`check_eq_checkRef`). -/
@@ -664,7 +685,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (poolChained rec v) c "R7-pool-chain"
   -- R8
   c := r8Codes v c
-  return c
+  return if linkRefused v then addCode c "link-points" else c
 
 /-! ## `check` is `checkRef` -/
 
@@ -757,9 +778,12 @@ theorem portIndex_find (roots : Array Json) (p : String) :
     rw [(inv_portIndex roots).2.2 k, ← Array.find?_toList, Array.toList_reverse]
     congr 1; funext r; rw [jeq_of_canon hp]; rfl
 
-set_option maxHeartbeats 400000 in -- its `simp` unfolds each join point of both checks into both of its branches
+-- `simp` unfolds both whole bodies, R2's declared day and the link-points step included, and each join point of
+-- both checks into both of its branches. The link-points step names `c` in both of its branches, so the steps before
+-- it are rewritten twice, past `simp`'s default step limit
+set_option maxHeartbeats 1600000 in
 /-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
-  simp (maxSteps := 400000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
+  simp (maxSteps := 800000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
 
 end Spot.Registration

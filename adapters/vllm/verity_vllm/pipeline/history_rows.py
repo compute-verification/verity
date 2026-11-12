@@ -17,9 +17,9 @@ indexer layer's positions), a writer unit's its latent row's. A table's position
 in step and row order, appended from the table's edge (`append`): every latent row of the window is appended, read in this
 window or not, since a later window's long rows read it. The window declares each table it appends to or reads as an
 `interface.History` (`declarations`): its runs are the positions it holds from the request's earlier windows (a held run),
-then this window's writer units, from which the verifier recomputes its root (`ml.windows.history.pins`). A read template's
-units go table by table, in the order the tables first appear, then row by row, then j, so a table's declarations are three
-a run, and a member holds one table's units (`cut`).
+then this window's writer units. The verifier pins the table at its registered root and holds that root to the one it
+computes (`verity.commitments.windows.history`). A read template's units go table by table, in the order the tables first
+appear, then row by row, then j, so a table's declarations are three a run, and a member holds one table's units (`cut`).
 
 Not wired yet: ``in0`` is element j of the row's ``tok``, its index's output, and a wire takes a writer's whole output row,
 so a read's key is a free input until each of the index's positions is a row of its own; and ``o0`` is the reads' output,
@@ -202,7 +202,7 @@ def append(plan: Plan, ms: Sequence[CS.Member], got: Sequence[tuple[dict[str, An
 def strings_of(plan: Plan, ms: Sequence[CS.Member], histories: H.Histories,
                at: Mapping[tuple[str, int], range]) -> tuple[dict[str, bytes], dict[str, bytes]]:
     """Each writer member's ``o0`` salts and strings, its units' rows' at their positions in their tables (``at``, `append`'s),
-    by port: what `ml.windows.rows.commit` takes as ``salts_of`` and ``strings_of``."""
+    by port: what `verity.commitments.windows.rows.commit` takes as ``salts_of`` and ``strings_of``."""
     where: dict[tuple[str, int], tuple[tuple[str, int], int]] = {}
     for k, us in plan.written.items():
         for (t, u), pos in zip(us, at[k], strict=True):
@@ -258,7 +258,7 @@ def declarations(plan: Plan, histories: H.Histories, edges: Mapping[tuple[str, i
         for at, n, k in runs:
             nm = H.name(*k)
             roots += [IF.TableRead(t, "in1", nm, "root", at, n), IF.TableRead(t, "in2", nm, "domain", at, n)]
-            openings.append(IF.Opening(t, nm, "in0", ("in3", "in4", "in5"), "o1", at, n))
+            openings.append(IF.TableOpening(t, nm, "in0", ("in3", "in4", "in5"), "o1", at, n))
     return IF.Registered({}, (), (), tuple(roots), tuple(openings), histories=tuple(hs))
 
 

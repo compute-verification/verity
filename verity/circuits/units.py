@@ -135,7 +135,7 @@ class Activation:
 
 
 @dataclass(frozen=True)
-class Placement:
+class UnitPosition:
     """Unit ``index`` of the partition: root-body node ``node`` (a Call), batch member ``member`` (template queries), and
     ``path``, the (body node, member) steps from the Call's Definition down to the flat Definition holding the unit."""
 
@@ -236,11 +236,11 @@ class PartitionUnits:
             self._counts[fn.id] = got
         return got
 
-    def __iter__(self) -> Iterator[Placement]:
+    def __iter__(self) -> Iterator[UnitPosition]:
         i = 0
         for k, m, fn, cut in self._calls():
             for path, uc in self._expand(cut, fn):
-                yield Placement(i, k, m, path, uc)
+                yield UnitPosition(i, k, m, path, uc)
                 i += 1
 
     def classes(self) -> dict[str, UnitClass]:
@@ -260,4 +260,4 @@ class PartitionUnits:
         return {s: UnitClass(s, *self._reps[s], n) for s, n in total.items()}
 
 
-__all__ = ["shape_digest", "ProofBlockCircuit", "Activation", "Placement", "UnitClass", "PartitionUnits"]
+__all__ = ["shape_digest", "ProofBlockCircuit", "Activation", "UnitPosition", "UnitClass", "PartitionUnits"]

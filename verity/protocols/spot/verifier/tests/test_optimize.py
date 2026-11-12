@@ -14,24 +14,25 @@ from dataclasses import replace
 from fractions import Fraction
 from itertools import combinations, product
 from decimal import Decimal, localcontext
-from math import ceil, comb, exp, fsum, lgamma, log, log1p, log2, prod, ulp
+from math import ceil, comb, fsum, inf, lgamma, log, log1p, log2, prod, ulp
 from pathlib import Path
 
 import pytest
 
 from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.spot.verifier.one_stage.draw import work_k, work_table
-from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Candidate,
-                                                           Cell, Commitment, CostModel, Grain, Objective, ReplayGrain,
+from verity.protocols.spot.optimize import (HM96_ANDS, KAPPAS, PROVING_ONLY, SESSIONS, SHA512_ANDS, SHA512_ROWS, Candidate,
+                                                           Cell, TensorCommit, CostModel, Grain, Objective, ReplayGrain,
                                                            MISS_TERMS, TemplateCost, _hit, _log_miss, _miss, certify, density_bound, density_exact,
                                                            for_budget, for_target, frontier,
                                                            grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
                                                            ln_upper, loc_bits, max_harm, max_harm_check, met_replay,
                                                            needs_benchmark, overlaps, perturb, pinned_ands,
-                                                           OVERFLOW, registration_cap, replay_cost, row_ands,
+                                                           registration_count, registration_sample, replay_cost, row_ands,
                                                            sensitivity, sqrt_grain, template_cost, touched,
-                                                           two_stage_design, two_stage_exfil, two_stage_price,
-                                                           two_stage_statements, weigh, work_law)
+                                                           two_stage_counts, two_stage_design, two_stage_exfil,
+                                                           two_stage_price, two_stage_statements, two_stage_strata, weigh,
+                                                           work_law)
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
@@ -242,18 +243,14 @@ def test_row_ands_follows_hm96_table():
 
 
 def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
-    """`SHA512_ROWS` is `Sha512Compress_v1`'s circuit-check pin, the same as the opening unit's `RowCompress_v1`, and both
-    are `compress_gadget`'s AND rows on a `forms.Circuit`, its committed copies included, which `SHA512_ANDS`, the
-    ripple-carry model's count, leaves out."""
+    """`SHA512_ROWS` is `Sha512Compress_v1`'s circuit-check pin, which is `compress_gadget`'s AND rows on a
+    `forms.Circuit`, its committed copies included, which `SHA512_ANDS`, the ripple-carry model's count, leaves out."""
     from verity.circuits.boolean.forms import Circuit
     from verity.commitments import gates
     from verity.commitments.gates.sha512 import compress_gadget
 
-    pins = {name: json.loads((Path(gates.__file__).parents[3] / where / f"{name}.circuit-check.json").read_text())["definitions"]
-            for name, where in (("lms", "verity/commitments/gates"), ("block_check", "verity/protocols/poub/verifier/commitments/gates"))}
-    assert SHA512_ROWS == pinned_ands("Sha512Compress_v1") == pins["block_check"]["RowCompress_v1"]["and"]
-    assert SHA512_ROWS == pins["lms"]["Sha512Compress_v1"]["and"] == pins["block_check"]["RowCompress_v1"]["and"]
-    assert pins["lms"]["Sha512Compress_v1"]["type"] == pins["block_check"]["RowCompress_v1"]["type"]
+    pins = json.loads(Path(gates.__file__).with_name("lms.circuit-check.json").read_text())["definitions"]
+    assert SHA512_ROWS == pinned_ands("Sha512Compress_v1") == pins["Sha512Compress_v1"]["and"]
     C = Circuit()
     out = compress_gadget(C, [C.input(f"cv{i}", 64) for i in range(8)], [C.input(f"m{i}", 64) for i in range(16)])
     C.output("cv", [b for w in out for b in w])
@@ -382,12 +379,12 @@ def test_the_commitments_weight_moves_the_switch_and_proving_only_leaves_them_ou
         CostModel(commit_weight=-1.0)
 
 
-SERVE = (Commitment("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
-         Commitment("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
-         Commitment("commit", "y", 500.0),
-         Commitment("commit", "kv", 400.0, chain=4.0),
-         Commitment("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
-         Commitment("remote", "receipts", 0.0, cost=7.0))
+SERVE = (TensorCommit("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
+         TensorCommit("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
+         TensorCommit("commit", "y", 500.0),
+         TensorCommit("commit", "kv", 400.0, chain=4.0),
+         TensorCommit("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
+         TensorCommit("remote", "receipts", 0.0, cost=7.0))
 
 
 def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(batched):
@@ -409,7 +406,7 @@ def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(ba
     assert for_budget(moved, fixed * 0.999, candidates=cands, costs=served, objective=objective) is None
     assert perturb(served, "commit", 2.0).serve_cost() == pytest.approx(2 * fixed)
     with pytest.raises(ValueError, match="non-negative"):
-        Commitment("commit", "x", -1.0)
+        TensorCommit("commit", "x", -1.0)
     unweighed = frontier(cands, replace(served, commit_weight=PROVING_ONLY), objective, grid=41)
     assert [dict(p.sizes) for p in unweighed] == [dict(p.sizes) for p in plans]
     for p, q in zip(unweighed, plans):
@@ -697,69 +694,89 @@ def test_a_sampled_replay_block_proves_each_stratums_k_in_its_types_statements()
     assert two_stage_price(cells, {0: 1}) == pytest.approx((1.0, 0.8 + 0.6, 1.4 + 8.0 + 1.2))
 
 
-def test_a_registrations_cap_is_past_its_sample_but_for_the_overflow():
-    """The registration's public cap K0: the binomial count it samples is past it with probability at most `OVERFLOW`
-    (summed exactly), at least one, at most the registration, and within a few of the least such cap."""
-    def tail(n: int, q: float, j: int) -> float:
-        return fsum(exp(lgamma(n + 1) - lgamma(i + 1) - lgamma(n - i + 1) + i * log(q) + (n - i) * log1p(-q))
-                    for i in range(j, n + 1))
+def test_the_first_stage_samples_a_whole_count_of_a_verification_phase():
+    """`registration_count` is the verifier's count at a rate: ⌈q·n⌉ of a verification phase's n replay blocks, so at
+    least one at any positive rate, and the rate K/n gives K back.  `registration_sample` is the most K whose cost a
+    replay block of the verification phase is within what the budget leaves, and 0 when one is over it."""
+    for q, n, want in ((0.0, 7, 0), (1e-9, 7, 1), (0.5, 7, 4), (1.0, 7, 7), (3 / 7, 7, 3), (2.5e-7, 4e6, 1),
+                       (2.5e-7, 4.1e6, 2), (6 / 7219.04, 7219.04, 6), (17 / 9.02e7, 9.02e7, 17)):
+        assert registration_count(q, n) == want, (q, n)
+    for k, n in ((1, 3), (37, 10 ** 6), (10 ** 9, 10 ** 12)):
+        assert registration_count(k / n, n) == k and registration_count((k + 0.5) / n, n) == k + 1
+    for bad in ((-0.1, 5), (1.5, 5), (0.5, 0.5)):
+        with pytest.raises(ValueError, match="a count needs"):
+            registration_count(*bad)
+    cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
+    k, n, replay = {0: 5}, 1000, 2.0
 
-    n = 4000
-    for sampled in (1e-6, 0.02, 1.0, 33.0, 600.0):
-        top = registration_cap(sampled, n)
-        assert 1 <= top <= n and tail(n, sampled / n, top + 1) <= OVERFLOW
-        least = next(j for j in range(n) if tail(n, sampled / n, j + 1) <= OVERFLOW)
-        assert top - max(1, least) <= max(3, 0.15 * least), (sampled, top, least)
-    assert registration_cap(0.0, n) == 0 and registration_cap(5.0, 3) == 3
+    def cost(x: int) -> float:
+        return x * (replay + two_stage_price(cells, k, x)[2])
+
+    assert registration_sample(cells, k, n, replay, cost(1) / n * (1 - 1e-9)) == 0
+    for most in (1, 2, 7, 64, 999, 1000):
+        assert registration_sample(cells, k, n, replay, cost(most) / n) == most
+        if most < n:
+            assert registration_sample(cells, k, n, replay, cost(most + 1) / n * (1 - 1e-9)) == most
+    assert registration_sample(cells, k, n, replay, 1e9) == n and registration_sample(cells, k, 7.9, replay, 1e9) == 7
+    assert all(cost(x) <= cost(x + 1) for x in range(1, 200))
 
 
-def test_a_registrations_statements_are_padded_to_its_cap_and_paid_whatever_it_samples():
-    """A type's registration statements hold K0 sampled replay blocks' blocks, split into sessions of at most its cap
-    padded to one size, their fixed costs and padded blocks paid by each registration and so over its Q sampled replay
-    blocks; a type takes them only where they cost less than its own, and without a registration it never does."""
+def test_a_verification_phases_statements_hold_its_whole_sample():
+    """A type's statements of a verification phase hold its blocks of all K sampled replay blocks, split into sessions
+    of at most its cap padded to one size, with no padding for the count, which is exact; a type takes them only
+    where they cost less than a sampled replay block's own, and with no count it never does.  Each type's `sessions`
+    are a sampled replay block's share of them, so K times it is the phase's whole number of sessions where the
+    statements are the phase's, and one a sampled replay block of a type whose blocks fit one statement."""
     cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
     for k in ({0: 1}, {0: 5}, {0: 20}):
-        assert two_stage_price(cells, k, 0.5, 0.0) == two_stage_price(cells, k)
+        assert two_stage_price(cells, k, 0) == two_stage_price(cells, k)
     own = [r["prove"] for r in two_stage_statements(cells, {0: 1})]
     assert own == pytest.approx([0.8 + 8.0, 0.6 + 1.2])
-    for sampled in (0.02, 1.0, 100.0, 1e4):
-        top = registration_cap(sampled, 1e6)
-        for c, taken, mine, r in zip(cells, (0.8, 0.2), own, two_stage_statements(cells, {0: 1}, sampled / 1e6, 1e6)):
-            blocks = ceil(top * taken - 1e-9)
+    for sampled in (1, 2, 5, 100, 10 ** 4):
+        for c, taken, mine, r in zip(cells, (0.8, 0.2), own, two_stage_statements(cells, {0: 1}, sampled)):
+            blocks = ceil(sampled * taken - 1e-9)
             sessions = ceil(blocks / c.cap)
             shared = (sessions * c.fixed + sessions * ceil(blocks / sessions) * c.prove) / sampled
             assert r["shared"] == (shared < mine) and r["prove"] == pytest.approx(min(shared, mine))
             assert r["padding"] == (pytest.approx(shared - sessions * c.fixed / sampled - taken * c.prove)
                                     if r["shared"] else 0.0)
-    assert not any(r["shared"] for r in two_stage_statements(cells, {0: 1}, 0.02 / 1e6, 1e6))
-    assert all(r["shared"] for r in two_stage_statements(cells, {0: 1}, 1e4 / 1e6, 1e6))
+            assert r["sessions"] * sampled == pytest.approx(sessions if r["shared"] else sampled * taken)
+    assert [r["sessions"] for r in two_stage_statements(cells, {0: 10})] == [8.0 / 4, 1.0]
+    assert not any(r["shared"] for r in two_stage_statements(cells, {0: 1}, 1))
+    assert all(r["shared"] for r in two_stage_statements(cells, {0: 1}, 10 ** 4))
 
 
-def test_a_registration_shares_statements_at_its_own_q():
-    """With a registration of many replay blocks, the design spends at most the budget at the most q it pays for, its
-    proving `two_stage_price`'s at that q and its cap the registration's; its types' statements shared, it samples
-    more replay blocks and bounds less than a statement per sampled replay block.  A registration of none, or too few
-    to pay for its padding, is that design."""
+def test_a_design_samples_a_whole_count_of_each_verification_phase():
+    """With a verification phase of n replay blocks, the design samples a whole K of them, the most the budget pays
+    for, at the rate K/n: its proving is `two_stage_price`'s at K, one more is over the budget, and its bound is the
+    one at K/n.  Its types' statements shared, it samples more replay blocks and bounds less than a statement per
+    sampled replay block.  A verification phase so small that one sampled replay block is over the budget has no
+    design; with no size given, one verification phase holds every replay block and each statement is a sampled replay
+    block's own."""
     delta, replay_blocks, budget = 2.0 ** -20, 10 ** 8, 1e7
     cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
              Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14)]
     kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6}
+    left, interior = (budget - 1e5) / replay_blocks, 1e-6 * sum(c.n * c.commit_bytes for c in cells)
     alone = two_stage_design(cells, replay_blocks, delta, **kw)
-    assert alone["shared"] == alone["padding"] == 0.0 and alone["registration_cap"] == 0
+    assert alone["shared"] == alone["padding"] == 0.0 and alone["registration_sample"] == 0
+    assert alone["replay_sample"] == pytest.approx(round(alone["replay_sample"]), abs=1e-6)
     assert two_stage_design(cells, replay_blocks, delta, registration=0.0, **kw) == alone
-    few = two_stage_design(cells, replay_blocks, delta, registration=10.0, **kw)
-    assert few["shared"] == 0.0 and (few["q"], few["bound"]) == (alone["q"], alone["bound"])
-    shared = two_stage_design(cells, replay_blocks, delta, registration=10 ** 4, **kw)
-    q, sampled = shared["q"], shared["registration_sample"]
-    assert sampled == pytest.approx(q * 10 ** 4) and shared["registration_cap"] == registration_cap(sampled, 10 ** 4)
-    strata = [replace(c, stratum=0 if c.bits <= shared["merged"] else 131072) for c in cells]
-    assert shared["prove"] == pytest.approx(shared["replay_sample"] * two_stage_price(strata, shared["k"], q,
-                                                                                      10 ** 4)[2])
-    assert shared["total"] <= budget * (1 + 1e-12) and shared["shared"] == 1.0 and 0 < shared["padding"] < 0.01
-    over = q * (1 + 1e-6)
-    assert over * (1.0 + 1e-6 * sum(c.n * c.commit_bytes for c in cells)
-                   + two_stage_price(strata, shared["k"], over, 10 ** 4)[2]) > (budget - 1e5) / replay_blocks
-    assert q > alone["q"] and shared["bound"] < alone["bound"]
+    assert two_stage_design(cells, replay_blocks, delta, registration=10.0, **kw) is None
+    for n in (10 ** 3, 10 ** 4, 10 ** 6):
+        row = two_stage_design(cells, replay_blocks, delta, registration=n, **kw)
+        q, count = row["q"], row["registration_sample"]
+        assert count == int(count) >= 1 and q == count / n and registration_count(q, n) == count
+        strata = [replace(c, stratum=0 if c.bits <= row["merged"] else 131072) for c in cells]
+        assert registration_sample(strata, row["k"], n, 1.0 + interior, left) == count
+        assert row["prove"] == pytest.approx(row["replay_sample"] * two_stage_price(strata, row["k"], count)[2])
+        assert row["total"] <= budget * (1 + 1e-12)
+        assert (count + 1) * (1.0 + interior + two_stage_price(strata, row["k"], count + 1)[2]) > left * n
+        assert row["bound"] == pytest.approx(two_stage_exfil(strata, row["k"], replay_blocks, q, delta), rel=1e-6)
+        assert row["sessions"] == pytest.approx(
+            count * sum(r["sessions"] for r in two_stage_statements(strata, row["k"], count)))
+    assert row["shared"] == 1.0 and 0 <= row["padding"] < 0.01 and row["sessions"] == round(row["sessions"]) >= 2
+    assert row["q"] > alone["q"] and row["bound"] < alone["bound"]
 
 
 def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
@@ -788,6 +805,177 @@ def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
         else:
             assert rows[True]["bound"] == pytest.approx(rows[False]["bound"], rel=1e-2)
     assert two_stage_design(cells, replay_blocks, delta, budget=1.0, replay=1.0, boundary=2.0) is None
+
+
+def test_a_design_by_template_has_the_counts_the_verifiers_rule_registers():
+    """The verifier's two-stage rule takes one whole count a template, each template a stratum of its own.  A design
+    by template has those strata: each cell's count is a whole number of at least one and at most its blocks, its bound
+    is the one at those strata, and `two_stage_counts` writes the counts by name with the first stage's K.  Two types
+    of one size class, which the width-stratified design samples together at a count they share, get a count each.  A
+    width-stratified design has no such counts, and neither has a design whose names don't match its cells."""
+    delta, replay_blocks, n = 2.0 ** -20, 10 ** 8, 10 ** 4
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
+             Cell(300, 12.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
+             Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14)]
+    kw = {"budget": 1e7, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "registration": n}
+    row = two_stage_design(cells, replay_blocks, delta, stratify="template", **kw)
+    assert row["design"] == "template" and row["merged"] == "template" and set(row["k"]) == {0, 1, 2}
+    assert all(k == int(k) and 1 <= k <= c.n for k, c in zip((row["k"][i] for i in range(3)), cells))
+    strata = [replace(c, stratum=i) for i, c in enumerate(cells)]
+    assert two_stage_strata(cells, row["merged"]) == strata
+    assert row["bound"] == pytest.approx(two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta), rel=1e-6)
+    assert row["total"] <= kw["budget"] * (1 + 1e-12) and row["q"] == row["registration_sample"] / n
+    # each cell is a stratum already, so `widths` adds no design; `kappas` holds the family to those scales
+    assert two_stage_design(cells, replay_blocks, delta, stratify="template", widths=True, **kw) == row
+    held = two_stage_design(cells, replay_blocks, delta, stratify="template", kappas=KAPPAS[-2:], **kw)
+    assert held["merged"] == "template" and held["kappa"] in KAPPAS[-2:] and held["bound"] >= row["bound"]
+    names = ["narrow", "narrower", "wide"]
+    assert two_stage_counts(row, names) == {"sampled": row["registration_sample"],
+                                            "k": {name: row["k"][i] for i, name in enumerate(names)}}
+    width = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert width["design"] == "stratified" and len(width["k"]) < 3
+    for bad, given in ((width, names), (row, names[:2]), (row, ["narrow", "narrow", "wide"])):
+        with pytest.raises(ValueError, match="by-template design's, one name a cell"):
+            two_stage_counts(bad, given)
+    with pytest.raises(ValueError, match="width-stratified"):
+        two_stage_design(cells, replay_blocks, delta, stratify="type", **kw)
+
+
+def test_a_design_with_one_session_a_template_holds_it_to_one_table_or_says_how_many():
+    """The verifier's second stage reads one session of one table a template of a verification phase.  The cost
+    model's own statements split a template's sample into several sessions.  With one session a template whatever
+    it holds, each template pays its fixed cost once a verification phase and its session is its whole sample, here
+    of several tables, which the row says.  Held to one table, no template samples more than its table holds over
+    the phase, so the design samples fewer proof blocks and bounds more.  Both are a by-template design's over a
+    verification phase, and the second needs each cell's table."""
+    delta, replay_blocks, n = 2.0 ** -20, 10 ** 8, 10 ** 4
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0, table=1024),
+             Cell(300, 12.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0, table=1024),
+             Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14, table=64)]
+    kw = {"budget": 1e7, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "registration": n, "stratify": "template"}
+    rows = {s: two_stage_design(cells, replay_blocks, delta, sessions=s, **kw) for s in SESSIONS}
+    strata = [replace(c, stratum=i) for i, c in enumerate(cells)]
+    for s, row in rows.items():
+        count = row["registration_sample"]
+        st = two_stage_statements(strata, row["k"], count, s)
+        assert row["form"] == s and row["total"] <= kw["budget"] * (1 + 1e-12)
+        assert row["bound"] == pytest.approx(two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta), rel=1e-6)
+        assert row["largest"] == max(r["largest"] for r in st) and row["tables"] == max(r["tables"] for r in st)
+        assert row["over"] == sum(1 for r in st if r["tables"] > 1)
+        assert row["sessions"] == pytest.approx(count * sum(r["sessions"] for r in st))
+    own, whole, table = (rows[s] for s in SESSIONS)
+    assert own["sessions"] > 3 and own["tables"] <= 1
+    assert whole["sessions"] == pytest.approx(3) and whole["over"] >= 1 and whole["tables"] > 1
+    st = two_stage_statements(strata, whole["k"], whole["registration_sample"], "template")
+    for c, r in zip(strata, st):
+        assert r["largest"] == ceil(whole["registration_sample"] * r["taken"] - 1e-9)
+        assert r["prove"] == pytest.approx((c.fixed + r["largest"] * c.prove) / whole["registration_sample"])
+    assert whole["bound"] <= own["bound"]
+    assert table["sessions"] == pytest.approx(3) and table["over"] == 0 and table["tables"] <= 1
+    assert all(table["registration_sample"] * table["k"][i] <= c.table for i, c in enumerate(cells))
+    assert table["bound"] > whole["bound"] and table["draws"] < whole["draws"]
+    with pytest.raises(ValueError, match="by-template design's"):
+        two_stage_design(cells, replay_blocks, delta, sessions="table", **(kw | {"stratify": True}))
+    with pytest.raises(ValueError, match="by-template design's"):
+        two_stage_design(cells, replay_blocks, delta, sessions="template", **(kw | {"registration": 0.0}))
+    with pytest.raises(ValueError, match="needs each cell's `table`"):
+        two_stage_design([replace(c, table=inf) for c in cells], replay_blocks, delta, sessions="table", **kw)
+    with pytest.raises(ValueError, match="sessions are one of"):
+        two_stage_design(cells, replay_blocks, delta, sessions="tables", **kw)
+    with pytest.raises(ValueError, match="needs the count"):
+        two_stage_statements(strata, own["k"], 0, "template")
+
+
+def test_a_stratum_a_width_samples_a_narrower_block_at_its_own_rate():
+    """A costly type a few bits over a size class shares the next class with a rare block of that class's whole
+    width, so the class's stratum samples it at the wide block's rate.  With `widths` each width is a stratum: the
+    costly type is sampled at the rate its own bits ask and the bound falls.  The family only grows, so `widths` is
+    never worse: where each class holds one width it changes nothing, and a uniform design has no strata to split."""
+    delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(2000, 2100.0, prove=1e-2, commit_bytes=300.0),
+             Cell(4, 4096.0, prove=1e-3, commit_bytes=512.0)]
+    assert [c.stratum for c in two_stage_strata(cells, 16)] == [0, 4096, 4096]
+    assert [c.stratum for c in two_stage_strata(cells, 4096)] == [0, 0, 0]
+    assert [c.stratum for c in two_stage_strata(cells[::-1], None)] == [2, 1, 0]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served, "union": True}
+    classes = two_stage_design(cells, replay_blocks, delta, **kw)
+    row = two_stage_design(cells, replay_blocks, delta, widths=True, **kw)
+    assert classes["merged"] == 16 and set(classes["k"]) == {0, 4096}
+    assert row["merged"] is None and set(row["k"]) == {0, 1, 2} and row["design"] == "stratified"
+    strata = two_stage_strata(cells, None)
+    assert row["bound"] == two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta, served, True)
+    assert row["prove"] == pytest.approx(row["replay_sample"] * two_stage_price(strata, row["k"])[2])
+    assert row["total"] <= budget * (1 + 1e-12)
+    assert row["k"][1] / 2000 < 0.6 * classes["k"][4096] / 2004 and row["bound"] < 0.7 * classes["bound"]
+    uniform = {"stratify": False, **kw}
+    assert two_stage_design(cells, replay_blocks, delta, widths=True, **uniform) == two_stage_design(
+        cells, replay_blocks, delta, **uniform)
+    apart = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(4, 131072.0, prove=1e-3, commit_bytes=2.0 ** 14)]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6}
+    assert two_stage_design(apart, replay_blocks, delta, widths=True, **kw) == two_stage_design(
+        apart, replay_blocks, delta, **kw)
+
+
+def test_a_margin_samples_the_strata_that_cost_little_above_their_rule():
+    """One stratum is most of the proving and the rest cost little.  With `margin` the family also holds each κ's
+    design with every stratum but the costliest sampled the margin above its rule: the costliest keeps its k, the
+    rest take theirs times 1 + m, rounded up and at most their blocks, and the bound falls for little proving.  The
+    family only grows, so a margin is never worse; none is the planner as it was, and a uniform design has no other
+    stratum to raise."""
+    delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
+    cells = [Cell(1000, 16.0, prove=1e-5, commit_bytes=2.0), Cell(2000, 2100.0, prove=1e-2, commit_bytes=300.0),
+             Cell(40, 512.0, prove=1e-4, commit_bytes=64.0), Cell(40, 1024.0, prove=1e-4, commit_bytes=128.0),
+             Cell(40, 1536.0, prove=1e-4, commit_bytes=128.0), Cell(4, 4096.0, prove=1e-3, commit_bytes=512.0)]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served, "union": True, "widths": True}
+    rule = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert rule["margin"] == 0.0 and two_stage_design(cells, replay_blocks, delta, margin=0.0, **kw) == rule
+    row = two_stage_design(cells, replay_blocks, delta, margin=0.125, **kw)
+    assert row["margin"] == 0.125 and (row["merged"], row["kappa"]) == (rule["merged"], rule["kappa"]) == (None, 0.5)
+    strata = two_stage_strata(cells, None)
+    costly, = (c.stratum for c in strata if c.bits == 2100.0)
+    blocks = {c.stratum: c.n for c in strata}
+    assert row["k"] == {t: k if t == costly else min(blocks[t], ceil(1.125 * k)) for t, k in rule["k"].items()}
+    assert any(row["k"][t] > rule["k"][t] for t in blocks) and row["k"][costly] == rule["k"][costly]
+    assert row["bound"] == two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta, served, True)
+    assert row["total"] <= budget * (1 + 1e-12) and row["q"] < rule["q"]
+    assert row["prove"] / row["replay_sample"] < 1.001 * rule["prove"] / rule["replay_sample"]
+    assert row["bound"] < 0.9 * rule["bound"]
+    one = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(2000, 2100.0, prove=1e-2, commit_bytes=300.0),
+           Cell(4, 4096.0, prove=1e-3, commit_bytes=512.0)]
+    assert two_stage_design(one, replay_blocks, delta, margin=0.125, **kw) == two_stage_design(
+        one, replay_blocks, delta, **kw)
+    uniform = {**kw, "stratify": False}
+    assert two_stage_design(cells, replay_blocks, delta, margin=0.125, **uniform) == two_stage_design(
+        cells, replay_blocks, delta, **uniform)
+    with pytest.raises(ValueError, match="margin"):
+        two_stage_design(cells, replay_blocks, delta, margin=-0.125, **kw)
+
+
+def test_a_design_held_to_some_kappas_is_the_best_among_them():
+    """`kappas` holds the family to those κ of `KAPPAS`.  All of them is the planner as it was, the best design's own
+    κ gives it back, and each κ alone gives the least bound at that κ, never under the best's.  k_t grows with κ, so a
+    κ below the best's proves fewer proof blocks a sampled replay block and samples more replay blocks for the same
+    budget.  A κ off `KAPPAS`, or none, is refused."""
+    delta, replay_blocks, served = 2.0 ** -20, 10 ** 8, 4096.0
+    cells = [Cell(1000, 16.0, prove=1e-5, commit_bytes=2.0), Cell(2000, 2100.0, prove=1e-2, commit_bytes=300.0),
+             Cell(40, 512.0, prove=1e-4, commit_bytes=64.0), Cell(40, 1024.0, prove=1e-4, commit_bytes=128.0),
+             Cell(4, 4096.0, prove=1e-3, commit_bytes=512.0)]
+    kw = {"budget": 1e7, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served, "union": True, "widths": True}
+    best = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert two_stage_design(cells, replay_blocks, delta, kappas=KAPPAS, **kw) == best
+    assert two_stage_design(cells, replay_blocks, delta, kappas=(best["kappa"],), **kw) == best
+    alone = {kappa: two_stage_design(cells, replay_blocks, delta, kappas=(kappa,), **kw) for kappa in KAPPAS}
+    assert all(row["kappa"] == kappa and row["total"] <= kw["budget"] * (1 + 1e-12) for kappa, row in alone.items())
+    assert min(row["bound"] for row in alone.values()) == best["bound"]
+    assert two_stage_design(cells, replay_blocks, delta, kappas=(2.0 ** -4, 2.0 ** -3), **kw)["bound"] == min(
+        alone[2.0 ** -4]["bound"], alone[2.0 ** -3]["bound"])
+    low = alone[best["kappa"] / 8]
+    assert low["bound"] > best["bound"] and low["q"] > best["q"]
+    assert all(low["k"][t] <= k for t, k in best["k"].items()) and sum(low["k"].values()) < sum(best["k"].values()) / 4
+    assert alone[0.0]["k"] == dict.fromkeys(best["k"], 1)
+    for kappas in ((), (0.3,), (0.5, 3.0)):
+        with pytest.raises(ValueError, match="KAPPAS"):
+            two_stage_design(cells, replay_blocks, delta, kappas=kappas, **kw)
 
 
 def test_a_capped_design_charges_what_a_request_serves():

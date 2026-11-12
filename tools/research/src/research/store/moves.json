@@ -2186,6 +2186,11 @@
     },
     {
       "paths": {
+        "benchmarks/pouw/machine_model/": "benchmarks/machine_model/"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/remote_session/prover.py": "verity/protocols/poub/prover/remote_session/prover.py",
         "benchmarks/remote_session/device.py": "verity/protocols/poub/prover/remote_session/device.py",
         "benchmarks/remote_session/session.cu": "verity/protocols/poub/prover/remote_session/session.cu",

@@ -38,7 +38,7 @@ NOT_SCANNED = {
 
 #: The public modules: module -> the interface it is (the vision note's I1..I10).
 PUBLIC = {
-    "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
+    "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
@@ -79,8 +79,9 @@ PUBLIC = {
                                                "values (VLLM-125)",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
-    "verity_vllm.program.predict.window_class": "I7: a window class, and H1's tables as a window circuit reads them under H1's "
-                                                "tie (Tables)",
+    "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
+                                                "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
+                                                "circuit cut at its linears (PearlTables)",
     "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
                                                "layout and the primitives a census prices, which the grader "
                                                "(benchmarks/training_slowdown/grader) reads",
@@ -114,6 +115,8 @@ PUBLIC = {
     "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
                                        "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
+    "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
+                                        "CONFIG) and where a serve dir holds each window's epoch (DIR)",
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
@@ -130,15 +133,31 @@ PUBLIC = {
                                                 "certifier's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
     "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
+    "verity_vllm.pipeline.advice_code.by_class": "I1: advice v1's charge by class: each window's bits split by the field "
+                                                 "that put them there, and the fields a registration holds at 0 with "
+                                                 "the rules that do, which benchmarks/network_e2e reports",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
+    "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained timed rounds (record, write), "
+                                                 "the names it registers each call's A rows and y under (a_value, y_value), "
+                                                 "each weight's B rows at PoUW's weight root (b_entries, b_value), "
+                                                 "built at the version W states (version_of, VERSION), "
+                                                 "which verify_run.tie and the one-stage audit read, the audited "
+                                                 "window's values rebuilt as W's (reuse), and the served run's served.json "
+                                                 "W is written from (SERVED_SCHEMA, KEEP, served_passes, macs, coins_of)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
                                            "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
+    "verity_vllm.protocols.pouw.h1.answers": "I1: the verifier of record's answers on a window's statements, each run once "
+                                             "as credit asks for it and shared by key by the steps that judge them "
+                                             "(Answers), which drawn.py check and pouw_piece.py period read",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
                                               "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
                                               "benchmarks time and gate",
+    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
+                                                   "under its domain (y_domain, commit_y, retain_y) and on its device "
+                                                   "(DeviceTrees), which verify_run opens on each drawn tile",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -218,11 +237,7 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
-    # archive/integrations/vllm/tools/train_step_census.py imports these two: they go when the archived file is deleted
-    "verity_vllm.program.frontend.rules",
-    "verity_vllm.program.frontend.rules.training",
     "verity_vllm.program.frontend.rules.family",
-    "verity_vllm.program.frontend.rules.vocab",
     "verity_vllm.program.frontend.targets",
     "verity_vllm.program.model",
     "verity_vllm.program.predict.batch",

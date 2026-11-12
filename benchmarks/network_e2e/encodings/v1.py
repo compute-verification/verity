@@ -137,13 +137,29 @@ def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple
     """A trace-corpus trace, its certified record and its I1 v0 advice; a tick-served trace's record is on its own
     certified tick's buckets, 100 ms buckets otherwise."""
     tr = R.read_corpus_trace(path, ingress=ingress)
-    rec = record_of(tr, stop_ids, **({} if tr.releases is None else {"bucket_s": tr.releases.tick.bucket_us / 1e6}))
+    rec = record_of(tr, stop_ids, bucket_s=_bucket_s(tr))
     return tr, rec, advice_of(tr, rec)
 
 
 def _tick(trace: Any) -> Any:
     """The certified tick a trace's engine admitted by, None for one that admitted on arrival."""
     return None if trace.releases is None else trace.releases.tick
+
+
+def _bucket_s(trace: Any) -> float:
+    """A trace's certified bucket, in seconds: its certified tick's, 100 ms without the tick."""
+    return 0.1 if trace.releases is None else trace.releases.tick.bucket_us / 1e6
+
+
+def served(trace: Any, record: Record, advice: I1.Advice, reg: Registered) -> dict[str, Any]:
+    """What a table row says of the serve its charge is of, so that the row alone reports an execution phase's advice:
+    the window in seconds (``reg.T`` of the trace's buckets); whether the engine cached prefixes, and the rows that
+    began from a cached prefix with the tokens they skipped, which no charge shows where no hit is sent; and each
+    window's length terms' bits, the same under every book: a window's charge less them is its segment's."""
+    hits = [row.cache_hit for st in advice.steps for row in st.rows if row.cache_hit]
+    return {"window_s": round(reg.T * _bucket_s(trace), 6), "prefix_caching": bool(trace.engine.enable_prefix_caching),
+            "cache_hit_rows": len(hits), "cache_hit_tokens": sum(hits),
+            "length_by_window": {w: sum(n for _v, n in t) for w, t in enumerate(length_tails(record, reg))}}
 
 
 def windows_of(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client") -> dict[str, Any]:
@@ -173,6 +189,7 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
     tr, rec, adv = _trace(path, stop_ids, ingress)
     tick = _tick(tr)
     row: dict[str, Any] = {"trace": label, "ingress": ingress, "tick": None if tick is None else asdict(tick),
+                           **served(tr, rec, adv, Registered(tr.engine, tuple(stop_ids), T=T, tick=tick)),
                            "requests": len(rec.requests), "steps": len(adv.steps), "windows": windows(rec, T),
                            "v0": sum(I1.bits_by_window(adv, T).values())}
     reg = Registered(tr.engine, tuple(stop_ids), T=T, tick=tick)
@@ -186,8 +203,8 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        unordered = sum(string_of([CV.Window(w.arrived) for w in wins], reg, tails)[1])
-        untimed = sum(string_of([CV.Window() for _ in wins], reg, tails)[1])
+        unordered = sum(string_of([CV.Advice(w.arrived) for w in wins], reg, tails)[1])
+        untimed = sum(string_of([CV.Advice() for _ in wins], reg, tails)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
                      "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
@@ -240,7 +257,7 @@ def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
     """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
     registration would fix it from history before the run; for a trace under the certified tick, where no window's
     segment codes anything, the uniform book under `TICK_TABLE_CAPS`."""
-    runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
+    runs = [None if "error" in r else [CV.Advice(**w) for w in r["windows"]] for r in residuals]
     out: list[dict | None] = []
     for k, mine in enumerate(runs):
         others = [w for j, w in enumerate(runs) if j != k and w is not None]
