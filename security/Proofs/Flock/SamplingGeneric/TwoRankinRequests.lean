@@ -52,7 +52,10 @@ theorem blocksTo_inter {C : Prog} {Pt : Partition} {R : Type} (req : Fin C.outs.
 theorem lightOf_eq_some_none_iff {s : AuditStatement} {Pt : Partition} {n : ℕ} {U : Finset ℕ} :
     lightOf s Pt n U = some none ↔ U ≠ ∅ ∧ n ≤ bitsOf s Pt U := by
   unfold lightOf
-  split_ifs with h₁ h₂ <;> simp [h₁, h₂]
+  split_ifs with h₁ h₂
+  · simp [h₁]
+  · simp [h₁, h₂]
+  · simp [h₁, h₂]
 
 /-- A set with a piece of class `some none` has class `some none`: `b` is a sum over the set. -/
 theorem lightOf_some_none_of_inter {s : AuditStatement} {Pt : Partition} {n : ℕ} {U B : Finset ℕ}
@@ -85,8 +88,10 @@ theorem lightOf_eq_of_inter {s : AuditStatement} {Pt Pρ : Partition}
     rw [lightOf_some_none_of_inter hi, lightOf_some_none_of_inter ((h i).symm.trans hi)]
   · have hpieces : ∀ i : Fin Pρ.blocks.length, U ∩ blocksIn Pt Pρ i = U' ∩ blocksIn Pt Pρ i := fun i =>
       eq_of_lightOf_eq (h i) fun hi => hheavy ⟨i, hi⟩
-    rw [← biUnion_inter_blocksIn hcov hU, ← biUnion_inter_blocksIn hcov hU']
-    exact biUnion_congr rfl fun i _ => hpieces i
+    have hUU : U = U' :=
+      (biUnion_inter_blocksIn hcov hU).symm.trans
+        ((biUnion_congr rfl fun i _ => hpieces i).trans (biUnion_inter_blocksIn hcov hU'))
+    rw [hUU]
 
 /-- **A class costs at most its pieces' classes**: in scope, `min(b(U), n) ≤ Σ_ρ min(b(U ∩ ρ), n)`. -/
 theorem lightBits_le_sum_inter (s : AuditStatement) {Pt Pρ : Partition}
