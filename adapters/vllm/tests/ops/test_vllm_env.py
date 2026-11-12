@@ -26,12 +26,15 @@ def run(tmp_path: Path, **env: str) -> subprocess.CompletedProcess:
 
 
 def venv(tmp_path: Path, commit: str | None, finished: bool = True) -> Path:
-    """A directory whose ``bin/python`` answers the script's one question as a vLLM of ``commit`` would (None: no vLLM),
-    with the ``freeze.txt`` an install writes last when it ``finished``."""
+    """A directory that holds a vLLM of ``commit`` as an environment does (None: no vLLM): the file setuptools-scm writes
+    into the package, which the script reads the build from; with the ``freeze.txt`` an install writes last when it
+    ``finished``."""
     d = tmp_path / "venv"
     (d / "bin").mkdir(parents=True)
-    (d / "bin" / "python").write_text(f"#!/bin/sh\necho {commit}\n" if commit else "#!/bin/sh\nexit 1\n")
-    (d / "bin" / "python").chmod(0o755)
+    if commit:
+        pkg = d / "lib" / "python3.12" / "site-packages" / "vllm"
+        pkg.mkdir(parents=True)
+        (pkg / "_version.py").write_text(f"__version__ = version = '0.0'\n\n__commit_id__ = commit_id = 'g{commit}'\n")
     if finished:
         (d / "freeze.txt").write_text("vllm==0\n")
     return d

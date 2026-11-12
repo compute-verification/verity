@@ -26,11 +26,12 @@ esac
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv-vllm-$BUILD}; PY=$VENV/bin/python
 say() { echo "[vllm-env] $(date -u +%FT%TZ) $*" >&2; }
 fail() { echo "VLLM_ENV_FAIL_$1: ${*:2}" >&2; exit 3; }
-# a tagged build's __version__ carries no commit: setuptools-scm's __commit_id__ names every build
-held() { "$PY" -c 'from vllm._version import __commit_id__ as c; print(c.removeprefix("g"))' 2>/dev/null; }
+# the build an environment holds, read from the file setuptools-scm wrote into its vLLM: a tagged build's __version__
+# carries no commit, and __commit_id__ names every build
+held() { sed -n "s/^__commit_id__ = .*['\"]g\([0-9a-f]*\)['\"].*/\1/p" "$VENV"/lib/python3.*/site-packages/vllm/_version.py 2>/dev/null | head -n 1; }
 
 if [ -e "$VENV" ]; then
-  [ "$(held)" = "$BUILD" ] || fail OTHER "$VENV exists and does not hold vLLM $BUILD (it holds: $(held || echo no vLLM)); name another VENV"
+  h=$(held); [ "$h" = "$BUILD" ] || fail OTHER "$VENV exists and does not hold vLLM $BUILD (it holds: ${h:-no vLLM}); name another VENV"
   [ -f "$VENV/freeze.txt" ] || fail OTHER "$VENV holds vLLM $BUILD without freeze.txt, so its install did not finish; name another VENV"
   say "$VENV holds vLLM $BUILD"
 else
@@ -50,12 +51,13 @@ else
     --extra-index-url "https://download.pytorch.org/whl/$CU" --index-strategy unsafe-best-match \
     "$tmp/$W" "numpy>=1.26" safetensors huggingface_hub zstandard pytest ninja >"$tmp/pip.log" 2>&1 \
     || { tail -n 5 "$tmp/pip.log" >&2; [ -z "${OUT:-}" ] || cp "$tmp/pip.log" "$OUT/"; fail PIP "see the lines above"; }
-  [ "$(held)" = "$BUILD" ] || fail IMPORT "the installed vLLM is not $BUILD: $("$PY" -c 'import vllm._version' 2>&1 | tail -n 1)"
+  h=$(held); [ "$h" = "$BUILD" ] || fail IMPORT "the installed vLLM is not $BUILD (it is: ${h:-none})"
+  "$VENV/bin/vllm" --version >"$tmp/version.txt" 2>&1 || { tail -n 5 "$tmp/version.txt" >&2; fail IMPORT "the installed vLLM does not start"; }
   # FlashInfer's own step, the one vLLM's image runs: the kernels of every GPU architecture, by uv into this environment
   UV_CACHE_DIR=$tmp/uv UV_HTTP_TIMEOUT=${UV_HTTP_TIMEOUT:-600} FLASHINFER_DISABLE_VERSION_CHECK=1 \
     "$PY" -m flashinfer download-kernels >>"$tmp/pip.log" 2>&1 \
     || { tail -n 8 "$tmp/pip.log" >&2; [ -z "${OUT:-}" ] || cp "$tmp/pip.log" "$OUT/"; fail KERNELS "flashinfer download-kernels: see the lines above"; }
-  "$PY" -c 'import importlib.util as u, sys; sys.exit(u.find_spec("flashinfer_cubin") is None)' \
+  ls -d "$VENV"/lib/python3.*/site-packages/flashinfer_cubin >/dev/null 2>&1 \
     || fail KERNELS "flashinfer download-kernels left no flashinfer_cubin"
   [ "$(held)" = "$BUILD" ] || fail KERNELS "FlashInfer's step changed the installed vLLM"
   UV_CACHE_DIR=$tmp/uv uv pip freeze --python "$PY" >"$VENV/freeze.txt" || fail FREEZE "uv pip freeze"
