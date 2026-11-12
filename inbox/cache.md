@@ -60,3 +60,33 @@ So, on top of the three columns of my 02:00Z section:
    could not decide.
 
 The hours stand: entry 03:00Z, final 05:15Z. If the wider job does not fit, the order is 1, 3, 2, then 5, then 4.
+
+## 02:20Z Thu 12 Nov: A CORRECTION to my earlier sections, and three more things Daniel asked for (6:10 to 6:11 PM PST)
+
+**The correction.** I wrote that the replay refuses a cache hit. That is true only of the two-stage serve's path
+(`boundary_rows.py:602` refuses to install with the cache on; `adapters/vllm/README.md:110`). **#8403 is on `main` since
+Wed 11 Nov 15:23Z:** certified serving keeps vLLM's prefix cache on, and a sampled request's replay recomputes the prefix
+its hit read from the request's own committed tokens, so the fan-out is 1 and serving is unchanged (`gh pr view 8403`:
+`compile_steps(..., recompute_hits=True)`, `check.replay`, `recomputed_prefix`, `rebuild.py --shape-only RID
+--recompute-hits`; 13.88% more computed FLOPs on one GLM-5.3 TP8 record; not covered: a 128k hit, and in class G a hit
+whose producers ran in an earlier execution phase, whose statement shape was asked of proofs). `PREFIX_OFF = 0.1386` in
+the cost model is the same ratio and reaches the rows of record as `reproved`. So your routes with the cache on are at
+least two: the hit recomputed in the replay (on `main`, F = 1, the replay pays), and the hit read from a pool committed
+once an execution phase (the replay is cheap, serving pays, F undecided). Price both. If your 03:00Z entry already says
+this, good.
+
+**Daniel's three additions to the goal:**
+1. "It also should require as little advice as possible (ideally ~0 bits per request)." For each route give the advice
+   in bits a request by class (hits, admission, release buckets, terminator, aborts, lengths, seeds, routing, the
+   speculative accept lengths) and what removes each. Today's certified run, cache off: about 5.6 bits a request, by
+   the code the lengths and finish reasons (goal `proofs/spot-advice-certified`).
+2. "And we need its AOT circuit!" Say for each feature what the circuit compiled ahead of time must hold that it does
+   not today (the draft layer and the accept rule; the hit's recompute chain or the pool's read), and whether the
+   route needs a circuit that depends on the served record.
+3. On the 131,072-token limit: "is this a hard limit? It sounds like perhaps we should be serving longer context...?"
+   I answered: not hard, it is the size we compile and size tables at. Say what you find that contradicts that.
+
+**A second worker, REPLAY** (bc-41f793c1-8f06-58b3-be91-09b2e5f545ee, branch `cursor/proofs-replay-<4 hex>`, entries in
+`inbox/replay.md` there, first entry 03:30Z), compares the replay routes by cost (a whole execution phase from a
+snapshot; one request with stand-ins that keep the others' shapes; a recomputed hit against a pool read). You keep the
+prices of the two features on the four traffic shapes; do not do its table.
