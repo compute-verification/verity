@@ -1999,7 +1999,9 @@ def onsite_written(serve_dir: Path, pieces: Path) -> dict[str, list[str]]:
     the verdict of every answer of its that lies beside a case under ``serve_dir``'s private/ (outside `NOT_A_PIECES`) or
     under ``pieces``, the run's public pieces: the case as its piece wrote it, with its own answer on it; none where no
     piece wrote one. It reads the answers alone, never a case, and holds no case to its answer: for the composite,
-    `onsite_pieces.sh`'s `onsite_cases` holds PoUS's and the wipe's to their pieces' Lean answers."""
+    `onsite_pieces.sh`'s `onsite_cases` holds PoUS's and the wipe's to their pieces' Lean answers. A case with no answer
+    beside it counts for no subprotocol, and an answer that isn't JSON raises `ValueError`, naming the directory under
+    private/ or ``pieces`` it lies in."""
     import composite as C
 
     found: dict[str, list[str]] = {p: [] for p in sorted(set(C.COMPONENTS["onsite"]) - set(C.COMPONENTS["remote"]))}
@@ -2008,15 +2010,15 @@ def onsite_written(serve_dir: Path, pieces: Path) -> dict[str, list[str]]:
     for root in (private, pieces):
         for f in sorted(root.rglob("case.json")) if root.is_dir() else []:
             d = f.parent
-            if any(d == s or s in d.parents for s in skips):
+            if any(d == s or s in d.parents for s in skips) or not (d / "answer.json").is_file():
                 continue
             try:
                 answer = json.loads((d / "answer.json").read_text())
-                protocol, verdict = answer["protocol"], answer.get("verdict")
-            except (OSError, ValueError, KeyError, TypeError, AttributeError):
-                continue
+            except ValueError as e:
+                raise ValueError(f"the answer beside the case under {(d.relative_to(root).parts or ('.',))[0]} isn't JSON: {e}") from e
+            protocol = answer.get("protocol") if isinstance(answer, dict) else None
             if isinstance(protocol, str) and protocol in found:
-                found[protocol].append(str(verdict))
+                found[protocol].append(str(answer.get("verdict")))
     return found
 
 

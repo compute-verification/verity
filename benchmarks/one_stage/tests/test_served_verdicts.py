@@ -3728,11 +3728,24 @@ def test_an_onsite_deferrals_line_names_each_subprotocol_whose_piece_wrote_no_ca
         "verity/certifier/v0 reject; verity/pous/p2/v4/run none; verity/remote-bandwidth/p2/v0 accept; verity/wipe/v0 accept")
 
 
+def test_an_onsite_deferrals_line_says_which_piece_left_an_answer_that_is_not_json(tmp_path):
+    """An answer beside a case that isn't JSON gives no subprotocol a verdict: the line before the deferral ends with the
+    error, naming the piece's directory and no window, and the deferral goes on."""
+    _onsite_wrote(tmp_path)
+    (tmp_path / "serve" / "private" / "pous" / "w7" / "answer.json").write_text("{")
+    run = _deferred(tmp_path, PRODUCT=None, COMPOSITE="")
+    assert run.returncode == 0, run.stderr
+    lines = (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines()
+    assert lines[0].startswith(ONSITE_CASES + "ValueError: the answer beside the case under pous isn't JSON: "), lines[0]
+    assert "w7" not in lines[0] and lines[1].startswith(f"DEFERRED V3c's audit: {SHORT}. A follow-on"), lines[:2]
+
+
 def test_onsite_written_reads_each_own_subprotocols_answers_beside_a_case_and_none_of_the_runners_copies(tmp_path):
     """`onsite_written` names onsite's own subprotocols, the ones its composite holds and remote's doesn't, and gives each
     the verdict of every answer of its beside a case: under the serve dir's private/ or the run's pieces, never under the
     composite's, a hand-off's or a deferral's directory, never an answer of another protocol (PoUW's period case) or one
-    that doesn't parse, and with no serve dir or pieces, none."""
+    that is no object, and with no serve dir or pieces, none. A case with no answer counts for none, and an answer that
+    isn't JSON raises, naming the directory it lies under and no window."""
     assert S.onsite_written(tmp_path / "serve", tmp_path / "served-out" / "pieces") == {
         "verity/certifier/v0": [], "verity/pous/p2/v4/run": [], "verity/remote-bandwidth/p2/v0": [], "verity/wipe/v0": []}
     _onsite_wrote(tmp_path)
@@ -3752,6 +3765,9 @@ def test_onsite_written_reads_each_own_subprotocols_answers_beside_a_case_and_no
         "verity/certifier/v0": ["reject"], "verity/pous/p2/v4/run": ["undecided", "accept"],
         "verity/remote-bandwidth/p2/v0": ["accept"], "verity/wipe/v0": ["accept"]}
     assert S.main(["onsite-written", "--serve-run", str(tmp_path / "serve"), "--pieces", str(tmp_path / "none")]) == 0
+    (private / "pous" / "w4" / "answer.json").write_text("{")
+    with pytest.raises(ValueError, match=r"^the answer beside the case under pous isn't JSON: "):
+        S.onsite_written(tmp_path / "serve", tmp_path / "served-out" / "pieces")
 
 
 def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
