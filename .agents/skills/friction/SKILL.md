@@ -103,7 +103,7 @@ What an agent may change:
 - Each owner removes the smells it finds in its own files without asking: code serving a retired question, two
   sources of truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired
   process, structure that doesn't earn itself, dead references. What crosses owners goes to that owner.
-- Close an old PR without asking when every commit on it is already in another open PR.
+- Close your own lane's PRs whenever you want: Daniel's standing request, so nobody asks first.
 - Hard switches: once a replacement lands, no second path stays alive beside it, and every bridge kept for the
   transition names its end state. The admin audits for splits and tells Daniel when an abstraction fails or turns into
   red tape.

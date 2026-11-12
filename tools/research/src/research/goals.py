@@ -15,12 +15,13 @@
                                              # or titled past eight words, and a lead with nothing due in 12 hours;
                                              # each line names its fix; exit 1 when anything is found (goals_audit.py)
 
-The plan is one graph of goals. A goal is an outcome with one owner: a one-line title of at most eight words, a due
-date, a day meaning its end or a time with its offset such as 2026-11-05T10:00-08:00, a status (will it be true by then?), tags from the
-site's fixed list of projects, and a Markdown description of what exactly will be true and where it stands, which never
-restates the fields. A goal nothing waits on is tier 1, a project; a piece of one is tier 2 and any step below it tier
-3; --tier overrides that. What a goal waits on is links only: the narrowest goal that blocks it, due
-before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
+The plan is one graph of goals. A goal is an outcome with one owner: a headline for a title (three to six plain words,
+no number; the writing-goals skill has the rule), a due date, a day meaning its end or a time with its offset such as
+2026-11-05T10:00-08:00, a status (will it be true by then?), tags from the site's fixed list of areas, and a Markdown
+description of what exactly will be true and where it stands, which never restates the fields. A goal under another is
+its subgoal. The page derives how deep a goal sits from what waits on what: 1 when nothing waits on it, down to 3;
+--tier, which keeps its old name, overrides that. What a goal waits on is links only: the narrowest goal that blocks
+it, due before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
 --blockers. The site checks every write and answers which field is wrong. --url points the command at another server;
 the token's audience stays the route's.
 """
@@ -155,8 +156,10 @@ def main(argv: list[str], route: Route | None = None) -> int:
     s.add_argument("--tag", action="append")
     s.add_argument("--owner", help="the lead that keeps it true, by handle")
     level = s.add_mutually_exclusive_group()
-    level.add_argument("--tier", type=int, choices=range(1, 4), metavar="N", help="its tier, overriding the one the plan derives: 1 a project, 2 a piece of one, 3 a step")
-    level.add_argument("--no-tier", action="store_true", help="the tier the plan derives from what needs it")
+    level.add_argument("--tier", type=int, choices=range(1, 4), metavar="N",
+                       help="how deep the goal sits, overriding what the plan derives: 1 a goal nothing waits on, 2 its "
+                            "subgoal, 3 a subgoal of that")
+    level.add_argument("--no-tier", action="store_true", help="the depth the plan derives from what needs it")
     s.add_argument("--description", help="TEXT, or @FILE")
     why = s.add_mutually_exclusive_group()
     why.add_argument("--blockers", help="why it's off track, when what it waits on doesn't say: TEXT, or @FILE")
