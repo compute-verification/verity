@@ -13,7 +13,8 @@ every sparse-MLA head's blocks (`volume`). `price` prices its strata: the planne
 gates of FlashInfer K6144 and K2048 in lookup slots at their measured warm sessions, the quant types' host walk, the
 Lean verifier as measured and the row's scale. `evaluate` charges it: the carried pool's pages recommitted at each edge
 (a copy stratum and the kv arm's hash tax), a request cut at the edge recomputed, its prefix hits reproved, B128's
-wait at paced egress, the pool's AND gates when only replays read it, and the served cap of trace128's longest output.
+wait at paced egress, the pool's AND gates when only replays read it, and a replay block served at most trace128's
+longest output.
 `assemble` refuses a row whose request count isn't its own plan's, and takes its split from its own design.
 """
 from __future__ import annotations
@@ -38,7 +39,7 @@ SHARE = 1 - 1 / LAMBDA
 RUN_S = 600
 SCOPES = ("world week", "world month", "world year", "datacenter week", "datacenter month", "datacenter year")
 BETAS = (0.05, 0.055, 0.06, 0.15, 0.4, 1.0, 2.5, 6.0, 15.0)
-#: the served cap: trace128's longest output, 875 tokens, at 32 bits a token
+#: the most bits a replay block serves: trace128's longest output, 875 tokens, at 32 bits a token
 SERVED_BITS = 875 * 32.0
 SERVED_CASE = "trace128 max x32"
 MIX, RULE = "B128", "paced at 10 tokens/s"
