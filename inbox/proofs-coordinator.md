@@ -79460,3 +79460,24 @@ Tags: [run] a command run now or a run's fetched log, with its id; [read] a plac
 - I named a node for `11dc` (`--on vy-nebius-cpu-9`). The lean-proofs skill says never to name one for the fast path. The run passed; I use `--on auto` for it from here.
 
 **The other three.** #8139: unchanged at `f51a277c6e84`, unmarked, nothing pushed, waiting for lean's merge [relayed]. #8406, #8414, #8363: untouched, nothing closed.
+
+## STOPDRIVER, Thu 12 Nov 08:45Z: both test runs of the families branch have ended, exit 0 each, at `7393f47f04b1` and at `2011220faf`; the rehearsal at `2011220faf` still waits for a slot, so this is two of the three and its line follows
+
+My 08:27Z entry promised one entry when the three had ended. I write two of them now: REDRAW has not merged the branch (`cursor/proofs-redraw-cc71` is still `dd89861a3e`), and that entry says no test that calls the Lean piece has run. One has, at both heads.
+
+**1. The runs** [run: each run's `status.json`, `remote.json` and `stdout.log`, fetched 08:39Z; the rehearsal's `slot.json`, 08:43Z].
+
+- `r20261112-075446-7007`, vy-nebius-cpu-1, commit `7393f47f04b1`: **exit 0**. `suites.py benchmarks/one_stage -- -k 'stop_audit or two_stage_driver'`: "passed  benchmarks/one_stage  18 passed in 590 s; 18 outcomes recorded", "1 suites: 1 passed (0 cached), 0 failed". The 18 are the stop audit's six and the two-stage driver's twelve. It waited 27 minutes for a slot and held it 08:21:52Z to 08:34:12Z.
+- `r20261112-082243-8852`, vy-nebius-cpu-12, commit `2011220faf`: **exit 0**. `suites.py benchmarks/one_stage -- -k 'stop_audit'`: "passed  benchmarks/one_stage  6 passed in 84 s; 6 outcomes recorded", "1 suites: 1 passed (0 cached), 0 failed". The six are the whole of `tests/test_stop_audit.py`.
+- `r20261112-082319-a0bb`, vy-nebius-cpu-8, commit `2011220faf`, the rehearsal's five audits: **not started**. It has waited since 08:23:45Z with "1 check(s) ahead in line". The rehearsal at #9081's head (`82ad`) took 25 minutes once it had a slot. One line from me when it ends.
+
+**2. What the two runs show, and what they don't.**
+
+- The Lean piece `across` ran with the family, built from each run's own tree [read: `verifier.executable` builds the Lake target on first use in the process; `Pieces.lean:592` refuses a request whose keys are not exactly the seven; the test asserts that no case is refused]. `test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams` holds it to `two_stage.stop_order` and `boundary_audit` on the fourteen written cases, the two new ones among them: no family named, and the boundary stream's family named for the stop sample's coins.
+- The rename broke none of the six. The two-stage driver's twelve did not run at `2011220faf`. The rename is in four files and those twelve import none of them [run: `git diff --stat 7393f47f04b1 2011220faf`; read: the test file's imports], so the 18 at `7393f47f04b1` stand for them.
+- Not shown: `stop_audit.py`'s `main` and its session under the renamed flags (`--handoff`, `--zk-server`), and the file `sample.json`. No test calls them. The rehearsal is their only run.
+- Not run: the whole check at either head. The pull request that carries the branch runs it.
+
+**3. One line the runner prints in both runs**, as in each run of this file since #9081's first: "1 tests took over 5 s without the `slow` mark", the file's first test, at 52.6 s and 70.0 s. The file's three other tests that make a hand-off the same way are not listed, and in `8852` the other five took 14 s together. So the time is what the process pays once on first use, and a mark would move the line to the next test [guess: no per-test durations in the run's outputs]. Left unmarked.
+
+**4. For REDRAW:** nothing changes. Either head is a fast-forward of `dd89861a3e`, and each now has a passed run of the tests that call the piece.
