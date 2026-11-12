@@ -74223,3 +74223,80 @@ Tags as in my 06:08Z entry. Mailbox read 06:18Z: 128 lines, newest section 05:05
 **Runs, with exit codes.** [run] `r20261112-054335-7821` 0; `r20261112-054441-a29f` 0; `r20261112-061450-3fbf` 0; `r20261112-055652-0fa9` 1 (my script's error, above). The two scripts are in my note's directory (`wl_salts.sh`, `wl_twin.sh`).
 
 For the table: no new figure. The 2.1425 GPU-seconds a statement stays as labelled: measured (`r20261111-115454-5832`), two provers on one H200, head block's statement, built from a branch, with `FC_SALTS_KEYED=all`, a form of salts no statement of ours covers; the switch is now also on `cursor/proofs-keyedsalts-811d` (on a branch, not on `main`, not run on a card).
+
+## SESSREAD, Thu 12 Nov 06:21Z: it compiles: the two-stage count at a request that reads several replay blocks (`r20261112-052746-8213`, exit 0) and the plan check's lemma without `hreq.1` (`r20261112-054602-bc5b`, exit 0), both files at `fd8e4f58af` beside the present ones; no `sorry`, no listed statement or lock touched; not replayed by check.py and not red-teamed
+
+### The verdict
+
+- [run] `r20261112-052746-8213` (vy-nebius-cpu-1, source `c6c9d7c417`, rc 0): the try of
+  `security/Proofs/Flock/SamplingGeneric/TwoRankinRequests.lean`. "lean exit 0 in 971 s"; "axiom probe: none of its 8
+  theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The file is the same at `fd8e4f58af`
+  [run `git diff --stat c6c9d7c417 fd8e4f58af`: only the second file].
+- [run] `r20261112-054602-bc5b` (vy-nebius-cpu-9, source `fd8e4f58af`, rc 0): the try of
+  `security/Proofs/Properties/Spot/TwoStageCheckRequests.lean`. "lean exit 0 in 949 s"; "axiom probe: none of its 3
+  theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Its log also has Lake's own
+  "Built Proofs.Flock.SamplingGeneric.TwoRankinRequests (5.5s)", a second build of the first file, on another node.
+- [run] both logs: no warning and no error on either file's own lines.
+- [read] What the two files hold, at `fd8e4f58af` on `cursor/proofs-sessread-1b22`:
+  - `Claims.Sampling.admissibleTwo_rankin_patterns_requests`: `AdmissibleTwoRankinPatterns`' statement, binder for
+    binder, without line 84 (each request reads the proof blocks of one replay block).
+  - `Claims.Sampling.admissibleTwoRankinPatterns_of_requests : AdmissibleTwoRankinPatterns`: the listed statement
+    from it, the hypothesis unread.
+  - `Properties.Spot.SecurityProofs.twoStageCheckPatternsSound_form_requests`: `twoStageCheckPatternsSound_form` with
+    `RequestsCover`'s second and third clauses as hypotheses and its first, `hreq.1`, nowhere.
+  - `twoStageCheckPatternsSound_requests`, the same in `TwoStageCheckPatternsSound`'s shape, and
+    `twoStageCheckPatternsSound_of_requests : TwoStageCheckPatternsSound`, the listed statement from it with `hreq.1`
+    unread.
+- [read] No `sorry`, no `axiom`, no `native_decide` in either file. No existing file is edited: `git diff --stat
+  origin/main...` is the two new files.
+
+**Of the four checks "proved" means (lean-proofs skill), two hold**, so I say compiles and not proved:
+
+1. It elaborates: yes [runs above].
+2. No axiom past the three: yes, the probe's line in each run.
+3. check.py's kernel replay: **no**. No root imports the files, so no check builds them, and check.py would fail them
+   as `orphan.file` [read `tools/verity/lean/check.py:1470-1475`]. The real change puts the proofs in the present
+   files, where the check replays them.
+4. Red-teamed by another agent: **no**. What stands in for it is mechanical only: each new statement's hypotheses are
+   the listed statement's less one, and the `_of_requests` theorems derive the listed statements from them.
+
+### Step 5 and the date
+
+- Step 5's list is my 05:57Z entry, unchanged by this result.
+- [derived] Whether the whole change fits Fri 13 Nov 17:00Z: its Lean does, being six files edited, two lines of
+  statement deleted, one proof replaced by the one that compiled and three terms changed in the other, which compiled
+  too, two honest witnesses shortened and two locks the candidate's records run regenerates but for one `why`, with no
+  proof left to find; it waits on Daniel's yes on two listed statements and on the planner's reading of a session
+  (`plancheck.two`, `two_stage_exfil`: two refusals, two tests), which are not proofs and not mine.
+
+### Where the four steps stand
+
+1. **Answered**: CACHE's reading and its three uses are right, no use missed (05:47Z entry).
+2. **Compiled** [`-8213`].
+3. **Compiled** [`-8213`], no step open.
+4. **Compiled** [`bc5b`], no step open.
+5. **Written** (05:57Z entry).
+
+### What the result does not say
+
+- [derived] It is the count inside one execution phase. The count across an execution phase's edge is not touched.
+- [derived] The right side is today's product of factors, looser than the count for a request heavy in several of its
+  replay blocks (05:47Z entry). No tighter bound was tried.
+- [read] `RequestsCover`'s last clause still wants every request that reads in a replay block to serve exactly the
+  point's `S` bits (`security/Properties/Spot/TwoStageCheck.lean:61-64`). The session cap's value and whether sessions
+  are padded to it are not mine.
+
+### Runs
+
+| run | what | exit |
+|---|---|---|
+| `r20261112-052746-8213` | try of `TwoRankinRequests.lean` at `c6c9d7c417` | 0 |
+| `r20261112-054644-631b` | the same with `--siblings` at `fd8e4f58af` | 0; 94 modules checked, 3,797 not built there |
+| `r20261112-054602-bc5b` | try of `TwoStageCheckRequests.lean` at `fd8e4f58af` | 0 |
+| `r20261112-061927-c373` | the same with `--siblings` | waiting for a slot on vy-nebius-cpu-11, 2 ahead at 06:21Z |
+| `r20261112-052426-7bae`, `r20261112-055349-9c8d` | a first draft; a duplicate | cancelled by me before their slots |
+
+Mailbox read 06:21Z: `inbox/sessread.md` does not exist on `cursor/proofs-inbox`.
+
+Next: nothing of the brief is open. `c373` is a name-clash check only; I report it if it finds one. If you want the
+real change drafted as a pull request once Daniel has said yes, say so: by the brief it is not mine until then.
