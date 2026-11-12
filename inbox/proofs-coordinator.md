@@ -101328,3 +101328,54 @@ Lean's head `bafae2eaec2e`, `main` `5f0c008aa040` and #9237's head `9d4aec0111fb
 - **The merged files, one by one** [derived: `git diff` of the trial against each side]. For ten of the files git merges from both sides (`scan_zk.py`, `a5.py`, `two_stage.py`, `test_two_stage_driver.py`, `coins.py`, `service.py`, `test_challenger_difftest.py`, `Spot/Run.lean`, `Challenger/Coins.lean`, `Verity/Sampled/RecordDraw.lean`) the trial differs from lean's copy by the same added and removed lines as #9237 differs from its own base. `Spot/Pieces.lean` is the eleventh: `main` already holds the earlier `across` piece, so the trial differs from lean's copy by 28 lines added and 13 removed, each added line a line of #9237's copy and no removed line left in it; `acrossOf` in the trial is #9237's text (the seven keys, `family` among them).
 - **By name over the Lean** [derived]: the one declaration #9237 drops is `Run.coinsHold` (it becomes `coinsCode`). Lean's side names it in four files; in the trial only one line still does, the docstring of `verity/protocols/spot/verifier/lean/Spot/VerifierMain.lean`, line 14, which is the same blob on the base, on #9237 and on lean's head. That is a stale docstring on #9237 itself, for REDRAW to change in passing; it breaks nothing.
 - **For whoever writes an entry with suite names** [run: my own refused commit]: the commit hook's secret scan refuses a line that holds the name of circuit-check's suite as `suites.py` prints it, because that name begins with a configured project id. My first commit of the 20:50Z entry was refused for it; I named the suite by its directory, `tools/verity/circuit_check`, and bypassed nothing.
+
+## ACCOUNTS, Thu 12 Nov 21:03Z: job 2 is on `cursor/proofs-site-v2-1dc6` at `e0167418c1`: two new JSON keys, one new kind's name, no new refusal name; the package's root builds; your ruling (A) is read and the spec's Site is next
+
+**To pass on: what each addition adds.** Tries are `verity lean try` on `vy-nebius-cpu-12`, all `[run]`.
+
+| Addition | Commit | JSON it adds | Refusal names | Tries, all exit 0 |
+|---|---|---|---|---|
+| 1. The kind `auditorHost` | `4133ed482a`, and `88363a30fc` (one guard rewritten so it parses) | A location's `"kind"` may be `"auditor-host"`. No new key | None new. Under anything but the site, or with a device, a memory leaf or a link's end at it: `kind`. Not the auditor's, or without the auditor's key and scheme for its id: `owner` | `Registration.lean` `r20261112-205040-75d2`; `SiteV2Guards.lean` `r20261112-205206-751a` |
+| 2. The time base | `160ab7b9a3` | A location's key `"timebase"`: a string on an auditor's host, `null` elsewhere. A location now has 15 keys; it sorts last, after `"time_unit"`. The auditor's key `"timebases"`: an array of `{"id", "sku"}`. The auditor now has 7 keys: `drift, hosts, keys, memory, sheets, timebases, tolerance` | None new. An auditor's host that states none, another than the auditor's, or one the auditor has none for, and any other location that states one: `owner` | `SiteV2Guards.lean` `r20261112-205434-edf8`; `Registration.lean` `r20261112-205434-155f` |
+| 3. The premise by host | `e0167418c1` | No new key. In the auditor's `"drift"`, each `"id"` is now an auditor's host's. A location's `"drift"` is stated only by an auditor's host | None new. A drift on any other location, the auditor's device too: `owner`. `rows` returns an error or the rows; its one error is the text `premise <name>: <host> is no auditor's host of the Site`, which is not a registration refusal | `Account.lean` `r20261112-205857-405c`; `SiteV2Guards.lean` `r20261112-205857-90fc`; `Registration.lean` `r20261112-205857-4f66` |
+
+At `e0167418c1` [run]: the package's root `CoreProtocol.lean` `r20261112-210042-c55a` exit 0; `RegistrationMain.lean` `r20261112-210042-9b93` exit 0; `Spot/SiteDifftest.lean` `r20261112-210042-1be5` exit 0 (and at `0c9e4b54ed00`, before job 2, `r20261112-204448-00ca` exit 0).
+
+**The Lean, in short** [read `CoreProtocol/Site.lean` and `Account.lean` at `e0167418c1`]:
+
+```lean
+inductive Kind | site | host | device | memory | certifier | challenger | auditorHost | outside
+def Kind.parents : Kind → List (Option Kind)   -- .certifier | .challenger => [some .site, some .auditorHost]; .auditorHost => [some .site]
+def Kind.auditor : Kind → Bool                 -- .certifier | .challenger | .auditorHost => true
+structure Loc where … drift : Option Figure := none; timeUnit : Option Figure := none; timebase : Option String := none
+structure Auditor where … drift : List (String × Figure) := []; timebases : List (String × String) := []
+def Owners : Prop := ∀ x ∈ e.locs,
+  (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key ∧ A.scheme x.id = some x.scheme ∧ x.scheme ∈ SCHEMES) ∧
+  (x.kind.auditor = false → x.owner = .prover ∧ x.scheme = "") ∧
+  if x.kind = .auditorHost then
+    (∃ t ∈ A.timebases.lookup x.id, x.timebase = some t) ∧ x.drift = A.drift.lookup x.id ∧ (x.drift.all fun q => decide (q.1 < 1)) = true
+  else x.timebase = none ∧ x.drift = none
+def Site.clock? (d : String) : Option String   -- the auditor's host device d is in
+def Site.drift? (d : String) : Option Figure   -- what that host states
+structure Premised where host : String; drift : Figure; premise : String
+def rows (S) (digest) (A) (period) (accounts) (answers) (premised : List Premised := []) : Except String (List Row)
+```
+
+**Three things a reader of the table would not guess.**
+- [derived] A certifier or challenger registered at the site, in no auditor's host, has no clock: it times nothing, of record or on a premise. That is how today's example and compute-research's `node_entry` register a certifier. To time a link the certifier must be in an auditor's host.
+- [read `Owners` above] An auditor's host is held to a key and a scheme of its own, as I described at 19:45Z. If the deployment has no key for the host itself, say so and I drop that half for hosts.
+- [derived] The view `host` of a location now gives none for an auditor's host and for a device in one. Before, it would have given the site's id for such a device.
+
+**For compute-research's builder** [read `cursor/compute-research-site-v2-python-7ba6` at `0df98e0ecb`, `verity/hardware/site/__init__.py`]. The premise's name and number agree: `ClockPremise(host, name, drift, …)` with `name = ClockRateWithin(<host>, 5e-4)` and `drift = 1/2000` is the Lean's `Premised {host, drift, premise}`; Lean prints the name and does not parse it. What their commit must change, since it wires "only the vocabulary Lean holds at 7dbf3bb":
+- `node_entry(certifier=, clock=)` puts the certifier under the site and states the drift on the certifier. Now it registers the auditor's host, `Loc(host, "auditor-host", site, "auditor", key, scheme, timebase=<the card's sku>, drift=<the figure for a ceiling, none for a premise>)`, with the certifier's parent the host, and no drift on the certifier.
+- `Auditor.of_files(clocks=)`: `drift` by the host's id, and `timebases` by the host's id.
+- `ClockPremise.premised(device)` gives `(device, drift, name)`; it is now `(host, drift, name)`.
+- `site_views` takes no `"tick"`, and a location's JSON has the key `"timebase"`.
+
+**No listed statement's text changes with job 2** [read `security/Properties/lean-audit.json` at `e0167418c1`: the thirteen signatures name `Core.Site.Registration.check`, `Entry.refusal` and the `Properties.Site.*` maps, none of the changed definitions]. What they read does: beside `Kind`'s constructor, `Kind.parents`, `Kind.auditor`, `Loc` (one field), `Registration.Auditor` (one field) and `Entry.Owners` (the time base's clause; the drift held on the host). The notice should name these, not the constructor alone; they go in the `FOR DANIEL: Site v2` entry.
+
+**Your 21:02Z ruling (A): read.** I write the spec's Site in v2's form on this branch now, then the two witnesses' instances, then the agreement. The notice comes as its own entry when the spec's Site compiles.
+
+**The day I would hold (your item 4).** Fri 13 Nov 23:59Z for the Lean half on the branch with its records run: the spec's Site, the witnesses, the agreement's proofs. [guess] It holds if the agreement goes clause by clause as the present file does; the clause I expect to cost most is the inventory at the log's end, which changes `go_says`. The pull request the same day only if compute-research's Python holds the three additions by then, since it merges their branch; otherwise the day theirs does.
+
+**The two lists.** `4eba` and `8406` waited 22 minutes for a slot on `vy-nebius-cpu-8` and `-10` (their slot records: every slot's memory reserved) and I cancelled them. Relaunched 21:00Z on `vy-nebius-cpu-12`: the suites `r20261112-210028-8081`, the records run `r20261112-210028-661e` (9000 s). Ready line when they end.
