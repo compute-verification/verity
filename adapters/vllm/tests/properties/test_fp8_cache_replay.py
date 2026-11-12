@@ -138,9 +138,10 @@ def doc(tmp_path, tag: str, fmt: str, flip: tuple[str, int, int] | None = None, 
     digests, raw = rows.digest()
     np.savez(tmp_path / f"{tag}.npz", **raw)
     eng = NS(vllm_config=NS(cache_config=NS(cache_dtype=fmt, block_size=BLOCK)))
-    steps = [{k: i for k in X.STEP_KEYS} for i in range(rows.steps)]
+    steps = [{**{k: i for k in X.STEP_KEYS}, "cache_hit": {"c": 4} if i == 2 else {}} for i in range(rows.steps)]
     return ({"steps": steps, "tokens": tokens or {"a": [5, 6, 7], "b": [8]}, "rows": digests, "chosen": X.chosen(eng, runner),
-             "empty_schedules": 0, "routes": {"top-k": rows.steps}, "topk": None}, tmp_path / f"{tag}.npz")
+             "empty_schedules": 0, "routes": {"top-k": rows.steps}, "topk": None, "rows_skipped": rows.skipped},
+            tmp_path / f"{tag}.npz")
 
 
 def test_a_replay_equals_its_serve_only_with_every_step_token_and_row_byte_on_the_same_engine(tmp_path):
@@ -151,7 +152,10 @@ def test_a_replay_equals_its_serve_only_with_every_step_token_and_row_byte_on_th
     same, b = doc(tmp_path, "same", "fp8_ds_mla")
     got = X.compare(served, same, (a, b))
     assert got["equal"] and got["rows"] == {"sets": 9, "differing": 0, "first": []} and json.dumps(got)
-    assert got["routes_replayed"] == {"top-k": 4} and X.summary(served)["routes"] == {"top-k": 4}
+    assert got["routes_replayed"] == {"top-k": 4}
+    said = X.summary(served)
+    assert said["routes"] == {"top-k": 4} and said["topk"] is None and said["cache_hits"] == {"c": 4} and json.dumps(said)
+    assert (said["cache_dtype"], said["steps"], said["tokens"], said["distinct_tokens"]) == ("fp8_ds_mla", 4, 4, 4)
 
     one, b = doc(tmp_path, "one", "fp8_ds_mla", flip=("a", 2, 513))
     got = X.compare(served, one, (a, b))
