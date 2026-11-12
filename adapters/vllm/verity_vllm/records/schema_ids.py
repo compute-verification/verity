@@ -131,6 +131,25 @@ BOUNDARY_LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
 #: the stochastic recompute's report, which `check.replay.stoch_recompute.recompute_run` writes
 STOCH_RECOMPUTE_SCHEMA = "verity-r15/stoch-recompute/v2"
 
+# --- the checks (`verity_vllm.check`)
+#: the Commit's token record, `commit/tokens_p<pair>.json` (`check.commit_tokens.CommitTokens.SCHEMA`), which
+#: `commit_tokens_record` writes and `link_to_commit_account` refuses any other than
+COMMIT_TOKENS_SCHEMA = "verity-vllm/commit-tokens/v1"
+#: the gates document, `gates.json` (`check.gates.GATES_SCHEMA`), which `gates_json` writes
+GATES_SCHEMA = "verity-gen/gates/v1"
+#: the fold summary, `fold_summary.json` (`check.gates.FOLD_SUMMARY_SCHEMA`), which `pipeline.match`'s fold writes
+FOLD_SUMMARY_SCHEMA = "verity-gen/fold-summary/v1"
+#: the query-use document, `query_use.json` (`check.gates.QUERY_USE_SCHEMA`); the partition gate refuses any other
+QUERY_USE_SCHEMA = "verity-ir/query-use/v1"
+#: the Commit's comparison with the Match record (`check.oracle_compare.SCHEMA`), which `oracle_compare` writes
+ORACLE_COMPARE_SCHEMA = "verity-sweep/oracle-compare/v1"
+#: the weights of record (`check.weights_of_record.SCHEMA`), which `weights_of_record` writes and `root_of_fields`
+#: hashes into the root
+WEIGHTS_OF_RECORD_SCHEMA = "verity/commit/weights-of-record/v2"
+#: the weights of record as derived before the root was host-independent (`check.weights_of_record.SCHEMA_V1`); no code
+#: writes it, and a row calls a record that carries it stale
+WEIGHTS_OF_RECORD_PRIOR_SCHEMA = "verity/commit/weights-of-record/v1"
+
 # --- the TP row (`verity_vllm.pipeline.tp`)
 #: the TP Commit's record of the replays it left for `tp-commit-replay` (`pipeline.tp.c2.SCHEMA`), which `seal` writes
 TP_REPLAY_DEFERRED_SCHEMA = "verity-vllm/tp-replay-deferred/v1"
