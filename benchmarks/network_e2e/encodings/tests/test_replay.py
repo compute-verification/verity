@@ -3,8 +3,8 @@
 The fixtures are step traces of vLLM d9105ea80's `Scheduler` and `AsyncScheduler` on a fake executor (`vllm_trace.py
 tests/fixtures --requests 14 --seed 3`, the cases named by the file): preemption under KV pressure in both engine loops,
 prefix caching, and a light load whose requests join part-full batches and an idle engine. Those of `tests/fixtures_draft`
-are the same scheduler's with a draft of 1, 3 and 5 tokens (`vllm_trace.sh`, the `draft` cases at their own size and
-seed 0)."""
+are the same scheduler's with a draft of 1, 3 and 5 tokens (`vllm_trace.sh --draft`: the cases with a draft, at their own
+size and seed 0)."""
 
 from __future__ import annotations
 
@@ -337,8 +337,8 @@ def test_refuses_what_it_does_not_model():
 def test_draft_fixtures_cover_the_draft_paths():
     """The draft fixtures are vLLM's scheduler under `mtp`'s settings, and at every K they hold the rows the draft rules
     decide: every kept count, a row whose drafts the context limit cut and one whose drafts the budget cut, a new or
-    resumed request's padded row in both loops, preemption and a prefix hit in both loops; and among them a request
-    that arrived after an empty schedule while another was in flight."""
+    resumed request's padded row in both loops, preemption and a prefix hit in both loops; and among them requests
+    that arrived after an empty schedule."""
     traces = {n: trace(n, DRAFT) for n in DRAFT_CASES}
     got = {n: _load("vllm_trace").exercised(t) for n, t in traces.items()}
 
@@ -360,7 +360,7 @@ def test_draft_fixtures_cover_the_draft_paths():
             for cache in (False, True):
                 assert some(lambda n: got[n]["cut_context"], **at, enable_prefix_caching=cache), (at, cache)
                 assert some(lambda n: any(s.preempted for s in traces[n].steps), **at, enable_prefix_caching=cache), (at, cache)
-    assert some(lambda n: got[n]["after_empty_busy"])
+    assert some(lambda n: got[n]["after_empty"])
 
 
 @pytest.mark.parametrize("name", DRAFT_CASES)
@@ -371,8 +371,9 @@ def test_replay_matches_vllm_with_a_draft_step_for_step(name):
     rp = R.replay(t.engine, t.requests, admit=t.before_step, passed=t.passed)
     assert len(rp.steps) == len(t.steps)
     for k, (a, b) in enumerate(zip(rp.steps, t.steps)):
-        assert (a.rows, a.drafts, sorted(a.preempted), a.cache_hit, sorted(a.new), sorted(a.resumed)) == (
-            b.rows, b.drafts, sorted(b.preempted), b.cache_hit, sorted(b.new), sorted(b.resumed)), k
+        # the trace records a new request's hit; a resumed request's shows in its row's start
+        assert (a.rows, a.drafts, sorted(a.preempted), {i: h for i, h in a.cache_hit.items() if i in a.new}, sorted(a.new),
+                sorted(a.resumed)) == (b.rows, b.drafts, sorted(b.preempted), b.cache_hit, sorted(b.new), sorted(b.resumed)), k
     assert rp.finish == ["stop" if r.eos else "length" for r in t.requests]
 
 
@@ -381,6 +382,18 @@ def test_kept_outputs_with_a_draft_are_the_traces_emissions(name):
     t = trace(name, DRAFT)
     assert [len(k) for k in t.kept_steps()] == [r.output_len for r in t.requests]
     assert [len(r.kept) + sum(r.kept) for r in t.requests] == [r.output_len for r in t.requests]
+
+
+@pytest.mark.parametrize("name", DRAFT_CASES)
+@pytest.mark.parametrize("contexts", R.CONTEXTS)
+def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
+    """Where the arrivals are not certified, the residual advice is still each request's admission alone: with the
+    drafts each row kept beside the certified I/O, it decodes back to the trace's steps."""
+    t = trace(name, DRAFT)
+    code = R.encode(t, contexts=contexts)
+    back = R.decode(t.certified(code.bucket_s), code)
+    assert [(s.rows, s.drafts) for s in back.steps] == [(s.rows, s.drafts) for s in t.steps]
+    assert all(len(b) <= code.ideal[w] + 2 for w, b in code.bits.items())
 
 
 def test_a_draft_needs_what_each_row_kept():

@@ -397,12 +397,10 @@ def exercised(t: Any) -> dict[str, Any]:
     (`rows_with_drafts`); a new or resumed request's, which are padding (`padded`); the rows of a request that held K
     drafts, its last row having emitted, and carried fewer, because the row ends at the context limit (`cut_context`) or
     because the step's budget ran out (`cut_budget`); how often a row kept each count (`kept`); and the requests added
-    after a schedule with no tokens (`after_empty`), those of them added while an earlier request still had a row to
-    come (`after_empty_busy`)."""
+    after a schedule with no tokens (`after_empty`)."""
     K, L = t.engine.num_speculative_tokens, t.engine.max_model_len
     out = {"rows_with_drafts": 0, "padded": 0, "cut_context": 0, "cut_budget": 0}
     emitted: dict[int, bool] = {}
-    last = [-1] * len(t.requests)
     for k, s in enumerate(t.steps):
         for i, start, n in s.rows:
             d = s.drafts.get(i, 0)
@@ -411,11 +409,9 @@ def exercised(t: Any) -> dict[str, Any]:
                 out["padded"] += d > 0
             elif emitted.get(i) and d < K:
                 out["cut_context" if start + n == L - 1 else "cut_budget"] += 1
-            emitted[i], last[i] = bool(t.emitted[k].get(i)), k
+            emitted[i] = bool(t.emitted[k].get(i))
     kept = [k for q in t.requests for k in q.kept or ()]
-    late = [i for i, p in enumerate(t.passed or ()) if p]
-    return out | {"kept": {str(k): kept.count(k) for k in range(K + 1)}, "after_empty": len(late),
-                  "after_empty_busy": sum(any(last[j] >= t.before_step[i] for j in range(i)) for i in late)}
+    return out | {"kept": {str(k): kept.count(k) for k in range(K + 1)}, "after_empty": sum(1 for p in t.passed or () if p)}
 
 
 def check(recs: Sequence[dict[str, Any]], tokens: dict[str, Sequence[int]] | None = None) -> dict[str, Any]:
