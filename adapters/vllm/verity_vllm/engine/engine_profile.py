@@ -218,7 +218,8 @@ def dist_identity(name: str) -> dict[str, Any]:
             d = {}
         url = d.get("url")
         out["direct_url"] = url
-        h = (d.get("archive_info") or {}).get("hash")
+        info = d.get("archive_info")
+        h = info.get("hash") if info else None
         if isinstance(h, str) and h.startswith("sha256="):
             out["wheel_sha256"] = h.split("=", 1)[1]
         if out["wheel_sha256"] is None and isinstance(url, str) and url.startswith("file://"):
