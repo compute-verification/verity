@@ -337,18 +337,22 @@
   },
   "NetTiming.PhaseErrors": {
    "owner": "@network-accounting",
+   "digest": "f66a286ff4efc9e9c17ff0f134a2514af3bc27b9561da15150560932a078908a",
    "why": "What e is: e i is at least execution phase i's error at every secret and history, the committed form's at the trace read at the statement (Compiled.εregX) plus the registered openings' binding term (BopsX's probability); the bound's second term is the sum of the e i. (met by `NetTiming.Witness.PooledLeakRegistered_honest`)"
   },
   "NetTiming.PhaseRounds": {
    "owner": "@network-accounting",
+   "digest": "cc4a0abfc56bf36647413cfb6209e90343fa9b75aff00cdf0b3c209060f450d1",
    "why": "A scope: each execution phase's verifier has at most kV rounds at its statement, so the monitoring period's coins are one type; a phase's verifier reads the first of its kV coins, and the coins past them are uniform and read by nothing. (met by `NetTiming.Witness.PooledLeakRegistered_honest`)"
   },
   "NetTiming.PhasesAdaptive": {
    "owner": "@network-accounting",
+   "digest": "8d6f13434f1f96e48ab9dc49361e19ebc5f88cb62312ba889ebe0b0cd4733fad",
    "why": "The monitoring period's adaptivity: each execution phase's statement, its prover's strategy and its registered openings read only the earlier phases' coins, so the phase's incorrect set is fixed before its sample; a property of the period the bound is read at, which it proves of no check. (met by `NetTiming.Witness.PooledLeakRegistered_honest`)"
   },
   "NetTiming.RateAt": {
    "owner": "@network-accounting",
+   "digest": "6e8552dbf24e31a9a27d781ec4598b965fe538952ff7788a7293f42c91be4cf1",
    "why": "The sample's rate, which the bound's first term is stated at: the design misses every set of the partition's proof blocks with probability at most 1 - q to the set's size. A uniform sample of kd of n proof blocks meets it at q * n <= kd and a sample of every proof block at q = 1 (NetTiming.rateAt_subset, NetTiming.rateAt_all). (met by `NetTiming.Witness.PooledLeakRegistered_honest`)"
   },
   "NetTiming.ResetsIn": {
@@ -19311,7 +19315,29 @@
    "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
   },
   "NetTiming.SecurityProofs.PooledLeakRegistered": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.PooledLeakRegistered : NetTiming.Guarantees.PooledLeakRegistered"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "Claims.Sampling.CommitmentScheme.Binds",
+     "NetTiming.PhaseErrors",
+     "NetTiming.PhaseRounds",
+     "NetTiming.PhasesAdaptive",
+     "NetTiming.RateAt"
+    ],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.Compiled.Sessions",
+     "NetTiming.BoundaryGates.Fits",
+     "NetTiming.CertifierRegisters",
+     "NetTiming.RegOpens"
+    ],
+    "reads": []
+   },
+   "type_hash": "adddd18839b9ee85dbbab0e5d88b34757d881d14e945fad237c30c18f0d32d70",
+   "unfolded_hash": "016e51d35c8a8cd7e9124be52f181822e6d3d0181e1fc181e6feb1d865b19c86"
   },
   "NetTiming.SecurityProofs.ResponseCapped": {
    "owner": "@network-accounting",
@@ -19569,10 +19595,123 @@
    "type_hash": "7f5221097b5b6cee0835da33734e0771770052bb0e4ff4698e2b2da0b3f47f10"
   },
   "NetTiming.Witness.PooledLeakRegistered_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakRegistered_honest :",
+    "  And (Claims.SamplingGeneric.Arg.KS FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoA Bool))",
+    "    (And (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool).commit)",
+    "      (And (Claims.SamplingGeneric.Compiled.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool))",
+    "        (And (NetTiming.PhaseRounds (fun x => Claims.Witness.SamplingGeneric.twoL Bool) 2 fun x x_1 x_2 => List.nil)",
+    "          (And",
+    "            (NetTiming.PhasesAdaptive (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP)",
+    "              fun x x_1 x_2 x_3 => NetTiming.Witness.certOps)",
+    "            (And",
+    "              (∀ (s : Claims.Sampling.AuditStatement),",
+    "                Eq ((Claims.Witness.SamplingGeneric.twoL Bool).parse List.nil) (Option.some s) →",
+    "                  NetTiming.RegOpens FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool).commit s",
+    "                    (Finset.instSingleton.singleton 1) NetTiming.Witness.certOps)",
+    "              (And",
+    "                (∀ (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition),",
+    "                  Eq ((Claims.Witness.SamplingGeneric.twoL Bool).parse List.nil) (Option.some s) →",
+    "                    Eq ((Claims.Witness.SamplingGeneric.twoL Bool).partition s) (Option.some Pt) →",
+    "                      NetTiming.RateAt s Pt 1)",
+    "                (And",
+    "                  (NetTiming.PhaseErrors FlockDeploy.sha512 (fun x => Claims.Witness.SamplingGeneric.twoL Bool)",
+    "                    (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP)",
+    "                    (fun x x_1 x_2 x_3 => NetTiming.Witness.certOps) fun x =>",
+    "                    instHAdd.hAdd",
+    "                      (Claims.SamplingGeneric.Compiled.εregX FlockDeploy.sha512",
+    "                        (Claims.Witness.SamplingGeneric.twoL Bool) List.nil Claims.Witness.silentP)",
+    "                      (Claims.Finder.Pr FlockDeploy.sha512",
+    "                        (NetTiming.BopsX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool)",
+    "                          (fun x => NetTiming.Witness.certOps) Unit Claims.Witness.silentP List.nil)))",
+    "                  (And",
+    "                    ({ egress := fun x ℓ x_1 => ℓ.elim0, ingress := fun x => List.cons 0 List.nil }.Fits",
+    "                      Claims.Witness.SamplingGeneric.twoStmt.prog 1)",
+    "                    (And",
+    "                      (∀ (s : Claims.Sampling.AuditStatement),",
+    "                        Eq ((Claims.Witness.SamplingGeneric.twoL Bool).parse List.nil) (Option.some s) →",
+    "                          NetTiming.CertifierRegisters FlockDeploy.sha512",
+    "                            (Claims.Witness.SamplingGeneric.twoL Bool).commit",
+    "                            { egress := fun x ℓ x_1 => ℓ.elim0, ingress := fun x => List.cons 0 List.nil } 1",
+    "                            (fun x x_1 => List.cons Bool.true List.nil) s NetTiming.Witness.certOps",
+    "                            (List.cons",
+    "                              { rows := fun ℓ => ℓ.elim0, jitter := 0, status := fun x => NetTiming.Status.complete }",
+    "                              List.nil))",
+    "                      (∀ (ω : Fin 1 → Prod Unit (Fin 2 → Bool)) (i : Fin 1),",
+    "                        And",
+    "                          (NetTiming.phaseAcc FlockDeploy.sha512 (fun x => Claims.Witness.SamplingGeneric.twoL Bool)",
+    "                            (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP) ⋯ Unit.unit i ω (ω i))",
+    "                          (And",
+    "                            (NetTiming.PhaseRegistered (fun x => Claims.Witness.SamplingGeneric.twoL Bool)",
+    "                              (fun x => { egress := fun x ℓ x_1 => ℓ.elim0, ingress := fun x => List.cons 0 List.nil })",
+    "                              (fun x => 1) (fun x => Finset.instSingleton.singleton 1)",
+    "                              (fun x => Claims.Witness.SamplingGeneric.twoStmt)",
+    "                              (fun x => Claims.Witness.SamplingGeneric.twoPart) (fun x x_1 => Bool.true)",
+    "                              (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 x_3 => NetTiming.Witness.certOps) Unit.unit ω",
+    "                              i)",
+    "                            (NetTiming.RecordComplete (fun x => 1) 1 (fun x => Claims.Witness.SamplingGeneric.twoStmt)",
+    "                              (fun x x_1 x_2 =>",
+    "                                List.cons",
+    "                                  { rows := fun ℓ => ℓ.elim0, jitter := 0,",
+    "                                    status := fun x => NetTiming.Status.complete }",
+    "                                  List.nil)",
+    "                              Unit.unit ω i))))))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ef60eb50f16d42b28e50c377dc42543bdbace44e631389465cf81b9d287451b3"
   },
   "NetTiming.Witness.PooledLeakRegistered_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakRegistered_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Pr fun ω =>",
+    "        And",
+    "          (∀ (i : Fin 1),",
+    "            And",
+    "              (NetTiming.phaseAcc FlockDeploy.sha512 (fun x => Claims.Witness.SamplingGeneric.leakL Bool)",
+    "                (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP) ⋯ Unit.unit i ω (ω i))",
+    "              (And",
+    "                (NetTiming.PhaseRegistered (fun x => Claims.Witness.SamplingGeneric.leakL Bool)",
+    "                  (fun x => NetTiming.Witness.trivLay) (fun x => 1)",
+    "                  (fun x => Finset.instEmptyCollection.emptyCollection)",
+    "                  (fun x => Claims.Witness.SamplingGeneric.notStmt) (fun x => Claims.Witness.SamplingGeneric.notPart)",
+    "                  (fun x x_1 => Bool.false) (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 x_3 => List.nil) Unit.unit ω i)",
+    "                (NetTiming.RecordComplete (fun x => 1) 1 (fun x => Claims.Witness.SamplingGeneric.notStmt)",
+    "                  (fun x x_1 x_2 =>",
+    "                    List.cons",
+    "                      { rows := fun x x_3 => Option.none, jitter := 0, status := fun x => NetTiming.Status.complete }",
+    "                      List.nil)",
+    "                  Unit.unit ω i)))",
+    "          (Not",
+    "            (NetTiming.PooledGood (fun x => NetTiming.Witness.trivLay) (fun x => 1)",
+    "              (fun x => Finset.instEmptyCollection.emptyCollection) 1 (fun x => Claims.Witness.SamplingGeneric.notStmt)",
+    "              (fun x => Claims.Witness.SamplingGeneric.notPart) (fun x x_1 => Bool.false)",
+    "              (fun x x_1 x_2 x_3 => List.cons Bool.false List.nil) 1",
+    "              (NetTiming.WregR FlockDeploy.sha512 (fun x => Claims.Witness.SamplingGeneric.leakL Bool)",
+    "                (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP) (fun x x_1 x_2 x_3 => List.nil)",
+    "                Unit.unit ω)",
+    "              fun x =>",
+    "              List.cons { rows := fun x x_1 => Option.none, jitter := 0, status := fun x => NetTiming.Status.complete }",
+    "                List.nil)))",
+    "      (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 1) 1) (Finset.univ.sum fun x => 0)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "53f5d7cd8d161a6ca8f9c979e27eb1c6bd16196489803739e47c90bdef2711f8"
   },
   "NetTiming.Witness.SampledAuditAccepted_honest": {
    "owner": "@proofs",
@@ -28898,8 +29037,8 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -37343,6 +37482,12 @@
     "NetTiming.Guarantees.PooledLeakAccepted": "ecc9283ccfc0633c2fca110ecf7d91a5f47414b6bdc95561508f21090609b4b3"
    }
   },
+  "Definitions.NetworkCertifier.Guarantees.PooledReg": {
+   "digest": "fa34f7b96d5db9d4e0dbe544e1b8961a309dec6ce4f46c9c19e1c56143e6f164",
+   "definitions": {
+    "NetTiming.Guarantees.PooledLeakRegistered": "3e2c041bbbe8d857887c296ec9712471b6c5da952a0260e962d1eb87be27802d"
+   }
+  },
   "Definitions.NetworkCertifier.Guarantees.ResponseCap": {
    "digest": "5d33d4732983b54a820ff35b0f5c1e0209feb8a59bf3e6a08b37427d816617d7",
    "definitions": {
@@ -37383,6 +37528,22 @@
    "definitions": {
     "NetTiming.LeakAt": "384ba8473c9dfde3a62acf6d4fe887c6b174f2581008ed953e7c49f597d19d55",
     "NetTiming.PooledGood": "82a11c0d8e1a2bf90a6a1ad8b96e18ac0539b75af43da83c2855569664285363"
+   }
+  },
+  "Definitions.NetworkCertifier.PooledReg": {
+   "digest": "f9d2943c12c5524ae1cdcc9f587a496d7a6fc5b01263f472aa42ca1117f36b8b",
+   "definitions": {
+    "NetTiming.BopsX": "d8881385c59f562fe4c1bb9f6943a510e33180a901746de3d170e27d44f11449",
+    "NetTiming.FregR": "5f16a4b60b9125ca63ae377c8dcda597bb1d40c70e6385d1b0017571a0acf67e",
+    "NetTiming.PhaseErrors": "f66a286ff4efc9e9c17ff0f134a2514af3bc27b9561da15150560932a078908a",
+    "NetTiming.PhaseRegistered": "76bd2fca2cb2a60ebb9f17a39d15ea508536d4a73cbe95fda885743f1aa460d0",
+    "NetTiming.PhaseRounds": "cc4a0abfc56bf36647413cfb6209e90343fa9b75aff00cdf0b3c209060f450d1",
+    "NetTiming.PhasesAdaptive": "8d6f13434f1f96e48ab9dc49361e19ebc5f88cb62312ba889ebe0b0cd4733fad",
+    "NetTiming.RateAt": "6e8552dbf24e31a9a27d781ec4598b965fe538952ff7788a7293f42c91be4cf1",
+    "NetTiming.RecordComplete": "1afaee1e32f77b473c6ffac20e215de2826ce784d9b9e7e44981e8066a3629db",
+    "NetTiming.WregR": "d8415cddd05eca8d2718ca8619141f76aaa216883eddabf7b638cba3bb9b1bf5",
+    "NetTiming.phaseAcc": "d59fb52fc39da542125a1d75b9f7742b143a9fc88861343e4603dad8dea40d24",
+    "NetTiming.regValR": "bec447ec1caa16849a4b1a35b8eae40df3bf3a80dd959c569a96a17c4cbab1b2"
    }
   },
   "Definitions.NetworkCertifier.ResponseCap": {
