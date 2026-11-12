@@ -65,3 +65,38 @@ two readers, `match_workload`'s `_workload_doc`, `_workload_enforce_eager`, `_wo
 `_workload_execution` and `_workload_expected_steps` and `match_fold`'s `_jsonable`, and it hands on the names
 other modules' tests still read through it: the three `INSTANCES_` names, `fold_summary_result`, `persist_program`,
 `run_stage`, `_workload_moe_construction` and `engine.served`'s `ENFORCE_EAGER`.
+
+## The Commit and its replay
+
+The Commit serves a row's workload with the committer attached and holds what it committed to what it served. `commit`
+is the stage (`verity-vllm commit`), and `commit_arb` the served Commit under seeded varied traffic. Before the GPU is
+held, `commit_plan` derives the plan the Commit reads. `commit_attach` gives a built committer the classes, sources,
+taps and hooks its required-value manifest asks for; `commit_coins` takes the Commit's coins from the auditor host's
+challenger, one challenge phase a Commit; `gpu_lease` runs a leased Commit, whose GPU phase alone holds a GPU.
+`c2_replay` is the C2 of record of one instrumented run, the sampled replay and the boundary linkage over its
+committed store, in the Commit's process or on CPU. A Commit with `--replay-deferred` leaves a sealed bundle instead
+(`replay_bundle`; `replay_plan` is the slim bundle's planner process), which `cpu_replay` opens against the Commit's
+record and replays without the engine (`verity-vllm commit-replay`). Beside them are `m1_capture`, the observation log
+of a workload under the observer; `admission_bound`, the bound on what a `--retain host` Commit retains on the host,
+and `telemetry.admission`, the row planner's reservation model; `compiled_merge`, a compiled row's two arms merged
+into one summary; `source_identity`, the precheck that a job runs the tree it names; and `spans`, the commitment's
+wall clock, part by part. `verity_vllm.gc_tuning`, the collector thresholds of the offline processes, sits above the
+package, and `pipeline.gc_tuning` hands its `tune` on to the two Match checkers that still import it from here.
+
+What code outside these modules takes from one of them is what its `__all__` lists, beside `Options` and `main` where
+the module is a command: `commit_attach` (`attach_of_record`, `classes_of_record`), `commit_coins` (the challenger
+gate, the challenge phase, the coins' families, positions and identities, and what samples by them; a benchmark
+imports `ChallengerGate`), `commit_plan` (`key`, `keyed`, `write`), `cpu_replay` (`OnRead`, `Refused`, `WORDS`,
+`manifest_of`, `of_record`, `open_weights`, `opener`, `provider`, `registered_roles`, `replay_args`, `tensor_root_of`,
+`tree_refusal`, `weights_attest`, `worker_peak`), `m1_capture` (`dump_cos_sin`), `replay_bundle` (`ARGS`, `HASHED`,
+`MANIFEST`, `NOT_RETAINED`, `PENDING`, `deferred_records`, `discard`, `open_bundle`, `partial`, `path`, `seal`,
+`seal_all`, `weights_extra`, `write_store`, `write_store_files`), `replay_plan` (its command alone) and `spans`
+(`Spans`). The benchmarks import `cpu_replay` and `replay_bundle` as modules. Eight modules state no `__all__`. Others
+import `commit` for `assert_pristine`, `baseline_state`, `class_coverage`, `git_head`, `make_committer` and
+`run_workload` (the benchmarks for three of them), `c2_replay` for `arrivals`, `programs_of_record`, `request_labels`,
+`rss_kb` and `seed_of`, `gpu_lease` for the lease (`acquire`, `give_back`, `leased`, `run`, `run_main`,
+`hide_devices`, `use_environ`, `cuda_initialised`) and its record's names (`DRIVER`, `MATCH_LEG_KEPT`, `RECORD`,
+`WEIGHTS_HASH`), and `source_identity` for `TREE`, `code_identity_of` and `tree_identity`. `commit_arb` and
+`compiled_merge` are commands and nothing else, only `commit` reads `admission_bound`, and only `admission_bound` and
+`cpu_replay` read `telemetry.admission`. Four private names are imported from another module, all of `gpu_lease`:
+`_HELD`, `_kept_by`, `_no_device` and `_watch`.
