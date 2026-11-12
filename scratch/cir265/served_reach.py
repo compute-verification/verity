@@ -9,7 +9,7 @@
   digest   the served statements' digest as `adapters/vllm/tests/pipeline/test_served_unit_rows.py` computes it, with the
            builder as it is and with the builder committing its sum, and how often the builder ran for each
 
-    python served_reach.py ROOT [MAX_GB]
+    python served_reach.py ROOT [MAX_GB]        REACH_FULL=1 opens every body, a traced Definition's gates too
 
 The process exits itself past MAX_GB of RSS (1.0)."""
 import hashlib
@@ -100,6 +100,11 @@ for t in names:
         units.setdefault(u, set()).add(t)
 out["units"] = len(units)
 
+#: without FULL, the body of a Definition traced from a circuit builder (`trace.definition`, `trace.part`: ``defn.traced``) is
+#: not built: it holds gates and, traced with calls, only `trace.folded` Definitions (`CallTracingCircuit.fold_call`), which
+#: ``folded`` lists; a unit's gates are gigabytes and minutes each
+FULL = bool(os.environ.get("REACH_FULL"))
+skipped: set[str] = set()
 visited: dict[int, object] = {}
 reach_of: dict[int, frozenset[str]] = {}
 
@@ -111,7 +116,9 @@ def reach(fn) -> frozenset[str]:
     visited[id(fn)] = fn
     reach_of[id(fn)] = frozenset()  # a Definition never holds itself
     got = {spec_base(CD.descriptor_id(fn))}
-    if isinstance(fn, SpecializedDefinition):
+    if isinstance(fn, SpecializedDefinition) and not FULL and getattr(fn.defn, "traced", None) is not None:
+        skipped.add(spec_base(CD.descriptor_id(fn)))
+    elif isinstance(fn, SpecializedDefinition):
         held = list({id(n.fn): n.fn for n in fn.body.nodes}.values())
         fn._body = None  # a unit's gates are gigabytes: the Definitions it holds are read, the body is built again if asked
         for g in held:
@@ -137,6 +144,12 @@ for u, via in sorted(units.items()):
     families |= got
     if got & set(COUNT_TREE):
         hits[u] = {"reaches": sorted(got & set(COUNT_TREE)), "named_by": sorted(via)}
+from verity.circuits.boolean import trace as TR  # noqa: E402
+
+out["full"] = FULL
+out["traced_families_not_opened"] = len(skipped)
+out["folded"] = sorted(TR.FOLDED)
+out["count_tree_families_traced"] = sorted(set(COUNT_TREE) & skipped)
 out["unresolved"] = unresolved
 out["walked_units"] = len(units) - len([u for u in unresolved if u in units])
 out["families_reached"] = len(families)
