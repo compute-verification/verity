@@ -68946,3 +68946,56 @@ This replaces the first item under "What I could not decide by reading" in my en
 - Two members with different circuit files that bind the same partition and program are both served. That is the case vLLM's test and its three-member window run.
 - Not covered by this check: a circuit under the provisional unit cover, which binds no partition object [read `HmRow.lean`:1288-1290].
 - The sentence I ask for in `PROTOCOL.md` §10.4 stays: the flags are the process's, so one stream serves one partition and one program. It can now add that a member of another is refused by its loop.
+
+## STOPS, Thu 12 Nov 03:12Z: both runs fail the same 14 tests, every one a test that asserts the off form, and nothing fails for another reason. `second-return` is pull request #9116, unmarked, its records run waiting for a slot. The terms follow-up waits on #9095's landing: four of the eight sites are mine to rename, four are names the test must spell
+
+In plain words: the two runs on the branch that turns the form's switch on fail only where a test expects `main`'s refusal of the two-stage form and gets an accept. The list is the same at the head before the merge and at the merged head, so the merge of `second-return` broke nothing, and its own tests pass there. `second-return` is now open as a pull request with no mark; I do not give a ready line until the lock records' run ends. #9095 has not landed, so I have pushed nothing for the retired terms; the four renames are prepared and read 40 sites where #9095 reads 44.
+
+Tags: [run] a command I ran now; [read] a file, log or record I read now; [derived] from those; [relayed] another lane's statement I did not check; [guess] mine, unchecked. Both runs in item 1 are development runs: the form's switch on, ahead of its proof; not `main`'s verifier.
+
+**1. The two runs: the same 14 failures, all of them tests that assert the off form.**
+- `r20261112-020749-f862`, the merged head `eb6b79a1da90`, `vy-nebius-cpu-1`, 02:08Z to 02:45Z, rc 1 [read: its `stdout.log` and the suites' logs]: `lake build` rc 0 (503 jobs); `benchmarks/two_stage` 10 passed, 3 skipped; `benchmarks/one_stage` 551 passed; the Python verifier's suite 865 passed, **13 failed**; the Lean difftest's suite 258 passed, **1 failed**, 2 skipped.
+- `r20261112-020825-292b`, the head before the merge `f87131e0b9c4`, `vy-nebius-cpu-3`, 02:08Z to 02:29Z, rc 1 [read]: `lake build` rc 0 (470 jobs); 10 passed, 3 skipped; 528 passed; 858 passed, **13 failed**; 250 passed, **1 failed**, 2 skipped.
+- **The two lists are one list** [run: `diff` of the two lists of ids; the `E` lines compared]: the same 14 test ids, the same assertion in each.
+  - `verity/protocols/spot/verifier/tests/test_two_stage.py`, 13:
+    - `test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both` (`assert not SS.FORM`)
+    - `test_the_run_of_record_holds_the_form_switch`
+    - `test_round_two_refuses_a_statement_the_run_did_not_make`, cases 0, 16 and 17 of 34
+    - `test_round_two_holds_each_header_to_its_templates_reference`, cases 0 to 3 of 11
+    - `test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read`, case 0 of 5
+    - `test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it`
+    - `test_round_two_holds_the_interior_record_to_the_replay_sample_in_order`, case 0 of 8
+    - `test_a_replay_block_of_two_templates_runs_with_a_template_major_interior`
+  - `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, 1: `test_a_two_stage_run_reaches_every_step`. It expects the Lean run to reject "on round 2's refusal of the two-stage form alone". The line before it, Lean's output equal to the Python's, passed.
+- **Each of the 14 asserts the off form** [read: each failure's assertion and values]. In each, round 2's check is `ok` with no codes and the outcome is accepted, where the test expects the one code `two-stage-form`. The nine parametrized failures are exactly the cases whose expected codes are `['two-stage-form']`; every such case fails, and no case that expects another code fails [derived].
+- **Nothing fails for another reason** [derived from the above: 14 of 14 accounted for].
+- **`second-return`'s tests pass at the merged head**, the switch on [read: the suites' logs]: the `replay_returns` piece, the difftest's `test_round_two_reads_what_a_replay_block_returns_only_at_round_ones_port` and `test_the_names_of_what_a_replay_block_returns_lean_the_pythons_whole`, and the Python verifier's `test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_value_of_it`.
+- Both runs are labelled in the store [run].
+
+**2. The retired terms review-29 named on #9095: waiting on its landing.**
+- #9095 is open at `16a53034f67a` and `origin/main` is still `be9a3d566905` [run 03:11Z]. I pushed nothing to its branch and made no branch yet.
+- **The eight sites** [run: the lint's `sites` on the file: 44 at #9095's head, 36 on `main`], all in `test_a_class_of_two_check_templates_samples_each_at_its_own_count`:
+  - **Four I rename.** Line 116, the docstring's ``stage1.json``, becomes "the hand-off", the command's own word for that file. The local variable `stage1` at lines 134, 135 and 136 becomes `handoff`.
+  - **Four the test must spell, left.** `got.stage1()` (line 134), a method of the command's first-stage result. `second.law` and `S.second_law` (line 139), the stream's sample field and a function of `verity/protocols/spot/verifier/service.py`. `again.draw` (line 139), a field of the command's resumed stage.
+- **Prepared, not pushed** [run, on a detached worktree of #9095's head]: with the four renames the lint reads **40** sites, and `ruff check` passes. The four left are the four names above.
+- **One thing for the vLLM lead** [read: VLLM-370, the worker's 02:21Z comment]. #9082 renames the command's field `First.draw` to `First.sample`. Line 139's `again.draw.units` is a new reader of it. When #9095 is on `main`, #9082's merge of `main` has to rename that reader too, or the test fails at run time, as its worker found for #8707's two readers. So I leave `again.draw` to #9082 and do not touch line 139.
+- **When #9095 is on `main`:** the branch from `origin/main`, the four renames, the test file's run and the lint through `research run`, then `research queue open` under PRF-361, which carries the label `proofs/terminology-clean` [read, Linear], and the ready line. ETA: within the hour after you resume me.
+
+**3. What else was open at 02:10Z, one line each.**
+- **`r20261112-013404-98f1`** (`second-return` alone at `389565d368cb`, the switch off as on `main`): rc 0; `lake build` rc 0; **62 suites, 62 passed**, none from the cache [read]. Labelled.
+- **`second-return`'s pull request: [#9116](https://github.com/compute-verification/verity/pull/9116), opened 03:09Z, unmarked**, head `389565d368cb7d9b0606fab707f4e97e2a09c659` of `cursor/proofs-return-579f`, mergeable [run]. No ready line yet: see the next line.
+- **The lock's records:** `r20261112-030419-9217` on `vy-nebius-cpu-1`, the records' fast path for the Spot verifier's Lean and the packages that require it, launched 03:05Z, **waiting for a slot at 03:11Z** [run]. Its cap is 120 min from taking a slot. It says which records move under the changed `Own`, and whether `security/`'s packages build against it. The ready line follows it.
+- **#9116's `Goal` line needs you**, as #9095's did. VLLM-370's only label is `from:vllm`, so `open` warned twice. I wrote `Goal proofs/spot-two-stage-e2e` by hand; #9041, the wire's side of the same rule, went under `proofs/spot-two-stage-sound`. Change it or label the issue. VLLM-367 is still unlabelled too.
+- **The merged head for the vLLM lane** (`eb6b79a1da90`, due Thu 08:00Z): delivered at 02:10Z. Its worker's rehearsal with it merged in, `r20261112-021724-d942`, accepted with round 2 `ok` and no codes, and it removed `return_salts` since the check takes no salt [relayed: VLLM-370, 02:21Z and 02:41Z].
+- **A counts record that names a model's block types** is still refused by name: not mine, unchanged.
+- **Thu 20:00Z**, the state for Thursday's run: stands.
+
+**4. Your question on FRAME's 02:13Z entry: yes, `second-return` holds as built if a block's parameters also become ports round 1 commits.**
+- It reads only the names of the block's return (`o<j>`, as the boundary record names its ports), never a parameter's [read: `returnsOk`, `replayReturns`]. A ruling on parameters changes neither.
+- Under that ruling, where round 1's record has a parameter's port, an interior that registers a value of that name is already refused (`second-interior-names`), and the link's read is at the boundary port (`second-read`) [read].
+- **What the ruling would still need** is what `second-return` adds for the return: a refusal where round 1's record has no port of the parameter's name, since `namesOk` cannot fire there. It is the same check over a longer list: the names of the block's parameter links, less the values the verifier supplies. That is a few lines on each side and a difftest case, once the ruling says which parameters are the prover's [derived; not written].
+- As at 02:10Z: the proof's model reads neither check (`SpotFlock.readsOk` never reads `interiorFailures`), so both refuse more than the model asks.
+
+**Mailbox** read 03:11Z: its newest section is yours of 02:25Z. Checkpoint note written 03:07Z.
+
+**I wait on** #9095's landing (no ETA of mine: it lands with a batch) and on `r20261112-030419-9217` (waiting for a slot; at most 120 min after it takes one).
