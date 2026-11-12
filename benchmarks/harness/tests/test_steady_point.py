@@ -1116,8 +1116,8 @@ def test_the_lease_is_asked_of_the_cards_on_the_numa_node_of_the_runs_cpus(tmp_p
 #: a node that doesn't say which cards are on the NUMA node of the run's CPUs: what it says instead, and why the lease
 #: is asked of any card
 ANY_CARD = [
-    ({"node_node0_cpulist": "0-24\n", "node_node1_cpulist": "25-31\n"}, [0, 1], "lists 2 NUMA nodes for the run's CPUs"),
-    ({"node_node0_cpulist": None, "node_node1_cpulist": None}, [], "lists 0 NUMA nodes for the run's CPUs"),
+    ({"node_node0_cpulist": "0-24\n", "node_node1_cpulist": "25-31\n"}, [0, 1], "the node lists 2 NUMA nodes for the run's CPUs"),
+    ({"node_node0_cpulist": None, "node_node1_cpulist": None}, [], "the node lists 0 NUMA nodes for the run's CPUs"),
     ({"cards": None}, [1], "`nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader` exited 1"),
     ({"pci_0000_b1_00_0_numa_node": "-1\n", "pci_0000_ca_00_0_numa_node": None}, [1],
      "none of the node's 3 cards says it is on NUMA node 1"),
