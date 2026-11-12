@@ -260,7 +260,6 @@
     {"file": "verity_vllm/check/match/decomp_profile.py", "kind": "method-assign", "symbol": "_install_profile_counters", "detail": ""},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "assignment", "symbol": "_divergence_report", "detail": ""},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "assignment", "symbol": "compare_steps", "detail": "", "count": 4},
-    {"file": "verity_vllm/check/match/program_compare.py", "kind": "attr-defined", "symbol": "_canon_step_relative", "detail": "", "count": 4},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "attr-defined", "symbol": "main", "detail": "", "count": 6},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "dict-item", "symbol": "audit_padding", "detail": "", "count": 2},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "index", "symbol": "compare_steps", "detail": "", "count": 2},
