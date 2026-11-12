@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The lowering probe: what ptxas emits on the H200 (sm_90a) and the RTX PRO 6000 (sm_120a) for each PTX form a coverage
-# row (benchmarks/pouw/machine_model/data/cover/rows.toml) cites, or that it refuses it. Compiles lowering.cu's cases
+# row (benchmarks/machine_model/data/cover/rows.toml) cites, or that it refuses it. Compiles lowering.cu's cases
 # with nvcc -cubin and reads cuobjdump -sass; CPU only, no GPU. Prints a line a case and architecture (its opcodes, or
 # ptxas's refusal) against its expectation below, then the verdict; exits 1 if a case lowers otherwise. With $OUT (under
 # research run) it also writes lowering.txt and each case's SASS there:
