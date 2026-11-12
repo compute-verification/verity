@@ -45,11 +45,14 @@ FINISH = {0: "stop", 1: "length", 2: "abort", 3: "error", 4: "repetition"}
 SAMPLING = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "presence_penalty", "frequency_penalty",
             "repetition_penalty", "stop_token_ids", "stop", "ignore_eos", "logit_bias", "n")
 #: the speculative decoding an engine is built with, as vLLM's ``SpeculativeConfig`` names it: the settings that decide which
-#: draft tokens a step verifies and which it accepts. The draft model's path is the engine's own, so it is left out.
+#: draft tokens a step verifies, which it accepts and which prefix-cache blocks a request hits. The draft model's path is the
+#: engine's own, so it is left out. A name the engine's vLLM does not have is skipped: the lookahead block hashes, the
+#: draft head's quantization and FLy's acceptance are later vLLM's.
 SPECULATIVE = ("method", "num_speculative_tokens", "num_speculative_tokens_per_batch_size", "draft_sample_method",
                "rejection_sample_method", "synthetic_acceptance_rates", "index_share_for_mtp_iteration", "parallel_drafting",
                "disable_padded_drafter_batch", "disable_eagle_block_drop", "use_local_argmax_reduction",
-               "enable_adaptive_verification")
+               "enable_adaptive_verification", "disable_lookahead_block_hashes", "draft_lm_head_quantization",
+               "fly_window_size", "fly_entropy_threshold", "fly_entropy_top_k")
 
 
 def _plain(v: Any) -> Any:
