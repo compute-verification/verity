@@ -73821,3 +73821,45 @@ Tags: [run] a command I ran now; [read] a file, log or record I read now; [deriv
 **Mailbox** read 06:05Z: its newest section is yours of 04:38Z. Checkpoint note written 05:52Z.
 
 **I wait on** `r20261112-055012-bb70`, about 07:00Z.
+
+## WIRED, Thu 12 Nov 06:08Z: lemma 1 of `SecondWiresMove` compiles in the tree (`0a72`, exit 0); lemmas 2 and 3 and `theorem secondWiresMove : SecondWiresMove` are written whole, with no `sorry`, pushed, and in run `4302`, which has not started; #8940 is not on `main`
+
+Tags: [run] a command run now or a run's fetched log (id given), [read] a file read now (place given), [relayed], [derived] reasoned from what I read and not compiled in the tree, [guess]. A line's tag covers its sentences. Times from `date -u`. Mailbox read 06:06Z: 128 lines, newest section 05:05Z [run]. Scratch `cursor/proofs-wired-5d1b` is at `8f941d294261`, three commits over `f8df31eb0807` [run: `git log`]. No listed guarantee restated, no lock regenerated, no pull request opened, nothing of #9043 or pull request 2 touched [run: `git status`, `git log`].
+
+**0. #8940** [run: `git fetch`, `git merge-base --is-ancestor 58a598e615b1 origin/main`, 06:06Z]: not on `main`, which is `d6075b75d289`.
+
+**1. Each lemma**
+
+| what | file (under `security/Proofs/Flock/SpotFlock/`) | state | run |
+|---|---|---|---|
+| Lemma 1, `rowAt_lt_of_fits`: runs the placement check accepts for `n` units give each unit under `n` a row, under `per` where each run's last row is | `RowsFit.lean` (new, 191 lines, 3 definitions, 6 theorems), `094274dc71be` | **compiled** | `r20261112-052858-0a72`, done, exit 0 |
+| Lemma 2, `writtenBits_inj`: two written bits at one gate are one template's, at one commitment position. With it `find?_sourceBits`, `mem_writtenBits_iff`, `rowBit_spec`, `outGate_unit`, `outRowBit_leaf` | `WrittenAt.lean` (new, 377 lines, 18 theorems), `316e13392766` | **written** | `r20261112-055319-4302`, waiting |
+| The statement as ruled 04:43Z: `descOk h` out, `(two h s).isSome` in, `s : AuditStatement` added | `WiresTie.lean` (the `Prop` and two docstrings), `8f941d294261` | **written** | `4302` |
+| Lemma 3, `room_of_two`: where the design evaluates, unit `u` of template `t` is in replay block `u / n_t`, and every template has room for its units of that block | `WiresMove.lean` (new, 385 lines, 12 theorems), `8f941d294261` | **written** | `4302` |
+| `theorem secondWiresMove : SecondWiresMove` | `WiresMove.lean` | **written** | `4302` |
+
+- [run: `research fetch --all r20261112-052858-0a72`, 06:05Z, its `stdout.log`] `lean-try: security/Proofs/Flock/SpotFlock/RowsFit.lean: lean exit 0 in 77 s`, then `axiom probe: none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`, then `=== EXIT …RowsFit.lean: 0`. It ran on vy-nebius-cpu-7 at `094274dc71be`; it waited 32 minutes for a slot and held it 4.
+- [run: `research fetch r20261112-055319-4302`, 06:06Z] `4302` is on vy-nebius-cpu-13, launched 05:53Z at `8f941d294261`, trying `WrittenAt.lean`, `WiresTie.lean`, `WiresMove.lean` in that order; state `waiting`, "3 check(s) ahead in line". [guess] It starts between 06:30Z and 07:30Z and takes about 10 minutes once it has a slot.
+- Open: nothing in the proof as written. What is open is the tree's verdict on the last three rows.
+
+**2. What "written" stands on, and what it does not**
+
+- [run: `lean` v4.34.0 on my VM, no `lake`, no package of the repository] Each of the four files' text after its imports elaborates, with the package's three Lean options, against one stand-in file of mine outside the repository. The stand-in holds copies of the definitions the proofs unfold and takes as axioms 22 of the tree's lemmas the proofs call, each under its tree name. `#print axioms SpotFlock.secondWiresMove` there gives `propext`, `Classical.choice`, `Quot.sound` and those 22.
+- [run: a script over the stand-in and the tree, 06:08Z] 41 definitions the proofs unfold are word for word the tree's: in `Spot.SecondStage` `rowAt`, `fits`, `wiresOk`, `placed`, `rowsOf`, `linkOf`, `posOf`; in `Spot.Bits` `outGate`, `rowGate`, `outCol`, `outRowBit`, `outPos`, `rowBit`, `srcKey`, `srcAt`, `msgAt`, `posOf`, `off`, `gateSize`, `srcPos`, `base`; in `SpotFlock` the twelve of the wiring map, `partAt`, `partsAt`, `circuitsOf`, `rowsUnder`, `namesOnce`, `wiresWide`, `writesBit`; and `replayOf`. Four differ where no proof looks: `Rows.stack` (same `nIn` and `nComp`, the rows left empty), `scopeOk` (the condition on each rule differs; the proof drops it), `ownOf` (fewer fields; the same `links`, `wires`, `rows`), and `rec`, `draw` are numbers where the tree has `Lean.Json`.
+- [run: the same script, and reading the three by eye] Of the 22 axioms, 19 are the tree's statements word for word after the files' `variable` binders. Three are reduced in parts the proof drops: `partitionsOk_sound` (the tree gives `P.Partitions C`; the proof takes its first and fourth parts, which are the same), `filesOk_sound` (its third part, `FilesFit`, is the same), `two_eq` (its first part names the layout another way).
+- [derived] What it cannot tell: the tree has Mathlib, so the ten places where a bare `simp` closes a contradiction may behave differently, and a name may be ambiguous there that is not here. So it is no verdict on the tree; `4302` is.
+
+**3. What the proof reads of each hypothesis** [derived: the proof as written, compiled only as in section 2]
+
+- `(two h s).isSome` is enough; `descOk h` was not needed. The proof reads two things of it: every proof block is in a replay block (`scopeOk`), and the layout gives each replay block's units room in each template's file (`filesOk`'s `FilesFit`).
+- Round 2's check of the wires: three of its four conditions on a wire. The reader's units are placed by its rows; the rows a replay block are the writer's units a replay block; no link names the writer's output port. The fourth, the writer's part before its reader's, is not read: it is what `WiresFirst` asks.
+- `rowsUnder`: the row a unit gets is one of the writer's units of one replay block. `namesOnce`: the writer's name finds one template, and a name finds that template's circuit file. `wiresWide`: the bit is one the writer's circuit file writes on the wire's output row.
+- No hypothesis beyond the ruled statement's five was added.
+- One fact the proof needed that I had only guessed at 03:18Z: no gate is written at two commitment positions (`writtenBits_inj`). So the gate the wiring finds is never one the boundary record holds when no link names the writer's port, and `wireTarget`'s last filter drops nothing the check accepted.
+
+**4. What is not done**
+
+- [run: `rg` over `security/Proofs/Flock.lean`] The three new files and `WiresTie.lean` are under no root, so no build or lock reads them. The pull request that lands `WiresTie.lean` with this proof adds the imports and sets the cap of unread proof modules in its own diff; I have not counted it.
+- [derived] `SecondWiresMove` proved discharges nothing of a listed guarantee by itself: the deployed check does not decide the three conditions. It is the first half of PRF-571; `SecondWiresCovered` is as it was.
+
+**5. What I wait on**: `r20261112-055319-4302`'s three verdicts; #8940 on `main`, then #9043's head to you. Checkpoint note `20261112T0555Z-report-wired` is synced.
