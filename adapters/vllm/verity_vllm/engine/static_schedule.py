@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from verity_vllm.records.schema_ids import STATIC_SCHEDULE_SCHEMA
@@ -71,7 +71,7 @@ def schedule_of(order: list[str], timing: Mapping[str, Any]) -> dict[str, Any]:
     return {**doc, "digest": hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
 
 
-def check(requests: list[Mapping[str, Any]], timing: Mapping[str, Any], *, cached_tokens: Mapping[str, int | None] | None = None,
+def check(requests: Sequence[Mapping[str, Any]], timing: Mapping[str, Any], *, cached_tokens: Mapping[str, int | None] | None = None,
           preempted: Mapping[str, int] | None = None) -> dict[str, Any]:
     """`requests`: the declared ones (`request_id`, `max_tokens`), in order; `timing`: `run_requests`' record; `cached_tokens`: {request id:
     the engine's `num_cached_tokens`}; `preempted`: `preemptions(...)` keyed by any id that contains the request's."""

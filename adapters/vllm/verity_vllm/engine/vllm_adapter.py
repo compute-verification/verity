@@ -121,9 +121,10 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     for rid, toks in ACCEPTED_TOKENS.items():
         accepted.setdefault(rid, list(toks))
     temperature = float(params.get("temperature", 0.0))
-    sampling = {"temperature": temperature, "top_p": float(params.get("top_p", 1.0)), "top_k": int(params.get("top_k", 0)),
-                "logprobs": None, "seed": seed, "n": n, "variant": variant,
-                "greedy": temperature == 0.0 and all(p["temperature"] == 0.0 for p in per_request)}
+    sampling: dict[str, Any] = {
+        "temperature": temperature, "top_p": float(params.get("top_p", 1.0)), "top_k": int(params.get("top_k", 0)),
+        "logprobs": None, "seed": seed, "n": n, "variant": variant,
+        "greedy": temperature == 0.0 and all(p["temperature"] == 0.0 for p in per_request)}
     if per_request:
         sampling["per_request"] = per_request
     if samp.get("ignore_eos"):
@@ -164,7 +165,8 @@ def execution_of_workload(workload: dict | None) -> str | None:
     a sweep (no row id: the caller's default applies and the header records `declared_execution: null`)."""
     if not isinstance(workload, dict):
         return None
-    sw = workload.get("sweep") if isinstance(workload.get("sweep"), dict) else {}
+    sweep = workload.get("sweep")
+    sw = sweep if isinstance(sweep, dict) else {}
     for v in (workload.get("execution"), sw.get("execution")):
         if isinstance(v, str) and v:
             return v

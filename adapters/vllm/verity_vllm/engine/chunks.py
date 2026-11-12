@@ -283,8 +283,9 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
     for rid, rec in recs.items():
         ts = token_steps.get(rid, [])
         first_tok = ts[0] if ts else None
+        pre: list[dict] | None
         if use_sched and chunks[rid]:
-            pre: list[dict] | None = chunks[rid]
+            pre = chunks[rid]
             steps_pre = [c["step"] for c in pre]
             partial = [c["step"] for c in pre if not c["prompt_complete"]]
             if first_tok is not None and steps_pre[-1] != first_tok:

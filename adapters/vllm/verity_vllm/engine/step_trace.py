@@ -29,7 +29,7 @@ import queue
 import threading
 from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from verity_vllm.engine import handle
 from verity_vllm.engine.hooks import Hooks
@@ -111,7 +111,7 @@ class StepTrace:
         self.scheduled = 0                      # steps scheduled with tokens so far: the index the next such step gets
         self.executed = 0
         self._pending: dict[int, int] = {}      # id(SchedulerOutput) -> its step
-        self._fh = None
+        self._fh: IO[str] | None = None
         self.sched: Any = None
         self.writer = writer
         self._lines: queue.SimpleQueue | None = None        # the writer thread's: (line, flush), a drain's Event, None to stop
@@ -137,13 +137,15 @@ class StepTrace:
     def _write(self) -> None:
         """The writer thread: each line as `_emit` would write it, and a drain's event set once the lines before it are flushed.
         After a failed write it writes nothing more, but still sets every drain's event."""
-        while (item := self._lines.get()) is not None:
+        lines, fh = self._lines, self._fh
+        assert lines is not None and fh is not None     # `install` sets both before it starts this thread, and
+        while (item := lines.get()) is not None:        # `uninstall` joins it before it clears them
             line, flush = item if isinstance(item, tuple) else ("", True)
             if self._failed is None:
                 try:
-                    self._fh.write(line)
+                    fh.write(line)
                     if flush:
-                        self._fh.flush()
+                        fh.flush()
                 except (OSError, ValueError) as e:
                     self._failed = e
             if isinstance(item, threading.Event):
@@ -241,11 +243,11 @@ class StepTrace:
                     emitted[rid] = len(o.new_token_ids)
                 if o.finish_reason is not None:
                     finished[rid] = {"reason": FINISH.get(int(o.finish_reason), str(o.finish_reason)), "stop_reason": _plain(o.stop_reason)}
-        rid = self.request_id
+        ext = self.request_id
         self._emit({"kind": "step", "step": step, "T": int(so.total_num_scheduled_tokens), "order": order,
-                    "rows": [[rid(r), start.get(r), int(nst[r])] for r in ids],
-                    "new": [rid(r) for r in new], "resumed": [rid(r) for r in resumed], "cache_hit": {rid(r): k for r, k in hits.items()},
-                    "preempted": sorted(rid(r) for r in (getattr(so, "preempted_req_ids", None) or ())),
+                    "rows": [[ext(r), start.get(r), int(nst[r])] for r in ids],
+                    "new": [ext(r) for r in new], "resumed": [ext(r) for r in resumed], "cache_hit": {ext(r): k for r, k in hits.items()},
+                    "preempted": sorted(ext(r) for r in (getattr(so, "preempted_req_ids", None) or ())),
                     "emitted": emitted, "finished": finished})
         self.executed += 1
 
@@ -253,7 +255,9 @@ class StepTrace:
         self.hooks.uninstall()
         if self._lines is not None:
             self._lines.put(None)
-            self._thread.join()
+            thread = self._thread
+            assert thread is not None                       # `install` sets it with `_lines`
+            thread.join()
             self._lines = self._thread = None
             atexit.unregister(self.drain)
         if self._fh is not None:
