@@ -94,13 +94,16 @@ class GraphCalls(ForwardCalls):
             out = self._into(w, sh, pipe, raw, tiles, m)
             if self._whole_retained:
                 self._tree_joined()
+                assert self._stages is not None
                 for stage, t in zip(self._stages[w, sh.m16], self._kept(sh, pipe), strict=True):
                     stage.copy_(t)
             if self._statement_on():
                 self.statement.stage(w, sh)
             return out
-        if self._whole is not None and self._whole_retained and (w, sh.m16) not in self._stages:
-            self._stages[w, sh.m16] = tuple(t.new_empty(t.shape) for t in self._kept(sh, pipe))
+        if self._whole is not None and self._whole_retained:
+            assert self._stages is not None
+            if (w, sh.m16) not in self._stages:
+                self._stages[w, sh.m16] = tuple(t.new_empty(t.shape) for t in self._kept(sh, pipe))
         if self._whole is not None and self._statement_on():
             self.statement.prepare(w, sh)
         if self.hashing:

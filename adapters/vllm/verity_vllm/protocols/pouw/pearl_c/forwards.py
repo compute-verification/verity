@@ -220,6 +220,7 @@ class ForwardCalls(_RunState):
         pass's buffer: each call's from its stage and its flags, as a call made alone keeps them."""
         cur = self.cur
         for mm, c in zip(cur.matmuls[len(cur.matmuls) - len(calls):], calls, strict=True):
+            assert self._stages is not None
             self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], *self._stages[c.w, c.m16])
             flags_at += c.m
 
@@ -273,6 +274,7 @@ class ForwardCalls(_RunState):
         if not self.hashing or not calls:
             return
         s, self._uploaded = self._uploaded, None
+        assert s is not None
         self._predicted = dict(s.predicted)    # the upload rewrote the uncalled weights' slots from the host copy
         cur.tiles, cur.flag_rows = s.after[1], s.after[2]
         if self._statement_on():
@@ -344,6 +346,7 @@ class ForwardCalls(_RunState):
                     self._fork(sh, g.steps[b:], raw)
                 finally:
                     pipe.tiles_group = False
+                assert self._whole is not None
                 if len(self._whole) == len(self.order):
                     self._join()
                     self._join_tree()
@@ -441,6 +444,7 @@ class ForwardCalls(_RunState):
                     f()
         finally:
             self.kernel.dev.stream = raw
+        assert self._pending is not None
         self._pending.append((sh, side.record_event() if self.whole_shape_joins else None))
 
     def _join(self) -> None:
