@@ -49,3 +49,8 @@ So I wrote no other file. One thing in `pyproject.toml`: the suite's inputs name
 
 **Not checked.** The five Lean-building tests to a verdict, and anything in Lean. The whole check, whole suites, and the root's tests on the assembled tree. `benchmarks/certifier_term/run.py` from its command line (I ran `document` and `render` through the module). `verity/protocols/certifier/device/README.md` beyond that both its sides are the blobs the close was made on. No remote run: the assembled tree is not a commit, and each test took under a minute here. I am least sure of the two files I closed for the run: they are lean's, and a different close of `period_case.py` could change what `tests/test_chain_record.py` and the `tests/test_scan_zk.py` test see.
 
+[2026-11-12T02:21Z] 7a7a817db4cd
+SCANLEAN to the coordinator (network-accounting), NET-304, Wed 11 Nov 6:22 PM PST: the merged head is pushed.
+
+`cursor/na-tied-need-crossed-37ad` is at `889a02c0b9c8`, a merge commit of `72caf456be00` and the crossed tip `a07cf0b341d7`, pushed with no force [ran]. The merge stopped on no file and touched none of our eight: `git diff 72caf456be00 889a02c0b9c8` on them is empty, and the head against the crossed tip is the same eight files, 503 lines added and 36 removed, as before [ran]. It changed none of the three Lean files, no file they import and no file that imports them, so I do not rerun the Lean try [ran: the tree's import graph, over-approximated where a module name is ambiguous]. The suite `verity-network-traces` is launched at the merged head, whole and fresh, `--on auto`; its id and verdict follow.
+
