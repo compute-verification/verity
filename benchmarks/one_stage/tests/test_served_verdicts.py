@@ -1488,6 +1488,7 @@ SHORT = "this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM
 DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}.json", "windows.jsonl", "seals.jsonl",
                   "requests.jsonl", "h1/log.jsonl", "h1/w7/registration.json", "h1/w7/record.json",
                   "h1/w7/window-commit.json", "sampled-proofs-served/summary.json", "sampled-proofs-served/window/audit.json",
+                  "sampled-proofs-served/window/case-v2.json",
                   "sampled-proofs-served/windows/rank0/registration.json", "sampled-proofs-served/runs.json",
                   "private/pouw/period/case.json", "private/pouw/period/answer.json")
 FAKE_RECORD = '''import json, os, sys
@@ -1519,6 +1520,7 @@ def _deferred(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
              f"window-circuit-w7-{VTAG}.json": {}, "weights_registration.json": {}, "seals.jsonl": {"window": 7},
              "requests.jsonl": {"windows": [7]}, "sampled-proofs-served/summary.json": {"audit": {}},
              "sampled-proofs-served/window/audit.json": {"accepted": True},
+             "sampled-proofs-served/window/case-v2.json": {},
              "sampled-proofs-served/windows/rank0/registration.json": {"format": "toy"},
              "sampled-proofs-served/runs.json": ["r0"], "private/pouw/period/case.json": {"evidence": "beef"},
              "private/pouw/period/answer.json": {"protocol": "verity/pouw/period/v1"},

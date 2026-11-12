@@ -677,12 +677,14 @@ private_pieces() {
 # window-circuit record at the class (step 3's), windows.jsonl (the run root), H1's log and each record it names, the
 # tie's window-commit answer, and the commit's window dir (circuit.json, registration.json, every value file). The
 # record's: seals.jsonl, windows.jsonl and requests.jsonl (the pick's steps), step 3's records audit's summary, audit
-# record, registration and runs, and the pieces it read. The composite's: PoUW's period case. And deferred.env, the
-# settings the follow-on runs at. Each is listed where it exists.
+# record, its case for the compiled check or why it wrote none (sampled proofs' answer accepts only beside the case,
+# `served_integrity.answer`), registration and runs, and the pieces it read. The composite's: PoUW's period case. And
+# deferred.env, the settings the follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
     printf '%s\n' weights_registration.json "window-circuit-w$K-$vtag.json" windows.jsonl seals.jsonl requests.jsonl \
       h1/log.jsonl "h1/w$K/window-commit.json" sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
+      sampled-proofs-served/window/case-v2.json sampled-proofs-served/window/case-v2-error.txt \
       sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
       private/pouw/period/answer.json
     [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
