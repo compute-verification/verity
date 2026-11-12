@@ -1,4 +1,4 @@
-"""h1_prove's window and the verifier's view of it (`h1_prove/window.py`, `run.py`, `h1unit.py`, `stage.py`), without the
+"""h1_prove's window and the verifier's view of it (`h1_prove/window.py`, `recorded.py`, `h1unit.py`, `stage.py`), without the
 unit's circuit: the window's public Program and template-instance partition derive exactly the tiles it commits and the
 rows each reads, its registered values (each call's A table and z table, its tiles' z/y records, `scaled_mm_zy`'s, and
 the weights' b/<K>) are read where the window's own reads say, every per-window value's domain binds the window's open
@@ -22,6 +22,7 @@ import h1unit as U
 import layer as L
 import numpy as np
 import pytest
+import recorded as RN
 import window as W
 from conftest import load
 
@@ -33,8 +34,7 @@ from verity.protocols.spot.verifier.one_stage import partition as P
 from verity.protocols.spot.verifier.one_stage import registered as G
 
 H1 = Path(__file__).resolve().parents[1] / "h1_prove"
-#: by `load`: h1_lanes holds a ``run.py`` and hidden_zk a ``stage.py`` too
-RN = load("h1_prove/run.py")
+#: by `load`: hidden_zk holds a ``stage.py`` too
 ST = load("h1_prove/stage.py")
 
 K = 64
@@ -103,7 +103,7 @@ def reference(z: dict, i: int) -> tuple[list[int], int]:
 
 @pytest.fixture(scope="module")
 def win():
-    """`run.program_of` the tests' window shape (`SHAPE`), which every commitment registers under: the tile's Program
+    """`recorded.program_of` the tests' window shape (`SHAPE`), which every commitment registers under: the tile's Program
     traces its seed and noise circuits, about 35 s at any K, and its partition about 14 s more."""
     return RN.program_of(K, *SHAPE)
 
@@ -362,7 +362,7 @@ def test_sampled_proof_blocks_open_to_their_window_and_no_other(tmp_path, win):
 
 @pytest.mark.slow
 def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its_record_moved(tmp_path, win):
-    """Each in-proof negative's tampered window (`window.py tamper`, `run.IN_PROOF`) opens to its own registration and
+    """Each in-proof negative's tampered window (`window.py tamper`, `recorded.IN_PROOF`) opens to its own registration and
     not the honest one, and changes exactly the value it names: the receipt word 0 plus one, a record's y of cell 0 plus
     one, its z of cell 0 plus one with y that z's dequant, two units' records exchanged, the record of the same tile in the
     other call, a record of z alone, a D_1 word one too large, a changed record re-registering its call's z table alone.
@@ -519,7 +519,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     """Three units of a window, units 0 and 2 reading the same A rows and units 0 and 1 the same B rows, each its own
     record: the prover's shared-row statement (`h1unit.statement_tables` through Flock's `circuit.write`, as `stage.py`
     stages it) and the verifier's own file (`h1unit.verifier_pub`, from the units' ``b || c``, positions and paths alone)
-    are one file byte for byte, every A, B, record and ok table row opening its registered root (`run.registered_opens`,
+    are one file byte for byte, every A, B, record and ok table row opening its registered root (`recorded.registered_opens`,
     the Lean verifier's check under --registered; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows
     committed afresh state no ok registration, a prover's A row the registration does not hold opens none, two rows at one
     position are refused, and a forged statement (`h1unit.forge_statement`) is the verifier's file of a window with the
