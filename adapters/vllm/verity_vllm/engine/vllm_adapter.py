@@ -13,22 +13,57 @@ import json
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.engine import static_schedule
 from verity_vllm.config import RowEngine, workload_file
-from verity_vllm.program import prefix_plan as PP
-from verity_vllm.engine.arrivals import run_requests_arrivals  # step-indexed arrivals (torch-free module, unit-tested)
-from verity_vllm.engine import chunks as _chunks  # prefill-chunk / token-step attribution (torch-free, unit-tested)
+
+# prefill-chunk / token-step attribution (torch-free, unit-tested)
+from verity_vllm.engine import chunks as _chunks
+from verity_vllm.engine import static_schedule
+
+# step-indexed arrivals (torch-free module, unit-tested)
+from verity_vllm.engine.arrivals import run_requests_arrivals
+from verity_vllm.engine.build import (  # noqa: F401
+    CASE,
+    EXECUTION_ENFORCE_EAGER,
+    Engine,
+    build_engine,
+    case_of,
+    compilation_facts,
+    effective_execution_doc,
+    engine_kwargs_for,
+    execution_label_of,
+    observed_flash_attn_version,
+    parse_engine_args,
+    parse_target_arg,
+    prepare_compiled_process_cache,
+    resolved_async_scheduling,
+    target_mismatches,
+    target_of_workload,
+    vllm_has_flashinfer,
+)
+from verity_vllm.engine.code_identity import (  # noqa: F401
+    _VERITY_INDUCTOR_DIR_MARK,
+    CUBIN_CODE_IDENTITY_RULE,
+    CUBIN_DENY_LIST,
+    cubin_code_sha256,
+    cubin_code_sha256_normalized,
+    cubin_section_denied,
+    cubin_section_detail,
+    cubin_sections,
+    generated_kernels_of_this_process,
+    loaded_code_objects,
+    loaded_code_objects_delta,
+)
 from verity_vllm.engine.handle import scheduler_or_none
-from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
-                                      effective_execution_doc, engine_kwargs_for, execution_label_of, observed_flash_attn_version,
-                                      parse_engine_args, parse_target_arg, prepare_compiled_process_cache, resolved_async_scheduling,
-                                      target_mismatches, target_of_workload, vllm_has_flashinfer)
-from verity_vllm.engine.code_identity import (_VERITY_INDUCTOR_DIR_MARK, CUBIN_CODE_IDENTITY_RULE, CUBIN_DENY_LIST,  # noqa: F401
-                                              cubin_code_sha256, cubin_code_sha256_normalized, cubin_section_denied,
-                                              cubin_section_detail, cubin_sections, generated_kernels_of_this_process,
-                                              loaded_code_objects, loaded_code_objects_delta)
-from verity_vllm.engine.run_facts import (ACCEPTED, ACCEPTED_PROFILE_ID, ACCEPTED_RECORD, host_doc, model_config_subset,  # noqa: F401
-                                          profile_manifest, versions_doc)
+from verity_vllm.engine.run_facts import (  # noqa: F401
+    ACCEPTED,
+    ACCEPTED_PROFILE_ID,
+    ACCEPTED_RECORD,
+    host_doc,
+    model_config_subset,
+    profile_manifest,
+    versions_doc,
+)
+from verity_vllm.program import prefix_plan as PP
 
 
 def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:

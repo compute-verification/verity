@@ -7,7 +7,7 @@ the multiprocess engine core when the object lives in another process (build wit
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, Union
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     import vllm
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
         @property
         def vllm(self) -> vllm.LLM: ...
 
-    Engine = Union[Wrapper, vllm.LLM, LLMEngine]
+    Engine = Wrapper | vllm.LLM | LLMEngine
 
 __all__ = ["engine_of", "executor", "model_runner", "scheduler", "scheduler_or_none"]
 

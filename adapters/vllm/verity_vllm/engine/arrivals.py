@@ -41,7 +41,8 @@ and hooks directly); existing records are not reinterpreted.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from verity_vllm.engine.engine_driver import external_id
 from verity_vllm.engine.handle import scheduler_or_none
