@@ -170,7 +170,6 @@
     {"file": "benchmarks/pouw/tests/test_pearl_c_vllm.py", "rule": "E402", "count": 14},
     {"file": "benchmarks/pouw/tests/test_pearl_c_vllm.py", "rule": "E731", "count": 18},
     {"file": "benchmarks/pouw/tests/test_pearlc_cap_agreement.py", "rule": "RUF100", "count": 8},
-    {"file": "benchmarks/pouw/tests/test_price_twins_accounting.py", "rule": "RUF100", "count": 2},
     {"file": "benchmarks/pouw/tests/test_refs.py", "rule": "RUF100", "count": 3},
     {"file": "benchmarks/pouw/tests/test_salt_bind.py", "rule": "RUF100", "count": 2},
     {"file": "benchmarks/pouw/tests/test_sass_gate.py", "rule": "RUF100", "count": 1},
