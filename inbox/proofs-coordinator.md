@@ -92460,3 +92460,53 @@ Next entry by 16:40Z.
 - **Still running, full runs with no stand-in:** `f794` (#9116), `cc58` (#9075), `bbd9` (#9173), `7cf7` (lean's line with `main` `06728b3b7c66`). Every failure so far is one of the eight suites or the `test_tick` line. [run]
 
 Branches: `cursor/proofs-landing-closes-99d1` at `2f6a899ce9cb8ec77e2a00988203f805ce5edbf6`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none. Next entry when the reruns end, by 16:30Z at the latest.
+
+## STOPDRIVER, Thu 12 Nov 15:48Z: PRF-598: #9337 is open and unmarked at `db1e686218bb`, ready for memory's read of commit `4c2a7e3fbd` and then your mark; nine changed suites pass at the head
+
+**Ready line.** [#9337](https://github.com/compute-verification/verity/pull/9337), head `db1e686218bb93c440ddc14cf03c17a229059dc6`, branch `cursor/proofs-prf598-named-ffc6`, base `main`, open, no label, not a draft [run: `gh pr view`]. Memory's commit: `4c2a7e3fbd080a71f74c97efbc17e5a26c799321` [run]. Suites at the head: run `r20261112-153321-89b8`, 9 of 9 passed [run]. Not run: the whole check, `circuit-check`, the Lean check, a composed run on a GPU node with the real pieces [run: none launched].
+
+### What is in it
+
+- [run] 14 files, 282 insertions, 54 deletions, seven commits on `origin/main` `06728b3b7c66`, all under `benchmarks/`.
+- [derived] Low-risk by `drive.toml`'s `lowrisk_excludes`: no Lean, lock, verifier, root test or `pyproject.toml`.
+- [run] Commit `4c2a7e3fbd` holds memory's four files and nothing else, 8 insertions and 5 deletions: `held_bandwidth.py` (the import and `"named_terms": ledger.NAMED_TERMS` beside `eps_terms`), `served_bandwidth.py` (the import and `out["profile"]["named_terms"] = ledger.NAMED_TERMS`), and one assertion in each one's test.
+- [run] Each of the two test edits also adds `ledger` to an import line the file already had; the assertion needs it.
+- [read] `p2_party.core_answer` is not touched.
+- [run] Item 1: the bandwidth entry carries `named_terms`, copied from `answer.profile.named_terms`; the record imports no ledger.
+- [run] Item 3, as you ruled: `composed.joint_horizon.named_terms`, the object by subprotocol, `{}` when none.
+- [run] Item 4: v2 in place with the two keys; `leg`, `check` and the schema each refuse a bandwidth entry with no `named_terms`, and terms with a value, in a total or in another shape.
+- [run] `check`'s refusal, as the body quotes it: `leg:bandwidth: it names no term its error leaves out; its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS), and the record is built from that`.
+- [run] Item 2: an accept established at every δ reads `the bandwidth audit: accept (its error reads 1/1099511627776 + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed))`.
+- [run] One not established at a δ ends `... except with 1/100 + 2^-64 + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)`.
+- [run] The words are built from the entry's own `term` and `status` (`block_record.error_form`), and a test holds `error_form("δ", ledger.NAMED_TERMS) == ledger.DELTA_FORM`.
+- [read] No sentence printed the block's sum at `main`, so there is no second sentence to change; `monitoring_period`'s docstring says its sums read with the block's `named_terms`.
+- [run] No number changes: the three fixtures equal the base's but for the two keys, and `from_period` at the head equals the base's module's output but for the two keys, for onsite and remote.
+- [read] The body's "What this does not do" says in plain words that the record still writes `holds: true` at δ for the bandwidth entry while the PRF term is unpriced, and that the wipe's and PoUS's entries stay silent.
+
+### The runs
+
+- [run] `r20261112-153321-89b8` (vy-nebius-cpu-8, head `db1e686218bb`, `--changed origin/main --quick`): 9 passed, 0 cached, 0 failed: interfaces 89, one_stage 573, pous 206, network-traces 605, prove_path 155, inference_only 10, verity-cli 108, verity-graph 215, repository 350.
+- [run] `r20261112-152126-6015` (vy-nebius-cpu-11, the parent `7df2a23888`): the same nine passed, same counts. The head adds one commit that tightens one test assertion.
+- [run] `r20261112-153422-bf9e` read that run's pous log on its machine: memory's slow test (`test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_the_leans`) is among the passed, 31 s, so it was not skipped.
+- [run] `r20261112-153457-03ab` read its root suite's log: the bookkeeping names one touched file, `benchmarks/one_stage/README.md`, at lines 180 and 249, which the base has and I did not change.
+- [run] On the VM at the head: `test_block_record.py` 19 passed, `test_served_verdicts.py` 161, `test_report.py` 47. Earlier, on the same content of those files: `test_served_bandwidth.py` 6 in 82 s, network's `test_block_certifier.py` 3 with no edit.
+- [run] Retired terms by file, base to head: `block_record.py` 93 to 92, `test_block_record.py` 50 to 49, `served_verdicts.py` 92 to 91, `test_served_verdicts.py` 119 to 119, both READMEs unchanged; lane text 0 to 0; ruff's (file, rule) counts unchanged.
+
+### Merges
+
+- [run] `origin/main` `5c0ae25d6c28`: clean.
+- [run] `origin/cursor/lean-remote-merge-landing-fc8d` `f3837f57d113`: 31 stops, the same 31 the base has alone, none in a file I touch. No stop beyond `main`'s own.
+- [run] `origin/cursor/memory-accounting-pous-piece-reads-bf16-7c2e` `83b08c41ef7d` changes `held_bandwidth.py` (45 insertions, 24 deletions): clean, and the merged file keeps both lines.
+- [guess] That is the swarm's branch you meant; it changes more than four lines, so it may be another. The body says a conflict there is memory's to close.
+
+### What you should know
+
+1. [run] `research queue open --issue PRF-598` linked the pull request to PRF-598 through the Linear app, as the command does. I wrote nothing else to Linear.
+2. [run] The same command warned that PRF-598 carries no goal's label (its labels: `from:memory-accounting`), so the body has `Refs PRF-598` and no `Goal` line.
+3. [run] A bandwidth answer written before this change has no `named_terms`: its row becomes an error and the composed verdict is `reject`, with the fix in the reason. Both writers in the tree write the key in this pull request.
+4. [run] `from-runs` now refuses the old all-protocols report its fixture came from, since that run's bandwidth row names no term. The README says so. [derived] Deleting `from_runs` is a follow-up, not done here.
+5. [read] `benchmarks/memory/run.py` has `ERROR_FORM`, a second copy of the ledger's words. It is memory's file and I left it.
+6. [read] The docstrings of memory's two files do not mention the new key. I changed no line of theirs beyond the import and the one line each.
+7. [read] Mailbox read at `1599fc1e4a`: nothing for me after your 15:06Z section.
+
+I stop here unless you write: I do not mark it.
