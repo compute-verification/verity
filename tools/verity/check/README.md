@@ -7,7 +7,7 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 | --- | --- |
 | `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: in a candidate, it names the PR whose merge grows a lint allowlist) |
 | `circuits` | `flock-circuit-build`, `flock-rust-tests` (Flock's Rust), `circuit-check` (the property checks every circuit passes) |
-| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run; off the gate and in no shard), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
+| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
 
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
@@ -21,9 +21,7 @@ such a failure as not red (no suspect, no ejection, no hold on `main`) until it 
 allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
-merge` requires it of no check. Today those are `circuit-check`, `ratchet-gate` and `lean-changed`. `lean-changed` catches
-nothing the audit doesn't, so no shard runs it, of a plan or an auto one (`shards.NO_SHARD`): neither a recorded check nor a
-candidate's sharded check runs it. Each of the other two still runs in a candidate's check,
+merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each still runs in a candidate's check,
 and its red holds nothing; under the loop's `--gate check`, a red that the run beside the candidate's base didn't have rings
 its owners. Under the loop's `--gate graph2`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the candidate (`research.vqueue_slim`), which waits
@@ -57,7 +55,8 @@ part, and its parts join as a split suite's do. `ci.toml`'s plans name a lean su
 every part runs the suite whole.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
-the same way, each keyed on what it reads. A nightly uncached run, which compiles what it tests and first imports every pass
+the same way, each keyed on what it reads. circuit-check's binding records travel through the store instead, each once
+under its name, which a pack lists (`records.py`). A nightly uncached run, which compiles what it tests and first imports every pass
 the commit's recorded checks hold, must agree with them. A disagreement means some part reads something it doesn't declare,
 and the fix goes in the check. The nightly also runs the opt-in tests `check.py`'s `OPT_IN` names, by name in runs of their
 own with their variables set, which every other check leaves skipped.
@@ -74,6 +73,7 @@ follows.
 | `suites.py` | every test suite, each run in its own process, with passes cached |
 | `guard/` | the read guard, the pytest plugin `suites.py` loads into every suite |
 | `verdicts.py` | passes carried between machines as one verdict pack |
+| `records.py` | circuit-check's binding records, put on the store once and named in the packs, fetched before circuit-check runs |
 | `common.py` | the helpers `check.py` and the Lean check share, apart so the Lean check's key covers them |
 | `plan.py` | `check.py --plan`: what `check` would reuse at a commit and what it would run |
 | `spans.py` | the spans a check run writes beside its steps, which the dashboard reads |
@@ -82,10 +82,12 @@ follows.
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
 | `train.sh` | the verified queue's recorded check of a candidate, and its records run |
 | `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast rows of record's neutrality after a landing |
+| `lean_prebuild.py` | a Lean change built before the candidate that holds it: the audit of a ready mark's merge (`tools/verity/lean/warm.py`) as a `research run` in a machine's research pool, off the check slots |
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
+| `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
@@ -200,12 +202,13 @@ PRs land through the verified queue (`research queue vqueue`): its flags are `dr
 `queue.toml`. A PR's ready mark runs the landing gates `drive.toml` names on its head, and its warn gates
 (`gates/markdown_caps.py`) too, whose failure only warns. The loop merges the marked PRs that are reviewed or low-risk onto
 `main` as a candidate, checks it (by default graph2's tasks, with `lean-agreement` and `ratchet-gate` run beside them; under
-`--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`, where no shard runs `lean-changed`), and
+`--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`), and
 moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too; `post_train.py`
 then runs the vLLM regression's rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any
 other's suspects are the PRs whose change touches what it names: a lone one is ejected, several are bisected. A red job off
 the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
-body) lands as any PR does, on a land verdict; `move_check.py` certifies a pure move (`verity check move BASE HEAD`).
+body) lands on its ready mark alone once the queue's rerun of its map is certified (`tools/move/README.md`);
+`move_check.py` certifies a pure move (`verity check move BASE HEAD`).
 
 ## The public boundary
 
@@ -213,8 +216,11 @@ The public monorepo is exported one way from this repository. `public_boundary.t
 `public_boundary.py` reads what each public file needs (Lean imports, Lake requires, Python imports and dependencies, anchored
 paths, commands) and fails on an edge into a file the export doesn't copy that `public_boundary_allowed.txt` doesn't list; the
 list only shrinks (`tests/test_public_boundary.py`). `public_export.py DEST` is the export's dry run: the public set as one
-commit of fresh history, its manifests pruned to what it copies, the leftovers a public reader shouldn't meet counted by area,
-and the third-party pins; with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
+commit of fresh history, its manifests pruned to what it copies, each Lean lock stating only what it copies
+(`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. It
+never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
+the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue
+(`[[residue]]`); with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
 `uv sync` and the licenses of what they fetched. It publishes nothing.
 
 ## Settings

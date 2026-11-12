@@ -34,7 +34,8 @@ The report gives:
 * per Lean lock, the entries it kept and dropped by section, the dropped names no tracked file declares, the entries that
   went with a witness it doesn't copy, the kept names a file it leaves out declares too, and what the text of a kept
   entry still holds, each with its section, entry, kind and text: the lane-text sites, and the declarations, modules and
-  paths the export leaves out that it spells. The export rewords neither; the lock they come from is reworded;
+  paths the export leaves out that it spells. The export rewords neither, and refuses: the lock they come from is
+  reworded. The report holds only those a `[[residue]]` entry of the boundary covers (`known`), which the export ships;
 * per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: the lane-text
   lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids, run and `art:`
   ids, lane handles, dates, names) and agents' branches;
@@ -560,7 +561,7 @@ def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held
     declarations a file the export leaves out declares too, and what the text it kept still holds, each as (section,
     entry, kind, text) with its count per section (`public_lock.leftovers`): the lane text (`lane_text`), and the
     declarations, modules and paths the export leaves out that a kept string spells (`Held.spelled`). Neither is
-    removed here: the lock they come from is reworded."""
+    removed here: the lock they come from is reworded, and `export` refuses those no known residue covers (`known`)."""
     kinds = dict(PUBLIC_LOCK.ENTRIES)
     sites, spelled = PUBLIC_LOCK.leftovers(new, lane_text), PUBLIC_LOCK.leftovers(new, held.spelled)
     both = {f"{where}: {name}" for where, kind, name in PUBLIC_LOCK.named(new)
@@ -573,6 +574,12 @@ def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held
             "also_withheld": sorted(both),
             "sites": dict(Counter(section for section, *_ in sites)), "site_list": [list(s) for s in sites],
             "spelled": dict(Counter(section for section, *_ in spelled)), "spelled_list": [list(s) for s in spelled]}
+
+
+def known(boundary, f: str, text: str) -> bool:
+    """Whether the boundary lists ``text`` in ``f`` as known residue: a `[[residue]]` entry whose paths hold the file and
+    whose pattern matches the text."""
+    return any(r.paths.fullmatch(f) and r.pattern.search(text) for r in boundary.residue)
 
 
 def fetch(root: Path, paths: list[str], log: Path) -> str:
@@ -622,7 +629,9 @@ def written(judgment, shipped: dict[str, list[str]]) -> list[str]:
 
 def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) -> dict:
     """Copy ``judgment``'s public set and the ``shipped`` fixtures' files into ``dest``, rewrite its manifests, its lists
-    of the tree's paths and its Lean locks, and commit it as a new repository's one commit."""
+    of the tree's paths and its Lean locks, and commit it as a new repository's one commit. `ValueError`, before the
+    commit, when a lock's kept text still holds lane text or names what the export leaves out, and the boundary lists it
+    under no known residue (`public_lock.refusal`)."""
     copied = set(judgment.public)
     for f in written(judgment, shipped):
         (dest / f).parent.mkdir(parents=True, exist_ok=True)
@@ -662,6 +671,10 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
                                  + "; ".join(left[:PUBLIC_LOCK.SHOWN])
                                  + (f"; and {len(left) - PUBLIC_LOCK.SHOWN} more" if len(left) > PUBLIC_LOCK.SHOWN else ""))
             locks[f] = lock_report(json.loads(old), wrote, dropped, held) | {"bytes": [len(old.encode()), len(new.encode())]}
+    if left := [(f, *row) for f, lock in locks.items() for row in lock["site_list"] + lock["spelled_list"]
+                if not known(boundary, f, row[3])]:
+        raise ValueError(PUBLIC_LOCK.refusal(left))
+
     def dropped(e) -> bool:
         if e.kind == "lake require":
             return ("require", e.what) in rewrites.get(e.source, [])

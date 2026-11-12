@@ -46,27 +46,40 @@ read.
 
 `--per-call` also prints where the model's MACs the credit leaves out went (its give-up: the model's MACs less the
 credit), by cause and by matmul call, from the Pearl+ verifier's split of its accepted verdict's credit call by call
-(`out/pieces/pouw/verify.json`'s ``uncredited``, or ``--uncredited F``, the file ``served_passes.py uncredited`` writes
-from the passes for a verdict whose document predates the split). Each call's real MACs are the MACs its credited cells
+(`out/pieces/pouw/verify.json`'s ``uncredited``, which Pearl+'s verifier writes once it is on main, or
+``--uncredited F``, such a split written beside the run's passes). Each call's real MACs are the MACs its credited cells
 hold at |K| and the cells the band rule leaves out (excluded A rows, excluded B rows' column blocks, voluntary rows'
-bands and blocks, and the side channels' k − |K|); its credited cells' MACs are the deduction's ε, over-cap and ρ terms
-and its credit, as exact fractions. The causes over the model are those, the LM head and attention (which Pearl+ doesn't
-credit), the linears outside the passes, and the floor of the credit; they sum to the give-up exactly. The split is the
-answer's or it is refused (exit 2): its commitment and its passes' records roots are the answer's, each call's terms sum
-as above, and its calls' credited cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. The
-ε deduction is the run's, at its draws: the verifier takes it off the records whose cells hold the most MACs a ticket, so
-the calls it lands on carry it for the whole run. ``--top N`` (default 10) calls are printed, by give-up.
+bands and blocks, and the side channels' k − |K|); its credited cells' MACs are the deduction's terms (ε's, that of
+sampled tiles over the inert-work bound, and the inert-work share ι's) and its credit, as exact fractions. The causes
+over the model are those, the LM head and attention (which Pearl+ doesn't credit), the linears outside the passes, and
+the floor of the credit; they sum to the give-up exactly. The split is the answer's or it is refused (exit 2): its
+commitment and its passes' records roots are the answer's, each call's terms sum as above, and its calls' credited
+cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. The ε deduction is the run's, at its
+sample: the verifier takes it off the records whose cells hold the most MACs a ticket, so the calls it lands on carry it
+for the whole run. ``--top N`` (default 10) calls are printed, by give-up.
 
 It exits 0 with the number printed, 1 with none (the answer isn't an accept, the Lean verifier's verdict isn't the
 answer's, or the run left no answer) and 2 when the command line, the run or its policy can't be read. A record
 withdrawn whole, or in a part that holds a file read here, is refused before any of it is fetched; a withdrawal of
 other files of it is printed beside the number. Under `research run` the printed document is also `$OUT/compute.json`;
 there the evidence store is read with the run's `--store-read` key.
+
+Through the harness kit's writer (`verity_bench.kit`) it also writes the run directory's `result.json` under `research run`,
+and `$OUT/result.json` outside one where `OUT` is set, with the
+fields every resource's benchmark reports (`amounts`), each stamped with this run and its commit and computed from the
+recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
+the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). Their names
+are every resource's: `metric`, `verified`, `capacity`, `free` and `error`. A reading is a clock of a
+registered device's card file (`clock.tensor`, `clock.sm`; `verity.hardware.cards`), capacity the registered devices'
+peak e4m3 MACs a second at that clock times the run's span (`capacity`), and free capacity less verified. A recorded
+run's record holds no registration of its hardware and no span the verifier holds its passes to, so capacity and free
+are written as one entry each, with no value and why.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from collections.abc import Callable
@@ -74,6 +87,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from verity.hardware import cards
+from verity.hardware.site import Site
+from verity_bench import kit
 from verity_config.settings import SHARED
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
@@ -94,14 +110,23 @@ CAUSES = {"lm_head": "LM head, which Pearl+ doesn't credit", "attention": "atten
           "outside": "linears outside the passes", "excluded_a": "excluded A rows",
           "excluded_b": "excluded B rows' column blocks", "voluntary": "voluntary rows' bands and blocks",
           "kept_width": "side channels (k beyond |K|)", "epsilon_macs": "ε's deduction",
-          "over_cap_macs": "draws over the inert-work bound", "rho_macs": "ρ, the scheme's cap", "floor": "the credit's floor"}
+          "over_bound_macs": "sampled tiles over the inert-work bound", "rho_macs": "ι, the inert-work share",
+          "floor": "the credit's floor"}
 #: a call's terms the split states, beside its MACs
 ROWS = ("excluded_a", "excluded_b", "voluntary", "kept_width")
-TERMS = ("epsilon_macs", "over_cap_macs", "rho_macs", "credited_macs")
+TERMS = ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs")
 ABSENT = ("absent: a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
           "developer's node")
 #: what the answer's ε and δ leave out, printed beside them
 SAMPLING_ALONE = "sampling's alone: the assumption's gap and δ, and binding, are not in them"
+#: the data sheet's readings of a device's peak, each a clock of its card file (`clock.tensor`, `clock.sm`)
+READINGS = ("tensor", "sm")
+#: the operand format of the MACs Pearl+ credits
+FORMAT = "e4m3"
+NO_SITE = "the run's record holds no registration of its hardware: no site entry naming its devices and their sheets"
+NO_SPAN = ABSENT.removeprefix("absent: ")
+DELTA_S = ("probability that a sample that accepts misses more than the share ε_s of the credited MACs: the answer's δ_s, "
+           "sampling's alone (the assumption's gap and δ, and binding, are not in it)")
 #: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 
@@ -290,13 +315,12 @@ def linear(shape: Shape, k: int, n: int) -> str:
 
 def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, shape: Shape, top: int) -> dict:
     """The give-up of the record under `tree` by cause and by call (module docstring), from the verifier's split in its
-    verify document or in `given`, a ``served_passes.py uncredited`` output. `Unreadable` unless the split is the
-    answer's. `macs` are the model's MACs at the class and `credited` the answer's credit."""
+    verify document or in `given`, such a split in a file of its own. `Unreadable` unless the split is the answer's. `macs` are the model's MACs at the class and `credited` the answer's credit."""
     try:
         held = json.loads(given.read_text()) if given is not None else _held(tree, VERIFY)
         if held is None or (given is None and "uncredited" not in held):
-            raise Unreadable("the record's verify document holds no per-call split (it predates it): `served_passes.py "
-                             "uncredited` writes one from the run's passes, and --uncredited reads it")
+            raise Unreadable("the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
+                             "verifier side of the per-call give-up is on main")
         answer = _held(tree, ANSWER)
         work, passes = answer["public"]["work"], answer["public"].get("passes")
         got, records = held["uncredited"], held.get("records")
@@ -366,6 +390,52 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
             "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None}
 
 
+def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
+    """The registered hardware's MACs over `span_s` seconds at each data-sheet reading (`READINGS`): each registered
+    device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.hardware.cards.rate` on the card
+    file of its sheet's SKU), summed over the devices, times the span, rounded up. `Unreadable` where the site registers
+    no device, or a device names no registered sheet or an SKU with no card file."""
+    if not site.units:
+        raise Unreadable("the registered hardware holds no device")
+    total = dict.fromkeys(READINGS, Fraction(0))
+    for d in site.units:
+        if (sheet := site.sheet(d)) is None:
+            raise Unreadable(f"the registered device {d} names no registered sheet")
+        try:
+            card = cards.load(sheet.sku)
+        except KeyError as e:
+            raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
+        for r in READINGS:
+            total[r] += cards.rate(card, fmt=FORMAT, mhz=card["clock"][r]["value"]) * span_s
+    return {r: math.ceil(v) for r, v in total.items()}
+
+
+def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None) -> list[dict]:
+    """The result a document `doc` gives in the fields every resource's benchmark reports, as the kit writer's
+    measurements: the metric (`metric`, the printed number in its unit, beside its target), the verified amount
+    (`verified`, the credited MACs), at each data-sheet reading the capacity (`capacity at clock.tensor`, ..., from the
+    registered hardware `site` over the run's span `span_s`) and the free amount (`free at ...`, capacity less verified),
+    and the probability the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name).
+    Where `site` or `span_s` is None, capacity and free are one entry each, with no value and why. Each is computed from
+    the recorded run."""
+    inputs = [doc["run"]] if doc["run"] else []
+    verified = doc["credited_macs"]
+    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "target": doc["target"],
+            "verdict": "at or above target" if doc["met"] else "below target", "inputs": inputs},
+           {"name": "verified", "value": verified, "unit": "MAC", "inputs": inputs}]
+    if site is None or span_s is None:
+        why = "absent: " + "; and ".join(w for w, x in ((NO_SITE, site), (NO_SPAN, span_s)) if x is None)
+        out += [{"name": x, "value": None, "unit": "MAC", "inputs": inputs, "why": why} for x in ("capacity", "free")]
+    else:
+        for r, c in capacity(site, span_s).items():
+            out += [{"name": f"capacity at clock.{r}", "value": c, "unit": "MAC", "inputs": inputs},
+                    {"name": f"free at clock.{r}", "value": c - verified, "unit": "MAC", "inputs": inputs}]
+    delta = doc["delta_s"]
+    out.append({"name": "error", "value": None if delta is None else float(Fraction(str(delta))), "unit": DELTA_S,
+                "inputs": [*inputs, "delta_s"], **({"why": "the answer states no δ_s"} if delta is None else {})})
+    return out
+
+
 def commit_of(attempt: dict) -> str | None:
     source = attempt.get("source") or {}
     return f"{source['commit']}-dirty" if source.get("commit") and source.get("dirty") else source.get("commit")
@@ -395,7 +465,7 @@ def per_call_text(got: dict, model_macs: int) -> list[str]:
              f"by cause, from the verifier's split of its {got['calls']} calls ({got['source']}):"]
     width = max(len(CAUSES[c["cause"]]) for c in got["causes"])
     lines += [f"    {CAUSES[c['cause']]:<{width}}  {_m(c['macs']):>17} MACs  {100 * c['share']:6.2f}%" for c in got["causes"]]
-    lines.append("  ε's deduction is the run's, at its draws: the verifier takes it off the records whose cells hold the most "
+    lines.append("  ε's deduction is the run's, at its sample: the verifier takes it off the records whose cells hold the most "
                  "MACs a ticket, so the calls it lands on carry it for the whole run")
     lines.append(f"  the {len(got['top'])} calls that give up the most:")
     for c in got["top"]:
@@ -445,14 +515,15 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     ap.add_argument("--per-call", action="store_true",
                     help="also print where the model's MACs the credit leaves out went, by cause and by matmul call")
     ap.add_argument("--uncredited", type=Path, metavar="F",
-                    help="with --per-call: the verifier's split from `served_passes.py uncredited`, for a record whose "
-                         "verify document predates it")
+                    help="with --per-call: a per-call give-up (`uncredited`) in a file of its own, for a record that holds "
+                         "none; the verifier writes it once Pearl+'s verifier side of the per-call give-up is on main")
     ap.add_argument("--top", type=int, default=10, metavar="N", help="with --per-call: the calls printed (default 10)")
     a = ap.parse_args(argv)
     if (a.uncredited or a.top != 10) and not a.per_call:
         ap.error("--uncredited and --top go with --per-call")
     try:
         doc = from_run(store_of(), a.run, a.per_call, a.uncredited, a.top)
+        measured = amounts(doc)
     except NoNumber as e:
         print(f"compute: no number: {e}", file=sys.stderr)
         return 1
@@ -465,6 +536,9 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     if out := SHARED.OUT:
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / "compute.json").write_text(line + "\n")
+        writer = kit.writer(out)
+        for m in measured:
+            writer.measurement(**m)
     return 0
 
 

@@ -97,7 +97,7 @@
   "Flock.Test.Annot"
  ],
  "exempt": {
-  "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/protocols/flock/prover/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)",
+  "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node, so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/protocols/flock/prover/tests/test_lean_rec_cap_guards.py instead (the tier for parts whose cold run is over 10 min; a small-shape guard is to go back into the roots)",
   "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd, (`contract`) Flock.Firewall.Contract.cmd, (`frame`, `tap`) Flock.Firewall.Frame.cmd and tapCmd, (`coins`) Flock.Firewall.Coins.cmd, (`hello`) Flock.Firewall.Hello.cmd, (`session`) Flock.Firewall.Session.cmd and (`finish`) Flock.Firewall.Finish.cmd, audited under Flock",
   "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock",
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
@@ -362,8 +362,7 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until its spec is extracted",
-  "Base": "the bytes, hashes and parsing below C-Flock (`core_base`): its lock declares no spec layer, so its definitions are recorded here as read rather than as a spec, excepted with C-Flock until its spec is extracted"
+  "Flock": "C-Flock is excepted until its spec is extracted"
  },
  "guarantees": {
   "Flock.Firewall.Contract.commitLeaf_eq": {
@@ -645,13 +644,13 @@
    }
   },
   "frozen": {
-   "Flock.Firewall.Contract.commitLeaf_eq": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_coins": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_commit": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_computed": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_finish": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_fixed": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_masked": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement"
+   "Flock.Firewall.Contract.commitLeaf_eq": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_coins": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_commit": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_computed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_finish": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_fixed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_masked": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement"
   },
   "inline": {
    "Flock.Firewall.Contract.holds_coins": {

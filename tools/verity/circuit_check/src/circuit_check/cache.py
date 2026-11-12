@@ -133,8 +133,10 @@ module the process imported but the checker's own (its version) and every bindin
 unchanged where it was, never through a move; a run reuses it only when every target it lists is reused that way too, and then
 builds no Definition.
 
-Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
-shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
+Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``, with no path or time shortcut.  An entry
+counts only for the checker version it was stored by, and a version expires: each run that uses a cache marks its own version
+used when it starts and removes every other one no run has used for `EXPIRE_S` (`expire`; a session reading records only
+marks, `mark`), never its own.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 An entry holds in itself only the reads no other entry is likely to hold (its pins, and each read that names its Definition); the
 rest are records under ``<dir>/<version>/reads/`` that any number of entries share, each stored once under the SHA-512 of its
 bytes and checked against it when read (`_hold`).  An entry and each record name the records they are read with (``needs``),
@@ -154,6 +156,7 @@ import importlib
 import json
 import os
 import platform
+import re
 import sys
 import time
 from contextlib import contextmanager
@@ -2098,6 +2101,140 @@ def version() -> str:
         _INTERNAL.pop()
 
 
+#: how long a cache keeps a version of the checker that no run has used (`expire`)
+EXPIRE_S = 72 * 3600
+#: a cache's marks, one empty file per version named by it, whose mtime is when a run last used that version or first saw it
+#: unmarked: beside the versions, and hidden, so a verdict pack never walks it (tools/verity/check/verdicts.py's `entries`)
+USED = ".used"
+#: what a version's directory is renamed to before it is deleted, ``<EXPIRED><version>.<pid>.<random>``: hidden for the same
+#: reason, and taken by `sweep` wherever a run left one
+EXPIRED = ".expired-"
+_VERSION_NAME = re.compile(r"[0-9a-f]{128}")
+#: what this process's stores lost because their version's directory went while they wrote (`expire`): an entry (`store`) or
+#: the seconds beside one (`units.store`), each as its key's directory and what it met
+LOST: list[str] = []
+
+
+def _mark(p: Path, now: float) -> None:
+    try:
+        os.utime(p, (now, now))
+    except FileNotFoundError:
+        with open(p, "a"):
+            pass
+        os.utime(p, (now, now))
+
+
+def mark(cache: Path, now: float | None = None) -> str | None:
+    """Mark this checker's version used now in ``cache``, when ``cache`` holds it: a run that only reads the cache (a session of
+    this package's suite taking its catalog from records) leaves this trace of a hit and writes nothing else.  What kept it from
+    marking, or None: an unmarked version only goes `EXPIRE_S` after another run that uses the cache saw it."""
+    now = _clock() / 1e9 if now is None else now
+    own = version()
+    with internal():
+        try:
+            if (Path(cache) / own).is_dir():
+                (Path(cache) / USED).mkdir(exist_ok=True)
+                _mark(Path(cache) / USED / own, now)
+        except OSError as e:
+            return f"not marked: {e!r}"
+    return None
+
+
+def expire(cache: Path, now: float | None = None, delete: Any = None) -> dict[str, list]:
+    """What a run that uses ``cache`` does first: mark this checker's version used now (`USED`), then rename away each other
+    version whose mark is `EXPIRE_S` old, and hand what is renamed away to ``delete`` (default: `sweep` in a process of its own,
+    not waited for).  A version with no mark is marked now, so it goes `EXPIRE_S` after the first run that saw it.  A record: the
+    versions renamed away (``gone``), and what it met and let be, each ``[what, why]`` (``left``).
+
+    It reads the cache's top and each other version's mark, never what a version holds: on a cache of N other versions, all
+    marked, a start makes N + 4 filesystem calls (a mkdir and a stat of `USED`, its own mark's utime, one listing of the top,
+    a stat of each other mark), and a version that goes adds a rename, a stat and an unlink, and starts `sweep`.  Nothing it meets
+    raises: a mark it can't write leaves its version for a later run, and a rename another run made first is that run's.  A run
+    of a version renamed away while it runs (one idle `EXPIRE_S`, which this one's mark rules out but for a run that started
+    between another's reading the mark and renaming) misses what it had, and its stores remake the directory or give none."""
+    now = _clock() / 1e9 if now is None else now
+    own, top = version(), Path(cache)
+    out: dict[str, list] = {"gone": [], "left": []}
+    with internal():
+        try:
+            (top / USED).mkdir(parents=True, exist_ok=True)
+            _mark(top / USED / own, now)
+            names = os.listdir(top)
+        except OSError as e:
+            out["left"].append([str(top), f"not marked or listed: {e!r}"])
+            return out
+        for name in names:
+            if name == own or not _VERSION_NAME.fullmatch(name):
+                continue
+            m = top / USED / name
+            try:
+                try:
+                    at = os.stat(m).st_mtime
+                except FileNotFoundError:
+                    _mark(m, now)
+                    continue
+                if now - at < EXPIRE_S:
+                    continue
+                away = top / f"{EXPIRED}{name}.{os.getpid()}.{os.urandom(4).hex()}"
+                os.rename(top / name, away)
+            except OSError as e:                       # a rename another run made first is the usual one
+                out["left"].append([name, repr(e)])
+                continue
+            out["gone"].append(name)
+            try:
+                if os.stat(m).st_mtime != at:          # a run of it marked it between the two: give it back if it is still free
+                    os.rename(away, top / name)
+                    out["gone"].pop()
+                    out["left"].append([name, "marked while it was renamed away: given back"])
+                    continue
+                m.unlink()
+            except OSError as e:
+                out["left"].append([name, f"renamed away, its mark kept: {e!r}"])
+        if out["gone"] or any(n.startswith(EXPIRED) for n in names):
+            if isinstance(started := (delete or _sweep_apart)(top), OSError):
+                out["left"].append([str(top), f"no sweep started: {started!r}"])
+    return out
+
+
+def sweep(cache: Path) -> str:
+    """Delete every directory `expire` renamed away in ``cache``, one sweeper a cache at a time (a lock under `USED`): another
+    that finds the lock held leaves them to the one holding it, which lists them again until none is left, and to a later run
+    if it ends first.  What it did."""
+    import fcntl
+    import shutil
+
+    top = Path(cache)
+    try:
+        lock = open(top / USED / ".sweep.lock", "a")
+    except OSError as e:
+        return f"no lock: {e!r}"
+    with lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return "another sweeper holds the lock"
+        done: set[str] = set()
+        while left := {n for n in os.listdir(top) if n.startswith(EXPIRED)} - done:
+            for n in sorted(left):
+                shutil.rmtree(top / n, ignore_errors=True)
+            done |= left                               # one it could not delete is not tried again here
+    return f"swept {len(done)}"
+
+
+def _sweep_apart(top: Path) -> Any:
+    """`sweep` in a process of its own that outlives this one, not waited for: a version runs to hundreds of thousands of files,
+    and a check's start does not wait on another version's delete.  The process, or the error that kept it from starting."""
+    import subprocess
+
+    try:
+        return subprocess.Popen([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                                 "from circuit_check.cache import sweep; sweep(sys.argv[2])", str(_HERE.parent), str(top)],
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                start_new_session=True)
+    except OSError as e:
+        return e
+
+
 #: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
 #: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
@@ -2900,19 +3037,24 @@ def _tree_modules(loaded: set[str] = frozenset()) -> tuple[set[str], dict[str, s
 def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
           worker: dict[str, dict[str, str | None]] | None = None) -> str | None:
     """Record ``report`` under ``k`` with its reads' digests; None, and nothing stored, when ``worker`` (`seen` in the process that
-    ran the check) differs from them: the tree changed while the run went on, and the report may be of a tree no digest names."""
+    ran the check) differs from them: the tree changed while the run went on, and the report may be of a tree no digest names.
+    None too, and the entry in `LOST`, when the version's directory went while it was written (`expire`)."""
     now = _digests(root, got)
     if worker is not None and worker != now:
         return None
     d = _dir(cache, k)
-    e = {"key": k, **_hold(d.parent, k, now), "report": report}
-    body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
-    eid = hashlib.sha512(body.encode()).hexdigest()
-    d.mkdir(parents=True, exist_ok=True)
-    # a temporary name of this writer's own: two checks may store the same entry at once
-    tmp = d / f".{eid}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
-    tmp.write_text(body)
-    os.replace(tmp, d / f"{eid}.json")
+    try:
+        e = {"key": k, **_hold(d.parent, k, now), "report": report}
+        body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
+        eid = hashlib.sha512(body.encode()).hexdigest()
+        d.mkdir(parents=True, exist_ok=True)
+        # a temporary name of this writer's own: two checks may store the same entry at once
+        tmp = d / f".{eid}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
+        tmp.write_text(body)
+        os.replace(tmp, d / f"{eid}.json")
+    except FileNotFoundError as e:
+        LOST.append(f"{d.name}: {e!r}")
+        return None
     return eid
 
 

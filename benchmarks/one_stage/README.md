@@ -110,7 +110,12 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
   and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
-  certifier's period reads it (`period.json`). With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
+  certifier's period reads it (`period.json`). With `V3C_WARM_JOBS` its warm step (`records_audit.py warm`) composes the
+  window's templates before the audit's coins, into the window's own directory or, with `V3C_COMPOSE_CACHE`, into the
+  directory that names: a kept compose cache, from which a later window under the same tree takes the circuits it
+  shares and composes only the rest. No step removes a kept cache, and it holds every template's circuit composed into
+  it, one of which can be past 100 GB.
+  With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
   `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
   (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its `period.json` once both are done, whose answer
   the certifier's piece reads. Each
@@ -152,22 +157,6 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the sampled and live runs'
   statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
   answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
-- `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
-  a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
-  Lean, honest and with a tampered block, a scan of everything the verifier received for the sampled proof blocks' bytes, and the
-  prover's cost per opening. `a8_gpu.sh` takes its cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host
-  job, and `a8_cost.py` reads a run's sessions into the one cost model's observations (`benchmarks/sampling_plan`).
-- `a7.sh`: run A7's entry point, on the same builds; the remote session's checks 1-3 and 5 on each sampled receipt are
-  proved, not opened, by the opening unit (`remote_bandwidth.opening`, `verity.protocols.poub.verifier.commitments.gates.block_check`) in a
-  second statement. A7 is the requirement's plan and memory-map units
-  (`verity.definitions.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
-  sampling design, their witness rows bound to canonical commitments, then wired to PoUB's ledger as its
-  requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its sample leaves
-  unproved can carry and its δ the sample's.
-- `plan_shards.py`: the sharded plan unit (`PlanShard_v1`) on a recorded remote session (vllm's `remote_session.json` and the
-  remote verifier's `verifier.json`): each pass's plan cut into the store's shards, every instance held to the unit's
-  reference, each distinct one to the circuit, and one staged by `UnitStager` for its fit in the circuit prover's block. A CPU job; it
-  builds nothing.
 - `zk_cost.sh`: Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job, or a preemptible guest job on a shared node). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 units, and sessions of 1 to 512 sampled proof blocks are proved by `flock-circuit prove --zk
@@ -205,8 +194,12 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   inherits it; with `FC_VERIFIER_CPUS`, the verifiers run on `verifier_cpus` and the provers on the rest), as their
   `count`, their `list` and the `numa_nodes` that hold them. With `--lean`, the last sessions at
   K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. A proof block's
-  verdict is the `NO_PROGRAM` refusal, as in `served_units`. A row with a refused session, a server process that exited
-  nonzero, or a prover out of device memory is void: no rate, its reasons in `void`, a `VOID` line, and the run exits 1.
+  verdict is the `NO_PROGRAM` refusal, as in `served_units`. With `--wide-leaf` every prover and verifier of the run
+  carries `flock-circuit --wide-leaf`, the wide level-0 leaf's statement version, and its rows say so (`wide_leaf`); the
+  script's docstring has the rest: the two statement names their Lean verdict is asked under, what `flock-verify`
+  takes and refuses under them, and how a row is held to the version its sessions ran. A row with a refused session, a
+  server process that exited nonzero, a prover out of device memory, or a session that ran another statement version
+  than the row's is void: no rate, its reasons in `void`, a `VOID` line, and the run exits 1.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
@@ -245,7 +238,8 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
 - `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
   deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
-  ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
+  ANDs, table reads and assertions from its leaves lowered once (table reads counted apart, so not comparable with a
+  statement's `ands` with its reads inline: `m1_families.py`'s docstring), against 2^26, and
   the log2 of Flock's circuit prover's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
   same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
   each unit's served MACs and the bits of each of its ports; `--steps all` takes every request step.
@@ -274,9 +268,9 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   private/out/serve/overhead.json, and `table --public` publishes ratios alone. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
-- `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
-  (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
-  reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
+- `served_composite.sh`: `served_verdicts.sh`'s step after its record. It names PoUS's and the wipe's composite cases as
+  their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's and onsite's Lean verdicts on the run's cases
+  (soundness's composite reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`.
 - `onsite_periods.py`: the onsite record (`verity/onsite-network-record/v1`) per monitoring period, a week, a month and a
   year by the node, a datacenter and the world, each cell its K, share of the weights and δ_net beside K over one
   execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:

@@ -7,7 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_flock_base.py", "tests/test_layout.py", "tests/test_layout_checks.py", "tests/test_rename.py",
-  "tests/test_restack.py", "tests/test_stage.py"]
+  "tests/test_resolve_check.py", "tests/test_restack.py", "tests/test_stage.py"]
 # `tests/test_stage.py` stages moves in toy repositories holding these, as a move's base holds them: the certificate and
 # the pins list it reads
 inputs = ["tools/verity/check/move_check.py", "tools/verity/check/pins.py"]
