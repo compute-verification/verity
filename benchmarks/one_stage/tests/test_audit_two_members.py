@@ -1,7 +1,9 @@
 """Two sampled members of a tiny committed window through the records audit as a served window's audit runs it
 (`served_verdicts.sh`'s ``v3c_audit``): ``records_audit.py audit`` in a process of its own, which samples on its stream
 and hands `a5.audit` the members, each proved by Flock's prover (`flock-circuit`, the CPU build) behind the ZK server
-and verified by the Lean verifier. Nothing on that path is replaced.
+and verified by the Lean verifier. Nothing on that path is replaced. The members' prover is the audit's one kept process
+(`a5.proof_server`), which proves them one after another and writes a ``LIVE`` record for each, a member the ZK server
+stops included (`_kept_prover`).
 
 * **The window** (`_window`): two templates of one proof block each, `ScaledMmS8Coordinate` at K = 128 and K = 256 (the
   smallest whose rows give Flock's composer a compression before a row's last block), recorded, committed and written
@@ -67,6 +69,15 @@ RECORD = ("summary.json", "window/audit.json", "window/registration.json", "wind
 VERDICTS = ("m0-verifier", "lean-verify", "lean-draw")
 
 pytestmark = pytest.mark.slow
+
+
+def _kept_prover(out: Path) -> list[str]:
+    """The members the audit's kept prover proved, in its order: the session directory each ``LIVE`` record in its log is
+    labelled with. A member proved by a process of its own has that process's log in its session directory instead."""
+    audit = out / "window"
+    assert not sorted(audit.glob("session-m*/prove.log")), "a member was proved by a process of its own"
+    log, = sorted((audit / "proof-server").glob("prover-*.log"))
+    return [Path(json.loads(x[5:])["label"]).name for x in log.read_text().splitlines() if x.startswith("LIVE\t")]
 
 
 def _window(d: Path, flipped: bool = False) -> Path:
@@ -136,6 +147,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert [(m["template"], m["n"]) for m in row["members"]] == [(descriptor_id(t), 1) for t in TEMPLATES]
     assert row["audit"]["accepted"] is True, row["audit"]
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in VERDICTS for k in (0, 1)}
+    assert _kept_prover(out) == ["session-m0", "session-m1"]
     assert row["negatives"] and all(row["negatives"].values()), row["negatives"]
     outcome = row["coins"]["outcome"]
     assert (outcome["accepted"], outcome["codes"], row["coins"]["coins_reason"]) == (True, [], None), row["coins"]
@@ -163,6 +175,8 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     assert row["draw"] == [0, 1] and row["audit"]["accepted"] is False
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": k == 0 for v in VERDICTS for k in (0, 1)}, row["audit"]
     assert sorted(row["audit"]["why"]) == sorted(f"{v}/m1" for v in VERDICTS), row["audit"]["why"]
+    # the kept prover has a record for the member the ZK server stopped too, and went on from the member before it
+    assert _kept_prover(out) == ["session-m0", "session-m1"]
     for k, proofs in ((0, True), (1, False)):
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
         record = json.loads(session.read_text())
