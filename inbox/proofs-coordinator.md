@@ -104512,3 +104512,53 @@ theorem opensOwn_of_checked {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ) (hc : 
 - `opensOwn_of_checked`: not written; [guess] that `m.pub.n = m.n`, which `placeOfRead_eq`'s twin needs, follows from `Checked.parsed` and `noPublic` by `loadPublic_inOut` (`Flock/Bridge/V5/Accepted.lean:205`, [relayed: PROVED 21:18Z]), not checked.
 - Whether the merged tree builds: records run `r20261112-203452-ae67`, still running on `vy-nebius-cpu-12` at 22:04Z (slot `p2` since 20:42Z), no verdict.
 - D's size, and so the hour.
+
+## FINDER, Thu 12 Nov 22:10Z: READY LINE for #9513 at `0f850991550326073f3e28cb04158eab5c62398c`: the binding bound over a monitoring period, section 4's pull request; it sits on #9346 and lands fourth; not marked
+
+In plain words. Section 4's pull request is open as [#9513](https://github.com/compute-verification/verity/pull/9513), unmarked, with its checks passed at its head. It proves the period's figure as a theorem: the probability that some phase of a monitoring period has the event, with the prover's SHA-512 calls charged once for the period. The six rows of network's table are proved instances at one session of one shape a sample, and six more at 2^12 sessions. It also states the period's bound at SPOT[Flock]'s own verifier, read off the period's expected calls, which is the statement I would list. It adds no lock entry.
+
+**What it sits on** [run]. #9513's head holds #9346's head `949c03c3a7a1`, which holds #9332's `5a6be198a5ed`, which holds #9149's `4a31b967c594`, which holds `main` at `6d95fcc68dd3`. It lands after the three. Its own diff against #9346's head is eight files: five new Lean modules, four import lines in `Proofs/Flock.lean`, the limits file and one allowlist entry. Nothing under `security/Definitions/`, no lock file, no named assumption, no listed statement, no existing lemma edited.
+
+**The statement that would be listed** [run: it compiles, with the axiom probe]. `SpotFlock.code_phases_oneWait_le_avg_strata`, in `security/Proofs/Flock/SpotFlock/OneWaitClassAvg.lean`:
+
+- For a monitoring period of `n` phases at SPOT[Flock]'s compiled two-stage verifier, one adversary across the phases, each phase's statement fixed before the period and in the two-stage scope: the probability that some phase's accepted run samples a proof block of the one-wait extraction's `FregTwoX` is at most `Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i])) + 2·(2·(T + e·A_s + n·c) + 4·(T + e·A_s + A_k + e·A_k + (1 + K_s)·n·c))/2^256`, with `A_s = C_s·T + N·T_R` and `A_k = C_k·T + S_k·T_R`.
+- `T` is the period's expected SHA-512 calls in total, both parties' counted. `T_R` is the expected calls it spends in runs whose second stage is refused. `C_s` and `C_k` are an accepted sample's sessions and classes, `N` and `S_k` the whole partition's proof blocks and classes, each at least every phase's. `K_s` bounds a phase's classes on average, `e` the expected reruns a session, `c` the opening checks' calls a phase.
+- Premises: `SpotFlock.Built`, `SpotFlock.Addresses`, and `Claims.ExpectedCR` at each phase's `B_conf,X` and two by-class finders. These are the premises of the lock's `Flock.SecurityProofs.SpotOneWaitTwo` at one phase [read, its line in `security/lean-audit.json`].
+- `SpotFlock.code_phases_oneWait_le_avg` is the same bound with the three totals left as hypotheses, if the more general statement is preferred.
+- A listing would also need its nontriviality witness, which is not written.
+
+**The figures** [run: twelve instances by `norm_num`, compiled]. Configuration: two stages with one wait; one table a session; the period's expected calls 2^80 in total; at most 2^26 sessions and 2^38 classes a sample; opening checks of at most 2^60 calls a phase. Each cell is the base-2 logarithm of the bound on the probability that some phase of the period has the event.
+
+| period, compute | phases | 1 session of one shape a sample, proved | 2^12 sessions, proved | today, scripted |
+|---|---|---|---|---|
+| a week, a datacenter | 5.91e7 | −111 | −111 | −85.63 |
+| a month, a datacenter | 2.53e8 | −111 | −111 | −83.53 |
+| a year, a datacenter | 3.08e9 | −111 | −110 | −79.92 |
+| a week, the world | 2.21e11 | −110 | −105 | −73.76 |
+| a month, the world | 9.49e11 | −109 | −103 | −71.65 |
+| a year, the world | 1.155e13 | −105 | −100 | −68.05 |
+
+**What the figures do not say**, each in the body too:
+
+- [derived] The twelve cells are instances of the form that holds the sample's three counts at every sample (`CompiledTwo.phases_oneWait_le_of_phasesBound`). At SPOT[Flock]'s code a count at every sample is the whole partition's, because a refused run samples every block. So at the code those counts are a deployment's premise. The form whose premise the code meets is the one on averages above, and it has no instance at numbers: that needs a number for `T_R`, and I have none.
+- [derived] Three inputs of the cells are a script's evaluation of the Lean's expressions, taken as hypotheses: the sessions' knowledge error within 2^-202, the fork's weight within 1212·10^12 a session, and `Pr[B_i] ≤ 2^-351`. No theorem states them at those numerals.
+- [derived] The fork term is still paid once a phase and reads each phase's prover at its largest count of calls, 2^80 in a phase. Paying it once a period is the choice you hold for Daniel.
+- [read] "Today" is a script's sum of #9149's phase bound over the phases, with the opening checks' calls left out. No theorem states it.
+
+**Checks at this head** [run]:
+
+- Records run `r20261112-201810-ed38`: pass; `security`, `security/Proofs`, `security/Properties` each pass, nothing regenerated. The fast records path, without the kernel replay or the tests.
+- Quick tier `r20261112-213323-eb49`: 12 suites, 12 passed, 0 failed.
+- Each new module alone with the axiom probe, none beyond `propext`, `Classical.choice`, `Quot.sound`: `PhasesOnce.lean` 6 theorems (`549f`), `PhasesNumbers.lean` 19 (`95ef`, at the commit that last changed it), `PhasesAvg.lean` 6 (`c534`), `TwoOneWaitAvgNumbers.lean` 3 (`3024`), `OneWaitClassAvg.lean` 10 (`4172`).
+- The retired-terms test itself at this head: 13 passed; its warning names no file of this change. The allowlist gains one entry of one site (`OneWaitClassAvg.lean` names the tree's `SpotFlock.cap` once, in a local notation), so the ratchet gate will ring the lane once for it.
+- `git merge-tree` with `main` at `783b526ab6f5`: clean. With lean's tip `f3ffe4e2bbcb`: two conflicted files, neither in the stack, and `main` conflicts with that branch on both.
+- I read the body back from GitHub: it is as written, plus the tool's two trailer lines.
+- Not run: the full check with the kernel replay.
+
+**The limits file** [derived]. `Proofs/Flock` at 284 modules and 2,413 declarations: #9346's 279 and 2,367 plus five modules and 46 declarations (7 + 20 + 6 + 3 + 10), recounted from the sources by the same regex as before. No guarantee reads the five modules yet; the body names the statement above as the one that would.
+
+**For circuits** [run]. The instance I named for CIR-270, `Claims.SamplingGeneric.CompiledTwo.eventTwoX_oneWait_le_cls_exp_513` with `Claims.Flock.Numbers.hashBound_oneWait_513_n29`, is in #9513 (`SamplingGeneric/TwoOneWaitAvgNumbers.lean`) and compiled with the probe. It lands with #9513 unless you want it as a pull request of its own on #9346's head.
+
+**Open with you** [read: the mailbox's newest section is still 18:30Z]. The four questions of my 19:18Z entry. And one new: whether the statement to list is the one read off `T` and `T_R` or the more general one.
+
+I mark nothing. If any of the three below changes head or lands, I merge and rerun both checks and send the new head the same hour.
