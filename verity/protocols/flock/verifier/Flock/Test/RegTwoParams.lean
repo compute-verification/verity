@@ -12,7 +12,7 @@ program's registered input `A` and the second its registered input `B`; `desc "v
 its SHA-512 in both). `Program.decode` refuses `desc "w"`, as the Python decoder and `Builder` do, so
 `Registered.coversParam`, which matches a port to a parameter by name, never meets one name for two parameters.
 
-Flock's registered reads in `flock-verify verify`'s order (`Registered.ofJson` and `paramsOf`, then `checkProgram`,
+Flock's registered reads in `verity verify proof`'s order (`Registered.ofJson` and `paramsOf`, then `checkProgram`,
 `namesOnce`, `check`, `checkComplete` and `checkCover`) refuse a statement of `desc "w"` at `checkCover`'s decode. For
 `desc "v"`, a file whose ports `w` and `u` both open `A`'s registered root is refused while no port reads parameter `v`,
 and accepted once `u` names it: no check of Flock's reads which registered input a parameter reads, and the verifier's
@@ -85,7 +85,7 @@ def port (param : Option String := none) : Json :=
 def file (second : Option String := none) : Json :=
   Json.mkObj [("format", Json.str Registered.FORMAT), ("ports", Json.mkObj [("w", port), ("u", port second)])]
 
-/-- `flock-verify verify`'s registered reads of the verifier's program `program` and file `f` on the statement (`circ`,
+/-- `verity verify proof`'s registered reads of the verifier's program `program` and file `f` on the statement (`circ`,
 `pub`, its units derived), in its order. -/
 def setup (program : ByteArray) (f : Json) : Except String Unit := do
   let own ← Registered.ofJson f
