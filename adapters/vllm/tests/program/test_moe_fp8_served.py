@@ -9,6 +9,7 @@ import importlib.util
 from pathlib import Path
 
 from verity.definitions.registry import fp8_moe_experts, moe
+
 from verity_vllm.engine.profiles.devices import fused_moe_config
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -23,6 +24,7 @@ LAUNCHES = range(1, 8193)
 def _served(module) -> set[str]:
     path = Path(module.__file__).with_name(f"{Path(module.__file__).stem}.circuit-check.py")
     spec = importlib.util.spec_from_file_location(f"{path.stem}_sidecar", path)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return {make().id for label, make in mod._model_roots() if "/served-" in label}

@@ -8,17 +8,22 @@ from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
+import contextlib
 import copy
 import hashlib
+import json
+import os
 import struct
+import sys
+import types
 
 import numpy as np
 import pytest
 import torch
+from verity.definitions.numerics import marlin_moe_rows as MR
 
 from tests.properties import dsv4_marlin_capture_gpu as X
-from verity.definitions.numerics import marlin_moe_rows as MR
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 E, K, N, SMS = 8, 256, 128, 3
 #: the config the stand-in kernel runs: TK 64 (two warp rows), TN 128, 4 blocks per SM, so GRID 12 splits K
@@ -236,8 +241,6 @@ def test_the_jit_phase_reads_each_kernel_back_from_the_driver_cache(tmp_path, mo
 
 
 def test_the_gate_holds_the_driver_to_the_map_s(monkeypatch) -> None:
-    import json
-
     assert X.pinned_driver() == json.loads(X.MAP.read_text())["target"]["driver"]["version"] == "580.173.02"
     monkeypatch.setattr(X.C, "gate", lambda *a: {"driver": "580.173.02", "want": {"min_driver": 575}, "checks": {"driver": True},
                                                  "ok": True})
@@ -504,9 +507,6 @@ def test_a_moved_pair_s_words_read_its_own_block(tmp_path) -> None:
 def test_the_replay_relaunches_the_recorded_call(monkeypatch) -> None:
     """`replay` re-launches run1's exact call into a SENTINEL-filled output with a fresh workspace and holds the words to run1's,
     as bits (the vLLM op stood in for here; on the GPU the kernel's slice fold is lock-serialized, so the real one must agree)."""
-    import sys
-    import types
-
     recorded = torch.tensor(np.array([[17, 0x7FA6], [3, 4]], dtype=np.int16)).view(torch.bfloat16)
     state = {"words": recorded.view(torch.int16).clone()}
 
@@ -701,12 +701,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
     the compute cache it points the driver at, the driver pinned to the map's, the comparisons through the spawned worker pool,
     identification against the sweep, the bindings, the per-case verdicts, the sealed record and the exit status, so a slip in the
     orchestration shows here and not in the H200's first hour."""
-    import contextlib
-    import json
-    import os
-    import sys
-    import types
-
     vc = types.ModuleType("vllm.config")
     vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
                     set_current_vllm_config=lambda cfg: contextlib.nullcontext())
@@ -768,8 +762,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_marlin_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
 

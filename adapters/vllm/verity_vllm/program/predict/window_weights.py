@@ -25,9 +25,9 @@ from dataclasses import asdict
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments.windows import interface as IF
+from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.records.weights_registration import WeightsRegistration
@@ -160,7 +160,7 @@ def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[An
 
 
 def _composed(registered: Any, r: Any, fields: list, checkpoint_dir: str, checkpoints_manifest: str | None,
-              kv_cache_dtype: str, on_field: Any) -> dict[str, Any]:
+              on_field: Any) -> dict[str, Any]:
     """`check.weights_of_record` of ``fields``, composed from ``checkpoint_dir``'s shards as ``checkpoints_manifest``
     (default the repository's ``manifests/checkpoints.json``) pins them at ``registered``'s model and revision, each field's
     words handed to ``on_field`` as digested."""
@@ -170,7 +170,7 @@ def _composed(registered: Any, r: Any, fields: list, checkpoint_dir: str, checkp
     ck = WR.CheckpointIndex(checkpoint_dir, checkpoints_manifest=str(checkpoints_manifest or CHECKPOINTS), model=model["repo"],
                             revision=model["revision"])
     return WR.weights_of_record({"instances": {}, "result": {"program_digest": r.digest}, "dir": None}, ck, prefix="",
-                                kv_cache_dtype=kv_cache_dtype, fields=fields, on_field=on_field)
+                                fields=fields, on_field=on_field)
 
 
 def _unrooted(rec: dict[str, Any], of: dict[str, list[str]], rooted: Any) -> dict[str, str]:
@@ -183,7 +183,7 @@ def _unrooted(rec: dict[str, Any], of: dict[str, list[str]], rooted: Any) -> dic
 
 
 def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
-                   kv_cache_dtype: str = "auto", grain: Grain = _GRAIN, served_params: Any = ()) -> dict[str, Any]:
+                   grain: Grain = _GRAIN, served_params: Any = ()) -> dict[str, Any]:
     """The weights of record of the circuit's registered weights (`check.weights_of_record`), the verifier's: each field of
     the class Program's weights record, in its order, composed from the checkpoint's pinned shards (``checkpoints_manifest``,
     default the repository's ``manifests/checkpoints.json``) at ``registered``'s model and revision, and each weight
@@ -202,7 +202,7 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
         for p in of.get(name, ()):
             shapes[p] = _entry(r.digest, p, _rows(p, words).size, params[p])
 
-    rec = _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype, shape)
+    rec = _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, shape)
     for f in _analytic(rec, of):
         for p in of[f["field"]]:
             shapes[p] = _entry(r.digest, p, _words(f), params[p])
@@ -225,21 +225,20 @@ def weight_values(registered: Any, served: Any, key: bytes, grain: Grain = _GRAI
             for p in of[name]}
 
 
-def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
-                 kv_cache_dtype: str = "auto") -> dict[str, np.ndarray]:
+def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None) -> dict[str, np.ndarray]:
     """Each field of the class Program's weights record composed from ``checkpoint_dir``'s shards (`check.weights_of_record`),
     by field, its words as digested: the words a committer serving that checkpoint serves (`weight_values`), where it reads
     them from the checkpoint rather than the engine's tensors."""
     r, fields = _fields(registered)
     out: dict[str, np.ndarray] = {}
-    _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype,
+    _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest,
               lambda name, words: out.__setitem__(name, np.array(words)))
     return out
 
 
 def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, served: Any = None,
-                         checkpoints_manifest: str | None = None, kv_cache_dtype: str = "auto",
-                         grain: Grain = _GRAIN, tables: Any = None, served_params: Any = ()) -> dict[str, Any]:
+                         checkpoints_manifest: str | None = None, grain: Grain = _GRAIN, tables: Any = None,
+                         served_params: Any = ()) -> dict[str, Any]:
     """The committer's registration of the weights it serves (`records.weights_registration`), written once per model and
     key before the first window's coins and pinned by the verifier (core's ``registration.check(pinned=...)``,
     ``records_audit.py --registered`` and ``--pins``, `registration_pins`): each weight parameter the class circuit
@@ -279,7 +278,7 @@ def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, serve
             return
         register(name, words)
 
-    rec = _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype, commit)
+    rec = _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, commit)
     for f in _analytic(rec, of):
         if (tables or {}).get(f["analytic"]["table"]) is None:
             continue

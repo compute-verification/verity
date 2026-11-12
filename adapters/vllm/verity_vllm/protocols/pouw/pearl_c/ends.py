@@ -6,17 +6,32 @@ commitment, and a retained pass's files and manifest (`write_manifest`).  A lagg
 from __future__ import annotations
 
 import types
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.pouw.verifier.audit import Epoch, Workload, transcript_domain
 from verity.protocols.pouw.verifier.core_check import MANIFEST_SCHEMA
 from verity.protocols.pouw.verifier.protocol import Matmul
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.pouw.verifier.serving import Schedule, SchemeId
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _write, _zeros, write_manifest
+from verity_vllm.protocols.pouw.pearl_c.host import (
+    _bytes,
+    _Driver,
+    _Keys,
+    _Lane,
+    _linked,
+    _put,
+    _TorchStream,
+    _Uploads,
+    _write,
+    _zeros,
+    write_manifest,
+)
+from verity_vllm.protocols.pouw.pearl_c.kernel import Kernel
 from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 
 
@@ -33,8 +48,84 @@ class _Pass:
     stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
     base: int | None = None          # its call at position p has index base + p; None until its first call (`call_index`)
 
+    @property
+    def first(self) -> int:
+        """The index of the pass's first call: ``base``, which a pass has from its first call on."""
+        assert self.base is not None
+        return self.base
 
-class PassEnds:
+
+class _RunState:
+    """What `PearlCDeviceRun.__init__` sets and its four base classes (`PassEnds`, `passes.EpochCalls`,
+    `graphs.GraphCalls`, `lanes.LaneCalls`) read of each other and of the run, declared once: annotations only, so the
+    class holds no value and ``hasattr`` on a run reads as before.  A tensor, a weight's side and a graph are ``Any``."""
+    scheme: C.PearlC
+    entry: str
+    kernel: Kernel
+    device: Any
+    hashing: bool
+    graphs: bool
+    time_gemm: bool
+    lag_ends: bool
+    aside_ends: bool
+    capacity: int
+    nb: int
+    tree_hash: str
+    salt: bytes
+    salt_key: bytes | None
+    coins: Any
+    opening: Any
+    roots: dict[int, bytes]
+    weights: dict[int, Any]
+    schedule: Schedule
+    main: _Lane | None
+    sides: list[_Lane]
+    fork: _Lane | None
+    driver: _Driver | None
+    keys: _Keys
+    uploads: _Uploads
+    torch_stream: _TorchStream
+    stream: Callable[[], int]
+    const_keys: dict[str, int]
+    leaves: Any
+    roots_buf: Any
+    flag_buf: Any
+    order: dict[int, int]
+    key_slots: Any
+    offs: Any
+    omit: frozenset[str]
+    commits: dict[str, Any]
+    details: dict[str, Any]
+    cur: _Pass
+    _host_keys: Any
+    _host_offs: Any
+    _slots_copied: Any
+    _predicted: dict[int, tuple]
+    _graphs: dict[tuple, Any]
+    _side_turn: int
+    _side_cache: dict[tuple, frozenset[str]]
+    _lagged: Any
+    _end_side: Any
+    _weight_files: dict[str, tuple[Path, dict]]
+    begin: Callable[..., Any]
+    join_sides: Callable[..., Any]
+    settle: Callable[..., Any]
+    _call_names: Callable[..., Any]
+    _call_steps: Callable[..., Any]
+    _call_cuts: Callable[..., Any]
+    _call_tree: Callable[..., Any]
+    _call_stats: Callable[..., Any]
+    _capture_lanes: Callable[..., Any]
+    _defers_a: Callable[..., Any]
+    _end_aside: Callable[..., Any]
+    _ended: Callable[..., Any]
+    _graphed: Callable[..., Any]
+    _lane_graph: Callable[..., Any]
+    _offsets: Callable[..., Any]
+    _widen_later: Callable[..., Any]
+
+
+class PassEnds(_RunState):
     """`PearlCDeviceRun`'s pass ends, as its base class: the run's ``cur``, ``hashing``, ``kernel``, ``nb``, ``roots``,
     ``salt``, ``schedule``, ``leaves``, ``roots_buf``, ``flag_buf``, ``const_keys``, ``tree_hash``, ``details``,
     ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``aside_ends``,
@@ -111,17 +202,24 @@ class PassEnds:
 
     def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, tree: Any, count: int) -> Path:
         import torch
-        d = cur.retain
+        d, salt_key = cur.retain, self.salt_key
+        assert d is not None and salt_key is not None
         wd = d / "weights"
         wd.mkdir(parents=True, exist_ok=True)
         weights = {}
         for w in sorted(self.weights):
             wt = self.weights[w]
             size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
+
+            def rows(wt: Any = wt) -> bytes:
+                return _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))
+
+            def tree_b(wt: Any = wt, size: int = size) -> bytes:
+                return _bytes(wt.b["tree_b"][:size])
+
             weights[str(w)] = {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
-                               "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False,
-                                               data=lambda wt=wt: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))),
-                               "tree": _linked(wd / f"{w}.tree", self._weight_files, data=lambda wt=wt, size=size: _bytes(wt.b["tree_b"][:size]))}
+                               "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False, data=rows),
+                               "tree": _linked(wd / f"{w}.tree", self._weight_files, data=tree_b)}
         matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,
                     "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
                     "root_a": roots_a[self.nb * p:self.nb * (p + 1)].hex(), **f}
@@ -133,7 +231,7 @@ class PassEnds:
                 "kernel_source_sha256": self.kernel.source_sha256, "schedule": self.details["schedule"],
                 "records_root": PW.records_root(self.salt, epoch.weights_root,
                                                 {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
-                "commitment": {"root": _bytes(tree[-self.nb:]).hex(), "count": count}, "hm96_salt_key": self.salt_key.hex(),
+                "commitment": {"root": _bytes(tree[-self.nb:]).hex(), "count": count}, "hm96_salt_key": salt_key.hex(),
                 "leaves": _write(d / "leaves", _bytes(self.leaves[:self.nb * count])), "tree_t": _write(d / "tree_t", _bytes(tree))}
         return write_manifest(d, head, weights, matmuls)
 

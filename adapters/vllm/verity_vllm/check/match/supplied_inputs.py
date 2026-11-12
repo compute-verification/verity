@@ -76,7 +76,7 @@ def load_oracle_supplied(P, pj: dict, d: str) -> set[int] | None:
         raise ValueError(f"{d}: program.json states supplied parameters but not the parameters' Input nodes (`input_nodes`)")
     ents = []
     for ent, owner in [(sup.get("registration"), None)] + [(r, i) for i, r in enumerate(sup.get("run") or [])]:
-        if not ent:
+        if not ent or in_nodes is None:
             continue
         nodes = in_nodes.get(ent["name"]) or []
         if not ent.get("fields"):

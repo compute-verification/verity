@@ -5,7 +5,7 @@ the denominator is 1.
 -/
 module
 
-public import Flock.Bytes
+public import Base.Bytes
 
 @[expose] public section
 set_option backward.privateInPublic true
