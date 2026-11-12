@@ -239,16 +239,10 @@ def plan_digest(body: Mapping[str, Any]) -> str:
 # the manifest's Values (one class per (op_path, output_member, family); hidden-stream geometries fold to `*`)
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def _identity_key(r: Mapping[str, Any]) -> tuple:
-    return (str(r.get("request_id")), str(r.get("step")), int(r.get("invocation") or 0), str(r.get("op_path")), str(r.get("output_member", "out")), int(r.get("rank") or 0))
-
-
-def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapping[str, Any]] = ()) -> list[ValuePlan]:
-    """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
-    prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
-    enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
+def value_classes(manifest: Mapping[str, Any]) -> list[ValuePlan]:
+    """One Value class per (op_path, output_member, family).  An identity whose row declares it padding or inactive (`boundary_class`,
+    `enablement`) is PRESCRIBED -- materialised by enablement, no runtime producer."""
     rows: list[Mapping[str, Any]] = next((held for name in ("identities", "entries", "rows") if (held := manifest.get(name))), [])
-    padded = {_identity_key(p) for p in padding_identities}
     out: dict[tuple[str, str, str], ValuePlan] = {}
     for r in rows:
         fam = str(r.get("family") or "")
@@ -274,7 +268,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
             if r.get(extra) and v.anchor is None:
                 v.anchor = str(r[extra])
         bc = str(r.get("boundary_class") or "")
-        if bc in PRESCRIBED_ENABLEMENT or str(r.get("enablement") or "") in PRESCRIBED_ENABLEMENT or _identity_key(r) in padded:
+        if bc in PRESCRIBED_ENABLEMENT or str(r.get("enablement") or "") in PRESCRIBED_ENABLEMENT:
             v.prescribed_identities += 1
     return [out[k] for k in sorted(out)]
 
@@ -513,9 +507,9 @@ def confirm_modules(values: Iterable[ValuePlan], corr: AcquireCorrespondence) ->
     return {"applicable": True, "confirmed": confirmed, "unconfirmed": unconfirmed}
 
 
-def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorrespondence, *, tables: Mapping[str, Any] | None = None,
-                     padding_identities: Iterable[Mapping[str, Any]] = ()) -> AcquisitionPlan:
-    values = value_classes(manifest, padding_identities)
+def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorrespondence, *,
+                     tables: Mapping[str, Any] | None = None) -> AcquisitionPlan:
+    values = value_classes(manifest)
     for v in values:
         legal, refused = sites_of(v, correspondence)
         v.sites, v.rejected = legal, refused

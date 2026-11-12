@@ -212,9 +212,8 @@ def test_prescribed_padding_identities():
     v = {v.value_id: v for v in plan.values}["body.blocks.0.act/out"]
     assert not v.prescribed and v.prescribed_identities == 1 and v.identities == 3 and v.chosen.kind == "producer_output"
     assert [s.kind for s in v.sites] == ["prescribed", "producer_output"]
-    # padding identities as the finalize phase knows them: every identity of a Value -> prescribed as a whole
-    pad = [r for r in rows if r["op_path"] == "logits"]
-    plan2, _, _ = make_plan(rows) if False else (P.acquisition_plan(manifest(rows), AcquireCorrespondence(tree()), tables=TABLES, padding_identities=pad), None, None)
+    # every identity of a Value declared padding -> prescribed as a whole
+    plan2, _, _ = make_plan([dict(r, boundary_class="padding") if r["op_path"] == "logits" else r for r in rows])
     lg = {v.value_id: v for v in plan2.values}["logits/out"]
     assert lg.prescribed and lg.chosen.kind == "prescribed" and lg.prescribed_identities == 2
     assert ("logits", "producer_output", "out") not in [h.key() for h in plan2.hooks()]
