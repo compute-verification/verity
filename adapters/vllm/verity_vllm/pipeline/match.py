@@ -85,6 +85,7 @@ from verity_vllm.pipeline.match_workload import (
 from verity_vllm.pipeline.match_workload import (
     _workload_moe_construction as _workload_moe_construction,  # read through this module
 )
+from verity_vllm.records.schema_ids import MATCH_RUN_SCHEMA, MATCH_STAGES_SCHEMA
 
 logger = init_logger(__name__)
 
@@ -323,7 +324,7 @@ def write_manifest(plan: Plan, a: Options) -> dict:
     from verity_vllm.pipeline.report import workload_summary
     C = profile_config(required(a, "profile"))
     man = {
-        "schema": "verity-gen/run/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": a.config_id,
+        "schema": MATCH_RUN_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": a.config_id,
         "profile": a.profile, "case": a.case, "workload_path": a.workload, "workload": workload_summary(a.workload),
         "C": C, "hf_config": _hf_config_of(a, C), "laptop": plan.laptop, "snapshot_steps": plan.steps, "tier_b_steps": plan.tier_b_steps,
         "verify_weights": True, "parallel_replay": plan.parallel, "phase": a.phase,
@@ -475,7 +476,7 @@ def save_stages(run: Path, recs: list[dict]) -> None:
     byname: dict[str, dict] = {}
     for r in recs:
         byname[r["stage"]] = r
-    (run / G.ARTIFACTS["stages"]).write_text(json.dumps({"schema": "verity-gen/stages/v1", "stages": list(byname.values())}, indent=1) + "\n")
+    (run / G.ARTIFACTS["stages"]).write_text(json.dumps({"schema": MATCH_STAGES_SCHEMA, "stages": list(byname.values())}, indent=1) + "\n")
 
 
 def gates_stage(plan: Plan, a: Options) -> dict:

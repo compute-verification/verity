@@ -19,6 +19,11 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.check import gates as G
 from verity_vllm.query.manifest.format import RUN_FAMILY, RUN_PARAM, canonical_identity
+from verity_vllm.records.schema_ids import (
+    REALIZED_INSTANCES_PROGRESSIONS_SCHEMA,
+    REALIZED_INSTANCES_SCHEMA,
+    REALIZED_PROGRAM_SCHEMA,
+)
 
 __all__ = ["INSTANCES_FORM_ENV", "INSTANCES_SCHEMA", "INSTANCES_SCHEMA_V2", "PROGRAM_SCHEMA", "fold_summary_result",
            "instances_form", "persist_program", "run_input_bindings"]
@@ -109,9 +114,9 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
     }, result
 
 
-PROGRAM_SCHEMA = "verity-gen/program/v1"
-INSTANCES_SCHEMA = "verity-gen/instances/v1"
-INSTANCES_SCHEMA_V2 = "verity-gen/instances/v2"   # operand_refs: "p" runs + node-space PROGRESSIONS ["N", idx, lo, hi, dI, dL, dH, count]
+PROGRAM_SCHEMA = REALIZED_PROGRAM_SCHEMA
+INSTANCES_SCHEMA = REALIZED_INSTANCES_SCHEMA
+INSTANCES_SCHEMA_V2 = REALIZED_INSTANCES_PROGRESSIONS_SCHEMA   # operand_refs: "p" runs + node-space PROGRESSIONS ["N", idx, lo, hi, dI, dL, dH, count]
 INSTANCES_FORM_ENV = "VERITY_INSTANCES_FORM"      # runs (default, v1) | progressions (v2); every reader accepts both (cb_a.compact.runs_from_file_items)
 
 
