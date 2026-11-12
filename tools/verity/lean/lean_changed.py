@@ -260,12 +260,13 @@ def audited(todo: list[str], read=read_here) -> list[str]:
 def ask(names: list[str], commit: str | None = None, repo: Path | None = None) -> tuple[int, str]:
     """`--ask`: (the GB a `--records` run of any of the packages ``names`` names asks, the line that says it in GiB,
     `check.py`'s `ask_lines`): the largest need of the build of each package their runs audit (`requirers`, `audited`),
-    with no replay. Read from this checkout, or with ``commit`` from git's objects at that commit in ``repo`` alone.
-    ValueError when a name matches no single package or git can't list ``commit``."""
+    with no replay. Read from this checkout, or with ``commit`` from git's objects at that commit in ``repo`` alone; in a
+    directory that lists no tree (the tools alone, as `research queue` runs it), the largest any records run's build
+    needs. ValueError when a name matches no single package or git can't list ``commit``."""
     if commit is None:
         files, read = LA.COMMON.tracked_files(ROOT), read_here
         if files is None:
-            raise ValueError("the tree's files cannot be listed")
+            return AUDIT.ask_lines({"any package (this directory lists no tree)": AUDIT.HEAVY_DEPS}, ("build",))
     else:
         if (got := at_commit(commit, [], repo)) is None:
             raise ValueError(f"git can't list {commit} in {repo or ROOT}")

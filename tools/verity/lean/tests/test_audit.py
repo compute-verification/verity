@@ -2677,22 +2677,25 @@ def test_all_neither_updates_records_nor_names_instances(capsys):
         assert "neither updates records nor names instances" in capsys.readouterr().err
 
 
-def test_a_run_that_reserved_less_than_its_floor_is_refused_with_the_command_at_its_ask(tmp_path):
+def test_a_run_that_reserved_less_than_its_floor_is_refused_with_the_command_at_its_ask(tmp_path, monkeypatch):
     """A run that reserved less than the largest floor among the steps it takes of every package it audits (a heavy
     build's one job; an ArkLib replay's whole figure) refuses, and prints the command to run instead at its ask, in GB,
-    with the ask in GiB under it; so does a research run that reserved nothing. A light package, the build alone where
-    only the replay's floor is missed, or a floor set to 0, go ahead. What a machine holds is its memory and swap, within
-    its cgroup."""
+    with the ask in GiB under it; so does one whose reservation is no number. A light package, the build alone where only
+    the replay's floor is missed, or a floor set to 0, go ahead. What a machine lets a run hold is its memory and swap,
+    within its cgroup, named by what bounds it; a run that declares no reservation, a research run's included, plans by
+    that, and refuses only where it is below the floor."""
     (tmp_path / "proc").mkdir()
     (tmp_path / "proc" / "meminfo").write_text("MemTotal:       16000000 kB\nMemFree:  100 kB\nSwapTotal:      4000000 kB\n")
     cg = tmp_path / "cg"
     cg.mkdir()
-    assert round(A.memory_gib(tmp_path / "proc", cg), 1) == 19.1
+    got = A.memory(tmp_path / "proc", cg)
+    assert (round(got[0], 1), got[1]) == (19.1, "this machine's memory, swap included")
     (cg / "memory.max").write_text(f"{8 * 2**30}\n")
     (cg / "memory.swap.max").write_text("max\n")
-    assert round(A.memory_gib(tmp_path / "proc", cg), 1) == 11.8
+    got = A.memory(tmp_path / "proc", cg)
+    assert (round(got[0], 1), got[1]) == (11.8, "its cgroup's cap, swap included")
     (cg / "memory.swap.max").write_text("0\n")
-    assert A.memory_gib(tmp_path / "proc", cg) == 8
+    assert A.memory(tmp_path / "proc", cg) == (8, "its cgroup's cap, swap included")
     heavy, mathlib, light = tmp_path / "Proofs", tmp_path / "Spec", tmp_path / "Tool"
     for p, deps in ((heavy, ["mathlib", "Arklib"]), (mathlib, ["mathlib"]), (light, ["batteries"])):
         p.mkdir()
@@ -2705,17 +2708,31 @@ def test_a_run_that_reserved_less_than_its_floor_is_refused_with_the_command_at_
     assert under.strip().startswith(f"{R.gb(R.REPLAY_ARKLIB_GIB)} GB is ") and "REPLAY_ARKLIB_GIB" in under, under
     assert A.memory_refusal([mathlib, heavy], have(R.REPLAY_ARKLIB_GIB), env={}) is None
     records = A.BELOW_FLOOR_RUN.format(gb="{gb}", pkg="Spec")
-    why = A.memory_refusal([mathlib, heavy], have(16), env={}, steps=("build",), run=records)
-    assert why.startswith(f"the build of {mathlib} needs at least {R.ONE_JOB_GIB} GiB") and "--mem-gb 93 " in why
-    assert "lean_changed.py --records Spec" in why and "86 GiB the build of" in why
+    why = A.memory_refusal([mathlib, heavy], have(R.ONE_JOB_GIB - 1), env={}, steps=("build",), run=records)
+    assert why.startswith(f"the build of {mathlib} needs at least {R.ONE_JOB_GIB} GiB")
+    assert f"--mem-gb {R.gb(R.BUILD_HEAVY_GIB)} " in why and f"{R.BUILD_HEAVY_GIB} GiB the build of" in why
+    assert "lean_changed.py --records Spec" in why
     assert A.memory_refusal([mathlib, heavy], have(R.ONE_JOB_GIB), env={}, steps=("build",)) is None, \
         "a build runs fewer jobs, down to one"
     assert A.memory_refusal([light], have(4), env={}) is None
     assert A.memory_refusal([heavy], have(16), env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
     assert "is no number of GiB" in A.memory_refusal([light], have(500), env={"VERITY_LEAN_MEM_FLOOR_GIB": "lots"})
-    why = A.memory_refusal([mathlib], (None, "research run r1 sets none of them"), env={}, steps=("build",))
-    assert "this run reserved nothing (research run r1 sets none of them)" in why
-    assert A.memory_refusal([light], (None, "research run r1 sets none of them"), env={}) is None
+    unread = A.reserved({"CHECK_SLOT_MEM_GB": "lots"})
+    why = A.memory_refusal([mathlib], unread, env={}, steps=("build",))
+    assert "this run reserved nothing it can read (CHECK_SLOT_MEM_GB='lots' is no number of GiB)" in why, why
+    assert A.memory_refusal([light], unread, env={}) is None
+    cap = "its cgroup's cap, swap included"
+    monkeypatch.setattr(A, "memory", lambda: (float(R.REPLAY_ARKLIB_GIB), cap))
+    queued = {"RESEARCH_RUN_ID": "r1"}
+    assert A.reserved(queued) == (R.REPLAY_ARKLIB_GIB, f"none of {', '.join(n for n, _ in R.RESERVATIONS)} declared, so {cap}")
+    assert A.memory_refusal([mathlib, heavy], A.reserved(queued), env={}) is None, "a queued run plans by its cgroup's cap"
+    declared = {**queued, "CHECK_SLOT_MEM_GB": str(R.REPLAY_ARKLIB_GIB - 1)}
+    why = A.memory_refusal([mathlib, heavy], A.reserved(declared), env={})
+    assert f"reserved {R.REPLAY_ARKLIB_GIB - 1:.1f} GiB (CHECK_SLOT_MEM_GB={R.REPLAY_ARKLIB_GIB - 1}, in GiB)" in why, \
+        "a declared reservation below the floor refuses, whatever the cap"
+    monkeypatch.setattr(A, "memory", lambda: (R.REPLAY_ARKLIB_GIB - 1.0, cap))
+    why = A.memory_refusal([mathlib, heavy], A.reserved(queued), env={})
+    assert why and f"declared, so {cap})" in why, "and so does a cap below it"
 
 
 def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_run_reserved(tmp_path):
@@ -2730,11 +2747,11 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_run_reserved(tmp_pat
     (proc / "self" / "cgroup").write_text("0::/user.slice/cluster-r1.scope\n")
     (cg / "user.slice" / "cluster-r1.scope").mkdir(parents=True)
     (cg / "memory.max").write_text("max\n")
-    assert A.memory_gib(proc, cg) == 512
+    assert A.memory(proc, cg) == (512, "this machine's memory, swap included")
     (cg / "user.slice" / "cluster-r1.scope" / "memory.max").write_text(f"{64 * 2**30}\n")
-    assert A.memory_gib(proc, cg) == 64
+    assert A.memory(proc, cg) == (64, "its cgroup's cap, swap included")
     (cg / "user.slice" / "memory.max").write_text(f"{32 * 2**30}\n")
-    assert A.memory_gib(proc, cg) == 32, "a parent's smaller limit holds"
+    assert A.memory(proc, cg)[0] == 32, "a parent's smaller limit holds"
     heavy, light = tmp_path / "heavy", tmp_path / "light"
     for p, deps in ((heavy, ["mathlib"]), (light, ["batteries"])):
         p.mkdir()
@@ -2745,12 +2762,15 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_run_reserved(tmp_pat
     assert A.build_threads(heavy, env, have_gib=R.BUILD_HEAVY_GIB) == A.cores()
     assert A.build_threads(light, env, have_gib=4) is None
     assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=200) == 3, "an explicit setting is the most it runs"
-    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "64"}, have_gib=R.gib(86)) == 6, "and what the run reserved bounds it"
-    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "64", "RESEARCH_RUN_ID": "r1"}) == 64, "a run that reserved nothing"
-    assert A.replay_threads(heavy, env, have_gib=R.REPLAY_ARKLIB_GIB) == min(A.cores(), R.REPLAY_ARKLIB_GIB // 4)
-    assert A.replay_threads(heavy, env, have_gib=8) == min(A.cores(), 2)
-    assert A.replay_threads(heavy, env, have_gib=1) == 1
-    assert A.replay_threads(heavy, {"CHECK_SLOT_MEM_GB": "12"}) == min(A.cores(), 3), "what the run reserved"
+    one_more = R.ONE_JOB_GIB + R.PER_JOB_GIB
+    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "64"}, have_gib=one_more) == 2, "and what the run reserved bounds it"
+    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "64", "CHECK_SLOT_MEM_GB": "lots"}) == 64, \
+        "a reservation that is no number bounds nothing: the run refuses first where a floor stands"
+    t = R.REPLAY_PER_THREAD_GIB
+    assert A.replay_threads(heavy, env, have_gib=R.REPLAY_ARKLIB_GIB) == min(A.cores(), int(R.REPLAY_ARKLIB_GIB // t))
+    assert A.replay_threads(heavy, env, have_gib=2 * t) == min(A.cores(), 2)
+    assert A.replay_threads(heavy, env, have_gib=t / 2) == 1
+    assert A.replay_threads(heavy, {"CHECK_SLOT_MEM_GB": str(3 * t)}) == min(A.cores(), 3), "what the run reserved"
     assert A.replay_threads(heavy, {"LEAN_NUM_THREADS": "3"}) is None
     assert A.replay_threads(light, env) is None
 
@@ -7933,8 +7953,9 @@ assert rep["peak_gib"]["fresh"] < 0.3, rep                              # each s
 def test_a_build_s_peak_adds_up_the_jobs_it_runs_side_by_side(tmp_path):
     """A build's jobs run at once and `ru_maxrss` is one process's, so `run` samples what its whole process tree holds
     (`tree_bytes`: every process below it, by its tasks' `children`, its anonymous and shared pages, the page cache
-    aside), and `peaked` records a step's peak with a warning naming the line of `reserve.py` to raise once it passes
-    `WARN_SHARE` of the step's need, never a failure."""
+    aside), and `peaked` records a step's peak and logs a warning naming the line of `reserve.json` to raise once the peak
+    would give a larger figure, never a failure. The warning is this run's alone: no report holds it, so no kept pass
+    (`lean_audit.keep_pass`, `BUILT`) carries it to a run that reuses the pass, and no comparison of reports reads it."""
     proc = tmp_path / "proc"
     for pid, kids, anon, shm in ((10, "11 12", 100, 0), (11, "13", 200, 50), (12, "", 300, 0), (13, "", 400, 0)):
         (proc / str(pid) / "task" / str(pid)).mkdir(parents=True)
@@ -7957,15 +7978,17 @@ def test_a_build_s_peak_adds_up_the_jobs_it_runs_side_by_side(tmp_path):
     heavy = tmp_path / "heavy"
     heavy.mkdir()
     (heavy / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "mathlib"}, {"name": "Arklib"}]}))
-    R, rep = A.reserve(), {}
-    A.peaked(rep, "replay", heavy, R.WARN_SHARE * R.REPLAY_ARKLIB_GIB)
-    A.peaked(rep, "build", heavy, 10.0)
-    assert rep == {"peak_gib": {"replay": R.WARN_SHARE * R.REPLAY_ARKLIB_GIB, "build": 10.0}}
-    A.peaked(rep, "replay", heavy, R.REPLAY_ARKLIB_GIB + 1)
-    (w,) = rep["warnings"]
-    line = next(i for i, s in enumerate((HERE.parent / "reserve.py").read_text().splitlines(), 1)
-                if s.startswith("REPLAY_ARKLIB_GIB = "))
-    assert w.startswith("replay: its peak") and f"raise REPLAY_ARKLIB_GIB at tools/verity/lean/reserve.py:{line}," in w, w
+    R, rep, said = A.reserve(), {}, []
+    A.peaked(rep, "replay", heavy, R.REPLAY_ARKLIB_GIB / (1 + R.MARGIN), said.append)
+    A.peaked(rep, "build", heavy, 10.0, said.append)
+    assert rep == {"peak_gib": {"replay": R.REPLAY_ARKLIB_GIB / (1 + R.MARGIN), "build": 10.0}} and said == []
+    A.peaked(rep, "replay", heavy, R.REPLAY_ARKLIB_GIB + 1, said.append)
+    assert set(rep) == {"peak_gib"} and rep["peak_gib"]["replay"] == R.REPLAY_ARKLIB_GIB + 1
+    (w,) = said
+    line = next(i for i, s in enumerate((HERE.parent / "reserve.json").read_text().splitlines(), 1)
+                if s.strip().startswith('"REPLAY_ARKLIB_GIB":'))
+    assert w.startswith(f"warning: {heavy}: replay: its peak"), w
+    assert f"raise REPLAY_ARKLIB_GIB at tools/verity/lean/reserve.json:{line}," in w, w
 
 
 def hyp(name, at, reaches, module=None, source="binder"):

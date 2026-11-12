@@ -5,42 +5,44 @@ largest the GiB `need` gives it, by what the package pins of the heavy dependenc
 ArkLib its manifest pins, empty for a package that pins neither). A run asks the largest need among the steps it takes
 of every package it audits (`ask`, in GB as `research run --mem-gb` takes it), refuses below the largest `floor`, and
 plans a heavy build's jobs and a heavy replay's threads within what it reserved (`reserved`, `build_jobs`,
-`replay_threads`). A step whose peak passes `WARN_SHARE` of
-its need warns, naming the line here to raise (`warning`). No audit's key reads this file (`lean_audit.NOT_READ`): a
-figure changed here reruns no audit and no records run. Standard library only.
+`replay_threads`). A step whose peak would give a larger figure than its own warns, naming the line to raise (`warning`).
+
+The rules are here, in every audit's key: a changed rule audits every package again. The figures are `reserve.json`'s,
+which no audit's key reads (`lean_audit.NOT_READ`), so a changed figure reruns no audit and no records run. This file
+takes numbers and reads nothing but that file: what a run reserved is read by `check.py`.
 """
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
+DATA = Path(__file__).with_name("reserve.json")
+HERE = "tools/verity/lean/reserve.json"
+FIGURES = json.loads(DATA.read_text())
 #: a build of a package that pins Mathlib or ArkLib, every job of it at once and the python beside them
-BUILD_HEAVY_GIB = 86
+BUILD_HEAVY_GIB = FIGURES["BUILD_HEAVY_GIB"]
 #: a build of a package that pins neither, and the replay of one that doesn't pin ArkLib
-LIGHT_GIB = 14
+LIGHT_GIB = FIGURES["LIGHT_GIB"]
 #: the whole kernel replay of a package that pins ArkLib, one process run alone: a figure of the tree that grows with what
-#: the replay checks, so raise it when a replay's report warns
-REPLAY_ARKLIB_GIB = 240
+#: the replay checks, so raise it when a replay warns
+REPLAY_ARKLIB_GIB = FIGURES["REPLAY_ARKLIB_GIB"]
 #: a heavy replay's threads: one per this many GiB of what its run reserved, since nothing else bounds what it holds
-REPLAY_PER_THREAD_GIB = 4
+REPLAY_PER_THREAD_GIB = FIGURES["REPLAY_PER_THREAD_GIB"]
 #: the least a heavy build runs in: its largest job alone and the python beside it
-ONE_JOB_GIB = 39
+ONE_JOB_GIB = FIGURES["ONE_JOB_GIB"]
 #: each job a heavy build runs beside that one, below `BUILD_HEAVY_GIB`
-PER_JOB_GIB = 8
-#: the share of its need past which a step's peak warns
-WARN_SHARE = 0.95
+PER_JOB_GIB = FIGURES["PER_JOB_GIB"]
+#: the share a step's figure is set above the largest peak the step has shown
+MARGIN = FIGURES["MARGIN"]
 ARKLIB = "Arklib"
-STEPS = ("build", "replay")
 #: what says a run reserved, each in its unit: a check slot's in GiB (slot.py), a `research run --mem-gb` run's in GB
 RESERVATIONS = (("CHECK_SLOT_MEM_GB", "GiB"), ("CHECK_RUN_MEM_GB", "GB"), ("RESEARCH_RUN_MEM_GB", "GB"))
-#: set inside a research run, where none of `RESERVATIONS` set means the run reserved nothing
-IN_RUN = "RESEARCH_RUN_ID"
-HERE = "tools/verity/lean/reserve.py"
 
 
 def figure(step: str, pins: Iterable[str]) -> str:
-    """The name here of what ``step`` of a package pinning ``pins`` holds at its largest."""
+    """The name of the figure ``step`` of a package pinning ``pins`` holds at its largest."""
     pins = set(pins)
     if step == "replay" and ARKLIB in pins:
         return "REPLAY_ARKLIB_GIB"
@@ -49,7 +51,7 @@ def figure(step: str, pins: Iterable[str]) -> str:
 
 def need(step: str, pins: Iterable[str]) -> int:
     """The GiB ``step`` of a package pinning ``pins`` holds at its largest."""
-    return globals()[figure(step, pins)]
+    return FIGURES[figure(step, pins)]
 
 
 def floor(step: str, pins: Iterable[str]) -> int:
@@ -77,17 +79,17 @@ def gib(gb: float) -> float:
     return gb * 10**9 / 2**30
 
 
-def ask(pins_of: Mapping[str, Iterable[str]], steps: Iterable[str] = STEPS) -> tuple[int, int, str | None, str | None]:
+def ask(pins_of: Mapping[str, Iterable[str]], steps: Iterable[str]) -> tuple[int, int, str | None, str | None]:
     """(the GB a run asks, the GiB that holds, the step and the package it is of): the largest `need` among ``steps`` of
     the packages it audits (``pins_of``)."""
     n, step, pkg = largest(need, pins_of, steps)
     return gb(n), n, step, pkg
 
 
-def reserved(env: Mapping[str, str], machine_gib: float) -> tuple[float | None, str]:
+def reserved(env: Mapping[str, str], machine_gib: float, machine: str) -> tuple[float | None, str]:
     """(the GiB a run reserved, what says so): the least of the `RESERVATIONS` set in ``env``, each converted to GiB, and
-    the machine's memory (``machine_gib``); None inside a research run (`IN_RUN`) that sets none of them, and wherever
-    one of them is no number."""
+    what this machine lets the run hold (``machine_gib``, which ``machine`` names: its cgroup's cap or its memory), which
+    is all a run that declares none of them has; None wherever one of them is no number."""
     got = []
     for name, unit in RESERVATIONS:
         try:
@@ -96,9 +98,9 @@ def reserved(env: Mapping[str, str], machine_gib: float) -> tuple[float | None, 
             return None, f"{name}={env[name]!r} is no number of {unit}"
         if v > 0:
             got.append((v if unit == "GiB" else gib(v), f"{name}={env[name]}, in {unit}"))
-    if not got and env.get(IN_RUN):
-        return None, f"research run {env[IN_RUN]} sets none of {', '.join(n for n, _ in RESERVATIONS)}"
-    return min([*got, (machine_gib, "this machine's memory and swap, within its cgroup")], key=lambda t: t[0])
+    if not got:
+        return machine_gib, f"none of {', '.join(n for n, _ in RESERVATIONS)} declared, so {machine}"
+    return min([*got, (machine_gib, machine)], key=lambda t: t[0])
 
 
 def build_jobs(reserved_gib: float, jobs: int) -> int:
@@ -116,15 +118,17 @@ def replay_threads(reserved_gib: float, jobs: int) -> int:
 
 
 def where(name: str) -> str:
-    """``name``'s line in this file, as `tools/verity/lean/reserve.py:N`."""
-    lines = Path(__file__).read_text().splitlines()
-    return f"{HERE}:{next(i for i, line in enumerate(lines, 1) if line.startswith(f'{name} = '))}"
+    """``name``'s line in `reserve.json`, as `tools/verity/lean/reserve.json:N`."""
+    lines = DATA.read_text().splitlines()
+    return f"{HERE}:{next(i for i, line in enumerate(lines, 1) if line.strip().startswith(json.dumps(name) + ':'))}"
 
 
 def warning(step: str, pins: Iterable[str], peak_gib: float) -> str | None:
-    """What ``step``'s report says when its peak, ``peak_gib``, passes `WARN_SHARE` of its `need`; None below that."""
+    """What a run prints when ``step``'s peak, ``peak_gib``, would give a larger figure than the one it is given; None
+    while it wouldn't."""
     n, name = need(step, pins), figure(step, pins)
-    if peak_gib <= WARN_SHARE * n:
+    # a figure is its step's largest peak with MARGIN above it, to the nearest GiB, so the peak it was set from never warns
+    if peak_gib * (1 + MARGIN) < n + 0.5:
         return None
-    return (f"{step}: its peak, {peak_gib:g} GiB, passes {WARN_SHARE:.0%} of the {n} GiB it is given ({name}): raise "
-            f"{name} at {where(name)}, whose ask a run reserves, before a run that reserved it runs out")
+    return (f"{step}: its peak, {peak_gib:g} GiB, with {MARGIN:.0%} above it passes the {n} GiB it is given ({name}): "
+            f"raise {name} at {where(name)}, whose ask a run reserves, before a run that reserved it runs out")

@@ -692,7 +692,8 @@ def test_the_ask_of_a_records_run_is_its_largest_build_here_or_at_a_commit(tmp_p
     else, which the records gate reads, and the GiB on stderr: the largest build among every package their runs audit
     (each PKG, its requirers and the packages their `proved_in` names), and no replay, which a records run doesn't run.
     With `--head` it reads the commit's objects alone, as `--inputs-key` does, so the queue can ask a head it never
-    checked out, running this file as a process of its own."""
+    checked out, running this file as a process of its own. In a directory of the tools alone, which lists no tree, it
+    asks the largest build any package's run can need."""
     heavy = json.dumps({"packages": [{"type": "path", "dir": ".."}, {"type": "path", "dir": "../props"},
                                      {"type": "git", "name": "Arklib"}]})
     root = tmp_path / "root"
@@ -730,6 +731,15 @@ def test_the_ask_of_a_records_run_is_its_largest_build_here_or_at_a_commit(tmp_p
     r = subprocess.run([sys.executable, str(HERE.parent / "lean_changed.py"), "--ask", P, S, "--head", sha, "--repo",
                         str(clone)], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert (r.returncode, r.stdout) == (0, f"{heavy_gb}\n"), (r.returncode, r.stdout, r.stderr[-2000:])
+    tools = tmp_path / "tools-alone" / "tools/verity/lean"
+    tools.mkdir(parents=True)
+    for f in HERE.parent.iterdir():
+        if f.is_file():
+            shutil.copy(f, tools / f.name)
+    r = subprocess.run([sys.executable, str(tools / "lean_changed.py"), "--ask", P], cwd=tools.parents[2],
+                       capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    assert (r.returncode, r.stdout) == (0, f"{heavy_gb}\n"), ("a directory of the tools alone lists no tree, so it asks "
+                                                              "the largest build", r.returncode, r.stdout, r.stderr[-2000:])
 
 
 def test_a_records_run_below_the_floor_of_any_build_it_runs_is_refused_with_its_ask(pair, tmp_path, monkeypatch):
@@ -741,7 +751,7 @@ def test_a_records_run_below_the_floor_of_any_build_it_runs_is_refused_with_its_
     monkeypatch.setenv("CHECK_SLOT_MEM_GB", "16")
     for v in ("VERITY_LEAN_MEM_FLOOR_GIB", "CHECK_RUN_MEM_GB", "RESEARCH_RUN_MEM_GB"):
         monkeypatch.delenv(v, raising=False)
-    monkeypatch.setattr(LC.AUDIT, "memory_gib", lambda: 1024.0)
+    monkeypatch.setattr(LC.AUDIT, "memory", lambda: (1024.0, "a test's machine"))
     said = []
     assert LC.audit_records(S, tmp_path / "deps", update=True, out=tmp_path / "out", log=said.append) == 2 and calls == []
     why = "\n".join(said)

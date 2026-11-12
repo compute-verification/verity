@@ -16,13 +16,7 @@ spec.loader.exec_module(LA)
 #: the loads of a `NOT_READ` file by a file of the key, each {(the file, the name it loads): why no verdict under a key
 #: reads it}; it only shrinks
 BESIDE = {(f"{LA.LEAN_TOOL}lean_audit.py", "unread.py"):
-          "the ratchet, which `run` runs after the audits from the checkout on every run: no pass is kept of it",
-          (f"{LA.LEAN_TOOL}check.py", "reserve.py"):
-          "what a run reserves and how many jobs it runs: it refuses a run before the run audits, a refusal is never kept, "
-          "and no step's verdict reads the plan (`test_reserve.py` holds it to numbers and functions of pins, steps and a "
-          "reservation)",
-          (f"{LA.LEAN_TOOL}lean_audit.py", "reserve.py"):
-          "`CARRIED`: copied into every scratch tree for check.py's load, and read by nothing of the audit's"}
+          "the ratchet, which `run` runs after the audits from the checkout on every run: no pass is kept of it"}
 
 
 def _loaders(sources: dict[str, str]) -> set[str]:

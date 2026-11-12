@@ -230,9 +230,10 @@ def reserve():
     return sibling("reserve")
 
 
-def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
-    """The memory this process may use, swap included: the machine's, bounded by the limits of its cgroup and every cgroup
-    above it (`/proc/self/cgroup`: a queued run's limit is on its own scope, below the hierarchy's root)."""
+def memory(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> tuple[float, str]:
+    """(the GiB this process may use, swap included, what bounds it): the machine's memory, bounded by the limits of its
+    cgroup and every cgroup above it (`/proc/self/cgroup`: a queued run's limit is on its own scope, below the hierarchy's
+    root), which is then its cgroup's cap."""
     info = {}
     for line in (proc / "meminfo").read_text().splitlines():
         k, _, v = line.partition(":")
@@ -249,10 +250,11 @@ def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")
             except (OSError, ValueError):
                 continue
         return min(got) if got else None
-    ram, swap = info.get("MemTotal", 0), info.get("SwapTotal", 0)
-    ram = ram if (m := limit("memory.max")) is None else min(ram, m)
-    swap = swap if (s := limit("memory.swap.max")) is None else min(swap, s)
-    return (ram + swap) / 2**30
+    machine = info.get("MemTotal", 0), info.get("SwapTotal", 0)
+    m, s = limit("memory.max"), limit("memory.swap.max")
+    ram, swap = machine[0] if m is None else min(machine[0], m), machine[1] if s is None else min(machine[1], s)
+    return (ram + swap) / 2**30, ("its cgroup's cap" if (ram, swap) != machine else "this machine's memory") + \
+        ", swap included"
 
 
 def _cgroups(proc: Path, cgroup: Path) -> list[Path]:
@@ -312,14 +314,15 @@ def pins_heavy(pkg: Path) -> bool:
 
 
 def reserved(env=os.environ) -> tuple[float | None, str]:
-    """(the GiB this run reserved, what says so): `reserve.reserved` on this machine's memory (`memory_gib`)."""
-    return reserve().reserved(env, memory_gib())
+    """(the GiB this run reserved, what says so): `reserve.reserved` on what this machine lets it hold (`memory`), which
+    is what a run that declares no reservation plans by."""
+    return reserve().reserved(env, *memory())
 
 
 def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
     """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, the jobs Lake runs at once, when ``pkg`` pins a heavy dependency
     (`pins_heavy`): as many of `LEAN_NUM_THREADS` (else of every core) as what the run reserved holds (`reserve.build_jobs`,
-    on ``have_gib`` or `reserved`), all of them where it reserved nothing; else None (`lake_env`'s value)."""
+    on ``have_gib`` or `reserved`), all of them where a reservation is no number; else None (`lake_env`'s value)."""
     if not pins_heavy(pkg):
         return None
     try:
@@ -342,7 +345,7 @@ def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> 
     if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg):
         return None
     have = reserved(env)[0] if have_gib is None else have_gib
-    return reserve().replay_threads(memory_gib() if have is None else have, cores())
+    return reserve().replay_threads(memory()[0] if have is None else have, cores())
 
 
 def rel(p: Path) -> str:
@@ -375,7 +378,7 @@ def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.envi
     """Why a run taking ``steps`` (of `STEPS`) of ``pkgs``, every package it audits (those proving another's guarantees
     included), must not start with what it reserved (``have``, `reserved`'s), or None: it reserved less than the largest
     floor among them (`reserve.floor`; `VERITY_LEAN_MEM_FLOOR_GIB` sets another, 0 none, and one that is no number
-    refuses), or, inside a research run, nothing. The reason names the command to run instead (``run``, with ``{gb}`` for
+    refuses), or a reservation that is no number. The reason names the command to run instead (``run``, with ``{gb}`` for
     the ask; by default this file's audit of ``pkgs``) and, under it, the ask in GiB (`ask_lines`). `check.py` and the fast
     path (`lean_changed.py`) refuse by it alike."""
     r = reserve()
@@ -392,7 +395,7 @@ def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.envi
     gb, line = ask_lines(pins_of, steps)
     run = (run or BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(["--build", *pins_of]))).format(gb=gb)
     what = f"the {step} of {pkg}" if step else "this run"
-    held = f"reserved {got:.1f} GiB ({said})" if got is not None else f"reserved nothing ({said})"
+    held = f"reserved {got:.1f} GiB ({said})" if got is not None else f"reserved nothing it can read ({said})"
     return (f"{what} needs at least {floor:g} GiB, and this run {held}: run it where it asks {gb} GB,\n"
             f"  {run}\n  {line}\nor set VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
@@ -472,11 +475,12 @@ def tree_bytes(pid: int, proc: Path = Path("/proc")) -> int:
     return total
 
 
-def peaked(rep: dict, step: str, pkg: Path, gib: float) -> None:
-    """Record ``step``'s peak, ``gib`` (`peak_gib`), and the warning `reserve.warning` gives it, if any (`warnings`)."""
+def peaked(rep: dict, step: str, pkg: Path, gib: float, log=print) -> None:
+    """Record ``step``'s peak, ``gib`` (`peak_gib`), and log the warning `reserve.warning` gives it, if any: this run's
+    alone, in no report, so no kept pass carries it to a run that reuses it."""
     rep.setdefault("peak_gib", {})[step] = gib
     if w := reserve().warning(step, pins(pkg), gib):
-        rep.setdefault("warnings", []).append(w)
+        log(f"warning: {rel(pkg)}: {w}")
 
 
 def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600,
@@ -5745,7 +5749,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if cache:
                 shutil.rmtree(cache, ignore_errors=True)
             if _peak.tree:
-                peaked(rep, "build", pkg, round(_peak.tree / 2**30, 1))
+                peaked(rep, "build", pkg, round(_peak.tree / 2**30, 1), log)
         if DEV_CACHE:
             rep["sampled"] = "none sampled: a --dev-cache build restores from Lake's own cache, and its run is never a verdict"
         else:
@@ -5884,7 +5888,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
         if isinstance(rep["replay"], dict) and rep["replay"].get("peak_gib"):
-            peaked(rep, "replay", pkg, rep["replay"]["peak_gib"])
+            peaked(rep, "replay", pkg, rep["replay"]["peak_gib"], log)
     if pipe:
         rep["pipeline"] = [dict(b) for b in pipe.batches]
     if fresh:
@@ -6353,10 +6357,14 @@ def main(argv: list[str]) -> int:
         return 0
     args = [*(f for f, on in (("--build", a.build), ("--closure", a.closure), ("--no-replay", a.no_replay),
                               ("--update", a.update)) if on), *(rel(p) for p in pkgs if p in named)]
-    if a.facts_from is None and steps and (why := memory_refusal(pkgs, reserved(), steps=steps,
-                                                       run=BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(args)))):
+    have = reserved() if a.facts_from is None and steps else None
+    if have and (why := memory_refusal(pkgs, have, steps=steps,
+                                       run=BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(args)))):
         print(f"check.py: {why}", file=sys.stderr, flush=True)
         return 2
+    if have and have[0] is not None and any(map(pins_heavy, pkgs)):
+        print(f"check.py: a heavy step plans its jobs within {have[0]:.1f} GiB, what this run reserved ({have[1]})",
+              file=sys.stderr, flush=True)
     try:
         if a.build:
             lean_slot(a.repo.resolve())                 # its descriptor stays open, and the slot held, until this process exits
@@ -6477,8 +6485,6 @@ def main(argv: list[str]) -> int:
                 print(f"  {w}", flush=True)
             for n in rep.get("notes", []):
                 print(f"  note: {n}", flush=True)
-            for w in rep.get("warnings", []):
-                print(f"  warning: {w}", flush=True)
             if (gaps := rep.get("trust_gap")) is not None:
                 print(f"  trust gap: {sum(map(len, gaps.values()))} premises outside their trust over the {len(gaps)} "
                       f"deployed guarantees, {len(set().union(*gaps.values()))} distinct:", flush=True)

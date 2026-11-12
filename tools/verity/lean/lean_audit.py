@@ -252,7 +252,7 @@ FLAGS = ["--build", "--closure"]
 #: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and but for `CARRIED` of the
 #: scratch tree, where a read of one fails the audit
 NOT_READ = {
-    "reserve.py": "what a run reserves and how many jobs it runs, never what it checks",
+    "reserve.json": "the figures a run reserves and plans its jobs by (`reserve.py`'s), never what it checks",
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
@@ -272,7 +272,7 @@ NOT_READ = {
 }
 #: the files of `NOT_READ` every scratch tree carries all the same (`scratch_tree`): check.py plans its run by them, and
 #: no verdict reads them
-CARRIED = ("reserve.py",)
+CARRIED = ("reserve.json",)
 
 #: the packages whose audits write `Unread.lean`'s facts (`check.py`'s `UNREAD_FACTS`): a pass of one is reused only with
 #: the facts it wrote, kept beside it, and the ratchet on wholly unread modules joins theirs (`unread_ratchet`)
@@ -1732,7 +1732,7 @@ LOCK_COMMIT = "lock-commit"
 #: what a full audit's report holds of the build, the seal, the kernel replay and the tests, which `check.py --facts-from`
 #: runs none of (`audit_from_facts`): a pass `keep_regenerated` keeps has them from the lock run's own audit of the package
 BUILT = ("sandbox", "build_threads", "staged", "sampled", "replay", "replay_cache", "pipeline", "proved_in", "unread_facts",
-         "peak_gib", "warnings", "facts_key")
+         "peak_gib", "facts_key")
 
 
 def stored_document(documents: Path, k: str, schema: str) -> tuple[Path | None, str]:
