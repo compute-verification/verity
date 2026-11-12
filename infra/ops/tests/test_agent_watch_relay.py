@@ -721,25 +721,33 @@ def test_the_run_that_placed_its_sender_by_its_name_rings_that_lane_and_says_how
 
 
 def test_a_placing_run_says_which_part_of_the_name_placed_its_sender(relay):
-    """A name places its sender by its leading handle, or by an issue key and the one handle it names: the post and the
-    doorbell say which, so the lane can tell a wrong placement from how it was made."""
+    """A name places its sender by its leading handle, by an issue key and the one handle it names, or by the lane that
+    issue is under in Linear (its lane label, or its team's own lane when it has none): the post and the doorbell say
+    which, so the lane can tell a wrong placement from how it was made."""
     kernels = relay.slack.tag(relay.slack.entry(relay.REG, "kernels"))
     w = "bc-37373737-3737-3737-3737-373737373737"
     rec = {"kind": "run_ended", "agent": w, "name": "kernels-fold: one row", "run": "r20261110-020000-cc00",
            "handle": "kernels", "role": "worker", "lane": "kernels", "node": "vy-nebius-2", "what": "bench", "rc": 0,
            "state": "done", "after": "12 min", "sender_status": "IDLE", "placed_by": "handle"}
     relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
-        rec, {**rec, "run": "r20261110-030000-cc01", "placed_by": "name", "issue": "HASH-7", "named": "kernels"}]) + "\n"
+        rec, {**rec, "run": "r20261110-030000-cc01", "placed_by": "name", "issue": "HASH-7", "named": "kernels"},
+        {**rec, "run": "r20261110-030000-cc02", "placed_by": "label", "issue": "HASH-7"},
+        {**rec, "run": "r20261110-030000-cc03", "placed_by": "team", "issue": "HASH-7"}]) + "\n"
     relay.once()
     said = " No handle owned this worker until now: the watch placed it under @kernels {} (if it is another lane's, tell @infra)."
     assert [p[p.index(" No handle owned"):] for p in relay.posts] == [
-        said.format("by its name's leading handle"), said.format("by its name's issue key HASH-7 and the handle it names")]
+        said.format("by its name's leading handle"), said.format("by its name's issue key HASH-7 and the handle it names"),
+        said.format("by the lane label of its name's issue HASH-7"),
+        said.format("by its name's issue HASH-7, which has no lane label and so is its team's own lane's")]
     assert all(p.startswith(f"{kernels} ") for p in relay.posts)
     assert [a[a.index("--text") + 1].split(": ")[0] for a in relay.ring_runs] == [
         "bench done after 12 min on vy-nebius-2; its sender placed under @kernels by its name's leading handle",
         "bench done after 12 min on vy-nebius-2; its sender placed under @kernels by its name's issue key HASH-7 and the handle "
-        "it names"]
-    assert [a[-2:] for a in relay.ring_runs] == [["--to", "@kernels"]] * 2
+        "it names",
+        "bench done after 12 min on vy-nebius-2; its sender placed under @kernels by the lane label of its name's issue HASH-7",
+        "bench done after 12 min on vy-nebius-2; its sender placed under @kernels by its name's issue HASH-7, which has no lane "
+        "label and so is its team's own lane's"]
+    assert [a[-2:] for a in relay.ring_runs] == [["--to", "@kernels"]] * 4
 
 
 def test_a_restart_never_posts_a_line_again_even_with_its_offset_lost(relay):

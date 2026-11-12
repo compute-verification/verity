@@ -3390,14 +3390,16 @@ KEYED = "bc-efefefef-efef-efef-efef-efefefefefef"
 
 def linear_teams(tmp_path):
     """The registry's lanes, each a handle with a Linear team that a cloud agent holds: circuits and vllm with a team of their
-    own, two that share one, one whose name extends vllm's, and kernels, renamed from another name. Three handles are no
+    own, two that share one (compute-accounting's own, which compute-research files in under its `linear_label`), one whose
+    name extends vllm's, and kernels, renamed from another name. Three handles are no
     lane: console (no team, a desktop agent's), dashboard (a team, a desktop agent's) and steward (a cloud agent's, no team)."""
     reg = json.loads((tmp_path / "registry.json").read_text())
     for h in reg["handles"]:
         h.update({"linear": team} if (team := {"circuits": "CIR", "vllm": "VLLM"}.get(h["handle"])) else {})
     reg["handles"] += [
         {"handle": "compute-accounting", "holder": f"its coordinator ({W4_})", "linear": "CMP"},
-        {"handle": "compute-research", "holder": f"its coordinator ({W5_})", "linear": "CMP"},
+        {"handle": "compute-research", "holder": f"its coordinator ({W5_})", "linear": "CMP",
+         "linear_label": "lane:compute-research"},
         {"handle": "vllm-serve", "holder": f"its coordinator ({W6_})", "linear": "SRV"},
         {"handle": "kernels", "holder": f"its coordinator ({W3_})", "linear": "HASH", "charter": "renamed from @hash"},
         {"handle": "dashboard", "holder": "a desktop agent (4d92fa93-101a-42e1-8282-d4a998892829)", "linear": "CON"},
@@ -4729,6 +4731,96 @@ def test_the_linear_reader_says_what_it_cant_read_without_a_credentials_value(tm
         with pytest.raises(ValueError, match=why):
             lin.issue("CIR-99")
     assert issubclass(W.urllib.error.HTTPError, OSError), "a refused grant or a 400 is a read that failed, made again"
+
+
+def test_a_shared_teams_sender_is_placed_by_the_lane_its_issue_is_under_read_once(tmp_path, capsys):
+    """Two lanes file under one Linear team, so a key of that team at a name's start names neither, and such a sender
+    went to infra to place by hand. Which lane an issue is under is in Linear, as the team's client reads it: the lane
+    its `lane:` label names, and with no such label the team's own lane, the one the registry gives no `linear_label`.
+    The issue is read once for an unplaced sender and what it gave is kept. A label naming a lane that doesn't share the
+    team places nobody and is not read again; a read that failed, or an issue Linear can't find, is read again at the
+    sender's next run's end."""
+    labelled, bare, wrong, gone, down = (f"bc-{c * 4}-{c * 2}-{c * 2}-{c * 2}-{c * 6}" for c in ("a3", "a4", "a5", "a6", "a7"))
+    names = {labelled: "CMP-377 HARDNESS-SPEC", bare: "CMP-12 TABLES", wrong: "CMP-13 ROWS", gone: "CMP-14 GONE",
+             down: "CMP-15 LATER"}
+    lin = FakeLinear(CMP_377={"labels": ["swarm", "lane:compute-research"]}, CMP_12={"labels": ["swarm"]},
+                     CMP_13={"labels": ["lane:vllm"]}, CMP_15={"labels": ["lane:compute-accounting"]})
+    api, clock, w, _, roots = nodes_setup(tmp_path, linear=lin)
+    linear_teams(tmp_path)
+    for agent, name in names.items():
+        api.workers[agent] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    for n, agent in enumerate((labelled, bare, wrong, gone)):
+        sends(roots, clock, w, agent, f"r20261105-11000{n}-000{n}")
+    first, second, *rest = ended(tmp_path)
+    assert {k: first.get(k) for k in ("agent", "handle", "role", "lane", "placed_by", "issue")} == {
+        "agent": labelled, "handle": "compute-research", "role": "worker", "lane": "compute-research", "placed_by": "label",
+        "issue": "CMP-377"}
+    assert {k: second.get(k) for k in ("agent", "handle", "role", "lane", "placed_by", "issue")} == {
+        "agent": bare, "handle": "compute-accounting", "role": "worker", "lane": "compute-accounting", "placed_by": "team",
+        "issue": "CMP-12"}
+    assert placed_files(tmp_path) == {
+        f"placed-{labelled}.json": {"agent_id": labelled, "lane": "compute-research", "role": "worker", "name": names[labelled],
+                                    "placed_by": "label", "issue": "CMP-377"},
+        f"placed-{bare}.json": {"agent_id": bare, "lane": "compute-accounting", "role": "worker", "name": names[bare],
+                                "placed_by": "team", "issue": "CMP-12"}}
+    assert [(r["role"], r.get("handle")) for r in rest] == [("unknown", None)] * 2, "no guess for the others"
+    assert lin.calls == [("CMP-377", None), ("CMP-12", None), ("CMP-13", None), ("CMP-14", None)]
+    err = capsys.readouterr().err
+    assert "by the lane label of its name's issue CMP-377" in err
+    assert "by its name's issue CMP-12, which has no lane label: its team's own lane" in err
+    for n, agent in enumerate((labelled, bare, wrong, gone)):
+        sends(roots, clock, w, agent, f"r20261105-12000{n}-000{n}")
+    assert lin.calls[4:] == [("CMP-14", None)], "read once per sender: a placement is the worker's entry, and a label " \
+        "that places nobody is remembered; only the issue Linear couldn't find is asked for again"
+    later = [r for r in ended(tmp_path) if r["agent"] == labelled][-1]
+    assert (later["handle"], later["role"], later.get("placed_by")) == ("compute-research", "worker", None)
+    lin.fail = W.urllib.error.URLError("timed out")
+    sends(roots, clock, w, down, "r20261105-130000-0009")
+    assert lin.calls[5:] == [("CMP-15", None)] and f"placed-{down}.json" not in placed_files(tmp_path)
+    lin.fail = None
+    sends(roots, clock, w, down, "r20261105-140000-0009")
+    assert lin.calls[6:] == [("CMP-15", None)] and placed_files(tmp_path)[f"placed-{down}.json"]["lane"] == "compute-accounting"
+    restarted = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                        notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=w.sh, linear=lin)
+    restarted.sweep(lambda r: None)
+    sends(roots, clock, restarted, wrong, "r20261105-150000-0001")
+    assert len(lin.calls) == 7, "nor after the watch restarts"
+
+
+def test_an_issue_with_no_lane_label_places_nobody_when_no_one_lane_owns_its_team(tmp_path):
+    """The team's own lane is the one sharing lane with no `linear_label`: a registry that marks none, or leaves two
+    unmarked, names no owner, and an unlabelled issue of that team places nobody."""
+    agent = "bc-a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3"
+    lin = FakeLinear(CMP_12={"labels": []})
+    api, clock, w, _, roots = nodes_setup(tmp_path, linear=lin)
+    reg = json.loads(linear_teams(tmp_path).read_text())
+    for h in reg["handles"]:
+        h.pop("linear_label", None)
+    (tmp_path / "registry.json").write_text(json.dumps(reg))
+    api.workers[agent] = worker("IDLE", W.iso(T0 - 600), "CMP-12 TABLES")
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, agent, "r20261105-110000-0001")
+    sends(roots, clock, w, agent, "r20261105-120000-0002")
+    assert [r["role"] for r in ended(tmp_path)] == ["unknown"] * 2 and placed_files(tmp_path) == {}
+    assert lin.calls == [("CMP-12", None)]
+
+
+def test_a_name_one_lane_already_places_costs_no_linear_read(tmp_path):
+    """The label is read only for a key of a team several lanes share that the name alone doesn't place: a key of one
+    lane's team, a shared team's key with its lane named, a leading handle and a name with no key read nothing."""
+    names = {"bc-a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3": "CIR-9 WIDTHS", "bc-a4a4a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a4": "no key at all",
+             "bc-a5a5a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a5": "CMP-377 HARDNESS-SPEC (compute-research)",
+             "bc-a6a6a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a6": "vllm-longrow: rows", "bc-a7a7a7a7-a7a7-a7a7-a7a7-a7a7a7a7a7a7": "SEAT: CMP-9"}
+    lin = FakeLinear(CMP_377={"labels": ["lane:compute-accounting"]}, CMP_9={"labels": ["lane:compute-accounting"]})
+    api, clock, w, _, roots = nodes_setup(tmp_path, linear=lin)
+    linear_teams(tmp_path)
+    for agent, name in names.items():
+        api.workers[agent] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    for n, agent in enumerate(names):
+        sends(roots, clock, w, agent, f"r20261105-11000{n}-000{n}")
+    assert lin.calls == [] and sorted(d["placed_by"] for d in placed_files(tmp_path).values()) == ["handle", "name", "name"]
 
 
 def test_the_pods_wrapper_hands_the_watch_the_file_its_github_and_linear_credentials_are_in():

@@ -11,7 +11,7 @@
 # Pushes, for the silent rule, are read with `git ls-remote` over https with verity-drive's App token (gh_app_token.sh), as fixtures_export.sh fetches.
 # $CONF/relay.env goes to the watch as a path (--gh-env), never into its environment: the watch reads from it GH_TOKEN, for
 # the open pull requests, and the Linear app's LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET, for the comments of the issues
-# integrators take hand-ins on; its Linear token is kept in $DIR/linear-token.json. The nodes
+# integrators take hand-ins on and for a shared team's issues' lane labels; its Linear token is kept in $DIR/linear-token.json. The nodes
 # whose ended runs ring their sender are $DIR/nodes.json (a copy of agent_watch_nodes.json, read each sweep), their hosts the notes
 # clone's machines.d.
 # While $DIR/wake exists the watch starts a run on a coordinator ready to wake (--wake); remove the file to go back to recording.

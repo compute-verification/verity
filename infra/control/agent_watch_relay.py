@@ -20,8 +20,8 @@ sender's handle (a coordinator's own, a worker's launcher's, for a run whose sen
 often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. A worker's run that ended rc 0
 is posted but rings no one: the watch resumes the worker itself, and rings its coordinator only if it stays idle (run
 ends were 47% of all doorbells, most of them workers' successes). The run at whose end the watch placed its sender, which no
-handle owned, as a lane's worker by an issue key in its name or the handle it starts with (the record's `placed_by`: `name`, with
-its `issue`, or `handle`) rings that lane
+handle owned, as a lane's worker by an issue key in its name, the lane that issue is under in Linear or the handle it starts
+with (the record's `placed_by`: `name`, `label` or `team`, with its `issue`, or `handle`) rings that lane
 whatever its result and its sender's status, and says how the lane was found, so a wrong placement shows where it rings; the
 worker's later runs are any worker's. The runs of one read whose sender
 no handle owns, and no name places, are one post that leads with infra's handle, naming each run's sender, rung as an alert;
@@ -218,8 +218,11 @@ def unknown(rec: dict) -> str:
 
 def found(rec: dict) -> str:
     """How the watch placed a run's sender by its name (`placed_by`): its issue key (and, for a team several lanes share,
-    the handle it names too), or the handle it starts with; "" for a run that placed nobody."""
+    the handle it names too, or else its issue's lane label, or its having none), or the handle it starts with; "" for a
+    run that placed nobody."""
     return {"name": f"by its name's issue key {rec.get('issue')}" + (" and the handle it names" if rec.get("named") else ""),
+            "label": f"by the lane label of its name's issue {rec.get('issue')}",
+            "team": f"by its name's issue {rec.get('issue')}, which has no lane label and so is its team's own lane's",
             "handle": "by its name's leading handle"}.get(rec.get("placed_by"), "")
 
 

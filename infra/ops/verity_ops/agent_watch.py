@@ -192,12 +192,17 @@ name (`place_by_name`) when the name names one lane (`name_lane`): by the issue 
 worker is named after its issue) when its Linear team is exactly one lane's, else by a lane's handle it starts with, before
 `-`, `:`, `/` or a space (`lane-topic: ...`), else by its issue keys further in (`NAME: TEAM-7 step 2`) when they are all
 one team's. A lane here is a registry handle with a Linear team (`linear`) that a cloud agent holds (`placing`); a key whose
-team several lanes share places only when the name also names exactly one of them as a whole word (which of them such an
-issue is under is a Linear label, which the watch doesn't read). The watch takes the name the agent list
+team several lanes share places when the name also names exactly one of them as a whole word, else, for a key the name
+starts with, by the lane the issue is under, as the team's Linear client reads it (`label_lane`: the issue is read from
+Linear once per such sender and what it gave is kept): the one of them its `lane:` label names (`placed_by: "label"`), and
+with no such label the team's own lane, the one of them the registry gives no `linear_label` (`placed_by: "team"`). The
+watch takes the name the agent list
 or an earlier sweep gave it, else reads it once (`GET /v1/agents/{id}`, the first time it meets the sender), writes the sender
-to workers.d as that lane's worker (`{agent_id, lane, role, name, placed_by: "name", issue}` or `placed_by: "handle"`, an entry
+to workers.d as that lane's worker (`{agent_id, lane, role, name, placed_by: "name", issue}`, `placed_by: "label"` or
+`"team"` with its `issue`, or `placed_by: "handle"`, an entry
 any other source overrides) and records the run for that handle as a worker's, with `placed_by`, so the relay rings the lane
-once and says how it was found. A name with no such key or handle, with keys of two teams, a team no lane or several have, a
+once and says how it was found. A name with no such key or handle, with keys of two teams, a team no lane has, a team
+several have whose issue's label names none of them or which no Linear credential lets the watch read, a
 handle that is no lane, and a name the API won't give place nobody: the runs of one read whose sender no handle owns are one
 `run_ended` with role `unknown`, each run with its `sender`, for the relay to ring infra once. Such a sender is a stray,
 watched as a worker is, under no lane, and infra is rung for it that once (`unplaced`): a read whose senders infra was all
@@ -306,6 +311,7 @@ LINEAR_TOKEN_URL = "https://api.linear.app/oauth/token"
 LINEAR_SCOPES = "read,write"    # the one scope set every client of the app asks for: a grant with another revokes its live tokens
 LINEAR_EARLY_S = 3600           # a cached token is replaced this long before it expires
 LINEAR_TIMEOUT_S = 20           # a call to Linear; a sweep makes no other once one fails
+LANE_LABEL = "lane:"            # an issue's label naming its lane, for a team several lanes share
 ISSUE_QUERY = ("query($id: String!, $n: Int!, $after: String) { issue(id: $id) { url state { type } "
                "labels { nodes { name } } comments(first: $n, after: $after) { pageInfo { hasNextPage endCursor } "
                "nodes { id createdAt botActor { userDisplayName } user { name } } } } }")
@@ -2019,8 +2025,8 @@ class Watch:
             self.linear_off = "credential"
             if not self.linear_said:
                 self.linear_said = True
-                print(f"{iso(t)} no Linear credential ({e}): no hand-in waiting on an integrator is recorded",
-                      file=sys.stderr, flush=True)
+                print(f"{iso(t)} no Linear credential ({e}): no hand-in waiting on an integrator is recorded, and no "
+                      "sender is placed by its issue's lane label", file=sys.stderr, flush=True)
         except ValueError as e:
             self.linear_refused.add(key)
             self.say(f"linear:{key}", f"issue {key} unread: {e}", t)
@@ -2097,6 +2103,32 @@ class Watch:
                             minutes=int((t - oldest["t"]) // 60), waiting=len(waiting), signs=signs[agent],
                             lane=self.integrators[agent]["lane"], **({"handle": handle} if handle else {}),
                             **({"older": True} if older else {}))
+
+    def label_lane(self, agent: str, name: str, t: float) -> tuple[str, dict] | None:
+        """(handle, how) for a sender named after an issue of a team several lanes share (`TEAM-7 NAME`), which its name
+        alone places nowhere: the lane the issue is under, as the team's Linear client reads it. That is the lane its
+        `lane:` label names, when one of those lanes (`placed_by: label`); with no such label, the team's own lane, the
+        one of them the registry gives no `linear_label` (a lane with no team of its own files in another's, each issue
+        under its label), when that is exactly one (`placed_by: team`). The issue is read once per sender and what it gave
+        is kept: a placement in workers.d (`place_by_name`), and an issue that places nobody in `done` for as long as the
+        sender is met. Only a read that failed, or that Linear answered it can't, is made again, at the sender's next
+        run's end."""
+        lanes, m = placing(self.registry), ISSUE_KEY_RE.match(name)
+        mine = [h for h, team in lanes.items() if m and team == m[1]]
+        if len(mine) < 2:
+            return None
+        if (key := f"label:{agent}") in self.done:
+            self.done[key] = t
+            return None
+        if (issue := self.read_issue(m[0], t)) is None:
+            return None
+        self.once(key, t)
+        label = next((x[len(LANE_LABEL):] for x in issue["labels"] if x.startswith(LANE_LABEL)), None)
+        own = [str(h.get("handle")) for h in read_json(self.registry).get("handles") or []
+               if h.get("handle") in mine and not h.get("linear_label")]
+        if label in mine:
+            return label, {"placed_by": "label", "issue": m[0]}
+        return (own[0], {"placed_by": "team", "issue": m[0]}) if label is None and len(own) == 1 else None
 
     def read_prs(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, the open PRs (`open_prs`, `{"branch", "body"}` each): a push to a PR's branch is the activity of
@@ -2327,11 +2359,12 @@ class Watch:
 
     def place_by_name(self, agent: str) -> tuple[str, str, dict] | None:
         """A sender no handle owns, placed by its name: when the name names one lane (`name_lane`: an issue key of one lane's
-        Linear team, or a lane's handle it starts with), the sender is written to `workers.d` as that lane's worker, with how
-        it was placed (`placed_by: name` and the `issue`, or `placed_by: handle`; `workers` reads such an entry last, so its
-        coordinator's own entry or a note wins), and is that lane's worker from this run on, as a stray a note names is.
-        Returns (the lane's handle, the name, how it was placed), or None when nothing places it and it stays a stray: a name
-        that names no one lane, or one the API won't give. The name is the one the watch has (the agent list's,
+        Linear team, or a lane's handle it starts with; else `label_lane`: the lane the issue it starts with is under, for
+        a team several lanes share), the sender is written to `workers.d` as that lane's worker, with how
+        it was placed (`placed_by: name`, `label` or `team` and the `issue`, or `placed_by: handle`; `workers` reads such an
+        entry last, so its coordinator's own entry or a note wins), and is that lane's worker from this run on, as a stray a note
+        names is. Returns (the lane's handle, the name, how it was placed), or None when nothing places it and it stays a
+        stray: a name that names no one lane, or one the API won't give. The name is the one the watch has (the agent list's,
         `watch_workers`' read, `learn`'s); only a sender it has never read costs a `GET /v1/agents/{id}`, once: a failed read
         leaves a stray, which `watch_workers` reads from the next sweep on."""
         t, w = self.clock(), self.workers.get(agent) or {}
@@ -2352,7 +2385,7 @@ class Watch:
             if agent not in self.names:             # a listed agent has its row in status.json already
                 self.worker_status[agent] = str(info.get("status") or "unknown")
         name = name[:120]
-        if not (found := name_lane(name, self.registry)):
+        if not (found := name_lane(name, self.registry) or self.label_lane(agent, name, t)):
             return None
         handle, how = found
         write_atomic(self.log.with_name("workers.d") / f"placed-{agent}.json", (json.dumps(
@@ -2367,8 +2400,11 @@ class Watch:
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(lane=w.get("lane") or handle, handle=handle, name=name, heard=max(w["heard"], t))
         self.save()
-        print(f"{iso(t)} run ends: placed {agent} ({name}) as @{handle}'s worker by its name's "
-              + (f"issue key {how['issue']}" if "issue" in how else "leading handle"), file=sys.stderr, flush=True)
+        print(f"{iso(t)} run ends: placed {agent} ({name}) as @{handle}'s worker by "
+              + {"label": f"the lane label of its name's issue {how.get('issue')}",
+                 "team": f"its name's issue {how.get('issue')}, which has no lane label: its team's own lane",
+                 "name": f"its name's issue key {how.get('issue')}"}.get(how["placed_by"], "its name's leading handle"),
+              file=sys.stderr, flush=True)
         return handle, name, how
 
     def own_cancel(self, row: dict, agent: str, handle: str, name: str, parent: str | None, coords: dict[str, str]) -> bool:
@@ -3058,7 +3094,7 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--gh-env", type=Path, default=None,
                     help="a file with a GH_TOKEN= line (--git-remote's open PRs, whose bodies name the agents their pushes count "
                          "for) and the Linear app's LINEAR_CLIENT_ID= and LINEAR_CLIENT_SECRET= lines (the comments of the "
-                         "issues integrators take hand-ins on)")
+                         "issues integrators take hand-ins on, and a shared team's issues' lane labels)")
     lp.add_argument("--launcher", type=Path, default=None,
                     help="launch_coordinator.py, for a coordinator's relaunch (default: the --registry checkout's "
                          "infra/cursor/launch_coordinator.py); relaunching also needs launch.env beside --log")
