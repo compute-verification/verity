@@ -24,7 +24,7 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, B
                              Rerun, Retry, Ring, Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, _said, branch
 from research.vqueue_records import lock_message
-from test_queue import World as Origin, _git, _merge
+from test_queue import World as Origin, _git, _landed_move, _merge
 
 T0 = 1_900_000_000.0
 #: the env's spec files in each listed graph
@@ -554,23 +554,33 @@ def test_a_move_pr_with_a_land_verdict_is_built_by_its_merge_and_advances_main_a
     assert _acts(loop.tick()) == ["advance", "on_main"] and env.main() == sha
 
 
-def test_a_head_below_a_move_main_landed_is_left_out_until_it_is_crossed(env):
-    """A merge of a head based below a layout move leaves its own lines naming the paths the move retired, however clean: the
-    loop takes only a head that holds every move `main` landed, and tells the rest to cross."""
-    base = env.main()
-    renamed = env.o.change({"c.txt": None, "moved/c.txt": "c\n"})
-    tree = _git(env.o.dev, "rev-parse", f"{renamed}^{{tree}}")
-    move = _git(env.o.dev, "commit-tree", tree, "-p", base, "-m", "move c\n\nLayout-move: tools/move/x_map.toml")
-    _git(env.o.dev, "push", "-q", "origin", f"{move}:refs/dev/{move}")
-    _git(env.o.origin, "update-ref", "refs/heads/main", move)
+@pytest.mark.parametrize("shadow", [False, True])
+def test_a_head_below_a_move_main_landed_is_taken_unless_its_change_names_what_the_move_retires_and_that_one_is_told_once(
+        env, shadow):
+    """A merge of a head based below a layout move leaves its own lines as they are, however clean: one whose own change names
+    none of the names the move's map retires crosses by that merge and is built, and one that names one, in a changed path or
+    an added line, is left out, its owner told the move and the fix once a head and move."""
+    base, move = _landed_move(env.o, '[paths]\n"c.txt" = "moved/c.txt"\n', {"c.txt": None, "moved/c.txt": "c\n"})
     env.listed(move, {})
-    below = env.o.change({"b.txt": "below\n"}, base=base)
-    env.o.gh.put(1, below)
-    crossed = env.put(2, {"d.txt": "crossed\n"})
-    loop = env.loop(policy)
-    builds = [r for r in loop.tick() if r["action"] == "build"]
-    assert [(r["members"], r["heads"]) for r in builds] == [([2], [crossed])], builds
-    assert loop.world.left[1][0] == below and loop.world.left[1][1].startswith(f"it lacks the move {move[:12]} "), loop.world.left
+    below = {n: env.o.change(files, base=base) for n, files in ((1, {"b.txt": "below\n"}), (2, {"e.txt": "reads c.txt\n"}),
+                                                                (3, {"c.txt": "edited\n"}))}
+    for n, head in below.items():
+        env.o.gh.put(n, head)
+    crossed = env.put(4, {"d.txt": "crossed\n"})
+    loop = env.loop(policy, shadow=shadow)
+    *told, built = loop.tick()
+    assert (built["action"], built["members"], built["heads"]) == ("build", [1, 4], [below[1], crossed]), built
+    assert [(r["action"], r["number"], r["heads"], r["base"], r["done"]) for r in told] == [
+        ("lacks", n, [below[n]], move, not shadow) for n in (2, 3)], told
+    assert all(r["why"].startswith(f"it lacks the move {move[:12]} `main` landed (tools/move/x_map.toml), whose retired "
+                                   "names its own change names (`c.txt`): merge `main` into it") for r in told), told
+    assert {n: why for n, (_, why) in loop.world.left.items()} == {r["number"]: r["why"] for r in told}, loop.world.left
+    assert env.posts == ([] if shadow else [f"{' '.join(r['to'])} vqueue: {r['text']}" for r in told]), env.posts
+    assert loop.tick() == []
+    env.o.gh.put(2, again := env.o.change({"e.txt": "reads c.txt again\n"}, base=base))
+    (told2,) = loop.tick()
+    assert (told2["action"], told2["number"], told2["heads"]) == ("lacks", 2, [again]), told2
+    assert len(env.posts) == (0 if shadow else 3)
 
 
 @pytest.mark.parametrize("lowrisk", [False, True])

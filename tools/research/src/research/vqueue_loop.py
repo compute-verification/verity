@@ -26,7 +26,9 @@ Lean-change test (`queue.lean_change`) of a change that compiles (a lock's alone
 `Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the files it
 conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`), unless `main` fetched again holds that
 head; its mark stays.  `left` is why each other open PR into `main` isn't ready (`World.ready`: the queue's word on it, a
-withdrawn mark's author, a hold and by whom, no land verdict, the freeze), which a candidate's drop for a member no longer
+withdrawn mark's author, a hold and by whom, no land verdict, the freeze, a move `main` landed that it lacks whose retired
+names its own change names, its owner told once a head and move: `queue.lacked_moves`, `Loop._lacking`), which a
+candidate's drop for a member no longer
 ready names (`vqueue._stale`); `pulled` those of them others than their owners took (a red's eject, any other eject or a
 mark withdrawn by another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of
 them), at its head or at the head a candidate in flight holds it at (`World.taken`), the only ones that drop a candidate in
@@ -200,8 +202,9 @@ from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, WORKDIR, DriveFlags, Entry, Member, Queue,
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
-                    label_verifier, lands_on_mark, lean_change, merged_tree, move_of, moves_between, own_files,
+                    label_verifier, lands_on_mark, lean_change, merged_tree, move_of, own_files,
                     priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
+from .queue import Retired, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
@@ -474,11 +477,13 @@ class Past:
         return {(r["sha"], r.get("why")) for r in self.of("ring") if r.get("done") or r.get("shadow")} | self._posting(
             "ring", lambda r: {(r.get("sha"), r.get("why"))})
 
-    def told(self) -> set[str]:
+    def told(self, kind: str = "skip") -> set[str]:
+        """Each `head@base` a message of ``kind`` told its owner of: a skip's (`Loop._merged`), or a move a head lacks
+        (`lacks`, `Loop._lacking`)."""
         def heads(r: dict) -> set[str]:
             return {f"{h}@{r.get('base')}" for h in r.get("heads") or ()}
 
-        return {k for r in self.of("skip") if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting("skip", heads)
+        return {k for r in self.of(kind) if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting(kind, heads)
 
     def conflicted(self) -> set[str]:
         """The heads whose owners were told they don't merge onto `main` (`Loop._conflicts`)."""
@@ -738,6 +743,9 @@ class World:
         #: by (head, `main`): its files (`_changed`), and (lean, conflict) (`_judge`)
         self._files: dict[tuple[str, str], frozenset[str]] = {}
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
+        #: by (head, `main`), the moves it lacks that its change names (`_lacks`); by (base, map), what a move's map retires
+        self._lacked: dict[tuple[str, str], list[tuple[str, str, list[str] | None]]] = {}
+        self._retires: dict[tuple[str, str], Retired | None] = {}
         #: each `carry.delta` judged, by its arguments (`_delta`)
         self._deltas: dict[tuple[str, str, tuple[str, ...], frozenset[str]], carry.Delta] = {}
         #: what the last `ready` decided of the verdict carry (`_carry`): {number: its head, the older head, why, whether it
@@ -756,6 +764,8 @@ class World:
         self.prs: dict[int, PR] = {}
         self.left: dict[int, tuple[str, str]] = {}
         self.pulled: set[int] = set()
+        #: of those left out for a move they lack whose names their change names: {number: (head, the last such move, why)}
+        self.lacking: dict[int, tuple[str, str, str]] = {}
         #: the move PRs the last `ready` took on their ready marks alone (`_uncertified`), and {number: what the last `build`
         #: regenerated of each move PR: its map, tip, commit and `move_check.py --json` report} (`_move`)
         self.on_mark: set[int] = set()
@@ -824,7 +834,8 @@ class World:
         `lowrisk_lane` is on, on its mark alone once its move is certified on `main` (`_uncertified`, `_off_mark`), never under
         the low-risk rule (`queue.lands_on_mark`).  Why each other open PR into `main` isn't one goes to `left`:
         the queue's word on one it doesn't admit (`Entry.why`; a withdrawn mark's author), else a hold and by whom, no land
-        verdict, the freeze, or an untaken PR whose head it holds; those others than their owners took go to `pulled`."""
+        verdict, the freeze, a move it lacks whose retired names its own change names (`lacked_moves`, also to `lacking`), or
+        an untaken PR whose head it holds; those others than their owners took go to `pulled`."""
         q, labels = self.q, self.labels
         prs = [p for p in self.open().values() if p.base == "main"]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
@@ -847,6 +858,7 @@ class World:
         pulled = {n for n, e in entries.items() if e.state != "ready" and self._pulled(e, state["ejected"].get(str(n)))}
         flags = flags_at(self.repo, main)
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
+        self._lacked = {k: v for k, v in self._lacked.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
         self._deltas = {k: v for k, v in self._deltas.items() if k[2] == landed}
         admitted = [n for n, e in entries.items() if e.state == "ready"]
@@ -884,11 +896,11 @@ class World:
                           and self._frozen_out(below, n, entries[n].pr.head, specs)]
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
                 took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
-            # a plain merge of a head below a move leaves its own lines naming the paths the move retired: it lands crossed
-            lacks = dict(zip(took, pool.map(lambda n: moves_between(self.repo, main, entries[n].pr.head), took)))
-            left.update((n, (entries[n].pr.head, f"it lacks the move {m[-1][0][:12]} `main` landed: cross it with "
-                                                 "`tools/move/restack.py` and push the crossed head, as a merge of `main` "
-                                                 "doesn't rewrite its own lines")) for n, m in lacks.items() if m)
+            # a plain merge of a head below a move leaves its own lines naming what the move retired: such a head lands
+            # crossed, and one whose own change names none of it crosses by that merge (`lacked_moves`)
+            lacks = dict(zip(took, pool.map(lambda n: self._lacks(main, entries[n].pr.head, files[n]), took)))
+            left.update((n, (entries[n].pr.head, lacks_why(m))) for n, m in lacks.items() if m)
+            self.lacking = {n: (entries[n].pr.head, m[-1][0], lacks_why(m)) for n, m in lacks.items() if m}
             took = [n for n in took if not lacks[n]]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
@@ -1103,6 +1115,12 @@ class World:
         if (key := (head, main)) not in self._files:
             self._files[key] = own_files(self.repo, main, head)
         return self._files[key]
+
+    def _lacks(self, main: str, head: str, files: frozenset[str]) -> list[tuple[str, str, list[str] | None]]:
+        """`lacked_moves` of ``head`` on ``main``, kept by (head, main), each map read once."""
+        if (key := (head, main)) not in self._lacked:
+            self._lacked[key] = lacked_moves(self.repo, main, head, files, self._retires)
+        return self._lacked[key]
 
     def _tree(self, sha: str) -> list[str]:
         """The files of ``sha``'s tree, as `_changed` names them."""
@@ -2339,7 +2357,7 @@ class Loop:
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t)
         new += self._flaky(t) + self._bases(t) \
             + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t) + self._off_gate(t)) + self._followed(t) \
-            + self._conflicts(t) + self._riding(t)
+            + self._conflicts(t) + self._lacking(t) + self._riding(t)
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
@@ -3125,6 +3143,26 @@ class Loop:
                                               "tick tells again"))
             else:
                 recs.append(self.record(t, "conflict", **line, done=True, posted=True))
+        return recs
+
+    def _lacking(self, t: Tick) -> list[dict]:
+        """Tell the owner of each PR `ready` left out for a move it lacks whose retired names its own change names
+        (`World.lacking`) the move and the fix: once a head and base, the base the last such move (`Past.told`, as a skip
+        is told).  A post that fails is told again by the next tick; with --shadow it is only logged."""
+        recs, told = [], t.past.told("lacks")
+        for n, (head, move, why) in sorted(self.world.lacking.items()):
+            if f"{head}@{move}" in told:
+                continue
+            text = (f"#{n} at {head[:12]} isn't taken into the verified queue's candidates on `main` {t.main[:12]}: {why} "
+                    f"(`research queue ready {n}`)")
+            line = dict(base=move, members=[n], heads=[head], number=n, why=why, text=text, to=list(to := self.owner(n)))
+            if self.shadow:
+                recs.append(self.record(t, "lacks", **line, done=False))
+            elif not self._say(t, "lacks", text, to, base=move, heads=[head], number=n):
+                recs.append(self.record(t, "lacks", **line, done=False, posted=False,
+                                        error=f"telling #{n}'s owner of the move it lacks failed: the next tick tells again"))
+            else:
+                recs.append(self.record(t, "lacks", **line, done=True, posted=True))
         return recs
 
     def _riding(self, t: Tick) -> list[dict]:
