@@ -466,7 +466,8 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     """The verifier's wiring check (`HmLinks`, `wiring.check_drawn`) on altered wires, each with the units it alters sampled: the first
     wire's unit 0 reading another unit's row, neither its writer's nor its own, of its words where one is (``words``: same,
     else other; rotating the writers is the honest wire at one unit a member or on a fan-out), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string
-    flipped in its reader's public body (a partial that is not the one its writer committed), its unit 0 sampled."""
+    flipped in its reader's public body (a partial that is not the one its writer committed; for a port held in its writer's
+    tree, the row of its table unit 0's reference names), its unit 0 sampled."""
     neg: dict[str, dict] = {}
     k = next((k for k, m in enumerate(members) if m.wired), None)
     if k is None:
@@ -501,8 +502,13 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
             "refused": bool(WI.check_drawn(rewired(j, tuple(w)), publics, units(j)))}
     m = members[k]
     names = [q for q, _ in m.all_rows]
-    body = bytearray(publics[m.key])
-    body[names.index(p) * WI.BC_BYTES] ^= 1
+    body, j = bytearray(publics[m.key]), names.index(p)
+    at = j * WI.BC_BYTES
+    if m.tables:
+        counts = [dict(m.tables).get(q, m.n) for q in names]
+        ref = WI.BC_BYTES * sum(counts) + 4 * j
+        at = WI.BC_BYTES * (sum(counts[:j]) + int.from_bytes(body[ref:ref + 4], "little"))
+    body[at] ^= 1
     neg["wired-row-not-its-writer-s-output (§16.13)"] = {
         "refused": bool(WI.check_drawn(members, {**publics, m.key: bytes(body)}, [m.base]))}
     return neg
