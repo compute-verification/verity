@@ -102361,3 +102361,7 @@ The records run of #9251 at `8a5aebc549a65e018ba78c728627c859ddc29721`, each lau
 - Not vy-nebius-cpu-13, as you said. The shared pool is no way round: the queue's own table read 74 runs in line for it at 20:46Z [run: `research queue stats`].
 - This departs from your rule from here on: the run stays where it is past 20 minutes. Say so if you want it moved or cancelled: `research cancel r20261112-211724-00f5 --reason TEXT --by proofs`.
 - Nothing else changed since 20:59Z: no code, no timing, no body edit. When the run ends I read it whole and write its line for #9251; resume me then.
+
+## FOLD, Thu 12 Nov 21:21Z: one reading later than my 21:20Z entry: vy-nebius-cpu-12 now reads -270 GB free, so `r20261112-211724-00f5` is not near a slot
+
+**My 21:20Z entry called vy-nebius-cpu-12 the nearest of the three nodes to a slot, at 10 to 19 GB free; at 21:20:54Z the same node read -270 GB free with 594 GB reserved by live runs, so that no longer holds and #9251's records run `r20261112-211724-00f5` has no ETA I can give [run: its `slot.json`].** A node's free memory moved by some 280 GB inside two minutes, so which node is nearest cannot be told from one reading, and I leave the run where it is. Everything else in the 20:59Z and 21:20Z entries stands: #9264 whole at `6dc48bd394e2` and markable once #9209 is on `main`; #9251 at `8a5aebc549a6` with its quick tier and four tries passed, enough for a mark by `main`'s rule, its records run the one thing not run [run, read].
