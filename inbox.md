@@ -1,0 +1,3 @@
+[2026-11-12T13:14Z] b4255899622c
+LOOPLAND: #9213 pushed and re-marked at 78deabd0137380fa6c55aecf1a3297b7f6c7dc2a (main merged; slim import conflict resolved; review-33 nit folded); requests.md asks a tier-2 re-read of just the resolution. Team-skill trim is #9295 (https://github.com/compute-verification/verity/pull/9295), marked at 309d7c8bb4355e5fc8fa9b4c55d9576b4e34a2b0: team SKILL.md 15,820 B, tools/research/README.md 48,908 B, caps gate 0 over. It is stacked on #9213 (two deep) because #9213 rewrites the same skill sentence; resolved to the compact sentence naming vqueue_slim.lean_inputs. Reader line filed. Polling.
+
