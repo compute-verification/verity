@@ -15,9 +15,12 @@ from types import SimpleNamespace as NS
 import pytest
 
 
-def test_probe_records_every_ticks_work_each_publish_and_the_collections(mod):
-    probe_mod = mod("warden_probe")
+@pytest.fixture
+def probe_mod(mod):
+    return mod("warden_probe")
 
+
+def test_probe_records_every_ticks_work_each_publish_and_the_collections(probe_mod):
     class Warden:
         def __init__(self) -> None:
             self.origin, self.slack, self.lateness, self.params = 10.0, 0.025, [], NS(bucket_ms=100, window=600)
@@ -104,10 +107,82 @@ def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
                                         "close": [1.0, 0.5]}
 
 
-def test_a_probe_given_no_clock_reads_the_network_certifiers_own(tmp_path, mod, monkeypatch):
+@pytest.fixture
+def runner():
+    """Stand-ins that call as the runner's classes call: `withhold` hands its record on ``withheld=True``, the
+    publisher's to its `keep` and the publisher process's to its own call. New classes each test, since a probe wraps
+    them in place."""
+    class Device:
+        async def run(self) -> None:
+            pass
+
+        def _tick(self, t: int) -> None:
+            pass
+
+    class Publisher:
+        def __init__(self, out=None) -> None:
+            self.out, self.kept = out, []
+
+        def withhold(self, record, grid) -> None:
+            self.keep(record, grid, withheld=True)
+
+        def keep(self, record, grid, withheld=False) -> None:
+            self.kept.append((record.window, grid, withheld))
+
+    class PublisherProcess:
+        def __init__(self) -> None:
+            self.process, self.closed = NS(pid=4321), []
+
+        def __call__(self, record, grid, withheld=False) -> None:
+            self.closed.append((record.window, grid, withheld))
+
+        def withhold(self, record, grid) -> None:
+            self(record, grid, withheld=True)
+
+        def close(self) -> list:
+            return []
+
+    return NS(Device=Device, Publisher=Publisher, PublisherProcess=PublisherProcess,
+              kept=NS(link="requests", window=0), withheld=NS(link="responses", window=1))
+
+
+def test_probe_times_a_withheld_records_keep_as_it_times_any_other(probe_mod, runner):
+    ticks = itertools.count(10.0, 0.5)
+    probe = probe_mod.Probe(clock=lambda: next(ticks))
+    probe.install(runner.Device, runner.Publisher)
+    publisher = runner.Publisher()
+    publisher.keep(runner.kept, "grid")
+    publisher.withhold(runner.withheld, "grid")
+    assert publisher.kept == [(0, "grid", False), (1, "grid", True)]
+    assert probe.publish == [(10.0, 0.5, "requests", 0), (11.0, 0.5, "responses", 1)]
+
+
+def test_probe_records_a_withheld_records_handoff_as_it_records_any_other(probe_mod, runner):
+    ticks = itertools.count(10.0, 0.5)
+    probe = probe_mod.Probe(clock=lambda: next(ticks))
+    probe.install(runner.Device, runner.Publisher, runner.PublisherProcess)
+    process = runner.PublisherProcess()
+    process(runner.kept, "grid")
+    process.withhold(runner.withheld, "grid")
+    assert process.closed == [(0, "grid", False), (1, "grid", True)]
+    assert probe.handoff == [(10.0, "requests", 0), (10.5, "responses", 1)]
+
+
+def test_time_keeps_times_each_keep_as_the_publisher_process_calls_it(tmp_path, probe_mod, runner):
+    """The spawned process keeps every record with ``withheld`` by name (the runner's `_publisher_main`)."""
+    ticks = itertools.count(10.0, 0.5)
+    probe_mod.time_keeps(runner.Publisher, clock=lambda: next(ticks))
+    publisher = runner.Publisher(tmp_path)
+    publisher.keep(runner.kept, "grid", withheld=False)
+    publisher.keep(runner.withheld, "grid", withheld=True)
+    assert publisher.kept == [(0, "grid", False), (1, "grid", True)]
+    lines = (tmp_path / probe_mod.PUBLISHER_KEEPS).read_text().splitlines()
+    assert [json.loads(line) for line in lines] == [[10.0, 0.5, "requests", 0], [11.0, 0.5, "responses", 1]]
+
+
+def test_a_probe_given_no_clock_reads_the_network_certifiers_own(tmp_path, probe_mod, runner, monkeypatch):
     """A probe's times are laid against the network certifier's origin, a reading of its host's raw clock: with no
     clock given, the probe, its collections and the publisher's keeps each read that clock, by its clock id."""
-    probe_mod = mod("warden_probe")
     from verity.protocols.certifier.verifier import pacer
 
     read = []
@@ -120,16 +195,8 @@ def test_a_probe_given_no_clock_reads_the_network_certifiers_own(tmp_path, mod, 
     probe = probe_mod.Probe()
     assert probe.clock is probe.collections.clock is probe_mod.Collections().clock is pacer.raw_clock
     assert probe.clock() == 12.5 and read == [pacer.time.CLOCK_MONOTONIC_RAW]
-
-    class Publisher:
-        def __init__(self, out) -> None:
-            self.out = out
-
-        def keep(self, record, grid) -> None:
-            pass
-
-    probe_mod.time_keeps(Publisher)
-    Publisher(tmp_path).keep(NS(link="requests", window=0), None)
+    probe_mod.time_keeps(runner.Publisher)
+    runner.Publisher(tmp_path).keep(runner.kept, None)
     assert json.loads((tmp_path / probe_mod.PUBLISHER_KEEPS).read_text()) == [12.5, 0.0, "requests", 0]
     assert read == [pacer.time.CLOCK_MONOTONIC_RAW] * 3
 

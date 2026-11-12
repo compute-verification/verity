@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     import vllm
     from vllm.v1.core.sched.scheduler import Scheduler
     from vllm.v1.engine.llm_engine import LLMEngine
-    from vllm.v1.worker.gpu_model_runner import GPUModelRunner
+    from vllm.v1.worker.gpu.model_runner import GPUModelRunner
 
     class Wrapper(Protocol):
         """:class:`verity_vllm.LLM`, structurally (`engine` sits below it in the layers)."""
@@ -55,7 +55,8 @@ def scheduler_or_none(llm: Engine) -> Scheduler | None:
 
 
 def model_runner(llm: Engine) -> GPUModelRunner:
-    """The engine's in-process model runner (the uniproc executor's driver worker's)."""
+    """The engine's in-process model runner (the uniproc executor's driver worker's): Model Runner V2 under
+    `engine.env.ENGINE`."""
     core = _engine_core(llm)
     worker = getattr(getattr(core, "model_executor", None), "driver_worker", None)
     for attr in ("worker", "model_runner"):

@@ -14,10 +14,8 @@ the next line (behind a comment marker or not). Every file under `verity/protoco
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
-(`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
-record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
-queued on `next` rewrites, or whose messages mirror the Lean's (``PENDING``), until that PR lands or the Lean is renamed,
-and the rename follows it.
+(`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``) and a spelling baked into a
+record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too).
 
 The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
@@ -237,17 +235,6 @@ ALLOWED: dict[str, str] = {
                                         "directory, which the protocols' word move rewrites; renamed with it",
 }
 
-PENDING: dict[str, str] = {
-    "verity/protocols/pouw/verifier/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
-    "verity/protocols/pouw/verifier/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
-                                                            "renamed with the Lean",
-    "adapters/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
-                                                             "renamed with the Lean",
-    "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "demos/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-}
-
-
 #: the lints that name the terms to find them: this one, and the ratchet over every term `GLOSSARY.md`'s table retires
 LINTS = ("tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py")
 #: the word maps a move renames by, which name the words they retire
@@ -255,9 +242,9 @@ MAPS = "tools/move/"
 
 
 def scanned(files: list[str]) -> list[str]:
-    """Every file but the Lean packages' configs and locks, PENDING, the LINTS and the word maps."""
+    """Every file but the Lean packages' configs and locks, the LINTS and the word maps."""
     return sorted(f for f in files if not f.endswith(("lean-audit.json", "lakefile.toml"))
-                  and f not in PENDING and f not in LINTS and not f.startswith(MAPS))
+                  and f not in LINTS and not f.startswith(MAPS))
 
 
 _CODE_CHAR = re.compile(r"\S")
@@ -512,7 +499,6 @@ def test_the_scan_reads_each_form():
                    "-- a proof\ndef unit := 2\n"),
         "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
         "c.lean": "-- a proof unit",
-        next(iter(PENDING)): "a proof unit",
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
@@ -585,7 +571,6 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nverity example vllm\n```\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
-        **{f: "a leg" for f in PENDING if f.endswith(".md")},
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
