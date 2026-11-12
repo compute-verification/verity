@@ -27,6 +27,23 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "verity/difftest/" = "tools/difftest/"
 "verity/difftest/lean/" = "verity/circuits/difftest/"
 
+[split]
+# A reference to `verity/difftest` as a whole follows its larger part, `tools/difftest/`; each one here means the
+# harness's Python or its distribution, or names it where the Lake package's own files are covered another way:
+# "old file: old directory" = why (`layout.py` fails on any other, and on an entry no reference needs).
+"AGENTS.md: verity/difftest" = "the map's line for the Python held to each Lean, which is `tools/difftest/`"
+"pyproject.toml: verity/difftest" = "the workspace member, the distribution `verity_difftest`, whose pyproject is at `tools/difftest/`"
+"uv.lock: verity/difftest" = "the distribution `verity-difftest`'s editable source, at `tools/difftest/`"
+"tools/verity/check/drive.toml: verity/difftest" = "a low-risk exclude: the Lake package's files stay excluded by `verity/circuits/` and by `*.lean`, `lakefile.*` and `lake-manifest.json`"
+"verity/README.md: verity/difftest" = "the Python that mirrors each Lean to it, which is `tools/difftest/`"
+"verity/difftest/README.md: verity/difftest" = "the harness's README, whose title names its own directory, `tools/difftest/`"
+"verity/commitments/identity/tests/test_identity_difftest.py: verity/difftest" = "the harness this suite drives its Lean through, `verity_difftest`"
+"verity/definitions/requirement/tests/test_requirement_difftest.py: verity/difftest" = "the harness this suite drives its Lean through, `verity_difftest`"
+"verity/protocols/pous/verifier/check/tests/test_setup_difftest.py: verity/difftest" = "the harness this suite drives its Lean through, `verity_difftest`"
+"verity/protocols/pouw/verifier/lean/check/README.md: verity/difftest" = "the shared harness's `ProtocolPort`, in `verity_difftest`"
+"verity/protocols/pouw/verifier/lean/window/README.md: verity/difftest" = "the shared harness's Python, `verity_difftest`"
+"verity/protocols/spot/verifier/lean/pyproject.toml: verity/difftest" = "a suite input: the Lake package stays covered by its `verity/circuits` entry"
+
 [retired]
 # the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
 # directory's, so a file only a branch has under it is carried
