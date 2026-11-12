@@ -25619,13 +25619,141 @@
    "type_hash": "064a7e2cb5cf114b010e90457de9a67c7e5400152b8bd9c484438300842a3d75"
   },
   "Verity.Sampled.onsite_soundness_deployedReady": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": [
+    "Verity.Sampled.onsite_soundness_deployedReady {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]",
+    "  (I : Verity.Sampled.Instance d α) (K₀ : Verity.Sampled.Constructions I.base)",
+    "  (reg : (A : Verity.Sampled.Live) → Option Claims.Msg → A.Reg)",
+    "  (record : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)",
+    "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hready : I.SessionsReady)",
+    "  (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered Verity.Registration.Composite.onsite)",
+    "  (hOR : I.LogOpensRecorded Verity.Registration.Composite.onsite)",
+    "  (hW : I.base.PouwSound Verity.Registration.Composite.onsite)",
+    "  (hI : I.base.InferenceOnlySound Verity.Registration.Composite.onsite)",
+    "  (hP : I.base.PousSound Verity.Registration.Composite.onsite)",
+    "  (hB : I.base.BandwidthAuditSound Verity.Registration.Composite.onsite)",
+    "  (hN : I.base.NetworkCertifierSound Verity.Registration.Composite.onsite)",
+    "  (hX : I.base.WipeSound Verity.Registration.Composite.onsite) :",
+    "  (I.vocab (I.constructionsAt K₀ Verity.Registration.Composite.onsite reg record recordDigest)).SoundnessAt",
+    "    Verity.Registration.Composite.onsite"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Verity.Sampled.Instance.LogOpensRecorded",
+     "Verity.Sampled.Instance.RegisteredFiles",
+     "Verity.Sampled.Instance.SessionRegistered",
+     "Verity.Sampled.Instance.SessionsReady",
+     "Verity.Vocab.BandwidthAuditSound",
+     "Verity.Vocab.InferenceOnlySound",
+     "Verity.Vocab.NetworkCertifierSound",
+     "Verity.Vocab.PousSound",
+     "Verity.Vocab.PouwSound",
+     "Verity.Vocab.WipeSound"
+    ],
+    "reads": [
+     "FlockSoundness.Assumptions.HmRowComputes",
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes",
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "01f53d82f719f5ef306e4ba9ede46c4a75c97b61d5149eb8fa36c981835ea4e3",
+   "unfolded_hash": "a04ce9990e7e6111302f4d4106bac94c6775e46d6274f03d28ac7e86f1e95751"
   },
   "Verity.Sampled.onsite_soundness_deployedReady_honest": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": [
+    "Verity.Sampled.onsite_soundness_deployedReady_honest :",
+    "  And (Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionsReady",
+    "    (And (Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).RegisteredFiles",
+    "      (And",
+    "        ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionRegistered",
+    "          Verity.Registration.Composite.onsite)",
+    "        (And",
+    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).LogOpensRecorded",
+    "            Verity.Registration.Composite.onsite)",
+    "          (And",
+    "            ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
+    "              Verity.Registration.Composite.onsite)",
+    "            (And",
+    "              ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
+    "                Verity.Registration.Composite.onsite)",
+    "              (And",
+    "                ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PousSound",
+    "                  Verity.Registration.Composite.onsite)",
+    "                (And",
+    "                  ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x =>",
+    "                          Option.none).base.BandwidthAuditSound",
+    "                    Verity.Registration.Composite.onsite)",
+    "                  (And",
+    "                    ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x =>",
+    "                            Option.none).base.NetworkCertifierSound",
+    "                      Verity.Registration.Composite.onsite)",
+    "                    ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.WipeSound",
+    "                      Verity.Registration.Composite.onsite)))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "FlockSoundness.Assumptions.UniformRandomBytes",
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "c9a7552fb9f8929cd698e62aa5dceb0da0baf12e19237dfb4712558b9dc2920b"
   },
   "Verity.Sampled.onsite_soundness_deployedReady_nontrivial": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": [
+    "Verity.Sampled.onsite_soundness_deployedReady_nontrivial :",
+    "  Not (Verity.Idle.exact.SoundnessFor Verity.Registration.Composite.onsite fun x => True)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
   },
   "Verity.Sampled.remote_soundness_deployedReady": {
    "owner": "@soundness",
@@ -57137,7 +57265,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "a93703c44e8c96db318ef021352bda1c22ad913052120dfd779b8788f4d5e033",
+   "digest": "201cd7724d8abdcc083a29c8c5bbfff2df4c2d1ef586d9c088857212c532fbcc",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -57233,10 +57361,13 @@
     "Verity.TreeSample": "79fa9c5673525eabcdd4c63f045415fa5d2fac82689029540788fd77f64e3d71",
     "Verity.TreeSpecOk": "666190d9707826c4245f369aa14ce49eaef4fc1789e996351240e99eddde8012",
     "Verity.Vocab": "326b175cc0d73eaa6baaa0c433d387e1d331ae9533489215ce5eac36b1b7da00",
+    "Verity.Vocab.BandwidthAuditSound": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
     "Verity.Vocab.FinderCR": "edaced35a3cbb1f7a3749d5c50cb3ad2a2e14f7ef6d00c633e9cbb3520429084",
     "Verity.Vocab.Holds": "4d3122b84d73fce763002a7789f07051de1e31d9c17e2739703ebb25cc8f884e",
     "Verity.Vocab.InferenceOnlySound": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
+    "Verity.Vocab.NetworkCertifierSound": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
     "Verity.Vocab.Opens": "dc9e98de8f4dd3c8d8e67112689b4467fc5ce5da8864de1d8fef43a123d101bf",
+    "Verity.Vocab.PousSound": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69",
     "Verity.Vocab.PouwSound": "11518fbb13cc95c1ccc10d6ab73a3ab8f341a919046c499e18f757de475d1670",
     "Verity.Vocab.Registered": "42e334619ebedd0e57f2d5b946fb9ccea7e5cf4e058a0655bb0da2595204c6b0",
     "Verity.Vocab.Seed": "b425dc76367208a8048429d13584d9413fd72d43fbc869e30b4db63bee6887c7",
@@ -57246,6 +57377,7 @@
     "Verity.Vocab.Target": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd",
     "Verity.Vocab.Unforgeable": "829ba2c9edcb766d0b28e4e8c71be2ddf0a521e01f0d3db5590f46042d2731f2",
     "Verity.Vocab.Verdict": "f92a5af0f0cede11a4233bb6da19cb08c8025c0efc96a23b5bea5e2918282b7d",
+    "Verity.Vocab.WipeSound": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937",
     "Verity.Vocab.boundary": "900af0bbd6d3eebb45d65ad8dbd3d88017c3933ff54ecf93af125a8837720fe0",
     "Verity.Vocab.callsAdd": "c3e8585bb7b914dcf7586f19146d8ce381e663b69f85f9bc13f55b64d8178d6c",
     "Verity.Vocab.callsMul": "626d7b3ea455cda365e793440bc647beb9738b751f8838aac23a229b96f0a26e",
