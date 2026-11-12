@@ -234,7 +234,7 @@ CONFIGURATIONS = {
                                          partition="per-expert", serve="tokens", form="patterns",
                                          registration="machine")),
     **_spans("head_units", Configuration("(A″) Tokens only, a head's key block as its scores and values units (modeled, "
-                                         "key rows not held equal)", TOKENS, REQUEST, "two-stage, width-stratified",
+                                         "key rows not held equal)", TOKENS, REQUEST, "two-stage, by template",
                                          ("exfiltration", "infiltration"), partition="head-scores-values",
                                          serve="tokens", form="patterns", registration="machine")),
     "every_block": Configuration("(C) Every proof-block boundary", "every proof block's outputs", "a proof block",
