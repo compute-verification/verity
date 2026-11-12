@@ -10,6 +10,7 @@ __models__ = ("zai-org/GLM-5.3",)
 import torch
 from verity.circuits.refs import array_of
 
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import known, shape
 from verity_vllm.program.frontend.rules.patterns import Consumed
@@ -45,7 +46,6 @@ class MlaAbsorbBmmRule(OpRule):
         B, _, K = known(shape(ctx, x))
         if (r := _value(ctx, w, BF16, (B, K, None), "W")):
             return r
-        from verity_vllm.program.frontend import targets as TG
         try:
             TG.tensor_core_dot(active_target_profile())
         except TG.UnregisteredTarget as e:
@@ -53,7 +53,6 @@ class MlaAbsorbBmmRule(OpRule):
         return True
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend import targets as TG
         x, w = node.args[0], node.args[1]
         B, M, K = known(shape(ctx, x))
         N = known(shape(ctx, w))[2]
@@ -137,8 +136,6 @@ class MlaAbsorbTransposePatternRule(OpRule):
             return f"the bmm / trailing transpose shapes are {shape(ctx, bmm)} / {shape(ctx, out)}, not {(B, M, N)} / {(M, B, N)}"
         if (r := _missing(ctx, ["batched_gemm"])):
             return r
-        from verity_vllm.program.frontend import targets as TG
-
         try:
             TG.tensor_core_dot(active_target_profile())
         except TG.UnregisteredTarget as e:
@@ -150,8 +147,6 @@ class MlaAbsorbTransposePatternRule(OpRule):
         return True if isinstance(m, dict) else f"not the MLA absorb transpose pattern ({m})"
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend import targets as TG
-
         m = self._match(node, ctx)
         assert isinstance(m, dict)
         DOT = TG.tensor_core_dot(active_target_profile())

@@ -10,6 +10,7 @@ from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import dtype_is, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 # -- the padded engine's step-boundary cache clear over implicit KV state ----------------------------------------------------
 
@@ -29,7 +30,6 @@ class CachePadRule(StateRule):
                     evidence_domain="structural; numerics: SelectBf16_v1 (exact-model-tested) per K/V word")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.vllm_iface import targets_for
         return targets_for("unified_cache_pad")
 
     def applies(self, node, ctx):
