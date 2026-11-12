@@ -533,6 +533,26 @@ published line the cached bytes are other bytes, attention is another kernel, ev
 request and a 79th layer, and at M a sampled token is drawn from another noise generator (section 3, a). The first
 shape-only replay at FP8 without drafts, then one with drafts, are the two runs that put it back (section 6).
 
+**Row 16 under the lead's ruling of 03:22Z** (every input of a replay block is a port of the boundary record, another
+template's output in the block, a value the verifier computes from what it holds before the sample, or the opened
+row of a read against a committed root) [relayed; the sorting is argued, mine]:
+
+- **Case 1, committed at serving:** the request's prompt and output ids, which the certified record also holds;
+  the step record, with each step's rows and
+  each decoding request's kept count. Today's served driver registers a replay block's parameters after the sample
+  [relayed, FRAME's finding in the ruling], so the step record's commitment before the coins is part of what row 16
+  needs, with or without drafts.
+- **Case 2, computed inside the block:** the logits, the draft tokens, the accept test's verdicts, the token at a
+  rejection, the kept count the block compares with the record's.
+- **Case 3, the verifier's own:** the zero stand-ins and their shapes, which come from the step record; the seed,
+  by its rule from the window's seed coin and the certified id (V `engine/served_seed.py:1-14`).
+- **Case 4, opened against a committed root:** every cache row the block reads and did not write: the cached
+  prefix's, a span's earlier positions', and under drafts the draft layer's rows at those positions. Which page is
+  read is fixed by the step record; under drafts that needs the kept counts, since they set the slots a step writes.
+- **Nothing in row 16 is outside the four,** if the page's root is taken at publish and the step record is committed
+  before the coins. The one input I cannot place is whatever FlashMLA's kernel reads beyond a row's own keys
+  (section 2, item 8).
+
 ### 2. What serving commits for a hit when the cache is FP8
 
 **The page is the FP8 bytes as stored, and the scale is computed from the token's own row alone.** By line:
