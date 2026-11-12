@@ -80,13 +80,20 @@ class Device:
         return None
 
 
-def stand_ins(monkeypatch, tmp_path: Path, tmpl_unit: Path | None = None, **server) -> None:
+def stand_ins(monkeypatch, tmp_path: Path, tmpl_unit: Path | None = None, made: list[dict] | None = None, **server) -> None:
+    """``made`` gets the keyword arguments each `ProofServer` was made with."""
     d = tmp_path / "staged"
     d.mkdir()
     (d / "stage.json").write_text(json.dumps({"n": 1, "k_log": 34}))
     monkeypatch.setattr(SR, "staged", lambda z, t, tu: (SimpleNamespace(pin="pin", tmpl_unit=tmpl_unit), 1, d))
     monkeypatch.setattr(SR, "Device", Device)
-    monkeypatch.setattr(SR, "ProofServer", lambda binary, out, *, provers, **kw: Server(Path(out), provers, **server))
+
+    def proof_server(binary, out, *, provers, **kw) -> Server:
+        if made is not None:
+            made.append(kw)
+        return Server(Path(out), provers, **server)
+
+    monkeypatch.setattr(SR, "ProofServer", proof_server)
 
 
 def run(monkeypatch, tmp_path: Path, *args: str, **server) -> tuple[int, dict]:
@@ -245,6 +252,31 @@ def test_a_flat_statement_has_no_unit(tmp_path):
     staging(tmp_path, {"statement": SR.STATEMENT_ID})
     st, _, d = SR.staged(tmp_path, "t")
     assert st.tmpl_unit is None and not (d / "unit.placed").exists()
+
+
+@pytest.mark.parametrize("wide", [True, False])
+def test_a_row_runs_one_statement_version_and_says_which(monkeypatch, tmp_path, wide):
+    """``--wide-leaf`` reaches the proof server, whose provers and verifiers all carry it, and the row keeps it; without
+    it neither does."""
+    made: list[dict] = []
+    rc, row = run(monkeypatch, tmp_path, *(["--wide-leaf"] if wide else []), made=made)
+    assert (rc, row["wide_leaf"], [kw["wide_leaf"] for kw in made]) == (0, wide, [wide])
+
+
+@pytest.mark.parametrize("tmpl", [False, True])
+def test_a_wide_leaf_rows_lean_verdict_is_under_the_versions_statement(monkeypatch, tmp_path, tmpl):
+    got = []
+
+    class Lean:
+        def __init__(self, lean, d, out, statement):
+            got.append(statement)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(SR, "Lean", Lean)
+    run(monkeypatch, tmp_path, "--lean", "flock-verify", "--wide-leaf", tmpl_unit=tmp_path / "unit.placed" if tmpl else None)
+    assert got == [(SR.FC.TMPL_STATEMENT if tmpl else SR.STATEMENT_ID) + "+wide-leaf"]
 
 
 def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch, tmp_path):
