@@ -333,7 +333,7 @@ theorem card_ne_le (s : Finset X) (f : X → Option Msg) (u v : Msg)
   have key : ∀ a, (s.filter fun x => f x = some a).card + (s.filter fun x => ∃ m, f x = some m ∧ m ≠ a).card =
       (s.filter fun x => (f x).isSome).card := by
     intro a
-    rw [← Finset.filter_card_add_filter_neg_card_eq_card (s := s.filter fun x => (f x).isSome)
+    rw [← Finset.card_filter_add_card_filter_not (s := s.filter fun x => (f x).isSome)
       (fun x => f x = some a), Finset.filter_filter, Finset.filter_filter]
     congr 2
     · exact Finset.filter_congr fun x _ => by cases f x <;> simp
@@ -624,6 +624,214 @@ def MissBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Arr
     MsgOpens A x Rd Acc Good Dg → DigestBefore (frame V A x θ F c σ place Rd Dg) Rd Acc Good Dg i → RunShown A x →
       ENNReal.ofReal (Claims.Pr (MissAt (frame V A x θ F c σ place Rd Dg) Rd Acc Good i)) ≤
         ENNReal.ofReal (Real.sqrt ((msgFinder V θ F c σ place Rd Dg i q).Pr Verity.sha512Msg))
+
+/-! ## The miss at one round, proved -/
+
+theorem opening_some {A : Live₂} {x : Msg} {Ω : Type} {out : Ω → Coins A x → Verity.Exchange} {Rd : Reading A}
+    {Dg : Verity.Exchange → ℕ → Option Msg} {i : ℕ} {ω : Ω} {hist : List (Msg × Msg)} {r : Coins A x} {u : Msg}
+    (h : opening out Rd Dg i ω hist r = some u) :
+    Rd.msg (out ω r) i = some u ∧ Dg (out ω (complete hist)) i = some (Verity.sha512Msg u) := by
+  unfold opening at h
+  rw [Option.filter_eq_some_iff] at h
+  exact ⟨h.1, of_decide_eq_true h.2⟩
+
+theorem opening_of {A : Live₂} {x : Msg} {Ω : Type} {out : Ω → Coins A x → Verity.Exchange} {Rd : Reading A}
+    {Dg : Verity.Exchange → ℕ → Option Msg} {i : ℕ} {ω : Ω} {hist : List (Msg × Msg)} {r : Coins A x} {u : Msg}
+    (h1 : Rd.msg (out ω r) i = some u) (h2 : Dg (out ω (complete hist)) i = some (Verity.sha512Msg u)) :
+    opening out Rd Dg i ω hist r = some u := by
+  unfold opening
+  rw [h1, Option.filter_some_eq_some]
+  exact decide_eq_true h2
+
+theorem runHist_length (t : Claims.Transcript) {i : ℕ} (h : i ≤ t.msgs.length) : (runHist t i).length = i := by
+  simp [runHist, h]
+
+theorem outMsg_eq (o : Out) : Claims.Recursion.outMsg o = msgOf o := by
+  cases o <;> rfl
+
+/-- **A run's message at a round it reaches is the prover's at the run's history before it.** -/
+theorem run_msgAt {Ω : Type} (pick : Ω → List (Msg × Msg) → Msg) {Coin : Type} [Inhabited Coin]
+    (Vr : Verifier Coin) (x : Msg) (ω : Ω) (r : Fin (Vr.k x) → Coin) (i : ℕ)
+    (h : i < (Claims.run FlockDeploy.sha512 (proverOf pick) Vr x ω r).msgs.length) :
+    msgAt (Claims.run FlockDeploy.sha512 (proverOf pick) Vr x ω r) i =
+      some (pick ω (runHist (Claims.run FlockDeploy.sha512 (proverOf pick) Vr x ω r) i)) := by
+  obtain ⟨new, hnew, hget⟩ := RecDeploy.run_get FlockDeploy.sha512 (proverOf pick) Vr x ω r i h
+  unfold msgAt runHist
+  rw [hget, ← hnew]
+  rfl
+
+theorem map_fst_take_eq {L : List (Msg × Out)} {ms : ℕ → Msg} {n : ℕ} (hn : n ≤ L.length)
+    (h : ∀ l < n, (L[l]?).map Prod.fst = some (ms l)) : (L.take n).map Prod.fst = (List.range n).map ms := by
+  apply List.ext_getElem?
+  intro l
+  rw [List.getElem?_map, List.getElem?_take, List.getElem?_map]
+  by_cases hl : l < n
+  · rw [if_pos hl, h l hl, List.getElem?_range hl]
+    rfl
+  · rw [if_neg hl, List.getElem?_eq_none (l := List.range n) (by simpa using hl)]
+    rfl
+
+/-- **The play's history is the run's** where the run's messages before round `i` are the play's. -/
+theorem playHist_eq {Ω : Type} (A : Live₂) (x : Msg) (P : Claims.Prover Ω) (ω : Ω) (r : Coins A x) (ms : ℕ → Msg)
+    (i : ℕ) (hi : i ≤ (Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.length)
+    (h : ∀ l < i, msgAt (Claims.run FlockDeploy.sha512 P A.L.V x ω r) l = some (ms l)) :
+    playHist A x r ms i = runHist (Claims.run FlockDeploy.sha512 P A.L.V x ω r) i := by
+  apply List.ext_getElem?
+  intro n
+  unfold playHist runHist
+  rw [List.getElem?_map, List.getElem?_map, List.getElem?_take]
+  by_cases hn : n < i
+  · rw [List.getElem?_range hn, if_pos hn]
+    obtain ⟨new, hnew, hget⟩ := RecDeploy.run_get FlockDeploy.sha512 P A.L.V x ω r n (by omega)
+    rw [hget]
+    have hp : ((P.next x (new.map RecDeploy.histOf) ω).eval FlockDeploy.sha512).1 = ms n := by
+      have := h n hn
+      unfold msgAt at this
+      rw [hget] at this
+      exact Option.some.inj this
+    have hfst : new.map Prod.fst = (List.range n).map ms := by
+      rw [hnew]
+      exact map_fst_take_eq (by omega) fun l hl => h l (by omega)
+    simp only [Option.map_some]
+    rw [hp, hfst, List.range_succ, List.map_append, List.map_singleton]
+    simp only [RecDeploy.histOf, outMsg_eq]
+  · rw [if_neg hn, List.getElem?_eq_none (l := List.range i) (by simpa using hn)]
+    rfl
+
+/-- **The runs at coins with one history before round `i` are the coins it shows.** -/
+theorem hist_eq_iff {A : Live₂} {x : Msg} (hS : RunShown A x) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
+    (r r' : Coins A x) (i : ℕ) :
+    runHist (Claims.run FlockDeploy.sha512 P A.L.V x ω r') i = runHist (Claims.run FlockDeploy.sha512 P A.L.V x ω r) i ↔
+      Shows (runHist (Claims.run FlockDeploy.sha512 P A.L.V x ω r) i) r' := by
+  constructor
+  · intro h
+    rw [← h]
+    exact (hS _ P ω r' i).1
+  · intro h
+    unfold runHist
+    rw [(hS _ P ω r i).2 r' h]
+
+section Round
+
+variable (V : Vocab d α) {A : Live₂} {x : Msg} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+  (σ : Verity.Game.Strategy (V.game θ F c)) (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ)
+  (Rd : Reading A) (Dg : Verity.Exchange → ℕ → Option Msg) (i : ℕ)
+
+/-- A tape and run coins' class at round `i`: the tape, and the frame's run's history before round `i`. -/
+noncomputable def clsOf (s : TapeOf V θ F c σ × Coins A x) : TapeOf V θ F c σ × List (Msg × Msg) :=
+  (s.1, histAt V θ F c σ place Rd Dg i s.1 s.2)
+
+/-- The redraw of a tape and run coins within their class. -/
+noncomputable def resOf (s : TapeOf V θ F c σ × Coins A x) (y : Coins A x) : TapeOf V θ F c σ × Coins A x :=
+  (s.1, merge (histAt V θ F c σ place Rd Dg i s.1 s.2) y)
+
+/-- The message read at round `i` that opens the class's digest. -/
+noncomputable def openAt (K : TapeOf V θ F c σ × List (Msg × Msg)) (s : TapeOf V θ F c σ × Coins A x) :
+    Option Msg :=
+  opening (outOf V θ F c σ place) Rd Dg i K.1 K.2 s.2
+
+/-- The class's most likely message at round `i`. -/
+noncomputable def modeAt (K : TapeOf V θ F c σ × List (Msg × Msg)) : Msg :=
+  modeOn (Shows (A := A) (x := x) K.2) (opening (outOf V θ F c σ place) Rd Dg i K.1 K.2)
+
+open Classical in
+theorem classOf_clsOf (hS : RunShown A x) (s : TapeOf V θ F c σ × Coins A x) :
+    classOf (clsOf V θ F c σ place Rd Dg i) s =
+      (Finset.univ.filter fun r' => Shows (histAt V θ F c σ place Rd Dg i s.1 s.2) r').map
+        ⟨fun r' => (s.1, r'), fun a b h => (Prod.mk.inj h).2⟩ := by
+  ext ⟨ω', r'⟩
+  rw [Finset.mem_map]
+  unfold classOf
+  rw [Finset.mem_filter]
+  constructor
+  · rintro ⟨-, h⟩
+    have h1 : ω' = s.1 := congrArg Prod.fst h
+    have h2 : histAt V θ F c σ place Rd Dg i ω' r' = histAt V θ F c σ place Rd Dg i s.1 s.2 := congrArg Prod.snd h
+    subst h1
+    exact ⟨r', Finset.mem_filter.2 ⟨Finset.mem_univ _,
+      (hist_eq_iff hS (prover V θ F c σ place Rd Dg) s.1 s.2 r' i).1 h2⟩, rfl⟩
+  · rintro ⟨a, ha, he⟩
+    simp only [Function.Embedding.coeFn_mk, Prod.mk.injEq] at he
+    obtain ⟨rfl, rfl⟩ := he
+    exact ⟨Finset.mem_univ _, Prod.ext rfl
+      ((hist_eq_iff hS (prover V θ F c σ place Rd Dg) s.1 s.2 _ i).2 (Finset.mem_filter.1 ha).2)⟩
+
+end Round
+
+/-- **Round `i`'s miss is at most the square root of its finder's success.** -/
+theorem missBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) : MissBound V A x θ F c σ := by
+  classical
+  intro place Rd Acc Good Dg i q hO hD hS
+  have hunif : ∀ (s : TapeOf V θ F c σ × Coins A x) (φ : TapeOf V θ F c σ × Coins A x → ℝ),
+      (∑ y, φ (resOf V θ F c σ place Rd Dg i s y)) * (classOf (clsOf V θ F c σ place Rd Dg i) s).card =
+        Fintype.card (Coins A x) * ∑ x' ∈ classOf (clsOf V θ F c σ place Rd Dg i) s, φ x' := by
+    intro s φ
+    rw [classOf_clsOf V θ F c σ place Rd Dg i hS, Finset.sum_map, Finset.card_map]
+    exact sum_merge (histAt V θ F c σ place Rd Dg i s.1 s.2) fun r' => φ (s.1, r')
+  have hmode : ∀ (s : TapeOf V θ F c σ × Coins A x) m,
+      ((classOf (clsOf V θ F c σ place Rd Dg i) s).filter fun x' =>
+          openAt V θ F c σ place Rd Dg i (clsOf V θ F c σ place Rd Dg i s) x' = some m).card ≤
+        ((classOf (clsOf V θ F c σ place Rd Dg i) s).filter fun x' =>
+          openAt V θ F c σ place Rd Dg i (clsOf V θ F c σ place Rd Dg i s) x' =
+            some (modeAt V θ F c σ place Rd Dg i (clsOf V θ F c σ place Rd Dg i s))).card := by
+    intro s m
+    rw [classOf_clsOf V θ F c σ place Rd Dg i hS, Finset.filter_map, Finset.filter_map, Finset.card_map,
+      Finset.card_map, Finset.filter_filter, Finset.filter_filter]
+    exact modeOn_spec _ _ m
+  have hmiss : ∀ s, MissAt (frame V A x θ F c σ place Rd Dg) Rd Acc Good i s →
+      bad (clsOf V θ F c σ place Rd Dg i) (openAt V θ F c σ place Rd Dg i) (modeAt V θ F c σ place Rd Dg i) s s := by
+    rintro ⟨ω, r⟩ hs
+    dsimp only [MissAt] at hs
+    obtain ⟨hA, hG, hlen, hne, hagree⟩ := hs
+    have hk : i < A.L.V.k x := lt_of_lt_of_le hlen (Claims.Recursion.run_length_le _ _ _ _ _ _)
+    obtain ⟨m, hm, hdg⟩ := hO _ hA hG i hk
+    have hKlen : (histAt V θ F c σ place Rd Dg i ω r).length = i := runHist_length _ hlen.le
+    have hmsg : msgAt (Claims.run FlockDeploy.sha512 (frame V A x θ F c σ place Rd Dg).P A.L.V x ω r) i =
+        some (modePick (outOf V θ F c σ place) Rd Dg ω (histAt V θ F c σ place Rd Dg i ω r)) :=
+      run_msgAt (modePick (outOf V θ F c σ place) Rd Dg) A.L.V x ω r i hlen
+    have hplay : playHist A x r (playMsgs Rd ((frame V A x θ F c σ place Rd Dg).out ω r)) i =
+        histAt V θ F c σ place Rd Dg i ω r := by
+      refine playHist_eq A x (frame V A x θ F c σ place Rd Dg).P ω r _ i hlen.le fun l hl => ?_
+      obtain ⟨ml, hml, -⟩ := hO _ hA hG l (lt_trans hl hk)
+      rw [← hagree l hl, hml]
+      simp [playMsgs, hml]
+    have hdig : Dg ((frame V A x θ F c σ place Rd Dg).out ω (complete (histAt V θ F c σ place Rd Dg i ω r))) i =
+        some (Verity.sha512Msg m) := by
+      rw [← hdg]
+      refine hD ω r _ hA hG ?_
+      rw [hplay]
+      exact shows_merge _ _
+    have hv : modePick (outOf V θ F c σ place) Rd Dg ω (histAt V θ F c σ place Rd Dg i ω r) =
+        modeAt V θ F c σ place Rd Dg i (clsOf V θ F c σ place Rd Dg i (ω, r)) := by
+      unfold modePick
+      rw [hKlen]
+      rfl
+    unfold bad
+    refine Exists.intro m (And.intro (opening_of hm hdig) fun hmv => hne ?_)
+    rw [hm, hmsg, hmv, hv]
+  have key := miss_le_sqrt (clsOf V θ F c σ place Rd Dg i) (resOf V θ F c σ place Rd Dg i)
+    (openAt V θ F c σ place Rd Dg i) (modeAt V θ F c σ place Rd Dg i)
+    (MissAt (frame V A x θ F c σ place Rd Dg) Rd Acc Good i) hunif hmode hmiss
+  have hfin : (Claims.Pr fun s : (TapeOf V θ F c σ × Coins A x) × Coins A x =>
+      fork (clsOf V θ F c σ place Rd Dg i) (openAt V θ F c σ place Rd Dg i) s.1
+        (resOf V θ F c σ place Rd Dg i s.1 s.2)) ≤
+      (msgFinder V θ F c σ place Rd Dg i q).Pr Verity.sha512Msg := by
+    unfold Claims.Finder.Pr
+    refine Claims.Pr_mono fun s hs => ?_
+    obtain ⟨u, w, hu, hw, huw⟩ := hs
+    have hu' : opening (outOf V θ F c σ place) Rd Dg i s.1.1 (histAt V θ F c σ place Rd Dg i s.1.1 s.1.2) s.1.2 =
+        some u := hu
+    have hw' : opening (outOf V θ F c σ place) Rd Dg i s.1.1 (histAt V θ F c σ place Rd Dg i s.1.1 s.1.2)
+        (merge (histAt V θ F c σ place Rd Dg i s.1.1 s.1.2) s.2) = some w := hw
+    refine Exists.intro u (Exists.intro w (And.intro ?_ (And.intro huw ?_)))
+    · show (msgFinder V θ F c σ place Rd Dg i q).out s = some (u, w)
+      simp [msgFinder, hu', hw', huw]
+    · have h1 := (opening_some hu').2
+      have h2 := (opening_some hw').2
+      rw [h1] at h2
+      exact Option.some.inj h2
+  exact le_trans (ENNReal.ofReal_le_ofReal key) (ENNReal.ofReal_le_ofReal (Real.sqrt_le_sqrt hfin))
 
 /-! ## The messages' bound -/
 
