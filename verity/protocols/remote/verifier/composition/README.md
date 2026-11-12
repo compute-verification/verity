@@ -94,8 +94,8 @@ the policy's record to sampled proofs' (one record, below), so the circuit the p
 audited.
 
 A stated exception: the policy's v0 publishes the division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Both products compose it, as an exception to
-everything-zero-knowledge, until v1's private form (the division committed under hiding leaves, compliance proved, a
+fresh-input bits) in the clear. Both products compose it for one run of record only, as an exception to
+everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
 padded profile) replaces it. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
 private data among the products' subprotocols unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
 `benchmarks/one_stage/composite.py` writes the exception's line into the record it renders.

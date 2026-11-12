@@ -128,10 +128,10 @@ states that no card does. A node is a host and the GPUs it carries. Its kind is 
 number is an entry under the cards' rules above. A node file names no machine, no address and no provider: it is the
 kind's, read on one node of it, and its sources cite what read it by `art:` id.
 
-| Node | file | GPU card | host card | the host's own leaves | its interfaces |
+| Node | file | GPU card | host card | the host's own leaves | its ways out |
 |---|---|---|---|---|---|
-| An RTX PRO 6000 node, eight cards | `nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0` |
-| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | none on record |
+| An RTX PRO 6000 node, eight cards | `nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, at its line rate, and the storage path |
+| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, which reads no rate, and the storage path |
 
 A file has `device` (`sku`, the GPU card, and `count`, how many of it the node carries), `host` (`sku`, the host card)
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`), its
@@ -150,11 +150,22 @@ that adds the disks' rates takes the smaller of the sum and it. Neither a measur
 a disk is a ceiling: the measured read stays on the host card (`disk.read`), under the ceiling, and a setting is
 stated nowhere.
 
-`interface.NAME`, one table an interface, is the node's own way out: an interface that carries traffic off the node,
-with its `rate`, the line rate each way in `bit/s`, as the node reports it (`/sys/class/net/NAME/speed`, `ethtool`).
-An interface is one when it is a device's and a route of the node's main tables names it; the loopback, a bridge and
-a tunnel are the node's own software (`benchmarks/bandwidth/node.py` reads both and says which). An interface that
-reports no speed has no table. No latency is stated: nothing reads one, and a link registers at 0.
+A node's ways out are what a byte leaves it by: its interfaces, and its storage path.
+
+`interface.NAME`, one table an interface, is an interface that carries traffic off the node, with its `rate`, the
+line rate each way in `bit/s`, as the node reports it (`/sys/class/net/NAME/speed`, `ethtool`). An interface is one
+when it is a device's and a route of the node's main tables names it; the loopback, a bridge and a tunnel are the
+node's own software (`benchmarks/bandwidth/node.py` reads both and says which). An interface that reports no speed,
+as a hypervisor's `virtio_net` device does, states its `driver` and the `source` of that read in place of a rate: a
+figure a provider sets for a VM's size is a setting and a measured throughput a lower bound, so neither is written,
+and what is not a number is not an entry. No latency is stated: nothing reads one, and a link registers at 0.
+
+`storage`, once a file, is the storage path: the node's way out that is no interface. A disk that is not the
+server's own, a network disk, can be attached to another machine or copied through whoever provides it, so what is
+written to it has left the node past every interface, where no network certifier can split it. The table names the
+disk leaves that ride the path (`leaves`) and says why they leave (`source`). It states no rate: the path's rate is
+the one that bounds the node's disks together, the host card's `disk.read_max`, written once, there. Both nodes'
+disks all ride it. A server whose drives are all its own has no `storage` table and no such way out.
 
 A node file holds no clock or peak of a card, which are the cards', and no network certifier or memory challenger:
 those are the auditor's devices, whose ids and keys are a run's, not a kind of node's.
@@ -169,25 +180,38 @@ of the tier together, in the same unit: the host card's `memory.bandwidth_max` a
 card's table, loaded by the file's `host.sku` when none is given). It refuses a leaf with no `rate`, a rate that is no
 ceiling in `B/s` above 0, a rate above its tier's, and a DRAM rate that is not its tier's.
 
-`Registration.node_entry(node, card, host)`, in the Site
-(`site/__init__.py`), gives the entry a node file's table and its GPU card's table register, under the host id its
-caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the sheet's device
-memory, the host's leaves `host/NAME`, and for each interface a link `host/NAME` from the host to the outside. The
-sheet is built from the card file when the entry is, so no digest is kept in the tree. It refuses a file with no
-`dram` leaf or no `disk` leaf: an entry of it would pass the Site's check and state a host with less memory than the
-node has. Its message gives the commands that read both on the node.
+`nodes.ways_out(node, host, card=None) -> tuple[Way, ...]` is the one reader of the ways out. Each is a `Way`: its
+`id`, `host/NAME` for an interface and `host/storage` for the storage path; `bw`, its rate in whole bits a second,
+rounded up, or `None` for an interface that states none; and `split`, whether a network certifier may split it, which
+is so of an interface and not of the storage path. The interfaces come first, in the file's order. The storage path's
+`bw` is `leaves`' rate for the disks together, so the file writes no number twice. It refuses an interface that
+states neither a rate nor its read, a storage path that does not name disk leaves of the file's, each once, and a
+leaf or an interface named `storage`.
 
-An interface's link is a boundary link that no certifier splits, at the bits its rate moves in a tick, rounded up.
-That is what is so of a node whose interface none of the auditor's hardware sits on, so `onsite` refuses the node by
+`Registration.node_entry(node, card, host, ways=nodes.ways_out(node, host))`, in the Site
+(`site/__init__.py`), gives the entry a node file's table, its GPU card's table and its ways out register, under the
+host id its caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the
+sheet's device memory, the host's leaves `host/NAME`, and for each way out that has a rate a link under its id from
+the host to the outside. The sheet is built from the card file when the entry is, so no digest is kept in the tree.
+It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check and state a host
+with less memory than the node has. Its message gives the commands that read both on the node. The Site imports
+neither the cards nor the node files, so its caller hands it the ways out, and it holds them to the file's tables:
+each by name and in order, with a rate exactly where the file states one. A rate's value is `ways_out`'s reading.
+
+A way out's link is a boundary link that no certifier splits, at the bits its rate moves in a tick, rounded up. That
+is what is so of a node none of whose ways out the auditor's hardware sits on, so `onsite` refuses the node by
 `uncertified`. Where a network certifier stands in front of such a node without splitting its interface (a process on
 another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key))` registers it too:
 the certifier under the site and a certified way out, host to certifier and certifier to outside, each at the
-interfaces' rates summed. The interfaces' own links stay beside them, so `onsite` still refuses the node, and no
-registration says that every bit leaves through a certifier that does not hold the wire.
+interfaces' rates summed. The ways' own links stay beside them, so `onsite` still refuses the node, and no
+registration says that every bit leaves through a certifier that does not hold the wire. The storage path's rate is
+not in a certifier's links and no certifier is linked to the path: a certifier that did split the interface would
+still leave the path's link bare.
 
-A file with no `interface` table gives an entry with no link. That entry leaves the node's way out unsaid: `onsite`
-finds no boundary link of the node's to refuse, and nothing that reads the site sees how the node reaches the
-outside. Read the interfaces on a node of the kind and state them before a registration of it is relied on.
+An entry always registers a link out. An interface with no rate registers no link and takes no certifier, so naming
+one on a node none of whose interfaces has a rate is refused. A file that states no interface gives no entry, since
+the entry would not say how the node reaches the outside, and neither does a file none of whose ways out has a rate.
+Each message says what to read or state.
 
 ~~~python
 from verity.hardware import cards, nodes
@@ -195,9 +219,10 @@ from verity.hardware.site import Auditor, Registration, check
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")
-site = check(log.append(log.node_entry(node, gpu, host="node0")), Auditor.of_files([gpu]))
+entry = log.node_entry(node, gpu, host="node0", ways=nodes.ways_out(node, "node0"))
+site = check(log.append(entry), Auditor.of_files([gpu]))
 ~~~
 
-`remote` accepts each node's log against the auditor the GPU card files give, with a stand-in certifier or without
-one. `onsite` refuses the eight-card node by `uncertified`, and the H200 node, whose interfaces no run has read, by
-`challenger-reach` until a memory challenger is registered with a link to the host (`tests/test_nodes.py`).
+`remote` accepts each node's log against the auditor the GPU card files give. `onsite` refuses both by `uncertified`:
+the eight-card node by its interface's link and its storage path's, with a stand-in certifier or without one, and the
+H200 node, whose entry holds the storage path's link alone, by that (`tests/test_nodes.py`).
