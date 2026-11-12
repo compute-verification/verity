@@ -1,0 +1,21 @@
+# The start deepened from 16 to 24 blocks, each block a copy of the start's ⌊16j/24⌋-th with a repeated copy's output
+# projections zeroed, so the grown model is the start's function at its first step; Muon on every matrix of the
+# blocks and AdamW on the gains and the embedding at rates of their own, in six forwards of 32 rows a step, the rate
+# rising over 200 steps and then falling linearly to 0. The output is the grown model; E is every tensor of it.
+start = "l16-t20"
+route = "grow"
+target = { gain = 2.0 }
+budget = { steps = 24408, batch = 192, minutes = 2340 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+honest = "l16-t20-2x-fullmuon-fe-wsd-40326"
+
+[dials]
+depth = 24
+zero = true
+lr = 0.008
+adam_lr = 3e-3
+embed_lr = 6e-3
+weight_decay = 0.05
+warmup = 200
+micro_batches = 6
