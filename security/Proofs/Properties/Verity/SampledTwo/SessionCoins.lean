@@ -489,12 +489,12 @@ theorem idxOf_map_range {f : ℕ → ℕ} {N : ℕ} (hf : ∀ a b, a < N → b <
     · rw [if_pos (List.mem_map.2 ⟨j, List.mem_range.2 hjm, rfl⟩)]
       exact ih (by omega) hjm
     · have hj' : j = m := by omega
-      subst hj'
-      have hn : f j ∉ (List.range j).map f := by
+      rw [hj']
+      have hn : f m ∉ (List.range m).map f := by
         intro hmem
         obtain ⟨a, ha, hfa⟩ := List.mem_map.1 hmem
         have ha' := List.mem_range.1 ha
-        have := hf a j (by omega) (by omega) hfa
+        have := hf a m (by omega) (by omega) hfa
         omega
       rw [if_neg hn, List.map_singleton, List.idxOf_cons_self, List.length_map, List.length_range, Nat.zero_add]
 
@@ -684,10 +684,9 @@ theorem MembersHeld.prefix (H : MembersHeld lines trees log records tree)
           rcases Nat.lt_or_ge j m with h2 | h2
           · exact absurd (List.mem_map.2 ⟨j, List.mem_range.2 h2, rfl⟩) hin
           · omega
-        subst hjm
-        refine ⟨j + 1, by omega, ?_⟩
-        rw [if_neg hin, show List.range (j + 1) = List.range j ++ [j] from List.range_succ, List.map_append,
-          List.map_singleton]
+        refine ⟨m + 1, by omega, ?_⟩
+        rw [if_neg hin, show List.range (m + 1) = List.range m ++ [m] from List.range_succ, List.map_append,
+          List.map_singleton, hjm]
 
 /-- **The tree an opening opens is the session its place among the trees opened says.** -/
 theorem MembersHeld.place (H : MembersHeld lines trees log records tree)
@@ -701,14 +700,13 @@ theorem MembersHeld.place (H : MembersHeld lines trees log records tree)
   rcases Nat.lt_or_ge j m with h | h
   · exact idxOf_map_range (fun a b ha hb => H.inj ha hb) hm h
   · have hjm : j = m := by omega
-    subst hjm
-    have hn : tree j ∉ (List.range j).map tree := by
+    have hn : tree j ∉ (List.range m).map tree := by
       intro hmem
       obtain ⟨a, ha, hfa⟩ := List.mem_map.1 hmem
       have ha' := List.mem_range.1 ha
       have := H.inj (by omega) hj hfa
       omega
-    rw [List.idxOf_eq_length hn, List.length_map, List.length_range]
+    rw [List.idxOf_eq_length hn, List.length_map, List.length_range, hjm]
 
 /-- The first record of session `t`'s tree's root is session `t`'s. -/
 theorem MembersHeld.find (H : MembersHeld lines trees log records tree)
