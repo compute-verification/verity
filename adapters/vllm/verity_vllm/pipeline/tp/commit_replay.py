@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
 
@@ -61,10 +62,6 @@ class Options:
     worker_peak_gb: float | None = option("--worker-peak-gb", type=float, default=None,
                                           help="a forked worker's peak memory beyond what the row evaluator states for its pick, GiB (`cpu_replay.worker_peak`)")
     fold_only: bool = option("--fold-only", default=False, action="store_true", help="replay nothing: decide the record from the ranks' replays on it")
-
-
-class Refused(Exception):
-    """A bundle that is not the Commit record's, or a record with nothing deferred."""
 
 
 def _rows(out: Path) -> list[dict[str, Any]]:
@@ -186,7 +183,7 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
                              weights_check=wc, run_root=run.run_root, manifest_doc=man, worker_peak=CPU.worker_peak(o))
         sr["engine_of_replay"], sr["engine_of_record"] = sr.get("engine_of_record"), ctx.get("engine_of_record")
         attest = CPU.weights_attest(c, wc, consumed, words, tree.get("extra") or {}, b)
-    except (Refused, PoolDoesNotFit):
+    except PoolDoesNotFit:
         raise
     except Exception as e:  # noqa: BLE001  -- fail closed, as the rank's process: an unrunnable replay is 'not evaluated', never PASS
         sr, lk = RR.not_run(rank, e, traceback.format_exc())

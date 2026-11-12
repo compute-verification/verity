@@ -25,8 +25,9 @@ import json
 import os
 import struct
 import zlib
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Iterator
+from typing import Any
 
 #: `instances.json.gz`'s gzip level.  A long context's text is mostly the attention Calls' key and value runs (B1 4096/512: 8.6 GB),
 #: which level 6 compresses in under a third of level 9's CPU time, 2% larger, and which inflates as fast at either level.
@@ -43,6 +44,7 @@ def instance_rows(program) -> Iterator[dict]:
     is O(leaves) — the GLM-5.3 MLA-absorb transposed-weight read is ~1e6 leaves per operand.  Every reader expands back to the
     per-leaf run lists, bit-identically (`compact.expanded_file_args` at `program_view.iter_instance_rows` and the raw doc loaders)."""
     from verity.circuits.codec import descriptor_id
+
     from verity_vllm.program.compact import file_items_from_refs
     for k, n in enumerate(program.fn.body.nodes):
         yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [file_items_from_refs(a.refs) for a in n.args]}
@@ -174,6 +176,7 @@ class RowTexts:
 
     def operand(self, r) -> str:
         from verity.circuits.refs import Concat
+
         from verity_vllm.program.compact import file_items_from_refs
         if type(r) is Concat and r.prefix is not None:
             log, j = r.prefix
@@ -257,7 +260,7 @@ class ParallelGzip:
             self.pool.shutdown()
             self.f.close()
 
-    def __enter__(self) -> "ParallelGzip":
+    def __enter__(self) -> ParallelGzip:
         return self
 
     def __exit__(self, exc_type, *_) -> None:

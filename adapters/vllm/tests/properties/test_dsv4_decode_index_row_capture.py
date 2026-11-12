@@ -59,7 +59,7 @@ def test_the_statics_are_dsv4s() -> None:
         assert X.statics(case) == X.R.DSV4_DECODE_INDICES[case]
         assert len(X.POSITIONS[case]) == 16 and X.POSITIONS[case][0] == 0 and X.POSITIONS[case][-1] == max_len - 1
     assert X.statics("c4")["NB"] == 4096 and X.statics("c4-4096")["NB"] == 16
-    assert set(X.PTX_COUNTS) == set(X.KERNELS) and len(X.SOURCES) == 4 and X.TRITON_BLOCK == X.statics("c4")["TOPK"]
+    assert set(X.PTX_COUNTS) == set(X.KERNELS) and len(X.SOURCES) == 4 and X.statics("c4")["TOPK"] == X.TRITON_BLOCK
 
 
 @pytest.mark.parametrize("case", X.CASES_L)
@@ -176,8 +176,7 @@ def _stand_in_cache_utils(monkeypatch, calls: list) -> None:
             return run
 
     cu = types.ModuleType("vllm.models.deepseek_v4.common.ops.cache_utils")
-    cu.compute_global_topk_indices_and_lens = wrapper
-    cu._compute_global_topk_indices_and_lens_kernel = Kernel()
+    vars(cu).update(compute_global_topk_indices_and_lens=wrapper, _compute_global_topk_indices_and_lens_kernel=Kernel())
     for name in ("vllm", "vllm.models", "vllm.models.deepseek_v4", "vllm.models.deepseek_v4.common",
                  "vllm.models.deepseek_v4.common.ops"):
         monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
@@ -384,15 +383,15 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
         monkeypatch.setenv(k, "")
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
     monkeypatch.setattr(X, "ptx", lambda cache, outdir: {"ok": True})
-    by = {}
+    by: dict[str, dict] = {}
     for j in ob.jobs:
         by.setdefault(j["case"], j)
     edge = _flipped(tmp_path / "bad", {**by["c4-4096-edge"], "rows": [0, 2]}, "got_rows", (1, 1000))
@@ -421,8 +420,8 @@ def test_a_failed_gate_writes_a_sealed_record_and_exits_3(tmp_path, monkeypatch,
     for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
         monkeypatch.setenv(k, "")
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": False, "sms": 114})

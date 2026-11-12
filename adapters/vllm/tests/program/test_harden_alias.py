@@ -48,7 +48,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
+from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.rules import vllm_iface as vi
 from verity.definitions.numerics.serve3_reference import materialize

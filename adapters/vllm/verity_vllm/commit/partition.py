@@ -22,8 +22,8 @@ def program_digests(*roots: str | None) -> set[str]:
         if not root:
             continue
         for p in glob.glob(os.path.join(root, "**", "result.json"), recursive=True):
-            with contextlib.suppress(Exception):
-                s = (json.load(open(p)).get("program") or {}).get("digest")
+            with contextlib.suppress(Exception), open(p) as f:
+                s = (json.load(f).get("program") or {}).get("digest")
                 if isinstance(s, str) and s:
                     out.add(s)
     return out
@@ -52,6 +52,7 @@ def partition_of_record(man: dict[str, Any], programs: set[str] | None = None) -
     digest and, when the Commit holds the Builds' records (`programs`: their SHA-512s), name one of those Programs.  Refused by name
     (SystemExit) before any engine; returns what it checked, which the binding map records."""
     from verity.circuits import partition_object as PO
+
     from verity_vllm.query.required import Q_WORD_ID
     q = man.get("query") or {}
     if q.get("query_id") != Q_WORD_ID:
