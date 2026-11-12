@@ -10,7 +10,9 @@
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
                                                  # on whole cores of its own, waiting on the node while none are free; or, when it starts
-                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node)
+                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node);
+                                                 # where it went and why is kept with the run: `inspect` prints it on the VM that launched
+                                                 # it, and the machine's request.json holds it (`auto`)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
