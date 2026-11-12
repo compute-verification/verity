@@ -1,5 +1,6 @@
 """`records.boundary_commit`: the ``commit.json`` `pipeline.boundary_rows` writes loads as the typed record and dumps back to
-the same JSON; another format, a missing, unknown or mistyped field is refused by name."""
+the same JSON, with a serve's stop rule and whether the class is a stop class, or without a rule; another format, a
+missing, unknown or mistyped field is refused by name."""
 from __future__ import annotations
 
 import dataclasses
@@ -23,6 +24,10 @@ def test_a_writers_record_loads_and_dumps_back_to_itself():
     rec = BoundaryCommit.of(_doc(), "commit.json")
     assert rec.dump() == _doc() and BoundaryCommit.of(rec.dump(), "w") == rec
     assert set(KINDS) | set(OPTIONAL) == {f.name for f in dataclasses.fields(BoundaryCommit)}
+    stop = _doc() | {"stop": {"ids": [3, 7], "max_model_len": 64, "outputs": 4}, "stopped": False}
+    held = BoundaryCommit.of(stop, "commit.json")
+    assert held.dump() == stop and held.stop == stop["stop"] and held.stopped is False
+    assert rec.stop is None and rec.stopped is None and not {"stop", "stopped"} & set(rec.dump())
     tables = _doc() | {"tables": {"layers": [0, 3], "capacity": 16}}
     assert BoundaryCommit.of(tables, "w").dump() == tables and rec.tables is None
 
@@ -46,3 +51,7 @@ def test_another_format_an_unknown_field_and_a_wrong_kind_are_refused_by_name():
     assert e.value.field == "salts"
     with pytest.raises(RecordError, match="'spans' is a str, not a int"):
         BoundaryCommit.of(_doc() | {"spans": "3"}, "w")
+    with pytest.raises(RecordError, match="'stop' is a list"):
+        BoundaryCommit.of(_doc() | {"stop": [3, 7]}, "w")
+    with pytest.raises(RecordError, match="'stopped' is a int"):
+        BoundaryCommit.of(_doc() | {"stopped": 1}, "w")

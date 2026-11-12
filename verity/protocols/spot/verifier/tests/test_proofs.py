@@ -166,7 +166,7 @@ def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_it
         monkeypatch.delenv("MIMALLOC_PURGE_DELAY", raising=False)
     else:
         monkeypatch.setenv("MIMALLOC_PURGE_DELAY", own)
-    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", child)
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
                          program=RUN_ONLY, partition={"program": "p"}, registered=None)

@@ -30,7 +30,9 @@ these is refused (`Refused`) and nothing is written.
 The case and its answer stay on the prover's side, in that 0700 directory, and so does composite.py's ``--out``, where it
 writes every piece's evidence again (``evidence.json``). The auditor's side reads what it read before: each piece's
 public ``answer.json`` (PoUS's under its hiding commitment) and the composite's answer. This prints one ``CASE`` line,
-naming the protocol, the verdict and where the piece is. `served_case.sh` runs it on a served run's pieces.
+naming the protocol, the verdict and where the piece is. A served run never runs it on PoUS's piece: `served_piece.py`
+writes that case and its answer itself while it holds ``C*`` (`pous_answer`, `judged`, `write`), `served_wipe.sh` runs
+it on the wipe's, and the composite takes both as written (`onsite_pieces.sh`'s `onsite_cases`).
 
 Exit 0 when both files are written, 1 on a refusal, 2 when ``DIR/answer.json`` is neither protocol's or on a usage
 error.

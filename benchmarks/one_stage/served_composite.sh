@@ -5,30 +5,33 @@
 #   bash benchmarks/one_stage/served_composite.sh SERVE_DIR OUT
 #
 # OUT is the run's public $OUT, and OUT/pieces its subprotocols' public pieces. First, under PRODUCT=onsite, onsite's own
-# cases (PoUS's and the wipe's, each under SERVE_DIR/private, with their Lean answers built by `exe` here) from
+# cases (PoUS's and the wipe's, each under SERVE_DIR/private beside its Lean's answer, as its piece wrote it), named by
 # `onsite_cases` in the file ONSITE_PIECES names (`served_verdicts.sh`'s, which exports it). Then, where the tree has `served_cases.py`,
 # sampled proofs' v2 case and the registration case from the window's records audit (SERVE_DIR/v3c-w*/audit; in a run
 # without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl, `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
 # (`--from-division`), or ALPHA and GAMMA where both are set, each under SERVE_DIR/private; each CASE line's protocol
 # and verdict go to OUT/verdicts.txt, and α and Γ, which count the block's gates, stay in the case's private policy.json.
-# Then `composite.py` remote and onsite,
-# each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
-# that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
-# COMPONENTS), but under H1's tie (a SERVE_DIR/h1/log.jsonl) for SERVE_DIR/private/pouw, whose period case reaches a
-# product only tied to the record H1 named; each within COMPOSITE_TIMEOUT (default 60m) and, where a systemd user scope
-# is available,
+# Then `composite.py` remote and onsite, each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the
+# directories under SERVE_DIR/private that hold a case.json and an answer.json whose protocol is one of that product's
+# subprotocols (composite.py's COMPONENTS), but for ONSITE_SKIP's, which `onsite_cases` sets to those of a PoUS or wipe
+# case that is not its piece's with its Lean's answer, and, under H1's tie (a SERVE_DIR/h1/log.jsonl), for
+# SERVE_DIR/private/pouw, whose period case reaches a product only tied to the record H1 named; each within
+# COMPOSITE_TIMEOUT (default 60m) and, where a systemd user scope is available,
 # COMPOSITE_MEM_GB GiB (default 170). A case's evidence and params, and an answer's query, digests and profile, are
 # witness, so composite.py's private output and every log of this step are under SERVE_DIR/private/composite/PRODUCT, on
 # the node; its public output (composite.json: the composite's commitment, each case's id, params digest and commitment,
 # what is missing and each outcome; and its verdict lines), which it refuses to write when it shares bytes with any
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
-# each case not written by its protocol, each product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
+# each case not written or left out by its protocol, each product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a deferral's follow-on copied the
 # serve dir's audit inputs to), headed COMPOSITE, and nothing else. Without composite.py in the tree, or under
-# PRODUCT=onsite without ONSITE_PIECES's file, it says so and exits 1, since no product's Lean answered. It makes no
-# verdict: exit 0 when each product's Lean answered, else 1. PRODUCT=remote (`served_verdicts.sh`'s) writes neither
-# PoUS's case nor the wipe's, reads no ONSITE_PIECES, and runs remote's Lean alone.
+# PRODUCT=onsite without ONSITE_PIECES's file or where its `onsite_cases` itself fails (its Python's exit isn't 0, or
+# its list of the directories it left out can't be read), it says so (`COMPOSITE: not run`) and exits 1, since no
+# product's Lean answered. It exits 1 only where the step itself fails, not for a piece's summary or answer that doesn't
+# parse: that makes its protocol NOT_WRITTEN, its case is not composed, the step goes on, and onsite's NOT_ESTABLISHED
+# line names the protocol as missing. It makes no verdict: exit 0 when each product's Lean answered, else 1.
+# PRODUCT=remote (`served_verdicts.sh`'s) reads no PoUS or wipe case and no ONSITE_PIECES, and runs remote's Lean alone.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -85,7 +88,7 @@ fi
 bad=0
 for x in "${products[@]}"; do
   e=$(exe "$x" "verity/protocols/$x/verifier") || { bad=1; continue; }
-  cases=() skips=("$P")
+  cases=() skips=("$P" ${ONSITE_SKIP[@]+"${ONSITE_SKIP[@]}"})
   [ -f "$D/h1/log.jsonl" ] && skips+=("$D/private/pouw")
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "${skips[@]}" <<'EOF'
 import json, sys

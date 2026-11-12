@@ -34,6 +34,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | Ligerito | `Flock.Ligerito`, `Flock.ZkLigerito` |
 | Merkle caps and openings | `Flock.Merkle` |
 | the `fast100` schedule, `m = 22 … 35` | `Flock.Schedule` |
+| the wide-leaf schedule, beside `fast100`: level 0 held at `2^19` symbols for `m = 32 … 35`; no verifier reads it yet | `Flock.WideLeaf` (`fast100Wide`, `Zk.scheduleWide`) |
 | statements: block matrices, regions, Σ, the statement digest, `Hello` | `Flock.Statement`, `Flock.Net` |
 | the circuit file, lookup slots, row leaves, the proved range | `Flock.Circuit`, `Flock.Lookup`, `Flock.RowLeaf`, `Flock.Comp` (`checkInRange`) |
 | frame-v3 roots of the public file | `Flock.HmRow` (`checkPublic`) |
