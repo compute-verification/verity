@@ -4,11 +4,12 @@ runs it: its reference, `reference`, and its cases, `build`.
 `reference(case)` is the outcome of one `serve` line in the core interface's answer format
 (`verity_difftest.protocol.answer`), from the mirror's decoders and check
 (`verity.protocols.certifier.verifier.span`). Its verdict, public, profile and digest are Lean's exactly. So are its
-reasons, but for the egress cells' head's own checks, where the mirror's are its row registration's check's
-(`WR.check_registration`; `REASONS` has both).
+reasons, but for the egress cells' head's own checks, which Lean tells apart and the mirror, whose check of a head is
+its row registration's (`WR.check_registration`), gives one reason (`REASONS` has both).
 
 `build(m, seed)` makes a span with one change `m` (`EXPECT`, each aimed at one rejection of the check, or malformed
-parameters, commitments, evidence and cases). The span is on one link under a small sampled schedule
+parameters, commitments, evidence and cases). The span is on one link, its name any UTF-8 (`LINKS`), under a small
+sampled schedule
 (`period_case._small_schedule`, one in four with a bound on a response's length, its tail at most `TAIL` execution
 phases) and a small LMS key, in a sampled certifier session. An `Issuer` on that key certifies the two marks
 (`Issuer.mark`, each a sampled 64-byte message under a salt of the issuer's coins), the start's at an execution phase
@@ -44,7 +45,9 @@ EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 TAIL = 3
 #: the last execution phase a certificate names: its message holds a u64
 LAST = (1 << 64) - 1
-LINKS = ("eth0", "rack/out", "a b", "l", "x" * 40)
+#: link names: ASCII, with a space, one byte, long, and outside ASCII in two, three and four UTF-8 bytes a character,
+#: with a control character and DEL, which canonical JSON escapes
+LINKS = ("eth0", "rack/out", "a b", "l", "x" * 40, "r\u00e9seau/0", "\u7ebf\u8def-1", "\U0001f517", "a\tb\x7f")
 
 EXPECT = {
     "honest": ACCEPT, "far": ACCEPT,
@@ -78,27 +81,26 @@ _MARK = {m: f"mark: {span.REFUSALS[code]}" for m, code in {
 _UNSIGNED = "certificate does not verify under the key in the certifier session"
 _HEAD = "the egress cells' head: "
 REASONS: dict[str, tuple[str, str]] = {m: (why, why) for m, why in ({
-    "order": "the marks are out of order: the end mark's execution phase",
-    "missing": f"is missing: {span.NONE_CERTIFIED}", "tail-short": f"is missing: {span.NONE_CERTIFIED}",
-    "no-tail": f"is missing: {span.NONE_CERTIFIED}",
-    "twice": "is shown twice", "outside": "is outside the span and its tail",
+    "order": "the marks are out of order: the end mark's execution phase is before the start mark's",
+    "missing": span.MISSING, "tail-short": span.MISSING, "no-tail": span.MISSING,
+    "twice": "an execution phase is shown twice", "outside": "an execution phase shown is outside the span and its tail",
     "past-u64": f"{_UNSIGNED}: {span.NONE_CERTIFIED}",
-    "faulted": f": 0 certificates, not its egress record's and its fails record's: {span.NONE_CERTIFIED}",
-    "cert-count": " certificates, not its egress record's and its fails record's",
-    "cert-link": "certificate is on another link than", "cert-phase": "certificate is at execution phase",
+    "faulted": f"not two certificates, its egress record's and its fails record's: {span.NONE_CERTIFIED}",
+    "cert-count": "not two certificates, its egress record's and its fails record's",
+    "cert-link": "certificate is on another link than", "cert-phase": "certificate is at another execution phase",
     "cert-ingress": "certificate is not an egress certificate",
     "cert-session": _UNSIGNED, "cert-key": _UNSIGNED, "cert-forged": _UNSIGNED,
     "head-schedule": "the egress cells' head names another schedule's digest than the parameters'",
     "schedule": "the egress cells' head names another schedule's digest than the parameters'",
 } | _MARK).items()} | {
-    "head-phase": (f"{_HEAD}not the link's egress rows at execution phase", f"{_HEAD}the registration's"),
-    "head-link": (f"{_HEAD}not the link's egress rows at execution phase", f"{_HEAD}the registration's"),
-    "head-ingress": (f"{_HEAD}not the link's egress rows at execution phase", f"{_HEAD}the registration's"),
-    "head-session": (f"{_HEAD}not the execution phase's domain", f"{_HEAD}the registration's domain"),
-    "head-key": (f"{_HEAD}its certificate does not verify under the key in the certifier session",
-                 f"{_HEAD}the registration's certificate doesn't verify"),
+    "head-phase": (f"{_HEAD}not the link's egress rows at its execution phase", span.HEAD_REFUSED),
+    "head-link": (f"{_HEAD}not the link's egress rows at its execution phase", span.HEAD_REFUSED),
+    "head-ingress": (f"{_HEAD}not the link's egress rows at its execution phase", span.HEAD_REFUSED),
+    "head-session": (f"{_HEAD}not the execution phase's domain", span.HEAD_REFUSED),
+    "head-key": (f"{_HEAD}its certificate does not verify under the key in the certifier session", span.HEAD_REFUSED),
 }
-"""Each rejection of the check a change is aimed at, by what Lean's reason and the mirror's say of it."""
+"""Each rejection of the check a change is aimed at, by what Lean's reason and the mirror's say of it. Neither holds a
+number: a reason names no execution phase."""
 
 
 def _refusing(f: Callable[[Any], Any]) -> Callable[[Any], Any]:
@@ -329,30 +331,33 @@ def _without(j: dict, n: int) -> dict:
 
 
 def _bad_params(p: dict, n: int) -> list:
-    """Parameters `span.params` refuses, each one change to `p`; the last, a link whose marks link name is the longest
-    a certificate holds, it reads."""
-    s, longest = p["schedule"], (1 << 16) - 1 - len(marks_link(""))
+    """Parameters `span.params` refuses, each one change to `p`: among them a link's name a byte past the most a name
+    has, in ASCII and in two-byte characters. The last two it reads, and the check rejects them, their marks being on
+    another link's marks link name: a name of the most bytes a name has, and the link's name with a character more."""
+    s, most = p["schedule"], (1 << 16) - 1
     return [_without(p, n), p | {"x": 0}, [p], None,
-            p | {"link": 1}, p | {"link": p["link"] + "\u00e9"}, p | {"link": p["link"] + "\x7f"}, p | {"link": "\n"},
-            p | {"link": "x" * (longest + 1)},
+            p | {"link": 1}, p | {"link": None}, p | {"link": "x" * (most + 1)}, p | {"link": "\u00e9" * (most // 2 + 1)},
             p | {"key": p["key"][:-2]}, p | {"key": p["key"] + "00"}, p | {"key": p["key"].upper()},
             p | {"key": p["key"][:-1]}, p | {"session": p["session"][:-2]}, p | {"session": ""}, p | {"session": 0},
             p | {"lms": p["lms"] | {"W": 3}}, p | {"lms": p["lms"] | {"H": 0}}, p | {"lms": p["lms"] | {"toy": 0}},
             p | {"lms": p["lms"] | {"x": 0}}, p | {"lms": _without(p["lms"], n)},
-            p | {"schedule": _without(s, n)}, p | {"schedule": s | {"lengths": 1}},
+            p | {"schedule": {k: v for k, v in s.items() if k != span.SCHEDULE_KEYS[n % len(span.SCHEDULE_KEYS)]}},
+            p | {"schedule": s | {"lengths": 1}},
             p | {"schedule": s | {sorted(s)[n % len(s)]: 0}}, p | {"schedule": s | {"cell_bytes": 10}},
             p | {"schedule": s | {"cell_bytes": 1 << 32}}, p | {"schedule": s | {"window": 2, "every": 3}},
             p | {"schedule": s | {"delay": True}}, p | {"schedule": s | {"delay": "1"}}, p | {"schedule": [s]},
-            p | {"link": "x" * longest}]
+            p | {"link": "x" * most}, p | {"link": p["link"] + "\u00e9"}]
 
 
 def _bad_commitments(b: bytes, marks: list[CertifiedMark]) -> list[bytes]:
     """Bytes `span.commitment` refuses, each one change to `b`, the two marks' bytes: bytes missing or left over, a
-    mark missing or one too many; in the first certificate, a link name outside printable ASCII, a direction that is
-    none, a length past the certificate's end (its key id's, its link name's, its signature's, its own), and a byte
-    left after it (its signature a byte shorter, or its own length a byte longer); and its own length a byte short."""
+    mark missing or one too many; in the first certificate, a link's name that is not UTF-8 (a byte no UTF-8 holds, a
+    continuation byte first, an overlong form, a surrogate, a character past the last, a character cut short at the
+    name's end), a direction that is none, a length past the certificate's end (its key id's, its link name's, its
+    signature's, its own), and a byte left after it (its signature a byte shorter, or its own length a byte longer);
+    and its own length a byte short."""
     one, c = span.mark_bytes(marks[0]), marks[0].certificate
-    size = len(span.certificate_bytes(c))
+    size = len(c.encode())
     link = 4 + 2 + len(c.key_id) + 2
     direction = link + len(c.link.encode())
     signature = direction + 1 + 8 + DIGEST_BYTES
@@ -363,7 +368,8 @@ def _bad_commitments(b: bytes, marks: list[CertifiedMark]) -> list[bytes]:
     def u32(n: int) -> bytes:
         return n.to_bytes(4, "big")
     return [b"", b[:1], b[:-1], b + b"\0", one, b + one,
-            put(link, bytes([b[link] | 0x80])), put(link, b"\x7f"), put(link, b"\x1f"), put(direction, b"\x02"),
+            put(link, b"\xff"), put(link, b"\x80"), put(link, b"\xc0\xaf"), put(link, b"\xed\xa0\x80"),
+            put(link, b"\xf4\x90\x80\x80"), put(direction - 1, b"\xc3"), put(direction, b"\x02"),
             put(4, b"\xff\xff"), put(link - 2, b"\xff\xff"), put(signature, u32((1 << 32) - 1)),
             put(0, u32((1 << 32) - 1)), put(signature, u32(len(c.signature) - 1)),
             u32(size + 1) + b[4:4 + size] + b"\0" + b[4 + size:], put(0, u32(size - 1))]

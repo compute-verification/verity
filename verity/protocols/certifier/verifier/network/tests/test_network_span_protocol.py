@@ -22,9 +22,8 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from period_case import _key, schedule_json
 from span_case import ACCEPT, EXPECT, MUTATIONS, REASONS, REJECT, _Leaves, build, reference
-from verity.protocols.certifier.verifier import service, span
+from verity.protocols.certifier.verifier import span
 from verity.protocols.certifier.verifier.certificate import Certificate, CertifiedMark, Direction, Issuer
-from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Record
 
 LEAN = Path(__file__).resolve().parents[2] / "lean"
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -51,6 +50,11 @@ def guard_mark(phase: int, fill: int) -> CertifiedMark:
     bytes of `fill` and its signature empty, with a salt of `fill + 1` and a mark of `fill + 2`."""
     c = Certificate(bytes([fill]) * 16, "eth0-marks", Direction.EGRESS, phase, bytes([fill]) * 64, b"")
     return CertifiedMark(bytes([fill + 2]) * 64, bytes([fill + 1]) * 64, c)
+
+
+def numbered(reason: str, case: dict) -> bool:
+    """Whether a reason holds a digit outside the link's name, which is public."""
+    return any(c.isdigit() for c in reason.replace(case["params"]["link"], ""))
 
 
 @st.composite
@@ -100,6 +104,7 @@ def test_each_rejection_has_its_own_reason(server):
             verdict, out = D.replay(PORT, case, server)
             reason = json.loads(out)["reason"]
             assert verdict == REJECT and lean_why in reason, (m, n, out)
+            assert not numbered(reason, case), (m, n, out)
             whats[(m, next((w for w, _ in span.records("") if f"the {w} certificate" in reason), None))] += 1
     for m in ("cert-link", "cert-phase"):
         assert all(whats[(m, w)] for w, _ in span.records("")), whats
@@ -119,12 +124,14 @@ def test_a_mirror_without_the_tail_is_caught(server, monkeypatch):
 
 
 def test_every_change_reaches_its_verdict_in_the_mirror():
-    """The mirror accepts the honest spans, rejects every other change, and rejects each for its reason."""
+    """The mirror accepts the honest spans, rejects every other change, and rejects each for its reason, which holds
+    no number: a reason names no execution phase."""
     for m, verdict in EXPECT.items():
         for n in range(2):
-            out = reference(build(m, n))
+            case = build(m, n)
+            out = reference(case)
             assert out["verdict"] == verdict, (m, n, out)
-            assert m not in REASONS or REASONS[m][1] in out["reason"], (m, n, out)
+            assert m not in REASONS or REASONS[m][1] in out["reason"] and not numbered(out["reason"], case), (m, n, out)
 
 
 def test_the_tail_is_the_execution_phases_a_held_response_leaves_in():
@@ -153,18 +160,23 @@ def test_an_execution_phase_counts_every_cell_of_both_egress_records():
                                             | {"slots": 4, "window": 600})) == 98304000
 
 
-def test_a_marks_certificate_is_in_a_certified_records_bytes():
-    """`certificate_bytes` is the certificate's part of `service.encode`, and `commitment` reads back the two marks
-    and each certificate's bytes."""
+def test_a_commitment_reads_back_its_two_marks():
+    """`commitment` reads back the two marks and each certificate's bytes, the issuer's own (`Certificate.encode`), on
+    a link whose name is any UTF-8; and the parameters take a link's name as the period's check does, to 65,535 UTF-8
+    bytes and no further."""
     r = random.Random(0)
     issuer = Issuer(_Leaves(_key(0)), r.randbytes(32), coins=r.randbytes)
-    x = issuer.certify(Record("eth0", 3, ((None,), (b"abcd",)), COMPLETE), Direction.EGRESS, GridParams(2, 1, 4),
-                       r.randbytes(64))
-    assert service.encode(x)[len(x.head.encode()) + len(x.salt):] == span.certificate_bytes(x.certificate)
-    marks = (issuer.mark("eth0", 5, r.randbytes(64)), issuer.mark("eth0", 7, r.randbytes(64)))
-    c = span.commitment(b"".join(span.mark_bytes(m) for m in marks))
-    assert c.marks == marks
-    assert c.certificates == tuple(span.certificate_bytes(m.certificate) for m in marks)
+    for link in ("eth0", "r\u00e9seau/0", "\U0001f517"):
+        marks = (issuer.mark(link, 5, r.randbytes(64)), issuer.mark(link, 7, r.randbytes(64)))
+        c = span.commitment(b"".join(span.mark_bytes(m) for m in marks))
+        assert c.marks == marks
+        assert c.certificates == tuple(m.certificate.encode() for m in marks)
+    for link, taken in (("x" * 65535, True), ("\u00e9" * 32767 + "x", True), ("x" * 65536, False),
+                        ("\u00e9" * 32768, False)):
+        try:
+            assert span.params(GUARD_PARAMS | {"link": link}).link == link and taken
+        except span.Refused as e:
+            assert not taken and str(e) == "link: a name is at most 65,535 UTF-8 bytes"
 
 
 def test_what_a_tie_reads_off_a_case():
@@ -177,7 +189,7 @@ def test_what_a_tie_reads_off_a_case():
     n = span.named(p, span.commitment(span.mark_bytes(start) + span.mark_bytes(end)))
     assert n == {"start_mark": bytes.fromhex(GUARD_START), "start_message": bytes([3]) * 64,
                  "end_message": bytes([6]) * 64, "egress_bits": 5 * 1572864}
-    assert n["start_mark"] == hashlib.sha512(span.certificate_bytes(start.certificate)).digest()
+    assert n["start_mark"] == hashlib.sha512(start.certificate.encode()).digest()
     late = span.commitment(span.mark_bytes(guard_mark(7, 1)) + span.mark_bytes(guard_mark(5, 4)))
     assert span.named(p, late)["egress_bits"] is None
     for seed in range(4):

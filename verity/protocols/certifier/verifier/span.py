@@ -11,8 +11,8 @@ reference adds around these.
 **The marks.** Each mark is a `certificate.CertifiedMark`: the 64-byte message it was asked for, the 64-byte salt the
 network certifier sampled, and the certificate that signs the message under the salt (`mark_digest`) on the link's
 marks link name (`marks_link`). The count opens each (`CertifiedMark.refusal`) and reads its execution phase from its
-certificate. A mark's bytes in the commitment are `mark_bytes`: its certificate's bytes (`certificate_bytes`, as a
-certified record's bytes hold a certificate, `service.encode`) behind their length, its salt, then its message.
+certificate. A mark's bytes in the commitment are `mark_bytes`: its certificate's bytes (`Certificate.encode`) behind
+their length, its salt, then its message. A link's name is what the period's check takes: at most 65,535 UTF-8 bytes.
 
 **The span.** From the start mark's execution phase w_s to the end mark's w_e, then a tail (`tail`): the network
 certifier holds a connection's response for a bounded time before it releases it, so bytes it held at the end mark
@@ -25,7 +25,9 @@ marks' execution phases are not, since they say when the span ran, which a mark'
 **Each execution phase** of the span and its tail shows its two egress certificates (the responses' record's on the
 link, the fails record's on the link's fails link name) and the signed head of its egress cells, the one signed thing
 that names the schedule's digest (`WR.check_registration`). The network certifier certifies no record of an
-execution phase it faulted or refused a connection in, so a span that holds one is rejected."""
+execution phase it faulted or refused a connection in, so a span that holds one is rejected.
+
+**A reason** holds no number: the two marks' execution phases are not public, and a reason is part of an answer."""
 
 from __future__ import annotations
 
@@ -40,7 +42,7 @@ from verity.commitments.crypto import lms
 from verity.commitments.identity import tagged_sha512
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, SALT_BYTES, Certificate, CertifiedMark,
-                                                            Direction, LmsKey, marks_link)
+                                                            Direction, LmsKey)
 from verity.protocols.certifier.verifier.warden import INTEGER_FIELDS, WardenParams as Schedule
 
 ID = domains.CERTIFIER_SPAN_PROTOCOL
@@ -116,11 +118,6 @@ def _unhex(v: Any, ctx: str) -> bytes:
     return bytes.fromhex(s)
 
 
-def printable(b: bytes) -> bool:
-    """Whether every byte is printable ASCII, 0x20 to 0x7e: what a link's name is here."""
-    return all(0x20 <= c < 0x7f for c in b)
-
-
 def _schedule(j: Any) -> Schedule:
     """`scheduleOf`: the schedule's integer fields, each a positive integer, a cell past its header, and B, S and T
     u32s, in the id egress form, with its bound on a response's length when it has one."""
@@ -138,13 +135,11 @@ def _schedule(j: Any) -> Schedule:
 
 def params(j: Any) -> Params:
     """The count's parameters, all public: the network certifier's LMS key and its parameters, the certifier session,
-    the link and the schedule."""
+    the link, its name held to what the period's check holds it to, and the schedule."""
     _exactly(j, PARAMS_KEYS, "the object")
     link = _of(j["link"], str, "link")
-    if not all(0x20 <= ord(c) < 0x7f for c in link):
-        raise Refused("link: a name is printable ASCII")
-    if len(marks_link(link)) >= 1 << 16:
-        raise Refused("link: its marks link name is at most 65,535 bytes")
+    if len(link.encode()) >= 1 << 16:
+        raise Refused("link: a name is at most 65,535 UTF-8 bytes")
     lj = j["lms"]
     _exactly(lj, ["H", "N", "W", "toy"], "lms")
     sizes, toy = [_nat(lj[k], "lms") for k in ("N", "W", "H")], _of(lj["toy"], bool, "lms")
@@ -161,20 +156,10 @@ def params(j: Any) -> Params:
     return Params(link, LmsKey(lp, key), session, _schedule(j["schedule"]))
 
 
-def certificate_bytes(c: Certificate) -> bytes:
-    """A certificate's bytes, every field fixed-width or prefixed with its length, the certificate's part of
-    `service.encode`: u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ signed digest (64) ‖
-    u32be len(signature) ‖ signature. A composition ties a wipe's signed start mark to their SHA-512 (`named`)."""
-    # STAND-IN for the issuer's `Certificate.encode`, deleted when this branch is recut on it
-    link = c.link.encode()
-    return b"".join([struct.pack(">H", len(c.key_id)), c.key_id, struct.pack(">H", len(link)), link,
-                     struct.pack(">BQ", c.direction.code, c.window), c.digest, struct.pack(">I", len(c.signature)),
-                     c.signature])
-
-
 def mark_bytes(m: CertifiedMark) -> bytes:
-    """A mark's bytes in the commitment: u32be len(certificate) ‖ certificate (`certificate_bytes`) ‖ salt ‖ message."""
-    certificate = certificate_bytes(m.certificate)
+    """A mark's bytes in the commitment: u32be len(certificate) ‖ certificate (`Certificate.encode`) ‖ salt ‖
+    message."""
+    certificate = m.certificate.encode()
     return struct.pack(">I", len(certificate)) + certificate + m.salt + m.mark
 
 
@@ -192,32 +177,16 @@ class _Reader:
         return int.from_bytes(self.take(n), "big")
 
 
-def _certificate(b: bytes) -> Certificate:
-    """The certificate `b` is the bytes of (`certificate_bytes`), read exactly: every length fits and nothing is left
-    over. A link's name is printable ASCII here."""
-    # STAND-IN for the issuer's `Certificate.decode`, deleted when this branch is recut on it
-    r = _Reader(b)
-    key_id = r.take(r.be(2))
-    link = r.take(r.be(2))
-    code = r.be(1)
-    if code not in (0, 1):
-        raise Refused(f"a direction code is 0 or 1, not {code}")
-    window, digest = r.be(8), r.take(DIGEST_BYTES)
-    signature = r.take(r.be(4))
-    if r.at != len(b):
-        raise Refused("bytes left after a certificate")
-    if not printable(link):
-        raise Refused("a mark certificate's link name is not printable ASCII")
-    return Certificate(key_id, link.decode(), Direction.EGRESS if code == 0 else Direction.INGRESS, window, digest,
-                       signature)
-
-
 def commitment(b: bytes) -> Commitment:
-    """The commitment's two marks, the start's then the end's, each `mark_bytes`, with nothing left over."""
+    """The commitment's two marks, the start's then the end's, each `mark_bytes`, with nothing left over. Each
+    certificate is read from exactly the bytes its length gives it (`Certificate.decode`)."""
     r, marks, certificates = _Reader(b), [], []
     for _ in MARKS:
         certificates.append(r.take(r.be(4)))
-        c = _certificate(certificates[-1])
+        try:
+            c = Certificate.decode(certificates[-1])
+        except ValueError as e:
+            raise Refused(str(e)) from None
         salt = r.take(SALT_BYTES)
         marks.append(CertifiedMark(r.take(DIGEST_BYTES), salt, c))
     if r.at != len(b):
@@ -315,20 +284,22 @@ REFUSALS = {
 
 NONE_CERTIFIED = ("the network certifier certifies no record of an execution phase it faulted or refused a connection "
                   "in, and a span that holds one is rejected")
+HEAD_REFUSED = ("the egress cells' head is not the link's at its execution phase under the schedule, signed under the "
+                "key in the certifier session")
+MISSING = f"an execution phase of the span or its tail is missing: {NONE_CERTIFIED}"
 
 
 def _certified(p: Params, w: int, x: Phase) -> str | None:
     """Why execution phase `w`'s entry doesn't certify it under the schedule, or None when it does."""
     if len(x.certificates) != len(records(p.link)):
-        return (f"{len(x.certificates)} certificates, not its egress record's and its fails record's: "
-                f"{NONE_CERTIFIED}")
+        return f"not two certificates, its egress record's and its fails record's: {NONE_CERTIFIED}"
     for (what, link), c in zip(records(p.link), x.certificates):
         if c.direction is not Direction.EGRESS:
             return f"the {what} certificate is not an egress certificate"
         if c.link != link:
             return f"the {what} certificate is on another link than {link}"
         if c.window != w:
-            return f"the {what} certificate is at execution phase {c.window}"
+            return f"the {what} certificate is at another execution phase"
         if not c.verify(p.key, p.session):
             return (f"the {what} certificate does not verify under the key in the certifier session: "
                     f"{NONE_CERTIFIED}")
@@ -337,8 +308,9 @@ def _certified(p: Params, w: int, x: Phase) -> str | None:
         return "the egress cells' head names another schedule's digest than the parameters'"
     try:
         WR.check_registration(doc, p.key, p.session, p.schedule, p.link, Direction.EGRESS, w)
-    except ValueError as e:
-        return f"the egress cells' head: {e}"
+    except ValueError:
+        # the registration check's own message names the execution phase, which no reason of the count does
+        return HEAD_REFUSED
     return None
 
 
@@ -351,30 +323,29 @@ def check(p: Params, c: Commitment, e: list[Phase]) -> tuple:
             return "reject", f"the {name} mark: {REFUSALS[code]}"
     start, end = (m.window for m in c.marks)
     if end < start:
-        return "reject", (f"the marks are out of order: the end mark's execution phase {end} is before the start's "
-                          f"{start}")
+        return "reject", "the marks are out of order: the end mark's execution phase is before the start mark's"
     t = tail(p.schedule)
     last = end + t
     for i, x in enumerate(e):
         want = start + i
         if not start <= x.phase <= last:
-            return "reject", f"execution phase {x.phase} is outside the span and its tail, {start} to {last}"
+            return "reject", "an execution phase shown is outside the span and its tail"
         if x.phase < want:
-            return "reject", f"execution phase {x.phase} is shown twice"
+            return "reject", "an execution phase is shown twice"
         if x.phase > want:
-            return "reject", f"execution phase {want} is missing: {NONE_CERTIFIED}"
+            return "reject", MISSING
         why = _certified(p, want, x)
         if why is not None:
-            return "reject", f"execution phase {want}: {why}"
+            return "reject", f"an execution phase shown: {why}"
     n = last - start + 1
     if len(e) < n:
-        return "reject", f"execution phase {start + len(e)} is missing: {NONE_CERTIFIED}"
+        return "reject", MISSING
     return "accept", public(start, end, t, capacity_bits(p.schedule)), {"link": p.link, "phases": n}
 
 
 def named(p: Params, c: Commitment) -> dict[str, Any]:
     """What a composition's tie reads off a case's parameters and commitment, meaningful once the count accepts
-    them: the SHA-512 of the start certificate's bytes (`certificate_bytes`), which a wipe's signed message names as
+    them: the SHA-512 of the start certificate's bytes (`Certificate.encode`), which a wipe's signed message names as
     its start mark; the messages the two marks open to; and the bits that can have left over the span and its tail.
     The first three are witness, read off the commitment. No rounding is applied here."""
     start, end = (m.window for m in c.marks)

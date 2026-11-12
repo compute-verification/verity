@@ -27,9 +27,9 @@ the execution phase. The mark and its salt are witness; the certificate is a sig
     {"key": hex(I ‖ T[1]), "link": name, "lms": {"H": h, "N": n, "W": w, "toy": bool},
      "schedule": {…}, "session": hex(session)}
 
-the network certifier's LMS key and its parameters, the certifier session's id (32 bytes), the link, whose name is
-printable ASCII and whose marks link name is at most 65,535 bytes, and the schedule, as the period's check reads it
-(its `scheduleOf`).
+the network certifier's LMS key and its parameters, the certifier session's id (32 bytes), the link, its name held to
+what the period's check holds it to, at most 65,535 UTF-8 bytes, and the schedule, as the period's check reads it (its
+`scheduleOf`).
 
 **Commitment**: the two marks, the start's then the end's, each
 
@@ -37,11 +37,11 @@ printable ASCII and whose marks link name is at most 65,535 bytes, and the sched
     certificate = u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be execution phase ‖
                   signed digest (64) ‖ u32be len(signature) ‖ signature
 
-the certificate in the bytes a certified record holds it in (`service.encode`), read exactly (`Read.certificateOfBytes`):
-each length fits, direction 0 or 1, nothing left over, and here a link name of printable ASCII. Nothing is left after
-the two marks. Its `digest` is `tagged_sha512("verity-network-certifier/span/v0", the commitment's bytes)`. The marks
-are witness, their execution phases with them: a composition reads them off the commitment (`named`) and publishes
-only that digest.
+the certificate in its one serialization (`Certificate.encode` in Python, the bytes a certified record holds it in),
+read exactly (`Read.certificateOfBytes`, held to `Certificate.decode`): each length fits, direction 0 or 1, a link's
+name UTF-8, nothing left over. Nothing is left after the two marks. Its `digest` is
+`tagged_sha512("verity-network-certifier/span/v0", the commitment's bytes)`. The marks are witness, their execution
+phases with them: a composition reads them off the commitment (`named`) and publishes only that digest.
 
 **Evidence**, canonical JSON, one entry per execution phase of the span and its tail, in order:
 
@@ -51,7 +51,8 @@ the execution phase's two egress certificates, in the period's form (its `certif
 on the link, and its fails record's, on the link's fails link name, `<link>-fails`; and the signed head of its egress
 cells, a row registration (the period's `rowsOf`).
 
-**The check**, each failure a rejection with its own reason:
+**The check**, each failure a rejection with its own reason, none of which holds a number: the two marks' execution
+phases are not public, and a reason is part of an answer.
 
 1. Each mark opens and verifies (`Mark.refusal`, in `CertifiedMark.refusal`'s order): its certificate is on the link's
    marks link name, is an egress certificate, is the key's, signs `markDigest` of its salt and its mark, and its
@@ -116,9 +117,6 @@ def failsLink (link : String) : String := link ++ "-fails"
 each is certified under. -/
 def records (link : String) : Array (String × String) := #[("egress", link), ("fails", failsLink link)]
 
-/-- Every byte is printable ASCII, `0x20` to `0x7e`: what a link's name is here. -/
-def printable (b : ByteArray) : Bool := b.data.all fun x => 0x20 ≤ x && x < 0x7f
-
 structure Params where
   link : String
   lms : Lms.Params
@@ -172,8 +170,7 @@ def keyed (j : Json) (want : List String) (ctx : String) : V Unit :=
 def paramsOf (j : Json) : V Params := do
   keyed j ["key", "link", "lms", "schedule", "session"] "the object"
   let link ← Flock.J.str j "link" "the object"
-  unless printable link.toUTF8 do throw "link: a name is printable ASCII"
-  unless (marksLink link).toUTF8.size < 2 ^ 16 do throw "link: its marks link name is at most 65,535 bytes"
+  unless link.toUTF8.size < 2 ^ 16 do throw "link: a name is at most 65,535 UTF-8 bytes"
   let l ← Flock.J.get j "lms" "the object"
   keyed l ["H", "N", "W", "toy"] "lms"
   let lms ← Lms.Params.make (← Flock.J.nat l "N" "lms") (← Flock.J.nat l "W" "lms") (← Flock.J.nat l "H" "lms")
@@ -200,8 +197,7 @@ def direction : M Direction := do
   | 1 => pure .ingress
   | c => throw s!"a direction code is 0 or 1, not {c}"
 
-/-- A certificate's fields in the bytes a certified record holds it in (`service.encode`), its link name printable
-ASCII. -/
+/-- A certificate's fields in its bytes (`Certificate.encode` in Python), its link's name UTF-8. -/
 def certificate : M Certificate := do
   let keyId ← bytes (← be 2)
   let name ← bytes (← be 2)
@@ -209,11 +205,10 @@ def certificate : M Certificate := do
   let window ← be 8
   let digest ← bytes 64
   let signature ← bytes (← be 4)
-  unless printable name do throw "a mark certificate's link name is not printable ASCII"
-  let some link := String.fromUTF8? name | throw "a mark certificate's link name is not UTF-8"
+  let some link := String.fromUTF8? name | throw "a certificate's link is not UTF-8"
   pure { keyId, link, direction, window, digest, signature }
 
-/-- The certificate `b` is the bytes of (`span.certificate_bytes`), read exactly: each length fits and nothing is
+/-- The certificate `b` is the bytes of (`Certificate.decode` in Python), read exactly: each length fits and nothing is
 left over. -/
 def certificateOfBytes (b : ByteArray) : V Certificate := do
   let (c, r) ← certificate.run ⟨b, 0⟩
@@ -278,16 +273,19 @@ def noneCertified : String :=
   "the network certifier certifies no record of an execution phase it faulted or refused a connection in, and a span \
     that holds one is rejected"
 
+/-- The reason of a span that shows too few execution phases. -/
+def missing : String := s!"an execution phase of the span or its tail is missing: {noneCertified}"
+
 /-- Why execution phase `w`'s entry doesn't certify it under the schedule: its two egress certificates, then its
 egress cells' signed head (the row registration's check, `check_registration` in Python). -/
 def phaseCheck (p : Params) (w : Nat) (x : Phase) : Except String Unit := do
   let recs := records p.link
   unless x.certificates.size == recs.size do
-    throw s!"{x.certificates.size} certificates, not its egress record's and its fails record's: {noneCertified}"
+    throw s!"not two certificates, its egress record's and its fails record's: {noneCertified}"
   for ((what, link), c) in recs.zip x.certificates do
     unless c.direction == .egress do throw s!"the {what} certificate is not an egress certificate"
     unless c.link == link do throw s!"the {what} certificate is on another link than {link}"
-    unless c.window == w do throw s!"the {what} certificate is at execution phase {c.window}"
+    unless c.window == w do throw s!"the {what} certificate is at another execution phase"
     unless c.signs p.lms p.key p.session do
       throw s!"the {what} certificate does not verify under the key in the certifier session: {noneCertified}"
   let (r, s, sd) := (x.registration, p.schedule, p.scheduleDigest)
@@ -297,7 +295,7 @@ def phaseCheck (p : Params) (w : Nat) (x : Phase) : Except String Unit := do
     throw "the egress cells' head names another schedule's digest than the parameters'"
   unless r.format == rowsFormat && r.value == s!"{p.link}/{d.value}/{w}" && r.link == p.link &&
       r.direction == d.value && r.window == w do
-    throw s!"the egress cells' head: not the link's egress rows at execution phase {w}"
+    throw "the egress cells' head: not the link's egress rows at its execution phase"
   unless r.cellBytes == B && r.rows == T && r.words == S * B / 2 && r.wordBits == outBits &&
       r.rowSchema == rowSchema && r.layout.buckets == T && r.layout.slots == S &&
       r.layout.connectionSlots == s.slots && r.layout.firstBucket == w * T do
@@ -317,13 +315,13 @@ def phasesCheck (p : Params) (first last : Nat) (e : Evidence) : Except String U
   for (x, i) in e.zipIdx do
     let want := first + i
     unless first ≤ x.phase && x.phase ≤ last do
-      throw s!"execution phase {x.phase} is outside the span and its tail, {first} to {last}"
-    if x.phase < want then throw s!"execution phase {x.phase} is shown twice"
-    if x.phase > want then throw s!"execution phase {want} is missing: {noneCertified}"
+      throw "an execution phase shown is outside the span and its tail"
+    if x.phase < want then throw "an execution phase is shown twice"
+    if x.phase > want then throw missing
     match phaseCheck p want x with
-    | .error why => throw s!"execution phase {want}: {why}"
+    | .error why => throw s!"an execution phase shown: {why}"
     | .ok () => pure ()
-  if e.size < last - first + 1 then throw s!"execution phase {first + e.size} is missing: {noneCertified}"
+  if e.size < last - first + 1 then throw missing
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Count Profile :=
   match c.startMark.refusal p, c.endMark.refusal p with
@@ -332,7 +330,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Count Prof
   | none, none =>
     let (first, endPhase) := (c.startMark.certificate.window, c.endMark.certificate.window)
     if endPhase < first then
-      .reject s!"the marks are out of order: the end mark's execution phase {endPhase} is before the start's {first}"
+      .reject "the marks are out of order: the end mark's execution phase is before the start mark's"
     else
       let t := tail p.schedule
       match phasesCheck p first (endPhase + t) e with
@@ -405,7 +403,10 @@ def guardSchedule : Schedule :=
 #guard tail { guardSchedule with delay := 10, egressCells := 4096, slots := 4, window := 600 } == 2
 #guard capacityBits { guardSchedule with slots := 4, window := 600 } == 98304000
 #guard marksLink "eth0" == "eth0-marks" && records "eth0" == #[("egress", "eth0"), ("fails", "eth0-fails")]
-#guard printable "eth0-marks".toUTF8 && !printable "é".toUTF8 && !printable ⟨#[0x7f]⟩ && !printable ⟨#[0x1f]⟩
+-- a link's name is any UTF-8: `é` reads, its first byte alone does not
+#guard
+  (Read.certificateOfBytes (⟨#[0, 0, 0, 2, 0xc3, 0xa9, 0, 0, 0, 0, 0, 0, 0, 0, 5]⟩ ++ ⟨Array.replicate 68 0⟩)).isOk &&
+  !(Read.certificateOfBytes (⟨#[0, 0, 0, 1, 0xc3, 0, 0, 0, 0, 0, 0, 0, 0, 5]⟩ ++ ⟨Array.replicate 68 0⟩)).isOk
 
 /-- Parameters of the `#guard`s, as their canonical JSON: the link `eth0` under `guardSchedule`, a zero key and a zero
 session. -/
