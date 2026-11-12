@@ -77,6 +77,19 @@ class _Side:
         return 0
 
 
+class _Cut(_Side):
+    """A stream whose server closes it once it has taken `left` writes."""
+
+    def __init__(self, left: int) -> None:
+        super().__init__()
+        self.left = left
+
+    def write(self, data: bytes) -> None:
+        super().write(data)
+        self.left -= 1
+        self.closed = self.left <= 0
+
+
 def _watermark_log(relay) -> dict:
     """What `serve` keeps of a relay's watermark in its log: the last line, the lost releases and its error."""
     return {"watermark": {"last": relay.watermarked and list(relay.watermarked), "lost": relay.watermark_lost,
@@ -84,14 +97,15 @@ def _watermark_log(relay) -> dict:
 
 
 def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[bytes],
-               served: Sequence[tuple[bytes, bool]], watermark: bool = False, refuse: Sequence[int] = ()) -> list[dict]:
+               served: Sequence[tuple[bytes, bool]], watermark: bool = False, refuse: Sequence[int] = (),
+               cut: int | None = None) -> list[dict]:
     """`requests` through the relay for one window on a `VirtualClock`, the k-th server to be connected sending
     `served[k]`'s bytes and, when its flag says so, ending: a server that doesn't end withholds the rest. Published in
     `out` as `warden_serve`'s `serve` and `client` publish a run (`test_warden_serve._run`, whose servers all end),
     with the relay's log (`warden.json`), each bucket ticked once the relay has read what its servers sent. Under
     `watermark` the relay also sends the watermark stream, whose bytes go to ``watermark.bin`` and whose end to the
-    log as `serve` writes it; the servers of `refuse` take no connection. Returns the relay's log, an entry a
-    connection."""
+    log as `serve` writes it; the servers of `refuse` take no connection, and the watermark's server closes the stream
+    once it has taken `cut` writes. Returns the relay's log, an entry a connection."""
     out.mkdir(parents=True, exist_ok=True)
     tau, B = params.bucket_ms / 1000, params.cell_bytes
     signer = ws.cs.signer(key, 4)
@@ -109,7 +123,7 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
         return side.reader, side
 
     async def mark():
-        streams.append(_Side())
+        streams.append(_Side() if cut is None else _Cut(cut))
         return streams[-1].reader, streams[-1]
 
     def settled(w: Warden) -> bool:
@@ -242,12 +256,13 @@ FIELDS, REQUESTS, HONEST = _requests()
 
 def _attempt(run: Path, cls: str, bits: list[int], chunk: int = 300, users: str = "user", late: bool = False,
              down: tuple[int, ...] = (), params=PARAMS, answers: dict[int, bytes] | None = None,
-             watermark: bool = False, refuse: tuple[int, ...] = ()) -> float:
+             watermark: bool = False, refuse: tuple[int, ...] = (), cut: int | None = None) -> float:
     """Class `cls` through the relay on a virtual clock, its run directory `run` as a try leaves it: eight id requests
     named ``<users>-<k>``, each answered by the stand-in's own ids as the class deviates them, the k-th connection
     planting from `bits` in turn. Under `late` a held response comes past its deadline, so never; the servers of
     `down` send nothing, whatever the class, and connection k's server answers `answers[k]` where given. Under
-    `watermark` the relay sends the watermark too, and the servers of `refuse` take no connection."""
+    `watermark` the relay sends the watermark too, the servers of `refuse` take no connection, and the watermark's
+    server closes the stream once it has taken `cut` writes."""
     fields, requests, honest = _requests(users)
     bit, served, lines = _bits(bits), [], []
     for k in range(len(requests)):
@@ -256,7 +271,7 @@ def _attempt(run: Path, cls: str, bits: list[int], chunk: int = 300, users: str 
         gone = dev.withhold or (late and dev.delay > 0) or k in down
         served.append((b"" if gone else out, not gone))
         lines.append({"release": k, "class": cls, "planted": "".join(map(str, dev.planted)), "whole": dev.whole})
-    log = _relay_run(run, run.parent / f"key-{run.name}", params, requests, served, watermark, refuse)
+    log = _relay_run(run, run.parent / f"key-{run.name}", params, requests, served, watermark, refuse, cut)
     assert [c["release"] for c in sorted(log, key=lambda c: c["ordinal"])] == list(range(N))
     (run / "traffic.json").write_text(json.dumps([{"at": 0.0, "ids": f} for f in fields]))
     (run / dv.PLANTED).write_text("".join(json.dumps(x) + "\n" for x in lines))
@@ -485,8 +500,8 @@ def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_
 
     tried, stopped = dv.tries(["honest", "tokens", "fail"], args, attempt)
     assert (tried, seen) == (["honest", "tokens"], ["honest", "tokens"])
-    words = ("tokens: STOPPED at a lost release: its network certifier's log names 1 lost on the watermark (2), a "
-             "line a server that reads `t n` alone stops ordering at")
+    words = ("tokens: STOPPED at a lost release: its network certifier's log names 1 lost on the watermark (2), so "
+             "the try did not reach its server whole")
     assert stopped == words + "; not tried: fail"
     run = args.scratch / "tokens"
     assert dv.watermark_log(run)["lost"] == [2]
@@ -504,19 +519,17 @@ def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_
     assert json.loads((args.out / "honest.json").read_text())["watermark"]["lost"] == []
     assert sorted(p.name for p in args.out.iterdir()) == ["honest.json", "tokens.json"]
 
-    assert dv.main(["table", "--out", str(args.out), "--stand-in"]) == dv.LOST_EXIT == 5
+    assert dv.main(["table", "--out", str(args.out), "--stand-in"]) == dv.WATERMARK_EXIT == 5
     out = capsys.readouterr().out
     assert out.rstrip().endswith(words) and "    lost:    1 release(s) named lost on the watermark" in out
     rows = json.loads((args.out / "rows.json").read_text())
     assert [(r["lost"], r["watermark_error"]) for r in rows] == [([], None), ([2], None)]
     assert "stopped with an error" not in out
-    assert "    watermark: stopped with an error (closed): its server had no line after it" \
-        in dv.table([rows[0] | {"watermark_error": "closed"}])
 
     monkeypatch.setattr(dv, "tries", lambda classes, args, real=dv.tries: real(classes, args, attempt))
     monkeypatch.setattr(dv.signal, "signal", lambda *_: None)
     seen.clear()
-    assert dv.main([*flags[:3], str(tmp_path / "again"), *WATERMARK]) == dv.LOST_EXIT
+    assert dv.main([*flags[:3], str(tmp_path / "again"), *WATERMARK]) == dv.WATERMARK_EXIT
     assert seen == ["honest", "tokens"]
     assert capsys.readouterr().out.rstrip().endswith(words + "; not tried: length, fail, extra, bucket")
 
@@ -549,7 +562,8 @@ def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_st
         return *dv.tries(["honest", "tokens", "fail"], args(name, *rehearse), attempt(how)), list(seen)
 
     tried, stopped, ran = tries("lost", "lost", *WATERMARK)
-    assert (tried, ran) == (["honest"], ["honest", "tokens"]) and stopped.startswith("tokens: STOPPED at a lost release")
+    assert (tried, ran) == (["honest"], ["honest", "tokens"])
+    assert stopped.startswith("tokens: STOPPED at a lost release")
     assert "tokens: no row" in capsys.readouterr().out and not (tmp_path / "lost" / "out" / "tokens.json").exists()
 
     tried, stopped, ran = tries("no-log", "no log", *WATERMARK)
@@ -560,22 +574,60 @@ def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_st
     # the network certifier never ran: nothing was sent, and the classes after it are tried, as without the watermark
     assert tries("never-ran", "never ran", *WATERMARK) == (["honest", "fail"], None, ["honest", "tokens", "fail"])
     assert tries("plain", "no log") == (["honest", "fail"], None, ["honest", "tokens", "fail"])
-    assert dv.watermark_log(tmp_path / "none") is None and dv.lost_stop("fail", tmp_path / "none", True) is None
+    assert dv.watermark_log(tmp_path / "none") is None and dv.watermark_stop("fail", tmp_path / "none", True) is None
 
 
-def test_a_watermark_that_stopped_with_an_error_is_kept_by_its_kind_and_stops_nothing(tmp_path):
+def test_a_watermark_its_server_closed_stops_the_tries_at_that_try_with_the_errors_kind(tmp_path, capsys):
+    """The watermark's server closes the stream after its head and three lines. No release is lost, and the relay's
+    log says the stream stopped: its server did not get the watermark whole, as a server that broke it would not. No
+    class is tried after that try, the line names the error's kind, and the exit is the watermark's, from the tries
+    and from the table made again."""
+    args = dv.parser().parse_args(["try", "--stand-in", "--out", str(tmp_path / "out"), "--scratch",
+                                   str(tmp_path / "scratch"), *WATERMARK])
+    seen = []
+
+    def attempt(cls, run, _):
+        seen.append(cls)
+        return _attempt(run, cls, [1, 0] * 60, watermark=True, cut=4 if cls == "tokens" else None)
+
+    tried, stopped = dv.tries(["honest", "tokens", "fail"], args, attempt)
+    words = ("tokens: STOPPED at a watermark error (closed): its network certifier's log says the stream stopped, so "
+             "its server did not get the watermark whole")
+    assert (tried, seen, stopped) == (["honest", "tokens"], ["honest", "tokens"], words + "; not tried: fail")
+    mark = dv.watermark_log(args.scratch / "tokens")
+    assert (mark["lost"], mark["error"]) == ([], "closed")
+    assert json.loads((args.out / "tokens.json").read_text())["watermark"] == mark
+    sent = (args.scratch / "tokens" / "watermark.bin").read_bytes()
+    assert sent.partition(b"\r\n\r\n")[2] == b"".join(dv.REL.watermark_chunk(t, n) for t, n in ((0, 0), (1, N), (2, N)))
+    assert dv.watermark_log(args.scratch / "honest")["error"] is None
+    assert (args.scratch / "honest" / "watermark.bin").read_bytes().endswith(dv.REL.WATERMARK_END)
+
+    assert dv.main(["table", "--out", str(args.out), "--stand-in"]) == dv.WATERMARK_EXIT
+    out = capsys.readouterr().out
+    assert out.rstrip().endswith(words)
+    assert ("    watermark: stopped with an error (closed), so its server did not get it whole: no class was tried "
+            "after this one") in out
+    rows = json.loads((args.out / "rows.json").read_text())
+    assert [(r["lost"], r["watermark_error"]) for r in rows] == [([], None), ([], "closed")]
+
+
+def test_a_watermarks_error_is_kept_by_its_kind_and_named_beside_a_lost_release(tmp_path):
     """The network certifier's log gives the error that stopped its watermark as text, which can hold the address it
-    connected to: what is kept is the error's first word. An error with no lost release stops no try."""
+    connected to: what is kept, and what the stop says, is the error's first word. A try with a lost release and an
+    error is stopped for both."""
     run = tmp_path / "run"
     run.mkdir()
     mark = {"last": [3, 1], "lost": [], "error": "ConnectionResetError: [Errno 104] reset by 192.0.2.7:8000"}
     (run / dv.RELAY_LOG).write_text(json.dumps({"connections": [], "watermark": mark}))
     assert dv.watermark_log(run) == {"last": [3, 1], "lost": [], "error": "ConnectionResetError"}
-    assert dv.lost_stop("honest", run, True) is None
+    stop = dv.watermark_stop("honest", run, True)
+    assert stop.startswith("honest: STOPPED at a watermark error (ConnectionResetError): ") and "192.0.2.7" not in stop
     mark |= {"error": "closed", "lost": [4]}
     (run / dv.RELAY_LOG).write_text(json.dumps({"connections": [], "watermark": mark}))
     assert dv.watermark_log(run) == {"last": [3, 1], "lost": [4], "error": "closed"}
-    assert dv.lost_stop("honest", run, False).startswith("honest: STOPPED at a lost release")
+    stop = dv.watermark_stop("honest", run, False)
+    assert stop.startswith("honest: STOPPED at a lost release: ") and "; and at a watermark error (closed): " in stop
+    assert dv.stop_words("honest", [], None) is None
 
 
 def test_a_tail_shorter_than_a_connection_is_refused_before_any_try(tmp_path):

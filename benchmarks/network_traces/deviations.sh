@@ -23,9 +23,9 @@
 #    prints is also $OUT/job.log.
 # The exit is try's: 0 every class did what its check says; 1 one didn't, honest was refused and the rest weren't
 # tried, or a try wrote no check; 2 a row is shown neither way, as tokens and length are until `table --ids` has the
-# server's record; 5 a try's network certifier named a lost release on its watermark (or ran with the watermark and
-# wrote no log), and no class after it was tried. Else 3, the front wasn't reached; 4, a variable or the python is
-# wrong; or 9, the guard.
+# server's record; 5 a try's network certifier named a lost release on its watermark, or its watermark stopped with
+# an error (or it ran with the watermark and wrote no log), and no class after it was tried. Else 3, the front wasn't
+# reached; 4, a variable or the python is wrong; or 9, the guard.
 # PY is a python with numpy; by default uv makes one in the temporary directory, at the tree's lock.
 set -uo pipefail
 RUN=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$RUN/out; mkdir -p "$OUT"
