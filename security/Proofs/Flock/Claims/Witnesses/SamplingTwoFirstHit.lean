@@ -112,9 +112,10 @@ open Claims.Witness (silentP)
 open Claims.Witness.SamplingGeneric
 open Claims.Witness.Sampling (toyStmt toyPart)
 
-/-- **`SpotFirstHitTwo`'s conclusion fails** at `sksLTwo`, at its silent prover and the costs `0`: it accepts with
-`P̄_a` at the footprint of its boundary trace read at the statement `0` at every interior. The three bounds the
-guarantee takes hold there at those costs (`compiledTwoKSFirstHitX_fails`). -/
+/-- **What `SpotFirstHitTwo` concludes fails** (`CompiledTwo.FirstHitTwoXAt`) at `sksLTwo`, at its silent prover and
+the costs `0`: it accepts with `P̄_a` at the footprint of its boundary trace read at the statement `0` at every
+interior. The three bounds the form takes, which the guarantee proves at its code, hold there at those costs
+(`compiledTwoKSFirstHitX_fails`). -/
 theorem compilerFirstHitTwoXAt_nontrivial :
     ¬ (sksLTwo Bool).FirstHitTwoXAt FlockDeploy.sha512 [] toyStmt toyPart toyTwo silentP 0 0 :=
   compiledTwoFirstHitXAt_fails _
