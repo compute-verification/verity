@@ -970,3 +970,49 @@ End your turn when 1 and 2 are done. Push at each step. Nothing on a card.
   script now reads the tree's layout, so a tree after the move runs it (before tonight it could not). A
   variable in the third field works as before. The lease's `who` becomes a variable: set
   `kernels-khshare` for your runs. Read the script as it now is before your dry run.
+
+## Thu 12 Nov 03:36Z: the lead's decisions on your 03:33Z return (the merge, Friday's pairs, the label, the gate)
+
+Read by me: `sass-gate-finding.md`, `friday-plan.md`, your two comments. Good work; every decision you asked
+for is below, with one condition you check yourself.
+
+1. **The merge of `main` goes on the branch before Thursday's run**, on one condition: your run
+   `r20261112-024714-c350` says 0 words differing on BOTH head-block statements at the merge. Then push the
+   merge commit (a plain push, never forced; `merge-main.sh`'s tree `5ca429b7ff83`), remake Thursday's and
+   Friday's dry runs at the new head, and post one worker comment on HASH-112: the new head, the twin's line,
+   the prover tests' run. **If any word differs: push nothing**, Thursday runs `e6ab4d9a98`, and you tell me
+   the count and the first differing word. Why before: Thursday is the walk's first hour on a card, and
+   Friday must time the tree Thursday showed equal, against `main`'s host walk and not an older one.
+   If `main` moves again before Friday, merge again only if the new commits touch the prover's walk or a
+   file Friday's job builds from; say which if so.
+2. **Thursday's run leaves its build in place** (`/workspace/jobs/kernels-khshare`, by its key), so Friday's
+   build is the same key and costs nothing of the lease.
+3. **Friday is `PAIRS="4:4 2:2 1:2"`**, four provers first, so one prover is what is lost if the hours run
+   out. Four provers a card is where the rows of record are, and two pairs cannot call a difference
+   whatever the rates.
+4. **Friday's run gets no `flock-steady` label and no art.** It holds own and kernel rows at one count in
+   one `rate.json`, and a labelled kernel row would publish a price of a prover nobody can build from
+   `main`. The result is the comparison in one job, each step with its ten checks, said on HASH-112 and in
+   the goal. `fri-after.sh` keeps each step's completed row; a priced row comes from a run on `main` after
+   the kernel lands.
+5. **The SASS gate: Friday's rows are timed results under the proof server's rules, not a screen, and
+   every place that quotes a time from them carries this sentence:** "no SASS gate: the gate cannot read
+   this binary (CUDA 13.3 stores the device code compressed) and holds no pin for its ptxas; on the
+   unpacked code every flagged instruction is an integer division's, by a what-if that is not the gate."
+   The gate is PoUW's: it guards floating-point words a verifier recomputes bit for bit. The walk's words
+   are XOR and AND, and what holds them is the twin on the card in the same run before any step
+   (`device_walk_matches_host`, every word), which your `GATE=1` already does. Say "accepted" for what
+   it is: on that statement a Lean accept says "units as stated, the Program not held to the circuit"
+   until proofs' PRF-567 lands, so the twin is the guard and the accept is not. Proofs may say no to
+   this by Fri 02:00Z. The gate's read of compressed code is its own issue, mine to file, not yours.
+6. **`steady.sh` in the notes is KMOVE's bytes again since 03:13Z, with `LEASE_WHO` as a variable**
+   (sha256 `928547337114…`, `stub.sh` `2775700389df…`). When you remake Friday's dry run, base
+   `fri-steady.sh` on that file and set `LEASE_WHO=kernels-khshare` instead of your edit of the lease's
+   name, if the other four asserted edits still assert; it is the file KMOVE's Thursday screen runs on a
+   card. If an edit does not assert, keep your base and say so; do not spend more than a few tries.
+   KSTEADY is told why its 02:10Z sync put old bytes back, and of `complete_row.py`'s refusal and the
+   lease's undeclared cores.
+7. **Thursday is unchanged:** I resume you at 15:25Z with the go, after reading the calendar.
+
+Return when the merge is pushed or refused and both dry runs are remade: the head, the twin's line, each
+dry run's last line, and whether Friday's base is the notes' file.

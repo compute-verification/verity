@@ -1700,3 +1700,24 @@ End your turn when the branch is whole and tested, with its head and what a firs
   script; it left that to you. A third, small one comes: the lease's `who` as a variable. **Read the two
   patches at your next checkpoint and say on HASH-115 if either breaks a row of yours; the spec replaces
   the script, so do not spend more on it than the read.**
+
+## Thu 12 Nov 03:36Z: your 02:10Z notes sync put back old bytes of `steady.sh` and `stub.sh`; fix `sync.sh` before you sync again
+
+- **What happened (read by me in the notes' history):** commit `9f3eef61d1` (02:10Z, your files beside it)
+  set `ksteady-jobs/steady.sh` back to sha256 `3821a8ee084f…`, its bytes before KMOVE's 02:05Z change
+  (`aefa3930a9`, `7d1caa1ad560…`): the step option and the tree's layout were gone, so the file could not
+  build today's tree. KMOVE put it back at 03:13Z with `LEASE_WHO` as a variable: **`steady.sh` is now
+  `92854733711475c9…`, `stub.sh` `2775700389df5a18…`.** KHSHARE caught it; nothing ran on the old bytes
+  that I know of.
+- **Why your guard did not stop it (inferred, yours to confirm):** either your notes checkout had not
+  pulled KMOVE's commit when `sync.sh` compared, or `.copied` was made anew from the notes after the stop
+  (the new-VM rule), which passes the guard for every file whatever your scratch holds.
+- **Do, before any other sync:** take the notes' `steady.sh` and `stub.sh` into `/tmp/ksteady/scripts` by
+  hand; make `sync.sh` pull the notes before its check, and make a scratch with no `.copied` refuse
+  where the scratch's copy differs from the notes' instead of trusting itself; then print both sha256s
+  after your next sync and see they are the two above.
+- **Two things KHSHARE found in your files** (`20261111T2030Z-khshare-prover-walk/friday-plan.md`, "Two
+  smaller things"): `complete_row.py` refuses a row that already carries `stage.blocks` and `stage.full`,
+  which is every row the walk's `server_rate.py` writes (a one-line allowance); and the lease declares no
+  cores (`gpu_lease.sh` lines 62 to 76 count the CPUs its processes are allowed on): say in the spec
+  whether it is declared.
