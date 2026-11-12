@@ -11,7 +11,7 @@ public import Proofs.Flock.SpotFlock.AddressFactsGive
 map the five facts are proved at, `addressOf`, is each gate's own position's address (`addressOf_held`,
 `addressAt_held`): its own port, place and slot. `Five R B desc q c₀` is the five facts at that map
 (`AddressFacts`), and `addressesConnected_held` gives the address premise from them through
-`addressesConnected_of_facts`; with an accepted run they give `Honest` (`honest_of_five`).
+`addressesConnected_of_facts`; with an accepted run they give `HonestExists` (`honest_of_five`).
 
 What the wiring makes trivial here:
 * one tree a gate's first half, a gate and the gate it is sent to sharing place and slot, is `addressOf_shares`;
@@ -85,10 +85,10 @@ def Five : Prop :=
 theorem addressesConnected_held (hf : Five R B desc q c₀) : AddressesConnected (held R B desc q c₀) :=
   addressesConnected_of_facts _ fun _ => ⟨_, hf⟩
 
-/-- **The five facts and an accepted run at some instance give `Honest`.** -/
+/-- **The five facts and an accepted run at some instance give `HonestExists`.** -/
 theorem honest_of_five
     (hO : ∃ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code),
-      Five R B desc q c₀ ∧ Accepts (held R B desc q c₀)) : Honest := by
+      Five R B desc q c₀ ∧ Accepts (held R B desc q c₀)) : HonestExists := by
   obtain ⟨R, B, desc, q, c₀, hf, hR⟩ := hO
   exact honest_of_owed ⟨R, B, desc, q, c₀, addressesConnected_held R B desc q c₀ hf, hR⟩
 
