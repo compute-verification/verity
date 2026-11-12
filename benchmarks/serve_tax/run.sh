@@ -74,7 +74,8 @@
 # into OUT/replay-<mode>; a mode listed again replays into OUT/replay-<mode>-<k>, its tokens compared with the first's too
 # (REPLAY_MODES="compiled compiled": does the replay agree with itself?). A pass vLLM's client sent is named with its
 # rung (REPLAY=agentic@4) and replayed from an arm whose server kept each request's ids (REPLAY_FROM=$OUT/prod-record:
-# that client keeps none). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
+# that client keeps none). The replay of an arm that served on the canonical top-k loads that plugin too, and keeps its
+# counters in PRIVATE/replay-<mode> where PRIVATE is set. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
 # checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
 # qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be d9105ea80, the integration's pin.
 set -uo pipefail
@@ -238,7 +239,8 @@ if [ "${1:-}" = leased ]; then
       dir="replay-$mode"; [ "$n" -gt 1 ] && { dir="replay-$mode-$n"; flag+=(--against "$OUT/replay-$mode"); }
       echo "== replay $REPLAY $mode #$n $(date -u +%FT%TZ)"
       "$PY" "$here/replay.py" --arm-dir "${REPLAY_FROM:-$OUT/record}" --load "$REPLAY" --checkpoint "$CK" --tp "$GPUS" \
-        "${flag[@]}" ${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"} --out "$OUT/$dir" > "$OUT/$dir.log" 2>&1 \
+        "${flag[@]}" ${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"} ${PRIVATE:+--private "$PRIVATE/$dir"} \
+        --out "$OUT/$dir" > "$OUT/$dir.log" 2>&1 \
         || { tail -n 40 "$OUT/$dir.log"; rc=1; }
       tail -n 1 "$OUT/$dir.log"
     done

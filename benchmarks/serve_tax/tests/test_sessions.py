@@ -18,6 +18,10 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     prod, again, record = (S.ARMS[n] for n in ("prod", "prod-again", "prod-record"))
     assert prod.parent == "published" and again.parent == record.parent == "prod"
     assert prod.args == again.args == record.args == () and record.plugin == ("record", "ids") and not prod.plugin
+    # ours serves on the canonical top-k, as the two-stage serve does: stock loads no plugin and sets nothing
+    assert (record.env, record.general) == (S.TOPK_ENV, S.TOPK) == (S.ARMS["two-stage"].env, S.ARMS["two-stage"].general)
+    assert S.entry_points(record) == ["verity_serve_tax = servetax_plugin:register", "verity_dsa_topk = dsa_topk:register"]
+    assert not prod.env and not again.env and not S.entry_points(prod) and not S.entry_points(again)
     assert prod.published and again.published and record.published
     context = S.published_context("prod", "glm53", None)
     argv = S.server_argv(prod, GLM, Path("/ck"), 8000, max_model_len=context)
@@ -34,7 +38,7 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     assert S.same_engine("prod", "prod-again") and S.same_engine("prod", "published")
     assert not S.same_engine("prod", "prod-record") and not S.same_engine("prod-again", "compiled-again")
     assert S.changes_of("prod") == S.changes_of("prod-again") == []
-    assert S.changes_of("prod-record") == ["the step record", "the served ids"]
+    assert S.changes_of("prod-record") == ["the step record", "the served ids", "the canonical top-k"]
     # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
     assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
     assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record")} == {"compiled"}

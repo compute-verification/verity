@@ -1,7 +1,7 @@
 """Replay one served window of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
 
     replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] [--tp N]
-              [--capture ID,... [--capture-template T]] --out DIR
+              [--capture ID,... [--capture-template T]] [--private DIR] --out DIR
 
 The window is the load's requests: its step trace's steps from the first one's arrival to the last one's finish, all of them
 the load's own (each load starts from an empty prefix cache and ends drained). A request's prompt ids are the plan's and
@@ -12,7 +12,10 @@ caching, async scheduling, block size and block count, and where the header hold
 cache's format and the speculative decoding: `HEADER_ARGS`), compiled unless ``--eager``, and adds each request, under its served
 engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
 the scheduler's ``schedule``), and where it arrived after schedules that held every request back, after as many
-(``after_empty``); the scheduler decides the rest as it did while serving. Its own step trace (`StepTrace`) is
+(``after_empty``); the scheduler decides the rest as it did while serving. Where the arm served with other vLLM general
+plugins (the canonical DSA top-k: ``canonical-topk``, ``two-stage``, ``prod-record``), the replay's processes load them
+too, under the arm's environment (`served_under`), and ``--private`` is where they keep what the arm keeps on the node
+(the top-k's counters; not kept without it). Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
 differing requests (each one's lengths and first differing position) and the replay's wall time beside the served window's
@@ -109,6 +112,23 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
 #: the KV cache's format and the speculative decoding only where the served engine left vLLM's defaults
 HEADER_ARGS = {"long_prefill_token_threshold": "long_prefill_token_threshold", "kv_cache_dtype": "kv_cache_dtype",
                "speculative": "speculative_config"}
+
+
+def served_under(arm: str | None, site: Path, private: Path | None) -> dict[str, str]:
+    """The environment a replay of ``arm``'s window runs in, so that its engine computes with what the served one did
+    beside stock vLLM: the arm's other vLLM general plugins (`serve_tax.Arm.general`: the canonical DSA top-k) declared
+    in ``site`` and on the path of every process, and the arm's environment, as its server had them
+    (`serve_tax.server_env`), each plugin loaded once first (`serve_tax.check_plugins`). Not `servetax_plugin`'s
+    changes, which record: the replay keeps its own trace. What the arm keeps on the node goes under ``private``, and
+    is not kept without one. Empty for an arm with no such plugin, and for one `serve_tax` doesn't define."""
+    served = S.ARMS.get(arm or "")
+    if served is None or not served.general:
+        return {}
+    env = {k: v for k, v in served.env.items() if private is not None or S.PRIVATE not in v}
+    ours = S.replace(served, plugin=(), tick=False, rows={}, env=env)
+    under = S.server_env(ours, site, S.plugin_site(site, ours), None, 0.0, 0.0, private=private)
+    S.check_plugins(under, ours)
+    return under
 
 
 def engine(checkpoint: Path, header: dict, eager: bool, tp: int = 1) -> Any:
@@ -290,18 +310,31 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
                                       "OUT/capture, each a span of --capture-template's units")
     ap.add_argument("--capture-template", default="TokenSelect_v4{V=154880}")
+    ap.add_argument("--private", type=Path, help="a directory outside every run's, for what the served arm's other "
+                                                 "plugins keep on the node (the canonical top-k's counters)")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
+    for public in (a.out, *([Path(SHARED.RESEARCH_RUN_DIR)] if SHARED.RESEARCH_RUN_DIR else [])):
+        if a.private and a.private.resolve().is_relative_to(public.resolve()):
+            raise SystemExit(f"the private directory {a.private} is inside {public}, which leaves the node: --private DIR, "
+                             "outside every run's directory")
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
-    os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
     meta = json.loads((a.arm_dir / "meta.json").read_text())
+    under = served_under(meta.get("arm"), a.out / ".site", a.private)
+    if under:           # before vLLM is imported: every process it starts inherits the path and the environment
+        os.environ.clear()
+        os.environ.update(under)
+        sys.path[:0] = [p for p in under["PYTHONPATH"].split(os.pathsep) if p and p not in sys.path]
+    os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
     capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
     got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture)
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
+           "served_under": {"plugins": [entry for entry, _ in S.ARMS[meta["arm"]].general],
+                            "env": {k: v for k, v in S.ARMS[meta["arm"]].env.items() if S.PRIVATE not in v}} if under else None,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
            "engine_ready_s": got["ready_s"], **compare(w, got)}

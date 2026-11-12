@@ -311,6 +311,7 @@ def test_run_shs_replay_runs_at_the_models_width_and_captures_what_it_is_told():
     call = sh[sh.index('"$PY" "$here/replay.py"'):]
     call = call[:call.index("rc=1; }")]
     assert '--tp "$GPUS"' in call and '${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"}' in call
+    assert '${PRIVATE:+--private "$PRIVATE/$dir"}' in call          # where the served arm's other plugins keep their files
 
 
 def test_run_sh_serves_every_model():

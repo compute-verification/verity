@@ -27,7 +27,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
 | `prod` | nothing: `published`'s server, as the stock arm the arms made from it are costed over | `published` |
 | `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
-| `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`, and each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with | `prod` |
+| `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -83,6 +83,9 @@ It takes each request's prompt ids from the plan and its served ids from the cor
 client keeps neither, so a pass it sent (`REPLAY=agentic@4`, the pass with its rung) is replayed from an arm whose
 server kept them, `prod-record` (`REPLAY_FROM=OUT/prod-record`): a line a finished request in
 `<arm>/server/ids.PID.jsonl`, its engine id, prompt ids and served ids.
+An arm that served on the canonical DSA top-k (`canonical-topk`, `two-stage`, `prod-record`) is replayed on it: the
+replay's processes load the plugin under the arm's environment (`replay.served_under`), and keep its counters under
+`--private` (`PRIVATE/replay-<mode>`) where one is given.
 It starts from an empty engine. `restore.py` starts mid-traffic instead: it puts a restore arm's boundary state at one
 edge into a fresh engine (the KV bytes into the same block ids, then the state, `boundary.restore`), replays to a later
 edge, adding each request that arrived in between before the step it arrived before, and compares every step's
@@ -272,7 +275,10 @@ number or load `prefix` has not run writes no entry under the metric's id. `gpus
 name of the stock arm two arms are made from: `prod-again` is its second lifetime, and `prod-record` adds the
 scheduler's step trace and keeps each request's prompt ids and served ids (`servetax_plugin.ServedIds`,
 `server/ids.PID.jsonl`), since vLLM's client keeps neither and a replay of a pass is given the first and compared with
-the second (`replay.window`). An arm is costed over the nearest stock arm above it (`serve_tax.STOCK`, `stock_of`),
+the second (`replay.window`). It serves on the canonical DSA top-k too (`serve_tax.TOPK`, `TOPK_ENV`): vLLM's own
+kernels order a row of more than 2,048 keys differently run to run, and the agentic load's prompts are longer, so a
+replay is to give the served tokens only where both select by the canonical rule. Its cost over `prod` holds the
+top-k's with the record's. An arm is costed over the nearest stock arm above it (`serve_tax.STOCK`, `stock_of`),
 so `serve_tax.py cost --arm prod-record` is over `prod`, stock at the same settings, with `prod-again`'s cost over
 `prod` as its noise floor. The three start from one environment, the job's (`VENV`), and `cost` refuses arms that
 different builds of vLLM served. Where `prod`'s server and its requests differ from the recipe's line, beside
