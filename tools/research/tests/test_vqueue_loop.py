@@ -1075,24 +1075,40 @@ def test_of_two_members_exported_at_once_only_the_one_whose_own_fixture_failed_i
     assert OTHER_FX in loop.world._registry(built["sha"]) and [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"]
 
 
-def test_an_export_runs_holding_the_export_lock_and_a_lock_held_past_its_wait_fails_that_tick_s_export(env):
+def test_an_export_runs_holding_the_export_lock_and_a_busy_lock_defers_it_to_the_next_tick_telling_no_one(env):
     """Each export runs while the loop holds `export_lock`, the lock the pod's own export pass holds over the same checkout
-    and store.  While another holds it past `export_lock_s` nothing is exported: the member is left out and its owner told,
-    as for any failed export, and once it is free the next tick exports the fixture and builds the member."""
+    and store.  While another holds it nothing is exported and nothing fails: the member is left out of this build alone,
+    with one `fixtures` line saying `deferred`, no skip line and no owner told; once it is free the next tick exports the
+    fixture and builds the member."""
     _main_to(env, _registry({BASE_FX: "data/old.bin"}))
-    one = env.put(1, _registry({BASE_FX: "data/old.bin", NEW_FX: "data/new.bin"}))
+    env.put(1, _registry({BASE_FX: "data/old.bin", NEW_FX: "data/new.bin"}))
     loop = env.loop(policy)
     script = _exports(env, loop)
     with open(loop.world.export_lock, "a") as other:
         fcntl.flock(other, fcntl.LOCK_EX)
-        exported, skip, none = loop.tick()
-    assert _calls(script) == [] and exported["unsent"] == {NEW_FX: f"another export held {script}.lock for 0 s"}, exported
-    assert (skip["number"], skip["heads"], skip["fixtures"], none["sha"]) == (1, [one], [NEW_FX], None), (skip, none)
-    (post,) = env.posts
-    assert NEW_FX in post and f"another export held {script}.lock" in post, post
+        deferred, none = loop.tick()
+    assert _calls(script) == [] and env.posts == [] and "skip" not in _acts(env.lines())
+    assert (deferred["action"], deferred["ids"], deferred["members"], deferred["deferred"], deferred["done"]) \
+        == ("fixtures", [NEW_FX], [1], True, False), deferred
+    assert (none["action"], none["sha"], none["why"]) == ("build", None, "no member merges onto its base with its fixtures exported")
     exported, built = loop.tick()
     assert _calls(script) == [["--no-registry", f"--id={NEW_FX}"]] and Path(f"{script}.held").read_text() == "1\n"
     assert (exported["exported"], built["members"], built["enqueued"]) == ([NEW_FX], [1], True), built
+    assert env.posts == []
+
+
+def test_a_busy_export_lock_is_waited_on_only_its_short_bound(env):
+    """A tick waits on another export's lock at most `export_lock_s`, a few seconds, then runs no export (None): that
+    export's pass holds it for its whole run, and every advance and drop of the tick waits behind the build."""
+    loop = env.loop(policy)
+    script = _exports(env, loop)
+    slept: list[float] = []
+    loop.world.sleep, loop.world.export_lock_s = slept.append, 3
+    with open(loop.world.export_lock, "a") as other:
+        fcntl.flock(other, fcntl.LOCK_EX)
+        assert loop.world.export_fixtures([NEW_FX]) is None
+    assert _calls(script) == [] and sum(slept) == 3 and L.EXPORT_LOCK_S <= 10
+    assert loop.world.export_fixtures([NEW_FX]) == {} and _calls(script) == [["--no-registry", f"--id={NEW_FX}"]]
 
 
 GRAPH2 = '''
