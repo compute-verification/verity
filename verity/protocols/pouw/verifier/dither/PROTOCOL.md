@@ -105,8 +105,8 @@ compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither 
   The sampled output cells are opened after it.
 - The weights are in the period's weight root, bound once a period, before any coin of the period is flipped.
 
-**The value root's layout**, pinned for kernels. It is the `v31.py` layout at 16 KiB rows,
-under Dither's tag and without segment S's rows:
+**The value root's layout**, pinned for kernels, at 16 KiB rows, under Dither's tag and without
+segment S's rows:
 - A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's output cells row-major
   (c = 128 r + col). m and N are multiples of 128, and L′ a multiple of 32 dividing K.
 - A tile's words of segment s, for s = 1..S − 1, are its 16,384 T_s as little-endian u16 (32 KiB, two rows). Its O

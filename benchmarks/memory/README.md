@@ -21,12 +21,17 @@ verity bench memory --loopback                both processes on this machine, on
   node serves `ROLE` (default `LLAMA32_1B_BF16`, Llama 3.2 1B as upstream holds it, since the store's layout covers
   BF16 weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host bound to
   that role's pinned checkpoint, and the coins come from the challenger host under period `PERIOD`, a name its ledger
-  hasn't used. `gate_run.sh`'s variables pass through: `COMMIT` (the commit the verifier host is pinned at, on
-  `main`'s first-parent line, whose tree must pin `ROLE`), `ARENA_GIB` and `UTIL` (the arena on each card and vLLM's
-  share of it), `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, and `FETCH=1`,
-  which stages the role's checkpoint on the node before checking it. The command waits for the fire run to reach the
-  evidence store and prints from it; interrupted, `--from` the fire run prints the same. `--dry-run` sends nothing to
-  either gate and prints no number.
+  hasn't used. `UNPACED=WINDOWS:WINDOW_MS:SAMPLES` asks for a session of one coin a window in place of `PACED`'s
+  (`7:60000:33273` is seven windows of a minute with 33,273 openings each); the verifier's ledger holds its γ as it
+  does a paced session's, and the auditor's line of record has no time-held line for it, which only a paced session
+  gets. `gate_run.sh`'s variables pass through: `COMMIT` (the commit the verifier host is pinned at, on `main`'s
+  first-parent line, whose tree must pin `ROLE`), `ARENA_GIB` and `UTIL` (the arena on each card and vLLM's share of
+  it), `HOST_GIB` (whole GiB of the node's host memory the store holds beside the arenas, default none),
+  `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, and `FETCH=1`, which stages
+  the role's checkpoint on the node before checking it. The session's form is `PACED` or `UNPACED` alone: the command
+  sets `gate_run.sh`'s `SESSIONS`, `WINDOWS`, `WINDOW_MS` and `SAMPLES` from `UNPACED`. The command waits for the fire
+  run to reach the evidence store and prints from it; interrupted, `--from` the fire run prints the same. `--dry-run`
+  sends nothing to either gate and prints no number.
 - **`--from RUN`** reads the verifier's record of a run in the store: a gate run's fire run, or a run of
   `remote_session/run.sh` that held the verifier. A run that holds several sessions needs `--session K`. A withdrawn
   run is refused before any of it is fetched. The text says what the number rests on: whether the verifier ran on the
