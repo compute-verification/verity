@@ -16,7 +16,9 @@ from pathlib import Path
 import pytest
 
 PKG = "verity.definitions.registry"
-REGISTRY = Path(importlib.util.find_spec(PKG).origin).parent
+_SPEC = importlib.util.find_spec(PKG)
+assert _SPEC is not None and _SPEC.origin is not None, PKG
+REGISTRY = Path(_SPEC.origin).parent
 DEFINITION_MODULES = ["fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa",
                       "boolean_dsa", "sparse_mla", "boolean_sparse_mla"]
 VOCAB = "attention_vocab"
@@ -102,7 +104,7 @@ def _violations(mod: str) -> list[str]:
                 elif not _verity(a.name) and top not in THIRD_PARTY and top not in sys.stdlib_module_names:
                     out.append(f"{mod}:{node.lineno}: imports {a.name}")
         elif isinstance(node, ast.ImportFrom):
-            base = (node.module if node.level == 0
+            base = ((node.module or "") if node.level == 0
                     else ".".join(package[:len(package) - node.level + 1] + ([node.module] if node.module else [])))
             top = base.split(".")[0]
             if base == PKG:

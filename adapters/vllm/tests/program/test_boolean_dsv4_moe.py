@@ -124,7 +124,7 @@ def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
     only its word view.  Its exponent field is 0 exactly at m = 0, which `Dsv4HashWeightOut_v1` reads as m = 0."""
     h = hashlib.sha256()
     for lo in range(0, 1 << 23, 1 << 19):
-        m = np.arange(lo, lo + (1 << 19), dtype=np.uint32)
+        m: np.ndarray = np.arange(lo, lo + (1 << 19), dtype=np.uint32)
         y = np.asarray(BS.evaluate_words(bind(BD.MufuLg2Mantissa), m | np.uint32(0x3F800000))).astype("<u4").reshape(-1)
         assert np.array_equal((y >> 23 & 0xFF) == 0, m == 0)
         h.update(y.tobytes())
@@ -154,7 +154,7 @@ def test_the_clamped_swiglu_on_its_edges_and_random_pairs() -> None:
 @pytest.mark.slow
 def test_the_clamped_swiglu_on_every_gate_and_every_up_word() -> None:
     """Every gate word against four of the clamp's edges and every up word against one (about 17 s)."""
-    every = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+    every: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
     rng = np.random.default_rng(0xC1A)
     g = np.concatenate([np.repeat(every, 4), np.tile(CLAMP_EDGES, 1 << 14)[:1 << 16], rng.integers(0, 1 << 16, 4000).astype(np.uint16)])
     u = np.concatenate([rng.choice(CLAMP_EDGES, 1 << 18), every, rng.integers(0, 1 << 16, 4000).astype(np.uint16)])

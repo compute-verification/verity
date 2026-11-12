@@ -144,15 +144,15 @@ class DecoderLayer(nn.Module):
 
     def __init__(self, C: dict, layer_idx: int, dtype=torch.bfloat16) -> None:
         super().__init__()
-        H, NH, KVH, D, I = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
+        H, NH, KVH, D, INTER = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
         self.NH, self.KVH, self.D = NH, KVH, D
         self.qkv_proj = LinearNoTP(H, (NH + 2 * KVH) * D, bias=C.get("BIAS", True), dtype=dtype)
         self.o_proj = LinearNoTP(NH * D, H, bias=False, dtype=dtype)
         self.rotary_emb = get_rope(D, C["MAX_POS"], C["ROPE_THETA"], dtype=dtype)
         self.attn = Attention(f"model.layers.{layer_idx}.self_attn.attn")
-        self.gate_up_proj = LinearNoTP(H, 2 * I, bias=False, dtype=dtype)
+        self.gate_up_proj = LinearNoTP(H, 2 * INTER, bias=False, dtype=dtype)
         self.act_fn = SiluAndMul()
-        self.down_proj = LinearNoTP(I, H, bias=False, dtype=dtype)
+        self.down_proj = LinearNoTP(INTER, H, bias=False, dtype=dtype)
         self.input_layernorm = RMSNorm(H, C["EPS"], dtype=dtype)
         self.post_attention_layernorm = RMSNorm(H, C["EPS"], dtype=dtype)
 
@@ -386,16 +386,16 @@ class HFDecoderLayer(nn.Module):
 
     def __init__(self, C: dict, dtype=torch.bfloat16, rope: bool = False) -> None:
         super().__init__()
-        H, NH, KVH, D, I = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
+        H, NH, KVH, D, INTER = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
         self.NH, self.KVH, self.D = NH, KVH, D
         self.rotary_emb = HFRotaryEmbedding(D, C.get("ROPE_THETA", 10000.0)) if rope else None
         self.q_proj = nn.Linear(H, NH * D, bias=C.get("BIAS", True), dtype=dtype)
         self.k_proj = nn.Linear(H, KVH * D, bias=C.get("BIAS", True), dtype=dtype)
         self.v_proj = nn.Linear(H, KVH * D, bias=C.get("BIAS", True), dtype=dtype)
         self.o_proj = nn.Linear(NH * D, H, bias=False, dtype=dtype)
-        self.gate_proj = nn.Linear(H, I, bias=False, dtype=dtype)
-        self.up_proj = nn.Linear(H, I, bias=False, dtype=dtype)
-        self.down_proj = nn.Linear(I, H, bias=False, dtype=dtype)
+        self.gate_proj = nn.Linear(H, INTER, bias=False, dtype=dtype)
+        self.up_proj = nn.Linear(H, INTER, bias=False, dtype=dtype)
+        self.down_proj = nn.Linear(INTER, H, bias=False, dtype=dtype)
         self.input_layernorm = HFRMSNorm(H, C["EPS"], dtype)
         self.post_attention_layernorm = HFRMSNorm(H, C["EPS"], dtype)
 

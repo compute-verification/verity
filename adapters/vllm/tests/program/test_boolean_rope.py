@@ -127,7 +127,7 @@ def _agree(target, inputs, chunk: int = 1 << 20) -> None:
     """Instances in slices of about `chunk` words of the first input: the bit-sliced evaluator holds ~700 bytes per word."""
     word = TR.word_of(target)
     n, step = len(inputs[0]), max(1, chunk // inputs[0][0].size)
-    bad = []
+    bad: list = []
     for i in range(0, n, step):
         part = [a[i:i + step] for a in inputs]
         got = BS.evaluate_words(target, *part).astype(np.uint64)
