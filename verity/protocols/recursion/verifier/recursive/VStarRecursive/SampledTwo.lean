@@ -3,10 +3,9 @@ SPOT's two-stage form (`verity/sampled-proofs/v1`, params and evidence `{"form":
 registration sampled once on the challenger's coins (the first stage, its replay blocks), the interior registration
 over the sampled replay blocks' proof blocks sampled once more on a challenger session of its own (the second stage),
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
-run of record over both stages (`Spot.Run.run`, through `Spot.Pieces.run`), whose round 2 holds the sessions'
-statements to the verdicts. It refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check
-runs, then a two-stage audit is refused while the two-stage form is outside the soundness theorem
-(`checkBlobsAt_refuses`). Nothing reads this module: `VStar.Recursive.Sampled` refuses the form by name.
+run of record over both stages (`Spot.Run.run`), whose round 2 holds the sessions' statements to the verdicts. It
+refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit is
+refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). Nothing reads this module: `VStar.Recursive.Sampled` refuses the form by name.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
   auditor's, fixed before any coin:
@@ -39,7 +38,7 @@ runs, then a two-stage audit is refused while the two-stage form is outside the 
   3. each verdict stamped with what round 2 reads of it, as `flock-verify verify` writes it and the stream's driver
      hands it on (`stamped`): the delivered sessions, the session's public header's and registered reads' digests, its
      sample and one table;
-  4. the stream's run of record over both stages (`Pieces.run` of `runJson`): the boundary audit over the replay
+  4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
      sample at the boundary's session roots, and the interior audit over the second sample with round 2's statement
      check, at the rest;
   5. the interior audit's verdict at its coins (`OneStage.checkAt`, as v2's per-member form decides it), which gives
@@ -49,9 +48,9 @@ runs, then a two-stage audit is refused while the two-stage form is outside the 
 module
 
 public import VStarRecursive.Protocol
-public import Spot.Pieces
+public import Spot.Run
 meta import VStarRecursive.Protocol
-meta import Spot.Pieces
+meta import Spot.Run
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -85,15 +84,16 @@ def MEMBER_CIRCUIT (m : String) : String :=
   s!"member {m}'s circuit is not a circuit the interior's proofs name for a template"
 
 structure Params where
-  boundary : Json
-  rule : Json
-  values : Json
-  declared : Json
+  boundary : OneStage.Params
+  rule : Select.Rule
+  values : Array Service.Value
+  declared : Array String
   challenger : String
   delta : Json
-  interior : Json
-  replay : Json
-  interiorValues : Json
+  interior : OneStage.Params
+  circuits : Array (String × String × Json × Json)
+  replay : Spot.Program
+  interiorValues : Array Service.Value
   audit : OneStageZk.Params
   members : Array OneStageZk.Member
 
@@ -104,7 +104,7 @@ structure Evidence where
   interior : OneStageZk.Evidence
   statements : Array OneStageZk.StatementFiles
   record : Json
-  stmts : Json
+  stmts : Array Json
 
 private def keysAre (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
@@ -112,6 +112,17 @@ private def keysAre (j : Json) (ks : Array String) (what : String) : V Unit :=
 
 private def without (j : Json) (k : String) : List (String × Json) :=
   ((entries j).filter (·.1 != k)).toList
+
+/-- The Spec's values, `{"name", "registered"}` each. -/
+def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
+  let .arr vs := j | throw s!"{what} is not a list"
+  vs.mapM fun v => match getD v "name", getD v "registered" with
+    | .str name, .bool registered => pure ({ name, registered } : Service.Value)
+    | _, _ => throw s!"a value of {what} is not a string name with a boolean"
+
+/-- Parameters as the stream's run reads them (`OneStage.paramsParsed`). -/
+def paramsAt (j : Json) : V OneStage.Params := do
+  OneStage.paramsParsed (← Core.canonicalJson (← Flock.canon j).toUTF8)
 
 /-- The form's rest: the object less its `form`, which must be `two-stage`. -/
 def split (j : Json) (what : String) : V Json := do
@@ -126,22 +137,28 @@ def paramsOfJson (j : Json) : V Params := do
   keysAre j #["boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"] "the parameters"
   let .arr os := getD j "outputs" | throw "outputs is not a list"
   if !os.isEmpty then throw OUTPUTS_REFUSED
-  let .twoStage _ _ _ ← Select.Rule.ofJson (getD j "rule") | throw "the rule is not two-stage"
+  let rule ← Select.Rule.ofJson (getD j "rule")
+  let .twoStage _ _ _ := rule | throw "the rule is not two-stage"
   let .str challenger := getD j "challenger" | throw "challenger is not a string"
-  let bp ← OneStage.paramsParsed (← Core.canonicalJson (← Flock.canon (getD j "boundary")).toUTF8)
+  let .arr ds := getD j "public" | throw "public is not a list"
+  let declared ← ds.mapM fun | .str s => pure s | _ => throw "a declared item is not a string"
+  let bp ← paramsAt (getD j "boundary")
   if (Select.strataSizes bp.verifier.program bp.verifier.query).length != 1 then throw ONE_DEFINITION
   let it := getD j "interior"
   keysAre it #["members", "params", "replay", "values"] "the interior's parameters"
   let ip := getD it "params"
-  let circuits ← Run.templateCircuits (getD ip "proofs") (getD ip "query")
+  let interior ← paramsAt (Json.mkObj (without ip "proofs"))
+  let circuits ← Spot.Run.templateCircuits (getD ip "proofs") interior.verifier.query
+  let .obj _ := getD it "replay" | throw "the interior's replay is not a program object"
+  let replay ← Spot.Program.parse (← Flock.canon (getD it "replay")).toUTF8
   let audit ← OneStageZk.membersParamsOfJson
     (Json.mkObj (without ip "proofs" ++ [("proofs", Json.mkObj [("members", getD it "members")])]))
   let some members := audit.members | throw "the interior audit names no members"
   for m in members do
     if !circuits.any (·.2.1 == m.own.circuit) then throw (MEMBER_CIRCUIT m.name)
-  pure { boundary := getD j "boundary", rule := getD j "rule", values := getD j "values", declared := getD j "public",
-         challenger, delta := getD j "delta", interior := ip, replay := getD it "replay",
-         interiorValues := getD it "values", audit, members }
+  pure { boundary := bp, rule, values := ← valuesOf (getD j "values") "values", declared, challenger,
+         delta := getD j "delta", interior, circuits, replay,
+         interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
 
 /-- The evidence (module docstring, **evidence**). -/
 def evidenceOf (b : ByteArray) : V Evidence := do
@@ -151,11 +168,11 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   let .str source := getD j "source" | throw "source is not hex"
   let source ← Flock.unhex source
   let .obj _ := getD j "record" | throw "the interior registration's record is not an object"
-  let .arr _ := getD j "statements" | throw "statements is not a list"
+  let .arr stmts := getD j "statements" | throw "statements is not a list"
   let interior ← OneStageZk.membersEvidenceOf (← Flock.canon (getD j "interior")).toUTF8
   let some statements := interior.statements | throw "the interior audit's evidence names no statements"
   pure { received, source, coins := getD j "coins", interior, statements, record := getD j "record",
-         stmts := getD j "statements" }
+         stmts }
 
 /-- The ports of the registration `record`'s roots. -/
 def portsOf (record : Json) : Array String :=
@@ -197,25 +214,26 @@ def stamped (p : Params) (e : Evidence) (bs : Core.Blobs) (out : Array (String �
       ("session_tables", Lean.toJson (1 : Nat))] ++ reads ++ draw
     pure (k, fields.foldl (fun acc (f, x) => acc.setObjVal! f x) v)
 
-/-- **The stream's run of record over both stages** (check, 4), as `Pieces.run` reads it: the boundary's parameters,
-record, rule, values, declared items, challenger, receipt and the bytes `ξ` it read, no closure, the second stage's
-sessions and the verdicts `vs`, no public outputs, the interior audit's statement, δ, the boundary's session roots and
-its coins; and the interior's parameters, replay block, values, record, receipt, the bytes `ξ₂` it read, its coins,
-proved units, instances, served units, session roots and the statements. -/
-def runJson (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : Evidence) (vs : Array (String × Json)) :
-    Json :=
+/-- **The stream's run of record over both stages** (check, 4), the input `Run.run` reads: the boundary's parameters,
+record, rule, values, declared items, challenger, receipt `received₁`'s place and the bytes `ξ` it read, no closure, the
+second stage's sessions and the verdicts `vs`, no public outputs, the interior audit's statement, δ, the boundary's
+session roots and its coins; and the interior's parameters, replay block, values, record, receipt's place `received₂`,
+the bytes `ξ₂` it read, its coins, proved units, instances, served units, session roots, the statements and the
+templates' circuits. As the stream's two-stage outcome hands its run of record the same (`_audit_two`). -/
+def inputOf (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : Evidence) (received₂ : String)
+    (vs : Array (String × Json)) : Spot.Run.Input :=
   let b := e.interior.base
   let (bRoots, iRoots) := rootsSplit c.record b.sessionRoots
-  Json.mkObj [("params", p.boundary), ("record", c.record), ("rule", p.rule), ("values", p.values),
-    ("public", p.declared), ("challenger", Json.str p.challenger), ("received", Json.str e.received),
-    ("source", Json.str (Flock.hexOf ξ)), ("closure", Json.null), ("sessions", Json.arr (b.sessions.map Json.str)),
-    ("verdicts", Json.mkObj vs.toList), ("outputs", Json.arr #[]), ("statement", b.statement), ("delta", p.delta),
-    ("proved_units", Json.null), ("instances", Json.null), ("served", Json.null), ("session_roots", bRoots),
-    ("coins", e.coins),
-    ("interior", Json.mkObj [("params", p.interior), ("replay", p.replay), ("values", p.interiorValues),
-      ("record", e.record), ("received", getD b.receipt "received"), ("source", Json.str (Flock.hexOf ξ₂)),
-      ("coins", b.coins), ("proved_units", Lean.toJson b.provedUnits), ("instances", Lean.toJson b.instances),
-      ("served", Lean.toJson b.served), ("session_roots", iRoots), ("statements", e.stmts)])]
+  { params := p.boundary, record := c.record, rule := p.rule, values := p.values, declared := p.declared,
+    challenger := p.challenger, received := e.received, source := ξ, closure := none,
+    sessions := b.sessions.map Json.str, verdicts := vs, outputs := #[], statement := b.statement, delta := p.delta,
+    provedUnits := none, instances := none, served := Json.null, sessionRoots := bRoots, coins := e.coins,
+    interior := some
+      { params := p.interior, replay := p.replay, values := p.interiorValues, record := e.record,
+        received := received₂, source := ξ₂, coins := b.coins,
+        provedUnits := some (b.provedUnits.map fun n => (n : Int)), instances := some (b.instances : Int),
+        served := Lean.toJson b.served, sessionRoots := iRoots, statements := some e.stmts,
+        circuits := p.circuits } }
 
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output. -/
 def prepare (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
@@ -225,7 +243,8 @@ def prepare (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let r ← OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs
   if !r.all then throw "proofs: a session's verifier did not accept"
   let vs ← stamped p e bs r.out
-  let run ← Pieces.run (runJson p c ξ ξ₂ e vs)
+  let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
+  let run ← Spot.Run.run (inputOf p c ξ ξ₂ e received₂ vs)
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6): the interior audit's verdict where it doesn't accept; where it does, the run of
