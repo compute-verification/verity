@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from verity_numerical.bench import instances as I
 from verity_numerical.checker import sweep as S
+from verity_numerical.checker.params import Reject
 
 ROOT = I.DEFAULT_ROOT
 
@@ -26,7 +27,7 @@ def test_a_negative_whose_hints_are_rejected_has_no_accepted_word(monkeypatch: p
     rows = [dict(zip(tier.columns, row)) for row in tier.index]
 
     def reject(*_: object) -> None:
-        raise S.Reject("outside the domain")
+        raise Reject("outside the domain")
 
     monkeypatch.setattr(S, "gen_vu", reject)
     got = [S._neg(i) for i in range(tier.n)]

@@ -6,25 +6,10 @@ fold reading, modelled served part and the TP score."""
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
+import arms as A
 import pytest
+import scoring as S
 
-FILLER = Path(__file__).resolve().parents[1]
-
-
-def _load(name):
-    spec = importlib.util.spec_from_file_location(name, FILLER / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-A = _load("arms")
-S = _load("scoring")
 share = S.share
 
 

@@ -12,11 +12,13 @@ as a Boolean circuit. It has three parts:
   for `verity.definitions.circuits.targets.target.FIRST`.
 - `checker`: a reference checker of that step with auxiliary witnesses, and the search for an output it accepts and should not.
 
-**What a caller may import** is each module's `__all__`. Its readers outside this directory are Flock's prover and pod
-scripts (`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`) and other benchmarks: `tc_probe/`
-(`bench.contract`, `bench.instances`, `reference.hawkeye_close`), and `proof_throughput/`, `judge.py` and `latency_compare.py`
-(`bench.contract`, `bench.latency`). Several benchmarks' scripts start `bench.generate` as a command, so what it prints is
-read too.
+**What a caller may import** is each module's `__all__`: every public name a file outside this directory reads is in one. The
+modules without a list (`bench.unit_costs_menu`, `bench.unit_costs_prover`) have no reader outside it, and `settings` also
+answers each setting it declares as an attribute. Its readers outside this directory are Flock's prover and pod scripts
+(`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`) and other benchmarks: `tc_probe/`
+(`bench.contract`, `bench.instances`, `reference.hawkeye_close`), and `proof_throughput/`, `judge.py` and
+`latency_compare.py` (`bench.contract`, `bench.latency`). Several benchmarks' scripts start `bench.generate` as a command, so
+what it prints is read too.
 
 **What it never does.** It states no relation of its own: every expected word comes from `verity.definitions.silicon`, and the
 reference and the checker are held to it by tests. It reads the census and the committed input sets and never writes them

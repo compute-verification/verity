@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 from verity.commitments.crypto.turboshake import turboshake128
 from verity.definitions.kernels.tc import group_sum_total_batch
+from verity.definitions.silicon import fp32
 from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16
 from verity.protocols.pouw.verifier import audit as AU
 from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
@@ -100,8 +101,8 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
         for q in range(F.R):
             acc = 0
             for p in range(F.R):
-                acc = F.fp32.fma(et[p] << 16, gl[p][q], acc)
-            row.append(C._bf16_of_word(F.fp32.add(acc, F.fp32.neg(bfr[q]))))
+                acc = fp32.fma(et[p] << 16, gl[p][q], acc)
+            row.append(C._bf16_of_word(fp32.add(acc, fp32.neg(bfr[q]))))
         mid.append(row)
     pb = np.concatenate([np.array(mid, np.uint16), eb ^ np.uint16(0x8000)], axis=1)
 

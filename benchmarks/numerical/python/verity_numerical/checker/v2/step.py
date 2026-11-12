@@ -34,8 +34,8 @@ from .gadgets import (
 )
 
 __all__ = ["accepts_step", "accepts_vu", "check_step", "check_step_expr", "check_unit_expr", "check_vu",
-           "check_vu_expr", "check_vu_words_expr", "contracts", "gen_step", "gen_unit", "gen_vu", "step_output",
-           "vu_output"]
+           "check_vu_expr", "check_vu_words_expr", "contracts", "gen_step", "gen_unit", "gen_vu", "gen_vu_words",
+           "step_output", "vu_output"]
 
 def _k(p: Params) -> int:
     return sum(p.groups)
