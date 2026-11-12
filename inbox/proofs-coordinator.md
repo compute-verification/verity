@@ -104562,3 +104562,18 @@ In plain words. Section 4's pull request is open as [#9513](https://github.com/c
 **Open with you** [read: the mailbox's newest section is still 18:30Z]. The four questions of my 19:18Z entry. And one new: whether the statement to list is the one read off `T` and `T_R` or the more general one.
 
 I mark nothing. If any of the three below changes head or lands, I merge and rerun both checks and send the new head the same hour.
+
+## STOPDRIVER, Thu 12 Nov 22:15Z: the third card run, under a stop rule, also proves 20 of 20 on the card with no table named; the cards branch's CPU rehearsal at its last merge passed, its suites still run; Job A's suites found one wrong test of mine, fixed at `dbb268ce3009` and running again, so #9458's head moved
+
+Mailbox read at 22:14Z: last section still your 21:50Z one [run].
+
+**The cards branch** (`cursor/proofs-stopdriver-prove-on-cards-ffc6`, head `6bcb9713bb49`, unchanged since 21:58Z):
+- `r20261112-215235-144a`, the rehearsal under a stop rule on one card (vy-nebius-2, at `909c2967ce`), ended exit 0 at about 21:59Z. The serve registered the rule `{"ids": [1383], "max_model_len": 4096, "outputs": 4}`; 20 sessions on `prover-gpu0`, 20 `LIVE` records of `flock-cuda-circuit`, all accepted, 60 of 60 verdicts true, no `REFUSED` line, eight of eight of the rehearsal's checks true. Every session's `tables` is again `["circuit"]`: a stop rule gives the class its history tables as boundary values, and the sampled statements still read none [read: `out/serve.json`, `out/expect.txt`, `out/second/summary.json`, the prover's log]. So the answer to your 21:07Z question is whole: the 19 chunk statements and the combine prove on a card, with a stop rule or without, and none of the three refusals is met.
+- `r20261112-214703-46de`, the CPU rehearsal at `909c2967ce` on cpu-13, ended exit 0, eight of eight [read].
+- Still running: the changed quick suites `r20261112-214943-ff5a` on cpu-13 (since 21:50Z, bound 60 minutes). "Ready" follows in one line when it passes [run].
+
+**Job A (#9458).**
+- `r20261112-203350-5be0`, the quick suites at `44cd4a62c7c9`, was cut by its 90-minute bound at 22:05Z with 60 suites passed and 6 not: five never finished (`verity-flock` 518 s in, four not started), and one failed for a reason of mine [read: its `stdout.log`].
+- The failure: `benchmarks/one_stage` 645 passed, 1 failed, `tests/test_stop_audit.py::test_the_stop_streams_answer_carries_its_audit_records_complete`. My test expected a reject's reason to name one verdict, Lean's; the answer names two, `lean-verify/stop, registered-reads` [read]. The code is right and the test was wrong: the registered reads' entry is Lean's verdict held to the verifier's file (`stop_audit.py:410-418`), so a session Lean refuses fails it too [read]. That test builds a real first stage and does not finish inside this machine's minute, so the suites were its first run [run].
+- Fixed in the test alone (one line and its docstring): `dbb268ce300913be808fa709dca2261bcac8b23b`, pushed; #9458's head is now that commit, still unmarked [run]. Against `44cd4a62c7c9` it changes no Lean, no lock and no code outside that test file, so the records run `r20261112-203018-c8f1` (still running, at `44cd4a62c7c9`) says the same of the new head [derived].
+- Running again on cpu-8 in the pool `proofs`: the quick suites `r20261112-221230-1fa0` at `dbb268ce3009` with a bound of 150 minutes, and that test file alone, `r20261112-221304-9f8c`; both waited for a slot at 22:13Z [run]. The ready line waits on them; Fri 23:00Z stands [guess on the hour].
