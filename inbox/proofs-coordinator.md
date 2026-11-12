@@ -97014,3 +97014,55 @@ Clock: `date -u` read 19:19Z before posting. Read only: no build, no run, nothin
 ### Next
 
 Item 2 of your 19:00Z turn: the four runs, then PRF-585's merge, both merge-trees against `main` and `origin/cursor/lean-remote-merge-onmain-fc8d`, its pull request and ready line; then the lever's.
+
+## RELAX, Thu 12 Nov 19:20Z: STOP RULE, yours to clear: R7's admission changes what `Properties.Spot.acceptMeans` says (R1's switch, R7's values, one new conjunct `CertifiedHeld`) and widens its open premise `ExpectsV2`; no new named assumption; both tries are queued and neither has started
+
+**Where it stands.** `cursor/proofs-r7-certified-b6a0` is at `20f5c21dfe37fd480afe160e7e9f4aa6c41bad1c`, four commits on #9375's head `e209a56847d4` [run: `git log`, `git push`]. The keyword and its shape are as in my 19:07Z entry, unchanged [read: my diff].
+- `0b8617b4e4db`: the Python (`registration.check`, `verifier.check` and `run`, `Stream.register`, the kept entry, `_audit`, `_audit_two`) [run: probe on the VM, Python's check only].
+- `7ea8151775`: the Lean code. `Registration.Verifier.certified`, `Verifier.v2`, `checkOutputs`' certified entries, `certifiedHeld` with the code `R7-certified`, the same term in `check` and `checkRef`; `OneStage.paramsParsed` reads the key `certified` as Python's `_certified` does; `Pieces.run` refuses an interior's params that name `certified` (so a two-stage interior with certified entries stays refused in the Lean's run too) [read: my diff; nothing of it has been elaborated yet].
+- `14b2918a76` and `20f5c21dfe`: the statement and the proof, **as tried, provisional**, on the branch only because the two tries you ordered need a statement to run against, and because an uncommitted tree is lost when my VM resets.
+
+**The statement, before and after** (`security/Properties/Spot.lean`; the listed guarantee is `Properties.Spot.acceptMeans : Properties.Spot.AcceptMeans`, owner @proofs, whose signature does not change; what moves is what `Registered`, which it reads, says) [read: `git diff 0b8617b4e4 14b2918a76 -- security/Properties/Spot.lean`]:
+
+```lean
+-- before
+def ExpectsV2 (v : Registration.Verifier) : Prop := v.registered.isEmpty = false
+-- after
+def ExpectsV2 (v : Registration.Verifier) : Prop := (v.registered.isEmpty && v.certified.isEmpty) = false
+
+-- R1, before: keys? rec = some (if v.registered.isEmpty then KEYS else KEYS_V2), and the format likewise
+-- R1, after:  keys? rec = some (if v.registered.isEmpty && v.certified.isEmpty then KEYS else KEYS_V2), likewise
+
+-- R7, before (its last three conjuncts)
+    ValuesAre es mine' ∧
+    (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+      EntryIs e want (heldFor v.supplied held' want.value)) ∧
+    SuppliedIs es mine' v.supplied (Supplied.root …)
+-- R7, after: `mine'` becomes `mine' ++ v.certified.map (·.1)` in each of the three
+
+-- new
+def CertifiedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
+  ∀ x ∈ v.certified, ∃ e, Registration.entryOf rec x.1.value = some e ∧ jeq (getD e "root") (.str x.2) = true
+
+-- Registered, before
+    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ R8 v ∧ RL v
+-- Registered, after
+    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v ∧ CertifiedHeld rec v) ∧ R8 v ∧ RL v
+```
+
+- In words: a verifier that holds certified entries expects a v2 record; the record's registered values are exactly the verifier's own and the certified ones, each once (a value in both is in no accepted record); a certified value's entry has the verifier's leaves, words, word bits and domain; and it has the verifier's root [read: the definitions above].
+- For a verifier with no certified entries the new statement says what the old one says: `x && true = x`, `mine' ++ #[] = mine'`, and `CertifiedHeld` holds of the empty list [derived, from the definitions; not a lemma in the tree].
+- **No new named assumption**, nothing added to `Assumptions.lean`, and no new premise of `acceptMeans` [read: my diff]. `Properties.Spot.ExpectsV2` is already the one `open` premise of `acceptMeans` in `security/Properties/lean-audit.json` (owner @proofs, LEAN-186, due 30 Nov); it keeps its name and its role, the guard of R7's conjunct, and its definition widens as above, so its digest in the lock moves [read: the lock's `open` and the guarantee's `premises.open`].
+- Lock records I expect to move: `Properties.Spot.acceptMeans`' unfolded hash (in `guarantees` and `unwitnessed`) and `ExpectsV2`'s digest, in `security/Properties/lean-audit.json` [derived: it is the only guarantee of that lock whose record names any of the changed definitions; run by me: a scan of the lock for `ExpectsV2`, `Registered`, `R7`, `Registration.check`]. Whether a record of `security/lean-audit.json` moves through `OneStage.check` or `Run.run` I have not established; only a records run says.
+- **What it does not say**, as before: that the entries the verifier holds are the certifier's (that is the driver's `check_registration` and its key), that the `--registered` file derives from the record (soundness's open premise), or that the rows link (PRF-490) [relayed: your 16:50Z and 17:07Z sections of Wed].
+
+**What I hold until your word:** the records run, any lock change, and the pull request. If the statement has to take another form (for instance a second guard beside `ExpectsV2` instead of widening it), the proof's change is about thirty lines and I redo it [derived: `git diff --stat 14b2918a76 20f5c21dfe`: 39 insertions, 25 deletions in two files].
+
+**The two risks: neither is answered yet.** Both tries were launched at 19:16Z at `20f5c21dfe` and wait for a slot on vy-nebius-cpu-7; the launcher's own estimate was a start in about 31 minutes, with 19 runs ahead [run: `research run --on auto --as proofs … lean_changed.py --try FILE`, `research status` at 19:19Z: both `submitted`].
+- Risk 1, `check_eq_checkRef`'s `simp`: `r20261112-191616-e348`, try of `verity/protocols/spot/verifier/lean/Spot/Registration.lean`. ETA about 20:15Z [guess: the wait plus the file's build].
+- Risk 2, `history_of_R7` and `registration_nil` over the new statement: `r20261112-191616-ea04`, try of `security/Proofs/Properties/Spot.lean`. ETA about 20:45Z [guess]. It also elaborates `OneStage.lean`'s new parser, which is its import.
+- Risk 2 is smaller than I named it at 18:47Z: `ownEntries` is not longer. The certified entries join after the output values' steps, so `heldRoots`, `PinnedHeld` and `history_of_R7` read the same own entries as today and each needs one `Array.mem_append_left` [read: my diff of `Proofs/Properties/Spot.lean` and `Spot/Pinned.lean`].
+
+**Meanwhile**, since none of it depends on the statement's final wording: the tests (`test_registered.py`, the Lean difftest's vectors, the stream test in the form of `test_service_outputs.py:159-170`, `register_interiors` refusing). For network's file list: `verity/protocols/spot/verifier/lean/Spot/Pieces.lean` is now among the files.
+
+For the table: R7 | `cursor/proofs-r7-certified-b6a0` at `20f5c21dfe37` | statement change written out above, waiting for your word before the records run and the PR | tries `e348` (about 20:15Z) and `ea04` (about 20:45Z) queued | next checkpoint by 20:20Z.
