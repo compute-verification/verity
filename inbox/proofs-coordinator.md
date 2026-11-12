@@ -70401,3 +70401,37 @@ Your 04:06Z section was read at 04:08Z and your 04:19Z correction at 04:20Z [run
 | `r20261112-041513-1065` | `6ef9e427d69b` | the same, refused at launch | refused before starting, no result |
 
 **Not done.** Job 3 (waits on #9092). #9128 is open and superseded (yours to close). Nothing is pushed to #9075's branch.
+
+## STOPDRIVER, Thu 12 Nov 04:29Z: ready line for #9081 at `0b6bdb0352e1`: its three checks at that head pass, no lock record moves; it waits on a second reader and on #9028
+
+**Mailbox** [run] read at `20cf67ae75`: the 03:39Z section (two questions on NET-297, by Thu 20:00Z) is the last; its answers are my next entry.
+
+### READY #9081, head `0b6bdb0352e1`
+
+- [run] **The head.** `0b6bdb0352e1` on `cursor/proofs-stopdriver-034c`, base `main`, holding #9028's head `eabb2d72de2e` and `main` at `be9a3d566905`. Open, not marked, `Refs PRF-565`. Its own change is 7 files, +1,634 and −3 lines.
+- [read] **Before and after, in one sentence.** Before, nothing proved a stop class's sampled stop blocks, and no Lean function said whether a record of one stream may rest on a record of another; after, a driver proves them and writes the stop stream's audit record, and the Lean verifier's executable has two new pieces, `across` and `across_all`, which say of each such read whether the earlier record was logged, was received first, and has an audit record that accepted and is complete (cases 1 to 4).
+- [read] **What a verifier accepts.** The Lean verifier's executable serves two new pieces. No existing piece changes. No guarantee's statement and no premise changes; nothing under `security/` is touched.
+- [run] **The records that move:** `{}`. That is `regenerated` in the records run's `audit.json`, parsed; its `failed` is `[]`, and the run kept no record under `lean-audit/record/`, so there is nothing to commit.
+
+### The runs, all at `0b6bdb0352e1`, all exit 0
+
+- [run] `r20261112-030020-70e6`: the Lean records run of `verity/protocols/spot/verifier/lean`. Pass for that package (5,782 declarations in 51 modules, the three axioms only, 0 guarantees) and for `security`, `security/Properties` and `security/Proofs`. It is a `lean-fast/v1` pass, on the check slot's kept build and without the kernel replay; the candidate's check replays. 5,126 s, 3,083 s of it waiting for a slot.
+- [run] `r20261112-030020-e203`: `suites.py --changed origin/main --quick`: 67 of 67 suites passed, among them `benchmarks/one_stage` (549 passed), `verity/protocols/spot/verifier` (856) and `repository` (308).
+- [run] `r20261112-030020-df45`: the rehearsal `stop_audit_small.sh`, five audits, each as `expect` holds it. Accept: exit 0, case 3, accepted and not complete. A length that is not the stop rule's: exit 1, Lean refuses the session ("zk inner: the batched constraint fails"). A stop record on a boundary record never logged: exit 1, case 2. A boundary audit that did not accept: exit 1, case 3. **A boundary audit that accepted and is not complete (new): exit 0, case 4**, `boundary-audit` without a verdict and with its reason, the record accepted, not complete, no length held.
+- [run] `r20261112-024412-2cb4`: the `stop_audit or two_stage_driver` selection, 19 passed. `r20261112-024412-f616` and `r20261112-024412-01a4`: `verity lean try` of `Spot/RecordAcross.lean` and `Spot/Pieces.lean` with `--siblings`.
+
+### For the second reader, three things to rule on or to know
+
+1. [read] **The `boundary-audit` entry on case 4 has no verdict** (`accepted: null`), so the stop stream's audit record can accept and is not complete (`benchmarks/one_stage/stop_audit.py`, `boundary_entry`). The other choice is a refusal. Mine, not ruled.
+2. [read] **`accepted` and `complete` are read from the audit record's own fields** (`Spot/RecordAcross.lean:144-154`). Lean recomputes neither, and nothing verifies that the record handed is the one the earlier stream's verifier wrote. A forged record that says `complete: true` is case 1. That is the `boundary-audit` premise, which the entry names.
+3. [read] **`across_all` is served by the verifier and read by nothing but its difftest.** If no tie's record comes to call it, it is unused code in the trusted executable.
+
+### What stands between this and a mark
+
+- [run] **#9028 is not on `main`** (open at `eabb2d72de2e`, 04:19Z).
+- [run] **`main` has moved** to `62bf29346f76` (eight pull requests since `be9a3d566905`). A trial merge into this head, not committed, has no conflict. None of my seven files is among its changes; it changes three lines of the Spot verifier's package (the challenger's limits of #8914). [guess] So the merge is mechanical, and the three checks run once more at the merged head when you say it is the head to mark. I have not merged, so that the head does not move under the second reader.
+- [read] I do not mark it.
+
+### One thing that is not mine
+
+- [read] At 04:16Z my conversation was handed the completion notices of four other workers of the lane (the ones titled SESSIONS, KEPT, HEADSPLIT and LAND3), as if I had launched them. I launched none and acted on none. [guess] If you did not get them, they went to me in your place.
