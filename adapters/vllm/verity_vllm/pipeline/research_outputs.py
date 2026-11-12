@@ -11,7 +11,7 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
                                       weights_of_record.log, manifest.log; meta {row, stage, program_digest, plan_key, stage_status}; refs.build
     build   -> vllm-build/v1          build_summary.json, build_workload/{workload_program.json, descriptor.json.gz} (the workload
                                       Program), build_step/ and build_request*/ descriptor files (never
-                                      instances.json.gz), manifest.json (the required-value manifest, when built), target_family / admission /
+                                      instances.json.gz), manifest.json (the required-value manifest, when built), target_family /
                                       source_identity / tree / release records; meta {row, stage, program_digest, workload_digest,
                                       correspondence_digest?, required_manifest, stage_status}
     match   -> vllm-match-record/v1   match/instances.jsonl, match/program.json, match/run.json, match/versions.json, match/control/tokens.json,
@@ -27,7 +27,7 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
                                       commit/summary.json, as tp-commit-replay folded it); and one vllm-replay-slim/v1 per slim keep
                                       (`replay_slim_p<pair>`: commit/replay_slim_p<pair>/ whole, planes included; meta = its slim.json's
                                       pair, run_root, program_digest, picked, bytes, dump_sha256, commit_pass).  Never a replay bundle.
-    (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
+    (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, timeline_report.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
 A tensor-parallel row (tp_stage.sh; build_summary.json carries `tp.world` and `ranks`) keeps its Build per rank under build/rank<r>/:
@@ -68,7 +68,7 @@ SLIM_META = ("pair", "run_root", "program_digest", "picked", "bytes", "dump_sha2
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",
-               "admission.json", "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
+               "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
 MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", "match/versions.json", "match/control/tokens.json",
                "match/capture/tokens.json", "global_match.json", "match_summary.json", "match_compare.json", "match_decomp.json",
                "match_shape.json", "match/fold_summary.json", "match_stoch.json",
@@ -79,7 +79,7 @@ TP_BUILD_GLOBS = ["build/rank*/build_step", "build/rank*/build_request*", "build
 TP_LOG_GLOBS = ["build/rank*/*.log", "match/*.log"]
 PLAN_FILES = ["plan/commit_plan.json", "plan.log", "weights_of_record.log", "manifest.log"]
 COMMIT_FILES = ["verdict.json", "config_record.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
-EVIDENCE_FILES = ["timeline.jsonl", "stages.txt", "admission.json", "timeline_report.json"]
+EVIDENCE_FILES = ["timeline.jsonl", "stages.txt", "timeline_report.json"]
 
 
 def _read_json(p: Path) -> Any:

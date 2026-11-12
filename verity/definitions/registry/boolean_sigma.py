@@ -5,6 +5,7 @@ its word).
 
     ResidualAdd_v2{N}, AllGather_v2{WORLD,N}, EmbeddingShard_v2{VS,H,START}, AllReduceRmsNormMnnvl_v2{WORLD,N,SHOT,CLUSTER,EPS,FMA}
     AllReduceResidualMnnvl_v2{WORLD,N,SHOT}, RmsNormMnnvl_v2{N,SHOT,CLUSTER,EPS,FMA}   (the fused one's parts)
+    RmsNormMnnvlSumSq_v2{N,SHOT,CLUSTER,EPS,FMA}, RmsNormMnnvlApply_v2{G,SHOT}   (that norm cut at its scale)
     DotBf16_v4{K}, GemmCoordinate_v4{K}, Gemm_v4{K,N}   (σ of b1's v1, the Ampere accepted kind; v2's is ops.boolean.gemm's v3)
     MhcFusedPostPre_v2{HC,H,NS,TH,TN,REPEAT,EPS,HC_EPS}
     InductorRMSNorm_v2, InductorAddRMSNorm_v2, InductorAdd2RMSNorm_v2, InductorAdd2RMSNormFinal_v2   {N,EPS,XBLOCK,R0_BLOCK,NUM_WARPS}
@@ -29,6 +30,7 @@ from __future__ import annotations
 
 from verity.definitions.boolean import sigma_lift
 from verity.definitions.registry import b1, b1_tp2, cublas_bf16 as CB, cuda_rmsnorm as CR, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
+from verity.definitions.registry import tp_allreduce_split as TS
 
 __all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "ArgmaxStepF32", "DotBf16", "DotTf32", "EmbeddingShard",
            "Fa3AttentionHeadSplit", "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "GemmTf32", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal",
@@ -37,7 +39,7 @@ __all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "Argm
            "MoeAlignBlocks", "MoeAlignPar", "MoeAlignRank", "MoeAlignRankStart", "MoeAlignRanks", "MoeAlignStart",
            "MoeExpertCoordinate", "MoeExpertCoordinateW", "MoeExpertGemm", "MoeExpertGemmW", "MoeExpertRow", "MoeRouterTopK",
            "MoeRouterTopKNorm", "RMSNormFusedCudaVector8", "RMSNormPairSumCuda", "RMSNormSumInOrderCuda",
-           "RMSNormSumStepCuda", "ResidualAdd", "RmsNormMnnvl"]
+           "RMSNormSumStepCuda", "ResidualAdd", "RmsNormMnnvl", "RmsNormMnnvlApply", "RmsNormMnnvlSumSq"]
 
 ResidualAdd = sigma_lift(b1.ResidualAdd, 2)
 DotBf16 = sigma_lift(b1.DotBf16, 4)
@@ -48,6 +50,8 @@ EmbeddingShard = sigma_lift(b1_tp2.EmbeddingShard, 2)
 AllReduceRmsNormMnnvl = sigma_lift(TA.AllReduceRmsNormMnnvl, 2)
 AllReduceResidualMnnvl = sigma_lift(TA.AllReduceResidualMnnvl, 2)
 RmsNormMnnvl = sigma_lift(TA.RmsNormMnnvl, 2)
+RmsNormMnnvlSumSq = sigma_lift(TS.RmsNormMnnvlSumSq, 2)
+RmsNormMnnvlApply = sigma_lift(TS.RmsNormMnnvlApply, 2)
 MhcFusedPostPre = sigma_lift(mhc.MhcFusedPostPre, 2)
 
 InductorRMSNorm = sigma_lift(I.InductorRMSNorm, 2)

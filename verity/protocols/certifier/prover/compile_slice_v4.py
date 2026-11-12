@@ -121,11 +121,8 @@ def dense(S) -> list[tuple[int, int]]:
 
 
 def key_tok(S) -> int:
-    """The key's token width: CTW, widened until a block's B tokens are whole bytes."""
-    tok = S.CTW
-    while S.B * tok % 8:
-        tok += 1
-    return tok
+    """The key's token width: CTW, widened until a block's B tokens are whole bytes (`block_key.token_width`)."""
+    return BK.token_width(S.CTW, S.B)
 
 
 def shape(S) -> SimpleNamespace:

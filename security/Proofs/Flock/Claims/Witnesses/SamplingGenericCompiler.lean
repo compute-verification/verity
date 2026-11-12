@@ -37,8 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The generic sampled compiler's statements say something
 
-Each closed statement of the generic sampled compiler (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`,
-`CompilerBits`, `CompilerEfficient`, `CompilerZK`) is a guarantee that the lock's `claims.generic` names, held to two
+Each closed statement of the generic sampled compiler (`CompilerKS`, `CompilerKSReg`, `CompilerKSRegX`,
+`CompilerKSCount`, `CompilerBits`, `CompilerEfficient`, `CompilerZK`) is a guarantee that the lock's `claims.generic` names, held to two
 witnesses (the lock's `witnesses`): honest ones, whose conclusions are its premises holding together at one instance,
 and a nontrivial one, at which its conclusion fails. Each builds its instance: coins `Bool` and the hash SHA-512
 (`FlockDeploy.sha512`), at the toys of `Witnesses.SamplingGeneric`, `SamplingGenericCost` and `SamplingGenericZK`.
@@ -46,7 +46,7 @@ and a nontrivial one, at which its conclusion fails. Each builds its instance: c
 * Honest: `twoL`, two sessions over `twoA` that each accept, under a binding commitment (`compilerKS_honest`), whose
   opening checks make no call (`compilerBits_honest`); `echoL`, one masked session over the zero-knowledge `echoArg`,
   with the toy witness in its sampling relation (`compilerZK_honest`).
-* Nontrivial: `sksL` (accepts with an empty relation) fails `KS`, `KSReg`, `KSCount` and `Bits`; `effL` (its opening
+* Nontrivial: `sksL` (accepts with an empty relation) fails `KS`, `KSReg`, `KSRegX`, `KSCount` and `Bits`; `effL` (its opening
   check calls more than it counts) fails `Efficient`; and `talkL` (a talking prover, a silent simulator) fails
   `ZkCompiled.ZK`.
 -/
@@ -61,7 +61,7 @@ open Claims.Witness.SamplingGeneric
 
 /-- **`CompilerKS`'s premises hold together at two sessions**: `twoA` is knowledge sound, `twoL`'s commitment binds,
 `twoL` meets the contract, the empty statement is in scope, and each run checks both proof blocks and is accepted. Also
-`CompilerKSReg`'s and `CompilerKSCount`'s, and with `compilerBits_honest` `CompilerBits`' and `CompilerEfficient`'s. -/
+`CompilerKSReg`'s, `CompilerKSRegX`'s and `CompilerKSCount`'s, and with `compilerBits_honest` `CompilerBits`' and `CompilerEfficient`'s. -/
 theorem compilerKS_honest :
     (twoA Bool).KS FlockDeploy.sha512 ∧ (twoL Bool).commit.Binds FlockDeploy.sha512 ∧
       (twoL Bool).Sessions FlockDeploy.sha512 ∧ (twoL Bool).Scope [] ∧
@@ -84,6 +84,9 @@ theorem compilerKS_nontrivial : ¬ (sksL Bool).KS FlockDeploy.sha512 := compiled
 
 /-- **`CompilerKSReg`'s conclusion fails** at `sksL`. -/
 theorem compilerKSReg_nontrivial : ¬ (sksL Bool).KSReg FlockDeploy.sha512 := compiledKSReg_fails _
+
+/-- **`CompilerKSRegX`'s conclusion fails** at `sksL`. -/
+theorem compilerKSRegX_nontrivial : ¬ (sksL Bool).KSRegX FlockDeploy.sha512 := compiledKSRegX_fails _
 
 /-- **`CompilerKSCount`'s conclusion fails** at `sksL`. -/
 theorem compilerKSCount_nontrivial : ¬ (sksL Bool).KSCount FlockDeploy.sha512 := compiledKSCount_fails _

@@ -1,8 +1,8 @@
 """wipe-egress: the network certifier's count of what can leave a node on the link its network certifier relays over a
 memory wipe's session [t0, t1), read off the gate's network certifier run (`vy-challenger-gate warden-rehearse`,
-`wipe_gate.sh`), as the ``wipe-egress/v1`` record the wipe's reader takes: when it is ``covered``, its
-`wipe_period.certify(p, egress_mib)` replaces the bound of the wipe signed `UNCOUNTED`; otherwise the wipe stays
-uncounted.
+`wipe_gate.sh`), as a ``wipe-egress/v1`` record, ``covered`` or not ("What it reads"). The record is all this script
+writes: what the wipe's reader does with one is its own function, `wipe_monitoring.counted`
+(`verity/protocols/pous/verifier/wipe_monitoring.py`), and is stated there.
 
     python wipe_egress.py RUN --t0-ns T0 --t1-ns T1 [--pad-ms 1000] [--out FILE]
 

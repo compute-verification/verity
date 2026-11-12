@@ -48,7 +48,7 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | γ | The honest overhead: honest busy SM-time ≤ (1 + γ)·(fastest stock time for the same MACs) at the served shapes, pooled over the served mix; γ ≤ 10 at each operating point (C compute-bound, L memory-bound, swept per card). | `Pouw.RelativeSecurity.Efficient`; operating points not yet in Lean |
 | fixed operand B_w | A GEMM operand fixed before the salt and reused across units, by id; model weights are its usual instance, never a first-class notion of their own. | `Pouw.Layout.fixedId`, `Pouw.Workload.fixed`, `Pouw.PearlC.Workload.FixedOK` |
 | inert work, ι | A tile's operations that don't affect its output: left out, the output is bit-for-bit unchanged (an FP32 add that rounding discards, an add into zero). The inert-work bound: on each sampled tile, the verifier computes it exactly and requires at most ι of the tile's credit (1/400 on the H100, 1/1,000 on the RTX PRO 6000); a sampled tile over it is credited nothing. Incorrect work, which sampling bounds, is separate. | `Pouw.PearlC.Skip`; `capOK`, `debitOf` until renamed |
-| SPOT[Π] | SPOT, the Sample-and-PrOve Transform, over Π, read "SPOT over Π", SPOT always in capitals. SPOT is a transform, not a protocol: from a proof system Π knowledge sound for single proof blocks it builds the argument SPOT[Π] for a whole partitioned computation, whose prover commits to every proof block and proves only the sampled ones; a SPOT proof is one run's commitments and Π-proofs. SPOT preserves completeness, zero knowledge and knowledge soundness, relaxed to the sampled relation, and states its costs. The deployed one is SPOT[Flock]; the recursion compiler has no name. | `Claims.SamplingGeneric` (`CompilerKS`, `CompilerZK`, proved); SPOT[Flock]'s claims: `Claims.Sampling` |
+| SPOT[Π] | SPOT, the Sample-and-PrOve Transform, over Π, read "SPOT over Π", SPOT always in capitals. SPOT is a transform, not a protocol: from a proof system Π knowledge sound for single proof blocks it builds the argument SPOT[Π] for a whole partitioned computation, whose prover commits to every proof block and proves only the sampled ones; a SPOT proof is one run's commitments and Π-proofs. SPOT samples and verifies one quantity at two levels: a run, and a monitoring period, whose pooled bound is the second level (every run's bound at once is compose over the period's runs). SPOT preserves completeness, zero knowledge and knowledge soundness, relaxed to the sampled relation, and states its costs. The deployed one is SPOT[Flock]; the recursion compiler has no name. | `Claims.SamplingGeneric` (`CompilerKS`, `CompilerZK`, proved); SPOT[Flock]'s claims: `Claims.Sampling` |
 | E, reach | An incorrect proof block's reach E: the set of served outputs it can change downstream, everything after it being locally correct. The wiring alone fixes it, and a set's reach is the union of its members'. Incorrect proof blocks change no served output outside their reach, so \|E\| bounds what they put on the served outputs. | `Population.Dataflow.coneEgress O {u}`, whose size the Lean writes E(u); `WeightSecurity.Served.Local`'s `E` bounds it per incorrect proof block |
 | run (SPOT) | SPOT's unit: the proof system's run of one registration, from its public check through its verdict, with its boundary commitment, live coins, sample, proofs and verdict. The run's serving, the span whose values it commits, is an execution phase. Its length, the run length, is a deployment parameter (600 s in the reference deployment, `window_s`), neither a circuit nor a security concept. | `Spot.Run` |
 | Break, B^τ, 𝒟_b^τ | The event that the fixed finder exhibits a SHA-512 collision, or the fixed forger a valid LMS signature under a device's registered key on a message the device's log never signed, charged as f(Pr[B^τ collides]) + Pr[the forger succeeds] and never assumed away; B^τ and 𝒟_b^τ are the finder and the distinguisher at server block b built from τ, Adv_PRF(𝒟_b^τ) the PRF term. | not yet in Lean |
@@ -85,7 +85,7 @@ denominator, an overlap counted once:
 | server block S, c_S, k_S | The actual circuit's gates on one registered server between two memory wipes. Its gate budget is c_S = ⌊Φ_s·Δ_wipe⌋; its fresh-input budget k_S = k_wipe + (r_in + r_side)·Δ_wipe is what the memory wipe leaves of M_s (≤ 4×10^10 bits plus egress) plus the network bits entering during it. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the sum over server blocks not yet in Lean |
 | inference block I, c, k | A block of 𝓘 (above; "(c, k)-block" only in technical detail). In verified compute 𝓘 refines the server blocks. | 𝓘 is a `Verity.Partition`, nested by `Verity.Partition.Refines`; the nesting not yet in Lean |
 | N | The necessary subcomputation: what every successful training run must compute (the P_α above), N counted objects of a kind we choose: products (weight × activation multiplies), products with their partial sums, or outputs the update can be recovered from. | not yet in Lean |
-| pricing argument, bounding strategy | Fresh-input bits per counted object, giving the yields (HeldRate prices products). A bounding strategy: a necessary subcomputation and its pricing argument; the bound takes the strongest that applies. | `Nci.Guarantees.ThreadedReads`, `Nci.Guarantees.IncompressibleContainedTraining`; strategies not yet in Lean |
+| pricing argument, bounding strategy | Fresh-input bits per counted object, giving the yields (HeldRate prices products). A bounding strategy: a necessary subcomputation and its pricing argument; the bound takes the strongest that applies. | `Nci.Guarantees.ThreadedReads`; strategies not yet in Lean |
 | q_S, q(c, k) | The server-block yield, the most counted objects one server block can complete within its budgets; the inference-block yield, the same for one inference block. | not yet in Lean |
 | straddle term | The counted objects computed partly in verified and partly in free compute inside one block, bounded by the bits crossing between them. | not yet in Lean |
 | T_min, T_ref, slowdown lower bound | The least GPU-hours that can fit N; those of the reference training algorithm, the best known way to train with no protocol, which bound T_𝒢(η; 𝓕); the result, T_min/T_ref ≤ slowdown(𝒢, 𝒜, η) (below). | T_min, T_ref not yet in Lean; the result `Nci.Guarantees.Dampener`, `Nci.Guarantees.DampenerRemote`, renamed later |
@@ -207,7 +207,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "session" for anything but Flock's and the ZK server's session (ARCHITECTURE.md's Glossary, Session); code and records' `session` in those other senses (`session_id`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the ZK server's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`security/Definitions/Pouw/Assumptions/Dither.lean`), until renamed | Dither |
-| "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
+| "the accelerator model", "the machine model" for 𝓜 (`benchmarks/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
 | "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `verity/protocols/inference_only/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`), until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (honest overhead γ, and ρ as 𝓜's resource rate, stay) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
@@ -236,7 +236,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "words" for Dither's committed 16-bit sums | prefix sums |
 | "staging", "the staging decode" for copying a stored model's bytes into GPU memory and decoding them to the served weights; `benchmarks/torch_gpu/p2_stage`, until renamed | the store's load |
 | "post-landing run", "postland" | after-landing run |
-| "train" for a batch of PRs landed on one check | none: drive lands the reviewed prefix of `next` |
+| "train" for a batch of PRs landed on one check | candidate |
 | "draw" (noun, verb), "drawn proof block", "drawn unit", "sampled unit"; `DrawIsCoin`, `Remote.Draw.Session`, `--draw`, until renamed | the sample, a sampled proof block; to sample (coins are flipped) |
 | "components", "product" for a composite's parts and their joining, and the Lean's and wire format's names | subprotocols; composition |
 | "firewall"; `flock-firewall`, `Flock.Firewall`, `FC_FIREWALL*`, until renamed | the ZK server |
@@ -250,7 +250,8 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "proof service" | proof system |
 | "audit coin"; "the audit" as a step | challenger's coins; verification phase |
 | "prover" for the party: "the prover's node, machine, host or site", "a machine the prover doesn't control", "nothing the prover runs or hosts", "prover-controlled", "prover hardware", "the prover system" | the developer: the developer's node, machine, host or site, a machine the developer doesn't control, the developer's hardware ("prover" stays for the proving side of a proof: Flock's prover, a proof's messages, a cheating prover in a soundness statement) |
-| "deployment" for onsite or remote, "onsite deployment", "remote deployment" (a datacenter running Verity, a deployment record and `verity.configuration.deploy` keep the word) | composite protocol: onsite or remote, the Lean's `Composite` |
+| "deployment" for onsite or remote, "onsite deployment", "remote deployment" (a datacenter running Verity, a deployment record and `verity.configuration.deploy` keep the word) | configuration: onsite or remote, the Lean's `Composite` |
+| "composite protocol" (the Lean's `Composite` keeps its name) | configuration: onsite or remote; protocol soundness is stated per configuration |
 | "named premise", and "premise" for a named `Prop`: "the card premise" | assumption, or a proposed assumption until a lock lists it: the card assumption ("premise" stays for a theorem's hypothesis) |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
 | tick(g) | t(g) |
@@ -268,7 +269,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   (`security/Definitions/Core/Accel/`), their resources (tensor cores, issue slots, shared-memory and register ports,
   device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000.
 - **The card table** is one SKU's numbers at its firmware maximum: its per-resource rates ρ, stores, formats and clock
-  ceiling (`benchmarks/pouw/machine_model/`'s data).
+  ceiling (`benchmarks/machine_model/`'s data).
 - **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Op`), each priced by a card's rates.
 - **The card assumption** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within
   T at the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
@@ -359,6 +360,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   registration*); the *second stage* samples k_t of its n_t proof blocks of each template t on fresh coins, and misses
   every incorrect one with probability at most ∏_t C(n_t − w_t, k_t)/C(n_t, k_t), w_t of them template t's.
   Harm is read at ρ's *footprint* w(ρ), the fewest incorrect proof blocks of any interior its boundary commitment allows.
+  A replay block is *closed* when it reads no other replay block's values, recomputing from its own inputs any it
+  needs; the *fan-out* F is the most replay blocks one group joined by such reads holds, 1 when all are closed, and a
+  served cap of S bits charges each replay block at most F S.
 - **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.circuits.partition`): the part of a partition that holds every input gate.
@@ -390,25 +394,34 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   record means a guarantee now says something else. It protects only the guarantees
   and what they read, though it lists many lemmas too.
 - **Checking and landing** (the team skill, "Landing"):
-  - **Ready mark**: an owner's statement that a PR's head may land; it admits that head to `next`.
+  - **Ready mark**: an owner's statement that a PR's head may land; it admits that head to the verified queue.
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
-  - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
-  - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark; the sync runs none.
-  - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
-  - **Warn gate**: a script run as a landing gate is, whose failure keeps no PR out: drive lands it and tells its owner.
-  - **Warn step**: a step of the after-landing run whose red is never reverted (drive.toml's `warn_steps`: ratchet-gate):
-    drive rings each culprit's lane, which fixes it forward in its next PR.
-  - **Low-risk lane**: drive landing a PR on `checked` on its ready mark alone, when its merge changes nothing drive.toml's
-    `lowrisk_excludes` names (no Lean, lock or soundness-path change).
-  - **Lock run**: drive's run of `lean-audit` alone on `checked`'s tip after a landing that changes Lean, a lock or the spec,
-    which lands on its verdict like any other; drive commits the lock records it regenerated there (`Lock records regenerated
-    for #N...`), and the after-landing run checks that commit.
-  - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
-  - **Culprit**: the one landing whose change touches what a red's failure names, never found by bisecting; its lane fixes
-    it forward within 30 min, or drive reverts it on `checked`, unless the red is a warn step's.
+  - **Verified queue**: the one landing path, ci's loop (`research queue vqueue`): it merges the PRs ready to land onto
+    `main` as candidates, and fast-forwards `main` only to one with no new failure: each gating task passed or fails on its
+    base too.
+  - **Candidate**: `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as
+    `queue/<sha12>` and checked as one.
+  - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
+    when none does); a lone suspect is ejected, its ready mark withdrawn, and several are bisected.
+  - **Preflight**: `research queue ready`'s checks of a head before the mark.
+  - **Landing gate**: a script at `main` that a head must pass at its mark's preflight (drive.toml's `landing_gates`).
+  - **Warn gate**: a script run as a landing gate is, whose failure only warns (drive.toml's `warn_gates`).
+  - **Off-gate step**: a step of the check off the merge gate (policy.toml's `off_gate` and drive.toml's `warn_steps`:
+    circuit-check, ratchet-gate); a candidate's check still runs it, and its red holds nothing. Under `--gate check`, a
+    red the run beside its base's check doesn't share rings who acts on it.
+  - **Low-risk lane**: the verified queue taking a PR on its ready mark alone, when its change touches nothing drive.toml's
+    `lowrisk_excludes` names (no Lean, lock, soundness-path or `tools/move/` change); a layout move's PR only once its move
+    is certified (**Pure move**).
+  - **Records run**: a candidate's run of `lean-audit` alone before its check, when a PR of it changes Lean, a lock or the
+    spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
+    what is checked.
+  - **After-landing run**: the whole check (every ci.toml job: `--kind after-landing`), which gates a candidate when the
+    verified queue runs with `--gate check`: one beside each candidate and beside `main` each time it moves, `main`'s saying
+    which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
+    lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
-    lands from `next` on its review, regenerated by drive on the tip below it and certified there.
+    lands on its ready mark alone once the queue's rerun of its map on its batch's tip is certified (`tools/move/README.md`).
 - **Running jobs** (`tools/research`, `infra/`):
   - **Attempt**: the evidence store's record of one run, completed or failed, with its outputs; `research run` is the
     command that makes one.

@@ -23,7 +23,7 @@ find "$S/build" -type f -size +8G -printf "build %s %P\n" -delete >> "$EV/store_
 (cd "$D" && find match commit -type f -size -200M -print0 2>/dev/null | xargs -0 -r cp -al --parents -t "$S/records/")
 (cd "$D" && find match commit -type f -size +200M -printf "records %s %p\n" 2>/dev/null >> "$EV/store_omitted.txt")
 (cd "$D" && find match commit -type f -size +200M -print0 2>/dev/null | xargs -0 -r cp -al --parents -t "$S/large/")
-for f in verdict.json stages.txt row.log timeline.jsonl commit.log build_summary.json target_family.json admission.json; do
+for f in verdict.json stages.txt row.log timeline.jsonl commit.log build_summary.json target_family.json; do
   [ -f "$D/$f" ] && cp -al "$D/$f" "$S/records/"
 done
 KINDS=${STORE_KINDS:-build records}

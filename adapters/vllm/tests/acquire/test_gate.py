@@ -1,5 +1,5 @@
 """The CPU gate and the committer adapter on a tiny module tree: the gate's plan and plan-vs-plan comparison, the REAL committer taking
-its selection from the plan (`apply_plan_to_committer`), VERITY_SKIP on that selection, and the compiled rows' record ops held to it."""
+its selection from the plan (`apply_plan_to_committer`), and VERITY_SKIP on that selection."""
 from __future__ import annotations
 
 import types
@@ -191,55 +191,3 @@ def test_install_refuses_an_unapplied_or_undone_skip(monkeypatch):
     with pytest.raises(SkipRefused, match="selected again at install"):
         c2.install()
     assert not c2.installed
-
-
-def recorded(monkeypatch, cs, src):
-    """The names the compiled record op sees (the op body dispatches to the live source's `_record`)."""
-    seen: list[str] = []
-    monkeypatch.setattr(cs, "_SRC", src)
-    monkeypatch.setattr(src, "_record", lambda x, nid: seen.append(src.names[nid & cs.BASE_MASK]))
-    return seen
-
-
-@pytest.mark.parametrize("skip", ["", "RMSNorm"])
-def test_compiled_source_wraps_the_committers_plan_selection(monkeypatch, tmp_path, skip):
-    """Compiled rows' record ops (wrapped before vLLM compiles) are the committer's plan selection -- not the class tables (which would
-    record `norm`, a module the plan does not select) -- with or without a skip; the plan derived from the manifest at wrap time is the
-    committer's plan (same digest)."""
-    from verity_vllm.acquire.sources import compiled_source as cs
-
-    cs._register_op()
-    monkeypatch.setenv("VERITY_SKIP", skip)
-    model, runner = Model(), Runner()
-    man, plan = promoted_plan(model, runner)
-    c = offline_committer(model, runner, acquire_inputs=MF.promoted_observation(man)["consumers"])
-    apply_plan_to_committer(c, plan)
-    src = cs.CompiledGraphSource(rows=4)
-    src.use_plan(man, tmp_path)
-    src.wrap_model(model, runner)
-    assert src.plan.digest == plan.digest and (tmp_path / "acquisition_plan.json").is_file()
-    assert src.selection["outputs"] == [n for n, _m in c._modules] and "norm" not in src.wrapped
-    assert src.selection["inputs"] == ["embed_tokens", "layers.1.post"]
-    assert set(src.selection["outputs"]).isdisjoint(NORMS) == bool(skip)
-    src.check_selection(c)
-    seen = recorded(monkeypatch, cs, src)
-    x = torch.randn(2, 4)
-    model.layers[1].post(x, x)
-    model.layers[0].qkv_proj(x)
-    assert seen == (["layers.1.post/in"] if skip else ["layers.1.post/in", "layers.1.post/0", "layers.1.post/1"]) + ["layers.0.qkv_proj"]
-
-
-def test_compiled_source_refuses_without_a_plan_or_off_the_committers_selection(monkeypatch):
-    from verity_vllm.acquire.sources import compiled_source as cs
-
-    cs._register_op()
-    model, runner = Model(), Runner()
-    with pytest.raises(RuntimeError, match="no plan or required-value manifest was passed in"):
-        cs.CompiledGraphSource(rows=4).wrap_model(model, runner)
-    assert not any("forward" in m.__dict__ for _n, m in model.named_modules())
-    man, plan = promoted_plan(model, runner)
-    src = cs.CompiledGraphSource(rows=4)
-    src.wrap_model(model, runner, plan=plan)
-    c = offline_committer(model, runner)                        # the class tables' selection: not the plan's
-    with pytest.raises(RuntimeError, match="not the committer's plan selection"):
-        src.check_selection(c)

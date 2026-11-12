@@ -37,16 +37,12 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
 **Sent**, as `window_charge.Window`s (`residual`), and nothing else:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
 - `order`: the order's deviations from release order, as above.
-- `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`pool.BlockPool.hit`: each candidate its
-  waiting loop reaches, the one whose allocation ends the loop included, and `would_admit`'s for an open step's
-  arrival), in the order it reads them, as its shortfall: the longest prefix a cache that never evicts holds
-  (`derived.Prefixes.cached` over the rows scheduled before the lookup) less the replay's hit, in whole blocks. Where
-  the bound holds (`derived.walk_steps`'s: sync scheduling, and the blocks of the requests admitted through the step at most
-  the pool less its null block) the shortfall is 0 by the bound and is derived at 0 bits. Past it, the hit is the
-  prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (the sampled leak bound's `hAs`).
-The resumes and the order of new requests that `derived.walk_steps` would otherwise read are the replay's, so v1 sends none.
-The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
-derived hits with it.
+The hits, the resumes and the order of new requests that `derived.walk_steps` would otherwise read are the replay's, so
+v1 sends none. Every prefix-cache lookup's hit is the replay's block pool's (`pool.BlockPool`, its LRU and eviction
+included), past the cumulative pool bound too, as the compile slice's pool derives it
+(`verity.protocols.certifier.prover.compile_slice_v2`), so no hit is the prover's choice. The registered caps hold the
+hits, the resumes and the lag bits at 0 (`CAPS`), so their counts code in 0 bits. The KV pool's size is registered
+before the run, never sent: a prover that chose it could declare a bigger pool and buy hits with it.
 
 **Sent, the lengths** (`Registered.send_lengths`, `lengths`): while no proof holds the length rule, each request's
 output_len and finish, as the plain tail of the window its body lands in, held to the certified ids and the stop rule.
@@ -54,18 +50,18 @@ output_len and finish, as the plain tail of the window its body lands in, held t
 **Under the certified tick** (`Registered.tick`, an engine served with ``--admit tick``), the engine adds each request
 once a logical clock has passed its release bucket's close, in release order, and the replay runs that rule from the
 record's `end`s and the registered τ (`replay.replay`'s ``tick``). It asks nothing, so there are no decisions, and v1
-requires the arrival order to be release order, so there are no order entries. The registered caps hold neither
-(`TICK_CAPS`, and a registered book's caps must too), so a window's timing fields code in 0 bits and it sends only its
-hits.
+requires the arrival order to be release order, so there are no order entries. The registered caps hold no count
+(`TICK_CAPS`, and a registered book's caps must too), so every window's segment codes nothing, in 0 bits: a window is
+charged its length terms alone, and 0 bits where the registration sends no lengths.
 
 **The windows** (the certifier PROTOCOL's A5: no later than the first window whose rows the value changes). Step s's
 window is the earliest window an output at step s or later is released in (the last window where none follows). An
 arrival's ingress window is the earliest release window of it and every later arrival, so that it never decreases
 where the arrivals deviate from release order. A decision about arrival i at step k goes to the earlier of step k's
 window and i's ingress window; an order entry for arrival p to the earlier of p's ingress window and the window of the
-first step that reads p (a decision about it, a lookup of it, or its admission); and a sent hit at step s to step s's
-window. Each is nondecreasing in the replay's order, so each field's values, window after window, are the order the
-replay reads them in, and the decoder replays them straight through.
+first step that reads p (a decision about it, a lookup of it, or its admission). Each is nondecreasing in the replay's
+order, so each field's values, window after window, are the order the replay reads them in, and the decoder replays
+them straight through.
 
 **The string**, MSB first, then zero bits to a whole byte: `window_code.encode(the windows, the registered Book)`, with W the
 record's windows (`windows`: its last bucket's, plus one). `window_code` codes each window's counts before its values and
@@ -76,9 +72,9 @@ The strings are prefix-free for every W, so a string
 charged c bits in all is one of at most 2^c (Kraft; the sampled leak bound's `hAs`). The codebook (`Registered.book`,
 `window_code.Book`) is fit on other runs, never this one, and its digest is registered before the first window. `decode`
 takes only the canonical string (`window_code.decode`: each segment the coder's own codeword for the symbols it decodes to),
-zero padding of fewer than 8 bits and no byte past it, and then holds the windows to the replay's: the decisions the
-replay asks, in order, and the hits and windows it gives; and the order to the one `arrival_order` recovers from the
-advice it decodes to, so that each advice has one string.
+zero padding of fewer than 8 bits and no byte past it, and then holds the windows to the replay's: no hit, resume or lag
+bit, the decisions the replay asks, in order, and the windows it gives; and the order to the one `arrival_order`
+recovers from the advice it decodes to, so that each advice has one string.
 """
 
 from __future__ import annotations
@@ -316,9 +312,10 @@ class Registered:
         if self.tick is not None:
             if type(self.tick) is not S.Tick:
                 raise AdviceCodeError(f"a registration's tick is a replay.Tick, not a {type(self.tick).__name__}")
-            if self.book is not None and (self.book.caps.arrived or self.book.caps.order):
-                raise AdviceCodeError("under the certified tick the registered book codes no decision and no order entry: its "
-                                      "caps' arrived and order are 0")
+            c = self.book.caps if self.book is not None else None
+            if c is not None and (c.arrived or c.hits or c.resumes or c.order or c.lag):
+                raise AdviceCodeError("under the certified tick the registered book codes nothing: its caps' arrived, hits, "
+                                      "resumes, order and lag are 0")
         if e.max_num_seqs < 1 or e.max_num_batched_tokens < 1 or e.max_model_len < 2 or e.block_size < 1:
             raise AdviceCodeError("the engine schedules at least one sequence and token a step")
         if not e.enable_chunked_prefill and e.max_num_batched_tokens < e.max_model_len:
@@ -434,43 +431,6 @@ def replay_record(record: Record, reg: Registered, engine: Any, order: Sequence[
     return rp, decisions, looks
 
 
-def _sent(record: Record, engine: Any, order: Sequence[int], rp: Any,
-          looks: Sequence[Sequence[Lookup]]) -> list[tuple[int, int]]:
-    """The hits v1 sends, as (step, shortfall): every lookup of a step the no-eviction bound doesn't cover, as the
-    longest prefix a cache that never evicts holds less the replay's hit, in whole blocks. The bound is
-    `derived.walk_steps`'s: sync scheduling, and the blocks of every request admitted so far, this step's included, at most
-    the pool less its null block. The cache that never evicts is `derived.Prefixes` over the rows scheduled before the
-    lookup, running rows first."""
-    if not engine.enable_prefix_caching:
-        return []
-    B = engine.block_size
-    reqs = [record.requests[k] for k in order]
-    prefixes = D.Prefixes([q.prompt + q.output for q in reqs], B)
-    life = [S.cdiv(len(q.prompt) + len(q.output), B) for q in reqs]
-    derive, filled, out = not engine.async_scheduling, 0, []
-    for s, (st, ls) in enumerate(zip(rp.steps, looks, strict=True)):
-        filled += sum(life[i] for i in st.new)
-        derive = derive and filled <= engine.num_gpu_blocks - 1
-        rows = {i: (start, start + n) for i, start, n in st.rows}
-        admitted = [i for i in rows if i in set(st.new) | set(st.resumed)]
-        for i, (start, end) in rows.items():
-            if i not in admitted:
-                prefixes.add(i, start, end)
-        for x in ls:
-            if not derive:
-                short = prefixes.cached(x.request, x.K) // B - x.hit
-                if short < 0:
-                    raise AdviceCodeError(f"step {s}: the replay hits {x.hit} blocks for request {x.request}, past the "
-                                          f"{x.hit + short} a cache that never evicts holds")
-                out.append((s, short))
-            if x.request in admitted:
-                prefixes.add(x.request, *rows[x.request])
-                admitted.remove(x.request)
-        for i in admitted:
-            prefixes.add(i, *rows[i])
-    return out
-
-
 def charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: int) -> tuple[list[int], list[int]]:
     """A5's windows, as I1's `bits_by_window` charges: each step's, the earliest window an output at that step or later
     is released in (the last window where none follows); and each arrival's ingress window, the earliest of its own
@@ -498,13 +458,13 @@ def charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: i
     return earliest, win
 
 
-def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
-              decisions: Sequence[Decision], looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
-    """The windows v1 sends (`window_charge.Window`). A decision goes to the earlier of its arrival's ingress window
-    and the earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window
-    and the earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
-    admission); and a sent hit's shortfall to the earliest window that shows its step's. Each is nondecreasing in the
-    replay's order, so each field's values, window after window, are the replay's."""
+def _residual(record: Record, reg: Registered, order: Sequence[int], rp: Any, decisions: Sequence[Decision],
+              looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
+    """The windows v1 sends (`window_charge.Window`): no hit, resume or lag bit, only decisions and order entries. A
+    decision goes to the earlier of its arrival's ingress window and the earliest window that shows its step's rows; an
+    order entry to the earlier of its arrival's ingress window and the earliest window that shows the rows of the first
+    step that reads that arrival (a lookup, a decision or its admission). Each is nondecreasing in the replay's order,
+    so each field's values, window after window, are the replay's."""
     earliest, win = charged(record, reg, order, rp, W)
 
     def at(k: int) -> int:
@@ -514,7 +474,6 @@ def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int]
         LN.check_admitted(record.requests, order, rp.admitted, at, reg.T, AdviceCodeError)
 
     arrived: list[list[bool]] = [[] for _ in range(W)]
-    hits: list[list[int]] = [[] for _ in range(W)]
     ranks: list[list[tuple[int, tuple[int]]]] = [[] for _ in range(W)]
     touch = list(rp.admitted)
     for i, k, _ in decisions:
@@ -523,22 +482,22 @@ def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int]
         for x in ls:
             touch[x.request] = min(touch[x.request], s)
     for field, values in (("decision", [(min(at(k), win[i]), b) for i, k, b in decisions]),
-                          ("order entry", [(min(at(touch[p]), win[p]), (p, (r,))) for p, r in _deviations(record, order)]),
-                          ("hit", [(earliest[s], short) for s, short in _sent(record, engine, order, rp, looks)])):
+                          ("order entry", [(min(at(touch[p]), win[p]), (p, (r,))) for p, r in _deviations(record, order)])):
         last = 0
         for w, v in values:
             if w < last:
                 raise AdviceCodeError(f"a {field} charged to window {w}, after one charged to window {last}")
             last = w
-            {"decision": arrived, "order entry": ranks, "hit": hits}[field][w].append(v)
-    return [CV.Window(arrived=tuple(a), hits=tuple(h), order=tuple(o)) for a, h, o in zip(arrived, hits, ranks)]
+            {"decision": arrived, "order entry": ranks}[field][w].append(v)
+    return [CV.Window(arrived=tuple(a), order=tuple(o)) for a, o in zip(arrived, ranks)]
 
 
 # --- the string --------------------------------------------------------------------------------------------------------
 
-#: v1's caps where the registration gives no book: an order entry ranks one arrival
-CAPS = CV.Caps(order_len=1)
-#: and under the certified tick, where no window holds a decision or an order entry
+#: v1's caps where the registration gives no book: no window sends a hit, a resume or a lag bit, and an order entry
+#: ranks one arrival
+CAPS = CV.Caps(hits=0, resumes=0, order_len=1, lag=0)
+#: and under the certified tick, where no window sends anything
 TICK_CAPS = replace(CAPS, arrived=0, order=0)
 
 
@@ -694,12 +653,12 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
             if first[e] < 0:
                 first[e] = s
     rp, decisions, looks = replay_record(record, reg, engine, order, lambda i, k: k >= first[i])
-    return _residual(record, reg, engine, order, rp, decisions, looks, windows(record, reg.T)), rp, order
+    return _residual(record, reg, order, rp, decisions, looks, windows(record, reg.T)), rp, order
 
 
 def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
-    """The windows `encode` codes (`window_charge.Window`s: the decisions, the order's deviations and the sent hits):
-    what a codebook is fit on."""
+    """The windows `encode` codes (`window_charge.Window`s: the decisions and the order's deviations): what a codebook
+    is fit on."""
     return _total(lambda: _residual_of(advice, record, reg)[0])
 
 
@@ -760,8 +719,9 @@ def _decode(wins: Sequence[Any], tails: Sequence[Sequence[int]], record: Record,
     engine = reg.engine
     cfg = check_record(record, reg, engine)
     LN.check(tails, record.requests, lengths(record, reg), cfg, AdviceCodeError)
-    if any(w.resumes or w.lag for w in wins):
-        raise AdviceCodeError("a window sends resumes or lag bits, which v1 replays or derives")
+    if any(w.hits or w.resumes or w.lag for w in wins):
+        raise AdviceCodeError("a window sends hits, resumes or lag bits, which v1 replays or derives: every hit is the "
+                              "replay's block pool's")
     if reg.tick is not None and any(w.arrived or w.order for w in wins):
         raise AdviceCodeError("a window sends decisions or order entries, which the certified tick fixes")
     entries = [(p, idx) for w in wins for p, idx in w.order]
@@ -781,9 +741,8 @@ def _decode(wins: Sequence[Any], tails: Sequence[Sequence[int]], record: Record,
     rp, decisions, looks = replay_record(record, reg, engine, order, bit_of)
     if used != len(arrived):
         raise AdviceCodeError(f"the replay asks {used} of the string's {len(arrived)} decisions")
-    if _residual(record, reg, engine, order, rp, decisions, looks, len(wins)) != list(wins):
-        raise AdviceCodeError("the windows aren't the replay's residual: a hit that isn't the replay's, or a value charged to "
-                              "another window than A5's")
+    if _residual(record, reg, order, rp, decisions, looks, len(wins)) != list(wins):
+        raise AdviceCodeError("the windows aren't the replay's residual: a value charged to another window than A5's")
     advice = advice_of_replay(record, reg, cfg, order, rp)
     if arrival_order(advice, record, reg.row_order) != order:
         raise AdviceCodeError("the order isn't the one the advice's rows give (another arrival order gives the same schedule)")

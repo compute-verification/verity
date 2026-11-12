@@ -12,8 +12,16 @@ elementwise arithmetic pass; the checker also measures it (counterexample.py) an
 - `SparseMask(values)`: the base with the entries that differ replaced, the indices as a bitmask or int32 list
   (whichever is smaller), the values encoded by `values` against the base's (default `Identity`).
 - `QuantDelta(bits)`: base + codebook[index], a 2**bits-entry fp32 codebook and `bits`-bit indices.
+- `ScaledQuant(bits, group)`: base + codebook[code] * scale, `bits`-bit codes rounded to nearest into a symmetric f16
+  codebook, an f16 scale for every `group` consecutive entries, the whole xz-coded.
+- `SparseTernary(keep, group)`: base + code * scale, a code -1, 0 or +1, nonzero on the `keep` share of each group's
+  largest magnitudes, an f16 scale a group, the whole xz-coded.
 - `SeedReplay`: base + sum_j coeff_j * z_j, z_j ~ N(0, 1) from seed_j (MeZO-style); the log of (seed, coeff) pairs.
 - `Compose(parts)`: each part applied to the previous part's output, starting from the base.
+
+A program that trains in a codec's parameterization hands over what it trained, the tensors `apply` takes after the
+base, and the codec packs them as they are (`encode_trained`): nothing is rounded a second time, and what decode
+rebuilds is `apply` on them.
 
 `Plan` encodes a step's whole weight set, one rule (key pattern, codec) per weight; its spec is a counterexample family's
 decoder.
@@ -22,6 +30,8 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import lzma
+import math
 
 import torch
 
@@ -40,6 +50,10 @@ class Codec:
 
     def encode(self, target: torch.Tensor, base: torch.Tensor) -> bytes:
         raise NotImplementedError
+
+    def encode_trained(self, *parts: torch.Tensor) -> bytes:
+        """The encoding of the parts a program trained: the tensors `apply` takes after the base, packed as they are."""
+        raise Unencodable(f"{self.kind} packs no trained parts: it encodes a weight from its value")
 
     def decode(self, enc: bytes, base: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
@@ -81,6 +95,9 @@ class LowRank(Codec):
     def encode_factors(a: torch.Tensor, b: torch.Tensor) -> bytes:
         """The encoding of the factors a program trained (A: r x d_in, B: d_out x r)."""
         return pack({}, [a.detach().float().contiguous(), b.detach().float().contiguous()])
+
+    def encode_trained(self, a, b):
+        return self.encode_factors(a, b)
 
     def encode(self, target, base):
         if base.dim() != 2:
@@ -166,6 +183,9 @@ class QuantDelta(Codec):
         """The encoding of a codebook and indices a program trained with."""
         return pack({"n": index.numel()}, [codebook.detach().float().cpu(), pack_bits(index.cpu(), self.bits)])
 
+    def encode_trained(self, codebook, index):
+        return self.encode_index(codebook, index)
+
     def encode(self, target, base):
         delta = (target.float() - base.float()).reshape(-1).cpu()
         levels = 2 ** self.bits
@@ -188,6 +208,128 @@ class QuantDelta(Codec):
 
     def cost_macs(self, enc, base):
         return base.numel()
+
+
+class ScaledQuant(Codec):
+    """The delta from the base in `bits`-bit codes (2 to 8): entry i is codebook[code_i] * scale[i // g], g the
+    largest divisor of the tensor's size that divides `group`. The codebook is 2**bits levels, zero one of them and
+    2**(bits-1) - 1 a side across a group's largest magnitude, which is its scale, so a code is the entry rounded to
+    the nearest level of its group; the tensor's largest magnitude is split between codebook and scales so neither
+    underflows f16. The encoding is xz's (preset 1) of the codebook, the scales and the codes."""
+
+    kind = "scaledquant"
+    XZ = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE, "preset": 1}
+
+    def __init__(self, bits: int, group: int = 128):
+        if not 2 <= bits <= 8 or group < 1:
+            raise ValueError("scaledquant: 2 to 8 bits, in groups of at least 1")
+        self.bits, self.group = int(bits), int(group)
+
+    def spec(self):
+        return {"kind": self.kind, "bits": self.bits, "group": self.group}
+
+    @staticmethod
+    def apply(base: torch.Tensor, codebook: torch.Tensor, scales: torch.Tensor, codes: torch.Tensor) -> torch.Tensor:
+        q = codebook.float()[codes.long()].view(scales.numel(), -1) * scales.float()[:, None]
+        return (base.float() + q.view(base.shape)).to(base.dtype)
+
+    def encode(self, target, base):
+        d = (target.detach().float() - base.float()).reshape(-1).cpu()
+        if not d.numel():
+            raise Unencodable("scaledquant takes a tensor with an entry")
+        g = math.gcd(d.numel(), self.group)
+        mid, half = 2 ** (self.bits - 1), 2 ** (self.bits - 1) - 1
+        top = d.abs().max()
+        c = torch.where(top > 0, top.sqrt(), 1.0)
+        scales = (d.view(-1, g).abs().amax(1) / c).half()
+        codebook = ((torch.arange(2 ** self.bits) - mid) / half * c).half()
+        step = scales.float() * (c / half)
+        codes = (d.view(-1, g) / torch.where(step > 0, step, 1.0)[:, None]).round().add(mid).clamp(0, 2 ** self.bits - 1)
+        return lzma.compress(pack({"n": d.numel()}, [codebook, scales, pack_bits(codes, self.bits)]), **self.XZ)
+
+    def decode(self, enc, base):
+        h, (codebook, scales, packed) = unpack(lzma.decompress(enc, format=lzma.FORMAT_XZ))
+        if h["n"] != base.numel() or codebook.numel() != 2 ** self.bits or h["n"] % max(1, scales.numel()):
+            raise ValueError(f"scaledquant: codes for {h['n']} entries in {scales.numel()} groups, for a weight of "
+                             f"{base.numel()}")
+        codes = unpack_bits(packed, self.bits, h["n"])
+        return self.apply(base, codebook.to(base.device), scales.to(base.device), codes.to(base.device))
+
+    def cost_macs(self, enc, base):
+        return 2 * base.numel()
+
+
+class SparseTernary(Codec):
+    """The delta from the base in codes of -1, 0 and +1, each times its group's f16 scale. `round` is the rounding: in
+    each group of `group` consecutive entries (0: the whole tensor is one group) an entry keeps its sign where its
+    magnitude is among the group's ceil(`keep` · group) largest (one that ties the least of those is kept too, a zero
+    never) and is 0 elsewhere, and the group's scale is its kept entries' mean magnitude. It is tensor ops alone and
+    reads no value into Python, so a step that takes it is one fixed graph.
+
+    A program that trains θ plus the rounding of a latent holds, at each step, the weight `apply` gives on that
+    step's codes, and hands its last codes over (`encode_trained`); decode runs the same `apply`, so the model it
+    rebuilds is the one trained, bit for bit. The encoding is the scales and the codes, two bits an entry, under xz
+    at its strongest preset: the sparser the codes, the fewer bits an entry."""
+
+    kind = "sparseternary"
+    XZ = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE, "preset": 9 | lzma.PRESET_EXTREME}
+    #: f16's largest finite value, which a larger scale is stored as
+    F16_MAX = 65504.0
+
+    def __init__(self, keep: float, group: int = 0):
+        if not 0 < keep <= 1 or group < 0:
+            raise ValueError("sparseternary: keep is a share in (0, 1], and group an entry count or 0 for the whole "
+                             "tensor")
+        self.keep, self.group = float(keep), int(group)
+
+    def spec(self):
+        return {"kind": self.kind, "keep": self.keep, "group": self.group}
+
+    @staticmethod
+    def round(delta: torch.Tensor, keep: float, group: int = 0) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """`delta`'s codes: each group's f16 scale, and the entries coded +1 and those coded -1, two bool planes of
+        `delta`'s shape (1 bit an entry each, so a step that passes them passes 2 bits an entry)."""
+        g = group or delta.numel()
+        if not delta.numel() or delta.numel() % g:
+            raise ValueError(f"sparseternary: groups of {g} don't divide a tensor of {delta.numel()} entries")
+        v = delta.float().reshape(-1, g)
+        a = v.abs()
+        n_keep = min(g, max(1, math.ceil(keep * g)))
+        kept = (a >= a.kthvalue(g - n_keep + 1, dim=1, keepdim=True).values) & (a > 0)
+        scales = ((a * kept).sum(1) / kept.sum(1).clamp(min=1)).clamp(max=SparseTernary.F16_MAX).to(torch.float16)
+        return scales, (kept & (v > 0)).reshape(delta.shape), (kept & (v < 0)).reshape(delta.shape)
+
+    @staticmethod
+    def apply(base: torch.Tensor, scales: torch.Tensor, plus: torch.Tensor, minus: torch.Tensor) -> torch.Tensor:
+        q = (plus.float() - minus.float()).reshape(scales.numel(), -1) * scales.float()[:, None]
+        return (base.float() + q.reshape(base.shape)).to(base.dtype)
+
+    def encode_trained(self, scales, plus, minus):
+        planes = plus.dtype == torch.bool and minus.dtype == torch.bool and plus.shape == minus.shape
+        if not planes or not scales.numel() or plus.numel() % scales.numel() or bool((plus & minus).any()):
+            raise Unencodable("sparseternary packs a scale a group and two bool planes of one shape, no entry in both")
+        codes = plus.detach().reshape(-1).cpu().to(torch.int64) + 2 * minus.detach().reshape(-1).cpu()
+        raw = pack({"n": codes.numel()}, [scales.detach().to(torch.float16).reshape(-1).cpu(), pack_bits(codes, 2)])
+        return lzma.compress(raw, **self.XZ)
+
+    def encode(self, target, base):
+        try:
+            return self.encode_trained(*self.round(target.detach().float() - base.float(), self.keep, self.group))
+        except ValueError as e:
+            raise Unencodable(str(e)) from None
+
+    def decode(self, enc, base):
+        h, (scales, packed) = unpack(lzma.decompress(enc, format=lzma.FORMAT_XZ))
+        if h["n"] != base.numel() or not scales.numel() or h["n"] % scales.numel():
+            raise ValueError(f"sparseternary: codes for {h['n']} entries in {scales.numel()} groups, for a weight of "
+                             f"{base.numel()}")
+        codes = unpack_bits(packed, 2, h["n"]).reshape(base.shape).to(base.device)
+        if bool((codes == 3).any()):
+            raise ValueError("sparseternary: a code that is none of 0, +1 and -1")
+        return self.apply(base, scales.to(base.device), codes == 1, codes == 2)
+
+    def cost_macs(self, enc, base):
+        return 2 * base.numel()
 
 
 def derive_seed(seed: int, key: str) -> int:
@@ -269,6 +411,10 @@ def from_spec(spec: dict) -> Codec:
         return SparseMask(from_spec(spec["values"]) if "values" in spec else None)
     if kind == "quant":
         return QuantDelta(spec["bits"])
+    if kind == "scaledquant":
+        return ScaledQuant(spec["bits"], spec.get("group", 128))
+    if kind == "sparseternary":
+        return SparseTernary(spec["keep"], spec.get("group", 0))
     if kind == "seed":
         return SeedReplay()
     if kind == "compose":
@@ -278,7 +424,8 @@ def from_spec(spec: dict) -> Codec:
 
 class Plan:
     """A step's weight set: each weight key takes the first rule whose pattern (fnmatch) matches it. The encoding is every
-    key's encoding, in key order, with its rule's index."""
+    key's encoding, in key order, with its rule's index. A target that is a tuple of tensors is the weight's trained
+    parts, which its codec packs as they are (`Codec.encode_trained`); a tensor is the weight, which it encodes."""
 
     def __init__(self, rules: list[tuple[str, Codec]]):
         self.rules = list(rules)
@@ -296,9 +443,11 @@ class Plan:
                 return i
         raise Unencodable(f"no rule matches weight {key!r}")
 
-    def encode(self, targets: dict[str, torch.Tensor], bases: dict[str, torch.Tensor]) -> bytes:
-        keys = sorted(targets)
-        encs = {k: self.rules[self.rule(k)][1].encode(targets[k], bases[k]) for k in keys}
+    def encode(self, targets: dict[str, torch.Tensor | tuple], bases: dict[str, torch.Tensor]) -> bytes:
+        encs = {}
+        for k in sorted(targets):
+            codec, target = self.rules[self.rule(k)][1], targets[k]
+            encs[k] = codec.encode_trained(*target) if isinstance(target, tuple) else codec.encode(target, bases[k])
         return self.encode_parts(encs)
 
     def encode_parts(self, encs: dict[str, bytes]) -> bytes:

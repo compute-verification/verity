@@ -3,15 +3,15 @@
 This directory runs the measurements: plain served vLLM (`stock`) against the same engine committing every value of every
 step, interleaved rep by rep through the shared harness (`benchmarks/harness`): throughput, time to first token, and
 per-token latency (p50 and p99), per model and batch, under continuous batching with staggered arrivals, greedy and seeded
-stochastic. It renders no tables: `benchmarks/g2/` does, from the evidence store (`curve.py` the overhead curve over every
-labeled run, `served.py` the served arm's runs).
+stochastic. It renders no tables.
 
 - `arm.py`: the arms' base, `ServedCommitArm`, which commits under `rows-sha512`. `prof_arm.py`'s rows arms and the
   harness's `commit` arms measure the Commit. Its docstring has what a run does, and which runs its gate accepts without a
   root (declared warm-ups, named in the verdict).
 - `served_arm.py` and `served_arm.sh`: the served arm, the Commit at 4 KiB rows against compiled and eager stock in one run
   (the specs `*-rtx-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
-  kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs.
+  kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs. `tests/test_served_arm.py` tests both over
+  stand-ins for the arms they build on.
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
@@ -34,3 +34,13 @@ labeled run, `served.py` the served arm's runs).
 The engines are vLLM's serving defaults (`serving_defaults`: torch.compile, full and piecewise CUDA graphs, no batch
 invariance), and each arm is gated token for token against `stock` before anything is timed. The acquisition under CUDA
 graphs is `adapters/vllm/verity_vllm/acquire/sources/served_compiled_source.py`.
+
+## Interface
+
+- **Provides:** the arms the shared harness runs (`arm.py`, `served_arm.py`, `prof_arm.py`), the tensor-parallel decode
+  step (`tp_decode.py`) and the scripts that launch and profile them.
+- **Loaded by:** the harness, through the specs that name `served_commit.served_arm`'s arms, and `benchmarks/moe_align`,
+  which imports `tp_decode`.
+- **Loads:** the vLLM integration's `commit`, `pipeline`, `engine`, `acquire`, `correspondence`, `query` and `protocols`
+  packages; `verity.circuits`, `verity.definitions`, `verity.commitments` and `verity.definitions.kernels`;
+  `benchmarks/harness` (`verity_bench`); torch and vLLM.

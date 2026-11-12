@@ -1,6 +1,6 @@
 module
 
-public import Flock.Canon
+public import Base.Canon
 public import Lean.Data.Json.FromToJson.Basic
 public import Lean.Data.Json.Parser
 

@@ -762,7 +762,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     """Compare every binding-map entry's committed bytes with the Match oracle.  `committed(step, name, byte_lo, byte_hi)` returns the
     bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained) -- in the Commit an `OpenedReader`, whose
     `OpeningNotVerified` makes the entry a mismatch.  `own` names what the run's sources committed that no module produced (their
-    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `runtime_rows`
+    `own_names`), so no Match value: not compared, counted as hidden_stream.  `runtime_rows`
     (`runtime_rows_of(manifest)`): an identity that is the runtime's rows r0.. is compared with the fold's rows from r0.  `producers` (producers_of(manifest))
     names each member's producing Program op so exploded-module folds are read at the producer's instances.  `workload` (the run's declared
     requests) is checked against the oracle's request table BY NAME first: a foreign Match record is result False 'foreign oracle' with

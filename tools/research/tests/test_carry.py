@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,10 @@ ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": 
        "GIT_CONFIG_NOSYSTEM": "1", "PATH": "/usr/bin:/bin"}
 LOCK = "Pkg/lean-audit.json"
 PINS = 'PINS = (Pin("pins/TRUSTED.sha256", None, "src"),)\n'
+ROOT = Path(__file__).resolve().parents[3]
+MOVE_SCRIPTS = ("tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py")
+MAP = "tools/move/demo_map.toml"
+PROTO = "import old_proto.a\n\nX = old_proto.a.f()\n"
 
 
 def lock(type_hash: str = "aa", digest: str = "1", **policy) -> str:
@@ -66,6 +71,44 @@ def branch(repo: Path, name: str, at: str = "main") -> None:
 
 def landed(repo: Path, *heads: str):
     return carry.trust(repo, [git(repo, "rev-parse", "main")], heads)
+
+
+def script(repo: Path, *argv: str) -> str:
+    """A move script of ``repo``'s run at its root, writing no bytecode into the tree it rewrites (`rename.py` refuses a dirty
+    one)."""
+    return subprocess.run([sys.executable, *argv], cwd=repo, env={**ENV, "PYTHONDONTWRITEBYTECODE": "1"}, check=True,
+                          capture_output=True, text=True).stdout
+
+
+@pytest.fixture
+def moved(tmp_path: Path) -> Path:
+    """A `main` whose move (this checkout's `rename.py` with a map from `old_proto` to `new_proto`, as a move lands) came after
+    the PR `pr` branched, then one more landed commit; the PR writes a line beside one the move rewrites."""
+    repo = tmp_path / "moved"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/verity/check/pins.py": "PINS = ()\n",
+                  "tools/research/src/research/store/moves.json": '{"moves": []}\n',
+                  MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
+                       '[words]\n"old_proto" = "new_proto"\n',
+                  "old_proto/__init__.py": "", "old_proto/a.py": "def f():\n    return 1\n", "b.py": PROTO, "c.py": "c\n"},
+           "base")
+    branch(repo, "pr")
+    commit(repo, {"b.py": PROTO + "Y = old_proto.a.f()\n"}, "the PR")
+    git(repo, "checkout", "-q", "main")
+    script(repo, "tools/move/rename.py", "--map", MAP)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", f"Move old_proto to new_proto\n\nMove: {MAP}\n")
+    commit(repo, {"c.py": "c2\n"}, "landed after the move")
+    return repo
+
+
+def cross(repo: Path) -> str:
+    """`pr` crossed to `main` across its move by this checkout's `restack.py`: the crossing's head."""
+    [r] = json.loads(script(repo, "tools/move/restack.py", "pr", "--move-commit", git(repo, "rev-parse", "main~1"), "--onto",
+                            "main", "--main", "main", "--json", "--no-pins"))
+    assert r["status"] == "clean", r
+    return r["result"]
 
 
 def test_a_merge_of_landed_main_carries_and_names_what_it_merged(repo: Path):
@@ -236,3 +279,44 @@ def test_the_command_prints_the_delta_and_exits_0_only_when_it_carries(repo: Pat
     commit(repo, {"b.py": "sneaked\n"}, "more")
     assert carry.main([old, "pr", "--repo", str(repo), "--landed", "main"]) == 1
     assert json.loads(capsys.readouterr().out)["kind"] == "authored"
+
+
+def test_a_crossing_carries_when_its_restack_commit_is_the_moves_script_rerun_on_its_parent(moved: Path, capsys):
+    """A head crossed across a move (`tools/move/restack.py`) is a commit that reruns the move's script on the PR's tree, named
+    by its `Restack-move:` trailer, and a merge of the moved `main` taking the move for their merge base: from their natural
+    base, the PR's line beside one the move rewrote conflicts.  Without the move's script rerun, that commit is the PR's own,
+    so a reviewer compared every crossed head by hand."""
+    old, move, main = (git(moved, "rev-parse", r) for r in ("pr", "main~1", "main"))
+    new = cross(moved)
+    assert carry.main([old, new, "--repo", str(moved), "--landed", "main"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert (d["kind"], d["parents"], d["moves"]) == ("merge-only", [main], [move]), d
+    assert d["why"] == (f"its 2 commit(s) since only merge {main[:12]} as the queue would and rerun the move {move[:12]} as a "
+                        "restack does")
+    assert carry.delta(moved, old, new, landed(moved)).kind == "authored"
+
+
+def test_a_restack_commit_that_changes_more_than_the_moves_script_is_the_prs_own(moved: Path):
+    old, move, main = (git(moved, "rev-parse", r) for r in ("pr", "main~1", "main"))
+    git(moved, "checkout", "-q", f"{cross(moved)}^1")
+    (moved / "b.py").write_text((moved / "b.py").read_text() + "Z = 'sneaked'\n")
+    git(moved, "commit", "-q", "-a", "--amend", "--no-edit")
+    sneaked = git(moved, "rev-parse", "HEAD")
+    tree = git(moved, "merge-tree", "--write-tree", f"--merge-base={move}", sneaked, main)
+    new = git(moved, "commit-tree", tree, "-p", sneaked, "-p", main, "-m", "Merge main (the layout move), restacked")
+    d = carry.delta(moved, old, new, landed(moved), restack=main)
+    assert (d.kind, d.moves) == ("authored", ()) and d.why == f"{sneaked[:12]} changes b.py beyond the move {move[:12]}'s script"
+
+
+def test_a_move_never_reruns_on_a_tree_that_another_commit_of_the_line_leaves_unvouched(moved: Path, tmp_path: Path):
+    """A move's script runs a tree's own code (`rename.py` loads the tree's pins list), so carry reruns it only once every other
+    commit of the PR's line passed: here an unreviewed commit below the crossing plants code in that list."""
+    old, main = git(moved, "rev-parse", "pr"), git(moved, "rev-parse", "main")
+    planted = tmp_path / "planted"
+    git(moved, "checkout", "-q", "pr")
+    commit(moved, {"tools/verity/check/pins.py": f"import pathlib\npathlib.Path({str(planted)!r}).touch()\nPINS = ()\n"}, "more")
+    new = cross(moved)
+    assert planted.exists()
+    planted.unlink()
+    d = carry.delta(moved, old, new, landed(moved), restack=main)
+    assert d.kind == "authored" and "tools/verity/check/pins.py" in d.why and not planted.exists()

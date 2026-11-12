@@ -16,10 +16,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_identity_difftest.py"]
-# Test-only: `lake` builds this package and, through its path requires, the difftest harness's Lean and these files of
-# Flock's verifier (`Flock.Hash`, `Flock.Canon` and what they import, and the package's configuration).
-inputs = ["verity/difftest/lean", "verity/protocols/flock/verifier/lakefile.toml",
-          "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
-          "verity/protocols/flock/verifier/Flock/Field.lean", "verity/protocols/flock/verifier/Flock/Bytes.lean",
-          "verity/protocols/flock/verifier/Flock/Hash.lean", "verity/protocols/flock/verifier/Flock/Canon.lean",
+# Test-only: `lake` builds this package and, through its path requires, the difftest harness's Lean and the base
+# packages (`Base.Hash`, `Base.Canon` and what they import; the harness requires the circuit format's too).
+inputs = ["verity/difftest/lean", "verity/circuits/base", "verity/circuits/lean",
           "verity/__init__.py", "verity/commitments/__init__.py"]

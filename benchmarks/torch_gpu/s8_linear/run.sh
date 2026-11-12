@@ -7,10 +7,9 @@
 # inputs/s8-ship.tar (RESEARCH_RUN_DIR).
 # A STEP is a script and its arguments in one word, e.g. "run.py --ms 1,7,257 --no-swap" (the canary) then "run.py" (the
 # gate); each writes into $OUT/<i>-<script>. @OUT@ in a step is $OUT ("bench.py --configs @OUT@/1-tune/best.json"), @S@
-# the run's scratch directory (deleted at exit, never uploaded), and a step "cpu:SCRIPT ..." runs with no lease ("cpu:realw.py
-# --gen --weights @S@/realw" then "realw.py --weights @S@/realw"). A step that fails ends the run (S8_KEEP_GOING=1: the rest
-# still run). S8_LOCK_MHZ locks the leased GPU's SM clock there for each step (`nvidia-smi -lgc`, where sudo allows it,
-# lock.txt), reset before the lease ends.
+# the run's scratch directory (deleted at exit, never uploaded), and a step "cpu:SCRIPT ..." runs with no lease. A step
+# that fails ends the run (S8_KEEP_GOING=1: the rest still run). S8_LOCK_MHZ locks the leased GPU's SM clock there for
+# each step (`nvidia-smi -lgc`, where sudo allows it, lock.txt), reset before the lease ends.
 # Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json; row_table/ seeds
 # ~/.cache/verity/row_table), the card and Python recorded. The Python with torch and vLLM is benchmarks/harness/env.sh's
 # $VENV (VERITY_BENCH_VENV, else the node's).

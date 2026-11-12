@@ -108,3 +108,8 @@ module's global (the guard `moe_align.install` holds, read back from each rank).
 - **`host.json`.** The host's time to issue a call of each op on each rank.
 
 `summary.json` gathers the three.
+
+## Interface
+
+Nothing outside `benchmarks/moe_align` loads from it, so no file here is an interface. The kernel it measures is the
+vLLM integration's (`verity_vllm.engine.moe_align`), which these scripts import.

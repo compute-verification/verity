@@ -146,7 +146,7 @@ def test_an_index_from_another_boot_or_left_mid_write_is_rebuilt(tmp_path, monke
     head = json.loads((index / "head.json").read_text())
     for k, v in (("boot", "another boot"), ("dirty", True)):
         (index / "head.json").write_text(json.dumps({**head, k: v}))
-        (index / f"t{b's'.hex()}.json").write_text(json.dumps({"budget": 5, "n": 4}))
+        (index / f"t{b's'.hex()}.json").write_text(json.dumps({"budget": 5, "n": 4, "u": 0}))
         for parsed in (_lines(state), 0):
             before = work.json.lines
             assert FW.Firewall(state).failures("s") == 1, k
