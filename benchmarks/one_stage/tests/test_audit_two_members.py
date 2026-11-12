@@ -149,7 +149,9 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     whose = {"key_sha512": opened["body"]["key_sha512"], "session": opened["session"]}
     assert opened["body"]["window"] == {"root": RUN} and len(whose["key_sha512"]) == 128
     assert row["coins"]["verified"] == whose
-    assert json.loads((out / "window" / "audit.json").read_text())["coins"]["verified"] == whose
+    record = json.loads((out / "window" / "audit.json").read_text())
+    assert record["coins"]["verified"] == whose
+    assert record["case_v2"]["written"] is False and "this audit drew 2 members" in record["case_v2"]["why"]
     answer = _answer(out)
     assert (answer["verdict"], answer["public"]) == ("undecided", None), answer
     assert answer["reason"].startswith("no case for the compiled check") and "this audit drew 2 members" in answer["reason"]

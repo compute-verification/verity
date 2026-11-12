@@ -91,9 +91,7 @@ window meets the two premises of `security`'s that no check here discharges, ``A
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
-as `served_integrity.answer` reads it (an accept names the challenger key and session its sample's coins verified
-under, ``public.coins``; an accepted audit that names none, or wrote no case for the compiled check, is undecided);
-each other subprotocol's from
+as `served_integrity.answer` reads it; each other subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
 `piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
 on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,

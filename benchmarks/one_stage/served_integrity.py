@@ -18,9 +18,10 @@ by name:
   answer's public outputs carry both (``public.coins``: ``{key_sha512, session}``), beside the ones the Lean makes
   public, so a reader that holds the deployment's key record compares the digest with it; nothing here holds a key
   record, so nothing here tells a development session's key from the auditor's.
-* the case for the compiled check, `Spot.OneStageZk` (``window/case-v2.json``, `a5.write_case`): where the audit wrote
-  none (``window/case-v2-error.txt`` says why: sessions that aren't `--zk`, a sample of several members), no verifier
-  of record can be run on the window, and the Python audit's acceptance alone is not sampled proofs' accept.
+* the case for the compiled check, `Spot.OneStageZk` (``window/case-v2.json``, `a5.write_case`), which the audit
+  record says it wrote (``case_v2``, `a5.case_written`): where the audit wrote none (the record says why, in the audit's
+  words: sessions that aren't `--zk`, a sample of several members), no verifier of record can be run on the window,
+  and the Python audit's acceptance alone is not sampled proofs' accept.
 """
 from __future__ import annotations
 
@@ -32,10 +33,6 @@ from typing import Any, Mapping
 from verity.protocols.spot.verifier.one_stage import audit as A, registration as R
 
 PROTOCOL = R.PROTOCOL
-
-
-#: under the audit's ``window/``: the case it wrote for the compiled check (`a5.write_case`), or why it wrote none
-CASE, NO_CASE = "case-v2.json", "case-v2-error.txt"
 
 
 def _refusal(reason: str, commitment: str | None, verdict: str = "reject") -> dict[str, Any]:
@@ -55,6 +52,16 @@ def whose_coins(rec: Mapping[str, Any]) -> dict[str, str] | None:
     if type(key) is not str or len(key) != 128 or set(key) - set("0123456789abcdef") or type(session) is not str or not session:
         return None
     return {"key_sha512": key, "session": session}
+
+
+def no_case(rec: Mapping[str, Any]) -> str | None:
+    """Why the audit record ``rec``'s audit left no case for the compiled check (``case_v2``, `a5.case_written`), in the
+    audit's words; None where the record says it wrote the case."""
+    case = rec.get("case_v2")
+    if isinstance(case, Mapping) and case.get("written") is True:
+        return None
+    why = case.get("why") if isinstance(case, Mapping) else None
+    return why if type(why) is str and why else "the audit record doesn't say it wrote one (case_v2)"
 
 
 def _codes(checks: Mapping[str, Any]) -> list[str]:
@@ -91,8 +98,8 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ, and its public ``coins`` whose coins the sample is on
-    (`whose_coins`). An accepted audit record that names no such coins, or beside which the audit wrote no case for the
-    compiled check (`CASE`), is undecided (module docstring)."""
+    (`whose_coins`). An accepted audit record that names no such coins, or whose audit wrote no case for the compiled
+    check (`no_case`), is undecided (module docstring)."""
     commitment = R.digest(registration) if registration is not None else None
     try:
         summary = json.loads((out / "summary.json").read_text())
@@ -127,10 +134,9 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         return _refusal("the audit record names no challenger key and session a check verified its coins under "
                         "(coins.verified): its acceptance says nothing of whose coins the sample is on", R.digest(reg),
                         "undecided")
-    if not (out / "window" / CASE).exists():
-        said = out / "window" / NO_CASE
-        why = said.read_text().strip() if said.exists() else "the audit wrote none, and no reason"
-        return _refusal(f"no case for the compiled check (Spot.OneStageZk, window/{CASE}): {why}", R.digest(reg),
+    why = no_case(rec)
+    if why is not None:
+        return _refusal(f"no case for the compiled check (Spot.OneStageZk, window/case-v2.json): {why}", R.digest(reg),
                         "undecided")
     delta = Fraction(wrong["delta"]).limit_denominator(10**12)
     profile = A.profile(reg, draw, wrong["delta"]).to_json()
@@ -142,4 +148,4 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
             "verdict": "accept"}
 
 
-__all__ = ["CASE", "NO_CASE", "PROTOCOL", "answer", "whose_coins"]
+__all__ = ["PROTOCOL", "answer", "no_case", "whose_coins"]
