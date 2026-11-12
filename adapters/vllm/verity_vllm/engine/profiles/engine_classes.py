@@ -105,8 +105,10 @@ def effective_refusals(name: str, effective: dict[str, Any], env_flags: dict[str
     facts, _, served, _ = of(name)
     want = {"tensor_parallel_size": facts["world"], **served, "enable_prefix_caching": False}
     if effective.get("enforce_eager") is False:
-        c = TargetProfile.COMPILATIONS[compilation(name, "compiled")]
-        want.update(breakable_cudagraph=True, capture_sizes=list(c["capture_sizes"]))
+        comp = compilation(name, "compiled")
+        if comp is not None:
+            c = TargetProfile.COMPILATIONS[comp]
+            want.update(breakable_cudagraph=True, capture_sizes=list(c["capture_sizes"]))
     return [f"the built engine's {k} is {effective.get(k)!r}, not the class's {v!r}" for k, v in want.items()
             if effective.get(k) != v] + [f"the built engine's environment sets {k}={env_flags.get(k)!r}, not the class's {v!r}"
                                          for k, v in env(name).items() if env_flags.get(k) != v]

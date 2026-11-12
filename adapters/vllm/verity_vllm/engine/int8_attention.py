@@ -186,7 +186,8 @@ def paged_windows(key_cache: torch.Tensor, value_cache: torch.Tensor, block_tabl
     blk = torch.where(live, block_table[:b].long().gather(1, col), 0)
     off = (pos % bs).expand(b, -1)
     zero = torch.zeros((), dtype=key_cache.dtype, device=dev)
-    return tuple(torch.where(live[..., None, None], c[blk, off], zero) for c in (key_cache, value_cache))
+    k, v = (torch.where(live[..., None, None], c[blk, off], zero) for c in (key_cache, value_cache))
+    return k, v
 
 
 def packed_windows(keys: torch.Tensor, values: torch.Tensor, starts: list[int], lens: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
@@ -197,7 +198,8 @@ def packed_windows(keys: torch.Tensor, values: torch.Tensor, starts: list[int], 
     live = pos[None, :] < torch.tensor(lens, dtype=torch.int64).to(dev, non_blocking=True)[:, None]
     row = torch.where(live, torch.tensor(starts, dtype=torch.int64).to(dev, non_blocking=True)[:, None] + pos[None, :], 0)
     zero = torch.zeros((), dtype=keys.dtype, device=dev)
-    return tuple(torch.where(live[..., None, None], t[row], zero) for t in (keys, values))
+    k, v = (torch.where(live[..., None, None], t[row], zero) for t in (keys, values))
+    return k, v
 
 
 def kv_quant_batch(k: torch.Tensor, v: torch.Tensor, k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
