@@ -1,7 +1,8 @@
 """Ahead-of-time prediction of the Build's Programs from a row's declared facts φ, without tracing, and its comparison with the traces.
 
 `phi` (φ: checkpoint config, target, TP, shape, sampler, execution), `build` (BuildProgram(φ): the `Derived[vLLM*]` Program the
-Build would derive, from a hand-written vocabulary, with the Llama-family decoder), `dsa` and `dsv4` (the family decoders it
+Build would derive, from a hand-written vocabulary, with the Llama-family decoder), `model_shape` (the shape facts of a
+checkpoint's config it builds from, and its weights record), `dsa` and `dsv4` (the family decoders it
 dispatches to by `FAMILY_FACTS[...]["arch"]`), `node` (a tensor-parallel node's Program: its ranks' forwards in one body, joined at
 their collectives, with no peer Input), `common` (what every decoder writes with), `score` (φ of a row from its declared
 inputs, the predicted workload Program and the predictor's code version), `aot` (the
