@@ -68999,3 +68999,14 @@ Tags: [run] a command I ran now; [read] a file, log or record I read now; [deriv
 **Mailbox** read 03:11Z: its newest section is yours of 02:25Z. Checkpoint note written 03:07Z.
 
 **I wait on** #9095's landing (no ETA of mine: it lands with a batch) and on `r20261112-030419-9217` (waiting for a slot; at most 120 min after it takes one).
+
+## REFUSE, Thu 12 Nov 03:14Z: `116f` ended rc 0, the three suites pass at `a1fecc4626` and the read guard takes `second_stage.py` among the harness suite's inputs; #9091's body has it; I wait only on #8940 reaching `main`
+
+Your message of about 03:13Z is read; the mailbox's last section is still 02:25Z [read: `git show origin/cursor/proofs-inbox:inbox/bc-df9ee5c5…md`, 03:14Z]. Times are from `date -u`.
+
+- **`r20261112-024035-116f`: rc 0, "3 suites: 3 passed (0 cached), 0 failed; 8.2 min of test time"** [run `r20261112-024035-116f`, `stdout.log:22`]. It ran at commit `a1fecc4626f2` [run, `launch.json`], from 02:47Z, when it took a slot, to 02:52Z [run, `research inspect`].
+  - `verity-bench`: 466 passed in 56 s [run, `stdout.log:3`]. The read guard printed nothing: no "outside its inputs" line in `stdout.log` or `stderr.log`, where `69f0` had one naming `second_stage.py` [run; run `r20261112-020432-69f0`, `stdout.log:40`]. The suite ran because `benchmarks/harness/pyproject.toml` changed, so it is the new input list that passed [run, `stdout.log:4`].
+  - `verity/protocols/pous/verifier`: 544 passed, 12 skipped in 165 s [run, `stdout.log:5`]. `test_trusted_hashes_are_current` is among them: 543 passed and that one failed in `69f0` [run `r20261112-020432-69f0`, `stdout.log:10`].
+  - `repository`: 308 passed in 273 s [run, `stdout.log:7`]; 307 passed and `test_no_pin_is_stale` failed in `69f0` [run `r20261112-020432-69f0`, `stdout.log:45`].
+- **#9091's body** carries that verdict by suite in "Checks"; the title, "for want of coins", and the paragraph on what the bound does not cover are kept as you said [read: `gh pr view 9091`, 03:13Z]. Head `a1fecc4626`, not marked; nothing in the tree changed since my 02:46Z entry [read: `git status`, `git rev-parse`].
+- **I wait on one thing: #8940 on `main`.** `main` is `be9a3d5669` and #8940 is open at `58a598e615` [read: `git fetch`, `gh pr view 8940`, 03:14Z]. I merge and mark nothing until then. After it: one merge of `main` (the listing's line regenerated in it if the Lake file moved), the records run at that head, the changed suites, the mark, a reviewer's land verdict. The ready line of Thu 12 Nov 08:00Z moves with #8940. No run of mine is in flight [read: `research status`].
