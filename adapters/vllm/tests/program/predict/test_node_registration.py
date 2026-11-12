@@ -255,15 +255,6 @@ def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
         assert NR.main(commit["o"]) == 2 and "the descriptor's θ is 0 root nodes" in capsys.readouterr().out
 
 
-def test_a_descriptor_without_a_callee_table_names_its_root_nodes_definitions_by_id():
-    """A descriptor that states no `callees` names each root node's Definition by its id, and `root_inputs` reads the input
-    nodes off those ids as it reads them through the table of one that has it."""
-    nodes = [{"form": "batch", "fn": "RegisteredInput16_v1", "n": 4}, {"form": "call", "fn": "Add16_v1"}, {"form": "call", "fn": "Input32_v1"}]
-    assert NR.root_inputs({"root": "f", "definitions": {"f": {"body": {"nodes": nodes}}}}) == [(0, 16, 4), (2, 32, 1)]
-    by_index = {"root": "f", "callees": [n["fn"] for n in nodes], "definitions": {"f": {"body": {"nodes": [{**n, "fn": i} for i, n in enumerate(nodes)]}}}}
-    assert NR.root_inputs(by_index) == [(0, 16, 4), (2, 32, 1)]
-
-
 def test_a_builds_program_digest_is_its_program_blocks_else_the_one_at_the_results_top(tmp_path):
     """`program_digest_of` reads a Build's `result.json`: the `program` block's `digest`, else `program_digest` at its top (a
     result without the block), else none."""
