@@ -117,6 +117,8 @@ lean_check = [
     "tools/verity/lean/{check,headers,module_keys,olean_graph,upstream,cache}.py",
     "tools/verity/lean/{Facts,Replay,Graph,Unread,Upstream}.lean",
     "tools/verity/lean/{sandbox,setup}.sh",
+    # the modules a package's replay checks first, each in a step of its own, which `check.py` reads where the file is
+    "tools/verity/lean/replay-first.json",
     "tools/verity/lean/tests/fixtures/{control,modules,violations.json,module-violations.json}",
 ]
 # the repository's structure the public tests and the Lean check read
