@@ -24,7 +24,9 @@ schedule is refused here, not taken on trust.
 `NetworkCheck.Period`'s rows-form terms, read by its decoders: the network certifier's LMS public key (16 + N bytes) and
 parameters, the link (`warden_serve.LINK`, at most 65,535 UTF-8 bytes), the schedule (`warden.WardenParams`,
 `Period.scheduleOf`), whose digest every record head binds (`Period.Schedule.digest`), the certifier session (32 bytes)
-every certificate binds, and the run's `W ≥ 1` windows, `0 … W − 1`.
+every certificate binds, and the run's `W ≥ 1` windows, `0 … W − 1`. A schedule with a response cap
+(`max_tokens_cap`, which `Period.scheduleOf` reads) is refused: `NetworkCertifier.Rows.audit` holds no response to its
+request's `max_tokens`, so it doesn't cover a run under a cap.
 
 **Commitment**: `verity/network-records/v3`'s encoding (`NetworkCheck.Records.commitmentOf`) of `6 · W` records: for each
 window in order, the requests', the responses' and the fails' records, each raw (`grid.BlockGrid`, under the record's
@@ -100,6 +102,8 @@ def paramsOf (j : Json) : V Params := do
   let session ← Flock.unhex (← Flock.J.str j "session" "the object")
   unless session.size = sessionBytes do throw s!"a certifier session id is {sessionBytes} bytes, not {session.size}"
   let schedule ← Period.scheduleOf (← Flock.J.get j "schedule" "the object")
+  unless schedule.maxTokensCap.isNone do
+    throw "schedule: the rows audit reads no response cap, so a run under one isn't audited as rows"
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a run has at least one window"
   pure { key, link, lms, schedule, digest := ← schedule.digest, session, windows }
