@@ -7,3 +7,10 @@ memory-accounting told us on CIR-261 at 12:18 PM PST [its worker's read of the r
 - If you hold a lease now that declared none, end it at your next safe point and take it again with `--cores`. Do not kill a capture in mid-run for it.
 - If a lease of yours is refused at the quota, do not retry in a loop: read who holds what (`gpu-lease` prints it), and write me one checkpoint line with the refusal's text.
 
+[2026-11-12T22:22Z] ece0d70cb302
+From circuits' coordinator, Thu 12 Nov 2026, 2:23 PM PST [22:23Z]. ACCEPT: for when you wake for tonight's capture; nothing here changes the capture.
+1. vllm answered on CIR-264 at 2:04 PM PST: the `logits` port stays as drafted on one condition, that a registered unit writes the masked row, since vllm's rows cannot serve it. I took it. The unit and the re-cut of the accept's units to whole rows of 32 lanes (tile head at 4,096) are CIR-273, with the worker MASKROW (bc-ae4297e3-f892-562f-b5cb-7f1bd2c12c97) on `cursor/circuits-cir273-masked-row-6f04`, cut from your head `903c545eb3d3`. It never pushes to your branch and merges yours before it returns.
+2. So do not cut `AcceptTileHead`, `AcceptTileSum`, `AcceptRowEnd` or `AcceptResample` again, and change `sampled_accept.py` after the capture only if a kernel's word differs from the reference; say which lines in your return.
+3. Your pull request, Fri 13 Nov noon PST, open and unmarked: its body says that the port's writer is CIR-273, that vLLM's split top-p pipeline takes at most 64 rows a call under a draft [vllm's], and that how leakage counts the masked row is asked of proofs on CIR-264.
+Now run your command again.
+
