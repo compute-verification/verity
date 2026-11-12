@@ -28,7 +28,6 @@ from typing import Any
 
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources.allreduce_norm import AllReduceNorm
-from verity_vllm.acquire.sources.forward_hooks import forward_hook, forward_pre_hook
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
 from verity_vllm.engine.collectives import fused_norm as FN
@@ -176,6 +175,7 @@ class TPPartialSource:
         self.modules = [(n, m) for n, m in model.named_modules() if n in {s[0] for s in self.sites}]
         self.cur: tuple[str, str] | None = None
         self._cur_stack: list[tuple[str, str]] = []
+        self._handles: list = []
         self._hooks = hooks.Hooks()
         self.active = False
         self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "sites": len(self.sites), "acquire_s": 0.0, "unattributed": 0, "shapes": {}, "kinds": {}}
@@ -253,6 +253,9 @@ class TPPartialSource:
             me.cur = me._cur_stack.pop() if me._cur_stack else None
             me._cur_in = None
 
+        for n, m in self.modules:
+            self._handles.append(m.register_forward_pre_hook(pre(n, type(m).__name__)))
+            self._handles.append(m.register_forward_hook(post))
         targets: list[tuple[Any, str, str]] = []
         for modname, attr, kind in SITES:
             try:
@@ -270,12 +273,12 @@ class TPPartialSource:
             self._hooks.wrap(mod, attr, partial(self._wrap, kind))
         for mod, attr in self.far.targets:
             self._hooks.wrap(mod, attr, self.far.wrap)
-        for n, m in self.modules:                                # after the patches: uninstall, newest first, takes the hooks off first
-            forward_pre_hook(self._hooks, m, pre(n, type(m).__name__))
-            forward_hook(self._hooks, m, post)
         self.active = True
 
     def uninstall(self) -> None:
+        for h in self._handles:
+            h.remove()
+        self._handles = []
         self._hooks.uninstall()
         self.far.uninstall()
         self.active = False

@@ -24,8 +24,6 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from verity_vllm.acquire.sources.forward_hooks import forward_pre_hook
-
 FAR_MODULE = "vllm.models.common.ops.fused_allreduce_rms_norm"
 FAR_NAME = "fused_allreduce_rms_norm"
 NO_CALL_SITE = "<fused_allreduce_rms_norm: no call seen>"
@@ -90,7 +88,7 @@ class AllReduceNorm:
     # -- install / steps ------------------------------------------------------------------------------------------------------
     def uninstall(self) -> None:
         for h in self._hooked.values():
-            h.uninstall()
+            h.remove()
         self._hooked = {}
 
     def close_step(self) -> None:
@@ -130,7 +128,7 @@ class AllReduceNorm:
                 c.x03_expected = getattr(c, "x03_expected", 0) + 1
                 return orig(hidden_states, residual, norm, *a, **k)
             if id(norm) not in me._hooked:
-                me._hooked[id(norm)] = forward_pre_hook(me.src._hooks, norm, me._mark)
+                me._hooked[id(norm)] = norm.register_forward_pre_hook(me._mark)
             if me._step is None:
                 me._step = int(getattr(job, "step", 0))
             prev, me.src.cur = me.src.cur, (name, FAR_NAME)

@@ -19,7 +19,6 @@ from typing import Any
 import numpy as np
 from verity.definitions.numerics import fp8_twins
 
-from verity_vllm.acquire.sources.forward_hooks import forward_hook, forward_pre_hook
 from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
 from verity_vllm.query import scale_products as SP
@@ -48,6 +47,7 @@ class ScaleProductsSource:
         self.torch, self.c, self.model = torch, committer, model
         self.sites = {str(k): dict(v) for k, v in sites.items()}
         self._hooks = hooks.Hooks()
+        self._handles: list[Any] = []
         self._scope: list[str] = []
         self._held: list[Any] = []
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "rows": 0, "sites": len(self.sites), "errors": 0}
@@ -59,12 +59,15 @@ class ScaleProductsSource:
         if missing:
             raise RuntimeError(f"scale products: the manifest's linear modules are not modules of the model: {missing[:4]}")
         for op in self.sites:
-            forward_pre_hook(self._hooks, mods[op], self._enter(op))
-            forward_hook(self._hooks, mods[op], self._leave(op), always_call=True)
+            self._handles.append(mods[op].register_forward_pre_hook(self._enter(op)))
+            self._handles.append(mods[op].register_forward_hook(self._leave(op), always_call=True))
         self._hooks.patch(self.torch.ops._C, "cutlass_scaled_mm", self._wrap(self.torch.ops._C.cutlass_scaled_mm))
         self.active = True
 
     def uninstall(self) -> None:
+        for h in self._handles:
+            h.remove()
+        self._handles = []
         self._hooks.uninstall()
         self._scope.clear()
         self._held.clear()

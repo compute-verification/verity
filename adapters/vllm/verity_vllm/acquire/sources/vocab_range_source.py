@@ -16,7 +16,6 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from verity_vllm.acquire.sources.forward_hooks import forward_hook, forward_pre_hook
 from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
 from verity_vllm.query import vocab_range as VR
@@ -58,6 +57,7 @@ class VocabRangeSource:
         self.torch, self.c, self.model = torch, committer, model
         self.sites = {str(k): dict(v) for k, v in sites.items()}
         self._hooks = hooks.Hooks()
+        self._handles: list[Any] = []
         self._scope: list[str] = []
         self._held: list[Any] = []
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "rows": 0, "sites": len(self.sites), "errors": 0}
@@ -70,12 +70,15 @@ class VocabRangeSource:
         if missing:
             raise RuntimeError(f"vocab range: the manifest's embedding sites are not modules of the model: {missing[:4]}")
         for op, m in where.items():
-            forward_pre_hook(self._hooks, mods[m], self._enter(op))
-            forward_hook(self._hooks, mods[m], self._leave(op), always_call=True)
+            self._handles.append(mods[m].register_forward_pre_hook(self._enter(op)))
+            self._handles.append(mods[m].register_forward_hook(self._leave(op), always_call=True))
         self._hooks.patch(self.torch.ops._C, "vocab_parallel_embedding", self._wrap(self.torch.ops._C.vocab_parallel_embedding))
         self.active = True
 
     def uninstall(self) -> None:
+        for h in self._handles:
+            h.remove()
+        self._handles = []
         self._hooks.uninstall()
         self._scope.clear()
         self._held.clear()

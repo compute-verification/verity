@@ -36,7 +36,6 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources.forward_hooks import forward_hook, forward_pre_hook
 from verity_vllm.acquire.sources.moe_source import moe_layers_of
 from verity_vllm.acquire.sources.oracle_witness import (
     MEMBERS,
@@ -165,6 +164,7 @@ class MoeAlignSource:
         self._calls: dict[str, int] = {}
         self._verdicts: list[tuple[str, Any]] = []
         self._held: list[Any] = []
+        self._handles: list[Any] = []
         self._hooks = hooks.Hooks()
         #: (engine step, module) -> the recorded (top-k ids, rank) this source replays (`arm`); None replays nothing
         self.replay: dict[tuple[int, str], tuple[Any, Any]] | None = None
@@ -187,8 +187,8 @@ class MoeAlignSource:
             self._count_replays()
 
         for name, m in self.modules:
-            forward_pre_hook(self._hooks, m, self._enter(name))
-            forward_hook(self._hooks, m, self._leave(name), always_call=True)
+            self._handles.append(m.register_forward_pre_hook(self._enter(name)))
+            self._handles.append(m.register_forward_hook(self._leave(name), always_call=True))
         mod = importlib.import_module(MARLIN_MODULE)
         if not callable(getattr(mod, ALIGN, None)):
             raise RuntimeError(f"moe align: {MARLIN_MODULE} has no {ALIGN}")
@@ -196,6 +196,9 @@ class MoeAlignSource:
         self.active = True
 
     def uninstall(self) -> None:
+        for h in self._handles:
+            h.remove()
+        self._handles = []
         self._hooks.uninstall()
         self.active = False
 
