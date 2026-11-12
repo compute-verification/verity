@@ -509,7 +509,7 @@ def write_bulk(path: Path, lines: list[str]) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("verity", type=Path)
-    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[6] / "Security")
+    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[6] / "security")
     args = ap.parse_args()
     rng = random.Random(SEED)
     rows = []

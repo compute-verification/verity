@@ -2,7 +2,7 @@
 
 `squaring.free_square` shows a squaring mod p1024 at 0 units through the one-word gather (`gather [idx, const c]` is
 `c·[idx ≤ 0]`, and `IntGate.indexBits = Nat.clog 2 (args.length − 1) = 0` for it). This module completes the argument at the
-fields 6b's `codecRows` (`Security/Proofs/Accounting/Gates.lean`) use, `⟨8, 5⟩` and `⟨16, 17⟩`: a circuit of the model
+fields 6b's `codecRows` (`security/Proofs/Accounting/Gates.lean`) use, `⟨8, 5⟩` and `⟨16, 17⟩`: a circuit of the model
 that computes `byte (lessParity (encodeWord F.p d.key (d.tweak F i) m)) l` for every `l`, on every sample, from the
 `CodecInputs` slots (payload bytes registered, round constants', mask's and tweak's bytes coin), with its window
 `Proven`, no budgeted gate at all (so `OperandBits B` for every `B`), no run input, and `budgeted C = 0`. Then

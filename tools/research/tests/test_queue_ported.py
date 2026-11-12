@@ -146,7 +146,7 @@ def test_each_pin_recording_a_ported_file_records_its_ported_digest_and_keeps_ev
     tree = _pin_main(world)
     _move_main(world, _tooling(tmp_path / "argv"))
     pr = {**tree, f"{POUS}/New.lean": "import Old\n", "y.lean": "import x\n"}
-    paths, exfil = ["lean-toolchain", "lakefile.toml", "Old.lean", UP, "New.lean"], ["Security/Proofs/lakefile.toml", "x.lean", "y.lean"]
+    paths, exfil = ["lean-toolchain", "lakefile.toml", "Old.lean", UP, "New.lean"], ["security/Proofs/lakefile.toml", "x.lean", "y.lean"]
     world.gh.put(1, _pinned(world, pr, paths, exfil))
     members, entries = world.queue().sync()
     assert [m.pr for m in members] == [1], entries[1].why
