@@ -128,8 +128,8 @@ class Run:
         self.clock.now = self.s.deadline(len(self.s.windows) - 1) + 1
         out = []
         for t in range(self.p.windows):
-            draws = self.s.close(t)
-            out.append(self.s.verify(t, [(open_ or self.prover.open)(self.passes[t, i], q) for i, q in draws]))
+            sampled = self.s.close(t)
+            out.append(self.s.verify(t, [(open_ or self.prover.open)(self.passes[t, i], q) for i, q in sampled]))
             if not out[-1].accepted:
                 break
         return out
@@ -233,7 +233,7 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
 class Link:
     """A requirement link that holds or not, the circuit reading `reads[step]` bits from complete blocks at a step
     (none otherwise), its memory-map unit's verdict `maps` on the records it is asked about, each kept in `asked`, and
-    its units' draw leaving `epsilon` of its credit unproved except with `delta` (every unit proved by default)."""
+    its units' sample leaving `epsilon` of its credit unproved except with `delta` (every unit proved by default)."""
     holds: bool
     reads: dict
     maps: object = True
@@ -561,7 +561,7 @@ def test_a_re_key_s_old_index_is_below_the_stale_bound_of_the_pass_after_its_ste
 
 
 def test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_error(honest) -> None:
-    """The plan and memory-map units are sampled: a link whose draw leaves ε of its credit unproved, except with δ,
+    """The plan and memory-map units are sampled: a link whose sample leaves ε of its credit unproved, except with δ,
     credits 1 − ε of the session's linked credit, 37 blocks (each plan read whole, less its uncredited post-seed
     blocks), and each window its own (23 and 14) less ε of the session's,
     since all of the unproved share may be one window's.  Its δ adds to both readings' error, which is otherwise every
@@ -672,24 +672,24 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
     decode.  A registered block's opening with a digest is malformed."""
     r = honest_session()
     r.clock.now = r.s.deadline(1) + 1
-    draws = r.s.close(0)
-    n = next(n for n, (i, q) in enumerate(draws) if (r.passes[0, i].plan.block(q) >= N) == appended)
-    opened = [r.prover.open(r.passes[0, i], q) for i, q in draws]
+    sampled = r.s.close(0)
+    n = next(n for n, (i, q) in enumerate(sampled) if (r.passes[0, i].plan.block(q) >= N) == appended)
+    opened = [r.prover.open(r.passes[0, i], q) for i, q in sampled]
     opened[n] = dataclasses.replace(opened[n], digest=digest)
-    assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, draws[n])
+    assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, sampled[n])
 
 
 @pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
 def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
-    """No session samples nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
+    """No session samples nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose samples are
     empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
     doesn't decode, read as no openings, is refused on every window."""
     r = Run(store(), windows=1)
     assert r.run() is None
     r.boundary()
     r.clock.now = r.s.deadline(0) + 1
-    draws = r.s.close(0)
-    openings = [r.prover.open(r.passes[0, i], q) for i, q in draws][:opened]
+    sampled = r.s.close(0)
+    openings = [r.prover.open(r.passes[0, i], q) for i, q in sampled][:opened]
     r.s.windows[0].draws = ()
     assert r.s.verify(0, openings) == audit.Verdict(0, False, "malformed") == r.s.failed
 
