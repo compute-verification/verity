@@ -40,7 +40,7 @@ def checkpoint(tmp_path_factory):
 def scheduler(checkpoint):
     """vLLM's scheduler on the pool, at the limit vLLM fitted the launch at -1 to; and its config."""
     import torch
-    from vllm.config import CacheConfig, ModelConfig, SchedulerConfig, VllmConfig
+    from vllm.config import CacheConfig, DeviceConfig, ModelConfig, SchedulerConfig, VllmConfig
     from vllm.v1.core import kv_cache_utils as K
     from vllm.v1.core.sched.scheduler import Scheduler
     from vllm.v1.core.single_type_kv_cache_manager import register_all_kvcache_specs
@@ -52,7 +52,7 @@ def scheduler(checkpoint):
     sc = SchedulerConfig(max_num_seqs=256, max_num_batched_tokens=2048, max_model_len=mc.max_model_len,
                          long_prefill_token_threshold=256, enable_chunked_prefill=True, is_encoder_decoder=False)
     cc = CacheConfig(block_size=BLOCK, gpu_memory_utilization=0.9, cache_dtype="auto", enable_prefix_caching=False)
-    cfg = VllmConfig(model_config=mc, scheduler_config=sc, cache_config=cc)
+    cfg = VllmConfig(model_config=mc, scheduler_config=sc, cache_config=cc, device_config=DeviceConfig(device="cpu"))
     cc.kv_cache_layout, cc.num_gpu_blocks_override = "LBNHC", BLOCKS
     spec = FullAttentionSpec(block_size=BLOCK, num_kv_heads=1, head_size=64, dtype=torch.bfloat16)
     kvc = K.generate_scheduler_kv_cache_config(K.get_kv_cache_configs(cfg, [{"layer": spec}], [1 << 30]))
