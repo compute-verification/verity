@@ -15,11 +15,11 @@
   },
   "Proofs/Core": {
    "modules": 4,
-   "declarations": 54
+   "declarations": 60
   },
   "Proofs/Flock": {
-   "modules": 241,
-   "declarations": 1843
+   "modules": 267,
+   "declarations": 2141
   },
   "Proofs/Nci": {
    "modules": 1,

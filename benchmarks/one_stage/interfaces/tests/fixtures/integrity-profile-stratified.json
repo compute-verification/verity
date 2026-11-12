@@ -1,0 +1,34 @@
+{
+ "covered": [],
+ "delta": "1/2",
+ "drawn": {
+  "unit": 162
+ },
+ "levels": [
+  {
+   "draw": {
+    "law": "stratified",
+    "strata": [
+     {
+      "k": 160,
+      "name": "RoPEHead_v1{D=64}",
+      "size": 160
+     },
+     {
+      "k": 2,
+      "name": "SiluMul_v2{I=8192}",
+      "size": 4
+     }
+    ]
+   },
+   "name": "unit",
+   "query": "449b7da1e838d37700081293de93b1ddef87bd4f2b20447187eb5215bcfde64407765b6b7770fe441e887e873f9ea16ee03f8fccd135e187acd92a1f18ade38c",
+   "size": 164
+  }
+ ],
+ "linked": false,
+ "prescribed": [],
+ "programs": [
+  "827d679d848eff4f66dfc60f8c91f5643c0c924689e431dbe7caf8a2bf564828c1a222305acb270cfee6c3d5a1d48b8d0752c179796b6757d01e25a93ccaf41c"
+ ]
+}

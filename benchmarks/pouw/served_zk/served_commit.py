@@ -992,7 +992,7 @@ class Challenger:
         codes = self._of_record(name, self.record.registration,
                                 OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
                                 dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
-                                                          None, None).codes)
+                                                          None, None))
         public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
                                  lambda: S.check_public(st.spec, rec).to_json())
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]

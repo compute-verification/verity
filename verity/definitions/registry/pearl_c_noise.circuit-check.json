@@ -1,0 +1,62 @@
+{
+ "definitions": {
+  "PearlCLineCode_v2": {
+   "and": 503,
+   "type": "fa224011214656d8d72f08440348fcab3f8f546b73a43fce0870daaa28c023f0bbc88a664093dffebca0d2742853762c9b50426f56e9bc65f77cd28f9aa0d2ef"
+  },
+  "PearlCLineCodes_v2": {
+   "and": 18749,
+   "type": "64b0ea96bad4cd7bb3deb12912eafdcbc6bb3bf0fb2359bf52640475a7d08f0f4e6d3b16203460b836bcc6a4402eb594ed51472c6501ac0605bfb95810e2318b"
+  },
+  "PearlCLineInt_v2": {
+   "and": 7,
+   "type": "7cddc0d14d031a63e793cb2dc756b118281921755bdc22ca4c8b34547d168ef2337fa0e29e87617c03595d4cfd8a8abe38a225896a6b6a44b7818de2c92aa9ca"
+  },
+  "PearlCLineKey_v2": {
+   "and": 77359,
+   "type": "c64edd5cce86b739b1ee9fc560340ba97f10af04c93d6d185a90e6c0e8064508b2ea392bbff03d03ec26d3325d20bf69785bd016ce5964b0babadaff100ebea4"
+  },
+  "PearlCLineNormRoot_v2": {
+   "and": 1967,
+   "type": "604b35571e3e6364369ff7a3ccf47b73b36c1249add5f23cc9f003af4ccf543c1c17fa9b907e28873a52a7e63b2edf7631d8c5fa23a5e63877d7b97b6fcc7461"
+  },
+  "PearlCLineRaw_v2": {
+   "and": 77540,
+   "type": "30149bcf907dd5609fc8be097d7099e9915906499b6e5d93448baa7a9450a157182e4860a888eb8edb41ec12f552d618a32fe2ab5859a993c7e88074b53b9ef6"
+  },
+  "PearlCLineScale_v2": {
+   "and": 3552,
+   "type": "7759ad2e22c1049620a3da638ba4cbf89f77d096df84ece8d01ebd9533659b64d6a7d4ed733dcb8c4096a7af355650e1fbcc0b5368948820181af2ef236899d7"
+  },
+  "PearlCRowBlock_v2": {
+   "and": 81402,
+   "type": "7b6b2e28631567809b6cba9e3a80d112329c358fa9b68343e2501bc9b5d1fae0f47593ca77d0e8b799326dcb1e4b539ee25b86f25d0ecb902308afbb5276ee30"
+  },
+  "PearlCRowSeedHead_v2": {
+   "and": 80810,
+   "type": "08a9443a8a76653c219fe1025305bac137bd9989ffa6efd303a6edca54679fe51e473a385c8c9216934e7e83a15e179bd59f6a68343aa08948145eca50f5bdf7"
+  },
+  "PearlCRowSeedTail_v2": {
+   "and": 78170,
+   "type": "f4610cfb8cce302de5aa0f814edce9af2ed6be7ff4dc3e121fa0eda1be8bd7485b322cb8e2f370b940df79227b59bb039d4914a4ff9778b2c7e60f0ea906fb5b"
+  },
+  "PearlCSeedB_v2": {
+   "and": 79387,
+   "type": "b70302e2b8b3d7b59bf4e59ac2cb635f30585da027c4d87a18148309f020d60b220eb9d77cbe2be5304cf0c8adf4f7dc3942d4ca9e8b668c6986d0861113f34a"
+  },
+  "PearlCShaBlock_v2": {
+   "and": 81402,
+   "type": "7b6b2e28631567809b6cba9e3a80d112329c358fa9b68343e2501bc9b5d1fae0f47593ca77d0e8b799326dcb1e4b539ee25b86f25d0ecb902308afbb5276ee30"
+  }
+ },
+ "pieces": {
+  "PearlCLineInt_v1": {
+   "and": 7,
+   "type": "d94dbe9a07f444367e2ec1ba4c8a38c406caec2c62386a698cf279b24c4bea485cefe3843a5dc7e55816e36d6dd9bdcc6f7a2cc226ca2ff04d52c3f975912933"
+  },
+  "PearlCLineNormRoot_v1": {
+   "and": 1986,
+   "type": "0e9fd4eed0b821008496f9b3e855887b863e450ff90878116709cac5784f5249e3c64aa2324cdf2ec00b8620f2910b11a5ba83acf78f28adc2ff468130275bb1"
+  }
+ }
+}

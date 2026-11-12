@@ -698,6 +698,35 @@ noncomputable def deployZkTrim (rel : Readable.Parsed → Readable.Relation) :
 
 end KS.Gen
 
+/-! ## The masked record at a truncation `K₀`
+
+Each wait of `E^rep` gives up after `cap` reruns, `2^256` at the deployed records (`Claims.Flock.Numbers.cap`). At a
+truncation `K₀` the masked instance is the same record with each wait giving up after `K₀` reruns (`deployZkAt`), and
+`κ`'s term `2k/K` is `2k/K₀` (`Claims.Flock.Numbers.κ_le_sum_cap`). -/
+
+/-- **A record with `E^rep` truncated at `K₀`**: each wait gives up after `K₀` reruns, everything else the record's. -/
+def _root_.Claims.Flock.Deploy.withCap {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (K₀ : ℕ) :
+    Claims.Flock.Deploy Coin Col T :=
+  { D with cap := fun _ => K₀ }
+
+/-- **Flock's deployed masked (`--zk`) verifier with `E^rep` truncated at `K₀`**: `deployZk rel`, each wait giving up
+after `K₀` reruns. -/
+noncomputable def deployZkAt (K₀ : ℕ) (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace :=
+  (deployZk rel).withCap K₀
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- **Flock's deployed masked (`--zk`) verifier with `E^rep` truncated at `K₀`**: `deployZk rel`, each wait giving up
+after `K₀` reruns. -/
+noncomputable def deployZkAt (K₀ : ℕ) (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace :=
+  (deployZk rel).withCap K₀
+
+end KS.Gen
+
 /-! ## What the instances meet -/
 
 /-- **A plain decoder meets the list-decoding spec's earlier `nMin` form** at the deployed code, at `agree₀` and its

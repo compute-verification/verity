@@ -1,0 +1,15 @@
+{
+ "format": 1,
+ "roots": ["Commitments"],
+ "layers": {
+  "Commitments": {
+   "imports": ["Commitments", "Base", "Lean.Data.Json", "Std.Data.HashMap"],
+   "except": [],
+   "why": "frame-v3 and the sampling of units are code: Lean core, its JSON and its hash maps, and the bytes, hashes and parsing below (`core_base`), no Mathlib and nothing of Security"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
+ }
+}

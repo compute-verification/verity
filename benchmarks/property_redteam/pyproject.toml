@@ -22,15 +22,15 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and the integration's quarantine, difftest and relation modules. `demo.py`'s registry walk reads
 # `verity.definitions.boolean` too.
 # The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/circuits",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/hardware/record.py",
           "verity/definitions/kernels", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
-          "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/protocols/spot/verifier/profile.py",
+          "verity/protocols/spot/verifier/profile.py",
           "verity/protocols/poub/verifier", "verity/protocols/spot/verifier/__init__.py",
           "verity/claims/__init__.py",
           "verity/protocols/spot/device/challenger.py", "verity/protocols/spot/device/remote.py",
           "verity/protocols/pouw/verifier/__init__.py",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py",
+          "verity/protocols/pouw/prover/__init__.py",
           "verity/protocols/pouw/prover/circuit", "adapters/vllm/verity_vllm/__init__.py",
           "adapters/vllm/verity_vllm/program/__init__.py", "verity/definitions/__init__.py",
           "verity/definitions/registry",
@@ -43,8 +43,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "adapters/vllm/verity_vllm/program/moe_difftest.py",
           "adapters/vllm/verity_vllm/program/layer_norm_difftest.py",
           "adapters/vllm/verity_vllm/program/sampling_rng.py",
-          "adapters/vllm/verity_vllm/program/libdevice_sampling.py",
-          "adapters/vllm/verity_vllm/program/rmsnorm_fused_sweep.py",
           "adapters/vllm/verity_vllm/program/gemm_target_correspondence.py",
           "adapters/vllm/verity_vllm/program/compiled_relations.py",
           "adapters/vllm/verity_vllm/program/compiled_norm_literal.py",

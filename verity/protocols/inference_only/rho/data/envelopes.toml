@@ -12,15 +12,16 @@ kind = "unmonitored"
 
 # Nci.Guarantees.DampenerRemote's terms, each at verity/protocols/inference_only/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
 # PoUW: residual, clock_share, host, eps_w, eps_agg, window_delta_*; detection: identities, lag_s (and, sampled, the rest).
-# window_delta_coin and window_delta_crypto, one and two of the per-window delta, and SPOT's p_evade are
-# not set here: the registry reads the per-window delta from core (rho/params.py).
+# window_delta_coin (delta_s, the per-window delta), window_delta_crypto (delta_bind + delta_ks, assumed at twice it:
+# neither has a deployed bound) and SPOT's p_evade are not set here: the registry reads the per-window delta from
+# core (rho/params.py).
 [regime.remote]
 kind = "remote"
 residual = { value = 0.323, low = 0.01, high = 1, source = "verity/protocols/inference_only/nci/tiers.py DEFAULTS residual: the floor credit at the locked clock, honest kernels at 1.72x the floor (measured); low: best plausible design; high: nothing credited, as in a training window today", status = "measured" }
 clock_share = { value = 0, low = 0, high = 0.3, source = "verity/protocols/inference_only/nci/tiers.py DEFAULTS clock_share: PoUW credits 2,430 MHz (H1's SM120 record), the ACCEL model's card table's ceiling for the RTX PRO 6000 Server Edition (Verity.Accel.Sm120), and all eight cards of a measured node (board 900-2G153-0000-000) report 2,430 MHz as their max, application, default and boost SM clock, so no capacity runs above the credited clock; the C4 dossier's 2,597 MHz is NVIDIA's family headline, not a clock this SKU reports; high: a card whose SKU or firmware reaches past its table (the premise that names them is unattested)", status = "measured" }
 host = { value = 0, source = "hosts carry no compute (GLOSSARY.md, the device model): a server's compute is its accelerators', so the host CPUs add nothing to the slowdown's free share. 1 counts them at their INT8 datasheet peak (Location.host_phi), periods.py's row without the hosts assumption", status = "ruled" }
 eps_w = { value = 0.00744, low = 6e-4, high = 0.00917, source = "verity/protocols/inference_only/nci/tiers.py DEFAULTS eps_w (CircuitCredit, draft); low: best plausible design (C7 dossier); high: CircuitCredit at r = 4 (exposure.RANGES)", status = "derived" }
-eps_agg = { value = 1e-4, low = 1e-6, high = 1e-3, source = "verity/protocols/inference_only/nci/tiers.py DEFAULTS eps_agg: per-window failure 3 x 2^-40 at the theorem's delta 2.7e-8 (Markov over the windows)", status = "derived" }
+eps_agg = { value = 1e-4, low = 1e-6, high = 1e-3, source = "verity/protocols/inference_only/nci/tiers.py DEFAULTS eps_agg: a chosen slack. CertificateSlack holds at any eps' with failure probability p/eps' (Markov over the windows), p being PouwSound's per-window failure delta_s + delta_bind + delta_ks. Only delta_s has a value, 2^-40: PoUW's binding (delta_bind) has no deployed bound and ProofSystemSound (delta_ks) is undischarged, so p is assumed; at 3 x 2^-40 the failure probability is 2.7e-8", status = "assumed" }
 identities = { value = 1, unit = "identity", low = 1, high = 1000, source = "verity/protocols/inference_only/nci/tiers.py DEFAULTS identities: detection is terminal (J = 1); high: identities a detection doesn't end", status = "assumed" }
 lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "verity/protocols/inference_only/nci/tiers.py DEFAULTS lag_s: a window plus the verdict delay", status = "assumed" }
 

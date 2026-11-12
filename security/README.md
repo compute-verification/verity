@@ -472,22 +472,22 @@ None of these is assumed silently; each would restate the conclusion:
 
 ## Three trees
 
-- `Definitions/` (package `security`, its root `Definitions.lean`): the spec, the part a reader reads. Each area
-  (`Core`, `Pouw`, `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and
-  its guarantee statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on
-  without proof, are declared in `Definitions/Assumptions.lean` or a module under it; a premise declared elsewhere is
-  open (The lock).
-- `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
-  runs, one `Properties.<Protocol>` module per protocol.
-- `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
-  guarantee, and the lemmas behind them.
+Each tree's README has its import rule, which the lock's `layers` and `trees` hold, and its areas:
+[`Definitions/`](Definitions/README.md) (package `security`), the spec; [`Properties/`](Properties/README.md)
+(`security_properties`), statements about the code's Lean functions; and [`Proofs/`](Proofs/README.md)
+(`security_proofs`), every proof.
 
-What may import what (`tests/test_lean_packages.py`): `security` requires only Mathlib; `security_properties` requires
-`security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
-ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
-import, and its `trees` forbid a statement from reading, or a definitions or
-properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
-guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
+## What outside code may do
+
+Outside code may run the Lean check on the packages, read a file here as data (a lock, or Lean a test holds its Python
+to) and build or run Lean in a package's Lake environment. No outside package requires them
+(`tests/test_lean_packages.py`), and a generated file is written only by the generator its header names. Today:
+
+- Lean files importing `Proofs.*` and the programs that build or run them: the one list is in `Proofs/README.md`.
+- The NCP pin's command in `tools/verity/check/pins.py` builds and runs Lean in `security`'s environment.
+- Generators: `lean_headline.py`, `lean_headline_dc.py` and `machine_model/` (the ACCEL model; it prints `Sheets/`)
+  in `benchmarks/pouw/`; `verity/definitions/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
+  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/pouw/verifier/lean/scripts/`.
 
 ## The lock
 
@@ -579,9 +579,9 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
 With the toolchain `lean-toolchain` pins:
 
 ~~~text
-lake build                                    # in security/: the spec
-lake build                                    # in security/Properties/, then security/Proofs/ (fetches ArkLib)
-python3 tools/verity/lean/check.py Security   # from the repository root
+lake build   # in security/: the spec
+lake build   # in security/Properties/, then security/Proofs/ (fetches ArkLib)
+python3 tools/verity/lean/check.py security/   # from the repository root
 ~~~
 
 The check audits `Proofs/` with the spec, from one build, and refuses a machine below its memory floor.

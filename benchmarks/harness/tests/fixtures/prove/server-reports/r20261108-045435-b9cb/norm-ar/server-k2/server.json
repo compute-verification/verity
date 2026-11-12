@@ -1,0 +1,30 @@
+{
+ "types": {
+  "ar-multimem": {
+   "c": 128,
+   "full": 256,
+   "k_log": 27
+  },
+  "rmsnorm-v8": {
+   "c": 128,
+   "full": 256,
+   "k_log": 27
+  }
+ },
+ "verify_s": {
+  "ar-multimem": {
+   "n": 13,
+   "mean": 6.1429,
+   "max": 6.5577
+  }
+ },
+ "timed_out": false,
+ "rc": [
+  -15,
+  -15
+ ],
+ "accepted": false,
+ "host_limit": {
+  "stopped_at_s": 173.2
+ }
+}

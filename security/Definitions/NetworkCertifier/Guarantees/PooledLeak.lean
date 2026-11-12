@@ -82,7 +82,11 @@ set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits** (conditional on its
 two per-window inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`,
-values `ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each committing at most `b` bits; with
+values `ρ i` at the registered inputs), with `n i` proof blocks, each committing at most `b` bits; with an operator
+`op` fixed before the period and the covert sender's secrets, a function of the observations alone: window `i`'s
+operator at the period's observations `o` is `op i (runsBefore o i)`, which reads only the windows before `i`, closed
+by then (`runsBefore`), and window `i` only through the observations before each step, so no window still open and
+none after; with
 the network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
 (`RecordFormat.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and its record of them in the format `f`,
@@ -93,8 +97,8 @@ after the earlier windows' coins `ω`, and `W z ω i ⊆ range (n i)` is the inc
 
 * `hesc`, the conditional escape: `Pr_x[acc z i ω x] ≤ (1 - q)^|W z ω i| + e i`, `q` the design's per-window
   detection probability (`Flock.Guarantees.SampledKSLive` at the history, not yet discharged);
-* `hleak`, the leak relation at that witness: `Pr[acc_i ∧ ¬LeakAt (W z ω i)] ≤ e' i` on the record's observations
-  (the live `SampledLeakAccepted`, P2, not yet discharged);
+* `hleak`, the leak relation at that witness: `Pr[acc_i ∧ ¬LeakAt (W z ω i)] ≤ e' i` on the record's observations,
+  at the window's operator at the record's earlier windows (the live `SampledLeakAccepted`, P2, not yet discharged);
 
 for `0 ≤ q ≤ 1` and `Fmax ≥ ln(1/δ)/q`:
 
@@ -105,7 +109,8 @@ for `0 ≤ q ≤ 1` and `Fmax ≥ ln(1/δ)/q`:
   `#Ss · ∏_c (cap c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n i`. -/
 def PooledLeakAccepted : Prop :=
   ∀ {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {m : ℕ}
-    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool)
+    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
+    (op : Fin m → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
     (n : Fin m → ℕ) (b : ℕ) (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
@@ -124,7 +129,8 @@ def PooledLeakAccepted : Prop :=
     (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
     (hesc : ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i)
     (hleak : ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
-      ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i)) ≤ e' i)
+      ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (run tap (schedOf z ω, srvOf z ω)).2 i)) (W z ω i)
+        ((run tap (schedOf z ω, srvOf z ω)).2 i)) ≤ e' i)
     (δ : ℝ) (hδ : 0 < δ) (Fmax : ℕ) (hF : Real.log (1 / δ) ≤ q * Fmax),
     (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
         ¬PooledGood lay k reg Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2) ≤

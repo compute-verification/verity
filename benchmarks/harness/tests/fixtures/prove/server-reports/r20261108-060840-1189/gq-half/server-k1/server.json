@@ -1,0 +1,18 @@
+{
+ "types": {
+  "gq-k6144": {
+   "c": 512,
+   "full": 1024,
+   "k_log": 25
+  }
+ },
+ "verify_s": {},
+ "timed_out": false,
+ "rc": [
+  -15
+ ],
+ "accepted": false,
+ "host_limit": {
+  "stopped_at_s": 339.3
+ }
+}

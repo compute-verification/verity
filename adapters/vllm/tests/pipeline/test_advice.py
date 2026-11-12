@@ -100,6 +100,17 @@ def test_a_prefix_cache_hit_names_the_request_whose_kv_it_reuses(tmp_path):
     assert first.start == first.cache_hit == 8 and first.sources == (I1.Source(0, 8),)
 
 
+def test_a_hit_s_sources_are_whole_blocks_even_where_an_earlier_request_agrees_into_the_next_block(tmp_path):
+    shared = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    _run(tmp_path, {0: [FakeRequest("e0", shared[:6] + [99, 98, 1], [6] * 3, 3)], 5: [FakeRequest("e1", shared + [2], [6] * 3, 3)],
+                    10: [FakeRequest("e2", shared + [3], [6] * 3, 3)]}, prefix_block=4)
+    rep = ADV.write(tmp_path, compiler=C)
+    a = _advice(tmp_path)
+    first = {a.requests[r.request].id: r for st in reversed(a.steps) for r in st.rows}
+    assert rep["roundtrip"] and first["user-e1"].sources == (I1.Source(0, 4),)
+    assert first["user-e2"].cache_hit == 12 and first["user-e2"].sources == (I1.Source(0, 4), I1.Source(1, 8))
+
+
 def test_a_resume_under_prefix_caching_reuses_its_own_kv(tmp_path):
     _run(tmp_path, {0: [FakeRequest("e0", list(range(3, 13)), [6] * 8, 8), FakeRequest("e1", [5] * 4, [6] * 8, 8)]},
          preempt_at={3: "e0"}, prefix_block=4)

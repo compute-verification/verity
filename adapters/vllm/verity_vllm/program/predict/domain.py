@@ -1,10 +1,32 @@
 """φ's domain: what of φ a predicted Program can't be the prediction of, refused before `build.build_program` writes one (a
-sampler the vocabulary lacks, a world, profile, execution or checkpoint dtype outside the decoder's, and an engine the target
-doesn't apply)."""
+sampler the vocabulary lacks, a top-p split count other than the registered one, a world, profile, execution or checkpoint dtype
+outside the decoder's, and an engine the target doesn't apply)."""
 from __future__ import annotations
+
+from verity.definitions.registry.topp_geometry import registered_splits
 
 from .common import Unexpressible
 from .phi import Phi
+
+
+class UnregisteredSplits(Unexpressible):
+    """A top-p policy whose split count isn't the registered one, `registered_splits` of the target's SM count: the S every served
+    launch runs at (`engine.topp_pin`), the one constant a Program carries for it. Any other S, one derived from the live batch
+    above all, would let a request's batch-mates pick its nucleus."""
+
+
+def check_splits(sampling: dict, num_sms: int | None) -> int:
+    """The registered split count ``sampling`` declares, refused (`UnregisteredSplits`) unless it is exactly
+    ``registered_splits(num_sms)``."""
+    S = sampling.get("splits")
+    if num_sms is None:
+        raise UnregisteredSplits(f"top-p on a target that declares no num_sms: the registered split count registered_splits(num_SMs) "
+                                 f"has no num_SMs (splits {S!r})")
+    want = registered_splits(int(num_sms))
+    if type(S) is not int or S != want:
+        raise UnregisteredSplits(f"top-p split count {S!r} is not the registered one, registered_splits({int(num_sms)}) = {want}: "
+                                 f"serving runs every launch at it, and the Program carries it as Const32[{want}]")
+    return S
 
 #: the engine environment a Program reads only as `tp_allreduce.settings_of` (above two ranks; two ranks' AllReduce2 is route-free)
 #: or not at all (the transport: `pipeline.build` records NCCL_P2P_DISABLE, never consults it; the DSA top-k's canonical row
@@ -24,8 +46,7 @@ def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str | tuple[str, ...], tu
     if s.get("kind", "greedy") == "stochastic":
         if int(s.get("top_k", 0) or 0) != 0 or not s.get("seeded", False):
             facts.append(f"stochastic sampling with top_k {s.get('top_k')!r}, seeded {s.get('seeded')!r} (seeded top-p only)")
-        if s.get("splits") != "derived" and not isinstance(s.get("splits"), int):
-            facts.append(f"stochastic sampling without a split count (splits {s.get('splits')!r})")
+        check_splits(s, phi.target_profile().num_sms)
     elif s.get("kind", "greedy") != "greedy":
         facts.append(f"sampling {s.get('kind')!r} (greedy or seeded top-p)")
     world = int((phi.tp or {}).get("world", 1))

@@ -10,4 +10,4 @@ domain and epilogue, the device its relation was pinned on, the instruction clas
 the targets' functions.
 
 The gate families' `veritor.*` ids are frozen: each spelling is in a family digest pin, so a new family takes a fresh id,
-and `tests/test_targets_frozen_families.py` (in `verity/circuits`'s suite) fails on one under the old prefix.
+and `verity/circuits/tests/test_targets_frozen_families.py` fails on one under the old prefix.

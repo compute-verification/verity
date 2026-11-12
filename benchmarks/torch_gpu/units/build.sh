@@ -25,7 +25,7 @@ ship_toolchain
 ship_stage benchmarks/torch_gpu/units
 for A in 90a 120a; do
   ship_cubin_flags "sm_$A"
-  "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/units.sm_$A.cubin" "$SRC/benchmarks/torch_gpu/units/units.cu" \
+  "$SHIP_NVCC" "${FLAGS[@]}" -o "$OUT/units.sm_$A.cubin" "$SRC/benchmarks/torch_gpu/units/units.cu" \
     2> "$OUT/ptxas.sm_$A.txt" \
     || { cat "$OUT/ptxas.sm_$A.txt" >&2; exit 1; }
   "$CUDA/bin/cuobjdump" -sass "$OUT/units.sm_$A.cubin" > "$OUT/units.sm_$A.sass"
@@ -36,7 +36,7 @@ for A in 90a 120a; do
   echo "harness sass_gate.py rc $?" >> "$OUT/harness-gate.sm_$A.txt"
   set -e
   tail -3 "$OUT/harness-gate.sm_$A.txt"
-  echo "nvcc ${FLAGS[*]} -o units.sm_$A.cubin units.cu" >> "$OUT/toolchain.txt"
+  echo "ship_nvcc ${FLAGS[*]} -o units.sm_$A.cubin units.cu" >> "$OUT/toolchain.txt"
 done
 cp "$HERE"/{words,lib,rmsnorm,quant,softmax,argmax,relu,add,sweep,bench,check,settings}.py "$OUT/"
 ship_source benchmarks/torch_gpu/units verity

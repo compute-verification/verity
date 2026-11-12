@@ -1,5 +1,6 @@
-"""hidden_zk's summarize.py judges every Lean check against the verdict it must give, counts a check without a verdict as a
-failure, and claims no pass for a config that was only staged."""
+"""hidden_zk's summarize.py holds every Lean check to the verdict it must give, counts a check without a verdict as a
+failure, claims nothing for a config that was only staged, and counts Lean's acceptances apart from its `NO_PROGRAM`
+refusals, under names that never read a refusal as an acceptance."""
 
 from __future__ import annotations
 
@@ -59,27 +60,32 @@ def test_each_lean_check_is_held_to_its_verdict(tmp_path):
     d = _staged(tmp_path)
     _proved(d, {"honest-own": TILE_FORM, "st-honest": TILE_FORM, "st-output_claim_false": False})
     s = _summary(tmp_path, HZ_LEAN="st-* tile-k64/honest-own")
-    assert s["all_pass"] is True and s["lean_checks"] == "st-* tile-k64/honest-own" and "stage_only" not in s
-    assert {t: (c["expect"], c["pass"]) for t, c in s["lean"].items()} == {
+    assert s["as_expected"] is True and s["lean_checks"] == "st-* tile-k64/honest-own" and "stage_only" not in s
+    assert {t: (c["expect"], c["as_expected"]) for t, c in s["lean"].items()} == {
         "honest-own": ("REFUSED", True), "st-honest": ("REFUSED", True), "st-output_claim_false": ("REJECT", True)}
+    # its honest checks are refused for their form, which is neither an acceptance nor a want of a Program
+    assert (s["lean_accepted"], s["lean_refused_no_program"]) == (0, 0)
+    assert not {"all_pass", "pass"} & (set(s) | {k for c in s["lean"].values() for k in c})
     _proved(d, {"st-output_claim_false": True})
     s = _summary(tmp_path)
-    assert s["all_pass"] is False and s["lean"]["st-output_claim_false"]["pass"] is False and s["lean_checks"] == "*"
+    assert s["as_expected"] is False and s["lean"]["st-output_claim_false"]["as_expected"] is False
+    assert s["lean_checks"] == "*" and s["lean_accepted"] == 0
     # a negative that passes every check (its form's refusal) and an honest check that a check rejects both fail
     _proved(d, {"st-output_claim_false": TILE_FORM, "honest-own": False})
     s = _summary(tmp_path)
-    assert {t: s["lean"][t]["pass"] for t in ("st-output_claim_false", "honest-own")} == {
+    assert {t: s["lean"][t]["as_expected"] for t in ("st-output_claim_false", "honest-own")} == {
         "st-output_claim_false": False, "honest-own": False}
     _proved(d, {"st-output_claim_false": None})
     s = _summary(tmp_path)
-    assert s["all_pass"] is False and s["lean"]["st-output_claim_false"]["verdict"] is None
+    assert s["as_expected"] is False and s["lean"]["st-output_claim_false"]["verdict"] is None
 
 
-def test_a_stage_only_config_claims_no_pass(tmp_path):
+def test_a_stage_only_config_claims_nothing(tmp_path):
     _staged(tmp_path)
-    assert _summary(tmp_path)["all_pass"] is False
+    assert _summary(tmp_path)["as_expected"] is False
     s = _summary(tmp_path, HZ_STAGE_ONLY="1", HZ_LEAN="st-*")
-    assert (s["stage_only"], s["all_pass"], s["lean_checks"]) == (True, None, None)
+    assert (s["stage_only"], s["as_expected"], s["lean_checks"], s["lean_accepted"], s["lean_refused_no_program"]) == (
+        True, None, None, None, None)
     assert s["zk"] is None and s["controls"] == {} and s["lean"] == {} and s["circuit_sha512"] == "ab"
 
 
@@ -87,11 +93,15 @@ def test_a_hiding_tile_is_covered_and_drawn_so_its_honest_checks_are_refused_onl
     d = _staged(tmp_path, "hidden")
     _proved(d, {"honest-own": NO_PROGRAM, "st-honest": NO_PROGRAM, "st-output_claim_false": False})
     s = _summary(tmp_path, "hidden-k64")
-    assert s["all_pass"] is True and {t: (c["expect"], c["verdict"]) for t, c in s["lean"].items()} == {
+    assert s["as_expected"] is True and {t: (c["expect"], c["verdict"]) for t, c in s["lean"].items()} == {
         "honest-own": ("REFUSED", "REFUSED"), "st-honest": ("REFUSED", "REFUSED"),
         "st-output_claim_false": ("REJECT", "REJECT")}
-    # no other verdict is a pass for it: not an acceptance a verifier without the Program gave, nor a session without a
-    # sample (D12), nor its rows' form
+    # Lean accepted none of them: both honest checks are counted as refused for want of a Program
+    assert (s["lean_accepted"], s["lean_refused_no_program"]) == (0, 2)
+    # no other verdict is as expected for it: not an acceptance a verifier without the Program gave (counted as the
+    # acceptance it is), nor a session without a sample (D12), nor its rows' form
     for why in (True, NO_DRAW, TILE_FORM):
         _proved(d, {"honest-own": why})
-        assert _summary(tmp_path, "hidden-k64")["lean"]["honest-own"]["pass"] is False
+        s = _summary(tmp_path, "hidden-k64")
+        assert s["lean"]["honest-own"]["as_expected"] is False and s["as_expected"] is False
+        assert (s["lean_accepted"], s["lean_refused_no_program"]) == (int(why is True), 1)

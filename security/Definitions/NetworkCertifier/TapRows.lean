@@ -66,6 +66,11 @@ open Claims Claims.Sampling
 def certifierVal (ops : List (Opening Bool)) (g : ℕ) : Bool :=
   ((ops.find? fun o => o.pos == g).map (·.val)).getD false
 
+/-- **The trace filled in**: the committed values `ref`, with `tv`'s value at every gate `ref` leaves unopened. At the
+network certifier's values (`certifierVal`) it holds the network certifier's records at the transfer gates wherever
+the trace's own openings there agree with them. -/
+def fillTrace (ref : ℕ → Option Bool) (tv : ℕ → Bool) (g : ℕ) : Option Bool := some ((ref g).getD (tv g))
+
 /-- **The network certifier registers the records `o`** at the transfer gates of the statement `s` over the horizon `k`,
 at the operator `op`: each of its openings `ops` passes under the statement's roots; before `k`, every egress and
 ingress gate has an opening, and at an egress gate the program holds constant the opening holds that constant; and each

@@ -193,13 +193,14 @@ def sourced() -> list[Param]:
 def _deltas() -> list[Param]:
     window, report = float(profile.WINDOW_DELTA), [float(d) for d in reporting.DELTAS]
     core = "verity.protocols.spot.verifier.profile WINDOW_DELTA, the per-window delta"
-    credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks, three of it (eps_agg's source)"
+    credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks (eps_agg's source)"
     return [
         Param("regime.remote.window_delta_coin", window, status="derived",
               source=f"{core}: {credit}: delta_s, the coins' sample"),
-        Param("regime.remote.window_delta_crypto", 2 * window, status="derived",
-              source=f"{core}: {credit}: delta_bind + delta_ks, commitment binding (SHA-512) and the proof system's "
-                     "knowledge soundness"),
+        Param("regime.remote.window_delta_crypto", 2 * window, status="assumed",
+              source=f"twice {core}: {credit}: delta_bind + delta_ks, commitment binding (SHA-512) and the proof "
+                     "system's knowledge soundness, each assumed at delta_s: PoUW's binding has no deployed bound "
+                     "and ProofSystemSound is undischarged"),
         Param("regime.remote-sampled.p_evade", window, low=1e-15, high=2.0 ** -20, status="declared",
               source=f"{core}, the planner's (verity/protocols/inference_only/nci/tiers.py DEFAULTS p_evade); high: 2^-20"),
         Param("incorrect.delta", min(report), low=min(report), high=max(report), status="ruled",

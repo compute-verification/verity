@@ -6,6 +6,10 @@
 # `check_build.sh test` (check's flock-rust-tests step) runs the Rust tests on the same checkout instead, in release as upstream's
 # CI does: flock-live's unit tests in the proving build's and the selftests' feature sets, and every test of the six crates the
 # patches change (the live crate's features don't reach them, so one run).
+# `check_build.sh bin DEST` builds the proving binary on the same checkout instead, as ../pod/60-circuit.sh builds it on a CPU
+# (release, sha512 and glue), and copies it to DEST while it holds the checkout: a test that proves runs its own copy, which
+# no later build of another tree replaces. A test's build fetches nothing: its cargo runs offline, and it exits 3 where this
+# machine has no checkout, not the toolchain or not every crate of this tree's build, which the steps above leave.
 # env: FLOCK_CHECKOUT (default $HOME/.cache/verity/flock-b684b12, cloned when missing; its target/ is kept between runs),
 # RUST_TOOLCHAIN (default the pin below, installed through rustup when missing: a machine's default toolchain doesn't decide it,
 # and an agent VM's, 1.83, can't parse upstream's edition-2024 manifests)
@@ -17,6 +21,14 @@ export PATH="$HOME/.cargo/bin:$PATH"
 mkdir -p "$(dirname "$F")"
 exec 9>"$F.lock"
 flock 9
+if [ "${1:-}" = bin ]; then
+  toolchains=$(command -v rustup >/dev/null && rustup toolchain list || true)
+  if ! grep -q "^$RUST_TOOLCHAIN-" <<<"$toolchains" || [ ! -d "$F/.git" ]; then
+    echo "check_build.sh bin: this machine has no Rust $RUST_TOOLCHAIN under rustup or no Flock checkout at $F, and a test's" \
+      "build fetches neither: check's flock-circuit-build step leaves both" >&2
+    exit 3
+  fi
+fi
 command -v rustup >/dev/null \
   || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none >/dev/null
 rustup toolchain list | grep -q "^$RUST_TOOLCHAIN-" || rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal >/dev/null
@@ -41,6 +53,17 @@ if [ "${1:-}" = test ]; then
   # take the buffer it gave back
   cargo test --release -q -p flock-core -p flock-parallel -p flock-prover -p flock-merkle -p flock-transcript -p flock-hash \
     -- --skip scratch::tests::take_reuses_given_buffer
+  exit
+fi
+if [ "${1:-}" = bin ]; then
+  echo "check_build: cargo build --release flock-circuit --features sha512,glue"
+  if ! cargo tree --offline -p flock-live --features sha512,glue >/dev/null 2>&1; then
+    echo "check_build.sh bin: this machine holds not every crate of this tree's build, and a test's build fetches none:" \
+      "check's flock-circuit-build step fetches them" >&2
+    exit 3
+  fi
+  cargo build --release --offline -q -p flock-live --bin flock-circuit --features sha512,glue
+  cp target/release/flock-circuit "${2:?check_build.sh bin DEST}"
   exit
 fi
 for features in sha512 sha512,glue sha512,glue,seed-injection; do
