@@ -37,8 +37,20 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
-from verity_vllm.protocols.remote_bandwidth.registry import KindReceipt, NodeMemory, RemoteBandwidthReceipt
+from verity_vllm.protocols.remote_bandwidth.interface import (
+    IDENTITY,
+    Append,
+    Codec,
+    PageLayout,
+    Receipt,
+    Segment,
+    WindowRecord,
+)
+from verity_vllm.protocols.remote_bandwidth.registry import (
+    KindReceipt,
+    NodeMemory,
+    RemoteBandwidthReceipt,
+)
 
 if TYPE_CHECKING:
     from verity.protocols.poub.verifier.audit import Tiles
@@ -175,8 +187,8 @@ def _check_disjoint(starts: list[tuple[int, np.ndarray]], plane_bytes: int) -> N
     by: dict[int, list[np.ndarray]] = {}
     for key, xs in starts:
         by.setdefault(key, []).append(xs)
-    for xs in by.values():
-        a = np.sort(np.concatenate(xs))
+    for group in by.values():
+        a = np.sort(np.concatenate(group))
         if (np.diff(a) < plane_bytes).any():
             raise ValueError("two KV layers' pages overlap in one storage")
 
@@ -310,6 +322,7 @@ class Binder:
             if layout not in (None, lay):
                 raise NotImplementedError("KV layers of different page shapes")
             layout = lay
+        assert layout is not None, "the runner bound at least one KV cache"
         _check_disjoint(starts, layout.plane_bytes)
         held = sum(f.numel() for f in flats.values()) - sum(b.nbytes for b in backings)
         if held:
@@ -378,6 +391,7 @@ class Binder:
     def z(self, seed: bytes) -> Callable[[str, int], bytes]:
         """The tile outputs a pass under ``seed`` binds its receipts to, by region and region block."""
         tiles, region = self.tiles, self.store.region
+        assert tiles is not None, "a pass's receipts are bound to tile outputs only by a binder that has the tiles"
         return lambda name, b: tiles.output(seed, region(name).first + b)
 
     def end(self) -> None:

@@ -56,8 +56,6 @@
     {"file": "tests/protocols/local_gate.py", "kind": "UP017", "symbol": "_now", "detail": "Use `datetime.UTC` alias"},
     {"file": "tests/protocols/pouw_h1_gpu.py", "kind": "F401", "symbol": "check_challenger", "detail": "`verity_vllm.protocols.pouw.h1` imported but unused"},
     {"file": "tests/protocols/pouw_h1_rehearsal.py", "kind": "F841", "symbol": "red_team", "detail": "Local variable `R` is assigned to but never used"},
-    {"file": "tests/protocols/remote_bandwidth/test_binder.py", "kind": "E731", "symbol": "test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote", "detail": "Do not assign a `lambda` expression, use a `def`"},
-    {"file": "tests/protocols/remote_bandwidth/test_binder.py", "kind": "E731", "symbol": "test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_registration", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tools/migrate/superseded_quarantine.py", "kind": "BLE001", "symbol": "_digest", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "F401", "symbol": "<module>", "detail": "`sys` imported but unused"},
     {"file": "verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py", "kind": "F401", "symbol": "<module>", "detail": "`re` imported but unused"},

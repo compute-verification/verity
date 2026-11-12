@@ -14,9 +14,16 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity_vllm.protocols.remote_bandwidth.binder import (
-    KERNEL_BLOCK_SIZES, Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
+    KERNEL_BLOCK_SIZES,
+    Binder,
+    Every,
+    Inbox,
+    PagedBacking,
+    TorchBacking,
+    page_layout,
+    storage_bytes,
 )
-from verity_vllm.protocols.remote_bandwidth.interface import Append
+from verity_vllm.protocols.remote_bandwidth.interface import Append, WindowRecord
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
@@ -240,7 +247,8 @@ EMPTY = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNames
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
     from verity_vllm.protocols.remote_bandwidth.registry import chain
-    s, recs = NodeMemory(), []
+    s = NodeMemory()
+    recs: list[WindowRecord] = []
     sigma = [bytes([t]) * 32 for t in range(3)]
     b = Binder(s, block_bytes=1024, messages=Every(2, sigma.__getitem__, windows=3), on_window=recs.append,
                reader=lambda segments: b"\x01" * 64)
@@ -261,14 +269,18 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
     """The verifier's message ends the window at the next pass's start, however many passes it held; chal_0's window
     chains from the registration digest the binder was given."""
     from verity.protocols.poub.verifier import receipts as rb
-    s, recs, inbox = NodeMemory(), [], Inbox()
+    s, inbox = NodeMemory(), Inbox()
+    recs: list[WindowRecord] = []
     digest = bytes(range(64))
     b = Binder(s, block_bytes=1024, messages=inbox, registration=digest, on_window=recs.append,
                reader=lambda segments: b"\x02" * 64)
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    step = lambda: b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+
+    def step() -> None:
+        b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+
     step()
     assert s._open_pass.seed is None
     sigma = [bytes([t + 7]) * 32 for t in range(2)]
@@ -301,7 +313,10 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     m = s.record_memory_map(registration=bytes(range(64)))
-    open_step = lambda: s._open_pass and s._open_pass.step
+
+    def open_step():
+        return s._open_pass and s._open_pass.step
+
     page = Block(1)
     page.ref_cnt = 1
     s.kv_alloc([1, 2])
@@ -330,10 +345,12 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     verifies with the tile's z."""
     from verity.protocols.poub.verifier import audit
     from verity.protocols.poub.verifier import receipts as rb
+
     from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt
     from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
-    s, recs, tiles = NodeMemory(salt_key=bytes(32)), [], audit.NoiseTiles()
+    s, tiles = NodeMemory(salt_key=bytes(32)), audit.NoiseTiles()
+    recs: list[WindowRecord] = []
     b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
     assert isinstance(b.receipt, RemoteBandwidthReceipt)
     r = runner()
