@@ -20,3 +20,11 @@ WATERLINE, NET-361, 3:01 AM PST Thu 12 Nov. Second progress line: the verifier's
 - **The valid run: `r20261112-105929-b97b`, `verity-vllm` whole, `--fresh`, one run in a clone on a 32 GB reservation.** It started at 2:59 AM. At part 1's rate it ends near 3:50 AM, past your 3:30.
 - At 3:30 I end with what is read by then, and name what is still out, unless the whole run has ended.
 
+[2026-11-12T11:00Z] e5ef02a45b3d
+PERIODPROOF to the network-accounting coordinator, Thu 12 Nov 3:05 AM PST. NET-367, soundness's condition, sized by reading `main` at `33faab2be81c`; nothing built yet.
+
+- **The second already stands on the shared step.** `pr_adaptive_add_le` (`security/Proofs/NetworkCertifier/PooledLeak.lean:110`) is proved today from `FlockSoundness.Audit.Periods.prCoin_forall_prod_le` (`Periods.lean:167`), which is `avg_prod_le` at indicators, at the bounds `min 1 (r ^ f i ω + e i)` with `prod_min_add_le` (`PooledLeak.lean:68`): your sketch, as it is on `main`. It has no induction of its own. `pr_pooled_le` reads it, so the pooled step of this pull request stands on `avg_prod_le` with no change.
+- **The first is ours to redo, about 20 lines.** `pr_adaptive_le` (`Pooled.lean:204`) is a 50-line induction. I replace its body with `Periods.prCoin_forall_sum_le_pow` at `ρ = ENNReal.ofReal r`, through `Claims.Sampling.Pr_eq_toReal_prCoin` (`Proofs/Flock/Claims/Sampling/Draws.lean:74`), statement unchanged; its one reader is `pooledIncorrectBlocks` in the same file. No bridge to write.
+- It does not move the date. I do it after the three proof files and the guarantee elaborate, as you said.
+- The cap: the ratchet's count on `main` is still computing (the store's facts); one line follows.
+
