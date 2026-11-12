@@ -107,19 +107,26 @@ The table, six columns for each route, AgentX's shape first. Reading left: the l
 the span and the pages' sizes, the carry spec, CACHE's final (05:15Z), `origin/cursor/proofs-inbox:inbox/replay.md`
 at each hour.
 
-## Entry 2, Thu 12 Nov 02:54Z, revised 03:04Z (due 06:00Z): the table, the recommended route, what is undecided, the context limit
+## Entry 2 and final, Thu 12 Nov 03:06Z (entry 2 was due 06:00Z, the final 16:00Z): the table, the recommended route, what is undecided, the context limit, the message for Daniel
 
-I read vllm's 02:50Z on VLLM-377: the route is to be chosen there at 07:00Z. This entry is written to be used for
-that; what could still move a cell before then is named at the end of this head.
+**Why the final is early.** I read vllm's 02:50Z on VLLM-377: Daniel wants the goal done by Friday morning and vllm
+asks for the route to be chosen there at 07:00Z, with your word by 04:00Z on whether that can hold. This entry is
+complete for that choice. Three inputs arrive after it; a one-off timer wakes me at about 05:45Z to read them, and
+what they change goes in an addendum entry below this one:
 
-Read since entry 1: your 02:28Z section (the context column is 1,048,576 beside 131,072; your point checked below
+- `r20261112-025327-f570`, the measured cost of the step record and the canonical top-k on this model at
+  saturation (ends about 05:20Z to 05:35Z by its launcher's guess, no later than 06:15Z);
+- CACHE's final (05:15Z), for column 6's prices on the four traffic shapes;
+- vllm-prodserve's settings table and accept rule (05:30Z on VLLM-377).
+
+**Read since entry 1:** your 02:28Z section (the context column is 1,048,576 beside 131,072; your point checked below
 with file and line), CACHE's entry 2 (`cursor/proofs-cache-7c3e` at `8dfb1e1dbe`), vllm's
 `20261112T0229Z-report-cachedserve-load`, the goals' texts, vllm-prodreplay's answer on VLLM-377 (02:48Z), the end of
 tonight's serving-cost run `03bb`, and vLLM's rejection sampler, draft layer, request and step defaults at the pin
 `d9105ea80`. The note `20261112T0217Z-report-cheapest-replay` holds the same text. Nothing was run and no code
 changed.
 
-Revised since `c348d79df3` (02:54Z):
+**Revised since `c348d79df3` (02:54Z):**
 
 1. The Lean on `main` does cover a replay block that reads another's committed values, in the sets' form, at about
    1,900 times the figure's bound; it is the patterns' form that does not. I had written "refuses".
@@ -131,12 +138,10 @@ Revised since `c348d79df3` (02:54Z):
    less the time it spent writing values; a whole-run replay reproduced a 128,960-token hit by re-running its
    producer; the CPU replay has never run at full depth; the table of the indexer's keys is not built.
 5. Tonight's two-stage arm ended: 194 of 3,272 requests committed, 7% of output rate over three repeats.
-6. Added: row 16 against CACHE's route; the grain of the page commitment; who is charged across execution phases;
+6. The longest hit read back from serving's pages is 384 tokens (6 pages), not 256.
+7. Added: row 16 against CACHE's route; the grain of the page commitment; who is charged across execution phases;
    the draft layer; whose each 131,072 is; the design sentence on `main` that this route changes
-   (`commit/history_tables.py:22-26`); the message for Daniel at 300 words or under.
-
-Still to come tonight, each named where it lands below: `r20261112-025327-f570` (the measured cost of the step record
-and the canonical top-k, by 06:15Z); CACHE's final (05:15Z); vllm-prodserve's settings and accept rule (05:30Z).
+   (`commit/history_tables.py:22-26`); the message for Daniel, 298 words.
 
 ### The answer
 
@@ -146,11 +151,13 @@ and the canonical top-k, by 06:15Z); CACHE's final (05:15Z); vllm-prodserve's se
    other request a zero stand-in of its recorded shape. Everything the positions did not compute, the cached prefix
    and the request's own earlier positions, it reads from KV pages that serving committed as it wrote them. Row 16.
 2. **Why it is cheapest.** It is the only route whose replay, interior commitment and proving do not grow with the
-   share of repeated prompt tokens (12% to 98%) or with the context (131,072 to the model's 1,048,576): what it
-   recomputes is what the request itself computed. Recomputing the hit, which is what `main` does, multiplies the
+   share of repeated prompt tokens (12% to 98%), and grow with the context (131,072 to the model's 1,048,576) no
+   faster than serving's own cost a token does: what it recomputes is what the request itself computed, and a
+   position's index scores every earlier key in the engine and in its proof alike. Recomputing the hit, which is what `main` does, multiplies the
    tokens replayed, committed and proved by 1.13 at our plan's 11.62% repeated and by 7 to 59 at 85.67% to 98.31%
-   [mine: 1/(1 − share) of prompt tokens; CACHE's 6.9 and 46 to 59 count FLOPs and outputs]. In this engine class the replay must also re-run every step that first computed a page of
-   the prefix, the earlier requests' decode steps included: for an agentic conversation, the conversation so far.
+   [mine: 1/(1 − share) of prompt tokens; CACHE's 6.9 and 46 to 59 count FLOPs and outputs]. In this engine class
+   the replay must also re-run every step that first computed a page of the prefix, the earlier requests' decode
+   steps included: for an agentic conversation, the conversation so far.
 3. **What it costs at serving** over stock vLLM: a hash of each KV page as it fills and a host copy kept until the
    coins, modeled at 0.036% to 0.045% of one card's time, **never run beside serving**; the step record and the
    token ids, measured inside noise. It does not grow with the repeated share: only computed tokens write pages. The
@@ -284,7 +291,7 @@ refuses one); a replay at an agentic load; a start inside the phase at TP8.
 | 2 | The restored state is checked leaf by leaf. Shown: 226 steps, 329 requests, 50,517 tokens equal, P40 [M `f460`]. | As row 1. | As row 1; the snapshot's pool is a committed input every request of the phase reads. |
 | 3 | Shown on one process (`rebuild.py:10-31`); sizes not read. | As row 1. | As row 1. |
 | 4 | Start state from a per-step copy: shown on one GPU only; the tensor-parallel path has none (`rebuild.py:68`), and it refuses a start step that runs a request the step before finished (`:40-41`). | The request's Program (row 5). | As row 5. |
-| 5 | The target's values depend on the others' shapes, not their values. Shown: 4 of 4 targets, among them a 256-token hit loaded as 4 pages, a 19,170-token prompt decoding at 19,360 keys, and a request preempted 3 times; an all-real control of 307 steps; P40 [M `ef0f`, `c677`, `b2cd`]. Not shown: a hit past 384 tokens in a one-request replay; a 131,072-token target; more than one KV cache group, which `rebuild.py:870` refuses [relayed, vllm-prodreplay]. | The request's Program after its history: the step compiler writes it in this engine class with the hit's rows as boundary inputs, the producers' (`steps.py:23-24`, `:45-46`), and a request carried over a phase's edge reads its own earlier rows the same way (`:46-51`). Refused today: a step above 2,048 tokens (`:57-59`), positions past 131,072 (`:95-96`), a recompute after preemption (`:56-57`), sampling other than greedy or seeded top-p (`:98`). Stock steps are 8,192 tokens on an H200 [read vLLM `vllm/engine/arg_utils.py:2663-2666`]. On the two-stage path the replay block is still the stand-in (`adapters/vllm/README.md:98-100`), and the CPU replay refuses a Program that reads a cached prefix (`request_replay.py:39-41`). Compile: 135 s a Program a rank over a 256-step span, 3.1 to 3.8 core-hours a sampled request [m `sweep.py:52-53`]. | Not closed: it reads values another replay block computed. On `main` the patterns' form, which the figure of record uses, refuses it: each request must read in one replay block (`TwoStageCheck.lean:58`), and the pricer refuses a fan-out above 1 (`optimize.py:1200-1202`). The capped form (`ServedCover`, `:89-94`) covers it when no two requests read one proof block, so with the conversation taken as the request and the cache keyed by conversation; it prices at about 1,945 times the patterns' form [m, CACHE's entry 2]. The patterns' form with S read as F·S: 1.52 times at F = 86, and no statement on `main` [m, CACHE; a proof sketch]. |
+| 5 | The target's values depend on the others' shapes, not their values. Shown: 4 of 4 targets, among them a 256-token hit loaded as 4 pages, a 19,170-token prompt decoding at 19,360 keys, and a request preempted 3 times; an all-real control of 307 steps; P40 [M `ef0f`, `c677`, `b2cd`]; and a 384-token hit loaded as 6 pages [M `38ef`, read in `vllm/20261110T0704Z-report-replayhit-gpu-verdict`]. Not shown: a hit past 384 tokens in a one-request replay; a 131,072-token target; more than one KV cache group, which `rebuild.py:870` refuses [relayed, vllm-prodreplay]. | The request's Program after its history: the step compiler writes it in this engine class with the hit's rows as boundary inputs, the producers' (`steps.py:23-24`, `:45-46`), and a request carried over a phase's edge reads its own earlier rows the same way (`:46-51`). Refused today: a step above 2,048 tokens (`:57-59`), positions past 131,072 (`:95-96`), a recompute after preemption (`:56-57`), sampling other than greedy or seeded top-p (`:98`). Stock steps are 8,192 tokens on an H200 [read vLLM `vllm/engine/arg_utils.py:2663-2666`]. On the two-stage path the replay block is still the stand-in (`adapters/vllm/README.md:98-100`), and the CPU replay refuses a Program that reads a cached prefix (`request_replay.py:39-41`). Compile: 135 s a Program a rank over a 256-step span, 3.1 to 3.8 core-hours a sampled request [m `sweep.py:52-53`]. | Not closed: it reads values another replay block computed. On `main` the patterns' form, which the figure of record uses, refuses it: each request must read in one replay block (`TwoStageCheck.lean:58`), and the pricer refuses a fan-out above 1 (`optimize.py:1200-1202`). The capped form (`ServedCover`, `:89-94`) covers it when no two requests read one proof block, so with the conversation taken as the request and the cache keyed by conversation; it prices at about 1,945 times the patterns' form [m, CACHE's entry 2]. The patterns' form with S read as F·S: 1.52 times at F = 86, and no statement on `main` [m, CACHE; a proof sketch]. |
 | 6 | Each stretch of the hit is recomputed in the step that first computed it, so every kernel choice is the served one (`steps.py:63-66`). Shown: hits of 128, 256 and 384 tokens, prompts up to 910 tokens [M `38ef`]. Refused by name: a producer an earlier execution phase carries in, a stretch whose row started before it, two requests computing one page in one step, a resume (`steps.py:66-67`). At AX most producers are from earlier phases. | The Program with the hit recomputed: built (#8403). For a producer in an earlier phase it would read that phase's schedule: not built. | Closed, F = 1: the form on `main` and the figure of record's. The interior and the proving grow with 1 + hits over computed: 14,229 GB a world year on our plan (1.13 times no reuse), 44 to 57 times at AX's reuse [m, CACHE's entry 2, `r20261112-020726-bb59` and `-020801-9d1e`]. |
 | 7 | It evaluates the registered circuit's own rows, so it is exact by definition; it is the reference the others are held to. Never run on a GLM-5.3 request at full depth: 4 of 78 layers, synthetic weights, one rank [relayed, vllm-prodreplay, `r20261108-091453-bf6d`]. | The request's Program, as row 5 or 6. | As the Program it evaluates. |
 | 8 | A position's row would not read its batch. Not available for this model. | The uncached request's Program, one a (prompt, output, hit) shape, shared by requests (`steps.py:27`). | As row 5 or 6, by what the hit reads. |
@@ -310,9 +317,9 @@ Nothing has been served past 131,072; every cell is [mine] or [argued] from the 
 
 ### The recommended route
 
-**Row 16.** It is the only route that stays flat in replay, interior and proving as traffic goes from 12% to 98%
-repeated and context from 131,072 to the model's limit, and it leaves serving stock but for a page hash and a host
-copy. Each part of its replay is already bit for bit on GLM-5.3 at TP8 at small size, so what it lacks is one
+**Row 16.** It is the only route whose replay, interior and proving stay flat as traffic goes from 12% to 98%
+repeated and grow no faster than serving's own cost a token as context goes from 131,072 to the model's limit, and
+it leaves serving stock but for a page hash and a host copy. Each part of its replay is already bit for bit on GLM-5.3 at TP8 at small size, so what it lacks is one
 statement in the guarantee and measurements at size.
 
 The changes, by lane, each with what I read that makes it possible:
@@ -366,7 +373,7 @@ Each with the run or statement that decides it.
 1. **What the page commitment costs beside serving.** 0.036% to 0.045% of a card modeled as a page hash; 2.3% to
    4.3% of serving's GPU time as today's history tables on an idle card. Decided by the serving-cost benchmark with
    the tables at all 78 layers (`TABLES`, `serve_tax.py:201`, holds 1) and with a page-leaf plugin, at one load.
-2. **Whether a long hit read from committed pages replays bit for bit.** Shown at 256 tokens. Decided by
+2. **Whether a long hit read from committed pages replays bit for bit.** Shown at 256 and 384 tokens. Decided by
    `rebuild.py --served --shape-only RID` on one of P128's two follow-ups that hit 131k and 83k tokens.
 3. **Whether the patterns' form holds with `N` readers,** and its price at AX. Decided by the Lean statement;
    CACHE's final has the model. The statement must also say who is charged across execution phases [argued]: at AX
@@ -459,10 +466,10 @@ find in the tree and carry as relayed.
 
 **Cheapest replay.** Re-run only the sampled request's own computed tokens, in the steps it was served in, with every
 other request replaced by zeros of the same shape. The cached prefix, and a long request's own earlier positions, are
-read from KV pages that serving committed as it wrote them. So the cost does not grow with the share of repeated
-tokens or with context length.
+read from KV pages that serving committed as it wrote them. So the cost does not grow with repeated tokens, and
+with context grows no faster than serving.
 
-**At serving.** A hash of each KV page as it is written and a host copy kept until the coins: modeled under 0.2% of
+**At serving.** A hash of each KV page as written and a host copy until the coins: modeled under 0.2% of
 serving time, not yet measured. Zero scheduling advice also needs the certified tick, 1.0% of output rate in our one
 pair of runs, so the total is near 1%.
 
@@ -479,6 +486,6 @@ circuit.
 1. The guarantee: the bound we quote needs each request to read in one replay block. One new statement covers cache
    hits and long contexts, at about 1.5 times today's bound for 86 requests sharing a prefix (modeled); without it,
    about 1,900 times.
-2. The request's circuit on this path, with the draft layer and its accept rule.
-3. Measurements: no cache hit past 384 tokens replayed this way, nothing at an agentic load, nothing past 131,072
-   context. The design does not limit context; this node's memory stops near 400,000 tokens.
+2. The request's circuit on this path, the draft layer and its accept rule.
+3. Measurements: the longest cache hit read back this way is 384 tokens; nothing at an agentic load or past
+   131,072 context. The design does not limit context; this node's memory stops near 400,000 tokens.
