@@ -17,7 +17,6 @@
     {"file": "verity/definitions/numerics/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},
     {"file": "verity_vllm/check/match/projection.py", "kind": "seed-default", "symbol": "Projection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "broad-except", "symbol": "_view", "detail": "except Exception"},
-    {"file": "verity_vllm/pipeline/report.py", "kind": "broad-except", "symbol": "log_header", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "_rid_of", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "git_head", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "nvidia_smi_used_mib", "detail": "except Exception"},
