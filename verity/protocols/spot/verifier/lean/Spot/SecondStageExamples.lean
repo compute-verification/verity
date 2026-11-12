@@ -671,6 +671,10 @@ private def exWiredRead (v : String) (root dom : Nat) (reads : List Nat) : Json 
 #guard wiredRead exWired "Triple_v0" #[("x", .null)]
 #guard !wiredRead exWired "Triple_v0" #[("out", .null)]
 #guard wiredRead exWired "Pair_v0" #[]
+-- reads named by rows, `x#0` and `x#1`, name no port a wire or a link names: the port is not read
+#guard !wiredRead exWired "Triple_v0" #[("x#0", .null), ("x#1", .null)]
+#guard linkedRead exLinked "Pair_v0" #[("x", .null)]
+#guard !linkedRead exLinked "Pair_v0" #[("x#0", .null), ("x#1", .null)]
 
 /-- The binding round 2 gives `Triple_v0`'s `x`, of row schema v2, placed in the run (`atRun`). -/
 private def exWiredBinding (own : Own) : Option String := do
