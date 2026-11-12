@@ -450,7 +450,7 @@ prints the table; the groups are:
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool), the back-fill's
-  spelling of `verified`, is read but not written; `verified_by`, a ledger row's free text, carries no verdict and is ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
+  spelling of `verified`, is read and deprecated for new writes; `verified_by`, a ledger row's free text, carries no verdict and is ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
   `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
   (`research.executor`); `nightly_check` on `commit:<sha>`, by the control pod's nightly check;
