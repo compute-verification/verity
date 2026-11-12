@@ -1,5 +1,5 @@
-"""A built engine's vLLM objects: the one module that knows vLLM's object graph (``llm_engine.engine_core[.engine_core]``
-and the uniproc executor's driver worker).
+"""A built engine's vLLM objects: the one module that knows vLLM's object graph (``llm_engine.engine_core[.engine_core]``,
+its executor and the uniproc executor's driver worker).
 
 Each accessor takes a :class:`verity_vllm.LLM`, a ``vllm.LLM`` or its ``LLMEngine``, and raises ``RuntimeError`` naming
 the multiprocess engine core when the object lives in another process (build with ``VLLM_ENABLE_V1_MULTIPROCESSING=0``,
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     Engine = Union[Wrapper, vllm.LLM, LLMEngine]
 
-__all__ = ["engine_of", "model_runner", "scheduler", "scheduler_or_none"]
+__all__ = ["engine_of", "executor", "model_runner", "scheduler", "scheduler_or_none"]
 
 
 def engine_of(llm: Engine) -> LLMEngine:
@@ -52,6 +52,16 @@ def scheduler_or_none(llm: Engine) -> Scheduler | None:
     engine core, a stub): for a reader that goes without it."""
     sched = getattr(_engine_core(llm), "scheduler", None)
     return sched if isinstance(getattr(sched, "requests", None), dict) else None
+
+
+def executor(llm: Engine) -> Any:
+    """The engine's in-process executor, whose ``collective_rpc`` reaches every worker."""
+    core = _engine_core(llm)
+    found = getattr(core, "model_executor", None)
+    if found is None or not callable(getattr(found, "collective_rpc", None)):
+        raise RuntimeError(f"{type(llm).__name__}: no in-process executor with collective_rpc (engine core "
+                           f"{type(core).__name__}); build with VLLM_ENABLE_V1_MULTIPROCESSING=0 (engine.env.ENGINE)")
+    return found
 
 
 def model_runner(llm: Engine) -> GPUModelRunner:

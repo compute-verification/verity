@@ -1,5 +1,6 @@
-"""`engine.handle`: the scheduler and the model runner of a `verity_vllm.LLM`, a `vllm.LLM` or its `LLMEngine`, through
-vLLM's object graph (stand-ins of it here), and a refusal naming the engine core when they live in another process."""
+"""`verity_vllm.engine.handle`: the scheduler, the executor and the model runner of a `verity_vllm.LLM`, a `vllm.LLM` or
+its `LLMEngine`, through vLLM's object graph (stand-ins of it here), and a refusal naming the engine core when they live
+in another process."""
 from __future__ import annotations
 
 from types import SimpleNamespace as NS
@@ -35,11 +36,28 @@ def test_a_core_without_the_inner_wrapper_and_a_worker_without_the_wrapper_resol
     assert handle.model_runner(llm) is RUNNER
 
 
-@pytest.mark.parametrize("get", [handle.scheduler, handle.model_runner])
+@pytest.mark.parametrize("get", [handle.scheduler, handle.model_runner, handle.executor])
 def test_a_multiprocess_engine_core_is_refused_by_name(get):
     llm = NS(llm_engine=NS(engine_core=MultiprocClient()))
     with pytest.raises(RuntimeError, match="engine core MultiprocClient.*VLLM_ENABLE_V1_MULTIPROCESSING=0"):
         get(llm)
+
+
+def test_each_kind_of_engine_reaches_the_executor_whose_collective_rpc_it_can_call():
+    found = NS(collective_rpc=lambda method: [method])
+    for kind, llm in _engines(NS(model_executor=found)).items():
+        assert handle.executor(llm) is found, kind
+    assert handle.executor(NS(llm_engine=NS(engine_core=NS(model_executor=found)))) is found
+
+
+@pytest.mark.parametrize("found", [None, NS(), NS(collective_rpc="not a call")])
+def test_an_executor_that_cannot_reach_its_workers_is_refused_by_name(found):
+    class Core:
+        model_executor = found
+
+    llm = NS(llm_engine=NS(engine_core=Core()))
+    with pytest.raises(RuntimeError, match=r"SimpleNamespace: no in-process executor with collective_rpc \(engine core Core\)"):
+        handle.executor(llm)
 
 
 def test_scheduler_or_none_is_the_scheduler_that_holds_its_requests_in_a_dict_else_none():
