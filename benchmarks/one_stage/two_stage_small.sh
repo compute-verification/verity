@@ -3,9 +3,10 @@
 # engine): flock-circuit, flock-verify and SPOT's Lean verifier built from this tree as the toy's audit.sh builds them,
 # then `first` (the boundary registration and the first stage on a local challenger session) and `second` (the interior,
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
-# Exit 0 when the second stage held (two_stage_small.py expect): round 1 commits the ids the block returns as a port, the
-# return's sessions read it at round 1's rows, round 2 accepts the statements, and the stream's outcome is accepted or
-# refused by the two-stage form alone. Records under $OUT (never a circuit, a prover file, a
+# Exit 0 when the second stage is what the class's record gives (two_stage_small.py expect). Round 1 commits the ids the
+# block returns as a port and the return's sessions read it at round 1's rows. The select's logits are a value the
+# prover registers after the first stage's sample, so everything holds but round 2's second-inputs, by which it refuses
+# the statements. Records under $OUT (never a circuit, a prover file, a
 # private body or salts, or a challenger's key or secret); a record over 63 MiB (a served vocabulary's public bodies and
 # written window, a challenger host's ledger) is not kept, and large.txt lists its SHA-512, size and path.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh
@@ -59,6 +60,9 @@ CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["chec
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
 RULE=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop", ""))' "$O/serve.json")
 STOP=(); [ -z "$RULE" ] || STOP=(--stop "$RULE")
+# a linked run whose record of round 1 doesn't commit the select's logits is refused by round 2's second-inputs
+LOGITS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("logits", ""))' "$O/serve.json")
+INPUTS=(); [ -n "$LOGITS" ] || [ -n "${SMALL_INLINE:-}" ] || INPUTS=(--inputs)
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --main "$O/main.txt" --out "$W/first" "${STOP[@]}" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
@@ -79,4 +83,4 @@ for d in first second; do
      | xargs -0 -r -I{} sh -c 'printf "%s  %s  %s\n" "$(sha512sum < "$1" | cut -d" " -f1)" "$(stat -c %s "$1")" "$1"' _ {}) > "$O/$d/large.txt"
 done
 [ -f "$W/second/summary.json" ] || exit 2
-"${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" | tee "$O/expect.txt"
+"${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" "${INPUTS[@]}" | tee "$O/expect.txt"

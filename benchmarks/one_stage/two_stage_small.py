@@ -45,6 +45,9 @@ GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_token
 MAX_MODEL_LEN = 4096
 #: the stream's code for the two-stage form, which it refuses every run by, last, until the form's proof lands
 FORM = "two-stage-form"
+#: round 2's code for a value the interior registration registers that a replay block's input may not read: here the
+#: sampler's ``logits``, which the prover registers after the first stage's sample
+INPUTS = "second-inputs"
 #: round 2's code for a replay block it derives no wires from: an inlined class's
 UNWIRED = "second-wires"
 
@@ -103,12 +106,15 @@ def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int =
 def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, bool]:
     """A ``two_stage.py second`` summary, check by check: every check before the sample passed, each session's circuit
     file is its template's params', every Lean verdict accepted, every negative refused, and round 2 and the stream's
-    outcome are the run's. For a record of round 1 that commits the block's return (``code`` None): round 2 accepts
-    the statements with no code, and the outcome is accepted, or refused by its interior record's statements check
-    with the two-stage form's code alone (`FORM`), and the one-stage audit's own record of the interior, which holds no
-    check of round 2's, is accepted, taking the sessions' reads of the interior's own ports as the stream's records do
-    (``accepted``, and ``record``: ``own_reads``, no failed check). For an unlinked run (``code`` `UNWIRED`): round 2 refuses
-    the statements by that code alone, and so does the outcome. Either way its replay sample's record fails nothing."""
+    outcome are the run's. For a record of round 1 that commits the block's return and its inputs (``code`` None): round
+    2 accepts the statements with no code, and the outcome is accepted, or refused by its interior record's statements
+    check with the two-stage form's code alone (`FORM`). For a linked run whose interior registers the block's inputs,
+    the ``logits`` the prover gives after the first stage's sample (``code`` `INPUTS`): round 2 refuses the statements
+    by that code alone, its return read at round 1's rows, and so does the outcome. Either way the one-stage audit's
+    own record of the interior, which holds no check of round 2's, is accepted, taking the sessions' reads of the
+    interior's own ports as the stream's records do (``accepted``, and ``record``: ``own_reads``, no failed check). For
+    an unlinked run (``code`` `UNWIRED`): round 2 refuses the statements by that code alone, and so does the outcome.
+    In every case its replay sample's record fails nothing."""
     audit, o, r2 = summary.get("audit") or {}, summary.get("outcome") or {}, summary.get("round_two") or {}
     inner = audit.get("audit") or {}
     negatives = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (audit.get("negatives") or {}).values()]
@@ -116,9 +122,10 @@ def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, boo
     if code is None:
         r2_ok = r2.get("ok") is True and r2.get("codes") == []
         o_ok = (o.get("accepted") is True and o.get("statements") == []) or (refused and o.get("statements") == [FORM])
-        record_ok = summary.get("accepted") is True and summary.get("record") == {"own_reads": True, "failed": []}
     else:
-        r2_ok, o_ok, record_ok = r2.get("codes") == [code], refused and o.get("statements") == [code], True
+        r2_ok, o_ok = r2.get("codes") == [code], refused and o.get("statements") == [code]
+    record_ok = code == UNWIRED or (summary.get("accepted") is True
+                                    and summary.get("record") == {"own_reads": True, "failed": []})
     return {"before_draw": bool(audit.get("checks_before_draw")) and all(audit["checks_before_draw"].values()),
             "pins": bool(summary.get("pins")) and all(summary["pins"].values()),
             "lean_verdicts": bool(inner.get("verdicts")) and all(v is True for v in inner["verdicts"].values()),
@@ -141,13 +148,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     e = sub.add_parser("expect")
     e.add_argument("summary", type=Path)
     e.add_argument("--unlinked", action="store_true")
+    e.add_argument("--inputs", action="store_true", help="a linked run whose interior registers the block's inputs: "
+                                                         "round 2 refuses it by second-inputs alone")
     a = ap.parse_args(argv)
     if a.cmd == "serve":
         got = serve(a.out, a.v, a.outputs, a.spans, inline=a.inline, nonce=a.serve, units=a.units, stop=a.stop)
         print(json.dumps({**{k: str(got[k]) for k in ("check", "class", "capture")},
                           **({"stop": json.dumps(got["stop"].to_json())} if got["stop"] else {})}))
         return 0
-    checks = expect(json.loads(a.summary.read_text()), UNWIRED if a.unlinked else None)
+    checks = expect(json.loads(a.summary.read_text()), UNWIRED if a.unlinked else INPUTS if a.inputs else None)
     print("SMALL " + json.dumps(checks))
     return 0 if all(checks.values()) else 1
 
