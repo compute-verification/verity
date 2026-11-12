@@ -1,4 +1,4 @@
-"""Each listed guarantee's security in bits, where something gives it a number, from the locks and no build.
+"""Each listed guarantee and the bits of its error term, where something gives it a number, from the locks and no build.
 
     verity lean bits [PKG ...] [--json] [--locks-only]
 

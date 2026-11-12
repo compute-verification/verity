@@ -52,7 +52,7 @@ verity lean try FILE [--siblings] [--on NODE]
   runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`)
 verity lean bits [PKG...] [--json] [--locks-only]
   every guarantee the locks list (default the three security locks), with whether it bounds a probability, its error
-  term, and its security in bits where something gives it a number, from the locks and the sources, no build (`bits.py`)
+  term, and that term's bits where something gives it a number, from the locks and the sources, no build (`bits.py`)
 research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   the fast path (the lean-proofs skill): PKG's records and its requirers'
@@ -303,7 +303,7 @@ Lean's job in `check` and the tools around the audit:
   module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`, whose failure prints
   the entry).
 - `trusted_size.py`: the size of a package's spec, per area.
-- `bits.py`: `verity lean bits`, each guarantee's security in bits and the source of the number.
+- `bits.py`: `verity lean bits`, each guarantee's error term in bits and the source of the number.
   `bits_mirror.py`: the Python mirrors of error terms it evaluates, each with the hashes it pins.
 - `tool.py`: the store's declarations of the scheduled runs.
 - `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.

@@ -30,9 +30,9 @@
                                     lean has an error on its own lines (on a project machine with
                                     --on auto); --siblings: then fail on a name another module of its package declares too
     verity lean bits [PKG...] [--json] [--locks-only]
-                                    every guarantee the locks list (default the three security locks), with its
-                                    security in bits where something gives it a number, and that number's source
-                                    (lean/bits.py)
+                                    every guarantee the locks list (default the three security locks), with the
+                                    bits of its error term where something gives it a number, and that number's
+                                    source (lean/bits.py)
 """
 from __future__ import annotations
 
