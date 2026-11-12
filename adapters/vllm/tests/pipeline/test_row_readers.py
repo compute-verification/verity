@@ -1,12 +1,14 @@
 """What a row's stages read back from the files beside the row, for the readers no other test runs: the lines of ``stages.txt``
-(`verity_vllm.pipeline.row_records`: `build_line`, `match_line`, `commit_line`), the Match and Build records' fields
+(`verity_vllm.pipeline.row_records`: `build_line`, `match_line`, `commit_line`), a row's shape when it samples (`row_shape`),
+the Match and Build records' fields
 (`missing_derived`, `fold_steps`, `served_shape`, `snapshot_steps_of_record`, `program_digest_of_record`, `manifest_verify_ok`),
 the workload's (`is_stochastic`, `tp_world`), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
 under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
 (`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
-experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`) and the command
-a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs.main`).
+experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
+a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs.main`) and the one that writes the rows' digests
+(`verity_vllm.pipeline.epoch`: `main` for `digests`).
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
 default its docstring names, never an error.
@@ -22,6 +24,7 @@ from typing import Any
 
 import pytest
 
+import verity_vllm.pipeline.epoch as EP
 import verity_vllm.pipeline.experiment as EXP
 import verity_vllm.pipeline.launch_context as LC
 import verity_vllm.pipeline.report as CARD
@@ -30,6 +33,7 @@ import verity_vllm.pipeline.row_build as RB
 import verity_vllm.pipeline.row_records as R
 import verity_vllm.pipeline.timeline as TL
 from tests.pipeline.test_row import STAGE_START, _summary_row
+from verity_vllm.config import CHECKPOINTS, WORKLOADS
 from verity_vllm.program import prefix_plan as PP
 
 
@@ -37,6 +41,22 @@ def _put(path: Path, doc: Any) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(doc if isinstance(doc, str) else json.dumps(doc))
     return str(path)
+
+
+def test_a_row_that_samples_takes_its_first_requests_shape_and_snapshots_every_step(tmp_path):
+    """A greedy row's default shape is its envelope and it snapshots two steps.  A row that samples takes the shape of its first
+    declared request and snapshots every step; with no declared request it keeps the envelope and the two steps."""
+    wl = WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json"
+    w = json.loads(wl.read_text())
+    first, longest = w["requests"][0], max(w["sweep"]["input_lengths"])
+    shape = R.row_shape(str(wl), str(CHECKPOINTS), str(tmp_path))
+    assert (shape["LP"], shape["T"], shape["snap"]) == (first["prompt_len"], first["max_tokens"] - 1, "all") and shape["LP"] != longest
+    assert (shape["B"], shape["I"], shape["O"]) == (8, 1024, 128)
+    bare = R.row_shape(_put(tmp_path / "bare.json", {**w, "requests": []}), str(CHECKPOINTS), str(tmp_path))
+    assert (bare["LP"], bare["snap"]) == (longest, "0,1") and bare["T"] > shape["T"] and bare["B"] == 8
+    unmeasured = {**first, "prompt_len": None, "prompt_token_ids": [1, 2, 3]}
+    counted = R.row_shape(_put(tmp_path / "counted.json", {**w, "requests": [unmeasured]}), str(CHECKPOINTS), str(tmp_path))
+    assert (counted["LP"], counted["T"], counted["snap"]) == (3, shape["T"], "all")
 
 
 def test_the_build_line_is_the_step_digest_and_the_manifest(tmp_path):
@@ -344,3 +364,29 @@ def test_the_outputs_command_prints_the_digest_of_record_and_declares_a_stages_o
     assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stage="commit", run_dir=str(run))) == 0
     assert "FAILED to write outputs.json: ValueError: commit stage PASS but its decision document verdict.json" in capsys.readouterr().err
     assert not (run / "outputs.json").exists()
+
+
+def test_the_digests_command_writes_each_rows_digests_and_their_table(tmp_path, capsys):
+    """`epoch digests` prints the document of the rows' digests; with `--out` the document goes to that file and the table is
+    printed, and `--markdown` keeps the table too.  A row with no Program or no manifest digest is in the document with what it
+    has, and the command returns 1."""
+    d = tmp_path / "row-a"
+    _put(d / "build_summary.json", {"step": {"program_digest": "s0"}, "request": {"program_digest": "p0"}, "workload": {"workload_digest": "w0"}})
+    _put(d / "manifest.json", {"manifest_digest": "m0", "program_digest": "g0", "query": {
+        "query_id": "q0", "partition": {"by_rank": {"1": {"object": "p", "digest": "pd1"}, "0": {"object": "p", "digest": "pd0"}}}}})
+    _put(d / "verdict.json", {"outcome": "PASS", "run_roots": ["r" * 20, "t" * 4]})
+    whole = {"row": "row-a", "programs": {"0": {"step": "s0", "workload": "w0", "requests": {"request": "p0"}}}, "manifest_digest": "m0",
+             "program_digest": "g0", "query_id": "q0", "partition_digests": ["pd0", "pd1"], "run_roots": ["r" * 20, "t" * 4], "verdict": "PASS"}
+    assert EP.main(EP.DigestsOptions(row_dirs=[str(d)])) == 0
+    assert json.loads(capsys.readouterr().out) == {"schema": "verity-vllm/rebaseline-digests/v1", "rows": [whole]}
+    empty: dict[str, Any] = {"row": "none", "programs": {}, "manifest_digest": None, "program_digest": None, "query_id": None,
+                             "partition_digests": [], "run_roots": [], "verdict": None}
+    out, md = tmp_path / "digests.json", tmp_path / "digests.md"
+    assert EP.main(EP.DigestsOptions(row_dirs=[str(d), str(tmp_path / "none")], out=str(out), markdown=str(md))) == 1
+    assert json.loads(out.read_text()) == {"schema": "verity-vllm/rebaseline-digests/v1", "rows": [whole, empty]}
+    table = capsys.readouterr().out
+    assert table == md.read_text() and table.splitlines()[2:] == [
+        "| row-a | PASS | s0 | w0 | 1 | m0 | 2 | " + "r" * 16 + ", tttt |", "| none | - | - | - | 0 | - | 0 | - |"]
+    (d / "manifest.json").unlink()
+    assert EP.main(EP.DigestsOptions(row_dirs=[str(d)], out=str(out))) == 1
+    assert json.loads(out.read_text())["rows"][0]["programs"] == whole["programs"] and not capsys.readouterr().err
