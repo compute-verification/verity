@@ -1,4 +1,4 @@
-"""F6's prover column: the fit and the posted fit it replaces, the registered check, one session priced from fixed
+"""The prover column: the fit and the posted fit it replaces, the registered check, one session priced from fixed
 coefficients, the range and memory limits, the slot sumcheck's term, descriptions, staging, a tiny audit unsplit and split
 exactly, and token-select's argmax tree."""
 from __future__ import annotations

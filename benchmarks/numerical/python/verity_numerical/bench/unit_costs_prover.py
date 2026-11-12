@@ -1,4 +1,4 @@
-"""Front F6's prover column: the inner Flock prover's wall time and peak memory per session at each bucket's nonzero
+"""The prover column: the inner Flock prover's wall time and peak memory per session at each bucket's nonzero
 bound, fitted from recorded prover runs, and where a session stops fitting on one node.
 
     python -m verity_numerical.bench.unit_costs_prover --inventory unit-costs.json --out DIR
@@ -43,7 +43,7 @@ holds the workload's largest templates). The what-if registers every generic bod
 :data:`RARE_SAMPLES` times as a tc-step-like unit.
 
 **Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
-(``verity_flock.circuit``). Affine in the ANDs lowered, wall time and peak RSS each fitted (weighted by 1 / y²) on circuits'
+(``verity_flock.circuit``). Affine in the ANDs lowered, wall time and peak RSS each fitted (weighted by 1 / y²) on the
 staging ladder (:data:`STAGING`); a registered type lowers one unit, at least the measured registered staging
 (:data:`REGISTERED_STAGING`), a generic type its whole subcircuit, a tree its distinct members.
 
@@ -52,8 +52,8 @@ the slot sumcheck's verifier and opens the committed bits, so each session's pro
 per entry per rep x entries x reps seconds. A slot's entries are its type's *template*, the registered table: the
 nonzeros of what the circuit text holds for the type (:func:`descriptions`: a registered type's one unit, a tree's distinct
 members, a generic type's whole subcircuit), at most Z. A session's entries are slots x its largest template's (the 16
-slots run as one sumcheck and the type is hidden, so every slot is padded to the session's largest; F4's table pads a
-template to n = 2^ν slots, whose padding pairs the kernel skips; proofs' ``vstar_c3.py`` takes the same shape). K1 is
+slots run as one sumcheck and the type is hidden, so every slot is padded to the session's largest; the sumcheck's table
+pads a template to n = 2^ν slots, whose padding pairs the kernel skips; V*'s ``vstar_c3.py`` takes the same shape). K1 is
 measured per ν: a template of 2^ν entries takes the measurement at the least measured ν' ≥ ν (the last beyond). Its memory
 is the committed bits of the bucket's stacked table (its T distinct templates, T padded to a power of two, each at the
 largest's size; bytes per entry) plus the sumcheck's working set (bytes per entry x the session's entries). A session's
@@ -66,11 +66,13 @@ import argparse
 import json
 import math
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity.commitments.windows.interface import K_MAX, PACK_LOG
 
 from . import unit_costs_padding as P
+from .unit_costs import retree
 
 #: vy-nebius-1 and vy-nebius-2: ``free -g`` total (GiB)
 NODE_GIB = 1716
@@ -92,10 +94,10 @@ MENU_K = 4
 #: per audit (mean) is rare, each of its types a bucket of its own at B = 1 or 16 (whichever costs less at the public count)
 BUCKETS_T = 8
 RARE_SAMPLES = 16
-#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (upper bounds,
+#: candidate 3's slot sumcheck, K1 as measured on vy-nebius-2's 32 threads (upper bounds,
 #: Lean builds loaded the node): ns per entry per rep at ν = 20 and 28, the middle of wide-Morton (the band's low end) and
 #: uniform columns (its high end, the worst case); reps; the committed bits' bytes per entry (8; 64 encoded at rate 1/8);
-#: and the working set per entry (peak RSS 37 GiB at ν = 28). F4's estimate before it: 13 ns (10-16) at ν = 20.
+#: and the working set per entry (peak RSS 37 GiB at ν = 28).
 SLOT_SUMCHECK: dict[str, Any] = {
     "k1_ns": ((20, 15.2), (28, 26.1)), "band": (((20, 12.2), (28, 19.3)), ((20, 18.2), (28, 32.9))), "reps": 2,
     "bits_bytes": 8.0, "work_bytes": 37 * 2 ** 30 / 2 ** 28,
@@ -180,7 +182,7 @@ REGISTERED_SESSIONS: tuple[tuple[int, tuple[str, str, int, int, int, int, float,
 )
 SOURCE = HIDDEN_ZK + tuple(r for _, r in REGISTERED_SESSIONS)
 
-#: circuits' staging ladder, ``verity_flock`` staging (trace, units, lanes, stage) of a random G-gate class, 2 instances, on
+#: the staging ladder: ``verity_flock`` staging (trace, units, lanes, stage) of a random G-gate class, 2 instances, on
 #: vy-cpu-2: (run, G, ANDs lowered, wall s, peak RSS GiB). G = 4096's ANDs are its report's rounded 17.5M.
 STAGING: tuple[tuple[str, int, int, float, float], ...] = (
     ('r20261009-064739-e959', 256, 110_754, 25.57, 1.08),
@@ -225,7 +227,7 @@ def lstsq(xs: Sequence[Sequence[float]], ys: Sequence[float], ws: Sequence[float
 #: each fit's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out
 #: the circuit text, whose coefficient fitted with it is negative and below its error
 FITS = {"rss_gib": (0, 1, 2), "prove_s": (0, 2), "wall_s": (0, 1, 2)}
-#: the column as posted at b41137f42: every fit over (D, circuit bytes), on :data:`HIDDEN_ZK`
+#: the column as first posted: every fit over (D, circuit bytes), on :data:`HIDDEN_ZK`
 POSTED_FITS = {"rss_gib": (0, 1), "prove_s": (0, 1), "wall_s": (0, 1)}
 
 
@@ -845,20 +847,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     d = SLOT_SUMCHECK
     k1s = lambda t: tuple(sorted(tuple(map(float, x.split(":"))) for x in t)) if ":" in t[0] else float(t[0])  # noqa: E731
     ap.add_argument("--k1-ns", nargs="+", default=None, metavar="[NU:]NS",
-                    help="slot sumcheck ns per entry per rep, one value or NU:NS points (default: proofs' measurement)")
+                    help="slot sumcheck ns per entry per rep, one value or NU:NS points (default: SLOT_SUMCHECK's)")
     ap.add_argument("--k1-lo", nargs="+", default=None, metavar="[NU:]NS", help="K1's band, low end")
     ap.add_argument("--k1-hi", nargs="+", default=None, metavar="[NU:]NS", help="K1's band, high end")
     ap.add_argument("--reps", type=int, default=d["reps"])
     ap.add_argument("--bits-bytes-per-entry", type=float, default=d["bits_bytes"], help="committed bits' bytes per entry")
     ap.add_argument("--work-bytes-per-entry", type=float, default=d["work_bytes"],
                     help="the sumcheck's working set per entry of the slot being proved")
-    ap.add_argument("--k1-source", default=None, help="where K1 comes from (default: proofs' K1 run)")
+    ap.add_argument("--k1-source", default=None, help="where K1 comes from (default: SLOT_SUMCHECK's source)")
     ap.add_argument("--no-slot-sumcheck", action="store_true", help="Flock's prove alone")
     a = ap.parse_args(argv)
-    from pathlib import Path
-
-    from .unit_costs import retree
-
     inv = json.loads(Path(a.inventory).read_text())
     if "token_select" not in inv:
         retree(inv)
