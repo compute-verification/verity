@@ -16,7 +16,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.certifier.prover.window_charge import Window
+from verity.protocols.certifier.prover.window_charge import Advice
 from verity_vllm.pipeline.advice_code.window_code import (
     Book, Caps, DEFAULT_CAPS, decode as decode, Decoder as Decoder, encode as encode, Encoded as Encoded,
     Encoder as Encoder, ints, context_key, KT, pack as pack, CoderState, unpack as unpack, code_window,
@@ -88,7 +88,7 @@ class _Count:
 # ------------------------------------------------------------------------------------------------------ a window
 
 
-def ideal_bits(windows: Sequence[Window], book: Book) -> list[float]:
+def ideal_bits(windows: Sequence[Advice], book: Book) -> list[float]:
     """Each window's model cost: its charge less the coder's termination and rounding."""
     c, st, out = _Ideal(book), CoderState(), []
     for win in windows:
@@ -98,7 +98,7 @@ def ideal_bits(windows: Sequence[Window], book: Book) -> list[float]:
     return out
 
 
-def fit_book(history: Iterable[Sequence[Window]], caps: Caps = DEFAULT_CAPS, prior_weight: int = 32) -> Book:
+def fit_book(history: Iterable[Sequence[Advice]], caps: Caps = DEFAULT_CAPS, prior_weight: int = 32) -> Book:
     """The book to register, fit on historical runs (each a sequence of windows), never on the audited run: each integer
     symbol's bin table from its samples, and each bit context's prior from its counts, scaled to at most `prior_weight`
     observations."""

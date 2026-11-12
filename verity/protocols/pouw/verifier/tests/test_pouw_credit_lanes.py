@@ -40,11 +40,11 @@ h1 = sys.modules["test_circuit_h1window"]
 LEAF = (8, 16)
 LINEARS = (("q_proj", 384, 32), ("k_proj", 384, 16), ("down_proj", 416, 16))
 STEPS, PREFIX = 2, "h1/w/"
-SALT, WINDOW, DRAW_ROOT = "5a" * 64, "cd" * 64, "d7" * 64
-COIN = {"after": DRAW_ROOT, "coin": "c0" * 64, "epoch": 0, "index": 0, "label": "draw", "path": [], "salt": "00" * 64}
-DRAW = {"coin": COIN, "root": DRAW_ROOT}
+SALT, WINDOW, SAMPLE_ROOT = "5a" * 64, "cd" * 64, "d7" * 64
+COIN = {"after": SAMPLE_ROOT, "coin": "c0" * 64, "epoch": 0, "index": 0, "label": "draw", "path": [], "salt": "00" * 64}
+SAMPLE = {"coin": COIN, "root": SAMPLE_ROOT}
 #: units 1 and 6 of K = 384's calls 0 and 4, unit 3 of K = 416's call 2
-DRAWN = [1, 3, 6]
+SAMPLED = [1, 3, 6]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -109,7 +109,7 @@ def _roots(w: dict) -> dict[str, str]:
     return {e["value"]: e["root"] for e in w["entries"]}
 
 
-def prove(w: dict, to: Path, files: dict, units=DRAWN) -> tuple[dict, dict]:
+def prove(w: dict, to: Path, files: dict, units=SAMPLED) -> tuple[dict, dict]:
     """The window's lanes evidence as an honest prover delivers it, and what each statement was proved against (by its
     public file): each tile-form call's statement as `test_pouw_credit_statements.prove`'s, and each sampled lanes-form
     leaf's partials committed under the sample root and its lanes and combine, each against its leaf Program, its
@@ -125,14 +125,14 @@ def prove(w: dict, to: Path, files: dict, units=DRAWN) -> tuple[dict, dict]:
             continue
         name = LL.served(PREFIX, LL.PARTIALS, u)
         tree = PR.commit(digest, name, [[rng.randrange(1 << 16) for _ in range(2 * LL.words(k))] for _ in range(LL.lanes(r, c))],
-                         DRAW_ROOT)
+                         SAMPLE_ROOT)
         produced.append(tree.entry())
         openings[name] = PR.rows_of(tree)
         at = HW.place(prog, u, STEPS, served=True)
         mine = {**roots, name: tree.root.hex()}
         partials = {x: y for x, y in tree.entry().items() if x not in ("value", "root")}
         for kind, ln in LL.statements(r, c):
-            known, kops = HW.leaf_known_ports(prog, kind, ln, u=u, registration=DRAW_ROOT, salt=bytes.fromhex(SALT),
+            known, kops = HW.leaf_known_ports(prog, kind, ln, u=u, registration=SAMPLE_ROOT, salt=bytes.fromhex(SALT),
                                               roots=(bytes.fromhex(roots[at[LL.A][0]]), bytes.fromhex(roots[at[LL.B][0]])),
                                               prog=digest)
             reg = HW.leaf_reads_file(prog, u, kind, ln, mine, partials, known, prog=digest, window=WINDOW, steps=STEPS,
@@ -165,7 +165,7 @@ def prove(w: dict, to: Path, files: dict, units=DRAWN) -> tuple[dict, dict]:
                                          "units": tuple(us), "openings": {}}
         statements.insert(0, {"call": call, "circuit": str(base / "circuit.txt"), "public": str(base / "pub.bin"),
                               "sessions": [str(base / "session")]})
-    rec = PR.record(DRAW_ROOT, COIN["coin"], produced, openings)
+    rec = PR.record(SAMPLE_ROOT, COIN["coin"], produced, openings)
     return ({"leaf_programs": {f"{kind}{k}": leaf_desc(kind, k).hex() for k in (384, 416) for kind in (LL.LANE, LL.COMBINE)},
              "produced": rec, "statements": statements}, proved)
 
@@ -187,16 +187,16 @@ def runner(proved: dict, tamper=None):
     return run
 
 
-def verified(w: dict, evidence, files: dict, run, units=DRAWN, entries=None, draw=DRAW):
+def verified(w: dict, evidence, files: dict, run, units=SAMPLED, entries=None, sample=SAMPLE):
     return Cr._verified(evidence, files, w["raw"], w["layout"], w["entries"] if entries is None else entries, WINDOW,
-                        units, STEPS, run, SALT, draw)
+                        units, STEPS, run, SALT, sample)
 
 
 def _leaf_statements(evidence: dict, u: int | None = None) -> list[int]:
     return [i for i, s in enumerate(evidence["statements"]) if "unit" in s and (u is None or s["unit"] == u)]
 
 
-def test_each_drawn_leaf_proved_as_its_lanes_and_combine_is_one_accepted_outcome(world, lanes, tmp_path):
+def test_each_sampled_leaf_proved_as_its_lanes_and_combine_is_one_accepted_outcome(world, lanes, tmp_path):
     """Every sampled leaf at a lanes-form K, its four lanes and its combine verified against its leaf Programs with credit's
     own files, is one accepted outcome under the window's program, its registered finding its statements' reads of the
     window's tables (each of its tables' values, at the window's roots), which `_proved` holds to the sample. Beside a
@@ -205,7 +205,7 @@ def test_each_drawn_leaf_proved_as_its_lanes_and_combine_is_one_accepted_outcome
         evidence, proved = prove(world, tmp_path / str(len(files)), files)
         got, why = verified(world, evidence, files, runner(proved))
         assert why is None, why
-        assert sorted(o["unit"] for o in got) == DRAWN and Cr._proved(DRAWN, got) is None
+        assert sorted(o["unit"] for o in got) == SAMPLED and Cr._proved(SAMPLED, got) is None
         roots = _roots(world)
         for o in got:
             assert o["verdict"] == "accept" and o["program"] == world["digest"]
@@ -218,20 +218,20 @@ def test_credit_builds_the_provers_served_leaf_files(world):
     `h1window.leaf_known_ports`, port for port, and its known openings those ports' trees' row 0."""
     prog, digest, (r, c) = world["prog"], world["digest"], LEAF
     roots = _roots(world)
-    for u in DRAWN:
+    for u in SAMPLED:
         k = Cr.leaf_k(world["layout"], u)
         name = LL.served(PREFIX, LL.PARTIALS, u)
         at = HW.place(prog, u, STEPS, served=True)
         assert Cr.leaf_place(world["layout"], world["shape"], u, STEPS) == at and at[LL.PARTIALS] == (name, 0)
-        partials = PR.entry(digest, name, LL.lanes(r, c), 2 * LL.words(k), DRAW_ROOT)
+        partials = PR.entry(digest, name, LL.lanes(r, c), 2 * LL.words(k), SAMPLE_ROOT)
         for kind, ln in LL.statements(r, c):
-            known, kops = HW.leaf_known_ports(prog, kind, ln, u=u, registration=DRAW_ROOT, salt=bytes.fromhex(SALT),
+            known, kops = HW.leaf_known_ports(prog, kind, ln, u=u, registration=SAMPLE_ROOT, salt=bytes.fromhex(SALT),
                                               roots=(bytes.fromhex(roots[at[LL.A][0]]), bytes.fromhex(roots[at[LL.B][0]])),
                                               prog=digest)
             want = HW.leaf_reads_file(prog, u, kind, ln, {**roots, name: "ee" * 64}, partials, known, prog=digest,
                                       window=WINDOW, steps=STEPS, served=True)
             got, why = Cr.leaf_registered_file(digest, world["layout"], world["shape"], u, (kind, ln),
-                                               {v: [x] for v, x in roots.items()}, WINDOW, STEPS, SALT, DRAW_ROOT,
+                                               {v: [x] for v, x in roots.items()}, WINDOW, STEPS, SALT, SAMPLE_ROOT,
                                                {name: "ee" * 64})
             assert why is None, why
             assert got == (want, {v: [tuple(op) for op in ops] for v, ops in kops.items()})
@@ -249,7 +249,7 @@ def test_a_leaf_with_a_statement_missing_or_no_lanes_evidence_is_refused(world, 
     assert got is None and why[0] == "missing" and why[1].startswith("drawn leaf 1 is at a lanes-form K")
 
 
-def test_leaf_statements_the_draw_did_not_ask_for_are_refused(world, lanes, tmp_path):
+def test_leaf_statements_the_sample_did_not_ask_for_are_refused(world, lanes, tmp_path):
     """A leaf statement proved twice (a retry), one of a unit no sampled leaf, and one that is no lane or combine of the
     tile: each refuses the window, whatever its other statements' verdicts."""
     files = files_of()
@@ -328,10 +328,10 @@ def test_a_leaf_opening_other_values_roots_or_rows_is_refused(world, lanes, tmp_
     for tamper in (other_opening, lambda p, f: {**f, "openings": None}):
         got, why = verified(world, evidence, files, runner(proved, tamper))
         assert got is None and why[0] == "registration" and "(P-shared)" in why[1], why
-    assert verified(world, evidence, files, runner(proved), draw={"coin": COIN})[1][0] == "registration"
+    assert verified(world, evidence, files, runner(proved), sample={"coin": COIN})[1][0] == "registration"
 
 
-def test_a_drawn_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp_path, monkeypatch):
+def test_a_sampled_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp_path, monkeypatch):
     """At the served proof's reach only: a tile other than 32 × 32 is ``lanes-shape`` before anything is verified (the
     stand-in's 8 × 16 here, and a 2 × 4 tile, which has no whole lane), and so is a K the tile check refuses, one below
     `h1zy.LEAST_K`, a chunked K and a J10-R template, the refusal read off the tile and K alone (J10-R's statement set,

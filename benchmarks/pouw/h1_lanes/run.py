@@ -21,7 +21,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   and admission tables, the weights' b/<K> and its receipt tree (`h1window`); here a registration record of the lane's
   Program (`registration.record`) stands for the window's, and its digest D is what the partials' domain binds. The roots
   the lanes' seeds read are (SHA-512 of root(a) under `ROOTS_TAG`, root(b)).
-* **The partials**, committed after the sample (STAND-IN: the sample of every unit, `draw_digest`): ``partials``, 32 rows, row
+* **The partials**, committed after the sample (STAND-IN: the sample of every unit, `sample_digest`): ``partials``, 32 rows, row
   l lane l's (`h1zy.lane_partial`, 2 (KS + m) u32), `produced.commit`'s tree under D, with `produced.record`'s record,
   which `produced.check` holds to the verifier's own entry (``produced_check``). The record keeps every row's opening
   (its ``b || c``): the partials' and the rows of ``a``, ``b``, ``zy`` and ``receipt``.
@@ -33,7 +33,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   registration record and produced record alone (`leaf_lanes.verifier_entries`), at the leaf's placement in the window's
   tables (`h1window.place`: unit 0 of the one-call window, one round), the public file `h1unit.verifier_pub`'s.
   Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
-  window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as flock-verify parses it, holds
+  window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as the Lean verifier parses it, holds
   the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
   sessions samples every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
 * **The negatives**, each a statement proved and checked like the others:
@@ -52,7 +52,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   ``o0`` the prover commits afresh, the public file stating it, which the verifier's own reads refuse (REJECT).
   ``lane3-index-from-public``: lane 3 whose ``pub`` row (its index, 3) the prover commits afresh and the public file
   states, checked against a verifier's file that leaves ``pub`` out: refused by the verifier's
-  `Registered.checkComplete`, which flock-verify runs on every statement of a ``--registered`` file, by name (REJECT,
+  `Registered.checkComplete`, which the Lean verifier runs on every statement of a ``--registered`` file, by name (REJECT,
   ``WHY``).
   ``combine-skips-p5-bit``: the combine over a circuit that reads bit i of ``p5`` in place of its last bit j, two bits the
   honest row holds equal (`lazy_combine`, its own Program), so its ok is 1 on the honest rows and it depends on no bit j:
@@ -60,7 +60,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   `KnownRead.fullRows` refuses the circuit by name (REJECT, ``WHY``); ``combine-skips-p5-bit-unmarked``, the same session
   against that file with ``p5``'s mark removed, which nothing else refuses (ACCEPT, by design: the control).
   ``other-registration-file``: lane 0 of the other leaf, its file and session that leaf's own and consistent, so
-  flock-verify accepts it, checked with the verifier holding this leaf's records: `pouw-leaf-own` refuses the file by name
+  the Lean verifier accepts it, checked with the verifier holding this leaf's records: `pouw-leaf-own` refuses the file by name
   (REJECT, ``WHY``); ``other-registration-file-held``, the same check holding the other leaf's records (ACCEPT, by
   design: the control).
   Every check registers ok = 1 (``o0``'s known row), so a statement whose ok is 0 is refused at its session's parameters
@@ -112,7 +112,7 @@ from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: 
 RC = (32, 32)
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROOTS_TAG = b"verity/pouw/h1-lanes/roots/v0\0"
-DRAW_TAG = b"verity/pouw/h1-lanes/stand-in-draw/v0\0"
+SAMPLE_TAG = b"verity/pouw/h1-lanes/stand-in-draw/v0\0"
 SALT_TAG = b"verity/pouw/h1-lanes/stand-in-salt/v0\0"
 REGISTERED = (LL.A, LL.B, LL.ZY, LL.RECEIPT)
 #: the one-call window's rounds (STAND-IN for the window's round log: one round, its call the leaf's)
@@ -152,9 +152,9 @@ def code_words(codes: list, scales: list) -> np.ndarray:
     return U.row_words(np.asarray(codes, np.uint8).view(np.int8), np.asarray(scales, np.uint32).view(np.float32))
 
 
-def draw_digest(registration: str, population: int) -> str:
+def sample_digest(registration: str, population: int) -> str:
     """STAND-IN for the sample's digest: the live coin selects the leaf."""
-    return hashlib.sha512(DRAW_TAG + canonical_json({"registration": registration, "units": list(range(population))})).hexdigest()
+    return hashlib.sha512(SAMPLE_TAG + canonical_json({"registration": registration, "units": list(range(population))})).hexdigest()
 
 
 # -- the statements' Programs -----------------------------------------------------------------------------------------------
@@ -256,7 +256,7 @@ class World:
     roots: tuple
     regs: dict
     registration: str
-    draw: str
+    sample: str
     tree: G.Registered
     record: dict
     reg_record: dict
@@ -303,10 +303,10 @@ def world(name: str, ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list) -> W
                    {"kind": "stand-in", "harness": "h1_lanes", "leaf": leaf.position}, partition=ctx.reg.part,
                    registered=[regs[v].entry() for v in REGISTERED])
     d = R.digest(rec)
-    draw = draw_digest(d, 1)
+    sample = sample_digest(d, 1)
     tree = PR.commit(ctx.prog, LL.PARTIALS, rows, d, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree), **{v: PR.rows_of(regs[v]) for v in REGISTERED}}
-    return World(name, leaf, roots, regs, d, draw, tree, PR.record(d, draw, [tree.entry()], ops), rec)
+    return World(name, leaf, roots, regs, d, sample, tree, PR.record(d, sample, [tree.entry()], ops), rec)
 
 
 def entries(ctx, w: World) -> tuple[dict, dict]:
@@ -569,7 +569,7 @@ def prepare(args) -> None:
         (work / "verifier" / f"{nm}.registration.json").write_text(json.dumps(w.reg_record))
         (work / "verifier" / f"{nm}.produced.json").write_text(json.dumps(w.record))
     mine = {LL.PARTIALS: PR.entry(ctx.prog, LL.PARTIALS, LL.lanes(*RC), ctx.wp, A.registration)}
-    produced_check = {nm: list(PR.check(w.record, A.registration, A.draw, mine)) for nm, w in ctx.worlds.items()}
+    produced_check = {nm: list(PR.check(w.record, A.registration, A.sample, mine)) for nm, w in ctx.worlds.items()}
     print(f"registered and produced: {time.time() - t0:.0f} s; produced records' codes against the honest registration: "
           f"{produced_check}", flush=True)
     row = A.tree.rows[LAZY_ROW]
@@ -621,7 +621,7 @@ def prepare(args) -> None:
     summary = {"k": args.k, "tile": U.tile(), "lanes": LL.lanes(*RC), "words": LL.words(args.k),
                "programs": {kind: P.program_digest(b.program)
                             for kind, b in (("lane", ctx.lane), ("combine", ctx.combine), ("lazy", ctx.lazy))},
-               "place": ctx.place, "registration": A.registration, "draw": A.draw, "produced": A.record, "produced_check": produced_check,
+               "place": ctx.place, "registration": A.registration, "draw": A.sample, "produced": A.record, "produced_check": produced_check,
                "forged_partial": ctx.worlds["mixed"].tree.bcs[5].hex(),
                "ands": {"lane": by["lane0"]["ands"], "combine": by["combine"]["ands"]}, "circuits": circuits,
                "ok": {tg: by[tg]["ok"] for tg in checks}, "binding": {tg: by[tg]["binding"] for tg in checks},

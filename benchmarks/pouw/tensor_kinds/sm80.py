@@ -23,9 +23,12 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import operator
 import re
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Callable
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -194,7 +197,6 @@ def _split(loop: dict[str, int]) -> tuple[int, int]:
 
 
 def _count(loop: dict[str, int], pat: str) -> int:
-    from fnmatch import fnmatchcase
     return sum(c for o, c in loop.items() if fnmatchcase(o, pat))
 
 
@@ -382,8 +384,8 @@ def _f(v, d=3):
 def render(s: dict) -> str:
     L = [f"Run {s.get('run_id', '?')}; clocks read, never set (default boost).", "",
          "## Forms (alone: least SMSP-cycles a PTX MMA over 2, 4 and 8 warps a SMSP, 8, 32 and 64 MMAs a loop iteration)", "",
-         "| form | SASS | slots | alone SMSP-cyc a MMA | slots/SM/clk | MACs/SM/clk | a, every program | a, IADD3+FFMA | "
-         "a, IADD3 (issue) | a, IADD3 (pipe) | a a slot vs IMMA.16832 | word | MHz clock64 / NVML |",
+         ("| form | SASS | slots | alone SMSP-cyc a MMA | slots/SM/clk | MACs/SM/clk | a, every program | a, IADD3+FFMA | "
+          "a, IADD3 (issue) | a, IADD3 (pipe) | a a slot vs IMMA.16832 | word | MHz clock64 / NVML |"),
          "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for k, f in s["forms"].items():
         nv = f["mhz_nvml"]
@@ -472,7 +474,7 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
     ext_runs: set[str] = set()
     issue_runs: set[str] = set()
 
-    def keep(d, k, v, run, better):
+    def keep(d: dict, k: str, v: float | None, run: str, better: Callable[[float, float], bool]) -> None:
         if v is None:
             return
         old = d.get(k)
@@ -481,7 +483,6 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
         elif abs(v - old[0]) <= 1e-9 * abs(v):
             old[1].add(run)
 
-    lt = lambda a, b: a < b
     for out, latest in [(p, False) for p in outs] + [(p, True) for p in ext]:
         rec = json.loads((out / "sm80.json").read_text())
         s, fails = rec["summary"], rec["gate_failures"]
@@ -493,15 +494,15 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
             issue_runs.add(run)
         for st, f in s["forms"].items():
             kind = FORMS[st][1]
-            keep(alone, kind, f["alone_smsp_cycles_per_mma"], run, lt)
+            keep(alone, kind, f["alone_smsp_cycles_per_mma"], run, operator.lt)
             if lane_ok:
-                keep(joint, kind, f["a"], run, lt)
+                keep(joint, kind, f["a"], run, operator.lt)
                 if not latest:
-                    keep(before, kind, f["a"], run, lt)
+                    keep(before, kind, f["a"], run, operator.lt)
         for kind, (_, lanes) in SCALAR.items():
             for ln in lanes:
                 v = s["lanes"].get(ln, {}).get("per_op", {}).get(ln)
-                keep(rate, kind, None if v is None else 4 * v, run, lambda a, b: a > b)
+                keep(rate, kind, None if v is None else 4 * v, run, operator.gt)
         for ln, v in s["lanes"].items():
             pairs[ln] = max(pairs.get(ln, 0.0), v["instr_per_smsp_cycle"])
     lines, cites = [], defaultdict(set)
@@ -520,13 +521,13 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
         cites[row] |= runs
     if joint:
         if not ext_runs:
-            raise SystemExit("census: name the runs of the schedule search's latest extension (--extension OUT...); "
-                             "decision 76 takes the joint row's margin from them")
+            raise SystemExit("census: name the runs of the schedule search's latest extension (--extension OUT...): "
+                             "the joint row's margin is the most they moved a kind's least")
         moved = {k: before[k][0] / v - 1 if k in before else math.inf for k, (v, _) in joint.items()}
         worst, m = max(moved.items(), key=lambda x: x[1])
         if m > NOISE:
             raise SystemExit(f"census: the search's latest extension moved {worst}'s a {m:.1%} below the earlier runs', "
-                             f"past the {NOISE:.0%} noise: extend the search again (decision 76)")
+                             f"past the {NOISE:.0%} noise: extend the search again")
         scale = (1 - NOISE) / (1 + m)
         for kind, (v, runs) in sorted(joint.items()):
             lines.append(f"{kind},JIM,,,{v * scale:.6g},,,,{' '.join(sorted(runs))}")

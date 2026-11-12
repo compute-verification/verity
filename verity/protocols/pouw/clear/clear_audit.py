@@ -230,9 +230,13 @@ class WorkProfile:
 
 @dataclass(frozen=True, slots=True)
 class Verdict:
+    """A tile's verdict; an accepted tile carries the operands and checked words its check computed (``ops``, ``checked``)."""
+
     tile: int
     ok: bool
     reason: str = ""
+    ops: object = field(default=None, compare=False, repr=False)
+    checked: object = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,9 +290,10 @@ class Verifier:
                             ref.tile)
         if ops is None or not scheme.admissible(ctx, ops):
             return Verdict(ref.id, False, "inadmissible inputs")
-        if scheme.digest(ctx, noise, scheme.checked(ctx, ops)) != opened_value(h, opening.leaf.value):
+        checked = scheme.checked(ctx, ops)
+        if scheme.digest(ctx, noise, checked) != opened_value(h, opening.leaf.value):
             return Verdict(ref.id, False, "checked values")
-        return Verdict(ref.id, True)
+        return Verdict(ref.id, True, ops=ops, checked=checked)
 
     def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
               ) -> Audit:
@@ -302,7 +307,8 @@ class Verifier:
             if reason is not None:
                 return Audit(False, (), (Verdict(-1, False, reason),), None)
         selected = selection.select(self.scheme, self.epoch, transcript, source, self.refs, prover.digest)
-        verdicts = tuple(self.check_tile(transcript, prover.open(self.epoch, tid)) for tid in selected)
+        verdicts = tuple(Verdict(v.tile, v.ok, v.reason)
+                         for v in (self.check_tile(transcript, prover.open(self.epoch, tid)) for tid in selected))
         ok = all(v.ok for v in verdicts)
         profile = (WorkProfile(self.scheme.name, self.work, len(selected), isinstance(selection, Sampled), self.scheme.certificate)
                    if ok else None)

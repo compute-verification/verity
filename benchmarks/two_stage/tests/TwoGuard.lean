@@ -19,19 +19,22 @@ registration, to be proved from the members' facts rather than decided on a run,
 (`Spot.Bits.prog`, `Spot.Bits.blockOf`). The output prints each member's sizes and the time of the unrolling's pieces at
 one gate: `Spot.Bits.off` past its last gate, `Spot.Bits.consts`, and `Spot.Bits.owner` at an input gate.
 
-* `check`: `runOkAt` and `twoFilesOk` at the run, with their times and the members' sizes; exit 0 when both accept, 1
-  when either refuses, 2 when the reference statements are not in Flock's masked scope (`Held.xS₀_ok`, decided before
-  any `Held` exists).
+* `check`: `runOkAt` and `twoFilesOk` at the run, with their times and the members' sizes, and `runOkAt`'s records
+  check (`recordsOk`) on its own; exit 0 when `runOkAt` and `twoFilesOk` accept, 1 when either refuses, 2 when the
+  reference statements are not in Flock's masked scope (`Held.xS₀_ok`, decided before any `Held` exists).
 * `diag`: each conjunct of `runOkAt` and `twoFilesOk` on its own, in the order they read them, with its time, then
-  `check`.
+  `check`; where `recordsOk` refuses, `runOkAt` again with the names the run's records name held in place of the
+  registrations' (`recordNames`), which is what the rest of round 2 decides of the run.
 
 Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. The model's statement parsers recurse deeper than a
 default stack holds: give the interpreter a large `--tstack`.
 
-**The coins.** `stmtOk` reads each coin only through its bytes (`SpotFlock.src`), so `runOkAt` takes the bytes. `src`
-itself reads its `2^20` bytes one list lookup at a time, which no evaluation finishes. The bytes here are the ones each
-stage's sample read of the challenger's coins (`c0.bin`, `c1.bin`), and zeros past them: the stream's Lean `Select` read
-exactly those bytes, and reads its source in order, so it reads none of the zeros.
+**The coins.** `stmtOk` reads the coins only through their bytes (round 0's through `SpotFlock.src`, the second
+stage's through `SpotFlock.stageSrc`), so `runOkAt` takes the bytes. `src` itself reads its `2^20` bytes one list lookup
+at a time, which no evaluation finishes. The bytes here are the ones each stage's sample read of the challenger's coins
+(`c0.bin`, `c1.bin`), and zeros past them: the stream's Lean `Select` read exactly those bytes, and reads its source in
+order, so it reads none of the zeros. The toy's second stage reads one coin, so the `Held` here has no round after
+round 1 (`more := 0`).
 -/
 
 open Lean (Json)
@@ -60,16 +63,16 @@ def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArr
     Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
-theorem readsOk_eq (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (c₀ c₁ : FlockDeploy.Coin) :
-    readsOk h t x m₁ xS c₀ c₁ = readsOkAt h t x m₁ xS (src c₀) (src c₁) := rfl
+theorem readsOk_eq (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
+    readsOk h t x m₁ xS c₀ c₁ = readsOkAt h t x m₁ xS (src c₀) (stageSrc c₁) := rfl
 
 /-- **`stmtOk`'s conjuncts on the run**, at the stages' bytes: the run's statement decodes, `m₂` states one session
-statement per template, and template `t`'s has `k₀ t` rounds, is in scope (`sessionOk`) and reads the run's
-(`readsOk`). -/
+statement per template, the run's records name their registrations' names (`recordsOk`), and template `t`'s statement
+has `k₀ t` rounds, is in scope (`sessionOk`) and reads the run's (`readsOk`). -/
 def runOkAt (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
   match decode x, stmtsOf m₂ with
   | some _, some xs =>
-    xs.length == h.ms.length &&
+    xs.length == h.ms.length && recordsOk h x m₁ &&
       (List.range h.ms.length).all fun t =>
         (FlockDeploy.V true).k (xs.getD t (h.xS₀ t)) == k₀ h t && sessionOk h t (xs.getD t (h.xS₀ t)) &&
           readsOkAt h t x m₁ (xs.getD t (h.xS₀ t)) s₀ s₁
@@ -80,8 +83,8 @@ reading the statement `s`. -/
 def regOk (h : Held) (s : Claims.Sampling.AuditStatement) : Bool := (partition h s).isSome && (two h s).isSome
 
 /-- **`stmtOk` is its registration's conjuncts and its run's**, the run's read through the coins' bytes. -/
-theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ c₁ : FlockDeploy.Coin) :
-    stmtOk h x m₁ m₂ c₀ c₁ = ((parse h x).any (regOk h) && runOkAt h x m₁ m₂ (src c₀) (src c₁)) := by
+theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
+    stmtOk h x m₁ m₂ c₀ c₁ = ((parse h x).any (regOk h) && runOkAt h x m₁ m₂ (src c₀) (stageSrc c₁)) := by
   unfold stmtOk runOkAt parse
   cases decode x <;> cases stmtsOf m₂ <;> simp [regOk, readsOk_eq, Bool.and_assoc]
 
@@ -115,9 +118,25 @@ def natsOf (what : String) (j : Json) : IO (List ℕ) := do
 def hexOf (what : String) (j : Json) : IO Claims.Msg := do
   return (← ok what (_root_.Flock.unhex (← ok what j.getStr?))).data.toList
 
+def strsOf (what : String) (j : Json) : IO (List String) := do
+  (← ok what j.getArr?).toList.mapM fun n => ok what n.getStr?
+
+/-- A registration's names (`Names`) as `held.json` gives them under `key`. -/
+def namesOf (held : Json) (key : String) : IO Names := do
+  let j := field held key
+  if j == .null then
+    throw (IO.userError s!"held.json: no {key}; an export from before the records' names (guard.export writes them)")
+  return ⟨← strsOf key (field j "ports"), ← strsOf key (field j "values")⟩
+
+/-- **The names record `rec` itself names** (`namesAt`), at which `recordOk rec` holds where it names each once. -/
+def recordNames (rec : Json) : Names :=
+  ⟨(namesAt rec "roots" "port").getD [], (namesAt rec "registered" "value").getD []⟩
+
 /-- **The auditor's copies**, from `held.json` (`held`), the reference statements `refs` and their templates' reference
 reads `reads` (`Held.refReads`, null past them), behind the decision that each reference statement is in Flock's masked
-scope (`refAt_ok`); none where one isn't. The first stage's registration
+scope (`refAt_ok`); none where one isn't. The boundary and interior registrations' names are `held.json`'s
+(`boundary_names`, `interior_names`: the design's ports, `expected_ports`, and no registered values). The first stage's
+registration
 is the boundary registration's program, query and work table with the stream's rule over them (`Select.resolve`, as
 the `select` piece takes it), the fields of `Registration.Verifier` the model doesn't read empty; `blockOf` is
 `filesBlockOf` at the members (`Held.ms`), and no proof block is checked whatever the stages sample (`always`): every
@@ -142,13 +161,16 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
   let links := Spot.SecondStage.linksOf? (field held "links")
   let wires := Spot.SecondStage.wiresOf? (field held "wires")
   let rows ← ok "rows" ((Spot.SecondStage.rowsOf? (field held "rows")).elim (.error "not a list of rows") .ok)
+  let boundaryNames ← namesOf held "boundary_names"
+  let interiorNames ← namesOf held "interior_names"
   if hz : 0 < refs.size ∧ (List.range refs.size).all (fun t => zkOk (refs.getD t [])) = true then
     let verifier : Spot.Registration.Verifier :=
       { program := P, query := queryJ, law := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
         anchors := #[], log := #[], partition := none }
     let h₀ : Held :=
-      { desc, vus, query, k, names, links, wires, rows, xS₀ := refAt refs, xS₀_ok := refAt_ok refs hz,
-        refReads := fun t => reads.getD t .null, frame := SamplingDeploy.toyCode,
+      { desc, vus, query, k, names, links, wires, rows, boundaryNames, interiorNames, xS₀ := refAt refs,
+        xS₀_ok := refAt_ok refs hz,
+        refReads := fun t => reads.getD t .null, frame := SamplingDeploy.toyCode, more := 0,
         reg := { first := { verifier, rule, closure := none }, ns := ns.toArray, ks := ks.toArray,
                  blockOf := fun _ _ _ => 0, always := fun _ => false } }
     let ms := h₀.ms
@@ -219,6 +241,7 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
   let (xs?, _) ← timed "stmtsOf" (fun _ => stmtsOf m₂) fun xs => toString (xs.map (·.map List.length))
   let xs := xs?.getD []
   let (rec?, _) ← timed "jsonMsg m₁" (fun _ => jsonMsg m₁) (fun r => b r.isSome)
+  let _ ← timed "recordsOk" (fun _ => recordsOk h x m₁) b
   let (sd, _) ← timed "secondDraw" (fun _ => secondDrawAt h s₀ s₁) fun d => (d.map (·.compress)).getD "none"
   let _ ← timed "replay sample" (fun _ => h.reg.sample s₀) toString
   let (refs, _) ← timed "refsOf" (fun _ => refsOf h) (fun r => toString r.size)
@@ -293,8 +316,17 @@ def main (args : List String) : IO UInt32 := do
   let sizes ← members ms
   if mode == "diag" then diag h ms x m₁ m₂ s₀ s₁
   let (run, runMs) ← timed "runOk" (fun _ => runOkAt h x m₁ m₂ s₀ s₁) b
+  let (records, _) ← timed "recordsOk" (fun _ => recordsOk h x m₁) b
+  -- where the records' names refuse, the rest of round 2's verdict: `runOkAt` with the run's own names held, which
+  -- takes several times `runOk`'s time, so only under `diag`
+  let mut rest : Json := .null
+  if mode == "diag" && !records then
+    if let (some st, some rec) := (decode x, jsonMsg m₁) then
+      let h' := { h with boundaryNames := recordNames st.record, interiorNames := recordNames rec }
+      rest := Lean.toJson (← timed "runOk at the records' own names" (fun _ => runOkAt h' x m₁ m₂ s₀ s₁) b).1
   let (files, filesMs) ← timed "twoFilesOk" (fun _ => twoFilesOk h ms) b
   let res := Json.mkObj [("held", Lean.toJson true), ("runOk", Lean.toJson run), ("runOk_ms", Lean.toJson runMs),
+    ("recordsOk", Lean.toJson records), ("runOk_at_own_names", rest),
     ("twoFilesOk", Lean.toJson files), ("twoFilesOk_ms", Lean.toJson filesMs), ("members", Json.arr sizes.toArray),
     ("not_evaluated", Lean.toJson "partition's membersPart and two's scopeOk, over bitsProgs")]
   IO.println s!"GUARD-RESULT {res.compress}"

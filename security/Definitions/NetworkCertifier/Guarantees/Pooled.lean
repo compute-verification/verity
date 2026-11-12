@@ -37,10 +37,10 @@ import Mathlib.Topology.Sheaves.Init
 # The incorrect proof blocks over a monitoring period of sampled audits
 
 A monitoring period is `m` windows, each audited on its own live coins: the period's coins are a product `Fin m → Ω`,
-window `i` sampling `k i` of its `n i` units at `ω i`, a uniform `k i`-subset. The units wrong at window `i`'s
-registration (`W i ω`) are fixed before its sample: they read only the earlier windows' coins. Every incorrect proof block risks
-detection in its window, and the windows' samples are independent, so the escapes multiply: with `q ≤ k i / n i` in every
-window, every window's audit accepts while the monitoring period holds at least `F` incorrect proof blocks in total with
+window `i` sampling `k i` of its `n i` proof blocks at `ω i`, a uniform `k i`-subset. The blocks incorrect at window
+`i`'s registration (`W i ω`) are fixed before its sample: they read only the earlier windows' coins. Every incorrect block
+risks detection in its window, and the windows' samples are independent, so the escapes multiply: with `q ≤ k i / n i` in
+every window, every window's audit accepts while the monitoring period holds at least `F` incorrect blocks in total with
 probability at most `(1 - q)^F` plus the windows' soundness errors `ε i`, whatever the number of windows. At
 `F ≥ ln (1/δ) / q` that is at most `δ + Σ_i ε_i`.
 
@@ -58,15 +58,15 @@ open Claims
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
 
-/-- **The incorrect proof blocks over a monitoring period of accepted sampled audits.** Over `m` windows on independent live
-coins, window `i` sampling a uniform `k i`-subset of its `n i` units (every coin samples `k i` units, and each
-`k i`-subset is sampled by the share `1 / C(n i, k i)` of the coins), with the units wrong at each registration fixed
-before that window's sample, and each window's audit accepting while its sample meets an incorrect proof block with probability at most
-`ε i`: for `0 ≤ q ≤ 1` with `q · n i ≤ k i` in every window,
+/-- **The incorrect proof blocks over a monitoring period of accepted sampled audits.** Over `m` windows on independent
+live coins, window `i` sampling a uniform `k i`-subset of its `n i` proof blocks (every coin samples `k i` blocks, and each
+`k i`-subset is sampled by the share `1 / C(n i, k i)` of the coins), with the blocks incorrect at each registration fixed
+before that window's sample, and each window's audit accepting while its sample meets an incorrect block with probability at
+most `ε i`: for `0 ≤ q ≤ 1` with `q · n i ≤ k i` in every window,
 
-* every window's audit accepts and the monitoring period holds at least `F` incorrect proof blocks with probability at most
+* every window's audit accepts and the monitoring period holds at least `F` incorrect blocks with probability at most
   `(1 - q)^F + Σ_i ε i`;
-* `(1 - q)^F ≤ δ` once `ln (1/δ) ≤ q · F`, so at most `ln (1/δ) / q` incorrect proof blocks pass the whole monitoring period
+* `(1 - q)^F ≤ δ` once `ln (1/δ) ≤ q · F`, so at most `ln (1/δ) / q` incorrect blocks pass the whole monitoring period
   except with probability `δ + Σ_i ε i`. -/
 def PooledIncorrectBlocksLe : Prop :=
   ∀ {m : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] (n k : Fin m → ℕ) (draw : (i : Fin m) → Ω → Finset (Fin (n i)))

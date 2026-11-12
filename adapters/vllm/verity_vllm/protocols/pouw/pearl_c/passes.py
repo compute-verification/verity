@@ -125,19 +125,33 @@ def step_ends(run: Any, limit: int | None = None):
     return make
 
 
-def hook_steps(hooks: Any, run: Any, calls: int, transcript_dir: str | None = None) -> None:
-    """End ``run``'s pass at each engine step (`step_ends`) on every runner class `model_runners` finds, through ``hooks``,
-    refusing a step over `step_tokens` (with ``calls`` calls a pass, in ``run.details["max_step_tokens"]``; none where the
-    run holds no device buffers), retain each
-    pass under ``transcript_dir`` when given (`pass_dir`), and record in ``run.details["pass_ends"]`` which path ends its
-    passes."""
+def hook_steps(hooks: Any, run: Any, calls: int, transcript_dir: str | None = None, runner: Any = None) -> None:
+    """End ``run``'s pass at each engine step (`step_ends`) on every runner class `model_runners` finds and on ``runner``
+    (the engine's model runner itself) when given, through ``hooks``, refusing a step over `step_tokens` (with ``calls``
+    calls a pass, in ``run.details["max_step_tokens"]``; none where the run holds no device buffers), retain each pass
+    under ``transcript_dir`` when given (`pass_dir`), and record in ``run.details["pass_ends"]`` which path ends its
+    passes.  ``runner``'s own ``execute_model`` is wrapped on top of what it holds now: a patch installed on the instance
+    before this install (a committer's, which calls the method it read then) never reaches the class's wrapper, and the
+    two wrappers share one depth, so a step that runs both ends its pass once."""
     limit = step_tokens(run, calls) if hasattr(run, "flag_buf") else None
     runners, make = model_runners(), step_ends(run, limit)
     for cls in runners:
         hooks.wrap(cls, "execute_model", make)
+    if runner is not None:
+        hooks.wrap(runner, "execute_model", lambda orig: _bound(make, orig, runner))
     run.retain_dir = Path(transcript_dir) if transcript_dir else None
     if run.retain_dir is not None and not run.cur.matmuls:
         run.begin()                 # the pass the run began before it had a retain directory, retained from its start
     run.details["max_step_tokens"] = limit
-    run.details["pass_ends"] = ("each engine step, at the model runner's execute_model" if runners else
-                                "the caller's end_pass (no model runner in this process)")
+    run.details["pass_ends"] = ("each engine step, at the model runner's execute_model" if runners or runner is not None
+                                else "the caller's end_pass (no model runner in this process)")
+
+
+def _bound(make: Any, orig: Any, runner: Any) -> Any:
+    """`step_ends`' wrapper over ``orig``, ``runner``'s own ``execute_model`` (bound, or a patch's function), as an
+    attribute of ``runner``."""
+    wrapped = make(lambda _runner, *a, **kw: orig(*a, **kw))
+
+    def execute_model(*a: Any, **kw: Any) -> Any:
+        return wrapped(runner, *a, **kw)
+    return execute_model

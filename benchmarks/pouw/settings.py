@@ -53,8 +53,9 @@ REGISTRY = Registry(
     S("PEARLC_ONE_COMMIT", not_zero, True, VALUE, "sm90: every call's A commitment launches one pd_commit variant; 0 launches "
                                                   "the shape's"),
     S("PEARLC_PDL", not_zero, True, VALUE, "sm90: the PDL kernels launch with programmatic stream serialization; 0 plainly"),
-    S("PEARLC_BF16_ROWS", not_zero, True, VALUE, "sm90: a split pipeline's pd_commit reads a call's BF16 rows in its FP32 "
-                                                 "words' place; 0 says no"),
+    S("PEARLC_BF16_ROWS", one, False, VALUE, "sm90: 1 has a split pipeline's pd_commit read a call's BF16 rows in its FP32 "
+                                             "words' place; off, as a whole capture deferring A's tree and forking its "
+                                             "scales races on them"),
     S("PEARLC_RS_FAST_NT", int, 128, VALUE, "hash_fast.cuh's segment kernels' block, as the cubin was built"),
     S("PEARLC_SHA", str, "fast", VALUE, "the SHA-512 kernels: fast (hash_fast.cuh's segments and folds) or ref"),
     S("PEARLC_CHAIN", str, "pl", VALUE, "sm90: the GEMM chain (run.py's CHAINS)"),
