@@ -106168,3 +106168,87 @@ For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `63889
 - **Files ready for soundness's reading:** none yet.
 
 **Not established:** everything; nothing is written or compiled.
+
+## WINDOWAT, Thu 12 Nov 22:37Z: the undrawn member's refusal is written and pushed on `cursor/proofs-windowat-undrawn-5e4b` (`cc35d5892178`), its try and difftest queued; I found no place where Flock refuses a one-table session of no instance; file C (`SetsUp.lean`) is written, with one question for soundness
+
+Mailbox read at `cursor/proofs-inbox` `de56f10be0a9`: the 22:21Z rulings are its last message to me. Heads at this entry [run: `git fetch`]: soundness `3e26cac7596a`, the lever `7d4e96a5fa07`, the every-member files change `ce41e7c92e8e`, all unchanged since my 22:05Z entry; `main` is `783b526ab6f5`. No merge was due, so no declaration my map names changed.
+
+### 1. The undrawn member (ruling 1)
+
+**What I read first, and what it says.** I read the parts I had not read, at one table and no instance, and found no refusal, so the change is not dropped.
+
+- `Record.decode` (`verity/protocols/flock/verifier/Flock/Record.lean:102`, steps S1 to S12) runs `Draw.check recDraw spec.unitDraw spec.instances` [read]. `Draw.check` and `UnitDraw.ofJson` (`verity/commitments/lean/Commitments/Draw.lean:346-407`) refuse a subset draw only where `k > population` or `units.size != k`, and hold `d.proved.size` to `instances`; neither refuses `instances = 0` [read].
+- `RecordText.check` (`Flock/RecordText.lean:65`) holds the canonical text only [read].
+- `FilePart.check`, `why`, `header` and `indicesOf` (`verity/protocols/spot/verifier/lean/Spot/FilePart.lean:157-195`) read the header's `units.indices` and no draw [read].
+- The setup after the size (`Flock/HmRow.lean:2536-2600`): `HmOut.checkPublic` recomputes the roots over `pub.population`, the regions use `c.instOf pub.n b g`, then `checkInRange`, `checkRegionBytes`, the digest, sigma and hello. Nothing there refuses `pub.n = 0` [read].
+- `Zk.verify` (`Flock/Zk.lean:324-342`) refuses `tabs.size == 0`, then `Record.decode`, `st.publics p`, the proofs' SHA-512s and `verifyRep` for each rep; `shapeOk`'s `words` is the same at no instance as at one [read].
+- `PortRoots.checkOf` (`Flock/PortRoots.lean:168`) takes the parsed circuit, the tags and the public file, and no draw [read: its signature; not its body].
+- A search for a refusal of no instance finds only `splits` at several tables (`Flock/HmRow.lean:2493,2651`, `Flock/ProgramRead.lean:457`) [run: `rg`, on my VM].
+
+Not read: `PortRoots.checkOf`'s body, `Stmt.publics`, the inside of `verifyRep` (the replay, the ring switch, ligerito), `HmLinks.check`, and `Record.decode`'s steps S13 and S14. A refusal there would make the new check redundant, and never wrong.
+
+**What I wrote.** One commit, `cc35d5892178`, on `cursor/proofs-windowat-undrawn-5e4b`, cut from `ce41e7c92e8e` [run: `git push`]. Three files:
+
+- `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean`:
+  - `Member.drawn (m) (want : Array Nat) : Bool`: whether `want` holds a unit in one of `m.units`' ranges.
+  - `undrawn (name)`: the refusal's text, `member {name}: the sample holds none of its units, and an undrawn member has no statement`.
+  - `drawnHeld (held) (want) : V Unit`: the first of `held` that is not drawn refuses by that text.
+  - `runMembers` runs `drawnHeld held want` after `membersHeld` and before `membersFiles`, so before any blob is read. `membersRun` and `checkMembersAt` are not edited: they change only through `runMembers`.
+  - `runMembers_files` and `runMembers_proved` are reopened: one more `bind_ok` each, statements unchanged.
+  - New: `drawnHeld_ok`, `runMembers_drawn` and `membersRun_drawn` (where the run returns, `∃ held, membersHeld ms sts = .ok held ∧ ∀ m ∈ held, m.drawn e.base.provedUnits = true`).
+  - Six `#guard`s on `Member.drawn` and `drawnHeld`, beside `membersHeld`'s.
+- `verity/protocols/spot/verifier/lean/Spot/MembersParse.lean`: the executable's `members` command ran `membersHeld` only, so no test could reach the new refusal through the executable. `membersParsed` now runs `drawnHeld` on the evidence's `proved_units` after it, under the same `proofs:` prefix. It still reads no registration, blob or coin.
+- `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, in `test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks`: two cases, a sample that misses the last statement's member and one that misses the first's, each refused by `proofs: member NAME: the sample holds none of its units, and an undrawn member has no statement`. The test now sets the evidence's `proved_units` to `[1, 4]` (a unit of each member with a session, none of the member without one) where it used the draw's own two units, since the form's writer is not tied to the draw in that test.
+
+`want` and `Member.units` index the registration's population alike [derived: `provedHeld` compares `want` with the units the sessions proved, which each session reads off its member's public file's `units.indices`, held to `m.indices` by `Member.population`].
+
+**Verified so far.** `Member.drawn`, `drawnHeld`, `drawnHeld_ok` and the guards elaborate in a core-only copy with `[propext, Quot.sound]` [run: `lean` on one file on my VM]. Nothing of the commit has elaborated in the tree yet. Its try and the difftest are one run, `r20261112-223333-3d6c` on cpu-10 (`lean_changed.py --try` of `OneStageZk.lean` and `MembersParse.lean`, then `suites.py verity-core-sampled-proofs -- -k per_member_form`), on a snapshot whose tree is the commit's [run: `git rev-parse` of both trees]. It is waiting, nine checks ahead of it at this entry. I do not call the commit done until that run passes.
+
+**The lock's records, exactly.** My 21:51Z entry said the change "changes no statement in a lock that I can see". More exactly: both `security/lean-audit.json` and `security/Properties/lean-audit.json` record a digest of `Spot.OneStageZk.runMembers` among the definitions their guarantees read (`2563aa68…` at `ce41e7c92e8e`) [read: `security/Properties/lean-audit.json:24446`, `security/lean-audit.json:58264`]. So this change regenerates those records: `runMembers`'s digest, the module's, and three new entries (`Member.drawn`, `undrawn`, `drawnHeld`), as the every-member files change regenerated 16 lines of each [read: its diff]. No guarantee's statement, shape or premise changes, and no accept of `checkBlobsAt` changes, since the form still refuses everything (`checkMembersAt_refuses`) [derived]. I edited no lock file; the records run does.
+
+**For whoever writes the Python twin of the several-member run:** it refuses, after the statements' structure and before any file is read, a statement whose member has no unit among the evidence's `proved_units`, by the text `member {name}: the sample holds none of its units, and an undrawn member has no statement`. `proofs.members_v2` already writes a statement only for a member with a session, so the writer needs no change [read: `verity/protocols/spot/verifier/one_stage/proofs.py:566-570`].
+
+**What it costs my own files.** `MemberForm/Run.lean`'s `runMembers_ok` unfolds `runMembers`, the only proof under `security/` that does [run: `git grep`]. When the refusal is in my base it takes one more line and gains the conjunct that every statement's member is drawn, which is what D's count of sessions reads. The refusal's commit merges into my branch without conflict [run: `git merge-tree`]. I merge it when you say its branch is the one to build on.
+
+### 2. Runs
+
+- `r20261112-203452-ae67` (the records on the merged tree, cpu-12): done, rc 0, at 22:11Z; wall 5,688 s, cgroup peak 50.1 GB [run]. Every package elaborates on the merge of soundness's branch and the lever: `verity/protocols/spot/verifier/lean` pass, `verity/protocols/certifier/verifier/lean` pass, `security` regenerated, `security/Properties` regenerated, `security/Proofs` pass. Its own words: "regenerated on the slot path, without the kernel replay or the tests: not a Lean verdict, and no merge accepts it".
+- `r20261112-220347-1827` (the try of `Consts`, `Opens`, `Accept`, `Run`, cpu-8, 64 GB): took its slot at 22:26Z and is running [run].
+- `r20261112-223333-3d6c` (the refusal's try and difftest, cpu-10, 48 GB): waiting.
+
+### 3. File C, `MemberForm/SetsUp.lean` (written, not elaborated, not committed)
+
+259 lines, 10 theorems. Only its two list lemmas are checked, in a core-only copy [run: `lean` on my VM].
+
+- `MemberOn F vm m`: the window's member `m` is the parameters' member `vm` on the files `F`: its tags are the one statement's, its circuit and public files are `namedFile (digestOf …) F`, its tables are `pinnedTables` of its circuit file, one count, the member's partition and program, no work, strata or closure, `m.n = vm.count`, and `(m.emb u).val = vm.first + u.val`.
+- `WindowOn V θ F W`: the parameters' members, sorted by first unit, pair with `W.ms` under `MemberOn F`; the law is `lawAt`; the challenger's family is registered; `W.Lb 0 = MAX_COINS * 64`; `V.read θ F` is the members' files; the share and the units agree.
+- `FilesPass m`: the public file loads at `m.n` units, no port id twice, and `PortRoots.checkOf` passes. `FilesPass.checked` gives `(m.toV5 t).Checked` under `m.RootsFix`.
+- `MembersSetUp` is `WindowOn`, `W.Laid`, and `FilesPass` of every member. `WindowOn.membersAt` gives `MembersAt W W.table`.
+- `windowAt_members`: `I.WindowAt k` from five named hypotheses: the instance's `SetsUp` is `MembersSetUp`; `WindowRegistered` (the window is on the registered files, the instance's construction); `ReadsMemberFiles` (the read depends on the files only through the members' named files, (N3)); `MemberFilesAt` (an accepted play's files agree with the registered ones at the members' digests, (N1)); and `WindowPasses`, below.
+
+Against my map's section C: the files are `namedFile (digestOf …) F`, soundness's own idiom, not `tableFile`; `units` is two fields, `units` and `place`; `loads` and `distinct` are one clause over `FilesPass`, which adds the ports check that A33's lemma needs.
+
+**The one question, isolated as `WindowPasses`** ("at an accepted play on files the window is on, the window is laid out and every member's files pass"). The verifier checks each member's files at the tables the blobs carry (`tablesOf bs`); the window's member holds `pinnedTables`, a choice of a file by its digest. The two agree only under `TablesSent`, and `WindowAt` gives an accepted play without it [read: `Window/Instance.lean:499-503`, `Sampled.lean:733-743`]. Two ways to hold `WindowPasses`, and the choice is soundness's:
+
+- (a) by the instance's construction: the checks are part of where `window θ` is defined, as `Live`'s `hdup` and `hn` are for the one statement. Nothing of mine changes.
+- (b) from the accept: a bridge lemma of mine from the run's `Member.FilesHeld` to `FilesPass`, which needs `TablesSent` among `WindowAt`'s hypotheses, so a change to `WindowAt` and to `covers`.
+
+`windowAt_members` compiles either way. The bridge and `W.Laid` from `laidHeld` are not written ([guess] 150 to 250 and 80 to 120 lines).
+
+Two things I saw and do not decide:
+
+- `v5Files_of_checksStmt` (`Flock/Bridge/V5/Accepted.lean:239`) derives `RootFixesDomainL` from the ports check. A window whose `SetsUp` holds `FilesPass.ports` could derive `W.RootsFix` and drop the roots term [derived, not elaborated]. That would change what a guarantee's δ says, so I only report it.
+- `tablesHeld` runs for each member against the same blobs, so members whose circuits look up different sets of tables are refused [read: `OneStageZk.lean:410`, in `statementOf`]. A limit on what honest serving passes, not on soundness.
+
+### To post
+
+- To soundness, with (N1) to (N4): which of (a) and (b) holds `WindowPasses`; and whether the window's instance's `SetsUp` can be `MembersSetUp` as stated above.
+- To MEMBERS when it resumes: the refusal's branch and the one line for the Python twin (section 1).
+
+### Not established
+
+- That the refusal's commit elaborates in the tree, and that its difftest passes: `r20261112-223333-3d6c` has not started.
+- That `Consts`, `Opens`, `Accept` and `Run` elaborate: `r20261112-220347-1827` is running.
+- That `SetsUp.lean` elaborates: it is in no try yet; it goes in the next one.
+- That Flock refuses no session of no instance anywhere: I read the parts listed and not the four named as unread.
+- The bridge to `FilesPass`, `W.Laid`, and all of D and E.
