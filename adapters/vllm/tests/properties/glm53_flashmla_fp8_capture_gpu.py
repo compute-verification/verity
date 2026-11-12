@@ -441,11 +441,13 @@ def write_cache(cache_t, lay: dict[str, Any], dev: str) -> dict[str, Any]:
         u = rand(n, 1)
         gain = torch.where(u < 1 / 16, torch.zeros_like(u),
                            torch.where(u < 3 / 16, torch.exp2(-8 - 12 * rand(n, 1)), torch.exp2(4 * rand(n, 1) - 2)))
+        kv_c, k_pe = (randn(n, DN) * gain).to(bf), randn(n, DR).to(bf)
         K.fused_norm_rope(
-            torch.from_numpy(pos[lo:lo + n]).to(dev), randn(n, Q_LORA).to(bf), qw, RMS_EPS, (randn(n, DN) * gain).to(bf), kvw, RMS_EPS,
-            randn(n, DR).to(bf), cos_sin, None, None, None, RMS_EPS, None, topk_buf[:n],
+            torch.from_numpy(pos[lo:lo + n]).to(dev), randn(n, Q_LORA).to(bf), qw, RMS_EPS, kv_c, kvw, RMS_EPS,
+            k_pe, cos_sin, None, None, None, RMS_EPS, None, topk_buf[:n],
             slot_mapping=torch.from_numpy(slot[lo:lo + n].astype(np.int64)).to(dev), indexer_k_cache=None, mla_kv_cache=cache_t,
-            mla_kv_cache_dtype="fp8_ds_mla", mla_k_scale=None, has_indexer=False, index_rope_interleave=False)
+            mla_kv_cache_dtype="fp8_ds_mla", mla_k_scale=None, has_indexer=False, index_rope_interleave=False,
+            kv_c_out=torch.empty_like(kv_c), k_pe_out=torch.empty_like(k_pe), index_k_out=None)
     torch.cuda.synchronize()
     return {"by": f"{K.fused_norm_rope.__module__}.fused_norm_rope", "rows": int(pos.size),
             "topk_buffer_untouched": bool((topk_buf == 7).all().item())}
