@@ -1,5 +1,5 @@
 """A training circuit's work read off its Program (`circuit_properties.work`, which reads the circuit alone) beside this
-benchmark's reading of the same loop body from a trace (`capture_step`'s rows, `formalism.he_of_rows` and `he_figure`),
+benchmark's reading of the same loop body from a trace (`capture_step`'s rows, `work.he_of_rows` and `calculator.slowdown`),
 on the lf model's tiny step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path) under AdamW, at each
 k of `products.DIAL_K` at which (H) states β(k).
 
@@ -12,8 +12,7 @@ gates on both sides. The Program is read under three statements (`STATED`): noth
 the reading lists. Under each, the Program's reading is never above the trace's: every product it charges is one the
 trace's M holds, with no more MACs and no larger β on either operand, and its blocks at the trace's F, and at its own,
 are at most what the trace's M gives under the same choice of sub-work. With nothing stated or the layout alone it
-charges nothing. With the rope tables named its blocks can exceed `he_figure`'s, which keeps one of three sub-works by
-its ρ rather than by blocks. Where the readings differ, the Program's is below, each for one cause:
+charges nothing. Where the readings differ, the Program's is below, each for one cause:
 
 - Rates: each product's operands are paid at most what the trace pays any product of its shape. Attention's scores
   multiply two activations, which `gemm_rate` prices at the least of attention's form and each single token side's,
@@ -29,7 +28,8 @@ its ρ rather than by blocks. Where the readings differ, the Program's is below,
 - The head's products and attention's: from `HEAD_K` the Program gives no bound, since it doesn't say which products
   are the head's, where the trace's figure keeps the weight gradients; a product of two activations, a weight
   gradient or attention's, is left out, where the trace keeps the weight gradients.
-- β: every operand at most min(16, β(k)), where the trace's weights are at their width, 32.
+- β and b: every operand at most min(16, β(k)) and every output at most 16 bits, where the trace's weights and
+  outputs are at their Definition's width, 32.
 - |C|: the products' gates differ by the MACs only the Program writes as products (those dots and sums) and by the
   MAC's Boolean Definition: the Program's `F32Fma_v1`, whose Boolean version `F32Fma_v3` keeps a NaN's payload rule,
   against `F32Fma_v4`, the PTX FFMA the trace prices a MAC at. The rest of |C| is every other primitive at its Boolean
@@ -49,7 +49,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from training_slowdown import formalism as F
+from training_slowdown import calculator
+from training_slowdown import work as TW
 from training_slowdown import gates as G
 from training_slowdown.capture import capture_step, products
 
@@ -166,8 +167,8 @@ STATED = {"nothing": None, "layout": WK.Layout("batch", *BATCH),
 @dataclasses.dataclass
 class Reading:
     step: Program
-    #: by (statement, k): the Program's work an iteration; by k: the trace's priced rows, `he_of_rows`' M and
-    #: `he_figure`'s figure
+    #: by (statement, k): the Program's work an iteration; by k: the trace's priced rows, `work.he_of_rows`' M and
+    #: `calculator.slowdown` on them
     work: dict
     rows: dict
     he: dict
@@ -190,8 +191,10 @@ def readings() -> Reading:
     for k in KS:
         blk = raw if k == raw["k"] else raw["at"][str(int(k))]
         r.rows[k] = [products.priced(row, None) for row in blk["rows"]]
-        r.he[k] = F.he_of_rows(r.rows[k], k, None, g.tokens)
-        r.fig[k] = F.he_figure(r.he[k], C, size)
+        record = TW.products_of_trace({"k": k, "rows": r.rows[k], "capture": raw["capture"], "p_match": blk["p_match"],
+                                       "tokens": g.tokens})
+        r.he[k] = record["he"]
+        r.fig[k] = calculator.slowdown({"c_gates": C, "k_bits": k}, record, {"gates": size})
         for name, lay in STATED.items():
             r.work[name, k] = iteration(step, k, lay)
     return r
@@ -254,9 +257,9 @@ def fits(work: WK.Work, he: dict) -> bool:
         room[end[1]] -= amount
 
 
-def trace_blocks(fig: dict, k: float, size: float) -> float:
-    return MC.bound(C, k, N=fig["N"], O=fig["O"], size=size, beta_w=fig["beta_w"], beta_x=fig["beta_x"],
-                    b=fig["b_y"], F=fig["F"]).blocks if fig["N"] else 0.0
+def trace_blocks(got: dict) -> float:
+    """The blocks of the calculator's choice of the trace's work."""
+    return got["bound"]["blocks"] if got["bound"]["available"] else 0.0
 
 
 def blocks(work: WK.Work, F_: float | None = None) -> float:
@@ -265,7 +268,7 @@ def blocks(work: WK.Work, F_: float | None = None) -> float:
 
 
 def trace_work(r: Reading, k: float) -> WK.Work:
-    """The trace's M as a work, each activation at most β(k) as `he_figure` charges it, its MACs already at M's share
+    """The trace's M as a work, each activation at most β(k) as the calculator charges it, its MACs already at M's share
     a sequence's start leaves."""
     bk = MC.beta(k)
     return WK.Work(k, r.size, [WK.Group("trace", tuple(g["width"]), tuple(g["weight"]), g["b_y"], g["k_dim"], g["macs"],
@@ -284,9 +287,9 @@ def test_the_programs_bound_is_never_above_the_traces(readings):
     for (name, k), it in r.work.items():
         assert fits(it, r.he[k]), (name, k)
         own = WK.bound(it, C)
-        for F_ in {r.fig[k]["F"], own.bound.F if own else 1.0}:
+        for F_ in {r.fig[k]["figure"]["F"], own.bound.F if own else 1.0}:
             assert blocks(it, F_) <= blocks(trace_work(r, k), F_), (name, k, F_)
-        assert trace_blocks(r.fig[k], k, r.size) > 0
+        assert trace_blocks(r.fig[k]) > 0
     for k in KS:
         assert r.work["nothing", k].groups == r.work["layout", k].groups == []
         rope = r.work["rope", k]
@@ -347,12 +350,12 @@ def test_both_sizes_are_boolean_gates_and_differ_by_what_each_prices(readings):
 
 
 def test_the_readings_constants_are_the_benchmarks():
-    assert WK.ACC_BITS == products.ACC_BITS and WK.SHARED_PREFIX == F.SHARED_PREFIX and WK.HEAD_K == F.HEAD_K
+    assert WK.ACC_BITS == products.ACC_BITS and WK.SHARED_PREFIX == TW.SHARED_PREFIX and WK.HEAD_K == TW.HEAD_K
     for w in (1.0, 16.0, 32.0):
         for rate in (0.5 * w, WK.PAID * w, w):
-            assert WK.paid(rate, w) == F.is_paid(rate, w)
+            assert WK.paid(rate, w) == TW.is_paid(rate, w)
+    assert MC.BETA == calculator.beta_rows()
     for k in products.DIAL_K:
-        assert MC.beta(k) == F.beta_k(k)
         for w, rank in ((32.0, 4.0), (16.0, 64.0)):
-            assert WK.k_star(k, w) == pytest.approx(F.k_star(k, w))
-            assert WK.beta_eff(w, rank, k) == pytest.approx(F.beta_eff(w, rank, k))
+            assert WK.k_star(k, w) == pytest.approx(TW.k_star(k, w))
+            assert WK.beta_eff(w, rank, k) == pytest.approx(TW.beta_eff(w, rank, k))

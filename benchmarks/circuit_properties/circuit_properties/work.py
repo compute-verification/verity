@@ -3,7 +3,7 @@
 The circuit is a Program in the `verity-ir/descriptor/v1` format, and nothing beside it: the reading takes no source
 language, trace, model or optimizer. It is computed once per specialized Definition and context and multiplied through
 batches and scans, so it never walks the unrolled circuit. Its rules are the training benchmark's reading of a trace
-(`training_slowdown.capture.products`' `_rates`, `_gemm_rate` and `_gathered`, `training_slowdown.formalism`'s
+(`training_slowdown.capture.products`' `_rates`, `_gemm_rate` and `_gathered`, `training_slowdown.work`'s
 `he_of_rows`), each resolved on the side of the smaller bound wherever a Program doesn't state what the rule reads.
 For `min_cut.bound`'s inputs it reads:
 
@@ -122,7 +122,7 @@ class Lookup:
 PRODUCTS = (Product(r"LinearRef_v\d+", "x", "w"), Product(r"DotRef_v\d+", "x", "w"))
 #: the registered gathers: a column of a table at a token
 LOOKUPS = (Lookup(r"Gather\w+x\d+_v\d+", "token", "column"),)
-#: `training_slowdown.capture.products`' and `training_slowdown.formalism`'s constants, which its suite holds equal:
+#: `training_slowdown.capture.products`' and `training_slowdown.work`'s constants, which its suite holds equal:
 #: the partial sums' width, the share of a rate that pays a width, the positions a sequence's start shares, and the k
 #: from which the head's products leave M
 ACC_BITS, PAID, SHARED_PREFIX, HEAD_K = 32, 0.999, 1, 8e7
@@ -486,17 +486,18 @@ def by_member(p: Profile, per: int, n: int) -> list[tuple[int, Status]]:
 
 
 def paid(rate: float, width: float) -> bool:
-    """Whether a rate pays its operand's width (`training_slowdown.formalism.is_paid`)."""
+    """Whether a rate pays its operand's width (`training_slowdown.work.is_paid`)."""
     return rate >= PAID * width
 
 
 def k_star(k: float, w: float) -> float:
-    """K* = ½√(k/w), the least contraction whose output a block can't make below its width (`formalism.k_star`)."""
+    """K* = ½√(k/w), the least contraction whose output a block can't make below its width
+    (`training_slowdown.work.k_star`)."""
     return 0.5 * math.sqrt(k / w)
 
 
 def beta_eff(w: float, r: float, k: float) -> float:
-    """An operand's β where the update reaches it through a rank-r bottleneck (`formalism.beta_eff`)."""
+    """An operand's β where the update reaches it through a rank-r bottleneck (`training_slowdown.work.beta_eff`)."""
     return w / (1 + (k_star(k, w) / r) ** 2) if r > 0 else 0.0
 
 

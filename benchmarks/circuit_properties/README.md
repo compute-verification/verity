@@ -43,8 +43,8 @@ summaries can't count exactly (one value bound to two activation leaves above th
 Boolean gates (each primitive at its registered Boolean version's, `work.boolean_gates`), every product with its dims,
 each operand's kind, rate, source bits and β, the charged products' MACs N and output wires O, and the arrays they
 multiply, which give F. The rules are the training benchmark's reading of a trace (`capture.products`' rates,
-`formalism.he_of_rows`' β), each premise a Program doesn't state taken on the side of the smaller bound. The products
-are a reader-side table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and `DotRef`),
+`training_slowdown.work.he_of_rows`' β), each premise a Program doesn't state taken on the side of the smaller bound.
+The products are a reader-side table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and `DotRef`),
 and the lookups another (`work.LOOKUPS`, the gathers). The update θ′ is a scan's carried words that a fresh input
 reaches; every input is free like θ (the carry is iterated to a fixed point, so a loop's iterations cost what its
 distinct contexts do). A product is charged where both operands depend on θ′ in every word, neither carries a gather's
