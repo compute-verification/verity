@@ -141,6 +141,8 @@ def test_a_row_prints_the_dtypes_the_steps_products_are_priced_in():
     assert library.priced_in(trace([*STEP, called | {"attention": "float32"}]) | new) == {
         "bfloat16": 6 / 7, "float32": 1 / 7}
     assert library.PRICED_IN.endswith(f"on the premise that {products.ATTENTION_PREMISE}.")
+    assert f"that {products.ATTENTION_PREMISE}, on which" in library.PARTS["premise"]
+    assert "sm_120's BF16 pipeline" in gates.__doc__ and "on sm_120," in products.ATTENTION_PREMISE
     row = {"entry": "e", "route": "r", "slowdown": 2.0, "binds": "b", "trains": {"share": 1.0}}
     assert library.line(row | {"step": {"priced_in": {"bfloat16": 1.0}}})[3] == "bfloat16"
     assert library.line(row | {"step": {"priced_in": {"bfloat16": 6 / 7, "float32": 1 / 7}}})[3] == (

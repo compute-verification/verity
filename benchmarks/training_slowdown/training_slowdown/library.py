@@ -65,7 +65,9 @@ PARTS = {
     "proved": "the bound's form: the statement named beside each slowdown, a lower bound on every partition of the "
               "traced step into the policy's blocks, given its two premises and its hypotheses on the circuit, "
               "which the trace doesn't check",
-    "premise": "(H) and (E), conjectures that one set of gates refutes, at the bits a value the row states",
+    "premise": "(H) and (E), conjectures that one set of gates refutes, at the bits a value the row states; and "
+               f"that {products.ATTENTION_PREMISE}, on which a 16-bit attention call's products are priced at 16 "
+               "bits",
     "scaled": "the planned run: the config's steps times the traced step's gates, so the traced step stands for "
               "every step; and every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC "
               f"at the {calculator.FLEET_PRECISION} GEMM's AND gates, times its locations and the period, and the "

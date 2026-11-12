@@ -49,7 +49,9 @@ no job writes): the grade never reads it and passes it on, beside each record it
   the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
   gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same ρ
   where τ's stub changes no step count: the block says which figures are blank and why (`blank`);
-- **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on;
+- **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on, and with
+  `capture.products.ATTENTION_PREMISE` where the search record's trace prices an attention call's products on it
+  (`capture.products.on_premise`);
 - **the bound of record** at the same policy (the `bound` of `calculator.slowdown`'s result there): the least
   slowdown of any partition of the attack's traced circuit, by the theorem's count solved for the fewest blocks. ρ's
   products term is this bound, so where products bind ρ is it and S is p times it (`BOUND_IS_RHO`). The block prints
@@ -641,6 +643,8 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
     its `seed`, its `split` and its `record`; `starts` is the starts registry (module docstring). With
     `as_if_assumed` every record is counted by the assumed dtypes (`without_dtypes`), and the result says so
     (`as_if`, under `SCHEMA_AS_IF`): it is no config's slowdown."""
+    from .capture import products
+
     starts = starts.get("starts", starts)
     if config["start"] not in starts:
         raise ValueError(f"grade: no start {config['start']!r} in the starts registry ({', '.join(starts)})")
@@ -678,6 +682,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
                   None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}")
     S = {k: None if why or not p[k] else p[k]["p"] * rho["rho"] for k in H} | {
         "why": why, "lower_bound": bool(rho.get("partial"))}
+    traced_rows = (((search or {}).get("record") or {}).get("trace") or {}).get("rows") or []
     return {
         "schema": SCHEMA_AS_IF if as_if_assumed else SCHEMA, "as_if": AS_IF if as_if_assumed else None,
         "training_slowdown": VERSION, "config": me, "start": config["start"], "gain": g,
@@ -694,6 +699,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
                  + (", every record counted by the assumed dtypes (as-if)" if as_if_assumed else ""),
             "rho": rho.get("rests_on"), "capture": rho.get("capture"), "capture_code": rho.get("capture_code"),
             "provenance": rho.get("provenance"),
+            "attention": products.ATTENTION_PREMISE if products.on_premise(traced_rows) else None,
             "gain": f"the fit {FORM} on {f['points']} of the {len(data)} starts on data {entry.get('data')}"
                     + (f", provisional under {FIT_TARGET}" if f["provisional"] else "")},
         "per_period": per_period(C["mean"] * rho["rho"], rho) if C and rho["rho"] is not None and not two else None,
@@ -790,7 +796,7 @@ def text(s: dict) -> str:
         f"capture: {r['capture'] or 'none'}, its code "
         + (r["capture_code"] or f"blank: {rho.get('blank', {}).get('capture_code', 'rho is unmeasured')}")
         + (f"; the record's provenance: {_said(r['provenance'])}" if r["provenance"] is not None else ""),
-        f"p: {r['p']}", f"gain: {r['gain']}")
+        *([f"attention: that {r['attention']}"] if r.get("attention") else []), f"p: {r['p']}", f"gain: {r['gain']}")
     add("bound of record", *([bound["why"]] if not bound["available"] else [
         f"every partition of the attack's traced circuit into the policy's blocks pays at least "
         f"{bound['slowdown']:,.6g}x ({bound['theorem']}: at least {bound['blocks']:.4g} blocks of c gates over its |C|)",

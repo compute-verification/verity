@@ -265,6 +265,9 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     assert s["S"] == {"honest": pytest.approx(1.5 * want["rho"]), "any": pytest.approx(1.5 * want["rho"]),
                       "why": None, "lower_bound": want["partial"]}
     assert s["rests_on"]["rho"] == want["rests_on"] and "4 of the 5 starts on data d" in s["rests_on"]["gain"]
+    premise = f"attention: that {products.ATTENTION_PREMISE}"
+    assert s["rests_on"]["attention"] is None and premise not in G.text(s)
+    assert premise in G.text(s | {"rests_on": s["rests_on"] | {"attention": products.ATTENTION_PREMISE}})
     at = graded(runs, ref, CONFIG | {"policy": "v4-pro-session"})
     assert at["policy"]["kind"] == policy.FIXED and at["rho"]["rho"] is None and at["S"]["any"] is None
     assert at["S"]["why"] == at["rho"]["why"] and at["p"] == s["p"] and at["per_period"] is None
@@ -744,6 +747,7 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     old = tr | {"capture": earlier, "rows": no_call(tr["rows"]),
                 "at": {k: b | {"rows": no_call(b["rows"])} for k, b in tr["at"].items()}}
     moved = work.repriced(old)
+    assert products.on_premise(tr["rows"]) and not products.on_premise(old["rows"])
     assert earlier != products.CAPTURE and len(moved) == len(attentions) and all(r in no_call(attentions) for r in moved)
     pol = policy.named(CONFIG["policy"], synthetic.SHAPE)
     alone = calculator.slowdown(pol, old)
