@@ -1,6 +1,8 @@
 """vLLM at its serving settings, replayed: what one served job shows, as the settings it ran with and three lines (README.md).
 
     prod_repro.py arms
+    prod_repro.py replay-env --ours ARM --kept DIR
+    prod_repro.py replay-ran --ours ARM --kept DIR [--private DIR] --out OUT
     prod_repro.py report OUT --stock ARM --ours ARM [--again ARM] --load NAME [--replayed PASS] [--rep 1] [--replay DIR]
                          [--expect-replay] [--advice-trace DIR [--advice-stops ID,...]] [--target PERCENT] [--json]
 
@@ -33,6 +35,13 @@ failure, and the last line counts the lines that are measured.
 
 ``arms`` prints the three arms a job serves by default: the arms at vLLM's published serving settings where the
 benchmark has them (`PROD`), else stock compiled vLLM, stock again and the step record (`TODAY`).
+
+``replay-env`` prints, a ``NAME=VALUE`` a line, what the replay of ``--ours``'s window runs under beside the job's
+own environment so that its engine is the served one's (`replay_env`: the arm's own vLLM general plugins and
+environment, the canonical DSA top-k's), with the plugins' site and the files they keep under ``--kept``; nothing
+for an arm with neither. ``replay-ran`` then writes OUT/replay_engine.json (`replay_ran`): those plugins and that
+environment, and the canonical top-k's counters as the replay's processes kept them and, where the job kept the
+arm's own (``--private``, the benchmark's PRIVATE), as serving's did.
 """
 from __future__ import annotations
 
@@ -40,7 +49,9 @@ import argparse
 import gzip
 import importlib.util
 import json
+import os
 import re
+import subprocess
 import sys
 from collections import Counter
 from collections.abc import Callable
@@ -81,6 +92,14 @@ AUTO_FIT = re.compile(r"Auto-fit max_model_len: (?:reduced from (\d+) to (\d+)|f
 LOG_LINES = 20000
 #: what the report says of a setting the launch line turns on and the step trace's header does not hold
 NOT_IN_HEADER = "the step trace's header holds none, and the replay's engine is built from the header"
+#: the key of a checkpoint's config.json for the keys the DSA indexer's top-k keeps: a request of more ids than that
+#: reads the keys the top-k selected
+INDEX_TOPK = "index_topk"
+#: the canonical DSA top-k's two variables (`benchmarks/dsa_topk`): its switch, and the directory each process keeps
+#: its counters in
+TOPK, TOPK_LOG = "VERITY_DSA_TOPK", "VERITY_DSA_TOPK_LOG"
+#: what a job's replay step leaves in OUT of the engine its replay ran (`replay_ran`)
+REPLAY_ENGINE = "replay_engine.json"
 
 
 def default_arms() -> tuple[str, str, str]:
@@ -132,10 +151,81 @@ def last_line(log: Path) -> str | None:
 
 def replay_state(replay_dir: Path, expected: bool) -> dict:
     """Whether the replay ended (it wrote replay.json), and where it did not, the last line of its log, which the
-    benchmark's runner keeps beside its directory."""
-    log = replay_dir.with_name(replay_dir.name + ".log")
+    benchmark's runner keeps beside its directory; and what its engine ran under, where the job's replay step left
+    that there (`REPLAY_ENGINE`)."""
+    log, engine = replay_dir.with_name(replay_dir.name + ".log"), replay_dir.with_name(REPLAY_ENGINE)
     return {"expected": expected, "ended": (replay_dir / "replay.json").is_file(), "log": str(log) if log.is_file() else None,
-            "last_line": last_line(log)}
+            "last_line": last_line(log), "engine": json.loads(engine.read_text()) if engine.is_file() else None}
+
+
+# ------------------------------------------------------------------------------------------- the replay's engine
+
+def arm_env(arm: str, private: Path) -> dict[str, str]:
+    """An arm's own environment (`serve_tax.Arm.env`), the files it keeps on the node under ``private``; empty for an
+    arm the benchmark does not define."""
+    a = S.ARMS.get(arm)
+    return {k: v.replace(S.PRIVATE, str(private)) for k, v in a.env.items()} if a else {}
+
+
+def replay_env(arm: str, kept: Path, path: str = "") -> dict[str, str]:
+    """What a replay of ``arm``'s window runs under, beside the job's own environment, so that its engine is the
+    served one's: the arm's own vLLM general plugins (`serve_tax.Arm.general`: the canonical DSA top-k's), declared in
+    the site ``kept``/site and on the path with their directories ahead of ``path``, and the arm's environment, the
+    files it keeps under ``kept``/private. The benchmark's own plugin is not among them: the replay records its own
+    steps. Empty for an arm with neither, whose replay runs in the job's environment as it is."""
+    a = S.ARMS.get(arm)
+    if a is None or not (a.general or a.env):
+        return {}
+    env = arm_env(arm, kept / "private")
+    if a.general:
+        site = kept / "site"
+        info = site / "verity_prod_repro-0.0.dist-info"
+        info.mkdir(parents=True, exist_ok=True)
+        (info / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-prod-repro\nVersion: 0.0\n")
+        (info / "entry_points.txt").write_text("[vllm.general_plugins]\n" + "".join(f"{e}\n" for e, _ in a.general))
+        env["PYTHONPATH"] = os.pathsep.join([str(site), *(str(ROOT / d) for _, d in a.general), *([path] if path else [])])
+    return env
+
+
+def plugins_load(arm: str, env: dict[str, str]) -> str | None:
+    """Why one of ``arm``'s own general plugins doesn't load in this interpreter under ``env``, as the benchmark checks
+    an arm's before its server starts (vLLM logs a plugin whose import fails and runs on without it); None where each
+    loads."""
+    names = [e.split("=")[0].strip() for e, _ in S.ARMS[arm].general]
+    code = ("import sys\nfrom importlib.metadata import entry_points\n"
+            "found = {e.name: e for e in entry_points(group='vllm.general_plugins')}\n"
+            "for name in sys.argv[1:]:\n    found[name].load()\n")
+    p = subprocess.run([sys.executable, "-c", code, *names], env={**os.environ, **env}, capture_output=True, text=True)
+    return (p.stderr.strip().splitlines() or ["no output"])[-1] if p.returncode else None
+
+
+def topk_counters(d: Path | None) -> dict | None:
+    """The canonical top-k's counters over the processes that kept theirs in ``d`` (`dsa_topk.log_to`: a file a
+    process, written every few thousand calls and at its exit): the processes, the calls of the indexer's top-k, the
+    canonicalizing launches, and the rows rewritten, those with a tie at the k-th key and those bisected. None where
+    no process kept any."""
+    recs = [json.loads(f.read_text()) for f in sorted(d.glob("dsa_topk.*.json"))] if d and d.is_dir() else []
+    if not recs:
+        return None
+    rows = Counter()
+    for r in recs:
+        for dev in r["rows"].values():
+            rows.update(dev)
+    return {"processes": len(recs), "calls": sum(sum(r["calls"].values()) for r in recs),
+            "launches": sum(sum(r["launches"].values()) for r in recs), "rows": dict(rows)}
+
+
+def replay_ran(arm: str, kept: Path, private: Path | None) -> dict:
+    """What the replay's engine ran under (`replay_env`): the arm's own plugins and environment, and where that turns
+    the canonical top-k on, its counters as the replay's processes kept them and as serving's did, where the job kept
+    the arm's files (``private``, the benchmark's PRIVATE: an arm's are under its name)."""
+    a = S.ARMS.get(arm)
+    env = arm_env(arm, kept / "private")
+    served = arm_env(arm, private / arm) if private else {}
+    return {"arm": arm, "plugins": [e for e, _ in a.general] if a else [], "env": env,
+            "topk": {"replay": topk_counters(Path(env[TOPK_LOG])),
+                     "served": topk_counters(Path(served[TOPK_LOG])) if served else None,
+                     "served_kept": bool(private)} if env.get(TOPK) and env.get(TOPK_LOG) else None}
 
 
 # ------------------------------------------------------------------------------------------------------- the settings
@@ -296,6 +386,19 @@ def first_step(w: dict, replay_dir: Path, step: int | None) -> dict | None:
             "replayed": None if mine is None else only(mine, served), "replay_kept_steps": kept is not None}
 
 
+def past_topk(w: dict, checkpoint: str | None, differing: list[dict]) -> dict | None:
+    """The requests of a window whose prompt and served ids together pass the keys the model's DSA indexer's top-k
+    keeps (`INDEX_TOPK` of the checkpoint's config.json), and how many of the differing ones are among them: past
+    that many keys attention reads the ones the top-k selected. None for a model with no such top-k, or where this
+    machine has no config.json of the checkpoint."""
+    f = Path(checkpoint) / "config.json" if checkpoint else None
+    k = json.loads(f.read_text()).get(INDEX_TOPK) if f and f.is_file() else None
+    if not isinstance(k, int):
+        return None
+    past = {r["engine_id"] for r in w["requests"] if len(r["prompt_ids"]) + len(r["served"]) > k}
+    return {"keys": k, "requests": len(past), "differing": sum(d["request"] in past for d in differing)}
+
+
 def tokens(out: Path, ours: str, load: str, rep: int, replay_dir: Path, state: dict) -> dict:
     """The tokens line: the served window of ``ours``'s pass ``load`` rep ``rep`` against the tokens its replay kept.
     Not measured without a replay, where the replay is of another window, or where the window can't be read back.
@@ -307,8 +410,8 @@ def tokens(out: Path, ours: str, load: str, rep: int, replay_dir: Path, state: d
         if state["expected"]:
             return not_measured(f"the replay did not end (no replay.json in {replay_dir})" + (
                 f"; its log ends: {state['last_line']} ({state['log']})" if state["log"] else "; it left no log"))
-        return not_measured("no replay ran" + (": a pass sent by vLLM's client keeps neither its prompts' ids nor the "
-                                               "served ids, so the replay has no window to rebuild"
+        return not_measured("no replay ran" + (": none was asked for (--replay PASS names the pass of vLLM's client to "
+                                               "re-run, from an arm that keeps each request's ids)"
                                                if meta.get("client") == S.BENCH else f" (no replay.json in {replay_dir})"))
     rec, run = json.loads((replay_dir / "replay.json").read_text()), meta.get("run_id")
     of = (Path(rec["arm_dir"]).name, rec["load"], rec["rep"], rec.get("served_run_id"))
@@ -346,6 +449,7 @@ def tokens(out: Path, ours: str, load: str, rep: int, replay_dir: Path, state: d
             "cache_hits": {"requests": len(hits), "tokens": sum(hits.values()), "longest": max(hits.values(), default=0)},
             "sampling": [{"temperature": t, "top_p": p, "seeded": seeded, "requests": k}
                          for (t, p, seeded), k in sorted(sampling.items(), key=lambda x: -x[1])],
+            "past_topk": past_topk(w, meta.get("checkpoint"), diff),
             "window": {"arm": ours, "load": load, "rep": rep, "run": run, "chosen": WINDOW},
             "served_mode": rec["served_mode"], "replay_mode": rec["mode"], "replay_run": rec.get("run_id"),
             "served_window_s": rec["served_window_s"], "replay_wall_s": rec["replay_wall_s"],
@@ -387,6 +491,7 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             return not_measured(f"{stock} and {ours} share no rung or no rep of load {load}")
         noise = S.serving_cost(ref, twin, load, c["rung"]) if twin else None
         how = {"client": S.BENCH, "rung": c["rung"], "reps": c["reps"], "saturated": c["saturated"],
+               "sessions": bool(getattr(S.LOADS.get(load), "sessions", False)),
                "by": "the paired ratio of output tokens a second over reps at one rung (serve_tax.serving_cost)"}
         c = {k: c[k] for k in ("value", "ci95") if k in c}
     else:
@@ -657,6 +762,35 @@ def _advice(v: dict) -> list[str]:
             f"  the trace: {v['trace']}; stop ids {','.join(map(str, v['stops']))} ({v['stops_by']})"]
 
 
+def _engine(e: dict | None) -> list[str]:
+    """What the replay's engine ran under, and where that is the canonical top-k, what its counters say of the
+    replay's processes and of serving's: a lower bound, since a process keeps them every few thousand calls and at
+    its exit."""
+    if e is None:
+        return []
+    if not e["plugins"] and not e["env"]:
+        return [f"  the replay's engine: the job's own environment ({e['arm']} turns nothing on in its engine beside its record)"]
+
+    def one(c: dict) -> str:
+        rows = c["rows"]
+        return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
+                f"calls of the indexer's top-k, {rows.get('rows_long', 0):,} rows past its keys rewritten "
+                f"({rows.get('rows_tied', 0):,} with a tie at the last key kept, {rows.get('rows_bisected', 0):,} bisected)")
+
+    names = ", ".join(x.split("=")[0].strip() for x in e["plugins"])
+    env = ", ".join(f"{k}={v}" for k, v in e["env"].items() if k != TOPK_LOG)
+    lines = [f"  the replay's engine: under {e['arm']}'s own changes to the engine: "
+             + "; ".join(x for x in (f"the vLLM plugin{'' if len(e['plugins']) == 1 else 's'} {names}" if names else "", env) if x)]
+    t = e.get("topk")
+    if t:
+        lines += ["  the canonical top-k in the replay: "
+                  + (one(t["replay"]) if t["replay"] else "NO process kept its counters: nothing shows it ran there"),
+                  "  the canonical top-k while serving: "
+                  + (one(t["served"]) if t["served"] else "NO process kept its counters: nothing shows it ran there"
+                     if t["served_kept"] else "its counters were not kept (the job named no PRIVATE directory)")]
+    return lines
+
+
 def text(r: dict) -> str:
     a, t, c, ran = r["arms"], r["tokens"], r["cost"], r["ran"]
     stock, ours = a["stock"], a["ours"]
@@ -677,6 +811,7 @@ def text(r: dict) -> str:
                                                     ": it left no log, so it did not start"))
     else:
         lines.append("  the replay: none was asked for")
+    lines += _engine(rp.get("engine"))
     lines += [f"settings of {ours}, with {stock}'s beside:",
               _setting("prefix caching", "prefix_caching", r),
               _setting("speculative decoding", "speculative_decoding", r),
@@ -697,13 +832,18 @@ def text(r: dict) -> str:
             + (f"{h['requests']:,} requests began from a prefix-cache hit, the longest {h['longest']:,} tokens"
                if h["requests"] else "no request of the window began from a prefix-cache hit"),
             f"  served {t['served_mode']}, replayed {t['replay_mode']}; the window's requests: {_sampling(t)}",
+            *([f"  {k['requests']:,} of the window's requests passed {k['keys']:,} ids of prompt and output, past which "
+               "attention reads the keys the DSA indexer's top-k selects"
+               + (f"; {k['differing']:,} of the {t['requests_differing']:,} differing requests are among them"
+                  if t["requests_differing"] else "")] if (k := t.get("past_topk")) else []),
             f"  the window: {t['window']['chosen']}"]
     if not c["measured"]:
         lines.append(f"cost: not measured: {c['why']}")
     else:
         how, noise = c["how"], c["noise_floor"]
         bench = how["client"] == S.BENCH
-        at = (f"at concurrency {how['rung']}, where stock's rungs {'show' if how['saturated'] else 'do NOT show'} it saturated"
+        at = (f"at {how['rung']} users" if how.get("sessions") else f"at concurrency {how['rung']}") if bench else ""
+        at = (f"{at}, where stock's rungs {'show' if how['saturated'] else 'do NOT show'} it saturated"
               if bench else f"at {how['rate']:g} requests a second, which stock did not keep up with")
         reps = f"{how['reps']} paired rep{'' if how['reps'] == 1 else 's'}" if bench else f"{how['reps'][0]} and {how['reps'][1]} reps"
         lines += [
@@ -731,6 +871,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("arms", help="the arms a job serves by default: stock, stock again, ours")
+    for name, what in (("replay-env", "what the replay of an arm's window runs under beside the job's environment, NAME=VALUE a line"),
+                       ("replay-ran", "write OUT/replay_engine.json: what the replay's engine ran under")):
+        q = sub.add_parser(name, help=what)
+        q.add_argument("--ours", required=True)
+        q.add_argument("--kept", type=Path, required=True, help="the replay step's directory on the node, outside the run's")
+    q.add_argument("--private", type=Path, help="where the job's arms kept their own files (the benchmark's PRIVATE)")
+    q.add_argument("--out", type=Path, required=True)
     p = sub.add_parser("report", help="the settings and the three lines of a finished job's out/")
     p.add_argument("out", type=Path)
     stock, again, ours = default_arms()
@@ -752,6 +899,17 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "arms":
         print(" ".join(default_arms()))
+        return 0
+    if a.cmd == "replay-env":
+        env = replay_env(a.ours, a.kept, os.environ.get("PYTHONPATH", ""))
+        why = plugins_load(a.ours, env) if env else None
+        if why:
+            print(f"prod_repro: a vLLM general plugin of {a.ours} doesn't load in the replay's environment: {why}", file=sys.stderr)
+            return 2
+        print("".join(f"{k}={v}\n" for k, v in env.items()), end="")
+        return 0
+    if a.cmd == "replay-ran":
+        (a.out / REPLAY_ENGINE).write_text(json.dumps(replay_ran(a.ours, a.kept, a.private), indent=1))
         return 0
     r = report(a.out, a.stock, a.ours, a.again or None, a.load, a.rep, a.replay, a.target, a.replayed, a.expect_replay,
                a.advice_trace, a.advice_stops)
