@@ -1407,6 +1407,17 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     if stream is None:
         result = V.audit_record(rec, receipt, lean_draw, rec["law"], sorted(proved), n_inst, statement, verdicts,
                                 a.delta, sessions=sessions, served=sorted(served), session_roots=session_roots)
+        if os.environ.get("SC_PROBE_REGISTERED") and name == "honest":  # a probe, not for landing
+            import probe_registered
+            import traceback
+            try:
+                got = probe_registered.run(M, pg, members, rec, receipt, lean_draw, sorted(proved), n_inst, statement,
+                                           verdicts, a.delta, sessions, sorted(served), session_roots, want, law,
+                                           table, leaf_layer, win, out)
+                log(f"probe-registered: record {json.dumps({k: [v['accepted'], v['registered'] and v['registered'].get('wrong')] for k, v in got['record'].items()})}")
+                log(f"probe-registered: registration {json.dumps({k: (v or {}).get('codes', v) for k, v in got['registration'].items()}, default=str)[:3500]}")
+            except (Exception, SystemExit):  # noqa: BLE001  the probe never fails the round
+                log(f"probe-registered: failed: {traceback.format_exc()[-3000:]}")
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": n_inst, "served": sorted(served),
