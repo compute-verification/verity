@@ -65,8 +65,8 @@ SYMBOLS = {"n_arrived": "decisions", "arrived": "decisions", "n_hits": "hits", "
 CLASSES = {"hits": ("hits",), "admission": ("decisions", "order"), "terminator": ("finish",),
            "output lengths": ("output_len",), "resumes and lag": ("resumes", "lag"), "segment end": ("segment_end",)}
 
-#: the cap (`window_code.Caps`) on each segment field's count a window
-_CAP = {"decisions": "arrived", "order": "order", "hits": "hits", "resumes": "resumes", "lag": "lag"}
+#: the field of `window_code.Caps` that bounds each segment field's count a window
+_BOUND = {"decisions": "arrived", "order": "order", "hits": "hits", "resumes": "resumes", "lag": "lag"}
 
 
 class Rule(NamedTuple):
@@ -137,18 +137,18 @@ def where(rule: str) -> tuple[str, int]:
 
 def closed(reg: Registered) -> dict[str, tuple[str, ...]]:
     """The fields no window of the registration can charge, each with the rules (`RULES`' keys) that hold it at 0: a
-    segment's field whose count the registered caps hold at 0, the segment's end where they hold every count there,
+    segment's field whose count the registered bounds hold at 0, the segment's end where they hold every count there,
     and the length terms where the registration sends none."""
-    caps, tick = V.book_of(reg).caps, reg.tick is not None
+    bounds, tick = V.book_of(reg).caps, reg.tick is not None
     out: dict[str, tuple[str, ...]] = {}
-    for field, cap in _CAP.items():
-        if getattr(caps, cap):
+    for field, name in _BOUND.items():
+        if getattr(bounds, name):
             continue
-        ours = ("tick caps",) if cap in ("arrived", "order") else ("caps",)
+        ours = ("tick caps",) if name in ("arrived", "order") else ("caps",)
         held = ("tick book",) if reg.book is not None and tick else ours if reg.book is None else ()
-        more = ("refused",) if cap not in ("arrived", "order") else ("tick replay", "tick refused") if tick else ()
+        more = ("refused",) if name not in ("arrived", "order") else ("tick replay", "tick refused") if tick else ()
         out[field] = (*held, "one value", *more)
-    if len(out) == len(_CAP):
+    if len(out) == len(_BOUND):
         out["segment_end"] = ("no segment",)
     if not reg.send_lengths:
         out["output_len"] = out["finish"] = ("no lengths",)

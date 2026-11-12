@@ -106,7 +106,7 @@ def test_under_the_tick_only_the_lengths_are_charged(asy):
 
 def test_without_the_tick_the_admission_is_charged():
     """The same run registered without the tick: its decisions are charged, each window's segment ends in the
-    termination's 2 bits, and no window sends a hit, a resume or a lag bit, which v1's own caps hold at 0. A book with
+    termination's 2 bits, and no window sends a hit, a resume or a lag bit, which v1's own bounds hold at 0. A book with
     room for hits charges their count even at none, so there the hits aren't 0 by construction."""
     cases = registrations(False)
     for name in ("plain", "plain, fit book"):
