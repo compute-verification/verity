@@ -32,7 +32,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.commitments.rowleaf import bit_row
 
 __all__ = ["OK_ROW", "PORT", "SALT_BYTES", "SALT_TAG", "WORD_BITS", "Constant", "FewTicks", "binding", "committed",
-           "constants", "held", "known", "members", "ok_port", "salt", "set_of"]
+           "constant", "constants", "held", "known", "members", "ok_port", "salt", "set_of"]
 
 #: the ok row the verifier accepts: a proof block's one output bit, 1, in its one word
 OK_ROW = (1,)
@@ -104,17 +104,20 @@ class FewTicks(ValueError):
         super().__init__(f"T = {T}: a scan has at least two ticks, its first bucket and its last")
 
 
+def constant(name: str, template: str, n: int) -> Constant:
+    """The constant of the member `name` of `n` proof blocks of `template` (`ScanOk.constOf`): its port
+    ``<name>/o0``, its proof blocks' count, and the frame domain and root of its ok rows."""
+    tree = committed(template, n)
+    return Constant(f"{name}/{PORT}", int(n), ADV.domain(tree.binding, n).domain_id.hex(), tree.root.hex())
+
+
 def constants(T: int) -> tuple[Constant, ...]:
-    """Each member's constant at the schedule's `T` (`members`), in order: what one period check computes once. A
-    `T` below 2 is refused (`FewTicks`): its bucket 0 would be the scan's first and its last, and no scan is staged
-    with such a member."""
+    """Each member's constant at the schedule's `T` (`members`, `constant`), in order: what one period check computes
+    once. A `T` below 2 is refused (`FewTicks`): its bucket 0 would be the scan's first and its last, and no scan is
+    staged with such a member."""
     if int(T) < 2:
         raise FewTicks(int(T))
-    out = []
-    for name, template, n in members(T):
-        tree = committed(template, n)
-        out.append(Constant(f"{name}/{PORT}", n, ADV.domain(tree.binding, n).domain_id.hex(), tree.root.hex()))
-    return tuple(out)
+    return tuple(constant(*m) for m in members(T))
 
 
 def ok_port(port: object) -> bool:
