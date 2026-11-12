@@ -1,7 +1,7 @@
 # The slowdown calculator's older name where prose says it: what `tools/move/rename.py --map
-# tools/move/slowdown_prose_map.toml` renames, on a tree `slowdown_calculator_names_map.toml` has run on. The calculator
-# was called "rho" after the symbol its number had; the number is the slowdown (GLOSSARY.md, Older names), and the
-# package that computes its lower bound is the slowdown calculator.
+# tools/move/slowdown_prose_map.toml` renames, on a tree `slowdown_calculator_map.toml`'s move has run on. The
+# calculator was called "rho" after the symbol its number had; the number is the slowdown (GLOSSARY.md, Older names),
+# and the package that computes its lower bound is the slowdown calculator.
 #
 # This move renames prose only (`scope = "prose"`): a word in a comment, a docstring or Markdown's text, never in code, a
 # string, backticks or a data file, so it moves no path, renames no declaration, leaves every lock and pin as it is, and

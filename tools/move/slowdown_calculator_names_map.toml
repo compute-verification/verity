@@ -5,11 +5,10 @@
 # - Its outputs and their keys: `rho.md` and `rho.json` are `slowdown.md` and `slowdown.json`, and the keys `"rho"` and
 #   `"declared_rho"` of the record and of the figures' data are `"slowdown"` and `"declared_slowdown"`. Nothing outside
 #   the package reads either file or key.
-# - The references the move's tools don't follow: `HERE.parent / "rho"` in the runner that puts the calculator on
-#   `sys.path`, its directory among the trees with an import root of their own (`tests/test_boundaries.py`), its
-#   directory where `AGENTS.md` writes it without its root, `rho/params.py` in a comment of the circuit properties'
-#   suite, a path from the calculator's directory that its move keeps there ([rewrite] keep_in), and its modules where
-#   a docstring or a comment names one (`rho.theorem.multiple_bound`, `rho.instances`).
+# - The references the move's tools don't follow and no check reads: `rho/params.py` in a comment of the circuit
+#   properties' suite, a path from the calculator's directory that its move keeps there ([rewrite] keep_in), and its
+#   modules where a docstring or a comment names one (`rho.theorem.multiple_bound`, `rho.instances`). The three a check
+#   reads went with the move (`slowdown_calculator_refs_map.toml`).
 # - The calculator named "rho" in the benchmarks' prose: "rho's" is "the slowdown calculator's".
 # What stays: the board's key `"rho"` (`nci.search`'s, which the calculator's `tests/test_attacks.py` reads and no row
 # here names), every `rho` that is a Python name (`slowdown_python_map.toml`), the symbol ρ, the red team's codec, whose
@@ -27,18 +26,6 @@ words = { "rho.md" = "slowdown.md", "rho.json" = "slowdown.json", "declared_rho"
 files = ["verity/protocols/inference_only/slowdown/run.py", "verity/protocols/inference_only/slowdown/slowdown/figures.py",
          "verity/protocols/inference_only/slowdown/tests/test_analysis.py"]
 words = { '"rho"' = '"slowdown"', "'rho'" = "'slowdown'" }
-
-[[words_in]]
-files = ["verity/protocols/inference_only/nci/statement.py"]
-words = { 'HERE.parent / "rho"' = 'HERE.parent / "slowdown"' }
-
-[[words_in]]
-files = ["tests/test_boundaries.py"]
-words = { "protocols/inference_only/rho" = "protocols/inference_only/slowdown" }
-
-[[words_in]]
-files = ["AGENTS.md"]
-words = { "inference_only/rho/" = "inference_only/slowdown/" }
 
 [[words_in]]
 files = ["benchmarks/circuit_properties/pyproject.toml"]

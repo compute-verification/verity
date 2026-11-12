@@ -1,8 +1,10 @@
 # The slowdown calculator's place: what `tools/move/layout.py --map tools/move/slowdown_calculator_map.toml` moves and
 # rewrites. `verity/protocols/inference_only/rho/`, the calculator of the slowdown lower bound, is
 # `verity/protocols/inference_only/slowdown/`, and its package `rho` is `slowdown`. Only the directory, the package and
-# the references to them are rewritten: the names and prose that say rho for the slowdown are the next three maps'
-# (`slowdown_calculator_names_map.toml`, `slowdown_prose_map.toml`, `slowdown_python_map.toml`).
+# the references to them are rewritten. Three references name the directory in a way this tool doesn't follow, and the
+# tree doesn't pass the check until they do: `slowdown_calculator_refs_map.toml` renames them, staged right after this
+# map, and the two commits land as one pull request. The names and prose that say rho for the slowdown are the maps'
+# after it (`slowdown_prose_map.toml`, `slowdown_calculator_names_map.toml`, `slowdown_python_map.toml`).
 # Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
 
 [roots]

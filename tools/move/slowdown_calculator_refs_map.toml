@@ -1,0 +1,34 @@
+# The references to the slowdown calculator's directory that its move's tool doesn't follow: what `tools/move/rename.py
+# --map tools/move/slowdown_calculator_refs_map.toml` renames, on the tree `slowdown_calculator_map.toml`'s move made.
+# `layout.py` follows a path from the repository's root and a join from `Path(__file__)`; these three name the directory
+# another way, and the tree doesn't pass the check until they follow it, so this map is staged right after that one and
+# the two commits land as one pull request (`stage.py`: a move that needs both stages two maps):
+# - `HERE.parent / "rho"` in nci's `statement.py`, which puts the calculator on `sys.path`: left as it is, the module
+#   reads a directory that is gone, outside its suite's inputs;
+# - `protocols/inference_only/rho`, the directory from `verity/`, among the trees with an import root of their own in
+#   `tests/test_boundaries.py` (`SEPARATE`): left as it is, the calculator's files belong to no unit;
+# - `inference_only/rho/`, as `AGENTS.md` writes the directory without its root.
+# Each row is under a [[words_in]] that names its one file. The names and prose that say rho for the slowdown are the
+# next maps' (`slowdown_prose_map.toml`, `slowdown_calculator_names_map.toml`, `slowdown_python_map.toml`).
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/inference_only/nci/statement.py"]
+words = { 'HERE.parent / "rho"' = 'HERE.parent / "slowdown"' }
+
+[[words_in]]
+files = ["tests/test_boundaries.py"]
+words = { "protocols/inference_only/rho" = "protocols/inference_only/slowdown" }
+
+[[words_in]]
+files = ["AGENTS.md"]
+words = { "inference_only/rho/" = "inference_only/slowdown/" }
+
+[rewrite]
+# Never rewritten: the earlier moves and their maps, and lock files.
+exclude = ["tools/move/**", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = []
+strings = []
