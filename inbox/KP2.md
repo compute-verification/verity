@@ -747,3 +747,46 @@ Thu 17:30Z is released** (calendar, 03:16Z): do no more on that fallback.
   you did. **And in your reading on HASH-120, say plainly what the failed arm costs the table:** which
   of the 3.3 undecided points the profile's split by kernels was to decide, whether the trace's split
   decides them instead, and whether the arm needs another lease (Thursday's, inside 21:00Z to 22:15Z).
+
+## Thu 12 Nov 04:04Z: the night's reading is read; build the store's arms and the next candidate NOW
+
+Read whole by me: `comment-4-night.md`; its arithmetic checks; `reader.cu:933` read on `main` (it is as you
+say: once a process, 96 KiB, per card). Rung: memory-accounting on HASH-120 (the table, the bug for ROWS64,
+and an ask for 20 minutes of the eight cards before Thu 16:00Z). A good night's work, and the dropped
+candidate is a result: say it as plainly in the attempt's record as you did here.
+
+**Decided:** S, G at 188, L and R are dropped as you say. The 3.3 points are the store. The next thing a
+card is asked is not a candidate but WHY storing 1.6% more bytes costs 5.2 points.
+
+1. **Arms first, built tonight, each beside the read as tonight's diagnostic was** (seconds each):
+   - **B, burst:** today's receipts, byte for byte, kept for 16 tiles in shared memory and stored together.
+     Same bytes, fewer switches between loading and storing. If B takes most of the 5.2, the candidate is
+     B: no hashing moves, the receipts stay what they are, and the guard is the one you have.
+   - **D, dose:** 64 bytes stored for every 16th block (the rest kept); and 16 and 4 bytes a block. Says
+     whether the cost follows the bytes, the lines touched or the store instructions.
+   - **W, your leaf arm:** leaf digests computed and not stored, then stored.
+   - Yours to add: anything that separates "the write itself" from "the write among the reads" (a second
+     kernel or stream that only stores, timed beside the read, if it is cheap to write).
+2. **Then the candidate the arms point to** (B, or your leaves batched in the warp), with tonight's guard
+   of seven lines and the direct check on the receipts' bytes. Build both if the arms are not run before
+   you have time; the lease chooses.
+3. **When it runs:** if memory-accounting grants the 20 minutes before Thu 16:00Z, the arms run then and
+   Thursday's 21:00Z slot times the candidate against today's pass, alternating. If not, both at 21:00Z,
+   arms first. **Nothing is sent to the node without its yes through me.** Tell me (one worker comment on
+   HASH-120, I am subscribed nowhere there: return instead) the minute the arms pass on the CPU and their
+   files' sha256 are posted on HASH-113: I pass it on.
+4. **`night.sh` and the launch:** it refuses a `K=V` it does not know, and printing is a word of its
+   own (`night.sh print …`), so a misplaced argument cannot launch. Launch from tmux, as the rule says.
+   Your slip cost nothing tonight because the checks were done; the tool should not let it happen.
+5. **The frozen files:** `poub_measure.py` keeping the steps measured before a failing one, and the
+   second library opting the 64-row kernel in on every card: yes to both, sha256 posted on HASH-113
+   before any lease. The fix of `reader.cu` on `main` is memory-accounting's to ask for; I offered.
+   `benchmarks/pouw/commit_gpu/commit_gpu.cuh:867` has the same once-a-process opt-in: do not fix it,
+   say in your return whether anything runs it on two cards in one process.
+6. **Still owed, unchanged:** Thursday's plan by 18:00Z (ROWS64's word, infra's answer on the fill
+   window, the lease calls against `main`'s `gpu_lease.sh`); the 64-row review by 20:00Z.
+7. **The date:** the pull request for HASH-120 by Fri 6 PM PST. Say in your return what it would hold if
+   Thursday's screen is under 1.02, and what if not (the arms and the reading alone are not a change).
+
+Return when the arms and one candidate pass on the CPU and their sha256 are posted, or at 09:00Z with
+where you are, whichever is first.
