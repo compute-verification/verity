@@ -1,12 +1,15 @@
 """The streamed-label wipe (`streamed_wipe`): the label format, an honest session accepted at batch size 1 and refused
 above it, which the guarantee doesn't cover, a wrong or late batch that ends the session with no retry, the fill before
-any challenge, the tiers the fill covers, a verdict that fails closed, and the guarantee's bound at the deployed instance
-and against an exhaustive count on a tiny one.  Every clock is injected."""
+any challenge, the start mark the challenger holds before the fill and signs in its header, the start and end messages,
+a session of another format or with a mark that is not one refused by the reader, the tiers the fill covers, a verdict
+that fails closed, and the guarantee's bound at the deployed instance and against an exhaustive count on a tiny one.
+Every clock is injected."""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
 import itertools
+import json
 import math
 
 import pytest
@@ -15,6 +18,7 @@ import pous_test_signer as ts
 from pous_fakes import Clock
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
+from verity.protocols.pous.verifier import wipe_party as WP
 from verity.commitments.randomness import derive
 
 SECRET, SERVER = b"auditor secret", b"server-7"
@@ -26,9 +30,11 @@ def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
     return sw.WipeParams(N, K, batch, limit, (("gpu", 128 * sw.LABEL_BYTES), ("host-dram", 128 * sw.LABEL_BYTES)))
 
 
-def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None) -> sw.Challenger:
-    return sw.Challenger(SECRET, SERVER, SESSION, p or params(), signer or ts.TestSigner(b"wipe challenger", height=2),
-                         log=log or ts.session_log(), clock=clock or Clock(1_000_000), coin_secret=b"coins")
+def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None, mark_source=None,
+               server: bytes = SERVER) -> sw.Challenger:
+    return sw.Challenger(SECRET, server, SESSION, p or params(), signer or ts.TestSigner(b"wipe challenger", height=2),
+                         log=log or ts.session_log(), clock=clock or Clock(1_000_000), coin_secret=b"coins",
+                         mark_source=mark_source)
 
 
 def run(c: sw.Challenger, respond=None, *, clock: Clock | None = None, spend=lambda b: 20_000) -> sw.SignedWipe:
@@ -137,6 +143,207 @@ def test_one_session_an_id():
     challenger(log=log)
     with pytest.raises(mc.SessionLogError):
         challenger(log=log)
+
+
+CERTIFICATE = b"a start certificate, as the network certifier returned it"
+
+
+class Reads:
+    """A clock that counts its reads."""
+
+    def __init__(self, now: int = 1_000_000) -> None:
+        self.now, self.reads = now, 0
+
+    def __call__(self) -> int:
+        self.reads += 1
+        return self.now
+
+
+def stream(c: sw.Challenger, how: str, sent: list) -> None:
+    """The whole fill, by `fill` or by `fill_by`, each thing streamed noted in `sent`."""
+    if how == "fill":
+        for first, _ in c.fill(100):
+            sent.append(first)
+    else:
+        c.fill_by(lambda key, n: sent.append(n))
+
+
+def session(certificate: bytes | None = CERTIFICATE, server: bytes = SERVER):
+    """An honest session and its signer: with `certificate`, the challenger's mark source returns it."""
+    clock = Clock(1_000_000)
+    signer = ts.TestSigner(b"wipe challenger", height=2)
+    c = challenger(clock=clock, signer=signer, server=server,
+                   mark_source=None if certificate is None else lambda m: certificate)
+    return c, run(c, clock=clock), signer
+
+
+def signed_bytes(s: sw.SignedWipe) -> bytes:
+    """What a session signs, rebuilt here from the format: the header's 17 keys in sorted order, with no spaces."""
+    p = s.commitment.params
+    header = {"batch": p.batch, "batches": len(s.batches), "clock": "CLOCK_MONOTONIC ns", "egress_bits": s.egress_bits,
+              "ended": s.ended, "fill_end_ns": s.fill_end_ns, "fill_start_ns": s.fill_start_ns, "k": p.k,
+              "label_bytes": 64, "labels": p.labels, "limit_ns": p.limit_ns, "protocol": "verity-pous/streamed-wipe/v2",
+              "records_tree": "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1",
+              "server": s.commitment.server.hex(), "session": s.commitment.session.hex(),
+              "start_mark": s.start_mark.hex(), "tiers": [[t, b] for t, b in p.tiers]}
+    assert list(header) == sorted(header) and len(header) == 17
+    head = json.dumps(header, separators=(",", ":")).encode()
+    return hashlib.sha512(b"verity-pous/streamed-wipe/session/v2\0" + len(head).to_bytes(8, "big") + head
+                          + sw.records_root(s.commitment.session, s.batches)).digest()
+
+
+@pytest.mark.parametrize("how", ["fill", "fill_by"])
+def test_the_start_mark_is_held_before_the_fill(how):
+    """The mark source is called once, with the start message, before the fill's first clock read and before anything
+    is streamed."""
+    clock, sent, calls = Reads(), [], []
+
+    def source(m: bytes) -> bytes:
+        calls.append((m, clock.reads, list(sent)))
+        return CERTIFICATE
+
+    c = challenger(clock=clock, mark_source=source)
+    assert calls == [] and c.start_mark == b"" and clock.reads == 0
+    stream(c, how, sent)
+    assert calls == [(sw.start_message(c.commitment), 0, [])] and sent and clock.reads == 2
+    assert c.start_certificate == CERTIFICATE and c.start_mark == hashlib.sha512(CERTIFICATE).digest()
+
+
+@pytest.mark.parametrize("how", ["fill", "fill_by"])
+def test_a_mark_source_that_raises_streams_no_label(how):
+    clock, sent = Reads(), []
+
+    def source(m: bytes) -> bytes:
+        raise ConnectionError("the network certifier is away")
+
+    c = challenger(clock=clock, mark_source=source)
+    with pytest.raises(ConnectionError, match="is away"):
+        stream(c, how, sent)
+    assert sent == [] and clock.reads == 0 and c.filled == 0 and c.fill_start_ns is None and c.start_mark == b""
+    with pytest.raises(RuntimeError, match="once the fill is complete"):
+        c.challenge()
+
+
+@pytest.mark.parametrize("how", ["fill", "fill_by"])
+@pytest.mark.parametrize("nothing", [b"", None])
+def test_a_mark_source_that_returns_no_bytes_raises(how, nothing):
+    clock, sent = Reads(), []
+    c = challenger(clock=clock, mark_source=lambda m: nothing)
+    with pytest.raises(ValueError, match="returned no start certificate"):
+        stream(c, how, sent)
+    assert sent == [] and clock.reads == 0 and c.filled == 0 and c.fill_start_ns is None and c.start_mark == b""
+
+
+def test_the_signed_header_carries_the_certificates_digest():
+    """The header's `start_mark` is the SHA-512 of exactly the bytes the source returned, under the session's one
+    signature. One byte of the certificate changed is another mark and another message, and the first session's
+    signature doesn't verify over it."""
+    c, signed, signer = session()
+    trusted = {signer.public_key}
+    assert signed.start_mark == hashlib.sha512(CERTIFICATE).digest()
+    assert signed.message() == signed_bytes(signed)
+    assert sw.verdict(signed, c.commitment, trusted=trusted, schemes=ts.SCHEMES).accepted
+    for i in (0, len(CERTIFICATE) // 2, len(CERTIFICATE) - 1):
+        changed = bytes(b ^ (j == i) for j, b in enumerate(CERTIFICATE))
+        other = session(changed)[1]
+        assert other.start_mark == hashlib.sha512(changed).digest() != signed.start_mark
+        assert other.message() == signed_bytes(other) != signed.message()
+        assert dataclasses.replace(other, start_mark=signed.start_mark, signature=signed.signature) == signed
+        forged = dataclasses.replace(signed, start_mark=other.start_mark)
+        assert sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons == \
+            ("the signature does not verify",)
+    for longer in (CERTIFICATE + b"\0", CERTIFICATE[:-1]):
+        assert session(longer)[1].start_mark == hashlib.sha512(longer).digest() != signed.start_mark
+
+
+def test_a_session_with_no_mark_source_signs_an_empty_mark():
+    """With no mark source the header's `start_mark` is the empty string, and the session is judged as any other."""
+    c, signed, signer = session(None)
+    assert c.start_certificate == b"" and signed.start_mark == b"" and signed.to_json()["start_mark"] == ""
+    assert signed.message() == signed_bytes(signed)
+    assert sw.verdict(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES).accepted
+    marked = dataclasses.replace(signed, start_mark=hashlib.sha512(CERTIFICATE).digest())
+    assert sw.verdict(marked, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES).reasons == \
+        ("the signature does not verify",)
+
+
+def test_the_start_message_is_the_commitment():
+    """The start message is the tagged SHA-512 of the commitment's header alone, and one byte of the commitment
+    changed is another start message, which the mark source is handed."""
+    c = challenger()
+    head = ('{"batch":1,"clock":"CLOCK_MONOTONIC ns","k":40,"label_bytes":64,"labels":256,"limit_ns":1000000,'
+            '"protocol":"verity-pous/streamed-wipe/v2",'
+            '"records_tree":"verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1",'
+            f'"server":"{SERVER.hex()}","session":"{SESSION.hex()}",'
+            '"tiers":[["gpu",8192],["host-dram",8192]]}').encode()
+    start = sw.start_message(c.commitment)
+    assert start == hashlib.sha512(b"verity-pous/streamed-wipe/start/v1\0" + len(head).to_bytes(8, "big")
+                                   + head).digest()
+    flip = lambda b, i: bytes(x ^ (j == i) for j, x in enumerate(b))  # noqa: E731
+    others = [dataclasses.replace(c.commitment, server=flip(SERVER, 0)),
+              dataclasses.replace(c.commitment, server=flip(SERVER, len(SERVER) - 1)),
+              dataclasses.replace(c.commitment, session=flip(SESSION, 0)),
+              dataclasses.replace(c.commitment, session=flip(SESSION, 31)),
+              dataclasses.replace(c.commitment, params=params(limit=LIMIT + 1)),
+              dataclasses.replace(c.commitment, params=params(batch=2)),
+              dataclasses.replace(c.commitment, params=sw.WipeParams(N, K + 1, 1, LIMIT, params().tiers)),
+              dataclasses.replace(c.commitment, params=sw.WipeParams(N - 1, K, 1, LIMIT, params().tiers)),
+              dataclasses.replace(c.commitment, params=sw.WipeParams(N, K, 1, LIMIT, (("gpu", N * sw.LABEL_BYTES),)))]
+    assert len({start, *(sw.start_message(x) for x in others)}) == 1 + len(others)
+    seen = []
+    elsewhere = challenger(server=flip(SERVER, 0), mark_source=lambda m: seen.append(m) or CERTIFICATE)
+    next(elsewhere.fill(100))
+    assert seen == [sw.start_message(others[0])] and seen != [start]
+
+
+def test_the_end_message_is_the_signed_message_and_its_signature():
+    """The end message is the tagged SHA-512 of the session's signed message and its signature, each behind its length:
+    it changes with either."""
+    c, signed, _ = session()
+    m, sig = signed.message(), signed.signature
+    end = sw.end_message(signed)
+    assert end == hashlib.sha512(b"verity-pous/streamed-wipe/end/v1\0" + len(m).to_bytes(8, "big") + m
+                                 + len(sig).to_bytes(8, "big") + sig).digest()
+    assert len(end) == len(sw.start_message(c.commitment)) == 64 and end != sw.start_message(c.commitment)
+    r = signed.batches[0]
+    others = [dataclasses.replace(signed, signature=bytes([sig[0] ^ 1]) + sig[1:]),
+              dataclasses.replace(signed, signature=sig[:-1] + bytes([sig[-1] ^ 0x80])),
+              dataclasses.replace(signed, signature=sig[:-1]), dataclasses.replace(signed, signature=b""),
+              dataclasses.replace(signed, egress_bits=signed.egress_bits + 1),
+              dataclasses.replace(signed, fill_end_ns=signed.fill_end_ns + 1),
+              dataclasses.replace(signed, start_mark=b""),
+              dataclasses.replace(signed, start_mark=bytes([signed.start_mark[0] ^ 1]) + signed.start_mark[1:]),
+              dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt_ns=r.receipt_ns + 1),
+                                                   *signed.batches[1:]))]
+    assert len({end, *(sw.end_message(s) for s in others)}) == 1 + len(others)
+
+
+def test_the_reader_refuses_another_format_or_mark():
+    """`wipe_party.signed_of` reads a session back with its mark, empty or not; it refuses a v1 session by name, and a
+    `start_mark` of another length, in upper case, or that is no hex."""
+    for certificate in (CERTIFICATE, None):
+        signed = session(certificate)[1]
+        j = json.loads(json.dumps(signed.to_json()))
+        assert set(j) == {"commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches", "egress_bits",
+                          "scheme", "public_key", "signature"}
+        assert WP.signed_of(j) == signed
+        v1 = {k: v for k, v in j.items() if k != "start_mark"}
+        v1["commitment"] = j["commitment"] | {"protocol": "verity-pous/streamed-wipe/v1"}
+        for old in (v1, v1 | {"start_mark": j["start_mark"]}):
+            with pytest.raises(ValueError, match="a signed wipe is verity-pous/streamed-wipe/v2, not "
+                                                 "'verity-pous/streamed-wipe/v1'"):
+                WP.signed_of(old)
+        with pytest.raises(KeyError, match="start_mark"):
+            WP.signed_of({k: v for k, v in j.items() if k != "start_mark"})
+    mark = j["start_mark"] = hashlib.sha512(CERTIFICATE).hexdigest()
+    assert len(mark) == 128 and WP.signed_of(j).start_mark == bytes.fromhex(mark)
+    letter = next(i for i, x in enumerate(mark) if x in "abcdef")
+    for bad in (mark.upper(), mark[:letter] + mark[letter].upper() + mark[letter + 1:], mark[:-2], mark + "00",
+                mark[:64], "00", mark[:-1], mark[:-1] + "g", " " + mark[1:], mark[:-1] + " ", "0x" + mark[2:], None, 0,
+                bytes.fromhex(mark)):
+        with pytest.raises(ValueError, match="a start mark is 128 lowercase hex digits, or empty"):
+            WP.signed_of(j | {"start_mark": bad})
+    assert sw.mark_of("") == b"" and sw.mark_of(mark) == bytes.fromhex(mark)
 
 
 def test_the_declared_tiers_hold_the_fill():

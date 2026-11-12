@@ -13,19 +13,31 @@ c_j   = derive(coin_secret, COIN_DOMAIN, {server, session, n}).uniform(N, j)    
 ~~~
 
 `secret` is the auditor's for this server and wipe, `coin_secret` is fresh from the OS when the fill completes.  A
-session has four steps:
+session has five steps:
 
 1. **Open.** The challenger claims the session id in its `SessionLog` (one session an id) and publishes the
    `WipeCommitment`: the server, the session, `N`, `k`, the batch size, the deadline a batch and the declared memory tiers,
    whose sizes add up to at least the fill.
-2. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
+2. **Mark.** A challenger with a mark source hands it `start_message(commitment)`, which the source takes to the
+   network certifier, and gets the start certificate's bytes back.  It keeps them, and its start mark is their SHA-512.
+   It does not verify them: bytes that are no certificate cost the session, never the count.  It holds the mark before
+   it reads its clock for the fill, so no label is streamed before it.  With no source the start mark is empty.
+3. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
    `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.
-3. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
+4. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
-4. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
-   commitment, how the session ended, the fill's times and the egress the network certifier counted over the session
-   (`close`), and the records root is the frame-v3-sha512 root of the batch records.
+5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
+   commitment, how the session ended, the start mark, the fill's times and the egress the network certifier counted over
+   the session (`close`), and the records root is the frame-v3-sha512 root of the batch records.  `end_message(signed)`
+   is the end message, what the challenger hands the network certifier after its last read.
+
+The two marks are 64 bytes each, and neither is signed:
+
+~~~text
+start = SHA-512(START_TAG ‖ u64 len ‖ commitment header)              the commitment's header alone, as sorted JSON
+end   = SHA-512(END_TAG ‖ u64 len ‖ message ‖ u64 len ‖ signature)    the session's signed message and its signature
+~~~
 
 A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖
 answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
@@ -55,16 +67,20 @@ from verity.commitments.randomness import derive
 
 from verity.protocols.pous.device.memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
 
-PROTOCOL = "verity-pous/streamed-wipe/v1"
+PROTOCOL = "verity-pous/streamed-wipe/v2"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"
 COIN_DOMAIN = "verity/pous/streamed-wipe-coins/v1"
 LABEL_TAG = b"verity-pous/streamed-wipe/label/v1\0"
-SESSION_TAG = b"verity-pous/streamed-wipe/session/v1\0"
+SESSION_TAG = b"verity-pous/streamed-wipe/session/v2\0"
+START_TAG = b"verity-pous/streamed-wipe/start/v1\0"
+END_TAG = b"verity-pous/streamed-wipe/end/v1\0"
 RECORD_BINDING = b"verity-pous/streamed-wipe/batch-records/v1\0"
 RECORDS_TREE = "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
 RECORD_SCHEMA = "pous/streamed-wipe/batch-record/v1"
 LABEL_BYTES = DIGEST_BYTES["sha512"]
 LABEL_BITS = 8 * LABEL_BYTES
+MARK_BYTES = DIGEST_BYTES["sha512"]
+"""A start mark: the SHA-512 of the start certificate."""
 COMPLETE, LATE, WRONG = "complete", "late", "wrong"
 
 DEPLOYED_FILL_BYTES = 2_600_000_000_000
@@ -208,11 +224,13 @@ def records_root(session: bytes, batches: Sequence[BatchRecord]) -> bytes:
 
 @dataclass(frozen=True, slots=True)
 class SignedWipe:
-    """A closed session: its commitment, how it ended, the fill's times, the batch records, the egress the network
-    certifier counted over the session in bits, and the one signature over them."""
+    """A closed session: its commitment, how it ended, its start mark (the SHA-512 of the start certificate the
+    challenger held before the fill, empty when it had no mark source), the fill's times, the batch records, the egress
+    the network certifier counted over the session in bits, and the one signature over them."""
 
     commitment: WipeCommitment
     ended: str
+    start_mark: bytes
     fill_start_ns: int
     fill_end_ns: int
     batches: tuple[BatchRecord, ...]
@@ -222,32 +240,58 @@ class SignedWipe:
     signature: bytes
 
     def message(self) -> bytes:
-        return message(self.commitment, self.ended, self.fill_start_ns, self.fill_end_ns, self.batches, self.egress_bits)
+        return message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, self.batches,
+                       self.egress_bits)
 
     def to_json(self) -> dict[str, Any]:
         """The signed session as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Signed.ofJson`)."""
-        return {"commitment": self.commitment.to_json(), "ended": self.ended, "fill_start_ns": self.fill_start_ns,
-                "fill_end_ns": self.fill_end_ns, "batches": [r.to_json() for r in self.batches],
-                "egress_bits": self.egress_bits, "scheme": self.scheme, "public_key": self.public_key.hex(),
-                "signature": self.signature.hex()}
+        return {"commitment": self.commitment.to_json(), "ended": self.ended, "start_mark": self.start_mark.hex(),
+                "fill_start_ns": self.fill_start_ns, "fill_end_ns": self.fill_end_ns,
+                "batches": [r.to_json() for r in self.batches], "egress_bits": self.egress_bits, "scheme": self.scheme,
+                "public_key": self.public_key.hex(), "signature": self.signature.hex()}
 
 
-def message(commitment: WipeCommitment, ended: str, fill_start_ns: int, fill_end_ns: int,
+def mark_of(text: str) -> bytes:
+    """A start mark read back from its header field: 128 lowercase hex digits, or the empty string for no mark."""
+    if not isinstance(text, str) or len(text) not in (0, 2 * MARK_BYTES) or text.strip("0123456789abcdef"):
+        raise ValueError("a start mark is 128 lowercase hex digits, or empty")
+    return bytes.fromhex(text)
+
+
+def message(commitment: WipeCommitment, ended: str, start_mark: bytes, fill_start_ns: int, fill_end_ns: int,
             batches: Sequence[BatchRecord], egress_bits: int) -> bytes:
     """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`."""
-    head = json.dumps({**commitment.header(), "ended": ended, "fill_start_ns": fill_start_ns, "fill_end_ns": fill_end_ns,
-                       "batches": len(batches), "egress_bits": egress_bits}, sort_keys=True, separators=(",", ":")).encode()
+    head = json.dumps({**commitment.header(), "ended": ended, "start_mark": start_mark.hex(),
+                       "fill_start_ns": fill_start_ns, "fill_end_ns": fill_end_ns, "batches": len(batches),
+                       "egress_bits": egress_bits}, sort_keys=True, separators=(",", ":")).encode()
     return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_root(commitment.session, batches))
+
+
+def start_message(commitment: WipeCommitment) -> bytes:
+    """The start message, what the challenger hands the network certifier before the fill:
+    `SHA-512(START_TAG ‖ u64 len ‖ commitment header)`, the header the commitment's alone (`WipeCommitment.header()`),
+    as sorted JSON with no spaces, the way the signed header writes it.  Not signed."""
+    head = json.dumps(commitment.header(), sort_keys=True, separators=(",", ":")).encode()
+    return _sha512(START_TAG, len(head).to_bytes(8, "big"), head)
+
+
+def end_message(signed: SignedWipe) -> bytes:
+    """The end message, what the challenger hands the network certifier after its last read:
+    `SHA-512(END_TAG ‖ u64 len ‖ message ‖ u64 len ‖ signature)`, the session's signed message and its signature.
+    Not signed."""
+    m = signed.message()
+    return _sha512(END_TAG, len(m).to_bytes(8, "big"), m, len(signed.signature).to_bytes(8, "big"), signed.signature)
 
 
 class Challenger:
     """One streamed-label wipe of `server` under `session`, signed by `signer` (module docstring).  The session id goes
     into `log` before anything else.  `coin_secret` is sampled from the OS when the fill completes unless a test gives
-    it."""
+    it.  `mark_source` takes the start message and returns the network certifier's start certificate for it, as bytes;
+    with none the session's start mark is empty."""
 
     def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
                  log: SessionLog, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None,
-                 coin_secret: bytes | None = None) -> None:
+                 coin_secret: bytes | None = None, mark_source: Callable[[bytes], bytes] | None = None) -> None:
         if resolution_ns is None:
             resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
         if resolution_ns > CLOCK_RESOLUTION_NS:
@@ -256,6 +300,9 @@ class Challenger:
         log.claim(session)
         self.commitment = WipeCommitment(server, session, params)
         self.signer, self.clock, self._coin_secret = signer, clock, coin_secret
+        self._mark_source = mark_source
+        self.start_certificate = b""
+        self.start_mark = b""
         self.filled = 0
         self.fill_start_ns: int | None = None
         self.fill_end_ns: int | None = None
@@ -269,12 +316,25 @@ class Challenger:
     def params(self) -> WipeParams:
         return self.commitment.params
 
+    def _hold_start_mark(self) -> None:
+        """With a mark source: hand it the start message, keep the start certificate's bytes it returns, and set the
+        start mark to their SHA-512.  The bytes are not verified.  A source that returns none raises."""
+        if self._mark_source is None:
+            return
+        certificate = self._mark_source(start_message(self.commitment))
+        if not isinstance(certificate, (bytes, bytearray)) or not certificate:
+            raise ValueError("the mark source returned no start certificate: the fill waits for its bytes")
+        self.start_certificate = bytes(certificate)
+        self.start_mark = _sha512(self.start_certificate)
+
     def fill(self, chunk: int) -> Iterator[tuple[int, bytes]]:
-        """The labels in order, `chunk` at a time, as `(first index, bytes)`; once only."""
+        """The labels in order, `chunk` at a time, as `(first index, bytes)`; once only.  The start mark is held
+        before the clock is read, so before any label."""
         if self.fill_start_ns is not None:
             raise RuntimeError("the fill streams once")
         if chunk < 1:
             raise ValueError("a chunk holds at least one label")
+        self._hold_start_mark()
         self.fill_start_ns = self.clock()
         n = self.params.labels
         for start in range(0, n, chunk):
@@ -285,9 +345,11 @@ class Challenger:
 
     def fill_by(self, send: Callable[[bytes, int], Any]) -> Any:
         """`fill`'s labels streamed by `send(K, N)`, which returns once it has sent the last; once only. Returns what
-        `send` returns. The answers are checked against this module's `label` whatever `send` streamed."""
+        `send` returns. The answers are checked against this module's `label` whatever `send` streamed.  The start mark
+        is held before the clock is read, so before `send` is called."""
         if self.fill_start_ns is not None:
             raise RuntimeError("the fill streams once")
+        self._hold_start_mark()
         self.fill_start_ns = self.clock()
         out = send(self.key, self.params.labels)
         self.filled = self.params.labels
@@ -346,9 +408,11 @@ class Challenger:
         if self.signed is None:
             assert self.fill_start_ns is not None and self.fill_end_ns is not None
             batches = tuple(self.batches)
-            m = message(self.commitment, self.ended, self.fill_start_ns, self.fill_end_ns, batches, egress_bits)
-            self.signed = SignedWipe(self.commitment, self.ended, self.fill_start_ns, self.fill_end_ns, batches, egress_bits,
-                                     self.signer.scheme, self.signer.public_key, self.signer.sign(self.commitment.session, m))
+            m = message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, batches,
+                        egress_bits)
+            self.signed = SignedWipe(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns,
+                                     batches, egress_bits, self.signer.scheme, self.signer.public_key,
+                                     self.signer.sign(self.commitment.session, m))
         return self.signed
 
     def coins(self) -> tuple[int, ...]:
@@ -475,8 +539,8 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
 
 
 __all__ = ["COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
-           "EGRESS_UNIT_BITS", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "WRONG", "BatchRecord", "Challenger", "Prover",
-           "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for", "draw_indices",
-           "egress_units", "label", "labels", "log2_error", "message", "records_root", "retained_bits", "verdict",
-           "wipe_key"]
+           "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
+           "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord", "Challenger",
+           "Prover", "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for",
+           "draw_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of", "message",
+           "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]
