@@ -452,6 +452,22 @@ def test_the_node_refuses_a_sweep_on_another_card(tmp_path):
     assert json.loads((tmp_path / "r" / "result.json").read_text())["validation"]["status"] == "failed"
 
 
+def test_the_result_holds_a_callers_whole_entries_as_given_and_its_own_through_the_kit(tmp_path):
+    """Serving cost's benchmark hands `write_result` entries it wrote whole, with fields the kit's writer has no argument
+    for: they are held as given, and only the entries given by `measured` are the kit's."""
+
+    run_dir, out = tmp_path / "r1", tmp_path / "r1" / "out"
+    out.mkdir(parents=True)
+    whole = {"name": "cost", "value": None, "unit": "tokens/s", "run": "another", "rung": 3, "inputs": ["a load"]}
+    overhead_node.write_result(run_dir, "r1", out, "record.json", True, "said", {"door": "cost"}, [whole])
+    assert json.loads((run_dir / "result.json").read_text())["measurements"] == [whole]
+    overhead_node.write_result(run_dir, "r1", out, "record.json", True, "said", {"door": "cost"}, [whole],
+                               measured=[{"name": "C", "value": 512, "unit": "m"}])
+    held, own = json.loads((run_dir / "result.json").read_text())["measurements"]
+    assert held == whole and (own["name"], own["value"], own["run"], own["host"]) == ("C", 512, "r1", STAMP)
+    assert own["inputs"] == ["out/record.json"]
+
+
 def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_with_its_controls(tmp_path, scheme):
     """At each point the arm takes 1.5 times the busy SM-time of the fastest stock kernel by wall time and 1.875 times the
     one of least SM-time, and the host's enqueue, a tenth of each side's SM-time, counts above stock's: γ is 0.55 and
