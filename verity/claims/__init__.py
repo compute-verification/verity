@@ -172,7 +172,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # costs more than the claim at 512 bits, as does the reduction's operation-count floor, an estimate from operation
     # counts, unmeasured. At k = 1 with the payload known, F27 is such a completion, at a floor of half a GMP extended
     # GCD. In partial-completion form it is `Accounting.Assumptions.WorkHardness`
-    # (security/Definitions/Accounting/Assumptions/RateAudit.lean)
+    # (security/Definitions/Assumptions/Accounting.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
           "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
@@ -198,7 +198,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # what lets the stacking guarantees treat the blocks a pass reads as uniform when every appended block is keyed by
     # a live coin flipped after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
-    # (security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
+    # (security/Definitions/Assumptions/Accounting.lean); the seed's key alone lets a writer choose a block's
     # encoding, and each coin keys a block apart (verity/protocols/poub/verifier/tests/test_key_binding.py)
     Entry("key-binding", "assumption",
           "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
@@ -305,8 +305,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
           "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
           "conjectured"),
-    # `Pouw.PearlC.GGapPerCoin (W1.w1Priced dv salt)` (security/Definitions/Pouw/PearlC/W1Stop.lean): the one open
-    # hypothesis of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced);
+    # `Pouw.PearlC.GGapPerCoin (W1.w1Priced dv salt)` (security/Definitions/Assumptions/Pouw.lean): the one named
+    # conjecture of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced);
     # it implies the gap property GGap itself (Pouw.PearlC.W1Stop.gGap_of_withStop)
     Entry("pouw-gamma-per-coin", "assumption",
           "Pearl-C's gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "

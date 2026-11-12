@@ -1026,6 +1026,7 @@
   "Properties.Accounting",
   "CircuitRequirement",
   "Definitions.Accounting",
+  "Definitions.Assumptions",
   "Definitions.Claims",
   "Definitions.Hash",
   "Definitions.Pouw.Basic",

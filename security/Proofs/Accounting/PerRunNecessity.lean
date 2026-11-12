@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.PerRun
+public import Definitions.Assumptions.Accounting
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Game.Params
 import Mathlib.Analysis.SpecialFunctions.Pow.Real

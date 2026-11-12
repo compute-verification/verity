@@ -5747,9 +5747,15 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
   "Definitions.Pous.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions", "Definitions.Pous.Guarantees"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous",
+    "Definitions.Pous.Assumptions",
+    "Definitions.Assumptions.Pous",
+    "Definitions.Pous.Guarantees"
+   ],
    "except": [],
-   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses (the area's, and timed incompressibility in the assumptions home, Definitions.Assumptions.Pous), never over a proof",
    "sealed": true
   },
   "Definitions.Pous.Guarantees.P2": {
@@ -5884,9 +5890,15 @@
    "why": "a guarantee is stated over the bandwidth audit's game, never over a proof"
   },
   "Definitions.Accounting.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting", "Definitions.Accounting.Assumptions"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Pouw",
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions",
+    "Definitions.Assumptions.Accounting"
+   ],
    "except": [],
-   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof",
+   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof; the premises of the area that are named assumptions of the lock (W, the key's binding, the sketch's hash) are declared in the assumptions home (Definitions.Assumptions.Accounting), which the modules that list them re-export",
    "sealed": true
   },
   "Definitions.Claims": {
@@ -6012,12 +6024,13 @@
     "Definitions.Accounting",
     "Definitions.Nci",
     "Definitions.Pouw",
+    "Definitions.Pous.Model.Audit",
     "Definitions.WeightSecurity",
     "Definitions.WeightSecurity.Assumptions",
     "Definitions.Assumptions"
    ],
    "sealed": true,
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost model (Definitions.Pouw.Game.Defs, for Definitions.Assumptions.Pouw) and weight security's definitions and premises, never a guarantee or a proof"
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost models (Definitions.Pouw.Game.Defs and Pearl-C's Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw and Definitions.Assumptions.Accounting), PoUS's timed audit (Definitions.Pous.Model.Audit, for Definitions.Assumptions.Pous) and weight security's definitions and premises, never a guarantee or a proof"
   },
   "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted": {
    "imports": [

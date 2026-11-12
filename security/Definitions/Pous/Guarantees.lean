@@ -9,6 +9,7 @@ public import Definitions.Pous.Accounting.PubMeets
 public import Definitions.Pous.Accounting.GradedMeets
 public import Definitions.Pous.Accounting.Rebuild
 public import Definitions.Pous.Assumptions
+public import Definitions.Assumptions.Pous
 public import Definitions.Pous.Model.HashChain
 public import Definitions.Pous.Model.Dense
 public import Definitions.Pous.Model.Inc

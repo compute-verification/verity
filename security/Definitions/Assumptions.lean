@@ -6,6 +6,8 @@ public import Definitions.Core
 public import Definitions.Accounting
 public import Definitions.Nci.Cut
 public import Definitions.Nci.Formalism
+public import Definitions.Assumptions.Accounting
+public import Definitions.Assumptions.Pous
 public import Definitions.Assumptions.Pouw
 public import Definitions.Assumptions.WeightSecurity
 
@@ -19,8 +21,9 @@ hypothesis, part of what the guarantee says, which the lock lists under `domain`
 lock lists it under `open` with the issue that discharges it and its due date. An area moves an assumption of its own
 here once it is one of the real ones, into a module under this one that reads nothing private when the area's readers
 mustn't import the rest, since this one reads Nci: Flock's are `Definitions.Assumptions.Flock`, PoUW's hashless cost
-models `Definitions.Assumptions.Pouw` and weight security's model claim under faults
-`Definitions.Assumptions.WeightSecurity`, all of which this module re-exports.
+models and Pearl-C's gap property per coin `Definitions.Assumptions.Pouw`, memory and bandwidth accounting's
+`Definitions.Assumptions.Accounting`, PoUS's timed incompressibility `Definitions.Assumptions.Pous` and weight
+security's model claim under faults `Definitions.Assumptions.WeightSecurity`, all of which this module re-exports.
 -/
 
 @[expose] public section

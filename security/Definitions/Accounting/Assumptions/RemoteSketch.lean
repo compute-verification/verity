@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.Remote.Held
 public import Definitions.Accounting.Remote.Sketch
-import Mathlib.Basic.ENNReal.Real
+public import Definitions.Assumptions.Accounting
 
 /-!
 # What deriving the receipts' sketch bound assumes (trusted)
@@ -11,7 +11,8 @@ import Mathlib.Basic.ENNReal.Real
 trace over a session's outcomes (`Accounting.Remote.Sketch.Outcome`) from the session (`Accounting.Remote.Sketch.Session`)
 and these premises, each a named `Prop` taken as a hypothesis:
 
-* `Accounting.Assumptions.SketchHashRandom A ε`: the random-oracle premise (`random-oracle`). At every prover coin and
+* `Accounting.Assumptions.SketchHashRandom A ε` (declared in `Definitions.Assumptions.Accounting`, which this module
+  re-exports): the random-oracle premise (`random-oracle`). At every prover coin and
   store, the keys SHA-512 gives at the session's candidate seeds are within `ε` of uniform: no event of the keys is
   more than `ε` likelier than at uniform keys.
 * `KeyBudget A qtot`: across pass `j`'s candidate seeds the receipt-hash queries total at most `qtot j`, the hashes the
@@ -27,43 +28,6 @@ The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside L
 -/
 
 @[expose] public section
-
-namespace Accounting.Assumptions
-
-open Accounting.Remote.Sketch
-
-variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
-
-/-- `random-oracle` (the random-oracle ruling: PoUW only, each use a named premise; its use for the
-memory sketch is not yet ruled on). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
-uniform**: at every prover coin `b` and registered store `D`, no event `E` of the keys (each candidate seed's signs and
-receipt hash) is more than `ε` likelier at `A.keys b D x`, over SHA-512's outputs `x`, than at uniform keys, so the
-keys' law is within statistical distance `ε` of uniform:
-$$\Pr_x\big[E(\mathrm{keys}(b, D, x))\big] \le \Pr_\kappa\big[E(\kappa)\big] + \varepsilon.$$
-
-It is the one random-oracle step `SketchBoundSession` takes: the bound is derived over the model's coins
-(`Accounting.Remote.Sketch.ModelCoins`, each candidate's key uniform and independent of the prover's coins, the store and
-the other keys), and this premise carries it to the trace's outcomes, whose keys are SHA-512's, at a cost of `ε`. The
-signs are `S_i`, which `remote_bandwidth.receipts` expands from the seed by SHA-512, and the receipt hash is SHA-512
-keyed by the seed (`SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)`) read as a function of the block's index and sketch words.
-
-SHA-512 is one fixed function, and for it the premise is false in Lean at small `ε`: a fixed function's outputs are one
-family, not a spread of them (with `Hs` a point, `keys b D` takes one value). So it is a premise, read in the
-random-oracle model, and not a lemma. There `Hs` is SHA-512 sampled as a uniform function and `keys b D x` its outputs at
-the seeds the prover's run tries. Distinct seeds' receipt hashes and 256-bit sign keys
-`K = derive(seed_i, SIGN_DOMAIN, …)` are fresh queries, uniform and independent, chosen adaptively or not. The signs are
-`K.stream` rows, `k_s × 4096` bits expanded from `K`'s 256, so two candidates whose `K` collide share their signs, and
-exact uniformity (`ε = 0`) is false at two or more candidates. Off a collision the signs are fresh too, so the keys' law
-is within the collision's probability of uniform: over at most `Q + P` candidate seeds, at most `(Q + P)²/2^257`, the
-`ε` `SketchBoundDeployed` reads and `timing.sketch_failure`'s last term. The premise fails for a run that tries one seed
-under two candidates (their keys are equal, not independent): the model gives each candidate its own key, and
-`timing.sketch_failure` charges each candidate a compression of its own. -/
-def SketchHashRandom [Fintype Hs] (A : Session β Hs P N m h S L q ks G) (ε : ℝ) : Prop :=
-  ∀ (b : β) (D : Accounting.RateSketch.Data N m 0 Accounting.RateSketch.Sector)
-    (E : Keys P N m h ks G → Prop),
-    Pous.pr (fun x : Hs => E (A.keys b D x)) ≤ Pous.pr E + ENNReal.ofReal ε
-
-end Accounting.Assumptions
 
 namespace Accounting.Remote.Sketch.Assumptions
 

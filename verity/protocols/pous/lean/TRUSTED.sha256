@@ -11,6 +11,7 @@ b4325d3d238395398ac9b0951e1fa7d3a44c5349625ebfef00ac3167481a23ef  Grader/Registr
 82ef7424d2c5bc489d087a3db7bb72b3e9b8e48c75e669fad25b767e5a2f0a66  ../../../../security/Proofs/lake-manifest.json
 7da1a650e183252b7b361dcc355b023cab8a858e021b73f5cdd341c99d1b7873  ../../../../security/Definitions/Pous.lean
 004fecb2ad265eb15d7e55aef8350790d4eb66fe7e24038153637a8db8a5d066  ../../../../security/Definitions/Core/Game.lean
+df093a3513ff2230fe752de80fd24676c26ec5198db2cc930da4997290a4e73f  ../../../../security/Definitions/Assumptions/Pous.lean
 1f3066f54f873a4ce22cbd07956b486c8cb25d9b9de6785466248c742265b32d  ../../../../security/Proofs/Pous/Statements.lean
 3990519592c3bc12d2be58e66bd7f2f053e673be369bd28696f82c0df4495740  ../../../../security/Proofs/Pous/Sanity.lean
 a44731c6ea5ffbcbef0449ceeaf6852beb80e9436a42d077917fd53167fe7538  ../../../../security/Proofs/Pous/Prob.lean
@@ -27,7 +28,7 @@ a9ada0ad1c3aa3139111312de493f9b57fdd4258ec3f46316c9415e494cda188  ../../../../se
 efc099a2484e91d667c799bfdac96a13800048c215001f4dbbacd4da2b158bae  ../../../../security/Definitions/Pous/Claims/StreamedWipeServer.lean
 8fe9fa1a511b6e525fc66b0457d0b9e0247dfb40c2c16f285e43edf16c554bc2  ../../../../security/Definitions/Pous/Game/Oracle.lean
 0f377c79b87742d89ce374ade6e7a6a40da03c116e3c68028eabda21c5ba9c92  ../../../../security/Definitions/Pous/Game/Prob.lean
-a2acedfe69b1a73344b61872752184def8ff571e521635f1e8f9ac9bd09a2868  ../../../../security/Definitions/Pous/Guarantees.lean
+74558f13b386100653f6556357b095cefaa42b96d2805120d597aa290762b1b6  ../../../../security/Definitions/Pous/Guarantees.lean
 778673ba736da65843c8010d2b992d68dd8fbdbc9a6ce891a6353c3f3a3405f9  ../../../../security/Definitions/Pous/Guarantees/Obligation.lean
 86714bf3e727006b4c33f750ccdcfd99bbfe7339a0ff09228c09b60bf24024a5  ../../../../security/Definitions/Pous/Guarantees/P2.lean
 ed98fc49994f820253ad4dc068b246bed6cb037c34c9c5d77240c2de2d255633  ../../../../security/Definitions/Pous/Guarantees/StreamedWipe.lean
@@ -44,7 +45,7 @@ d4b0232ff5fd28a74d82b7ed495e1e088db8a475dcc881244e4c8ea926534527  ../../../../se
 7621ecad510c11f1f18425e373bbfce393a0278ed6dd466ece57fb5528af5c5a  ../../../../security/Definitions/Pous/Model/FreeBlocks.lean
 4f577d651f9099335d4fa1b74b700e947ad72ccf1b675e908a4bb09efc28e6f3  ../../../../security/Definitions/Pous/Model/Graded.lean
 740809aa2fc697d13034293b28001e1160af0d8c01ac12c8042f28635dbf6605  ../../../../security/Definitions/Pous/Model/HashChain.lean
-b615c4fb3575a19c0a23f4aa3b0a3d772d429961fae74e65fe1b83aeab3fc434  ../../../../security/Definitions/Pous/Model/Inc.lean
+17708253732d9c47c54164b864c21e1d1bb705df3f4c5237ae906f355ffbb850  ../../../../security/Definitions/Pous/Model/Inc.lean
 58a529f299155f24ae2f67057192035d930ed3d297ddea302090fccd242f2c09  ../../../../security/Definitions/Pous/Model/Invertible.lean
 04183b4a59cadc35452e13094f1f7194dad36b19908f08e2a1524f811365847b  ../../../../security/Definitions/Pous/Model/Labelling.lean
 1fab04cfbe04396672054dd0fc8e604fda4ace90358d2ff9d1932208b2487164  ../../../../security/Definitions/Pous/Model/M1.lean
