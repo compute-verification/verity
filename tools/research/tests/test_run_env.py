@@ -32,7 +32,8 @@ def test_the_default_is_the_cap_unless_the_environment_names_the_variable_and_a_
 def test_a_job_starts_with_onednn_held_off_amx_and_its_record_says_so(tmp_path, monkeypatch):
     monkeypatch.delenv(NAME, raising=False)
     assert _run(tmp_path / "runs") == (CAP, {NAME: CAP})
-    assert NAME not in dict(os.environ), "set for the workload: the runner's own environment is as it was"
+    names = set(os.environ)
+    assert NAME not in names, "set for the workload: the runner's own environment is as it was"
 
 
 def test_a_value_the_job_or_the_runners_environment_names_stays(tmp_path, monkeypatch):
@@ -43,7 +44,8 @@ def test_a_value_the_job_or_the_runners_environment_names_stays(tmp_path, monkey
     monkeypatch.setenv(NAME, "AVX512_CORE_VNNI")
     assert _run(tmp_path / "inherited") == ("AVX512_CORE_VNNI", {NAME: "AVX512_CORE_VNNI"})
     assert _run(tmp_path / "both", "--env", f"{NAME}=AVX2") == ("AVX2", {NAME: "AVX2"})
-    assert dict(os.environ)[NAME] == "AVX512_CORE_VNNI"
+    kept = dict(os.environ)[NAME]
+    assert kept == "AVX512_CORE_VNNI"
 
 
 def test_a_run_a_machine_claimed_gets_it_under_its_requests_env(tmp_path, monkeypatch):
@@ -86,4 +88,5 @@ def test_a_job_users_unit_gets_it_and_a_value_the_run_names_wins(tmp_path, monke
         passed = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--pass"]
         units.append((passed, jobuser.job_env(environ, passed)[NAME]))
     assert units == [([], CAP), ([NAME], "AVX2")]
-    assert NAME not in dict(os.environ)
+    names = set(os.environ)
+    assert NAME not in names

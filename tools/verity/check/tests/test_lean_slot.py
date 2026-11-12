@@ -387,7 +387,8 @@ def test_the_lean_audit_run_by_hand_with_build_takes_a_slot_of_pool_audit(slots,
     monkeypatch.setenv("LEAN_SLOTS", str(slots / "lean-slots"))
     held = [_hold(slots / "lean-audit-0.lock")]
     fd = audit.lean_slot(ROOT)
-    assert os.environ.pop(LS.HELD) == "audit/1" and fd is not None
+    slot = os.environ.pop(LS.HELD)
+    assert slot == "audit/1" and fd is not None
     os.close(fd)
     monkeypatch.setenv(LS.HELD, "check/0")
     assert audit.lean_slot(ROOT) is None                                 # nested: check's step or lean_changed holds one

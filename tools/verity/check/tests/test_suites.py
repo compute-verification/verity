@@ -140,7 +140,8 @@ def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_im
 def test_a_member_that_builds_but_declares_no_package_is_named(tmp_path, monkeypatch):
     _member(tmp_path, "odd", "odd", None)
     S = _suites(monkeypatch, tmp_path)
-    assert S.foreign({"odd": "odd"}, dict(os.environ)) == "odd's package from nowhere (its build configuration declares none)"
+    found = S.foreign({"odd": "odd"}, dict(os.environ))
+    assert found == "odd's package from nowhere (its build configuration declares none)"
     (tmp_path / "odd" / "src" / "odd").mkdir(parents=True)
     (tmp_path / "odd" / "src" / "odd" / "__init__.py").write_text("")       # hatch's default layout
     assert S.importable({"odd": "odd"}) == {"odd": "odd"}
