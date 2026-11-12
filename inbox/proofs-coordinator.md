@@ -76531,3 +76531,316 @@ Your 07:34Z message reached me through the shell hook [read].
 - **The `RecordAcross.lean` branch** does not rest on it: the branch was cut at 07:27Z, after it, and the run is of another commit [read].
 
 **Two executions of me.** Since this turn began there are two of me on this VM, in the one checkout [run: processes under the same daemon that I did not start, a tmux session `sd-tries`, and commits made here that I did not type]. The platform started the turn twice after the VM's restart at 07:25:57Z [guess]. The other one is ahead of me and is doing your 06:09Z task: it cut `cursor/proofs-stopdriver-families-ffc6` (merge `c0fc2a48ff`), committed the Lean change (`48c51c4d66`) and the driver's and the test's (`81804cf3ab`), ran the two tries, `r20261112-073240-b89c` of `Spot/RecordAcross.lean` and `r20261112-073241-25c7` of `Spot/Pieces.lean`, each "lean exit 0" and exit 0, and launched the stop audit's test file as `r20261112-073740-81db` [read: `git log` and its logs under `/tmp/sd`]. So that two of me do not write over each other: I, the one writing this, write nothing to that branch or its tree while it works and launch no run [run]; the entry on the families change is its entry; I read its two commits as a second reader, and if that read finds something I say so in one entry after its own [run: the read is under way]. Your 07:34Z message reached only me (the hook delivers once), so this entry is its answer and the other one's entry will not name `e0e3` [guess].
+
+## ACCOUNTS, Thu 12 Nov 07:41Z: the design is one value beside a protocol (`Core.Account`) and one function (`Account.rows`), written whole at `944c0750d4` and not yet compiled (its try is still waiting for a slot); no lock record moves; no reason found that the registration's head must be in the public output; a memory leaf's read rate: my reading is no new field
+
+Tags: [read] a file I read now, with place, line and commit (`origin/main` `d6075b75d289` unless another is named); [run] with the run id; [relayed]; [derived] with its steps; [guess]. Times are `date -u`.
+
+### What you can act on
+
+1. **The registration's head (your question (c), owed to network-accounting by 20:00Z): I found no reason it must be in the public output.** [derived, from the four reads in section 6(c)] Either place works for the rows and for a statement. One cost points to the public output for the protocols that sample, and it is a cost, not a need: their profile is the shared type `Core.Integrity`, so a head in the profile is a new field of a type 47 lock records read, 2 of them deployed; a key of the public output is the protocol's own. [read, section 6(c)]
+2. **None of the seven publishes the head today, so by your rule the rows function certifies nothing from them yet.** [read: each public output and profile, section 3] Each account's `head` is `none` until its protocol publishes one, and `rows` then holds its answers to no registration: every row reads "not audited: charged at capacity". [read: `Account.lean:400-406` at `944c0750d4`] This is the one thing every protocol must add before its row can carry a number; it is a new key, no rename.
+3. **A memory leaf's read rate: my reading is no new field.** [derived, section 5] memory-accounting's line with the field is not on MEM-279 as of 07:36Z (the newest comment is soundness's of 07:20:25Z). [read: MEM-279's eight newest comments, 07:22Z]
+   - HBM's rate is already registered: the device's sheet's `bw`, held exactly to the auditor's sheet. A view reads it with no new field, and my `Part.capacity` does. [read, section 5]
+   - A host's DRAM and a disk have no sheet, so a field on their leaf would be a number the prover states that nothing holds. The view leaves them with no registered rate: their row prints no capacity. [read, section 5]
+   - If you say yes: every site entry's digest changes, the site tag should move to v2, the sheet and genesis tags and the one pinned digest do not move, and 151 + 53 lock records read the spec's site module, 1 of them deployed, which does not read a leaf. [read, section 5]
+4. **A tick (your question (b)): Lean states its length nowhere, and my function takes it as an argument.** The smallest change is a constant in `CoreProtocol/Site.lean`; it moves no digest but does not fix the 1 Gbit/s step. Only a finer unit for `β` fixes the step, and that moves the site tag. If the site tag moves for any reason, both should go in that one move. [derived, section 6(b)]
+5. **A certifier's registered key (your question (a)): the registered string states no parameter set, and nothing but one string comparison reads it.** The smallest way is the scheme id as a prefix of the registered string; no code that compares changes and no tag moves. [read and derived, section 6(a)]
+6. **What does not fit the form as it is, for the leads to know before they write their values:** the certifier's and PoUW's spans are counts whose seconds are not in the output; PoUS and the wipe name no device, so at a site of more than one device their row is about the whole tier; no flow publishes which ticks its span covers, so two answers over the same ticks would both count as cover; the older bandwidth protocol publishes no span at all. [read, section 3]
+
+### 1. The type, as Lean text
+
+From `verity/protocols/interface/CoreProtocol/Account.lean` at `944c0750d4` on `cursor/proofs-accounts-e4bb` (not pushed yet), 590 lines with the rows function, the example protocol's value and 19 `#guard`s. [read] **It has not been compiled**: run `r20261112-071838-1772` (`verity lean try … --siblings --on auto`) was launched at 07:18Z and at 07:38Z still waits for a slot on vy-nebius-cpu-4. [run] The text below can change where Lean refuses it; the shape will not.
+
+```lean
+/-- Where an accepted answer holds a value: under a key of its public output, or of its profile. -/
+inductive Key where
+  | published (key : String)
+  | profile (key : String)
+  deriving DecidableEq, Repr
+
+/-- A part of the registered hardware an amount is about: the devices' compute, in tensor-core MACs; a tier's memory, in
+bits held; a tier's read rate, in bits read from its memory; a link, in bits sent over it. -/
+inductive Part where
+  | compute
+  | memory (tier : Tier)
+  | read (tier : Tier)
+  | link
+  deriving DecidableEq, Repr
+
+namespace Part
+/-- **The registered capacity** of the leaves `xs` of a part, at each reading of the registration it can be read at: a
+rate a tick for a flow, an amount for memory. Compute has two readings: `stated`, the registered sheets' own figures, and
+`bound`, the larger of those and the auditor's estimate, which is the device model's rate. A tier's read rate is its
+devices' sheets' `bw`; no sheet states one for memory under a host, so the list is empty there: the registration holds
+none. -/
+def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
+    (xs : List String) : List (String × Nat) :=
+end Part
+
+/-- A unit an amount is published in: its name, and how many of its part's unit (a bit, or a MAC of compute) one of it
+is. -/
+structure Measure where
+  name : String
+  base : Nat
+  deriving DecidableEq, Repr
+
+def bits : Measure := ⟨"bits", 1⟩
+def bytes : Measure := ⟨"bytes", 8⟩
+def mebibytes : Measure := ⟨"MiB", 8 * 2 ^ 20⟩
+def macs : Measure := ⟨"MACs", 1⟩
+
+/-- Which side of the capacity an amount bounds: the verified amount from below, or the free amount from above. -/
+inductive Side where
+  | verified
+  | free
+  deriving DecidableEq, Repr
+
+/-- When an amount holds: at a moment; over a span whose length the answer holds under `key`, as a count of steps of
+`seconds` seconds each (a list counts its entries); or over a span the answer does not state, which covers no tick. -/
+inductive Time where
+  | moment
+  | span (key : Key) (seconds : Ratio)
+  | unstated
+  deriving DecidableEq, Repr
+
+/-- How a period's error forms from its accepted answers' errors: summed, or stated once by the one answer of the
+period, which pools it. -/
+inductive Pool where
+  | sum
+  | once
+  deriving DecidableEq, Repr
+
+/-- What an answer holds when its check certifies nothing: an accepted answer that says so under a boolean key, or one
+whose amount is already at its safe end (nothing verified, or everything free), or no accepted answer at all, the check
+refusing. -/
+inductive Uncertified where
+  | flagged (key : Key)
+  | safe
+  | refused
+  deriving DecidableEq, Repr
+
+/-- **The form of one amount a protocol publishes**, and the part of the registered hardware it is about. `metric` names
+the amount among its protocol's; `place` is the key under which an answer names the location or the link it ran on, none
+when it is about the whole site. -/
+structure Amount where
+  metric : String
+  part : Part
+  place : Option Key := none
+  key : Key
+  unit : Measure
+  side : Side
+  time : Time
+  share : Option Key := none
+  error : Key
+  pool : Pool := .sum
+  capacity : Option Key := none
+  uncertified : Uncertified
+  unpriced : List String := []
+  deriving DecidableEq, Repr
+
+/-- A form `rows` reads: a moment exactly for memory, a share only beside a verified amount, and a unit that is not
+empty. -/
+def Amount.Formed (m : Amount) : Prop :=
+  (m.time = .moment ↔ m.part.flow = false) ∧ (m.share.isSome = true → m.side = .verified) ∧ 0 < m.unit.base
+
+/-- **What a protocol accounts for**: its id, the key under which an accepted answer names the registration's head (none
+while the protocol names no registration: `Account.rows` then holds its answers to none), and the form of each amount it
+publishes. -/
+structure Account where
+  protocol : String
+  head : Option Account.Key
+  amounts : List Account.Amount
+  deriving DecidableEq, Repr
+
+/-- A row's standing: an amount certified, an error of 1 or more ("no bound at this period"), or a resource no accepted
+answer covers ("not audited: charged at capacity"). -/
+inductive Status where
+  | certified
+  | noBound
+  | notAudited
+  deriving DecidableEq, Repr
+
+/-- **An accounting row**: the amount (`metric`) of a part at a place, at one reading of the registration; the period's
+row, or the row of its `session`-th accepted answer; how many accepted answers it reads; and the capacity, the verified
+and the free amounts in the part's unit, with the error and the terms it names and does not price. An amount is none
+where there is no number to print: no bound, or no registered capacity. -/
+structure Row where
+  metric : String
+  part : Part
+  place : String
+  reading : String
+  session : Option Nat := none
+  sessions : Nat := 0
+  status : Status
+  side : Option Side := none
+  capacity : Option Nat
+  verified : Option Nat
+  free : Option Nat
+  error : Ratio := ⟨0, 1⟩
+  unpriced : List String := []
+  deriving DecidableEq, Repr
+
+/-- **The accounting rows** of the site `S` registered at `head`, over a period of `ticks` ticks of `tick` seconds, from
+the protocols' `answers` read by their `accounts`: the rows of each amount at each place its answers name, then the rows
+of what none covers. `digest` and `A` are the registration's: the sheets' digest and the auditor, whose estimate
+compute's `bound` reading reads. -/
+def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (head : String) (tick : Figure)
+    (ticks : Nat) (accounts : List Account) (answers : List Answer) : List Row :=
+```
+
+How `rows` reads it [read: `Account.lean:277-433` at `944c0750d4`; the figures are the file's guards, desk-checked, not yet run]:
+
+- **An answer counts** only if it names the account's protocol, accepts, and holds the rows' `head` as a string under the account's `head` key.
+- **A flow** (compute, a read rate, a link) gets one row for the period at each reading of the capacity. Verified is the certified answers' amounts summed. Free is their amounts summed plus the capacity of the ticks no certified answer's span covers, and at most the capacity. The error is the answers' errors summed (`Pool.sum`), or the one answer's (`Pool.once`); two answers that each pool a period give error 1.
+- **An amount at a moment** (memory) gets one row for each accepted answer and one for the period: the least verified (or the most free) of its sessions, at their largest error, with the count of sessions.
+- **An error of 1 or more** gives `Status.noBound`: no verified and no free amount, and the error stays in the row.
+- **What no reading covers** gets a row "not audited: charged at capacity", verified 0, free the capacity; the capacity is empty where the registration holds none.
+- **On the example's one node** (one device with 2^30 bytes of HBM, a boundary link of 100 bits a tick, 1,000 ticks of 1 ns): compute 4,000,000,000 MACs, HBM 8,589,934,592 bits, HBM's read rate 3,200,000 bits, the link 100,000 bits. Two link checks of 3,000 bits over 400 ns and 2,000 bits over 300 ns, each at error 1/1000, give free 35,000 bits, verified 65,000 bits, error 1/500.
+
+### 2. Where two shapes are possible
+
+| Choice | Shape A (taken) | Shape B | What each costs | I would take |
+|---|---|---|---|---|
+| Where the form lives | A value beside the protocol, in its own file | A field of `Core.Protocol` | B: 105 + 1 lock records read `CoreProtocol.Protocol`, 4 deployed (section 7), and all seven protocols set the field in the same change. A: no record moves; a protocol with no value simply has no row | A |
+| The part of the hardware | Data: `Part`, four constructors, one `capacity` function of the site | A function `Site → capacity` in each amount | A: equality is decidable, so `rows` can find what no protocol covers; a new kind of resource is a new constructor. B: any capacity can be said, but nothing can list what is not audited, and a capacity can be copied from anywhere | A |
+| The form | Keys (`Key`), read by one reader | A reader `Answer → Option Reading` written per protocol | A: printable, decidable, no code per protocol, no key renamed; it needed `share`, a span as a count of steps, and `Time.unstated` to fit the seven. B: fits anything, and is code nothing holds to the published JSON | A |
+| The head | A key on the account; none means held to no registration | The caller says which answers belong to the registration | A: is your rule; it certifies nothing until each protocol publishes the head. B: certifies today, on the caller's word | A |
+| Capacity of compute | A list of named readings: `stated` (the registered sheet) and `bound` (the larger of it and the auditor's estimate) | One number | A: one row per reading. The registered sheet holds one clock reading, the card's `clock.sm`; the card's other reading is not registered, so it is a row only if the auditor's sheet carries it (`rows` takes the auditor) | A |
+| A moment's period row | The least verified at the largest error, with the count of sessions | The sessions' errors summed | A is the page's "all but at most M − 1 … at one error", and leaves the count's bound to the comparison. B is soundness's 07:20Z rule read at every session. Each session has its own row, so the comparison can form either | A, and soundness should say |
+| The tick and the period's length | Arguments of `rows` | Constants | A works under every option of section 6(b) | A |
+
+[derived; the counts are read in section 7]
+
+### 3. The seven public outputs against the form
+
+| Protocol | Amount, unit, side | Time | Error | Capacity; nothing certified | Fits? |
+|---|---|---|---|---|---|
+| certifier, `verity/certifier/v0` | `K`, bits, free | `windows`, a count of execution phases | `eps`, the scans' δ summed; `Pool.sum` | none; a refusal publishes nothing | The amount, error and place (`link` in the profile) fit. The span does not as it is: a phase's seconds are the grid's parameters, not in the output, so the value must carry them as a constant |
+| PoUS, `verity/pous/p2/v4/run` | `s_bits`, bits, verified | a moment | `eps` | none; `certified` false with 0 bits | Fits. It names no device: the row is about every leaf of its tier |
+| wipe | `foreign_bits`, bits, free | a moment | `eps` | `memory_bits`; `certified` | Fits. `egress_mib` is an input of `foreign_bits`, not a row |
+| PoUW's period, `verity/pouw/period/v1` | `work`, MACs, a list, verified | `windows`, a list; its entries are counted | `delta`; `eps` is a list of shares, null where none | none; a null share verifies nothing | Fits with `share` and `Pool.once`. A window's seconds are not in the output |
+| bandwidth, P2 | `q_bytes`, bytes, verified | `span_ns` | `eps` | none in Lean | Fits, as `Part.read` of its tier |
+| bandwidth, `verity/remote-bandwidth/v0` | `q_bytes`, bytes, verified | no key | `eps` | none | The amount fits; with no span it covers no tick (`Time.unstated`) |
+| inference-only | none: `{}` | | | | No amount: no value, or one with no amounts |
+| sampled proofs | `drawn`, `proved`, `bound`, `per_template`; δ in the profile | | | | No amount of a registered resource: no value |
+
+[read: `NetworkCheck/Period.lean:245, 1279-1286, 1357-1365` and `LinkWindow.lean:146`; `PousCheck/RunProtocol.lean:58, 194-205`; `MemoryChallenger/WipeProtocol.lean:29-34, 165-166`; `PouwCheck/Credit.lean:2207-2218` and `Period.lean:56`; `RemoteAudit/P2Protocol.lean:150-155`; `RemoteAudit/Protocol.lean:50, 114-118`; the last two rows are ONSITE's 04:13Z table, relayed, with `OneStage.lean:117-121` and `NciCheck/Protocol.lean:160, 167` not re-read by me]
+
+- **PoUW's verified amount is my reading, for compute-accounting to confirm:** each window's `work` less its share, `⌊work × (1 − ε)⌋`, and nothing for a window whose `eps` is null. [derived from `Credit.lean:2207-2208`, "the δ the ε is reported at and each window's ε", and AGENTS.md's "surfaces what its sample established (ε at δ)"]
+- **Which tier PoUS and the wipe are about** is their lead's to say; the type takes any. [guess that it is HBM]
+- **A draft of the certifier's value**, as an example, in no file [derived; `seconds` stands for one execution phase's]:
+
+```lean
+def certifier : Account :=
+  { protocol := "verity/certifier/v0"
+    head := none
+    amounts := [{ metric := "covert bits", part := .link, place := some (.profile "link"), key := .published "K",
+                  unit := bits, side := .free, time := .span (.published "windows") seconds,
+                  error := .published "eps", pool := .sum, uncertified := .refused }] }
+```
+
+### 4. Section 7's fifth form against the rows
+
+| The page says | In the type and the rows | Fits? |
+|---|---|---|
+| A row is the capacity, the certified amount with its error, and the other, which follows | `Row.capacity`, `verified`, `free`, `error`; `Amount.side` says which was certified | yes |
+| An error names the terms it does not price | `Amount.unpriced`, copied into each row | yes |
+| An error of 1 or more prints "no bound at this period" | `Status.noBound`; no amount, the error kept, as soundness ruled at 07:20Z | yes |
+| Compute's row is the period's, its pooled error paid once | `Pool.once`: the one accepted answer's error | yes; two answers in one period give no bound, since the type does not know how two pooled errors combine |
+| A link's row: the accepted checks' bits are free, their errors summed; a refused or unrun span is charged at the link's capacity | free = the bits summed + `β` × the ticks no accepted check covers | yes, with two limits: cover is counted in ticks, not by which ticks; `β` is one way |
+| An amount at a moment: a row for each session and one for the period | as section 1 | yes for the rows; "all but at most M − 1" needs the auditor's M, which is the comparison's |
+| Not audited: charged at capacity | `Status.notAudited` | yes |
+| Capacity needs the period's length and a tick's seconds | arguments `ticks` and `tick` of `rows` | yes; the registration holds neither (section 6(b)) |
+| Compute's capacity in MACs at each data-sheet reading | one row per reading of `Part.capacity` | in part: section 2's row on compute |
+| A scope's row sums over every link of the scope (soundness, 07:20Z) | rows are per place an answer names; an amount with no place key sums over all its answers | in part: a site's row over several links' rows is their sum, which `rows` does not form; one fold if you want it there |
+
+[read: the joint page's section 7, `note:compute-research/20261112T0228Z-draft-accounting-architecture-joint`; soundness's comment of 07:20:25Z on MEM-279; `Account.lean:340-433` at `944c0750d4`]
+
+**Are my rows what the comparison would read?** Yes in shape: each row is plain data with decidable equality, an exact `Ratio` for the error, a status, and `Row.toJson` under the benchmarks' five names (`metric`, `verified`, `capacity`, `free`, `error`). [read: `Account.lean:318-332, 438-445`] Two things it would not find in them: the auditor's M for a moment's count, and a site's summed row. [derived]
+
+### 5. A memory leaf's read rate
+
+**What a new field of `Loc` moves** [read at `d6075b75d289` unless said]:
+
+| Place | What changes |
+|---|---|
+| Lean code | `Loc` (`CoreProtocol/Site.lean:161-170`), `Loc.toJson` (`:576-579`), `Loc.ofJson`, which requires exactly eight keys (`:646-647`), and a new conjunct of an entry's check to hold it to the sheet (beside `Figures`, `:357-358`) |
+| The spec | `Verity.Site.Loc` (`security/Definitions/Core/Site.lean:149-158`), the two maps between code and spec (`security/Properties/Core/Site.lean:112, 132`), and their proofs (`security/Proofs/Properties/Core/Site.lean`, 547 lines; `security/Proofs/Core/Site.lean`, 387 lines) |
+| Python | `Loc`, `to_json`, `of_json` with its exact keys (`verity/hardware/site/__init__.py:306-338`) and the mirrored check |
+| Difftests | two: `site-difftest` (`Spot/SiteDifftest.lean`, `test_site_difftest.py`, 22 `Loc(` calls) and `core-registration serve` (`test_registration_difftest.py`, 8) |
+| Tests and demos that build a `Loc` | `test_site.py` 34 calls, `test_lifecycle.py` 12, `lifecycle.py` 8, `onsite.py` 2; none needs a change if the field has a default, but every JSON vector with a location does |
+| Digests | every site entry's (`locs` is in its JSON, `Site.lean:586-588`). The entry's `format` is the tag `verity/registration/site/v1` (`:528`), and `ofJson` refuses the old shape, so **the site tag should move to v2**, in five places (`Site.lean:528`, `Registration.lean:17`, the interface README `:111`, `site/__init__.py:52`, `registration.py:9`). **The sheet and genesis tags do not move** |
+| Fixtures | none: no tracked JSON holds `"locs"`, and `fixtures/artifacts.json` has no registration entry. The one pinned digest is the genesis one (`test_site.py:276-278`), which a location does not reach |
+| Lock records | 151 of `security`'s 1,121 and 53 of `Properties`' 465 read a definition of `Definitions.Core.Site`; 13 of `Properties`' read `CoreProtocol.Site`. **One is deployed**, `Verity.remote_soundness_of_subprotocols`, and it reads only `Verity.Registration.Composite` of that module (`security/Properties/Verity/Soundness.lean:72-75`), not a location |
+
+[the lock counts are read from `report.json` of run `r20261112-030020-70e6`, a records run of tree `0b6bdb0352e1`, a proofs branch of 03:01Z, not `main`; they are per module]
+
+**The view instead.** A sheet already holds "bits from device memory to the chip a tick", `bw` (`Site.lean:147-155`); registration holds it equal to the auditor's sheet's (`:358`); Python computes it from the card's `memory.bandwidth` (`site/__init__.py:275-290`; the H200's is 4.916736e12 B/s, a ceiling, `h200-sxm-141gb.toml:52`); and the device model carries it (`Site.lean:483`). So HBM's read rate under a device is a function of the site with no new field. [read] `Part.capacity (.read .hbm)` is that function. [read: `Account.lean:135-138` at `944c0750d4`]
+
+**What then holds the host's DRAM: nothing.** Only a device must name a registered sheet (`Site.lean:352-353`); a host's `sheet` is the empty string. [read] The host's card exists (`xeon-platinum-8468-2s.toml:34-36`: 6.144e11 B/s, a ceiling; its `read` is marked a placeholder) but no registered thing carries it. [read] Three ways:
+
+| Way | What it moves | What it gives |
+|---|---|---|
+| A field on the leaf | the table above | a number for DRAM and disk that the prover states and nothing holds, since they have no sheet |
+| A sheet for a host | `Sheet`'s figures are a device's (a clock and a peak rate for every operand class, each required positive, `Site.lean:132-135`), so a host's sheet is a second kind of sheet: the sheet's JSON and tag move, not the site's | DRAM's rate held to the auditor's sheet, as HBM's is |
+| Neither | nothing | DRAM's and a disk's read rate print with no capacity; reads certified from them have nothing to be compared with |
+
+**My reading: no to the field.** [derived] For HBM it adds nothing the sheet does not already hold. For DRAM it buys an unheld number at the price of the site's format. If DRAM's rate is needed, the host's sheet is the change that holds it, and it is larger; compute-research's cards (CMP-409) would feed it. [relayed: compute-research, MEM-279, 06:44:51Z]
+
+**Not established:** which of the 151 + 53 records reach `Loc` itself; the reports are per module. And whether memory-accounting's rate is the card's `memory.bandwidth` (which `bw` is) or a measured read, which no card of a GPU holds on `main`; a measured read would be a new figure of the sheet, not of the leaf. [read: `h200-sxm-141gb.toml:49-52`]
+
+### 6. Network-accounting's three questions
+
+**(a) A certifier's registered key.**
+
+- **The bytes state no parameter set.** An LMS public key is `I ‖ T[1]`, 16 + N bytes, 80 at N = 64, with "no type fields: a verifier holds one parameter set" (`verity/commitments/crypto/lms.py:33-35, 42, 309-311`); a check sees only its length (`:355-358`; `verity/commitments/lms/lean/Lms/Verify.lean:140`). The deployed set is `(N, W, H) = (64, 1, 20)` (`lms.py:112`; `Lms/Verify.lean:34-47`). [read]
+- **Each check is told the set another way.** The certifier's check takes `"key"` and beside it `"lms": {"H","N","W","toy"}` in its parameters (`NetworkCheck/Period.lean:41, 852-854`). The one-stage challenger's key is JSON of exactly `{"H","W","public"}`, N fixed at 64 (`Spot/ChallengerRecord.lean:64-80`). The memory challenger names a scheme id, `"lms-sha512/n64-w1-h20/v0"` (`MemoryChallenger/Verdict.lean:45, 51`). [read]
+- **The registration reads the key once, as a string:** `A.key x.id = some x.key` (`CoreProtocol/Site.lean:365-368`; Python `site/__init__.py:687`). No protocol's check compares its own key with the registered one in `interface/`, `onsite/` or `remote/`. [read] The lifecycle demo registers the bare hex of a key made under `Params(64, 4, 4)`, which is not the deployed set, and nothing in the registration says so (`demos/lifecycle/onsite.py:37, 40`). [read]
+- **The smallest way:** the registered string is the scheme id, a colon, and the hex: `lms-sha512/n64-w1-h20/v0:` then 160 hex digits. `Owners` still compares two strings, the location's JSON keeps its eight keys, and no tag moves. What changes is who writes the string (the auditor's key list and the demos) and one function that splits it for a check that wants to hold its own key to it. The other way, a ninth key on a location, moves what section 5's table moves. [derived]
+
+**(b) A tick.**
+
+- **Lean states no length.** `Site.device` takes `tick` as an argument (`CoreProtocol/Site.lean:472-484`), and so does the spec's (`security/Definitions/Core/Site.lean:408-416`). Python alone fixes it: `TICK = Fraction(1, 10 ** 9)` (`site/__init__.py:75-76`), used as a default by `Sheet.of_file`, `Auditor.of_cards` and `Site.device` (`:275-290, 456-459, 581-596`). The merge branch's `CoreProtocol/Period.lean` defines a tick as a bare `Nat` and states no length. [read: `ded7d80c415b`]
+- **The registration's own numbers are already in ticks:** a sheet's `bw`, a link's `β` and its latency (`Site.lean:147-155, 173-178`). So a registration means nothing without a tick's length, and does not state it. [read, derived]
+- **Vectors at another tick:** `test_site.py:229` (half a nanosecond) and the difftest's `TICKS`, which are 1 ns, 1/2 ns, 3/7 ns, 1 s and 0 (`test_site_difftest.py:175`). Both vary only the argument of `device`, for compute. [read]
+- **Links of 100,000 bits a tick**, which is 100 Tbit/s at a nanosecond: `test_site.py:46-49`, the difftest's `β ∈ {0, 1, 100000}` (`test_site_difftest.py:166`), `demos/lifecycle/onsite.py:44, 48` and `remote.py:20`. The Lean example's links are 100, 100 and 10 (`Registration.lean:413-415`). No tracked fixture holds a link. [read; 100,000 bits/ns × 10^9 ns/s = 10^14 bit/s, derived]
+- **The certifier measures time in its own unit**, `bucket_ms` (`NetworkCheck/LinkWindow.lean:146`), not in ticks. [read]
+
+| Option | What it moves | What it leaves |
+|---|---|---|
+| A constant in `CoreProtocol/Site.lean`, mirrored by Python's `TICK`, held by `site-difftest` | one definition and one difftest vector; no digest, no tag; no lock record of the interface (it has none) | the step stays 1 Gbit/s; `device` keeps its argument, so the vectors at other ticks stay |
+| A field of the registration | in the genesis entry: the genesis tag and the pinned `GENESIS_ONSITE` (`test_site.py:276-278`); in a site entry or a sheet: that tag, as section 5 | each registration states its own tick; the step stays unless the tick is chosen small, which makes `bw` and every rate a tick round up more coarsely |
+| A finer unit for `β` (bits a second, or a ratio a tick) | `Link`'s meaning under the same key, so the site tag; the check `0 < k.β` (`Site.lean:346`); every `β` above; the spec's `Link` | the only one that removes the step |
+
+**I would take the constant now, and the finer unit in the same move as any other change of the site's format.** [derived] My `rows` takes the tick and the period's ticks as arguments, so it stands under all three. [read: `Account.lean:427-428`]
+
+**(c) Where the head is published.**
+
+- **An accepted answer carries both the public output and the profile, and a refusal neither** (`CoreProtocol/Protocol.lean:42-47, 73-81`). [read]
+- **A statement reads both:** properties are stated over `P.check p c e = .accept pub prof` (`Protocol.lean:68-71`). [read]
+- **The composition carries both** under each subprotocol's id (`CoreComposition/Product.lean:96-100`), and its ties read each subprotocol's committed case, not either output (`CoreComposition/Tie.lean:19-21`). [read]
+- **A record reads neither:** `CoreProtocol/Record.lean` names no public output and no profile. [read: no match for either word in the file]
+- **The cost that differs:** a protocol that samples publishes `Core.Integrity` as its profile, a shared type read back exactly (`CoreProtocol/Profile.lean:8, 113-125`): PoUW's per-window check, sampled proofs and the example. A head there is a field of the shared type, whose module 46 records of `Properties` and 1 of `security` read, 2 deployed (`Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`, `Verity.remote_soundness_of_subprotocols`). The certifier, PoUS, the wipe and bandwidth have profiles of their own. [read: the same `report.json`; `rg` for `Core.Integrity` under `verity/protocols`]
+- **What the type does:** `Account.head : Option Key` is `.published k`, `.profile k`, or none, and `rows` counts an answer only if it holds the rows' head there. [read: `Account.lean:214-221, 400-406`]
+- **Beside this:** the registration log is itself a protocol whose commitment's digest is the head and whose public output holds `head` and `site` (`CoreProtocol/Registration.lean:288-293, 308-310, 359-372`), so the site and the head `rows` takes can both come from its accepted answer. [read]
+
+### 7. A field of `Protocol` against a value beside it
+
+- **A field:** 105 records of `Properties` and 1 of `security` read `CoreProtocol.Protocol`. Four are deployed: `Pous.Period.SecurityProofs.periodHeld`, `Pous.Period.SecurityProofs.periodHeldDeployed`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`, `Verity.remote_soundness_of_subprotocols`. A new field of the structure changes its definition, which each of them reads. [read: the same `report.json`; that every one of the 106 records' hash changes is derived, not run]
+- **A value beside it:** the interface's lock has no `guarantees` section on `main`, and no guarantee reads the new module, so no record moves. [read: `verity/protocols/interface/lean-audit.json`] What the lock gains I say with the records run, which I start once the try passes.
+- **The file imports `CoreProtocol.Example` and `CoreProtocol.Registration`** for the example's value and the guards, so it is not a layer of minimal imports. [read]
+
+### 8. The remote merge
+
+`git merge-tree --write-tree` of `944c0750d4` with `cursor/lean-remote-merge-landing-fc8d` at `ded7d80c415b` gives a tree with no stop. [run on my VM, 07:21Z: tree `0d809461aa3c`] The one file both change is `CoreProtocol.lean`: the merge adds `public import CoreProtocol.Period` and moves `Protocol.Canonical`; I add one line at the end of the list; git keeps both sides' lines. [read: the merged file] My file reads none of what the merge renames (`Core.Draw` to `SamplingDesign` in `Profile.lean`). [read: `git diff origin/main...ded7d80c415b -- verity/protocols/interface/CoreProtocol/Profile.lean`] Whether it compiles on the merge I have not run.
+
+### 9. Runs, what I could not establish, what I wait on
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-071838-1772` | the try of `Account.lean` with `--siblings`, on vy-nebius-cpu-4 | waiting for a slot since 07:19Z; no verdict |
+
+- **Not established:** that the file compiles and its guards hold; which lock records reach `Loc` itself; the lock counts at `main` rather than at tree `0b6bdb0352e1`; memory-accounting's exact field; whether the certifier's execution phase has one length across runs.
+- **Next:** the try's errors, then the push of `cursor/proofs-accounts-e4bb`, the interface's records run, and the pull request by 13:00Z.
+- **I wait on nothing from you.** A word on section 2's rows on the head and on a moment's period row would save a later change.
