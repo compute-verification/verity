@@ -16,20 +16,20 @@ import os
 import socket
 import threading
 
-import pytest
-
 import pous_fakes
 import pous_test_signer as ts
+import pytest
+
 from verity.configuration.deploy import sources as S
 from verity.configuration.deploy.party import Send
 from verity.configuration.deploy.runtime import run as deploy_run
 from verity.configuration.deploy.stream import Side
+from verity.configuration.wire import Message
 from verity.protocols.pous.device import challenger_party as CP
 from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period, run
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
-from verity.configuration.wire import Message
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()
@@ -133,12 +133,12 @@ def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
     _, point, published, blocks, _ = _in_process()
     sid, old, rounds = _split(point, published.root, lambda i: blocks[i], ts.TestSigner(b"same key", 2),
                               draw=S.SeededCoins(b"hiding").draw)
-    caps = {CS.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
-            CS.PROVER: {"store": lambda i: blocks[i]}}
+    capabilities = {CS.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
+                    CS.PROVER: {"store": lambda i: blocks[i]}}
     clock = S.VirtualClock(S.VirtualTime(Clock()()), 1_000)
     r = deploy_run({"protocol": CS.ID, "params": CS.request_of("n0", point, published.root)},
-                   [CS.CHALLENGER, CS.PROVER], "live", None, protocols={CS.ID: CP.PROTOCOL}, capabilities=caps,
-                   authenticate=False,
+                   [CS.CHALLENGER, CS.PROVER], "live", None, protocols={CS.ID: CP.PROTOCOL},
+                   capabilities=capabilities, authenticate=False,
                    sources={CS.CHALLENGER: {"clock": clock, "coins": GivenCoins(S.SeededCoins(b"hiding").draw)}})
     assert r.status == "completed", r.outcomes
     assert r.outcomes[CS.CHALLENGER] == {"outcome": {"session": old.to_json(), "session_id": sid.hex()},
@@ -233,10 +233,9 @@ def _refused(request, salts: mc.SaltLog, log: mc.SessionLog) -> str:
     with pytest.raises(CP.Refusal) as e:
         CP.designate(request, salts, log)
     a, b = socket.socketpair()
-    with a, b, a.makefile("rwb") as f:
-        with pytest.raises(CP.Refusal) as served:
-            CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
-                     domain=period.SESSION_DOMAIN, clock=Clock())
+    with a, b, a.makefile("rwb") as f, pytest.raises(CP.Refusal) as served:
+        CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
+                 domain=period.SESSION_DOMAIN, clock=Clock())
     assert str(served.value) == str(e.value)
     return str(e.value)
 

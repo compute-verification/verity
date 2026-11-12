@@ -2052,7 +2052,8 @@ cut into a cell or reaches the server, and it fails at once. It is never clamped
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
 certified response holds at most its request's `max_tokens` tokens, hence at most the cap
 (`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
-them; an uncapped schedule hashes neither and keeps its digest. The period check reads uncapped schedules only.
+them; an uncapped schedule hashes neither and keeps its digest. The period check (`NetworkCheck.Period`) reads the cap
+with the schedule, binds it in the schedule's digest and publishes it (`max_tokens_cap`).
 
 **The lengths rows** (`WardenParams.lengths`, id form only, none by default) are what the network certifier signs of the
 requests it released, beside its cells: each one's place in the release order, its request's bytes, its response's

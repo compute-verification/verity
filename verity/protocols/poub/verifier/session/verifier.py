@@ -136,12 +136,10 @@ from pathlib import Path
 
 from verity.protocols.poub.verifier import audit, coins, ledger, line, timing
 from verity.protocols.poub.verifier import store as rstore
-from verity.protocols.spot.device.challenger import Verify
-
-from verity.protocols.poub.verifier.session import challengers
+from verity.protocols.poub.verifier.session import challengers, wire
 from verity.protocols.poub.verifier.session import lean_verifier as lv
-from verity.protocols.poub.verifier.session import wire
 from verity.protocols.poub.verifier.session.checks import Checks
+from verity.protocols.spot.device.challenger import Verify
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
@@ -1093,7 +1091,10 @@ class Verifier:
             _, _, stamp = self.expect("pong")
             rtts.append(stamp - t0)
         rtts.sort()
-        at = lambda q: rtts[min(n - 1, int(q * n))]
+
+        def at(q: float) -> int:
+            return rtts[min(n - 1, int(q * n))]
+
         return {"n": n, "min_ns": rtts[0], "median_ns": rtts[n // 2], "max_ns": rtts[-1], "p50": at(0.5),
                 "p99": at(0.99), "p999": at(0.999), "max": rtts[-1]}
 
@@ -1785,3 +1786,10 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     (a.out / "verifier.json").write_text(json.dumps(out, indent=1))
     print(f"verifier: cpu {json.dumps(out['cpu'])}", flush=True)
     return 0
+
+
+__all__ = ["AVERAGE", "GPU_HBM_BYTES", "HBM_BYTES", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
+           "WORST_PASS", "ingress_bursts", "lean_record", "load_registry", "main", "memory", "memory_error",
+           "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
+           "recorded_paced", "recorded_rates", "recorded_windows", "regions_of", "save_registry", "sketch_at",
+           "timing_parts"]

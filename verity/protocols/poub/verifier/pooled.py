@@ -161,3 +161,6 @@ def run_json(j: Mapping) -> dict:
         return bound(ws, d).to_json()
     except Refused as e:
         return {"refused": str(e)}
+
+
+__all__ = ["number"]

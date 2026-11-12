@@ -6,6 +6,7 @@ module
 
 public import Flock.Comp
 public import Flock.Scan
+public import Base.Pow2
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -17,9 +18,7 @@ open Lean (Json)
 
 def WORD : Nat := 128
 
-def log2ceil (n : Nat) : Nat := if n ≤ 1 then 0 else Nat.log2 (n - 1) + 1
 def isPow2 (n : Nat) : Bool := n > 0 && 2 ^ Nat.log2 n == n
-def nextPow2 (n : Nat) : Nat := 2 ^ log2ceil n
 
 def tokens (s : String) : Array String := Id.run do
   let mut out := #[]

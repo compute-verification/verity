@@ -225,7 +225,7 @@ class TcpListen:
     def __init__(self, address: str = "127.0.0.1:0", max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> None:
         host, _, port = address.rpartition(":")
         self.server = socket.create_server((host, int(port)))
-        self.address = "%s:%d" % self.server.getsockname()[:2]
+        self.address = "{}:{}".format(*self.server.getsockname()[:2])
         self.pipe: TcpPipe | None = None
         self._held: list[bytes] = []
         self._bounds = (max_head, max_body)

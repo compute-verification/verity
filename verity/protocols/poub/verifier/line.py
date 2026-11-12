@@ -317,7 +317,7 @@ def _stretches(groups: Sequence[Group], per: int, N: int, b: int, chip_bytes: in
         held = tuple(Fraction(sum(k(x) for x in groups[lo:hi]), P)
                      for k in (lambda x: x.weights, lambda x: x.hbm, lambda x: x.host))
 
-        def reading(lost: Fraction) -> Reading:
+        def reading(lost: Fraction, held: tuple[Fraction, ...] = held) -> Reading:
             w, h, host = held
             return Reading(lost, max(Fraction(0), w - lost) * b, max(Fraction(0), h - lost) * b,
                            max(Fraction(0), h - w + host - lost) * b)
@@ -712,3 +712,7 @@ def record_run_json(j: Mapping) -> dict:
         return line_of_record(**args).to_json()
     except Refused as e:
         return {"refused": str(e)}
+
+
+__all__ = ["FORMS", "GROUP", "LINK_CHARGED", "Refused", "SEEN", "TIME_HELD", "line", "number", "of_json",
+           "record_run_json", "run_json", "text"]
