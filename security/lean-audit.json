@@ -225,6 +225,10 @@
    "digest": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06",
    "why": "The partition the bound counts: every block reads at most k gates outside θ."
   },
+  "Nci.Cut.ReadsOn": {
+   "owner": "@training",
+   "why": "The blocks the count is over: each block of G reads at most k gates outside θ, all the blocks at most T between them, and the squares of what G's blocks read sum to at most S."
+  },
   "Nci.Cut.ValuesInjective": {
    "owner": "@training",
    "digest": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275",

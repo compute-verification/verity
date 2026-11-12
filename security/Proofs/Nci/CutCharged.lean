@@ -18,7 +18,8 @@ the second bound.
 
 `HECharged_honest` and `HECharged_nontrivial` are at the toy (`Toy`). With a block for each MAC, the first under the
 budget `k = 2` and the second charged whole, `HECharged`'s premises hold together. With one block holding both MACs
-and no block charged, the block reads three gates, and at the total `T = 0` the bound is `0`, below `N = 2`.
+and no block charged, the block reads three gates, so `ReadsOn` fails at `k = 0` and the total `T = 0`, where the bound
+is `0`, below `N = 2`.
 -/
 
 @[expose] public section
@@ -48,7 +49,8 @@ of `G` at what it reads and all of them at one `β_x`: (H) at `k` holds at what 
 a block of `G` and an output with a wire in it are at most `O` (`outOn_le`), and the MACs a block outside `G` holds
 whole take `γ` of its at most `c` gates each. -/
 theorem HECharged : Guarantees.HECharged := by
-  intro ι V _ _ _ d W val k m c γ T S P G βw βx b hw hx hb hval hshare hH hE hk hT hS
+  intro ι V _ _ _ d W val k m c γ T S P G βw βx b hw hx hb hval hshare hH hE hR
+  obtain ⟨hk, hT, hS⟩ := hR
   have hq : 0 < βw * βx := mul_pos hw hx
   have hQ : ∑ u ∈ G, ((d.unregistered (P.gates u)).card : ℝ) ^ 2 / (βw * βx) ≤ S / (βw * βx) := by
     rw [← sum_div]
@@ -92,7 +94,7 @@ theorem toy_card_mac : ∀ s, 1 ≤ (Toy.W.mac s).card := by decide
 theorem HECharged_honest : Guarantees.HECharged_honest := by
   have h0 := toy_reads_P2 0
   have h1 := toy_reads_P2 1
-  refine ⟨toy_values, toy_noSharedPair, toy_hardness 2, toy_exports 1, fun u _ => toy_reads_P2 u, ?_, ?_,
+  refine ⟨toy_values, toy_noSharedPair, toy_hardness 2, toy_exports 1, ⟨fun u _ => toy_reads_P2 u, ?_, ?_⟩,
     toy_card_mac, fun u _ => toy_card_P2 u⟩
   · rw [Fin.sum_univ_two]
     omega
@@ -102,6 +104,7 @@ theorem HECharged_honest : Guarantees.HECharged_honest := by
 theorem HECharged_nontrivial : Guarantees.HECharged_nontrivial := by
   refine ⟨one_pos, toy_values, toy_noSharedPair, toy_hardness 0, toy_exports 1, fun h => ?_, ?_⟩
   · have h3 := toy_reads_P1
+    obtain ⟨-, h, -⟩ := h
     rw [Fin.sum_univ_one] at h
     omega
   · rw [toy_N, compl_univ, sum_empty]

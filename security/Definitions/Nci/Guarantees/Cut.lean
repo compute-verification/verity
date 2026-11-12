@@ -19,7 +19,7 @@ rest charged whole, with what all the blocks read as a total and what the set's 
 
 The witnesses that each says something are at the toy (`Nci.Cut.Toy`): `Cut_honest`, `CountHE_honest` and
 `HECharged_honest`, their premises holding together, and each statement's `_nontrivial`, the toy beating its bound
-once the block cap `ReadsAtMost`, the verdict, or the total is dropped.
+once the block cap `ReadsAtMost`, the verdict, or `ReadsOn` is dropped.
 -/
 
 @[expose] public section
@@ -95,15 +95,15 @@ def HEShared : Prop :=
           shareF ω * (k / 2 * √(W.O * W.N / q)) / (k + shareF ω * alphaHE k q b) ^ (3 / 2 : ℝ)) ≤
         m * c / d.D.size d.D.computed
 
-/-- **The bound under (H) and (E), with blocks charged whole.** `G` is a set of a partition's blocks, each reading
-at most `k` gates outside `θ`; the blocks outside `G` are charged whole, with no budget on what each reads. `T` is at
-least what all the blocks read outside `θ` between them, and `S` at least the sum over `G` of the squares of what each
-of its blocks reads. Under `HE`'s premises, with (H) at `k`, `N` is at most the MACs the blocks outside `G` hold whole
-(`Work.inside`) and `T + ½ √(S O / (β_w β_x)) + ½ √(S T / (β_w β_x b))` (`workHEOn`). A MAC split between blocks is
-counted in `T`, whichever blocks hold its gates, and `O` is the whole work's, the charged blocks' MACs' among it. MACs
-are disjoint, so where each has at least `γ` gates and each block outside `G` at most `c`, those blocks hold at most
-`c / γ` MACs whole each: `γ N ≤ |Gᶜ| c + γ (T + …)`. At `G` every block, `T = m k` and `S = m k²` the first bound is
-`HE`'s.
+/-- **The bound under (H) and (E), with blocks charged whole.** `G` is a set of a partition's blocks, each reading at
+most `k` gates outside `θ`; the blocks outside `G` are charged whole, with no budget on what each reads. `T` is at least
+what all the blocks read outside `θ` between them, and `S` at least the sum over `G` of the squares of what each of its
+blocks reads (`ReadsOn`, the three together). Under `HE`'s premises, with (H) at `k`, `N` is at most the MACs the blocks
+outside `G` hold whole (`Work.inside`) and `T + ½ √(S O / (β_w β_x)) + ½ √(S T / (β_w β_x b))` (`workHEOn`). A MAC split
+between blocks is counted in `T`, whichever blocks hold its gates, and `O` is the whole work's, the charged blocks'
+MACs' among it. MACs are disjoint, so where each has at least `γ` gates and each block outside `G` at most `c`, those
+blocks hold at most `c / γ` MACs whole each: `γ N ≤ |Gᶜ| c + γ (T + …)`. At `G` every block, `T = m k` and `S = m k²`
+the first bound is `HE`'s.
 
 It is no second statement of the count. The count over a set of blocks, each under its own budget and the rest's MACs
 held whole, is stated once, and this is its corollary at one (H) for every block of `G`, with the charged blocks' MACs
@@ -112,9 +112,7 @@ def HECharged : Prop :=
   ∀ (ι V : Type) [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : RegisteredCircuit) (W : Work d.D ι)
     (val : Finset (Fin d.D.N) → V) (k m c γ T S : ℕ) (P : Partition d.D m) (G : Finset (Fin m)) (βw βx b : ℝ),
     0 < βw → 0 < βx → 0 < b → ValuesInjective W val → NoSharedPair W val →
-    Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k → Assumptions.Exports W b →
-    (∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ k) → ∑ u, (d.unregistered (P.gates u)).card ≤ T →
-    ∑ u ∈ G, (d.unregistered (P.gates u)).card ^ 2 ≤ S →
+    Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k → Assumptions.Exports W b → ReadsOn d P G k T S →
       (W.N : ℝ) ≤ ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) + workHEOn T S (βw * βx) b W.O ∧
       ((∀ s, γ ≤ (W.mac s).card) → (∀ u ∈ Gᶜ, (P.gates u).card ≤ c) →
         (γ : ℝ) * W.N ≤ (Gᶜ.card : ℝ) * c + γ * workHEOn T S (βw * βx) b W.O)
@@ -184,18 +182,16 @@ gate, as is the charged block. -/
 def HECharged_honest : Prop :=
   ValuesInjective Toy.W Toy.val ∧ NoSharedPair Toy.W Toy.val ∧
     Assumptions.Hardness Toy.d Toy.arrays Toy.val ![1, 1] 2 ∧ Assumptions.Exports Toy.W 1 ∧
-    (∀ u ∈ ({0} : Finset (Fin 2)), (Toy.d.unregistered (Toy.P2.gates u)).card ≤ 2) ∧
-    ∑ u, (Toy.d.unregistered (Toy.P2.gates u)).card ≤ 4 ∧
-    ∑ u ∈ ({0} : Finset (Fin 2)), (Toy.d.unregistered (Toy.P2.gates u)).card ^ 2 ≤ 4 ∧
+    ReadsOn Toy.d Toy.P2 {0} 2 4 4 ∧
     (∀ s, 1 ≤ (Toy.W.mac s).card) ∧ ∀ u ∈ ({0} : Finset (Fin 2))ᶜ, (Toy.P2.gates u).card ≤ 1
 
-/-- **`HECharged` without the total**: `HE_nontrivial`'s values, costs, (H) at `k = 0` and (E); one block holding
-both MACs, no block charged, reads three gates, more than `T = 0`, and `N = 2` exceeds the bound at `T = 0` and
-`S = 0`, `0`. -/
+/-- **`HECharged` without `ReadsOn`**: `HE_nontrivial`'s values, costs, (H) at `k = 0` and (E); one block holding
+both MACs, no block charged, reads three gates, more than `k = 0` and than the total `T = 0`, and `N = 2` exceeds the
+bound at `T = 0` and `S = 0`, `0`. -/
 def HECharged_nontrivial : Prop :=
   (0 : ℝ) < 1 ∧ ValuesInjective Toy.W Toy.val ∧ NoSharedPair Toy.W Toy.val ∧
     Assumptions.Hardness Toy.d Toy.arrays Toy.val ![1, 1] 0 ∧ Assumptions.Exports Toy.W 1 ∧
-    ¬ ∑ u, (Toy.d.unregistered (Toy.P1.gates u)).card ≤ 0 ∧
+    ¬ ReadsOn Toy.d Toy.P1 univ 0 0 0 ∧
     ¬ ((Toy.W.N : ℝ) ≤ ((∑ u ∈ (univ : Finset (Fin 1))ᶜ, (Toy.W.inside (Toy.P1.gates u)).card : ℕ) : ℝ) +
         workHEOn 0 0 (1 * 1) 1 Toy.W.O)
 
