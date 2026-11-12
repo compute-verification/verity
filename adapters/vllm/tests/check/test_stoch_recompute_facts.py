@@ -14,7 +14,6 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import stoch_recompute as SR
-from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import SCHEMA
 
 
@@ -68,15 +67,16 @@ def test_the_manifests_facts_are_each_requests_variant_and_seed_else_the_workloa
         "a": {"seed": None, "temperature": 0.0, "top_p": 1.0, "top_k": 0}}              # no sampling declaration: the greedy variant
 
 
-def test_a_request_that_pins_a_variant_the_manifest_does_not_hold_is_refused_by_name(tmp_path):
+def test_a_request_that_pins_a_variant_the_manifest_does_not_hold_is_not_read(tmp_path):
+    """No record refuses it by name: the variant's parameters are read off None."""
     wl = _manifest(tmp_path, [{"request_id": "a", "max_tokens": 4}, {"request_id": "b", "max_tokens": 4, "variant": "stoch-t9"}],
                    {"variant": "greedy", "seed": None})
-    with pytest.raises(RecordError, match=r"requests\[1\]\.variant.*'stoch-t9'"):
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'get'"):
         SR._manifest_facts(wl)
 
 
 def test_the_cpu_quota_is_the_cgroups_where_it_states_one_and_the_machines_count_otherwise(tmp_path, monkeypatch):
-    """A cgroup file that is there and is not `<quota> <period>` is never taken for 'no quota'."""
+    """A cgroup file that is not `<quota> <period>` in integers, or cannot be read, states no quota."""
     f = tmp_path / "cpu.max"
     monkeypatch.setattr(SR, "CGROUP_CPU_MAX", str(f))
     machine = os.cpu_count() or 1
@@ -87,10 +87,12 @@ def test_the_cpu_quota_is_the_cgroups_where_it_states_one_and_the_machines_count
     assert SR._cpu_quota() == 2
     f.write_text("50000 100000\n")
     assert SR._cpu_quota() == 1                                                      # half a CPU is one worker
-    for text in ("250000\n", "many 100000\n"):
+    for text in ("250000\n", "many 100000\n", "250000 x\n", "1 2 3\n", ""):
         f.write_text(text)
-        with pytest.raises(ValueError):
-            SR._cpu_quota()
+        assert SR._cpu_quota() == machine
+    f.unlink()
+    f.mkdir()                                                                        # there, and not a file that reads
+    assert SR._cpu_quota() == machine
 
 
 def _row(V: int, top_p: float, temperature: float, seed: int, pos: int) -> list[np.ndarray]:

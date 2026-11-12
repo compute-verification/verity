@@ -434,9 +434,11 @@ def _stratum_spec(fam: str, spec: str, statics: dict[str, Any]) -> str:
     per_stratum / 128 where the spec-as-stratum key had made it certain.  The phase axis keeps prefill / first-decode / mid / last:
     `Attention_v2{NB=9,last=partial,NH=..,...}` x request x phase x module x lifetime; <= +1 stratum per formerly mixed stratum.  Every
     other family's spec is its own key (Gemm{K,N}, RMSNorm{N}, ... carry no per-row length)."""
-    t, bn = statics.get("T"), statics.get("BN")
-    if fam not in ATTENTION_ROW_FAMILIES or not isinstance(t, int) or not isinstance(bn, int):
-        return spec                                                              # `spec_statics` keeps a static that is no integer as its text
-    bn = max(1, bn)
+    if fam not in ATTENTION_ROW_FAMILIES or "T" not in statics or "BN" not in statics:
+        return spec
+    try:
+        t, bn = int(statics["T"]), max(1, int(statics["BN"]))
+    except (TypeError, ValueError):
+        return spec
     nb = -(-t // bn)
     return _T_STATIC.sub(f"NB={nb},last={'full' if t % bn == 0 else 'partial'},", spec, count=1)

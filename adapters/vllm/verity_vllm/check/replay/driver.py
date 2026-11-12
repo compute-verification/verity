@@ -232,10 +232,15 @@ class PoolDoesNotFit(RuntimeError):
 
 def _cgroup_memory() -> tuple[int, int] | None:
     """The cgroup's (memory.max, memory.current) in bytes; None where it states no limit: a file of `CGROUP_MEMORY` is absent (no
-    cgroup v2 memory controller) or memory.max is `max`.  A file that is there and cannot be read raises."""
-    if not all(os.path.exists(p) for p in CGROUP_MEMORY):
+    cgroup v2 memory controller) or cannot be opened, or memory.max is `max`."""
+    read = []
+    try:
+        for p in CGROUP_MEMORY:
+            with open(p) as f:
+                read.append(f.read().strip())
+    except OSError:
         return None
-    lim, cur = (Path(p).read_text().strip() for p in CGROUP_MEMORY)
+    lim, cur = read
     return (int(lim), int(cur)) if lim.isdigit() and cur.isdigit() else None
 
 

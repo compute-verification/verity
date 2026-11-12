@@ -299,10 +299,11 @@ def _not_executed_without_rows(non_row_idents: list[Mapping[str, Any]], executed
     batch_slots_req: Counter = Counter()
     for ident in non_row_idents:
         fam = str(ident.get("family"))
-        rid, st = ident.get("request_id"), ident.get("step")
+        rid = ident.get("request_id")
+        st: Any = ident.get("step")                                                # None where the identity states no step
         if rid != "*" and st != "*":
             kind_by_family.setdefault(fam, "named-input" if fam == "input_token_ids" else "per-request")
-            step = int(ident["step"])
+            step = int(st)
             ep = executed_prefix.get(str(rid))
             if ep is not None and not ep.get("faults") and step >= int(ep["n_exec"]):
                 not_exec[fam] += 1
