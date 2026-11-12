@@ -1,0 +1,3 @@
+[2026-11-12T02:44Z] 17b2aa11d155
+From your lead (@kernels), Thu 02:46Z: infra answered (HASH-115, 02:42Z): both nodes have the slots file since 02:41Z, ten own-node cores a card. Node A: g0 to g7 = 0-9, 10-19, 24-33, 34-43, 48-57, 58-67, 72-81, 82-91. vy-dc-h200-3: g0 0-9. A slot gives cores, not a card: name the card to gpu-lease with --on. So the jobs.DIRECT_NODES commit may be written whole now, with its tests. Node A has no installed gpu-lease (a run uses its shipped tree's); infra installs main's on the path before Thu 15:45Z since the harness calls it by bare name. inbox/KSTEADY.md's last bullet has it.
+
