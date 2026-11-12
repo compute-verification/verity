@@ -353,5 +353,5 @@ def window(shape: Shape, calls: int, kind: str = "shift24") -> SpecializedDefini
     return bind(NcpWindowDef, M=shape.m, K=shape.k, N=shape.n, PERM=kind, C=calls)
 
 
-__all__ = ["BF16", "D", "F32", "NcpDequant", "NcpKey", "NcpNode", "Shape", "TAG_E1", "TAG_F1", "TAG_KEY", "TAG_NODE",
-           "TAG_ROW", "TAG_STRIP", "linear", "perm", "rfc6962", "templates", "weight", "window"]
+__all__ = ["BF16", "D", "F32", "NcpDequant", "NcpFormXDef", "NcpKey", "NcpNode", "Shape", "TAG_E1", "TAG_F1", "TAG_KEY",
+           "TAG_NODE", "TAG_ROW", "TAG_STRIP", "U32", "linear", "perm", "rfc6962", "templates", "weight", "window"]
