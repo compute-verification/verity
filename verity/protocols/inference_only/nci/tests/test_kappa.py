@@ -41,7 +41,7 @@ def test_every_shape_is_rhos(name):
 
 
 def test_the_library_models_rho_also_has_are_its_sizes():
-    """`models.json` is the library's table, with the thread family's `entry_fee` and `fanout`; where rho has the model,
+    """`models.json` is the library's table, with the thread family's `entry_fee` and `fanout`; where the slowdown calculator has the model,
     its sizes are rho's."""
     both = {m["id"]: m for m in catalog.load("models") if m["id"] in SHAPES}
     assert set(both) == {"kimi-k2", "dense-100b"}
