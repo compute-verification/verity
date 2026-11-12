@@ -1186,7 +1186,7 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
     `Properties.Spot.TwoStageCheckServedSound`, whose `N` is `fanout`).  `fanout`, F, is the replay grain's fan-out
     (`partition.fanout`): the requests reading in a replay block serve at most F S bits together, so S is read as F S.
     F is 1 when every replay block is closed, each recomputing from its own inputs any value another computed while
-    serving; the patterns' form reads each request in one replay block, so it refuses F > 1.  The sets' form
+    serving; the patterns' form is priced only at closed replay blocks, so it refuses F > 1.  The sets' form
     counts Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)}: each product's factor over a group of n blocks of b bits and one rate
     becomes Σ_m C(n, m) w^m 2^{min(m b, S)} <= 1 + Light + 2^S Heavy (`_capped`), by min(Σ_g x_g, S) <= Σ_g min(x_g, S),
     and each sum over nonempty T is also at most 2^S (∏_v (1 + w_v) − 1), so a wholly incorrect replay block of N proof
@@ -1201,8 +1201,8 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
     if (served is None and union) or (served is not None and not served >= 0):
         raise ValueError("a served-output cap is at least 0 bits, and the patterns' form needs one")
     if not fanout >= 1 or (union and fanout > 1):
-        raise ValueError(f"a fan-out is at least 1, and the patterns' form reads each request in one replay block, so it "
-                         f"needs fan-out 1, not {fanout}")
+        raise ValueError(f"a fan-out is at least 1, and the patterns' form is priced only where no replay block reads "
+                         f"a value another computed, so it needs fan-out 1, not {fanout}")
     served = None if served is None else served * fanout
     strata = _strata(cells, k)
     groups: dict[tuple[float, float], float] = {}
