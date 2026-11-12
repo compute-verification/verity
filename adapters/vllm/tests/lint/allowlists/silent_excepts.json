@@ -10,6 +10,8 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "<module>", "detail": "except ImportError: torch = None"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: continue"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: pass"},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._pin_thread", "detail": "except OSError: pass"}
+    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._pin_thread", "detail": "except OSError: pass"},
+    {"file": "verity_vllm/check/commit_rules.py", "kind": "silent-except", "symbol": "_int", "detail": "except (TypeError, ValueError): return default"},
+    {"file": "verity_vllm/check/match_oracle.py", "kind": "silent-except", "symbol": "MatchOracle._view_bytes_range", "detail": "except (KeyError, TypeError, ValueError): return None"}
   ]
 }

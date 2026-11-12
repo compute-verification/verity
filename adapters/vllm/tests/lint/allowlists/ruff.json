@@ -38,7 +38,6 @@
     {"file": "tests/properties/glm53_dsa_capture_gpu.py", "kind": "F821", "symbol": "gpu", "detail": "Undefined name `st`", "count": 8},
     {"file": "tests/properties/glm53_tp8_allreduce_capture_gpu.py", "kind": "B008", "symbol": "CommTap.__enter__.tap", "detail": "Do not perform function call `getattr` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
     {"file": "tests/properties/router_tap_exactness_gpu.py", "kind": "F821", "symbol": "check_live.generate", "detail": "Undefined name `llm`"},
-    {"file": "tests/protocols/pouw_h1_gpu.py", "kind": "F401", "symbol": "check_challenger", "detail": "`verity_vllm.protocols.pouw.h1` imported but unused"},
     {"file": "tests/protocols/pouw_h1_rehearsal.py", "kind": "F841", "symbol": "red_team", "detail": "Local variable `R` is assigned to but never used"},
     {"file": "tools/migrate/superseded_quarantine.py", "kind": "BLE001", "symbol": "_digest", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "F401", "symbol": "<module>", "detail": "`sys` imported but unused"},
