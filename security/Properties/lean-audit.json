@@ -435,6 +435,7 @@
   },
   "MemoryChallenger.Properties.CountRan": {
    "owner": "@network-accounting",
+   "digest": "9907064fdef4064960c0a1ddf17bc939f3227dc1419f2aa9c97039448d2bec32",
    "issue": "NET-353",
    "due": "2026-11-30"
   },
@@ -542,6 +543,7 @@
   },
   "NetTiming.Guarantees.SpanCovers": {
    "owner": "@network-accounting",
+   "digest": "026ae400f7149c79b9f15801e7ff64be2525852d001de0d3c80d5592e6259fd3",
    "issue": "NET-355",
    "due": "2026-11-30"
   },
@@ -2793,13 +2795,72 @@
    "unfolded_hash": "b688d3cdc94be6a2dbd630c2222347e7d857758aebe1c9cec900ad2257953a8b"
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeCountTied": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": ["MemoryChallenger.Properties.SecurityProofs.wipeCountTied : MemoryChallenger.Properties.WipeCountTied"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["MemoryChallenger.Properties.CountRan", "NetTiming.DeviceIntact", "NetTiming.Guarantees.SpanCovers"],
+    "reads": []
+   },
+   "type_hash": "71674ec6ae3e8db0252a2761fc7d53f0e81b64af71d2169b4da5dc342b10a371",
+   "unfolded_hash": "846e3f0183badfb37b3a4e4340b39c1cac8241e42aff8c3fe19878e669cd875a"
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_honest": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_honest :",
+    "  Exists fun seed =>",
+    "    Exists fun K =>",
+    "      Exists fun c =>",
+    "        Exists fun k =>",
+    "          Exists fun sig =>",
+    "            Exists fun out =>",
+    "              Exists fun prof =>",
+    "                And (Eq (Lms.keygen Lms.deployed seed) (Except.ok k))",
+    "                  (And",
+    "                    (Eq",
+    "                      (MemoryChallenger.WipeProtocol.protocol.check",
+    "                        (MemoryChallenger.Properties.measuredWipeParams k.publicKey)",
+    "                        MemoryChallenger.Properties.measuredCommitment",
+    "                        {",
+    "                          signed :=",
+    "                            Option.some",
+    "                              (MemoryChallenger.Properties.measuredSession",
+    "                                (MemoryChallenger.Properties.measuredDigest K c) k.publicKey sig) })",
+    "                      (Core.Outcome.accept out prof))",
+    "                    (MemoryChallenger.Properties.CountRan MemoryChallenger.Properties.markedCount",
+    "                      (fun x x_1 x_2 => False) MemoryChallenger.Properties.markedDevice))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "03c4f2def9eea74ea292f8a4c162324923381a1735c6d330c6aab43e718c4a40"
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_nontrivial": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_nontrivial :",
+    "  Not",
+    "    (Or",
+    "      (MemoryChallenger.Properties.SpanCounted MemoryChallenger.Properties.emptyMarks",
+    "        MemoryChallenger.Properties.idleDevice MemoryChallenger.Properties.measuredCommitment",
+    "        MemoryChallenger.Properties.unencoded MemoryChallenger.Properties.markedSpan 0)",
+    "      False)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8747a3ece4588635969ee859ae5316fa2c634229821e11a994bea0bc1d6db804"
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "owner": "@memory-accounting",
@@ -15078,6 +15139,19 @@
     "NetTiming.released": "bd7a7eb8a9c8fd4d638c59ab6cc71d568958770e488af4c1c2331485fe4a82ff"
    }
   },
+  "Definitions.NetworkCertifier.Guarantees.Marks": {
+   "digest": "43a9f94ddb4ba086f71422900025d10b448a5dba700bf312d65de9391022727a",
+   "definitions": {
+    "NetTiming.Guarantees.SpanCovers": "026ae400f7149c79b9f15801e7ff64be2525852d001de0d3c80d5592e6259fd3"
+   }
+  },
+  "Definitions.NetworkCertifier.Marks": {
+   "digest": "b76f5dbb19b2e7a8f3a42bebfadd83d7e37fdec55660ecb3efd53ce9efe643d5",
+   "definitions": {
+    "NetTiming.markPhase": "5ded235136357d0bf26b16870180fd2bae2196ab825138f9862afbac12dc8331",
+    "NetTiming.spanTail": "4b9b0d5642def81762d8e71fc12afe7475c60adfbf38f0e6e5ddae3c0a0cdb6f"
+   }
+  },
   "Definitions.NetworkCertifier.Premises": {
    "digest": "aa7d78606bf681c2c756d8768f6f08aa4a31f12042de5c38ed91002ad4c40b0f",
    "definitions": {
@@ -15130,6 +15204,17 @@
     "NetTiming.handingBuckets": "41f46728f0aaee014d5b5ebd8eddf94f517e89933df180c31e5f76d78924efdf",
     "NetTiming.handingFrom": "803b654bf9ab8249bb310823526569de70e6cd6c088c0bc9696dcd7888d9aaba",
     "NetTiming.payloads": "629f7e81bf6e3bc9a64a924267226b9298a3069c46e5d2a8101b6bc9e43f1d87"
+   }
+  },
+  "Definitions.NetworkCertifier.Warden": {
+   "digest": "fb8b2533707f8a64cd235d2b291eef6494363b1d30058c24ad0a236877698458",
+   "definitions": {
+    "NetTiming.CertifierSchedule": "d9fbc604ad36aa40dadb12263be023eec703b4219d04dafefc77ea04956457e2",
+    "NetTiming.CertifierSchedule.D": "a86911951c9e789bc929ca9e49dfda47e73fc489db7d1e9931564c26cbb70f02",
+    "NetTiming.CertifierSchedule.adm": "460d53c9bf8c98fdcf34e6a87b3c245d5e81b2e005716203bd5962bba2e96343",
+    "NetTiming.CertifierSchedule.bucket": "ceb55518c4312aec2edf5823056386489541f7752acef4453675575e33fce070",
+    "NetTiming.CertifierSchedule.cells": "989506e815af77cd908a07332b9f9798bbe7dbf8a42e373884640d0a1971b752",
+    "NetTiming.CertifierSchedule.r": "89a0618515286ed7f6f9474b57b5e3f9f380e233cf0c432ed23da13bfc045f5d"
    }
   },
   "Definitions.Pous.Accounting.Params": {
@@ -22185,6 +22270,44 @@
    "digest": "674edaf0f552011dc4fbdc1077082849fcf1ff88def7fd34b76ad7866ef72932",
    "definitions": {
     "MemoryChallenger.Properties.WipeSurvivorBound": "6bfa373338c284a4817a6403813eb9b2789de372dd9bd4ec4bd60d3cf54b5217"
+   }
+  },
+  "Properties.Pous.WipeCount": {
+   "digest": "6d6d52699e012a9e967ba03543b8d0f82a513af0e1105a512233c6ce4df27751",
+   "definitions": {
+    "MemoryChallenger.Properties.CountRan": "9907064fdef4064960c0a1ddf17bc939f3227dc1419f2aa9c97039448d2bec32",
+    "MemoryChallenger.Properties.Mark": "0da5dad50149f17392c9567e07db482b3de03886c698a57031c00f22f31992ed",
+    "MemoryChallenger.Properties.Mark.bucket": "caa079a1ea501d9b9a95419519503ec67e95f7c1fdfc1c09df71b07115809a01",
+    "MemoryChallenger.Properties.Mark.certificate": "7f73b7b0c7b35341f6b0e5836c2b9a67b4c5f19e9acb330df8d501c1217c4178",
+    "MemoryChallenger.Properties.Mark.message": "d7ead83a4b282ba2aedd6102a3eabb86e1e85d2f8a7c6f1e3247c7cd634dd56b",
+    "MemoryChallenger.Properties.MarkDevice": "db86d778371304d94aae53588610aa7e93d70737942331d92897b8fda5bf2c61",
+    "MemoryChallenger.Properties.MarkDevice.cellCap": "3c5453e6a2e8f6104505cdabc5b084d3454f71cf437916cd4bb337e687f57935",
+    "MemoryChallenger.Properties.MarkDevice.marks": "db07aaf7b143d8a80c65ee0d3c6d849b4510249891a68f1cdd1b4d7cf31d6fe8",
+    "MemoryChallenger.Properties.MarkDevice.phaseBuckets": "10220cb9287dc02531ceacdc81cf7f0d3b5a0cc575b48d7444bbc4b782d7e855",
+    "MemoryChallenger.Properties.MarkDevice.schedule": "05332fc0db993cdf4009c8f88e24158f96c935690d60f9806bd8c8d4f018c78d",
+    "MemoryChallenger.Properties.MarkDevice.stamp": "2e3fbd36d3f62acea571044a7292b88d533891581a1068e19de176209f8690f2",
+    "MemoryChallenger.Properties.SpanCount": "fb4d890ba1aafc45af6f2299ae370dfd94868e61c9aaccafd629f127cccbf791",
+    "MemoryChallenger.Properties.SpanCount.Of": "74653da7a1e9241bc2edc1ea664681da46d2fe4df787d96cc7cfc92af6ad20c0",
+    "MemoryChallenger.Properties.SpanCount.capacityBits": "71d707a4419cbc4fd69ff8c20b7f369564bc824c8c28e55d7c0210113ba315fb",
+    "MemoryChallenger.Properties.SpanCount.egressBits": "1ec9937fe874b440bfb90b5856dc19a46d2da47a963807f88da4cdbabee26380",
+    "MemoryChallenger.Properties.SpanCount.endMessage": "694b703311419b82e122862177e79ba3de96ace79ef1fe56169992884868dbc7",
+    "MemoryChallenger.Properties.SpanCount.endPhase": "1102b91c3a353501672dd99331d0b839c95041c85adcef29872bfd8d7d9a8e9e",
+    "MemoryChallenger.Properties.SpanCount.startMark": "7f30963b57ec100a62d28bc7ac5fb4ec50e0372dfce97c8522429d18383b5d5a",
+    "MemoryChallenger.Properties.SpanCount.startMessage": "094ff8f3c4e42fbd5ec0b4fcc03081d9781e7b5e4e2c3252c9fcd0086d3d9950",
+    "MemoryChallenger.Properties.SpanCount.startPhase": "b36e562b5e343832f735598180c27f7f8b7bada1fff8958271c69ed26492e1f2",
+    "MemoryChallenger.Properties.SpanCount.tail": "645a9512cd76f68604cd3f083fc44f03c2c8e0e68112e85689dd4c5e499807b9",
+    "MemoryChallenger.Properties.SpanCounted": "608a8ffe3352dedc1de6972f3b8bfb008d6fd7e4b06d76a2b342e0a09a25fb60",
+    "MemoryChallenger.Properties.WipeCountTied": "b3568bca5428222d5b30c42996a9550e6554fa61243554681aa6793e5d403cfa",
+    "MemoryChallenger.Properties.WipeMarks": "dcbf8bc3e3c8aa12881b655bc4ac074bd395f2e4c8e33e2036695e29e0b554f8",
+    "MemoryChallenger.Properties.WipeMarks.endMessage": "12cd85af5f9da1143db35ca099b50e48c2575651528191925e6fbe473ea77256",
+    "MemoryChallenger.Properties.WipeMarks.startMark": "12cf77adb0bd0c4ccc6491b33c92ac1dd89dc390dbdafc15e6f380a2b980bbcf",
+    "MemoryChallenger.Properties.WipeMarks.startMessage": "e3a0cde03b45602a1ab5cca3a389a5b6aa9b2a6a3ad70a8f0b97c93b15e1146d",
+    "MemoryChallenger.Properties.emptyMark": "160a18dd004c20822eab3e76eeb4014622671fe513f6bb4e30bde4f43733d19e",
+    "MemoryChallenger.Properties.emptyMarks": "424e8644d746c1936c2c51eb9311605fe9944a0af300367a6c00e5bc1b6d3e5d",
+    "MemoryChallenger.Properties.idleDevice": "04a9f41b7e56bb2ecda70c9755f9eb5ba34ebf42c1dfd56338a34a5cbd3f082c",
+    "MemoryChallenger.Properties.markedCount": "232ecf4bdcf5252bd2c91f0c31ec731762088bbda8b849c47d536e6bd5397d25",
+    "MemoryChallenger.Properties.markedDevice": "c39e367bdbc5dfb042d1378aaea03824d706a0068623fcbc8d496ac019b7e499",
+    "MemoryChallenger.Properties.markedSpan": "ebb0616ede6453f26184d89e4b47acda5e5f4f03f448abadfde1791976a871bd"
    }
   },
   "Properties.Pous.WipeSigned": {
