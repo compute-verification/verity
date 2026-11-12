@@ -35,15 +35,12 @@ def imported(path: Path) -> set[str]:
 
 
 def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_most():
-    """With every script directory on one path, ``import NAME`` is the first holder's module whoever asks. So a script
-    beside another ``NAME.py`` never asks by name, nobody asks by name for a NAME that `AHEAD` gives to no directory,
-    and `AHEAD` names no directory it need not.
-
-    A script in no holder's directory that asks by name means whichever holder it put on the path itself, which this
-    path does not give it: no such script is loaded here."""
+    """With every script directory on one path, ``import NAME`` is the first holder's module whoever asks. So only the
+    first holder's own scripts and the tests ask by name: a script beside another ``NAME.py`` never does, nor one in no
+    holder's directory, which means whichever holder it put on the path itself. Nobody asks by name for a NAME that
+    `AHEAD` gives to no directory, and `AHEAD` names no directory it need not."""
     shared = {name: dirs for name, dirs in holders().items() if len(dirs) > 1}
     ahead = [POUW / d for d in CT.AHEAD]
-    loaded = {Path(f) for m in list(sys.modules.values()) if (f := getattr(m, "__file__", None))}
     wrong, used = [], set()
     for path in [*CT.scripts(), *sorted(TESTS.glob("*.py"))]:
         for name in sorted(imported(path) & shared.keys()):
@@ -55,10 +52,9 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
             elif beside and path.parent != first:
                 wrong.append(f"{path.relative_to(POUW)} imports {name} beside its own {name}.py, and under the suite "
                              f"that is {first.relative_to(POUW)}'s: load it from its file")
-            elif not beside and path.parent != TESTS and path in loaded:
-                wrong.append(f"{path.relative_to(POUW)} is loaded and imports {name} by name from outside {where}: "
-                             f"under the suite that is {first.relative_to(POUW)}'s, so the script loads the file it "
-                             f"means, or a suite of its own tests it")
+            elif not beside and path.parent != TESTS:
+                wrong.append(f"{path.relative_to(POUW)} imports {name} by name from outside {where}: under the suite "
+                             f"that is {first.relative_to(POUW)}'s, so the script loads the file it means")
             else:
                 used.add(first)
     assert not wrong, "\n".join(wrong)
