@@ -1731,3 +1731,38 @@ End your turn when the branch is whole and tested, with its head and what a firs
   request.** It will take the row's Program and its record will carry the verdict's new field. Until the
   stager writes a Program beside each circuit, `--lean` without one stays refused. **So the kit
   follow-up does not touch `--lean` and the spec asks for no Lean verdict**; no kernels row claims one.
+
+## Thu 12 Nov 04:18Z: proofs gave HASH-98's line (04:13Z); two jobs of yours close the issue
+
+Read proofs' comment on HASH-98 whole first (and my answer under it). **The line: the measured blocks are
+the ones proofs staged, rows 1, 2 and 15 by comparison of the run's staging record with theirs (the
+circuit file's SHA-512 and 13 other fields, all nine timed steps), rows 3 to 14 and 16 by our statement
+that the pins agree.** What it adds, in order:
+
+1. **Under the rows' table, now:** rows 1 and 2 time `SparseMlaHeadBlock_v2`, the Boolean Definition of
+   the census's `_v1` type (pins `4b31e7caba011398…`, `be5bca5c30515dc4…`); row 15 times the word
+   Definition `SparseMlaCombine_v1` (pin `0bd0add320930b34…`, from `r20261110-161919-afe0`). The AND
+   counts of the timed circuits are 30,893,497 and 29,482,383, not the census's estimates, and the
+   figure does not read them. Wherever kernels' text says `_v1` for a timed head block, it says `_v2`.
+2. **Whether `main` stages those three pins today (proofs: not established; they were staged at
+   `c6cadd0e32`, which is not an ancestor of `main`: checked by me).** The cheap read first: does
+   anything the stager or those Definitions read differ between `c6cadd0e32` and `origin/main`
+   (`stage.py`, the Definitions' modules and their `.circuit-check.json` pins, the lowering they
+   call)? If the read settles it, say how. If not, stage `FIRST=false` from `main` on a CPU machine
+   with the memory (proofs: 4,583 s and 203 GB a head block) and compare the circuit file's SHA-512
+   with the pin; `FIRST=true` only if the first differs or the read says they can differ apart.
+   **By Thu 20:00Z, as a worker comment on HASH-98 for my ring.** This matters past HASH-98: KMOVE's
+   Thursday screen and KHSHARE's Friday rows prove the `4b31e7ca…` statement.
+3. **Row 15 on `main`'s Boolean version: node A, card 4, cores 48-57, Thu 17:30Z to 18:45Z, booked**
+   (the calendar's row). Stage the combine from `main` (the `_v1` staging took 222 s; say which
+   Definition `main`'s stager gives for `census:SparseMlaCombine_v1{…}` and its pin), then 1, 2 and 4
+   provers in one lease of at most 60 minutes, as the rows of record were run. Other lanes hold cards
+   0, 1 and 6 in those minutes, so it runs beside them (`OPEN`) and each step records them; say which
+   of the ten checks that costs, if any. Dry-run it tonight; I give the go Thu at 17:25Z after
+   reading the calendar. If `main` gives no Boolean version of the combine at these statics, tell me
+   at once and I release the row.
+4. **The select:** stage none of the three v1 types. After #9075 is on `main`, two statements price
+   its twenty types (`census:GreedyChunk_v2{N=7744,OFF=7744}`, `census:GreedyCombine_v2{V=154880,N=7744}`);
+   that is a later job, on proofs' ring.
+5. **The kit follow-up stays first** where the two do not collide; item 2's read is an hour of yours
+   at most.
