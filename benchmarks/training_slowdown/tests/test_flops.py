@@ -441,7 +441,7 @@ HEADS, L, S, E = 2, 5, 6, 4
 ASKED = [(q, k, v) for q in (False, True) for k in (False, True) for v in (False, True)]
 
 
-def counted(body, math: bool, monkeypatch) -> tuple[dict, int]:
+def counted_attention(body, math: bool, monkeypatch) -> tuple[dict, int]:
     """One step's record of `body(c, w)`, with `w` an updated weight of θ, under the math attention kernel or the one
     torch picks, and how many fused kernels the counter saw."""
     seen = []
@@ -487,8 +487,8 @@ def test_a_fused_attention_is_counted_as_the_math_kernels_ops_for_the_gradients_
         if any(asked):
             out.sum().backward()
 
-    fused, kernels = counted(body, False, monkeypatch)
-    assert kernels == 1 + any(asked) and (fused, 0) == counted(body, True, monkeypatch)
+    fused, kernels = counted_attention(body, False, monkeypatch)
+    assert kernels == 1 + any(asked) and (fused, 0) == counted_attention(body, True, monkeypatch)
     gq, gk, gv = asked
     bwd = {tuple(row[2:4]): row[5] for row in fused["log"] if row[0] == "bwd"}
     scalings = {("mul", f"[[3, {HEADS}, {L}, {E}]]"): n * L * E, ("mul", f"[[3, {HEADS}, {E}, {S}]]"): n * E * S}
@@ -529,8 +529,8 @@ def test_a_fused_attentions_record_is_the_math_kernels_whatever_its_operands_are
     """The same record under either kernel where the operands' provenance differs (token data, an updated weight, both),
     with a mask, a scale, three dims and grouped queries: each op inside the kernel is classified by its own operands,
     as the math kernel's ops are."""
-    fused, kernels = counted(VARIANTS[variant], False, monkeypatch)
-    assert kernels == 1 and (fused, 0) == counted(VARIANTS[variant], True, monkeypatch)
+    fused, kernels = counted_attention(VARIANTS[variant], False, monkeypatch)
+    assert kernels == 1 and (fused, 0) == counted_attention(VARIANTS[variant], True, monkeypatch)
     kinds = {row[1] for row in fused["log"]}
     assert ("updated" in kinds) == (variant not in ("no token",)), kinds
     if variant == "an updated mask":
