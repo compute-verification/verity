@@ -1,5 +1,5 @@
 """a0 hands a run's members to one kept verifier (`a0.VerifyMembers`, `a0.lean_verify`'s ``members``), on a stand-in for
-`flock-verify`: each member gets the verdict `verify` gives its session as a process of its own, equal but for the
+Lean's verifier: each member gets the verdict `verify` gives its session as a process of its own, equal but for the
 seconds, and its log reads as that process's does; a member the kept process gives no verdict is refused, and so is every
 member after it, with no second process and no second try."""
 from __future__ import annotations

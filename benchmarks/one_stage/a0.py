@@ -326,7 +326,7 @@ def archive_files(st: dict, n: int) -> list[Path]:
 
 
 def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held: dict | None = None) -> dict[Path, str]:
-    """Each of ``files`` in ``archive`` under its SHA-512 (`flock-verify archive-put`, its log ``log``), and each one's
+    """Each of ``files`` in ``archive`` under its SHA-512 (Lean's ``archive-put``, its log ``log``), and each one's
     key there; a file Lean could not put has none. ``held``, a dict a run's archives share: a file archived once, by its
     identity (`identity`), is linked into a later archive rather than read again, and a call whose every file is held
     starts no process. Lean holds an object to its key when it reads it (`archiveGet`)."""
@@ -369,7 +369,7 @@ monotonic = time.monotonic
 
 
 class VerifyMembers:
-    """Lean's `flock-verify verify-members`, one process for a run's members (`Flock.VerifyMembers`): started on the run's
+    """Lean's ``verify-members``, one process for a run's members (`Flock.VerifyMembers`): started on the run's
     registered program (``program``, its key in ``archive``), which it reads once, it takes a member as one line, the JSON
     array of `verify`'s arguments for it, and answers with what `verify` prints for that member and then
     ``MEMBER {"exit":E,"index":I}``, E `verify`'s exit status and I the line's place.
