@@ -110,7 +110,7 @@ def test_an_entry_without_an_encoding_has_no_dtype_the_store_knows(left_out):
     store = OP.CommittedStore({"entries": [_entry(encoding=left_out, element_range=[0, 8])]}, _committed)
     assert store.words("r0", 0, "m", "out", 0, 4) == (None, "unknown dtype '' of (r0, step 0, m/out)")
     words, dtype = OP.CommittedStore({"entries": [_entry(encoding={"dtype": "bf16"}, element_range=[0, 8])]}, _committed).words("r0", 0, "m", "out", 0, 4)
-    assert dtype == "bf16" and words.tolist() == [0, 0, 0, 0]
+    assert words is not None and dtype == "bf16" and words.tolist() == [0, 0, 0, 0]
 
 
 @NO_DICT
@@ -139,7 +139,8 @@ def test_a_binding_map_whose_entries_state_no_rank_is_rank_0s(left_out, monkeypa
         return reached.value.args[0]
 
     assert ranks_of(_with({"schema": "test"}, "entries", left_out)) == [0]
-    for identity in (ABSENT, None, {}):
+    unstated: list[Any] = [ABSENT, None, {}]
+    for identity in unstated:
         assert ranks_of({"entries": [_with({"name": "m/out"}, "identity", identity)]}) == [0]
     assert ranks_of({"entries": [_entry(), _entry(rank=None)]}) == [0]
     assert ranks_of({"entries": [_entry(rank=1), _entry(rank=0), _entry(rank=1)]}) == [0, 1]

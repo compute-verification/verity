@@ -9,6 +9,7 @@ import os
 import struct
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -52,7 +53,8 @@ def test_a_block_the_headers_workload_leaves_out_declares_nothing(left_out):
     """Its requests, its children, its sampling and the sampling's per-request entries: each absent, null or empty."""
     one = {"requests": [{"request_id": "a", "seed": 1}], "children": [{"request_id": "a.1", "parent": "a"}],
            "sampling": {"temperature": 0.5, "per_request": [{"request_id": "a", "top_k": 40}]}}
-    stated = {"a": {"seed": 1, "temperature": 0.5, "top_p": 1.0, "top_k": 40}, "a.1": {"seed": None, "temperature": 0.5, "top_p": 1.0, "top_k": 40}}
+    stated: dict[str, dict[str, Any]] = {"a": {"seed": 1, "temperature": 0.5, "top_p": 1.0, "top_k": 40},
+                                         "a.1": {"seed": None, "temperature": 0.5, "top_p": 1.0, "top_k": 40}}
     assert SR._request_facts(SimpleNamespace(workload=one)) == stated
     greedy = {"seed": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}
     without = {"requests": {"a.1": {"seed": None}}, "children": {"a": stated["a"]}, "sampling": {"a": greedy, "a.1": greedy | {"seed": None}}}
