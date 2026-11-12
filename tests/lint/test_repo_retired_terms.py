@@ -35,10 +35,12 @@ standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
 import sys
+import tokenize
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
@@ -79,11 +81,13 @@ LIVE = {
     "IR": "an acronym the code uses for other things (an alias, a cut); \"Verity IR\" and \"IR evaluator\" are retired",
     "reference run": "a run whose output another is compared with is live; the training-cost reference is retired",
 }
-#: other senses of an enforced word, never counted: nvidia-smi's field among them, and the names of PoUS's cap on an audit's
-#: duration and PoUB's lifetime cap, which aren't Pearl's
+#: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
+#: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, and the stacking property's caps as its Lean names
+#: them (``Gates.Caps``, ``FoolingCap``), none of them Pearl's
 OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?"
                           r"|power[ ._-]draws?)|(?<![^\W_])(?:audit_cap|AUDIT_CAP|auditCap|cap_ns|CAP_NS"
-                          r"|schedule_cap|SCHEDULE_CAP)(?![^\W_])")
+                          r"|schedule_cap|SCHEDULE_CAP)(?![^\W_])"
+                          r"|(?<!\w)(?:R_cap(?:_phase|_node(?:_by_class_peak)?)?|caps\.total|FoolingCap|compute_cap)(?!\w)")
 #: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there
 OWN_CAPS = {
     "verity/protocols/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
@@ -93,8 +97,8 @@ OWN_CAPS = {
 #: `Device.cap` are terms of their own)
 PEARL_CAP = re.compile(r"(?<!\w)CAPS?(?!\w)")
 #: hypothesis's own ``draw`` in a module importing it: a composite strategy's first parameter, through its body, and the
-#: data object's ``data.draw(``; a longer name, an attribute (``challenger.draw``), a string (a ``"draw"`` key) and the
-#: other forms (``draws``, ``drawn``) aren't
+#: data object's ``data.draw(``, as code; a comment, a string (a ``"draw"`` key), a longer name, an attribute
+#: (``challenger.draw``) and the other forms (``draws``, ``drawn``) aren't
 HYPOTHESIS = re.compile(r"^[ \t]*(?:from|import)[ \t]+hypothesis\b", re.M)
 COMPOSITE = re.compile(r"^([ \t]*)@(?:\w+\.)*composite\b.*\n(?:\1@.*\n)*\1(?:async[ \t]+)?def[ \t]+\w+[ \t]*\(\s*draw\b",
                        re.M)
@@ -290,7 +294,20 @@ def hypothesis_draws(text: str) -> frozenset[int]:
         after = text.find("\n", m.end()) + 1 or len(text)
         end = next((n.start() for n in LINE.finditer(text, after) if len(n.group(1)) <= len(m.group(1))), len(text))
         out |= {d.start() for d in BARE_DRAW.finditer(text, m.end() - len("draw"), end)}
-    return frozenset(out)
+    return frozenset(out) & code_names(text, "draw") if out else frozenset()
+
+
+def code_names(text: str, name: str) -> frozenset[int]:
+    """Where ``text``, read as Python, says ``name`` as code, outside comments and strings: the start of each (none where it
+    doesn't read as Python)."""
+    starts = [0]
+    for line in text.split("\n"):
+        starts.append(starts[-1] + len(line) + 1)
+    try:
+        return frozenset(starts[t.start[0] - 1] + t.start[1] for t in tokenize.generate_tokens(io.StringIO(text).readline)
+                         if t.type == tokenize.NAME and t.string == name)
+    except (tokenize.TokenError, SyntaxError):
+        return frozenset()
 
 
 def sites(text: str, path: str) -> list[tuple[int, str]]:
@@ -451,6 +468,26 @@ def test_hypothesis_s_draw_is_another_sense_and_the_sample_beside_it_is_not() ->
     assert said(bare) == sample
     assert sorted(said(HYPOTHESIS_EXAMPLE.replace("from hypothesis", "from elsewhere"))) == sorted(
         sample + [(5, "draw"), (6, "draw"), (7, "draw"), (17, "draw")])
+
+
+def test_a_draw_in_a_comment_or_string_of_a_composite_body_is_still_the_sample() -> None:
+    """Only code is hypothesis's: the word in a comment or a docstring inside a composite's body is prose."""
+    text = ('from hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n'
+            '    """Each unit we draw, one by one."""\n'
+            '    k = draw(st.integers(0, 3))  # draw the count, then the units\n'
+            '    return [draw(st.just(i)) for i in range(k)]  # draw\n')
+    assert said(text) == [(6, "draw"), (7, "draw"), (8, "draw")]
+
+
+def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_senses_and_a_cap_beside_them_is_not() -> None:
+    """The stacking property's caps by the names its Lean gives them, and nvidia-smi's field, anywhere; a "cap" beside
+    them, and a longer name built on one, still count, in their directories too."""
+    theirs = ("R_cap, R_cap_phase, R_cap_node, R_cap_node_by_class_peak, caps.total, `Gates.FoolingCap`; "
+              'nvidia-smi --query-gpu=name,compute_cap; {"compute_cap": "12.0"}')
+    assert said(theirs, "benchmarks/stacked_share/share.py") == []
+    assert said("R_cap is the cap; R_capRows, caps.totals, FoolingCaps, a compute cap, compute_cap_max and its cap",
+                "benchmarks/stacked_share/beta.py") == [(1, "cap"), (1, "cap"), (1, "caps"), (1, "Caps"), (1, "cap"),
+                                                         (1, "cap"), (1, "cap")]
 
 
 def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -> None:
