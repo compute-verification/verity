@@ -102448,3 +102448,53 @@ None was still unstarted when I read them at 21:03Z, so I cancelled none and rel
 - #9375 on `main`. Then: the one_stage change opened, the restaging on the new `main`, the pull request with the table redone, the ready line with the hour.
 - Yours: ci's word on the route and on the mover's repinning; the marks.
 - My branches on the remote are those of my 20:19Z entry and one more scratch, `cursor/proofs-scratch-carve-base-2de4` [read: `git ls-remote`]. Nothing is marked; nothing went to Linear or Slack.
+
+## RELAX, Thu 12 Nov 21:23Z: No: R7's branch does not refuse soundness's case, because R7 holds the record and never reads a `--registered` file. What refuses it is one clause on the relaxed check (each certified value has a reported read), which today's strict check has and #9023 drops. It does not refuse every such file, and neither does today's strict check [run]. I recommend R7's pull request first as it stands, then #9023 with the clause before its mark; Fri 5 PM PST stands for R7
+
+Your 21:12Z word reached me by the shell hook. I read network-accounting's and soundness's comments on PRF-548 (posted 20:56Z and 20:57Z) [read]. Answers in your order.
+
+**1. No.**
+- **R7 compares the record with the verifier's entries, nothing else.** `R7-certified` is `certifiedHeld rec v` (`Spot/Registration.lean:503`, called by `check` at :569 and `checkRef` at :642); Python's is `_certified_held(c, rec, cert)` (`one_stage/registration.py:829`, called at :421); the property is `CertifiedHeld rec v` (`security/Properties/Spot.lean:288`). Each reads the record and the verifier's certified entries. None reads a `--registered` file or a verdict [read, my head `8e92d28fe27b`].
+- **On my branch the case is refused, by the base's strict record check and not by R7.** The read under the unlisted name is dropped (`Record.ownRegistered`, `Spot/Record.lean:99-101`; Python `audit.session_registered`, `one_stage/audit.py:131-132`). The certified value then has no reported read and the equality fails, naming it (`Record.lean:132` and :222, `sameDict opened want`; `audit.py:159`, `opened != want`) [read; run: probe below, `opened={}`, `accepted=False`, `wrong: ['W']`].
+- **With #9023's relaxed check the same case passes**, at `Record.lean:136` and :225 of `6b782d972ec4` (`subDict opened want`, with `opened` empty) and `audit.py:142` there (`wrong` is taken over `opened` alone) [read; run: the same probe against #9023's `audit.py`, `accepted=True`].
+- **Today's strict check refuses the case only when the renamed port is the value's only reported reader** [run]. A session whose file names the port under an unlisted value at another root, beside another accepted session that reports a read of the value at its root, is accepted by the strict check today: the renamed read is dropped and the other session's read satisfies the equality. The check sees a `{value: root}` with the ports dropped, so no comparison over it refuses every such file. "The way the strict check does today" is the most a one-line comparison gives.
+- **The probe** [run on my VM, Python only, no Lean]: `audit.session_registered` and `audit.audit_record` on a record that registers one value `W`, three sets of verdicts (honest; renamed alone; renamed beside an honest one), against this branch's `audit.py` and #9023's. Strict: accept, reject, accept. Relaxed: accept, accept, accept.
+
+**2. The comparison: in the relaxed check, each value the verifier holds a certified entry for has a reported read.** The kept direction already holds that read to the record's root, and `R7-certified` holds the record's root to the verifier's.
+- **In both verifiers:** `Record.checks` and `checksFast` (Lean) and `audit.audit_record` (Python) take the certified values' names; the failing `registered` check's `wrong` gains each certified value with no reported read. The program's own registered values stay relaxed (Pearl+'s tables).
+- **It needs both changes under it**: the relaxed comparison (#9023) and the verifier's certified entries (R7). #9023 alone cannot state it, since nothing in the record marks which registered values are certified. On R7's branch alone a test of the case cannot fail without it, because the strict check there refuses the case already.
+- **So it is on a branch of its own, stacked on both:** `cursor/proofs-r7-certified-read-77a3` at `1e96817fde054624102d3f8344d3ca8addb7e58b`, the merge of R7's head `8e92d28fe27b` and #9023's head `6b782d972ec4` (clean; the three Python tests of R7 and of the relaxed check pass on it [run]). It is a descendant of both, so your answer to 4 is a fast-forward of either pull request's branch. **I did not merge #9023 into R7's branch**: that would put the relaxed check under CERTSTOP and network's worker and make R7's waiting records run stale before you answer 4. Say so if you want it there now.
+- **Files it changes** [read]: `Spot/Record.lean` (`checks`, `checksFast`, their equality, `Input`, `inputOf`, `record`), `Spot/OneStage.lean` (`recordChecks`), `Spot/Run.lean` (the record's input); `one_stage/audit.py`, `one_stage/verifier.py` (`audit_record`), `service.py` (`_audit`, `_audit_two`); the statement and `checks_ok`, `recordChecks_nil`, `acceptMeans_iff` in the proofs; a unit test, a stream test and difftest cases of exactly the case, each failing without the clause.
+- **What it does not refuse:** the renamed read beside another session's honest read of the same value (answer 1). That needs which port reads which value, which the record does not say: the open premise as it stands.
+
+**3. `CertifiedHeld` does not say it; it needs one clause.** `CertifiedHeld` says the record's entry for each certified value has the verifier's root. It says nothing of what the sessions read. The clause, in `UnitsProved` beside `OpenedRegistered` (so `UnitsProved` reads the verifier, which it does not today):
+
+```lean
+/-- Each value the verifier holds a certified entry for has a read the accepting verdicts of record report. -/
+def CertifiedRead (v : Registration.Verifier) (opened : Array (String × Json)) : Prop :=
+  ∀ x ∈ v.certified, ∃ y ∈ opened, y.1 = x.1.value
+
+-- UnitsProved p c e, last conjuncts
+  OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record) ∧
+  CertifiedRead p.verifier ((openedRoots c.record e.verdicts).getD #[])
+```
+
+- **In plain words, for the body.** Before (with #9023): "Each read the accepting sessions report of one of the record's own values is of a registered value, at the record's root for it. A registered value needs no reported read." After: "The same, and each value the verifier holds a certified entry for has such a reported read." With `CertifiedHeld` that read is at the root the verifier holds.
+- **It is a third change to what `acceptMeans` says**, after #9023's and R7's two. No named assumption, no premise. With no certified entry it is #9023's statement [derived: the quantifier is empty].
+- **What it does not say:** that every port that reads a certified value's rows is reported under that value.
+- **This is the statement written before any proof** (your stop rule). I build it on the stacked branch from now unless you say stop.
+
+**4. Neither closes. R7's pull request lands first, as it stands; #9023 then merges `main` and takes the clause before its mark.**
+- soundness's condition is on #9023's mark, and this meets it as written: the relaxed check never reaches `main` without the clause.
+- R7 on its base needs nothing more: the strict check under it refuses the case as far as it does today.
+- R7's date and NET-335 do not wait on the clause's Lean. The clause changes `Record.checks`' signature, which `Flock.SecurityProofs.RecursiveAuditC3` and 29 guarantees of `security/Properties` read (my count for #9023's body), so its records run is the larger one.
+- "#9023 first with the refusal added" does not exist: the refusal reads R7's input. #9023 first without it leaves `main` with the relaxed check and no clause; that harms nothing only because `main`'s R7 refuses every record that lists a certified value [derived], and it is not what soundness wrote.
+- If you want one pull request instead: fast-forward R7's branch to the stacked branch and close #9023. Its cost is that R7 waits for the clause.
+
+**Dates.** Fri 13 Nov 5 PM PST stands for R7's pull request as it is. For the clause I give a date in my Fri 16:00Z entry, after the first tries of `checks_eq_checksFast` and `checks_ok` with the new input.
+
+**R7's runs** [run: `research status`, 21:23Z]: all three still wait for a slot on the proofs pool. Records `r20261112-203637-a681` and tries `r20261112-203806-b740` on cpu-12 since 20:37Z. The suites: I cancelled `r20261112-202607-8ec0` on cpu-8 (164 GB under its memory reservations) and launched them again as `r20261112-204929-ca89` on cpu-10, one ahead of it in line. The head is unchanged, `8e92d28fe27b`.
+
+**Not established:** whether in the scan each certified value has one reading member (then the clause is exact there); I did not read NET-335's driver. No Lean ran for the probe: the Lean lines are read, and `checks` is Python's twin by its difftest.
+
+For the table: soundness's case: not refused by R7; refused today by the strict check when the renamed port is the value's only reader, accepted by #9023's; clause `CertifiedRead` written, building on `cursor/proofs-r7-certified-read-77a3` at `1e96817fde05`; recommend R7 first, then #9023 with the clause; R7 Fri 5 PM PST stands.
