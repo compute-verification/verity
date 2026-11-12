@@ -54,6 +54,23 @@ def test_a_row_both_sides_rewrote_under_a_new_first_cell_is_not_kept_twice():
     assert MR.rows([base, A], [ours, A], [ours, A, C]) == [ours, A, C], "the same rewrite on both sides is one row"
 
 
+def test_a_row_only_one_side_moved_stays_gits_conflict():
+    """A move is a change.  The result is in ours' order, so a row theirs alone moved would stay where ours has it with no one
+    told; one ours alone moved would be kept, and lost when the same two changes merge on the other branch."""
+    assert MR.rows([A, B], [A, B, C], [B, A]) is None, "theirs reorders while ours adds"
+    assert MR.rows([A, B], [B, A], [A, B, C]) is None, "ours reorders while theirs adds"
+    assert MR.rows([A, B, C], [B, A, C], [A, C, B]) is None, "both reorder, differently"
+    assert MR.rows([], [A, B], [B, A]) is None, "both add the same rows, in different orders"
+    assert MR.rows([A, B, C], [A, B], [C, A, B]) is None, "theirs moved the row ours removed"
+    assert MR.rows([A, B, C], [C, A, B, D], [A, B]) is None, "ours moved the row theirs removed"
+
+
+def test_a_move_both_sides_made_the_same_way_merges():
+    assert MR.rows([A, B], [B, A, C], [B, A]) == [B, A, C], "and ours adds a row"
+    assert MR.rows([A, B], [B, A], [B, A, C]) == [B, A, C], "and theirs adds a row"
+    assert MR.rows([A, B, D], [B, A], [B, A, D, C]) == [B, A, C], "and ours removes a row neither moved"
+
+
 def test_a_conflict_that_holds_the_row_under_a_header_stays_gits_conflict():
     """One side gave every row a new column while the other added a row, or each side added a table at one place: merged by
     rows, the first is a table with a short row and the second one table under two headers."""
@@ -79,6 +96,36 @@ def test_the_driver_writes_the_merge_to_ours_and_leaves_gits_markers_where_it_re
     assert MR.main([str(base), str(ours), str(theirs)]) == 1
     text = ours.read_text()
     assert "<<<<<<< ours\n" in text and ">>>>>>> theirs\n" in text and text.count("| `a/` |") == 3
+
+
+def test_the_driver_leaves_a_conflict_that_holds_half_of_a_move_to_git(tmp_path):
+    """Theirs moves a/ below b/ while ours adds c/ at the end: git takes a/ out above with no conflict, and the conflict
+    holds the two rows added below b/, one of them a row the base holds above.  And ours moves a/ below b/ while theirs
+    removes it and adds c/: merged by rows, the page would hold the row theirs removed."""
+    base, ours, theirs = _sides(tmp_path, [A, B], [A, B, C], [B, A])
+    assert MR.main([str(base), str(ours), str(theirs)]) == 1
+    assert ours.read_text().count("<<<<<<< ours\n") == 1
+    base, ours, theirs = _sides(tmp_path, [A, B], [B, A], [B, C])
+    assert MR.main([str(base), str(ours), str(theirs)]) == 1
+    assert ours.read_text().count("<<<<<<< ours\n") == 1
+
+
+def test_the_driver_leaves_a_row_the_table_would_hold_twice_to_git(tmp_path):
+    """Each side adds c/, at different places: git puts theirs' above with no conflict, and the conflict holds ours'."""
+    base, ours, theirs = _sides(tmp_path, [A, B], [A, C], [C, A])
+    assert MR.main([str(base), str(ours), str(theirs)]) == 1
+    text = ours.read_text()
+    assert text.count("<<<<<<< ours\n") == 1 and text.count("| `c/` |") == 2
+
+
+def test_the_driver_leaves_rows_each_side_moved_its_own_way_as_gits_conflict(tmp_path):
+    """Ours swaps a/ and b/ while theirs moves b/ below c/: the conflict holds ours' swap beside theirs' b/ removed.  Merged
+    by rows, the page would be in theirs' order, and ours' move dropped with no one told."""
+    base, ours, theirs = _sides(tmp_path, [A, B, C], [B, A, C], [A, C, B])
+    assert MR.main([str(base), str(ours), str(theirs)]) == 1
+    assert ours.read_text().count("<<<<<<< ours\n") == 1
+    base, ours, theirs = _sides(tmp_path, [A, B, C], [A, C, B], [B, A, C])
+    assert MR.main([str(base), str(ours), str(theirs)]) == 1, "and with the sides swapped"
 
 
 def test_prose_both_sides_rewrote_stays_a_conflict_beside_rows_that_merge(tmp_path):
