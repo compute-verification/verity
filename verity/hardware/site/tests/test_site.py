@@ -598,20 +598,25 @@ AUDITOR_JSON = {
                "shared": [{"bw": 50, "tier": "disk"}],
                "ways": [{"beta": 400000000000, "id": "node0/eth0"}, {"beta": None, "id": "node0/eth1"}]}],
     "keys": [{"id": "cert0", "key": "k0", "scheme": "lms-sha512/n64-w1-h20/v0"}],
-    "memory": [{"bw": 6554, "bytes": 2147483648, "host": "node0", "id": "dram0"}], "sheets": [], "tolerance": "0"}
-"""`SiteV2Guards.lean`'s auditor: a certifier's key, scheme and drift, a host's figures and a leaf's."""
+    "memory": [{"bw": 6554, "bytes": 2147483648, "host": "node0", "id": "dram0"}], "sheets": [],
+    "timebases": [{"id": "vm0", "sku": "tb0"}], "tolerance": "0"}
+"""`SiteV2Guards.lean`'s auditor: a certifier's key, scheme and drift, a host's figures and a leaf's, and the time base
+of a host of its own."""
 
 
 def test_a_locations_and_the_auditors_encodings_are_the_leans() -> None:
-    """A location writes `bw`, `chip`, `drift` and `time_unit` as null where it has none, `scheme` as a string and
-    `shared` as a list of a rate and a tier, each; the auditor writes its keys with their schemes, its leaves' and
-    hosts' figures and its devices' drifts. Both read back what they write, as `SiteV2Guards.lean` pins them."""
+    """A location writes `bw`, `chip`, `drift`, `time_unit` and `timebase` as null where it has none, `scheme` as a
+    string and `shared` as a list of a rate and a tier, each; the auditor writes its keys with their schemes, its
+    leaves' and hosts' figures, its devices' drifts and its hosts' time bases. Both read back what they write, as
+    `SiteV2Guards.lean` pins them."""
     assert canonical(LEAF.to_json()) == (
         b'{"bw":6554,"bytes":2147483648,"chip":null,"drift":null,"id":"dram0","key":"","kind":"memory",'
-        b'"owner":"prover","parent":"node0","scheme":"","shared":[],"sheet":"","tier":"dram","time_unit":null}')
+        b'"owner":"prover","parent":"node0","scheme":"","shared":[],"sheet":"","tier":"dram","time_unit":null,'
+        b'"timebase":null}')
     assert canonical(ROOT.to_json()) == (
         b'{"bw":null,"bytes":0,"chip":null,"drift":null,"id":"site0","key":"","kind":"site","owner":"prover",'
-        b'"parent":null,"scheme":"","shared":[],"sheet":"","tier":null,"time_unit":"1/1000000000"}')
+        b'"parent":null,"scheme":"","shared":[],"sheet":"","tier":null,"time_unit":"1/1000000000",'
+        b'"timebase":null}')
     cert = Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=SCHEMES[1], drift=Fraction(1, 10))
     host = Loc("node0", "host", "site0", chip=8002732032, shared=(("disk", 50),))
     for x in (LEAF, ROOT, cert, host):
@@ -622,6 +627,7 @@ def test_a_locations_and_the_auditors_encodings_are_the_leans() -> None:
                                              (("node0/eth0", 400000000000), ("node0/eth1", None)))),)
     assert (a.key("cert0"), a.scheme("cert0"), a.scheme("x"), a.drift) == (
         "k0", "lms-sha512/n64-w1-h20/v0", None, (("cert0", Fraction(3, 5000)),))
+    assert a.timebases == (("vm0", "tb0"),)
     assert a.to_json() == AUDITOR_JSON and Auditor.of_json(a.to_json()) == a
     assert SCHEMES == ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0")
 
@@ -929,21 +935,23 @@ G_CERT = Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=ROOT2)
 G_IN_VM = replace(G_CERT, parent="vm0")
 G_UPLINKS = (Link("up0", ("node0", "cert0"), 1, 0), Link("up1", ("cert0", OUTSIDE), 1, 0))
 G_KEYED = replace(G_AUDITOR, keys=(("cert0", "k0", ROOT2),))
-VM_KEYED = replace(G_KEYED, keys=(*G_KEYED.keys, ("vm0", "k1", ROOT2)))
+VM_KEYED = replace(G_KEYED, keys=(*G_KEYED.keys, ("vm0", "k1", ROOT2)), timebases=(("vm0", "tb0"),))
 """`SiteV2Guards.lean`'s certifier, at the site and in the auditor's host `vm0`, its two uplinks, and the auditors
-that hold the certifier's key and the host's beside it."""
+that hold the certifier's key and, beside it, the host's key and time base."""
 
 
 def g_vm(parent: str = "site0") -> Loc:
-    return Loc("vm0", "auditor-host", parent, "auditor", key="k1", scheme=ROOT2)
+    return Loc("vm0", "auditor-host", parent, "auditor", key="k1", scheme=ROOT2, timebase="tb0")
 
 
 def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
     """An auditor's host, as the guards state it. `Kinds`: it is at the site, a certifier or a challenger may be in
     it, it is under no host of the prover's, holds no device and no memory leaf, and no link ends at it. `Owners`: it
-    is the auditor's own, with its key. `Chips`: it states no on-chip bits. The auditor's inventory holds nothing of
-    it. In the views it is no host of the prover's, a device in it is in none, and a challenger in it reaches the
-    hosts its links end at."""
+    is the auditor's own, with its key, and states its time base, the auditor's for it, held as its key is: refused
+    with none, with another, or where the auditor has none for the host; no other location states one, the auditor's
+    device in the host neither. `Chips`: it states no on-chip bits. The auditor's inventory holds nothing of it. In
+    the views it is no host of the prover's, a device in it is in none, and a challenger in it reaches the hosts its
+    links end at."""
     vm = g_vm()
     assert holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, vm, G_IN_VM), links=G_UPLINKS))
     assert holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, vm, replace(G_IN_VM, kind="challenger"))))
@@ -958,10 +966,16 @@ def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
     assert not holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, replace(vm, owner="prover"))))
     assert not holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, replace(vm, key="k9"))))
     assert not holds("Owners", G_KEYED, Entry("", locs=(G_ROOT, vm)))
+    assert not holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, replace(vm, timebase=None))))
+    assert not holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, replace(vm, timebase="tb1"))))
+    assert not holds("Owners", replace(VM_KEYED, timebases=()), Entry("", locs=(G_ROOT, vm)))
+    assert not holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, vm, replace(G_IN_VM, timebase="tb0"))))
+    assert not holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, replace(G_HOST, timebase="tb0"))))
     assert holds("Chips", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, vm)))
     assert not holds("Chips", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, replace(vm, chip=1))))
     assert incomplete(Site((CARD,), (G_ROOT, G_HOST, g_dram(6554), g_disk(28), vm, G_IN_VM)), WITH_DISK) is None
-    assert Loc.of_json(vm.to_json()) == vm and vm.to_json()["kind"] == "auditor-host"
+    assert Loc.of_json(vm.to_json()) == vm
+    assert (vm.to_json()["kind"], vm.to_json()["timebase"]) == ("auditor-host", "tb0")
     site = Site(locs=(G_ROOT, G_HOST, G_GPU, vm, G_IN_VM), links=G_UPLINKS)
     assert (site.host("cert0"), site.host("vm0"), site.host("gpu0")) == (None, None, "node0")
     challenged = Site(locs=(G_ROOT, G_HOST, vm, replace(G_IN_VM, id="chal0", kind="challenger")),

@@ -702,6 +702,15 @@ def test_a_clock_the_card_does_not_bound_is_refused(host: str, card, refusal: st
         clock_drift(host, card())
 
 
+def test_an_auditor_holds_its_hosts_time_bases_by_their_cards() -> None:
+    """`Auditor.of_files(timebases=)` takes, by a host's id, the card of the time base its clock runs on, and holds the
+    card's SKU for the host, which `owner` holds the host's own to; a card of another kind is refused."""
+    held = Auditor.of_files((), timebases={"vy-auditor-1": cards.load(TIMEBASE)})
+    assert held.timebases == (("vy-auditor-1", TIMEBASE),)
+    with pytest.raises(Malformed, match="is no time base"):
+        Auditor.of_files((), timebases={"vy-auditor-1": cards.load("xeon-6776p-2s")})
+
+
 def _clocked(kind: str, clock: object) -> tuple[Registration, Auditor]:
     """Node `kind`'s remote log with `CERTIFIER` in front of it, its host's clock `clock`, and the auditor holding the
     certifier's key and that clock."""

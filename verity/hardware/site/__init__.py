@@ -43,7 +43,7 @@ end (`incomplete`):
 | `sheet-digest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's; each new memory leaf directly under a host states the auditor's figures for it (its host, a rate above 0, its bytes), and no other new location a rate; each new site states the site's unit of time, above 0, and no other new location one; each new host states the auditor's figures for it (its on-chip state and each tier's shared rate, none 0), and no other new location either |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
-| `owner` | each new certifier, challenger or auditor's host is the auditor's own, with its key, its key's scheme, one of `SCHEMES`, and the auditor's figure for its clock's drift, below 1 where there is one; every other new location is the prover's and states no scheme and no drift |
+| `owner` | each new certifier, challenger or auditor's host is the auditor's own, with its key, its key's scheme, one of `SCHEMES`, and the auditor's figure for its clock's drift, below 1 where there is one; every other new location is the prover's and states no scheme and no drift; each new auditor's host states its time base, the auditor's for it, and no other new location one |
 | `inventory` | the log, at its end: under each host, every memory leaf the auditor has figures for, at least its count of devices of each SKU it lists, and each way out it lists, as a link under that id with an end at the host at its rate |
 | `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
 | `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
@@ -374,13 +374,10 @@ def device_drift(clock: ClockPremise | Fraction | None) -> Fraction | None:
     return _rat(clock, "a host's clock drift")
 
 
-def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
-    """**The drift of the clock in host `host`**, as its time base's card (`verity.hardware.cards.load(sku)`, a card
-    of kind `timebase`) states it in `drift.max`: by the entry's mark, a premise or the auditor's figure, never both.
-    Marked `premise`, it is the host's premise, `ClockRateWithin(<host>, <drift.max>)` with the number as the card
-    writes it in scientific notation; marked `ceiling`, it is the figure `Auditor.drift` takes for the auditor's
-    devices in the host, with no premise. A `measurement` is only a lower bound on the ceiling and a `placeholder`
-    no bound, so either is refused, as are a card of another kind and a drift that is not a share below 1 in `s/s`."""
+def _timebase(host: str, card: Mapping[str, Any]) -> str:
+    """The SKU of the time base whose card `card` is (`verity.hardware.cards.load(sku)`, a card of kind `timebase`),
+    the one the clock of the auditor's host `host` runs on: what the host states as its time base (`Loc.timebase`). A
+    card of another kind is refused."""
     _str(host, "the host's name")
     if not host:
         raise Malformed("the host's name is empty; name the auditor's host whose clock the card times")
@@ -389,6 +386,17 @@ def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
         raise Malformed(f"card {sku!r} is no time base (its kind is "
                         f"{card.get('kind') if isinstance(card, Mapping) else None!r}); give the card of the clock "
                         f"host {host}'s device reads, `verity.hardware.cards.load(sku)` of a card of kind \"timebase\"")
+    return _str(sku, "a time base's SKU")
+
+
+def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
+    """**The drift of the clock in host `host`**, as its time base's card (`verity.hardware.cards.load(sku)`, a card
+    of kind `timebase`) states it in `drift.max`: by the entry's mark, a premise or the auditor's figure, never both.
+    Marked `premise`, it is the host's premise, `ClockRateWithin(<host>, <drift.max>)` with the number as the card
+    writes it in scientific notation; marked `ceiling`, it is the figure `Auditor.drift` takes for the auditor's
+    devices in the host, with no premise. A `measurement` is only a lower bound on the ceiling and a `placeholder`
+    no bound, so either is refused, as are a card of another kind and a drift that is not a share below 1 in `s/s`."""
+    sku = _timebase(host, card)
     try:
         entry = card["drift"]["max"]
         value, unit, mark, source = entry["value"], entry["unit"], entry["mark"], entry["source"]
@@ -576,7 +584,9 @@ class Loc:
     that key is of (`SCHEMES`), which says how many levels of keys stand under it; both empty on every other location.
     `drift` is how far the clock of one of the auditor's devices may run from real time, as a share of it; None on
     every other location, and a device that states none times nothing. `time_unit` is the site's unit of time in
-    seconds, on a location of kind `site` and None on every other (`Site.time_unit`)."""
+    seconds, on a location of kind `site` and None on every other (`Site.time_unit`). `timebase` is the SKU of the
+    time base the clock of an auditor's host runs on, the card the auditor reads the clock's drift from
+    (`clock_drift`); None on every other location."""
 
     id: str
     kind: str
@@ -592,6 +602,7 @@ class Loc:
     shared: tuple[tuple[str, int], ...] = ()
     drift: Fraction | None = None
     time_unit: Fraction | None = None
+    timebase: str | None = None
 
     def __post_init__(self) -> None:
         _str(self.id, "a location's id")
@@ -610,22 +621,23 @@ class Loc:
         object.__setattr__(self, "shared", _shared(self.shared, f"{self.id}'s shared"))
         object.__setattr__(self, "drift", _opt(self.drift, _rat, f"{self.id}'s drift"))
         object.__setattr__(self, "time_unit", _opt(self.time_unit, _rat, f"{self.id}'s time unit"))
+        _opt(self.timebase, _str, f"{self.id}'s time base")
 
     def to_json(self) -> dict[str, Any]:
         return {"bw": self.bw, "bytes": self.bytes, "chip": self.chip,
                 "drift": None if self.drift is None else _rat_str(self.drift), "id": self.id, "key": self.key,
                 "kind": self.kind, "owner": self.owner, "parent": self.parent, "scheme": self.scheme,
                 "shared": _shared_json(self.shared), "sheet": self.sheet, "tier": self.tier,
-                "time_unit": None if self.time_unit is None else _rat_str(self.time_unit)}
+                "time_unit": None if self.time_unit is None else _rat_str(self.time_unit), "timebase": self.timebase}
 
     @classmethod
     def of_json(cls, j: Any) -> Loc:
         j = _exactly(j, ("bw", "bytes", "chip", "drift", "id", "key", "kind", "owner", "parent", "scheme", "shared",
-                         "sheet", "tier", "time_unit"), "a location")
+                         "sheet", "tier", "time_unit", "timebase"), "a location")
         return cls(j["id"], j["kind"], j["parent"], j["owner"], j["sheet"], j["tier"], j["bytes"], j["key"],
                    j["scheme"], j["bw"], j["chip"], _shared_of(j["shared"], "a shared rate"),
                    _opt(j["drift"], _rat_json, "a location's drift"),
-                   _opt(j["time_unit"], _rat_json, "a location's time unit"))
+                   _opt(j["time_unit"], _rat_json, "a location's time unit"), j["timebase"])
 
 
 @dataclass(frozen=True)
@@ -859,8 +871,9 @@ class Auditor:
     SKU's; the relative tolerance registration allows around an estimate; the key of each of its own devices and hosts
     and the scheme it is of, by its id (`keys`, each `(id, key, scheme)`); its figures for each memory leaf directly
     under a host, by the leaf's id (`memory`); its figures for each host of the prover's, by the host's id (`hosts`);
-    and how far each of its own devices' clocks may run from real time, by the device's id (`drift`). The first under
-    an SKU or an id is the one the check reads. That these figures are the hardware is a public input: no check holds
+    how far each of its own devices' clocks may run from real time, by the device's id (`drift`); and the time base of
+    each of its own hosts, its SKU by the host's id (`timebases`). The first under an SKU or an id is the one the check
+    reads. That these figures are the hardware is a public input: no check holds
     it and no premise says it, and a result is over the registered hardware."""
 
     sheets: tuple[Sheet, ...] = ()
@@ -869,6 +882,7 @@ class Auditor:
     memory: tuple[tuple[str, MemoryFigures], ...] = ()
     hosts: tuple[tuple[str, HostFigures], ...] = ()
     drift: tuple[tuple[str, Fraction], ...] = ()
+    timebases: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sheets", tuple(self.sheets))
@@ -885,22 +899,27 @@ class Auditor:
             object.__setattr__(self, f, pairs)
         object.__setattr__(self, "drift", tuple((_str(i, "a device"), _rat(q, f"{i}'s drift"))
                                                 for i, q in _pairs(self.drift, "the auditor's drift")))
+        object.__setattr__(self, "timebases", tuple((_str(i, "a host"), _str(k, f"{i}'s time base"))
+                                                    for i, k in _pairs(self.timebases, "the auditor's time bases")))
 
     @classmethod
     def of_files(cls, cards: Iterable[Mapping[str, Any]], tolerance: Fraction = Fraction(0),
                  keys: Mapping[str, tuple[str, str]] | None = None, *,
                  memory: Iterable[tuple[str, MemoryFigures]] = (), hosts: Iterable[tuple[str, HostFigures]] = (),
                  drift: Iterable[tuple[str, Fraction]] = (),
-                 clocks: Mapping[str, ClockPremise | Fraction] | None = None) -> Auditor:
+                 clocks: Mapping[str, ClockPremise | Fraction] | None = None,
+                 timebases: Mapping[str, Mapping[str, Any]] | None = None) -> Auditor:
         """The auditor whose data sheets come from these card files (`verity.hardware.cards.load(sku)` each), at this
         tolerance, with its devices' keys, each a key and its scheme by the device's id, and these figures
         (`Registration.node_figures` gives a node's). `clocks` gives, by the id of each of its devices, the clock of
         the host it runs in, `clock_drift`'s: a figure is the device's drift, after `drift`'s; a premise gives none
-        (`device_drift`), and is the row's to name (`ClockPremise.premised`)."""
+        (`device_drift`), and is the row's to name (`ClockPremise.premised`). `timebases` gives, by the id of each of
+        its hosts, the card of the time base its clock runs on (a card of kind `timebase`), whose SKU is the host's
+        time base."""
         clocked = [(d, q) for d, c in (clocks or {}).items() if (q := device_drift(c)) is not None]
         return cls(tuple(Sheet.of_file(c) for c in cards), tolerance,
                    tuple((d, k, c) for d, (k, c) in (keys or {}).items()), tuple(memory), tuple(hosts),
-                   (*drift, *clocked))
+                   (*drift, *clocked), tuple((h, _timebase(h, card)) for h, card in (timebases or {}).items()))
 
     def sheet(self, sku: str) -> Sheet | None:
         """The data sheet for `sku`: the first under it."""
@@ -925,11 +944,13 @@ class Auditor:
                           for i, h in self.hosts],
                 "keys": [{"id": d, "key": k, "scheme": c} for d, k, c in self.keys],
                 "memory": [{"bw": m.bw, "bytes": m.bytes, "host": m.host, "id": i} for i, m in self.memory],
-                "sheets": [k.to_json() for k in self.sheets], "tolerance": _rat_str(self.tolerance)}
+                "sheets": [k.to_json() for k in self.sheets],
+                "timebases": [{"id": i, "sku": k} for i, k in self.timebases], "tolerance": _rat_str(self.tolerance)}
 
     @classmethod
     def of_json(cls, j: Any) -> Auditor:
-        j = _exactly(j, ("drift", "hosts", "keys", "memory", "sheets", "tolerance"), "the auditor")
+        j = _exactly(j, ("drift", "hosts", "keys", "memory", "sheets", "timebases", "tolerance"), "the auditor")
+        timebases = [_exactly(t, ("id", "sku"), "a host's time base") for t in _list(j["timebases"], "timebases")]
         drift = [_exactly(d, ("drift", "id"), "a device's drift") for d in _list(j["drift"], "drift")]
         keys = [_exactly(k, ("id", "key", "scheme"), "a key") for k in _list(j["keys"], "keys")]
         memory = [_exactly(m, ("bw", "bytes", "host", "id"), "a memory leaf's figures")
@@ -948,7 +969,8 @@ class Auditor:
                    tuple((k["id"], k["key"], k["scheme"]) for k in keys),
                    tuple((m["id"], MemoryFigures(m["host"], m["bw"], m["bytes"])) for m in memory),
                    tuple((h["id"], host(h)) for h in hosts),
-                   tuple((d["id"], _rat_json(d["drift"], "a device's drift")) for d in drift))
+                   tuple((d["id"], _rat_json(d["drift"], "a device's drift")) for d in drift),
+                   tuple((t["id"], t["sku"]) for t in timebases))
 
 
 @dataclass(frozen=True)
@@ -1292,8 +1314,15 @@ def _capacity(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 def _owners(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
     """Each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key, its key's
     scheme, one of `SCHEMES`, and the auditor's figure for its clock, below 1 where there is one; every other new
-    location is the prover's and states no scheme and no clock."""
+    location is the prover's and states no scheme and no clock; and each new auditor's host states its time base, the
+    auditor's for it, held as its key is, and no other new location states one."""
     for x in e.locs:
+        if x.kind == "auditor-host":
+            if x.timebase is None or x.timebase != _lookup(a.timebases, x.id):
+                return (f"auditor-host {x.id} states the time base {x.timebase!r}, and the auditor's for it is "
+                        f"{_lookup(a.timebases, x.id)!r}; it must state that one")
+        elif x.timebase is not None:
+            return f"{x.kind} {x.id} states a time base, which only an auditor's host does"
         if x.kind in AUDITOR_KINDS:
             if x.owner != "auditor" or a.key(x.id) != x.key or a.scheme(x.id) != x.scheme:
                 return f"{x.kind} {x.id} isn't the auditor's own, with its key and scheme"
