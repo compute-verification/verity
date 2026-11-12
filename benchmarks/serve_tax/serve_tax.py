@@ -1358,9 +1358,6 @@ def run(a: argparse.Namespace) -> int:
     read them, refused before anything starts."""
     if ARMS[a.arm].certifier:
         return certified(a)
-    if getattr(a, "side", None):
-        raise SystemExit(f"--side: arm {a.arm} is served by one command; the sides are those of an arm behind the "
-                         f"network certifier ({', '.join(n for n, x in ARMS.items() if x.certifier)})")
     out, held = Path(a.out).resolve(), SHARED.RESEARCH_RUN_DIR
 
     def outside(private: Path) -> Path:
@@ -3125,7 +3122,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--side", choices=(SERVER, CLIENT),
                    help="an arm behind the network certifier: the side this command serves, the engine and the id "
-                        "front on the node, or the certifier, its shim and vLLM's client on the certifier's host")
+                        "front on the node, or the certifier, its shim and vLLM's client on the certifier's host "
+                        "(ignored by the other arms, which one command serves)")
     r.add_argument("--front", type=int, default=FRONT_PORT, metavar="PORT",
                    help="such an arm: the loopback port the id front listens on, on the node, and where the "
                         "client's side reaches it")

@@ -37,12 +37,14 @@
 # The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its
 # own (--loads prefix --arms "compiled no-prefix-cache two-stage": its cost is the row alone) and joined with WITH.
 # An arm behind the network certifier (tick-certifier) is served by two commands, and this script is the node's:
-#   ARMS=tick-certifier SIDE=server LOADS=chat=RUNG TICK_MS=SAT,FREE [FRONT=PORT] [CELLS=NAME=N,...] [STOP_AT=TIME]
-#     bash benchmarks/serve_tax/run.sh --model glm53
+#   ARMS="[compiled] tick-certifier" SIDE=server LOADS=chat=RUNG TICK_MS=SAT,FREE [FRONT=PORT] [CELLS=NAME=N,...]
+#     [STOP_AT=TIME] bash benchmarks/serve_tax/run.sh --model glm53
 # starts the arm's engine and the id front before it on loopback port FRONT and holds them until the certifier's run
 # has ended or STOP_AT (serve_tax.certified_server); OUT/tick-certifier/server.json is its record, and it has no table
-# and no cost. The other command runs where the certifier does, a host that reaches FRONT and is never this node:
-# serve_tax.py run --arm tick-certifier --side client, with the same LOADS and CELLS. Its directory is the arm's.
+# and no cost here. The other command runs where the certifier does, a host that reaches FRONT and is never this node:
+# serve_tax.py run --arm tick-certifier --side client, with the same LOADS and CELLS. Its directory is the arm's, and
+# `serve_tax.py cost` over it and this job's compiled gives its cost. SIDE is its arms' alone: stock named before it
+# is served whole, under the same lease.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
 # files hold the requests' tokens and the salts (OUT keeps each class's public commit.json, a line of
 # <arm>/server/boundary.PID.jsonl), the history tables and the top-k's counters. It is a directory outside every run's.
@@ -314,9 +316,11 @@ dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
 # the cost of the last arm over compiled; a job that ends on stock has none: compiled alone (a calibration of its
-# rungs), or published, which is stock under other settings and no arm of ours. WITH: the out/ directories of earlier
+# rungs), or published, which is stock under other settings and no arm of ours; nor has the node's side of an arm
+# behind the network certifier, whose passes are in the other side's directory. WITH: the out/ directories of earlier
 # jobs on this node whose arms served another load, which joins the number
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ]; then
+if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
+    && [ "${SIDE:-}" != server ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})
   "${cost[@]}" --out "$OUT" --result || rc=1

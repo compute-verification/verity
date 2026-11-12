@@ -131,9 +131,7 @@ def test_an_arm_behind_the_certifier_is_served_by_its_two_sides_and_by_vllms_cli
             (bench, "served by two commands: --side server on the node"),
             ([*bench, "--side", "client"], "--certifier-windows N"),
             ([*run, "--client", "vllm-bench", "--loads", "long", "--side", "client"], "not long"),
-            ([*bench, "--side", "server", "--cells", "queue=8", "--tick-ms", "220,220"], "a queue of 8 under the rung 96"),
-            (["run", "--arm", "compiled", "--model-id", "glm53", "--client", "vllm-bench", "--loads", "chat", "--side",
-              "server", "--out", str(tmp_path / "out")], "--side: arm compiled is served by one command")):
+            ([*bench, "--side", "server", "--cells", "queue=8", "--tick-ms", "220,220"], "a queue of 8 under the rung 96")):
         with pytest.raises(SystemExit, match=why):
             S.main(argv)
     assert not (tmp_path / "out").exists()
@@ -142,6 +140,20 @@ def test_an_arm_behind_the_certifier_is_served_by_its_two_sides_and_by_vllms_cli
         S.main(["passes", "--loads", "chat,long", "--arms", ARM, "--model-id", "glm53"])
     with pytest.raises(SystemExit, match="load chat: no dataset file"):
         S.main(["passes", "--loads", "chat=96", "--arms", ARM, "--model-id", "glm53"])
+
+
+def test_a_job_of_the_nodes_side_serves_stock_whole_first_and_has_no_cost(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """One job on the node serves stock and then the arm's side under one lease: the side is passed to every arm, an
+    arm one command serves takes no notice of it, and the job computes no cost, the arm's passes being in the other
+    side's directory."""
+    sh = (S.HERE / "run.sh").read_text()
+    assert '${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} --out "$OUT/$arm"' in sh
+    assert '[ "${ARMS##* }" != published ] \\\n    && [ "${SIDE:-}" != server ]; then' in sh
+    served = []
+    monkeypatch.setattr(S, "serve", lambda a, private: served.append((a.arm, a.side)) or 0)
+    S.main(["run", "--arm", "compiled", "--model-id", "glm53", "--client", "vllm-bench", "--loads", "chat=96", "--side",
+            "server", "--out", str(tmp_path / "out")])
+    assert served == [("compiled", "server")]
 
 
 class Proc:
