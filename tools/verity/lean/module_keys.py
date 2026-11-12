@@ -623,7 +623,12 @@ def policy_roots(pkg: Path) -> list[str]:
     """The modules the audit builds besides the default targets (`lake build +ROOT`): its `lean-audit.json`'s `roots`."""
     f = pkg / "lean-audit.json"
     doc = json.loads(f.read_text()) if f.is_file() else {}
-    roots = doc.get("roots", []) if isinstance(doc, dict) else []
+    return as_roots(doc.get("roots", []) if isinstance(doc, dict) else [])
+
+
+def as_roots(roots) -> list[str]:
+    """A lock's `roots` section, whatever its JSON holds, as `policy_roots` gives it: its strings, and none unless it is
+    a list (check.py's `load` accepts any)."""
     return [r for r in roots if isinstance(r, str)] if isinstance(roots, list) else []
 
 

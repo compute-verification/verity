@@ -1850,17 +1850,38 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
     assert all("rep, policy, work = _open(pkg, out)" in ast.unparse(funcs[f]) for f in both), "the name the walk starts from"
     assert [n.value for n in ast.walk(module) if isinstance(n, ast.Constant) and isinstance(n.value, str)
             and (n.value == A.POLICY or n.value.endswith("/" + A.POLICY))] == [A.POLICY], "a lock's path that `POLICY` does not name"
-    # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index) and in
-    # `upstream.py`'s own command line, and check.py calls neither
+    # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index), in
+    # `upstream.py`'s own command line and in `lean_audit.py`'s runs of check.py, and check.py calls none of them
     siblings = {c.args[0].value for c in ast.walk(module) if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "sibling"}
     naming = {f"{s}.{getattr(top, 'name', '')}" for s in siblings for top in ast.parse((HERE.parent / f"{s}.py").read_text()).body
               if any((isinstance(v := getattr(n, "value", None), str) and A.POLICY in v) or getattr(n, "id", None) == "POLICY"
                      for n in ast.walk(top))}
-    assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main"}, (
+    assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main", "lean_audit.", "lean_audit._run",
+                      "lean_audit.keep_regenerated", "lean_audit.packages", "lean_audit.provers"}, (
         f"of the siblings check.py loads ({', '.join(sorted(siblings))}), these name the lock's file: {sorted(naming)}; one that "
         f"a step before the judge calls reads the lock by its path, where this walk does not follow it")
     assert not {"policy_roots", "main"} & {n.attr for n in ast.walk(module) if isinstance(n, ast.Attribute)}, \
         "check.py calls a sibling's function that reads the lock by its path"
+    # of `lean_audit` check.py takes the artifact cache and its bundles' log line, neither of which names the lock's
+    # file; the cache's `put` reads a package's `roots` by its path (`module_keys.policy_roots`) unless handed them
+    took = [parent[id(c)] for c in ast.walk(module) if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "sibling"
+            and c.args[0].value == "lean_audit"]
+    assert sorted({getattr(t, "attr", "") for t in took}) == ["LakeArtifacts", "bundled"], (
+        f"check.py takes {sorted({getattr(t, 'attr', '') for t in took})} of `lean_audit`, where it may take only "
+        "`LakeArtifacts` and `bundled`: a step before the judge that calls a `lean_audit` function naming the lock's file "
+        "reads the lock by its path")
+    for t in (t for t in took if t.attr == "LakeArtifacts"):
+        made, where = parent[id(t)], owner[id(t)]
+        bound = parent[id(made)]
+        assert isinstance(made, ast.Call) and isinstance(bound, ast.Assign) and len(bound.targets) == 1 and \
+            isinstance(bound.targets[0], ast.Name), f"`{where}` holds a `LakeArtifacts` by one name, whose puts this follows"
+        puts = [c for c in ast.walk(funcs[where]) if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+                and c.func.attr == "put" and getattr(c.func.value, "id", None) == bound.targets[0].id]
+        assert puts and all(any(k.arg == "roots" for k in c.keywords) for c in puts), (
+            f"`{where}`'s put into the artifact cache is not handed the roots, so `LakeArtifacts.put` reads them from the "
+            "lock by its path: hand it those of the lock `audit` holds (`roots=`)")
+    assert "publishing(pkg, rep, compiled, policy['roots'], log)" in ast.unparse(funcs["audit"]), \
+        "the roots `publish` hands its put are those of the lock `audit` loaded"
 
 
 @pytest.mark.slow

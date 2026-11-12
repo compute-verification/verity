@@ -874,6 +874,19 @@ def _keys(pkg: Path) -> dict[str, str]:
     return {m: LA.MK.entry_path(Path(), LA.MK.key(m, keyed, outs)).as_posix() for m in keyed}
 
 
+def test_a_put_handed_the_roots_reads_no_lock_and_keys_as_the_lock_would(tmp_path, monkeypatch):
+    """check.py's publish runs before the audit's judge, where no step reads a lock by its path, so it hands `put` the
+    roots of the lock its audit loaded. They key the build as `policy_roots` does from the same lock, whose `roots` may
+    hold any JSON check.py's `load` accepts (`module_keys.as_roots`), and no lock is read."""
+    pkg = _package(tmp_path)
+    (pkg / "lean-audit.json").write_text(json.dumps({"roots": ["P.B", 7]}))
+    read = LA.LakeArtifacts(tmp_path / "read").put({pkg: SANDBOXED})
+    monkeypatch.setattr(LA.MK, "policy_roots", lambda p: pytest.fail(f"{p}'s lock read by its path"))
+    assert LA.LakeArtifacts(tmp_path / "handed").put({pkg: SANDBOXED}, roots={pkg: ["P.B", 7]}) == read == 3
+    assert sorted(os.listdir(tmp_path / "handed" / "keys")) == sorted(os.listdir(tmp_path / "read" / "keys"))
+    assert (LA.MK.as_roots(["P", 7, None]), LA.MK.as_roots("P"), LA.MK.as_roots(None)) == (["P"], [], [])
+
+
 def test_the_artifact_cache_indexes_each_module_under_its_key_after_what_it_imports(tmp_path):
     """Lake's input hash is 64 bits of a hash that isn't cryptographic, so the cache indexes a module under its key
     (`module_keys`), the task graph's of its compile reading the outputs its build holds of what it imports, with the digest

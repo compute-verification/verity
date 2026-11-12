@@ -1102,7 +1102,8 @@ class LakeArtifacts:
         fcntl.flock(f, fcntl.LOCK_EX)
         return f
 
-    def put(self, reports: dict[Path, dict], since: float | None = None, log=print) -> int:
+    def put(self, reports: dict[Path, dict], since: float | None = None, log=print,
+            roots: dict[Path, object] | None = None) -> int:
         """Index each module of the builds of ``reports``' packages (each with what check.py said of its build: its report,
         or `builds`' record of a run that didn't end) that the build compiled (a trace written after ``since``, and not
         one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
@@ -1129,7 +1130,11 @@ class LakeArtifacts:
         names the first few with its words. Only what
         the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s. check.py's publish
         names what its build compiled (`"compiled"`) too: in one check.py, another package's build, which may fail, can
-        compile a module of a path dependency the two share."""
+        compile a module of a path dependency the two share. The modules keyed are those of each package's lock's
+        `roots`: ``roots`` gives them by package, as the caller holds the lock (check.py's publish, from the lock its
+        audit loaded, so nothing before the judge reads a lock by its path), and without it each is read from the
+        package's lock (`module_keys.policy_roots`). Either way they are taken as `policy_roots` takes them
+        (`module_keys.as_roots`), so one lock gives the same keys."""
         with self._lock():
             n = 0
             for pkg in sorted(reports):
@@ -1144,7 +1149,7 @@ class LakeArtifacts:
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
-                keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
+                keyed, owners = MK.keys(pkg, MK.policy_roots(pkg) if roots is None else MK.as_roots(roots[pkg])), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
                 if isinstance(only := rep.get("compiled"), list):

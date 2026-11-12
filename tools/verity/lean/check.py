@@ -5034,18 +5034,18 @@ def pack_replays(at: Path) -> tuple[Path, int] | None:
     return dest, len(todo)
 
 
-def publish(pkg: Path, rep: dict, held: threading.Event, said: dict, log=print) -> None:
+def publish(pkg: Path, rep: dict, roots, held: threading.Event, said: dict, log=print) -> None:
     """Put what ``pkg``'s build compiled into the node's artifact cache (`ARTIFACTS`, `lean_audit.LakeArtifacts.put`, on
-    ``rep``, what the audit said of the build), and with `BUNDLE` write the module versions it added there as a bundle
-    for other nodes (`LakeArtifacts.bundle_into`), with the replay entries this run's kernel has accepted so far beside
-    them (`pack_replays`). The put reads the build under the package's `writing`, and ``held`` is set once it holds it
-    (or failed to): a dependent's build, which waits for that hold, then cannot write the build under it. ``said`` gets
-    how many versions were new (`published`)."""
+    ``rep``, what the audit said of the build, and ``roots``, its lock's as the audit loaded it), and with `BUNDLE`
+    write the module versions it added there as bundles for other nodes (`LakeArtifacts.bundle_into`), with the replay
+    entries this run's kernel has accepted so far beside them (`pack_replays`). The put reads the build under the
+    package's `writing`, and ``held`` is set once it holds it (or failed to): a dependent's build, which waits for that
+    hold, then cannot write the build under it. ``said`` gets how many versions were new (`published`)."""
     try:
         store = sibling("lean_audit").LakeArtifacts(ARTIFACTS)
         with writing(pkg, log):
             held.set()
-            said["published"] = store.put({pkg: rep}, STARTED, log)
+            said["published"] = store.put({pkg: rep}, STARTED, log, roots={pkg: roots})
         log(f"publish: {pkg}: {said['published']} module version(s) new in the artifact cache")
         if BUNDLE is not None:
             with _BUNDLING:
@@ -5059,16 +5059,17 @@ def publish(pkg: Path, rep: dict, held: threading.Event, said: dict, log=print) 
         held.set()
 
 
-def publishing(pkg: Path, rep: dict, compiled: set[str], log=print) -> None:
+def publishing(pkg: Path, rep: dict, compiled: set[str], roots, log=print) -> None:
     """Once ``pkg``'s build steps and its sampled recompile passed in the sandbox and its build is sealed, whatever its
-    audit comes to: start its `publish` of the modules its build compiled (``compiled``, from its steps' logs), and
+    audit comes to: start its `publish` of the modules its build compiled (``compiled``, from its steps' logs), keyed
+    from its lock's ``roots`` as the audit holds them, so no step before the judge reads a lock by its path, and
     return once that holds the build. The build is announced (`built`) after this returns, so no dependent's build
     writes it before the put has read it; the facts and the replay, which read the seal's copies, run beside the put,
     and a dependent's build waits for it (`writing`)."""
     held, said = threading.Event(), {}
     build = {"package": rep["package"], "sandbox": rep["sandbox"], "failures": list(rep["failures"]),
              "compiled": sorted(compiled)}
-    t = threading.Thread(target=publish, args=(pkg, build, held, said, log), daemon=True)
+    t = threading.Thread(target=publish, args=(pkg, build, roots, held, said, log), daemon=True)
     PUBLISHING[pkg] = (t, said)
     t.start()
     held.wait()
@@ -5730,7 +5731,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     # ``store`` overrides the default for a caller whose cache is a throwaway private dir, as lean's review allows.
     store = (sealed is not None) if store is None else store
     if build and ARTIFACTS is not None and rep["sandbox"] and not DEV_CACHE:
-        publishing(pkg, rep, compiled, log)
+        publishing(pkg, rep, compiled, policy["roots"], log)
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)
