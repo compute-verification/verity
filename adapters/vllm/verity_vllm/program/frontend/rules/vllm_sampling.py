@@ -23,8 +23,9 @@ from __future__ import annotations
 import struct
 
 import torch
-from verity.circuits.refs import Coll
+from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
+from verity.definitions.registry.sampling import SPLIT_COUNTS
 
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, rows_of, shape
@@ -84,7 +85,6 @@ class GumbelTopPTokenSelectRule(OpRule):
             return f"top_p {top_p!r} is not a static number in (0, 1]"
         if isinstance(pos, bool) or not isinstance(pos, int) or pos < 0:
             return f"pos {pos!r} is not a static non-negative int"
-        from verity.definitions.registry.sampling import SPLIT_COUNTS
         if isinstance(S, bool) or not isinstance(S, int) or S not in SPLIT_COUNTS:
             return f"S {S!r} is not a launched split count {SPLIT_COUNTS} (the registered constant)"
         return True
@@ -111,7 +111,6 @@ class GumbelTopPTokenSelectRule(OpRule):
             temp_c = ctx.call(ctx.kind("const", node, W=32, BITS=tbits), node=node, rule=self, name=f"{hint}/temperature")
             s_c = ctx.call(ctx.kind("const", node, W=32, BITS=int(S)), node=node, rule=self, name=f"{hint}/splits")
             outs.append(ctx.call(fn, r, topp_c, seed_c, pos_c, temp_c, s_c, node=node, rule=self, name=f"{hint}[{i}]"))
-        from verity.circuits.refs import array_of
         out = array_of(outs).reshape(_tensor_type(lead, 32)) if lead else outs[0]
         ctx.define(node, out)
         ctx.record(self, node, {"V": V, "S": f"Const32[{int(S)}] (the registered split count)",

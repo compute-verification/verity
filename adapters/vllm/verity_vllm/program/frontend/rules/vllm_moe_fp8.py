@@ -30,7 +30,9 @@ import math
 import torch
 from verity.circuits.refs import Coll
 from verity.definitions.registry.fp8 import weight_blocks
+from verity.definitions.registry.prims import F32, I32
 
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (
@@ -75,7 +77,6 @@ def _tile_pins(meta, sc, profile) -> str | None:
         if (warps, stages) != (MOE_GEMM_PINS["num_warps"], MOE_GEMM_PINS["num_stages"]):
             return f"numerics_unregistered: num_warps/num_stages {warps}/{stages} are not {MOE_GEMM_PINS['num_warps']}/{MOE_GEMM_PINS['num_stages']}"
         return None
-    from verity_vllm.program.frontend import targets as T
     return T.moe_fp8_tuned_tile_refusal(profile, sc.get("BLOCK_SIZE_M"), sc.get("BLOCK_SIZE_N"), sc.get("BLOCK_SIZE_K"), warps, sc.get("SWAP_AB"))
 
 
@@ -102,7 +103,6 @@ def _fp8_launch_pins(node, meta, sc, profile) -> str | None:
 def moe_expert_fp8_role(routed: bool, bm: int, bn: int, warps: int, swap: bool) -> tuple[str, dict]:
     """(vocabulary role, its DOT) of a block-FP8 launch's per-pair Definition on the active target: the `_dot` roles' block-FP8 forms
     (`vocab._moe_expert_dot` with `G`); raises `frontend.targets.UnregisteredTarget` for a target without a registered e4m3 step."""
-    from verity_vllm.program.frontend import targets as T
     dot = T.moe_expert_fp8_launch_dot(active_target_profile(), bm, bn, warps, swap)
     return ("moe_expert_gemm_w_dot" if routed else "moe_expert_gemm_dot"), {"DOT": dot}
 
@@ -135,7 +135,6 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         profile = active_target_profile()
         if (r := _fp8_launch_pins(node, meta, sc, profile)):
             return r
-        from verity_vllm.program.frontend import targets as T
         geom = meta.get("geometry") or {}
         try:
             T.moe_expert_fp8_launch_dot(profile, sc.get("BLOCK_SIZE_M"), sc.get("BLOCK_SIZE_N"),
@@ -195,7 +194,6 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         bc, bsc = ctx.coll(b), ctx.coll(b_s)
         naive = sc.get("naive_block_assignment") is True
         ids_node = launch_tensor(node, meta, "expert_ids_ptr") if naive else ctx.val(launch_tensor(node, meta, "sorted_token_ids_ptr")).ids_node
-        from verity.definitions.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
         role, dot = moe_expert_fp8_role(mrw, BM, BN, WARPS, SWAP)
