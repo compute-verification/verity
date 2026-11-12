@@ -1,4 +1,4 @@
-"""What four readers make of a record that leaves an optional field out: the field absent, null and empty read alike.
+"""What these readers make of a record that leaves an optional field out: the field absent, null and empty read alike.
 
 * `verity_vllm.pipeline.program_cache`: a workload without `sweep` or `requests` keys a derive by nulls and no requests.
 * `verity_vllm.pipeline.vu_store`: a unit that states no evaluations names no value; a replay record that states no evaluator kept
@@ -14,9 +14,15 @@
 * `verity_vllm.pipeline.global_program`: a component states its applicability at its record's top, else under `artifact`; a
   declaration without components, or without a sampler, is a greedy one; a weights record without `unresolved` or `checkpoint`
   lists none and names no directory; the command's summary states null for a block the result does not have.
+* `verity_vllm.pipeline.build`: a workload without `requests` is a sampler batch of one; one without `sweep`, `variants` or
+  `sampling` is greedy, or has the policy its requests state; a launch context without its by-step lengths has none; a Program
+  with no correspondence annotation and a derive with no KV rewrite record none; a result without `tp` or `declared_derived` is
+  a single-GPU manifest that declares nothing; the command's summary states null for a result without `target` or `artifact`.
 """
 from __future__ import annotations
 
+import copy
+import dataclasses
 import gzip
 import hashlib
 import json
@@ -25,8 +31,12 @@ from types import SimpleNamespace
 import pytest
 
 from tests.check.test_sampled_replay import _program
+from tests.pipeline import tp_toy
+from tests.pipeline.test_build_ir_record import _write
 from tests.pipeline.test_vu_export import _world
 from verity_vllm.check.replay import driver as SR
+from verity_vllm.correspondence.runtime import NAMESPACE as CORRESPONDENCE
+from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as GP
 from verity_vllm.pipeline import manifest as M
@@ -34,6 +44,7 @@ from verity_vllm.pipeline import match as RC
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import program_graph as PG
 from verity_vllm.pipeline import vu_store as VS
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NO_SWEEP = dict.fromkeys(PC.DERIVE_INPUTS)
 SWEEP = {"sampling": "greedy", "sampling_params": {"top_k": 4}, "batch": 2, "sampling_seeds": [7, 8]}
@@ -389,3 +400,93 @@ def test_the_workload_program_s_summary_states_null_for_a_block_its_result_does_
     assert json.loads(capsys.readouterr().out) == {**SUMMARY, **stated}
     monkeypatch.setattr(GP, "build", lambda *_a, **_k: {"ok": False, "reason": "refused", "message": "why"})
     assert GP.main(a) == 4 and json.loads(capsys.readouterr().out) == {"reason": "refused", "message": "why"}
+
+
+UNSTATED: list[dict] = [{}, {"requests": None}, {"requests": []}]
+
+
+@pytest.mark.parametrize("doc", UNSTATED)
+def test_the_sampler_geometry_of_a_workload_that_states_no_request_is_a_batch_of_one_s(doc, tmp_path):
+    wl = tmp_path / "wl.json"
+    wl.write_text(json.dumps(doc))
+    policy: dict = {"kind": "stochastic", "seeded": True, "workload": str(wl)}
+    assert B.sampler_geometry(policy, TargetProfile.default().with_overrides(num_sms=142)) is None
+    assert policy["geometry"]["num_sms"] == 142 and policy["splits"] == policy["geometry"]["splits"]
+
+
+@pytest.mark.parametrize("doc", [{}, {"sweep": None, "variants": None, "sampling": None}, {"sweep": {}, "variants": {}, "sampling": {}}])
+def test_the_policy_of_a_workload_that_states_no_sweep_no_variant_and_no_sampling_is_its_requests(doc, tmp_path):
+    wl = tmp_path / "wl.json"
+    wl.write_text(json.dumps(doc))
+    assert B.sampling_policy(None, str(wl)) == {"kind": "greedy", "source": "workload", "workload": str(wl)}
+    wl.write_text(json.dumps({**doc, "requests": [{"variant": "v", "seed": 7}]}))
+    seeded = B.sampling_policy(None, str(wl))
+    assert (seeded["kind"], seeded["temperature"], seeded["label"]) == ("stochastic", 1.0, "v"), "a variant the workload does not define"
+    wl.write_text(json.dumps({**doc, "sampling": {"variant": "v"}}))
+    assert B.sampling_policy(None, str(wl))["kind"] == "greedy", "a top variant the workload does not define, and no request"
+    wl.write_text(json.dumps({**doc, "sampling": {"variant": "v"}, "variants": {"v": {"temperature": 0.5}}}))
+    assert B.sampling_policy(None, str(wl))["temperature"] == 0.5
+
+
+@pytest.mark.parametrize("params", [{}, {"sampling_params": None}, {"sampling_params": {}}])
+def test_a_sweep_that_states_no_sampling_parameters_samples_at_the_defaults(params, tmp_path):
+    wl = tmp_path / "wl.json"
+    wl.write_text(json.dumps({"sweep": {"sampling": "stoch-t1-p1", **params}}))
+    policy = B.sampling_policy(None, str(wl))
+    assert (policy["kind"], policy["temperature"], policy["top_p"], policy["top_k"], policy["label"]) == ("stochastic", 1.0, 1.0, 0, "stoch-t1-p1")
+
+
+@pytest.mark.parametrize("launch", [{"conflict": True}, {"conflict": True, "max_seqlen_q_by_step": None},
+                                    {"conflict": True, "max_seqlen_q_by_step": {}}])
+def test_a_launch_context_that_states_no_length_by_step_conditions_on_none(launch):
+    cond = B.applicability_conditions(TargetProfile.default(), {}, {}, {}, launch=launch)
+    assert cond["launch_context"] == {"max_seqlen_q_by_step": {}, "conflict": True}
+    stated = B.applicability_conditions(TargetProfile.default(), {}, {}, {}, launch={**launch, "max_seqlen_q_by_step": {3: 9, 1: 4}})
+    assert stated["launch_context"]["max_seqlen_q_by_step"] == {"1": 4, "3": 9}
+
+
+@pytest.mark.parametrize("rewrites", [{}, {"kv_rewrites": None}, {"kv_rewrites": []}])
+def test_the_program_writer_counts_no_kv_rewrite_for_a_derive_that_states_none(rewrites, tmp_path):
+    rep, mod, record, inner = tp_toy.derive_rank(2, 0)
+    root = next(n for n, m in mod.named_modules() if m is inner)
+    provenance = {k: v for k, v in rep.provenance.items() if k != "kv_rewrites"}
+    res = _write(f"{tmp_path}/none", dataclasses.replace(rep, provenance={**provenance, **rewrites}), record, root)
+    assert res["kv_rewrites"] == 0 and res["program"]["correspondence"]["namespace"] == CORRESPONDENCE
+    two = _write(f"{tmp_path}/two", dataclasses.replace(rep, provenance={**provenance, "kv_rewrites": [{}, {}]}), record, root)
+    assert two["kv_rewrites"] == 2
+
+
+@pytest.mark.parametrize("keep", [(), ("theta",)])
+def test_the_program_writer_records_no_correspondence_for_a_program_that_carries_none(keep, tmp_path):
+    rep, mod, record, inner = tp_toy.derive_rank(2, 0)
+    bare = copy.copy(rep.program)
+    bare.annotations = {k: v for k, v in rep.program.annotations.items() if k in keep}
+    res = _write(f"{tmp_path}/bare", dataclasses.replace(rep, program=bare, correspondence_digest=None), record,
+                 next(n for n, m in mod.named_modules() if m is inner))
+    assert res["program"]["correspondence"] is None and res["program"]["correspondence_digest"] is None
+
+
+@pytest.mark.parametrize("unstated", [{}, {"tp": None, "declared_derived": None}, {"tp": {}, "declared_derived": {}}])
+def test_the_construction_manifest_of_a_result_that_states_no_tp_and_no_declaration_is_a_single_gpu_one(unstated, tmp_path):
+    B._write_manifest(str(tmp_path), {"LP": 4, **unstated})
+    m = json.loads((tmp_path / "construction_manifest.json").read_text())
+    assert (m["structural_inputs"]["tp"], m["structural_inputs"]["rank"], m["tp"], m["declared"], m["derived"]) == (1, 0, None, None, None)
+    tp = {"world": 2, "rank": 1, "collectives": {"record": [1], "n": 3}}
+    B._write_manifest(str(tmp_path), {"tp": tp, "declared_derived": {"declared": {"a": 1}, "derived": {"b": 2}}})
+    m = json.loads((tmp_path / "construction_manifest.json").read_text())
+    assert (m["structural_inputs"]["tp"], m["structural_inputs"]["rank"], m["declared"], m["derived"]) == (2, 1, {"a": 1}, {"b": 2})
+    assert m["tp"] == {"world": 2, "rank": 1, "collectives": {"n": 3}}
+
+
+@pytest.mark.parametrize("unstated", [{}, {"target": None, "artifact": None}, {"target": {}, "artifact": {}}])
+def test_the_build_command_s_summary_states_null_for_a_result_with_no_target_and_no_artifact(unstated, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(B, "run", lambda *args, **kw: {"ok": False, **unstated})
+    monkeypatch.setattr("verity_vllm.pipeline.gc_tuning.tune", lambda: None)
+    assert B.main(B.Options(out=str(tmp_path / "out"))) == 1
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["target"] == {"declared": None, "applied": None} and summary["artifact_identity"] is None
+    stated = {"ok": False, "target": {"declared": {"d": 1}, "applied": {"a": 2}, "host": "h"}, "artifact": {"identity": "i" * 64}}
+    monkeypatch.setattr(B, "run", lambda *args, **kw: stated)
+    assert B.main(B.Options(out=str(tmp_path / "out"))) == 1
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["target"] == {"declared": {"d": 1}, "applied": {"a": 2}} and summary["artifact_identity"] == "i" * 64
