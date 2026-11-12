@@ -23,8 +23,11 @@ registered openings fix before the phase's sample.
   constant one. The secret `z` and the coins `ω` fix phase `i`'s statement `x z ω i`, its prover's strategy `Pv z ω i`
   and its registered openings `ops z ω i`, each reading only the phases before `i` (`PhasesAdaptive`). `phaseAcc` is the
   phase's verdict and `WregR` its incorrect set.
-* The premises a guarantee over these takes by name: the design's rate (`RateAt`) and the bound on each phase's error
-  (`PhaseErrors`).
+* The premises a guarantee over these takes by name: the design's rate (`RateAt`), the bound on each phase's error
+  (`PhaseErrors`), and that a phase's charge reads only the phases before it (`ChargeAdaptive`). A phase's error is
+  bounded by a number fixed before the period, `e i`, plus the average over the phase's own coins of a charge
+  `cl z ω i`, a quantity of those coins that is not negative; the period then pays the charges at their total along
+  its coins, once, where the `e i` add.
 * What a guarantee over these says of a phase besides its verdict, in its event and not among its premises: the
   phase's statement is registered as the period's (`PhaseRegistered`) and its record is complete (`RecordComplete`).
 -/
@@ -126,16 +129,22 @@ def PhasesAdaptive (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m �
     (∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → Pv z ω i = Pv z ω' i) ∧
     ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → ops z ω i = ops z ω' i
 
-/-- **`e i` bounds execution phase `i`'s error**: at every secret and every history, the committed form's
-error at the trace read at the statement (`Compiled.εregX`) plus the registered openings' binding term (`BopsX`'s
-probability), both at the statement's verifier, is at most `e i`. -/
+/-- **Each execution phase's charge reads only the earlier phases' coins**: phase `i`'s charge `cl z ω i`, a function
+of the phase's own coins, is one at any two histories of the period's coins that agree before `i`. -/
+def ChargeAdaptive (cl : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Tp × (Fin kV → Coin) → ℝ) : Prop :=
+  ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → cl z ω i = cl z ω' i
+
+/-- **`e i` and the charge bound execution phase `i`'s error**: at every secret and every history, the committed
+form's error at the trace read at the statement (`Compiled.εregX`) plus the registered openings' binding term
+(`BopsX`'s probability), both at the statement's verifier, is at most `e i` plus the average, over the phase's own
+coins, of the phase's charge `cl z ω i`. At the charge zero it is at most `e i`. -/
 def PhaseErrors [Fintype Tp] [Nonempty Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A)
     (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp)
-    (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) (e : Fin m → ℝ) :
-    Prop :=
+    (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) (e : Fin m → ℝ)
+    (cl : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Tp × (Fin kV → Coin) → ℝ) : Prop :=
   ∀ z ω i, (D (x z ω i)).εregX H (x z ω i) (Pv z ω i) +
-    (BopsX H (D (x z ω i)) (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e i
+    (BopsX H (D (x z ω i)) (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e i + Ex (cl z ω i)
 
 /-- **Execution phase `i` is registered as the period's**, at the secret `z` and the period's coins `ω`: its
 statement parses to one registered as `sw i` (`SameRegistration`) with the partition `Pw i`, and the phase's registered

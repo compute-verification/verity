@@ -12,18 +12,26 @@ at the incorrect sets of one trace: at each execution phase, the trace read at t
 openings (`regValR`), whose incorrect set (`WregR`) the phase's statement, its prover's strategy and its registered
 openings fix before the phase's sample.
 
-* The first input holds there with `e_i` at least the committed form's error at the trace read at the statement
-  (`Compiled.εregX`) plus the registered openings' binding term (`BopsX`'s probability): an accepted run that samples
-  a proof block of the set has a session's extraction fail, or its extractions disagree with themselves, with the
-  trace read at the statement or with a registered opening.
+* The first input holds there with the phase's error at most `e_i` plus the average, over the phase's own coins, of
+  a charge. The error is the committed form's at the trace read at the statement (`Compiled.εregX`) plus the
+  registered openings' binding term (`BopsX`'s probability): an accepted run that samples a proof block of the set
+  has a session's extraction fail, or its extractions disagree with themselves, with the trace read at the statement
+  or with a registered opening.
 * The second holds there with no error: where the network certifier registers an accepted phase's record among the
   registered openings (`CertifierRegisters`), the record meets the leak relation at that set, with no probability.
 
 So the probability that every phase is accepted, at a statement registered as the period's (`PhaseRegistered`) and
 with a complete record (`RecordComplete`), outside the period's good event (`PooledGood` at `WregR`) is at most
-`(1 - q)^Fmax + Σ_i e_i`. That an accepted phase is so registered and its record complete is in the event, not among
-the premises: a period in which an accepted phase is not registered as the period's, or has an incomplete record, is
-outside the bound.
+`(1 - q)^Fmax + Σ_i e_i` plus the average, over the period's coins, of the charges' sum. That an accepted phase is so
+registered and its record complete is in the event, not among the premises: a period in which an accepted phase is
+not registered as the period's, or has an incomplete record, is outside the bound.
+
+The charge. `e_i` is a number fixed before the period, and the `e_i` add over the phases. Phase `i`'s charge
+`cl z ω i` is a quantity of the phase's own coins that is not negative and reads only the phases before `i`
+(`ChargeAdaptive`): the part of a phase's error that the prover spends as the period's coins fall. The period pays
+the charges at their total along its coins, `Σ_i cl z ω i (ω i)`, averaged over those coins, once. So a quantity the
+prover spends across the phases as the earlier coins fall is charged at its total over the period, not at its
+largest value in each phase. At the charge zero the bound is `(1 - q)^Fmax + Σ_i e_i`.
 
 What it takes. The sampled proof system's premises (`Arg.KS`, and `CommitmentScheme.Binds` and `Compiled.Sessions`
 at every statement's verifier). The verifier is a function of the statement, `D y` the compiled verifier that judges
@@ -34,10 +42,15 @@ this statement derives it from what the verifier accepts. That each phase reads 
 (`PhasesAdaptive`), a property of the period the statement is read at, which it proves of no check. That the registered
 openings pass under each statement's roots and open every registered input (`RegOpens`), that the layouts fit the
 registered statements (`BoundaryGates.Fits`), and that at each accepted phase the network certifier registers its
-record among the registered openings (`CertifierRegisters`).
+record among the registered openings (`CertifierRegisters`). That each phase's error is at most `e_i` plus its
+charge's average (`PhaseErrors`), with the `e_i` and the charge not negative and the charge reading only the phases
+before its own (`ChargeAdaptive`).
 
 What it does not say. It counts no secrets: `PooledLeakAccepted`'s second conclusion does, at any incorrect sets. It
-fixes no sample's form and states no error's size.
+fixes no sample's form and states no error's size. It fixes no charge: the charge is a parameter, and this statement
+shows of no charge that it bounds a phase's error. The error it bounds is the committed form's, a number that the
+phase's statement, its prover's strategy and its registered openings fix before the phase's coins; it does not bound
+a phase's error by what the prover spends at the phase's own coins.
 -/
 
 @[expose] public section
@@ -61,7 +74,9 @@ are the phase's observations in the network certifier's record. Given
   (`hA`, `hb`, `hS`);
 * registered openings that pass under each statement's roots and open every registered input (`hops`);
 * `q`, the rate every execution phase's sample met (`hrate`), a hypothesis here, with `0 ≤ q ≤ 1`;
-* `e i` at least phase `i`'s error at the trace read at the statement plus the registered openings' binding term
+* `e i`, not negative (`he0`), and a charge `cl z ω i`, a quantity of phase `i`'s own coins that is not negative
+  (`hcl0`) and reads only the phases before `i` (`hcl`), with phase `i`'s error at the trace read at the statement
+  plus the registered openings' binding term at most `e i` plus the charge's average over the phase's own coins
   (`he`);
 * layouts that fit the registered statements (`hfit`), and at each accepted phase, the network certifier registering
   the phase's record among the registered openings (`hcert`);
@@ -70,8 +85,9 @@ for every secret, the probability that every phase is accepted, its statement re
 `Pw i` and the openings holding `ρ i` at the registered inputs (`PhaseRegistered`) and its record complete
 (`RecordComplete`), while the period's good event fails (`PooledGood` at the incorrect sets `WregR`: they hold under
 `Fmax` proof blocks in total, and every phase's record meets its leak relation at its own) is at most
-`(1 - q)^Fmax + Σ_i e i`. A period in which an accepted phase is not registered as the period's, or has an incomplete
-record, is outside the bound. -/
+`(1 - q)^Fmax + Σ_i e i` plus the average, over the period's coins `ω`, of the charges' sum `Σ_i cl z ω i (ω i)`: the
+period pays the charges once, at their total along its coins. A period in which an accepted phase is not registered
+as the period's, or has an incomplete record, is outside the bound. -/
 def PooledLeakRegistered : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} (H : Claims.Msg → Claims.Msg)
     (D : Claims.Msg → Compiled Coin A) (hA : A.KS H) (hb : ∀ y, (D y).commit.Binds H) (hS : ∀ y, (D y).Sessions H)
@@ -88,7 +104,10 @@ def PooledLeakRegistered : Prop :=
     (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
     (hrate : ∀ z ω i s Pt, (D (x z ω i)).parse (x z ω i) = some s →
       (D (x z ω i)).partition s = some Pt → RateAt s Pt q)
-    (e : Fin m → ℝ) (he : PhaseErrors H D x Pv ops e) (hfit : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)))
+    (e : Fin m → ℝ) (he0 : ∀ i, 0 ≤ e i)
+    (cl : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Tp × (Fin kV → Coin) → ℝ) (hcl : ChargeAdaptive cl)
+    (hcl0 : ∀ z ω i c, 0 ≤ cl z ω i c) (he : PhaseErrors H D x Pv ops e cl)
+    (hfit : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)))
     (hcert : ∀ z ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
       CertifierRegisters H (D (x z ω i)).commit (lay s) (k s) (op i (runsBefore (obs z ω) i)) s (ops z ω i s)
         (obs z ω i))
@@ -96,6 +115,6 @@ def PooledLeakRegistered : Prop :=
     Pr (fun ω => (∀ i, phaseAcc H D x Pv hk z i ω (ω i) ∧
           PhaseRegistered D lay k reg sw Pw ρ x ops z ω i ∧ RecordComplete k Dj sw obs z ω i) ∧
         ¬PooledGood lay k reg Dj sw Pw ρ op Fmax (WregR H D x Pv ops z ω) (obs z ω)) ≤
-      (1 - q) ^ Fmax + ∑ i, e i
+      (1 - q) ^ Fmax + ∑ i, e i + Ex fun ω => ∑ i, cl z ω i (ω i)
 
 end NetTiming.Guarantees
