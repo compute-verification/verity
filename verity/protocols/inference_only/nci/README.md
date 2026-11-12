@@ -7,7 +7,7 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - every source we rely on, each claim quoted verbatim (`sources/`);
 - the parameters the bounds depend on, each estimate saying which findings it merges and how (`parameters.json`);
 - the policies they are evaluated under (`calibrations.json`);
-- the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
+- the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `bracket.py`).
 
 Nothing in `verity` reads this directory. The theorems it cites are in `security/`: `Nci.SecurityProofs.ThreadedTraining`
 (`security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.IncompressibleContainedTraining`
@@ -21,7 +21,7 @@ and `fit.py` read. Hosts carry no compute and no run beats the reference's effic
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
 where every unit is proved (T1 to T4), and rho's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`residual` 1) both are 1.
 Without the reference-efficiency assumption they are 1.21 and 1.22, without the
-hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
+hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`bracket.py`, and `tiers.py`'s `efficiency` and `residual`;
 `GLOSSARY.md`, Older names).
 
 ## Files
@@ -38,7 +38,7 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `arguments.py` | the map's checks (every reference resolves, including Lean names against the lock) and its rendering |
 | `catalog.py` | loading, and `problems()`: every rule below that a file breaks |
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
-| `slowdown.py` | the bracket per row; `python verity/protocols/inference_only/nci/slowdown.py [--calibration ID] [--row ID]` |
+| `bracket.py` | the bracket per row; `python verity/protocols/inference_only/nci/bracket.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python verity/protocols/inference_only/nci/kappa.py [--model ID]` |
 | `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python verity/protocols/inference_only/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
@@ -56,7 +56,7 @@ This directory has an import root of its own (`SEPARATE` in `tests/test_boundari
 it:
 
 - `verity/protocols/inference_only/rho` reads data files of this directory by path (the algorithm library,
-  `algorithms.json`, and the calibrations, `calibrations.json`), and its tests load `tiers.py` and `slowdown.py` by
+  `algorithms.json`, and the calibrations, `calibrations.json`), and its tests load `tiers.py` and `bracket.py` by
   path to hold rho's own arithmetic to theirs; rho's suite names each among its `inputs`;
 - the Lean lock (`security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
   statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
@@ -158,7 +158,7 @@ of new state per block can reach. What it throttles is moving the base model's f
 
 ## The bracket
 
-For each row under each calibration of its model, `slowdown.py` computes a bracket:
+For each row under each calibration of its model, `bracket.py` computes a bracket:
 
 - `lower` is the proven bound, `Nci.SecurityProofs.ThreadedTraining`:
   \(\text{slowdown} \ge \kappa\, b_a / (2\alpha\Lambda_T)\) with \(\alpha = K/\Gamma\) and the thread term
@@ -384,5 +384,5 @@ at most the bits of data the budgets allow.
 
 ~~~sh
 python verity/protocols/inference_only/nci/render.py > /tmp/nci-index.md     # never commit the output
-python verity/protocols/inference_only/nci/slowdown.py --calibration kimi-k2-1m-raw
+python verity/protocols/inference_only/nci/bracket.py --calibration kimi-k2-1m-raw
 ~~~
