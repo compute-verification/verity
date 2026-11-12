@@ -26,3 +26,16 @@ def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monk
     sts = SRW.circuit_record(SimpleNamespace(members=members, row_tables=()), [])
     got = hashlib.sha512(IF.circuit_bytes(sts)).hexdigest()
     assert len(sts) == 70 and got == STATEMENTS, got
+
+
+def test_each_served_key_rows_writer_commits_the_bits_it_returns():
+    """Each key rows' writer the served partitions name commits 16 NVIS W bits (`partition._template_bits`, the class the
+    partition checks and the weight the leak bound gives a wrong proof block of it), 65,536 at 64 keys of 64 columns: the
+    row it returns, which every head's scores and values units read, though it is its input."""
+    from verity.protocols.spot.verifier.one_stage import partition as P
+
+    writers = sorted({t for f in SERVED for t in json.loads(f.read_text())["chunk_cap"]
+                      if t.startswith("SparseMlaHeadKeysWire_")})
+    got = {t: (P._template_bits(fn), 16 * fn.statics["NVIS"] * fn.statics["W"]) for t in writers for fn in [SRW.template(t).fn]}
+    assert len(writers) == 18 and all(b == want for b, want in got.values()), got
+    assert got["SparseMlaHeadKeysWire_v2{NVIS=64,W=64,C=0}"] == (65536, 65536)

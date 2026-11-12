@@ -8,7 +8,7 @@ same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     SparseMlaHeadBlock_v3{DR,DV,NVIS,FIRST,BN,DOT,SCALE}   the same function written as Calls; ``opt_in``
     SparseMlaHeadScores_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  the block up to P, written as Calls
     SparseMlaHeadScoresCols_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE,G}  the same on its key rows' column blocks side by side
-    SparseMlaHeadKeysWire_v2{NVIS,W,C}                     its input, through casts that are wires: no AND
+    SparseMlaHeadKeysWire_v2{NVIS,W,C}                     its input, each bit XORed with a constant 0: no AND
     SparseMlaHeadValues_v2{NVIS,FIRST,BN,DOT,G,C}          the block's P V steps on G columns of O, written as Calls
     SparseMlaHeadEnd_v2{DV,INV}
     SparseMla_v2{T,NH,DR,DV,BN,DOT,INV,SCALE}
@@ -241,13 +241,17 @@ SparseMlaHeadScoresColsV2 = EW.on_bits("SparseMlaHeadScoresCols", 2, ["DR", "DV"
 
 
 def _head_keys_wire(B, S, kv):
-    """`SparseMlaHeadKeysWire_v1`'s body on bits: each word through `Bf16ToF32_v2` and `U32Hi16_v2`, wires and constants, no
-    AND."""
-    from verity.definitions.ops.boolean import cast as BC
-    from verity.definitions.ops.boolean import scalar as BSC
+    """`SparseMlaHeadKeysWire_v1`'s function on bits, not its body: each input bit XORed with one constant 0, so each bit it
+    returns is a gate of its own activation (16 NVIS W XORs and the constant, no AND), as each word `SparseMlaHeadKeysWire_v1`
+    returns is its own `U32Hi16_v1`'s.  Casts that are wires would return its input bits themselves, and a template's
+    returned bits are the gates of its own it returns (`partition._template_bits`)."""
+    from verity.circuits import boolean as BL
+    from verity.circuits.refs import broadcast
 
-    wide = B.batch(BC.Bf16ToF32, Coll(Array(S.NVIS * S.W, BF16), kv.refs), axes=(0,))
-    return B.batch(BSC.U32Hi16, wide, axes=(0,)).reshape(Array(S.NVIS, Array(S.W, BF16)))
+    n = 16 * S.NVIS * S.W
+    zero = B.call(BL.constant(0))
+    pairs = Coll(Array(2, Array(n, BL.BIT)), concat([kv.refs, broadcast(*zero.refs[0], n)]))
+    return B.batch(BL.XOR, pairs, axes=(1,)).reshape(Array(S.NVIS, Array(S.W, BF16)))
 
 
 SparseMlaHeadKeysWireV2 = EW.on_bits("SparseMlaHeadKeysWire", 2, ["NVIS", "W", "C"], lambda S: M._head_keys_type(S, BF16),

@@ -83,8 +83,9 @@ def test_boolean_agrees_with_its_word_view(target) -> None:
 
 
 def test_the_writer_returns_its_input_at_no_and_and_a_return_other_than_its_input_is_refused() -> None:
-    """The writer is the identity on its words (word and Boolean), its gates its 2 NVIS W primitive calls (one a word on
-    bits), none an AND, the same gates on every column block it names; and its flat unit (`class_statement.unit_lowering`, as `UnitStager` stages it), honest, satisfies every
+    """The writer is the identity on its words (word and Boolean), its gates its 2 NVIS W primitive calls, and on bits a XOR
+    of each of its 16 NVIS W input bits with one constant 0, none an AND, the same gates on every column block it names; and
+    its flat unit (`class_statement.unit_lowering`, as `UnitStager` stages it), honest, satisfies every
     row, while a returned bit flipped after witness generation (`ir_lower.evaluate_layout`'s ``flip``) leaves its lane
     unsatisfied: a writer whose return is not its input is refused by its Definition."""
     from verity_flock import class_statement as CL
@@ -94,7 +95,7 @@ def test_the_writer_returns_its_input_at_no_and_and_a_return_other_than_its_inpu
     word, boo = bind(M.SparseMlaHeadKeysWire, NVIS=16, W=32, C=0), bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=32, C=0)
     assert np.array_equal(np.asarray(E.evaluate_batch(word, kv)).reshape(kv.shape), kv)
     assert np.array_equal(np.asarray(BS.evaluate_words(boo, kv)).astype(kv.dtype).reshape(kv.shape), kv)
-    assert (word.gates, boo.gates) == (2 * 16 * 32, 16 * 32)
+    assert (word.gates, boo.gates) == (2 * 16 * 32, 16 * 16 * 32 + 1)
     assert bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=32, C=5).body.gates == boo.body.gates
     for d in (M.SparseMlaHeadKeysWire, BM.SparseMlaHeadKeysWireV2):
         with pytest.raises(ValueError, match=re.escape("SparseMlaHeadKeysWire: NVIS=2 and W=16 must be >= 1 and C=-1 >= 0")):
