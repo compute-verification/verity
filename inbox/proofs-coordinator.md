@@ -105816,3 +105816,83 @@ For the table: certified rows | form: the Program's mark, one refusal in the rec
 - #9229 at `7cab9aeb4422`: the quick suites `r20261112-184654-0f98` ended, 70 of 70 suites passed. The guard `r20261112-204759-aacf` runs, 3 of its 6 tests passed so far. Its ready line follows the guard.
 
 **Not established.** That any file of this hour compiles. That `addressOf` meets ADDRROW's shapes once the wired case is restated. That the wiring map is idempotent at an accepted run (the lemma is not written). The entry fact and the one-tree fact at the map: not started. Whether Friday's circuits meet (a) to (e), and whether its interior registration registers no value. `SourcesNamed` already leaves out a member that reads a registered table (weights) at a port of its own; Friday's token select reads none [relayed: HONEST2's design], a later workload will. That the design's evaluation is the right place for the decided conditions rather than the statement check: say if you want them elsewhere.
+
+## RUNCOINS, Thu 12 Nov 22:33Z: your ruling is in: the run's coins are now stated as the device's coins or the model's break, under the verifier's key, with no premise of mine; and a finding: the run's coin check lets the evidence choose which coin family a stage reads
+
+**In plain words.** `EvidenceIsLog` is deleted. In its place, a stage's bytes are either coins the device released after the record's digest, on the window the verifier holds, or the model's own `Break`. The one hypothesis is the one REDRAW's change discharges: the run's coin check reads `drawCoins` under the verifier's key. The proof reuses `drawnByDevice`, which is already proved, and restates nothing of PERIODREAD's. Reading the check for this, I found that it never says which coin family a stage reads: the family's name comes from the evidence. I also changed the top statement's play to `proverSeq` on `seqCoins` (from `Honest.lean`), so part 4 becomes one pointwise lemma. The new text is in a try. Nothing new is compiled since 21:59Z.
+
+Clock: `date -u` read 22:33Z. Branch `cursor/proofs-runcoins-2d88` at `4473d67acb`. Mailbox read at 22:31Z (your 22:21Z ruling; nothing after it).
+
+### 1. The ruling, applied (`RunsAs/Statement.lean` at `4473d67acb`)
+
+- [read] `drawnByDevice : DrawnByDevice` is proved (`Proofs/Properties/Challenger/Drawn.lean:54`). It says: what `drawCoins key w label after coins` reads is what a run of the device released of `label` after `after`, on a run whose ledger opens on `w`; or `Break dev key label coins`. So the device's side is already done for a draw, and I build on it. I don't need the every-line ledger form (`LedgerLinesOfDevice`).
+- New statements, all mine, in namespace `SpotFlock.RunsAs`:
+  - `Starts b ξ`: `b` is the start of `ξ`.
+  - `drawEvidence coins`: the coin evidence with its `key` removed, which is what `drawCoins` reads.
+  - `CheckReadsDraw key`: the hypothesis REDRAW's lemma discharges. Where `Challenger.coinsReason coins w after read = none`, then `drawCoins key w label after (drawEvidence coins) = .ok ξ` for some `label`, and `read` starts `ξ`. Today it holds only at the key the evidence carries.
+  - `FromDevice dev key w after coins read`: for some label, either `read` starts `s.released label after` for a run `s` of `dev` under `key.pub` that `OpensOn` `w`, or `Break dev key label (drawEvidence coins)`.
+  - `RunCoinsFromDevice key`: at an accepted two-stage run under `CheckReadsDraw key`, each stage that read bytes has `FromDevice` after its record's digest, on the window its verifier holds. This replaces `RunCoinsInOrder` and is to be proved, not assumed.
+  - [derived] The proof is three steps. First, `accepted_steps` (part 5) gives `coinsHold` for each stage. Second, `coinsHold` with a nonzero read gives `coinsReason … = none`. Third, `CheckReadsDraw` followed by `drawnByDevice`. About 60 lines [guess].
+- REDRAW: when its signature is in, `CheckReadsDraw` becomes a lemma at the new `coinsReason`. The only file it touches is `RunsAs/Statement.lean`, plus the proof file once it exists.
+- Your point 5 applies here [read]. My break branch is `Properties.Challenger.Break`, so an earlier period's genuine signature replayed in the evidence counts as a forgery here too.
+
+### 2. FINDING: the coin check doesn't fix the stage's coin family
+
+- [read] `Challenger.coinsReason` (`ChallengerCoins.lean:105-120`) takes the family from the evidence's `segment.label` and checks `read` against that family's coins. `Run.coinsHold` (`Run.lean:165-169`) passes no family. `drawCoins` takes the family as an argument and refuses any other (`ChallengerDraw.lean:42`), but the run never calls it.
+- [derived] So `FromDevice` can only say "some family". If the device releases more than one family after the same record digest, the prover chooses which one a stage reads. That choice is not counted as grinding.
+- [guess] I don't know whether the device releases a second family after a registration's digest when asked. The model's `released label after` is per family.
+- The fix: the run passes each stage's family to the check (the first stage's and the second's), so `FromDevice` names it. It belongs to REDRAW's change or the verifier's owner, and it isn't mine. It is not a STOP RULE case: it refuses more, and no listed statement changes.
+
+### 3. TWOLEG: where my file and the leg's meet
+
+- [read] `AcceptsRun A x Rd Acc` (`SampledTwo/Projection.lean` at `08e3d2b2d7`) is universal: every prover and coins whose messages, and whose coins at the read rounds, are what the form's check read give an accepting run.
+- My statement is the inner lemma, as you said. `RunAcceptsPlay` covers `Run.run` accepted, the held copies agreeing, round 2's check (`RoundTwo`) and each session accepted by Flock (`SessionsAccept`, at a session prover `P' t` and coins `r' t`). From these it concludes that `V h` accepts `proverSeq h [] m₁ m₂ P'` on `seqCoins h c₀ c₁ r'`, where `c₀` and `c₁` are the run's bytes padded with zeros (`PlayCoins`).
+- I propose one bridge lemma, mine: `SpotFlock.RunsAs.accepts_of_reads`. Two runs of `V h` at `x` whose messages agree at every round and whose coins agree at every round `V h` reads have the same outcome. The rounds `V h` doesn't read are round `stage + 1` and the verdict's round. P7 is then my theorem plus this lemma, at the form's `Rd`.
+- What I need the form's accept to give, which is the outer function's contract (name and signature are TWOLEG's call):
+  - `Run.run` accepted on the verdicts the form computed, at `(i, it)` (`AcceptedTwo`).
+  - `Rd.msg o 1` is the interior record's bytes and `Rd.msg o (stage + 1)` the session statements' message.
+  - `Rd.coin o 0` and `Rd.coin o (1..stage)` are the stage bytes padded with zeros (`PlayCoins`).
+  - For each template, the messages and coins the form read for its session make Flock's masked verifier accept at `stmtAt h m₂ t`.
+- TWOLEG, please confirm this or name the shape the form gives, and I'll fit the bridge to it.
+
+### 4. FRAME's five clauses on my side
+
+- `two`: `ScopeHolds`.
+- `sessionOk`, `pinOk` and the rounds: `SessionsHeld`.
+- `recordsOk`: not on my base `3aeb727bea`. I'll place it when FRAME's change lands.
+- One lemma each, from the verdicts and the registration step. All are owed, none written. `NamesDistinct` stays a hypothesis until FRAME names the head.
+
+### 5. The map of the five parts (owed 23:30Z)
+
+| part | where | state |
+|---|---|---|
+| 1 the first stage's sample | `Samples.lean`: `select_append`, `sample_pad` | `select_append` elaborated [run `r20261112-220700`]. Open: the draw's units are the select's `proved`, about 150 lines [guess] |
+| 2 the second stage's draw | `Samples.lean`: `selectSecond_append`, `secondDraw_pad` | written; in `r20261112-223154-7e2e` |
+| 3 round 2 | RUNSAS: `stmtOk_of_check : RunsAs.RoundTwo h` | RUNSAS's |
+| 4 the sessions | a pointwise `accepts_seq`, at `seqCoins` | NEEDS, below |
+| 5 the outcome | `Outcome.lean` (`codes_of_attach`, `check_true_of_codes`), `Steps.lean` (`accepted_steps`: the accepted run's path through `Run.run`) | `check_true_of_codes` compiled [run `r20261112-215016-ac20`]; `accepted_steps` written, in `r20261112-223154-7e2e` |
+| coins | `RunCoinsFromDevice` from part 5 and `drawnByDevice` | stated; proof about 60 lines [guess] |
+| top | `RunAcceptsPlay`: parts 1 to 5 plus `OwnAgrees` from `HeldMatches` | stated |
+
+- [run] The top statement's earlier text elaborated in `r20261112-215016-ac20`. The text at `4473d67acb` (play as `proverSeq`, the coin statements) is in `r20261112-223154-7e2e` [ETA 23:00Z, guess].
+
+### Runs
+
+- `r20261112-221431-f9db` (vy-nebius-cpu-4): Statement, Outcome and Samples at `03e9bd5b0d`, still building imports at 22:32Z.
+- `r20261112-223154-7e2e` (vy-nebius-cpu-9): the aggregator `RunsAs.lean` at `4473d67acb`, all four files.
+
+### NEEDS
+
+- From the owner of `SpotFlock/Honest.lean` (none named; you decide): split `accepts_seq` at its `refine Pr_pos_of (seqCoins …) ?_`. The goal after that line becomes `accepts_seqCoins`: the run on `seqCoins h c₀ c₁ r'` accepts. `accepts_seq` then becomes the one-line `Pr_pos_of _ (accepts_seqCoins …)`, and no statement changes. If you'd rather, I can make that edit, or copy the roughly 110 lines into `RunsAs/Sessions.lean`; the copy would be deleted once the split lands.
+- From REDRAW or the verifier's owner: the stage's family passed to the coin check (section 2).
+- From RUNSAS: `stmtOk_of_check` at the agreed shape (unchanged since 21:59Z).
+
+**To post.** Nothing.
+
+**Not established.**
+- Nothing new is compiled: `Samples.lean` past `select_append`, `Steps.lean` and the new statement text wait on the two runs.
+- `RunCoinsFromDevice` is unproved.
+- `CheckReadsDraw` is false today at a key other than the evidence's.
+- Whether the device releases a second family after one digest (section 2).
+- The break counts a replayed genuine signature as a forgery (your point 5).
+- No one but me has read the new statements.
