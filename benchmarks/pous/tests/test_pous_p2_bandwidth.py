@@ -25,6 +25,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 from p2_v1 import bandwidth as B
 
+from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import verifier as V
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.poub.verifier import p2, p2_case, p2_party, receipts
@@ -203,19 +204,24 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
     to the session's, and which the device's answers.jsonl keeps. Each session's core case, the one the device's
     private cases.jsonl keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the toy's store,
-    and `session.json` holds only its digest, store and verdict."""
+    its log closed by the memory challenger's key (`p2_party_at_leaf`) under the session id the party was given, and
+    `session.json` holds only its digest, store and verdict."""
     reg = B.toy(tmp_path / "toy")
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.poub.verifier.p2_party "
-             f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
-             f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)}")
+    mc.SessionLog.create(tmp_path / "challenger" / "sessions")
+
+    def party(session: bytes) -> str:
+        return (f"cd {ROOT} && exec {sys.executable} -S -E {Path(__file__).resolve().parent / 'p2_party_at_leaf.py'} "
+                f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
+                f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)} "
+                f"--challenger {tmp_path / 'challenger'} --session {session.hex()}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
-            "--node", reg.node.decode(), "--party", party, "--party-host", "127.0.0.1", "--device", "cpu",
+            "--node", reg.node.decode(), "--party-host", "127.0.0.1", "--device", "cpu",
             "--ref-decode", "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001",
             "--deadline-s", "0.001", "--workers", "1"]
     cases = []
     for name, more, expect in (("honest", [], "accept"), ("cheat", ["--skip-layer", "1"], "reject")):
-        private = tmp_path / "private" / name
-        assert B.main(base + more + ["--out", str(tmp_path / name), "--expect", expect,
+        private, session = tmp_path / "private" / name, hashlib.sha512(name.encode()).digest()[:32]
+        assert B.main(base + more + ["--party", party(session), "--out", str(tmp_path / name), "--expect", expect,
                                      "--case-dir", str(private)]) == 0
         doc = json.loads((tmp_path / name / "session.json").read_text())
         assert doc["verifier_record"] == doc["answer"] and doc["answer"]["verdict"] == expect
@@ -227,6 +233,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         assert doc["case"] == {"commitment": p2_case.digest(case).hex(), "dir": str(private), "judge": "python",
                                "store_root": reg.root.hex(), "verdict": expect}
         assert case["evidence"] not in (tmp_path / name / "session.json").read_text()
+        assert case["params"]["session"] == session.hex()
         cases.append(case)
     kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
     assert kept == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
@@ -234,7 +241,8 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     record = {"verdict": "accept"}
     assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
     with pytest.raises(SystemExit, match="can't be under --out"):
-        B.main(base + ["--out", str(tmp_path / "x"), "--case-dir", str(tmp_path / "x" / "private")])
+        B.main(base + ["--party", party(session), "--out", str(tmp_path / "x"),
+                       "--case-dir", str(tmp_path / "x" / "private")])
 
 
 KILLED = """

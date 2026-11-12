@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-from dataclasses import dataclass
+import importlib.util
 from functools import cache
 import json
 import shutil
@@ -24,7 +24,6 @@ from pathlib import Path
 
 import pytest
 
-from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
@@ -42,42 +41,17 @@ SESSION_ID = hashlib.sha512(b"p2-party-test/session").digest()[:32]
 """The session id the auditor gives the memory challenger for a session (`p2_party.Closer`)."""
 
 
-class _SparseTree:
-    """A deployed key's tree for leaf 0 alone, its siblings constants (`test_pous_memory_challenger._SparseTree`)."""
-
-    def __init__(self, I: bytes, seed: bytes) -> None:
-        self.root = b""
-        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")  # type: ignore[arg-type]
-        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
-
-    def __getitem__(self, r: int) -> bytes:
-        return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
+SIGNER = Path(__file__).resolve().parents[6] / "verity/protocols/pous/verifier/tests/pous_test_signer.py"
 
 
 @cache
-def deployed_key(label: bytes) -> lms.PrivateKey:
-    """A key at S1's deployed parameters, which the case's check verifies at, that signs at leaf 0 alone."""
-    I, seed = hashlib.sha512(label + b"/I").digest()[:16], hashlib.sha512(label + b"/seed").digest()
-    return lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
-
-
-@dataclass(frozen=True)
-class AtLeaf:
-    """`memory_challenger.LmsSigner` signing at leaf 0 every time, with no leaf state."""
-
-    key: lms.PrivateKey
-    scheme: str = mc.LMS
-
-    @property
-    def public_key(self) -> bytes:
-        return lms.public_key(self.key)
-
-    def sign(self, session: bytes, record: bytes) -> bytes:
-        return lms.sign_at(self.key, 0, lms.memory_challenger_message(self.key.I, session, record)).encode()
-
-
-def signer(label: bytes = b"p2-party-test/memory-challenger") -> AtLeaf:
-    return AtLeaf(deployed_key(label))
+def signer(label: bytes = b"p2-party-test/memory-challenger"):
+    """The memory challenger's key at S1's deployed parameters, which the case's check verifies at
+    (`pous_test_signer.AtLeaf`)."""
+    spec = importlib.util.spec_from_file_location("pous_test_signer", SIGNER)
+    ts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ts)
+    return ts.AtLeaf(label)
 
 
 class MemoryLog:
