@@ -66,3 +66,20 @@ lean on LEAN-249 at 06:11Z, and Daniel at 06:00Z asking that the carve go as fas
 3. **A choice between two meanings in verifier code, or a test whose pinned value changes, comes to me first** with both sides quoted (as the slot's 22 against 21 did not: say that one too, in the entry you owe on `063f21247151`).
 4. **Order:** first the entry on `063f21247151` and the scans on the merge commit that my 06:55Z section asks for; then these closes; your two runs when they end. **Entry with the shas by 14:00Z** (two hours before lean's date), sooner if done; a first entry by 09:00Z with what each file's stop is and anything you need from me.
 5. lean's merge-tree "does not find a meeting that git merges and a test then fails". For each of the seven, say whether you found one (as with `test_dsa_topk_reads.py`): the pull request's changed files that the crossed side also changed without a stop, and the tests that read them.
+
+## Coordinator, Thu 12 Nov 07:10Z: four more of ours stop against the merge commit and are marked in the next hours; one file is in five of them
+
+[run by me 07:10Z: `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d HEAD` of every unmarked proofs pull request; blobs by `git rev-parse HEAD:PATH`]
+
+| Pull request, head (not marked yet) | Stops in | Blob at its head |
+|---|---|---|
+| #8950 `840b28b0f92d` (holds #8904) | `spot/verifier/lean/tests/test_difftest.py`; `spot/verifier/tests/test_optimize.py` | `7d60524a20f6`; `7581971b21a4` (= #8904's, so #8904's close serves) |
+| #9112 `c454bb683c8e` (holds #8904, not #8950) | `verity/protocols/spot/optimize.py`; `test_difftest.py`; `test_optimize.py` | `a540e748eb0e`; `7d60524a20f6` (= #8950's); `9147ffbf3d73` |
+| #9116 `f7c857994a36` (does not hold #9066) | `test_difftest.py` | `2327af336ffd` |
+| #9091 `a1fecc4626f2` | `verity/protocols/pous/lean/TRUSTED.sha256` (one line) | a pin, not text: see below |
+
+- **`test_difftest.py` is in five states of ours** (`1cffecac04b3` the #9066 stack; `7d60524a20f6` #8950 and #9112; `2327af336ffd` #9116; `main`'s `9d6e20947522`; and the crossed side's +492 −48). lean's merge takes `main` once more about 17:00Z, with whichever of ours have landed by then. So for this file give: **(a)** the close for the #9066 stack (the marked four), as already asked; **(b)** one file with every one of ours in (the stack, #8950/#9112's change, #9116's change) and a list of which test or hunk is whose, so that a hunk whose pull request has not landed can be dropped by name. Say whether our changes are additive tests that stand apart or edit the same lines.
+- **`optimize.py` and `test_optimize.py` for #9112** and **`test_optimize.py` for #8904/#8950**: one close each, after the marked seven.
+- **`TRUSTED.sha256` (#9091):** the pin is memory-accounting's file and its lines are computed, so the close is the line recomputed on the merged tree with #9091 in, not a join of two texts. Say which line #9091 changes, which the merge changes, and the command that writes the line (lean's worker commits "the PoUS pin's line" on the merge branch tonight: read how). Do not compute it until the merge branch has its manifests commit; say in your entry what it waits for.
+- **Not yours:** #8139, #8406 and the older unmarked ones also stop; their owner (OLDFOUR) is told at its resume.
+- These four are after the marked seven. I mark them as they come ready and name each close on LEAN-249 as owed from you.
