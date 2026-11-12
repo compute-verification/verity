@@ -28,8 +28,8 @@ stop stays a failure. Nothing runs a stopped job again by itself: the command's
 next run finds it stopped and starts it again, from the latest state a run of it kept (a run stopped before it
 was up kept none, and loses no earlier one), or from θ where none kept one. A job whose last `STALLS` runs were
 each stopped and kept no newer state than the one before them is stalled: it is stopped every time before its
-next checkpoint, and only `--continue-stalled` continues it, for `STALLS` more such stops. A job that continues is given the CPU thread count its kept
-record states. Where the state is between the two runs is
+next checkpoint, and only `--continue-stalled` continues it, for `STALLS` more such stops. A job that continues
+is given the CPU thread count its kept record states. Where the state is between the two runs is
 `NODE_STATE`: by default with the stopped run's output, on the store, from where the next run fetches it on
 whichever machine it gets. The command tells that run which state it continues from (`--continues`: the sha256 the
 store lists for the `state.json` in the stopped run's record, or `nothing`), and the job refuses any other it finds
@@ -48,8 +48,8 @@ from θ) when E is under 50 MiB. `--weights` makes each job this call runs keep 
 for a promoted config; a job that already has its record isn't run again for them.
 
 `--dry-run` prints what it would run and runs nothing. The command exits 0 when every job has its record, 3 when a job
-is still pending (its run id says which) or stopped, and 1 when a job failed: a failed job is shown, and never run
-again.
+is still pending (its run id says which) or stopped, 4 when a job stalled, and 1 when a job failed: a failed job is
+shown, and never run again.
 """
 from __future__ import annotations
 
@@ -86,11 +86,13 @@ TMP = "/tmp"
 #: runs the trap once the command it waits on has ended, the job included, which keeps the run's end the job's. The
 #: trap then writes the job's record of the stop (`stop_record`, in `$stopped`) where the job wrote no record (one
 #: stopped before its own process was up), and ends the script with the status of the command the stop ended, so
-#: nothing after it starts
+#: nothing after it starts. A script whose shell wrote that record never ends with 0, which a stop between two
+#: commands, or during one that ends 0 when told to stop, would give it: it ends with 143 (SIGTERM's) instead, so
+#: status 0 with a record is still the job's own record of its end (`store_state`)
 ENV = ('tmp=$(mktemp -d {tmp}/training-slowdown.XXXXXX) && fetching="$(dirname "$OUT")/fetching" && '
        'trap \'rm -rf "$tmp" "$fetching"\' EXIT && stopped={record} && '
-       'trap \'status=$?; [ -e "$OUT/run.json" ] || {{ mkdir -p "$OUT" && printf "%s\\n" "$stopped" > "$OUT/run.json"; }}; '
-       'exit $status\' TERM && export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
+       'trap \'status=$?; [ -e "$OUT/run.json" ] || {{ mkdir -p "$OUT" && printf "%s\\n" "$stopped" > "$OUT/run.json"; '
+       '[ "$status" -ne 0 ] || status=143; }}; exit $status\' TERM && export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
 #: the environment's programs
 PYTHON, RESEARCH = '"$UV_PROJECT_ENVIRONMENT/bin/python"', '"$UV_PROJECT_ENVIRONMENT/bin/research"'
 #: what goes into the environment: the workspace with the members' CUDA torch (the suites' `--extra torch-cpu`

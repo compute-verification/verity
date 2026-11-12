@@ -9,13 +9,14 @@ from pathlib import Path
 
 import pytest
 from synthetic import tiny_registry, write_config
-from test_command import ART, Research, cmd, command, stop
+from test_command import ART, Research, cmd, command, last_run, stop
 
 from training_slowdown import config, starts, stop_record, told
 
 #: `uv`, on the script's PATH: it says what it was asked and where, and puts the two programs the script then starts
 #: into the environment it was told to make. Under STANDIN=sync it then waits to be told to stop, as a sync still
-#: running is
+#: running is; under STANDIN=quits it waits too and ends with 0 when told to stop, as a command between two of the
+#: script's ends, or one that ends 0 on SIGTERM
 UV = """#!{python}
 import json, os, signal, sys
 from pathlib import Path
@@ -26,7 +27,9 @@ with open({log!r}, "a") as f:
 for name in ("python", "research"):
     (env / "bin" / name).write_text(Path({program!r}).read_text())
     (env / "bin" / name).chmod(0o755)
-if os.environ["STANDIN"] == "sync":
+if os.environ["STANDIN"] == "quits":
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
+if os.environ["STANDIN"] in ("sync", "quits"):
     os.write(int(os.environ["UP"]), b"up")
     signal.pause()
 """
@@ -64,7 +67,7 @@ signal.pause()
 
 
 @pytest.mark.parametrize("standin, status", [("ends", 0), ("job", 75), ("sync", -signal.SIGTERM),
-                                             ("fetch", -signal.SIGTERM)])
+                                             ("fetch", -signal.SIGTERM), ("quits", -signal.SIGTERM)])
 def test_a_queued_jobs_environment_is_its_runs_own_under_tmp_and_gone_when_it_ends(tmp_path, monkeypatch, standin,
                                                                                     status):
     """The script the command queues, in a tree like the one a run ships: `uv sync` is told to make the environment
@@ -74,8 +77,10 @@ def test_a_queued_jobs_environment_is_its_runs_own_under_tmp_and_gone_when_it_en
     record or none; after one told to stop (SIGTERM to the script's process group, as a lease out of time sends it),
     whose record and exit status are then the run's; and after a stop that came while `uv sync` ran or the state was
     fetched, before the job was up, which leaves the job's record of a stop, the shell's, the stopped command's
-    status, and no part of a state. What a test of the command's text can't show is that bash, told to stop, waits
-    for the job, writes no record over the job's, starts nothing after the stop, and still removes the directory."""
+    status, and no part of a state. A stop to a command that then ends with 0 leaves that record too, and the script
+    ends with SIGTERM's 143 and not 0, so the command reads the run as stopped and not as done. What a test of the
+    command's text can't show is that bash, told to stop, waits for the job, writes no record over the job's, starts
+    nothing after the stop, and still removes the directory."""
     root, made, out = tmp_path.resolve() / "tree", tmp_path / "tmp", tmp_path / "run" / "out"
     here, bin_, log = root / "benchmarks" / "training_slowdown", tmp_path / "bin", tmp_path / "log"
     monkeypatch.setattr(cmd, "HERE", here)
@@ -119,7 +124,7 @@ def test_a_queued_jobs_environment_is_its_runs_own_under_tmp_and_gone_when_it_en
     else:
         said = json.loads((out / "run.json").read_text())
         assert told(said) and said == (json.loads(record) if standin == "job" else stop_record(job.seed, job.split))
-    assert sorted(x.name for x in out.iterdir()) == (["run.json"] if standin in ("sync", "fetch") else
+    assert sorted(x.name for x in out.iterdir()) == (["run.json"] if standin in ("sync", "fetch", "quits") else
                                                      ["state"] if standin == "ends" else ["run.json", "state"])
     if (out / "state").exists():
         assert sorted(x.name for x in (out / "state").iterdir()) == ["state.json", "tensors"]
@@ -130,7 +135,8 @@ def test_a_queued_jobs_environment_is_its_runs_own_under_tmp_and_gone_when_it_en
                        "cwd": str(root)}
     assert made_in.name == "venv" and made_in.parent.parent == made
     assert made_in.parent.name.startswith("training-slowdown.") and ".venv" not in script
-    assert [x["program"] for x in said[1:]] == {"sync": [], "fetch": ["research"]}.get(standin, ["research", "python"])
+    assert [x["program"] for x in said[1:]] == ({"sync": [], "quits": [], "fetch": ["research"]}
+                                                 .get(standin, ["research", "python"]))
     for x in said[1:]:
         assert x["argv"] == ({"research": ["data", "fetch", ART, "--path", "out/state/*", "--to",
                                            str(out.parent / "fetching")],
@@ -138,3 +144,11 @@ def test_a_queued_jobs_environment_is_its_runs_own_under_tmp_and_gone_when_it_en
                                          "--split", "search", "--starts", str(reg.resolve()), "--state",
                                          f"{out}/state", "--continues", r.sha256, "--out", str(out)]}[x["program"]])
         assert x["cwd"] == str(root if x["program"] == "research" else here)
+
+    # the command reads the run by its status and the run.json its record holds
+    ended = "art:" + "c" * 64
+    r.attempts[last_run(r, job)] = {"status": {"rc": p.returncode}, "outputs": {"run_record": ended}}
+    if (out / "run.json").exists():
+        r.said[ended] = (out / "run.json").read_text()
+    store = cmd.Store(r)
+    assert cmd.store_state(job, store.labels(), store, False).state == (cmd.DONE if standin == "ends" else cmd.STOPPED)

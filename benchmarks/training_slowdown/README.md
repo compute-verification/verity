@@ -182,8 +182,8 @@ budget, the seeds, the windows it asks for where it asks, and what the grade rea
 jobs, one per seed and split, each labelled in the store `training-slowdown=<digest>/<seed>/<split>`, and runs the ones
 its labels lack: on the queue (kind `training-attack`, `infra/cluster/kinds/training.toml`), on one machine with `--on`,
 or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending or
-stopped, 4 when one stalled (below) and 1 when one failed; a failed job is never run again. A job's run gets the time its config's budget gives
-it (`budget.minutes`, the job's own limit over every run it continues in; without it, the kind's). A queued job
+stopped, 4 when one stalled (below) and 1 when one failed; a failed job is never run again. A job's run gets the
+time its config's budget gives it (`budget.minutes`, the job's own limit over every run it continues in; without it, the kind's). A queued job
 writes nothing into the tree it runs from, which every run of its commit shares: its Python environment is the
 run's own, built by `uv sync --frozen` in a directory the job makes under /tmp (`UV_PROJECT_ENVIRONMENT`), which the
 job's shell removes when the job ends, stopped or not.
@@ -197,9 +197,9 @@ then ends the route's process and leaves the state. The command reads a stop fro
 job reports (a lease out of time: `timeout`'s 124, whatever the job's own): a run that didn't end with 0 is stopped
 when its record says so, and failed when it holds no record or one that doesn't. A job told to stop before its own
 process is up, while its environment is made or its state fetched, has written none: its shell then writes the job's
-record of a stop, and the run is stopped too; a crash with no stop is failed. The command's next run starts a stopped
-job again, from the latest state a run of it kept, so a run stopped before the job was up loses no earlier state, and
-with the CPU thread count that state's record states. A job whose last three runs (`STALLS`) were each stopped and
+record of a stop, and the run is stopped too; a crash with no stop is failed. The command's next run starts a
+stopped job again, from the latest state a run of it kept, so a run stopped before the job was up loses no earlier
+state, and with the CPU thread count that state's record states. A job whose last three runs (`STALLS`) were each stopped and
 kept no newer state than the one before them is stalled, and the command names those runs: it is stopped every time
 before its next checkpoint. A stall is no failure, since the job it continues ends with the unbroken job's record,
 but the command continues a stalled job only under `--continue-stalled`, for three more such stops. The job
@@ -221,9 +221,9 @@ updated MACs or tokens outside a step is invalid, so an `output` that computed o
 would make a continued job invalid: it makes the unbroken job invalid too, whose last checkpoint's output is counted
 after its last step, unless it computes so at an earlier checkpoint and not at the last. That is a limit, and no
 route here meets it: `ema`'s output computes nothing and `lora`'s multiplies each adapter's two matrices. A state is
-a cache: the command keeps it with the stopped run's output on the store, the next run fetches it on whichever machine it gets, beside its
-output and into it once whole, so a stop while it fetches leaves no part of one (`NODE_STATE` in
-`run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
+a cache: the command keeps it with the stopped run's output on the store, the next run fetches it on whichever
+machine it gets, beside its output and into it once whole, so a stop while it fetches leaves no part of one
+(`NODE_STATE` in `run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
 hidden from the route's process as a final set is, and only the job's own process writes it. A state is at most three
 times its model (the weights and two buffers of the optimizer for each), and a run holds three states at once while
 it keeps one, and a fourth, the store's own copy, when it fetched the one it continues from: the command asks the

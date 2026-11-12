@@ -29,7 +29,8 @@ def env(job) -> str:
     return ('tmp=$(mktemp -d /tmp/training-slowdown.XXXXXX) && fetching="$(dirname "$OUT")/fetching" && '
             'trap \'rm -rf "$tmp" "$fetching"\' EXIT && stopped=' + told + ' && '
             'trap \'status=$?; [ -e "$OUT/run.json" ] || { mkdir -p "$OUT" && printf "%s\\n" "$stopped" > '
-            '"$OUT/run.json"; }; exit $status\' TERM && export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
+            '"$OUT/run.json"; [ "$status" -ne 0 ] || status=143; }; exit $status\' TERM && '
+            'export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
 
 
 class Research:
