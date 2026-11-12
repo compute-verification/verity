@@ -65,7 +65,7 @@ records the datatype of each port a bytes model counts. For example, the MoE rou
 
 A template the proof backends only partly prove records `verifier_evaluated`: the parts the verifier checks natively, their
 share of the template, whether the headline counts a cell as covering the template (with a footnote), and the ruling.
-Attention's softmax is counted, per red-team-flock-3's grant. Sampling is not counted; one
+Attention's softmax is counted, by the ruling its entry records. Sampling is not counted; one
 renderer switch counts it.
 
 ## Workloads

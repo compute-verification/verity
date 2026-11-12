@@ -17,7 +17,7 @@ from verity_numerical.bench import drivers
 DATA = Path(__file__).parent / "data"
 SLICE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "flock" / "prover" / "tests" / "data" / "captured-101" / "slices" / "gemm-coordinate-ampere-bf16-k2048"
 BF16 = ("gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/blake3-keyed", "bench-instances-bf16-hopper-v1")
-#: Two machines as the RunPod API and the probes record them (red-team-flock 12:00Z: the H100 prover and its A40 verifier).
+#: Two machines as the RunPod API and the probes record them (an H100 prover and its A40 verifier).
 SEPARATE = {"prover": {"pod_id": "pod-p", "machine_id": "m-h100", "public_ip": "203.0.113.10", "cpu_model": "Xeon 8470"},
             "verifier": {"pod_id": "pod-v", "machine_id": "m-a40", "public_ip": "198.51.100.20", "cpu_model": "EPYC 7502"},
             "link": {"peer": "10.0.0.2:7400", "peer_ip": "10.0.0.2"}}
@@ -151,7 +151,7 @@ def test_check_catches(mutate, why):
 
 
 def test_check_catches_runs_on_one_machine(tmp_path):
-    """Two containers of one host: different hostnames, the same kernel boot id (red-team-flock 12:00Z, the L40S cells)."""
+    """Two containers of one host: different hostnames, the same kernel boot id."""
     p, v = _run(tmp_path / "p", "h1", _doc("6d1295ed"), boot="b-1"), _run(tmp_path / "v", "h2", None, boot="b-1")
     assert any("share boot_id b-1" in x for x in C.check(_cell(), _doc("6d1295ed"), p, v))
     q, w = _run(tmp_path / "q", "h1", _doc("6d1295ed"), boot="b-1"), _run(tmp_path / "w", "h2", None, boot="b-2")
