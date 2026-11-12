@@ -3417,9 +3417,6 @@
     "Claims.ZKServer.Loop.Src": "the prover-side firewall's randomness, trusted for the zero-knowledge guarantees only: every input the firewall host takes from its operating system is the random tape, uniform (flock-firewall-os-src)",
     "FlockSoundness.Assumptions.KeyedStreamsUniform": "commitment hiding, trusted for the zero-knowledge guarantees only: the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do, up to its advantage (prf/sha-512)",
     "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
-   },
-   "Verity.Sampled.remote_soundness_deployedReady": {
-    "Hash.Assumptions.LmsUnforgeable": "the remote verifier never talks to the onsite devices and gets each device's LMS signature only as a witness inside the proof, so the signature's unforgeability is the remote audit's to trust"
    }
   }
  },
@@ -3437,8 +3434,7 @@
   "Flock.SecurityProofs.SampledKSLiveV5",
   "Flock.SecurityProofs.SessionLoopZKDeployed",
   "NetTiming.SecurityProofs.PeriodLeakAccepted",
-  "Pous.SecurityProofs.StreamedWipe",
-  "Verity.Sampled.remote_soundness_deployedReady"
+  "Pous.SecurityProofs.StreamedWipe"
  ],
  "trust_gap": {
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": [
@@ -3479,8 +3475,7 @@
    "Claims.ZKServer.LeanRelease.LiveRoundEq",
    "Flock.Guarantees.LoopInnerRound0"
   ],
-  "NetTiming.SecurityProofs.PeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"],
-  "Verity.Sampled.remote_soundness_deployedReady": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound"]
+  "NetTiming.SecurityProofs.PeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"]
  },
  "meaning": [
   "Definitions.Core",

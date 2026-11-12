@@ -823,14 +823,19 @@
    "Verity.Assumptions.TrustedHost": "the honest verifier server's auditor-trusted devices (trusted-host): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
-  "extra": {}
+  "extra": {
+   "Verity.remote_soundness_of_subprotocols": {
+    "Hash.Assumptions.LmsUnforgeable": "the remote verifier never talks to the onsite devices and gets each device's LMS signature only as a witness inside the proof, so the signature's unforgeability is the remote audit's to trust"
+   }
+  }
  },
  "deployed": [
   "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
   "Pous.Period.SecurityProofs.periodHeld",
   "Pous.Period.SecurityProofs.periodHeldDeployed",
   "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+  "Verity.remote_soundness_of_subprotocols"
  ],
  "trust_gap": {
   "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingAuditSecure"],
@@ -873,7 +878,8 @@
    "Accounting.Remote.Held.Assumptions.Routed",
    "Accounting.Remote.Held.Assumptions.SketchBoundAt",
    "Accounting.Remote.Held.Assumptions.SquaringCeiling"
-  ]
+  ],
+  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
