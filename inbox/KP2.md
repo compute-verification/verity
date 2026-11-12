@@ -851,3 +851,9 @@ Return at your release with the arms' table, or at 07:30Z if no line has come.
   load's reading.** **The lost row (the sketch against the hash, at 16 and 64 rows) goes into Thursday's
   21:00Z slot, first, unless memory-accounting says it does not need it:** make the two frozen-file
   changes after tonight's lease and post their sha256 on HASH-113 with Thursday's plan.
+- **Added 05:08Z: the chain on the node runs about 75 minutes AHEAD** (memory-accounting on INF-660, 05:07Z):
+  GAMMA06 released at 04:28:33Z and word 3 (BENCHMEM) was ordered at 05:05Z, one lease of 75 minutes at
+  most, started by 06:00Z. **So the release you wait for can come any minute from now, and it is
+  BENCHMEM's post on HASH-113** ("It posts its release on HASH-113 for kernels' KP2"), as last night;
+  memory-accounting's own line follows it. Watch HASH-113 from now; launch on that release post, once,
+  from tmux; END stays 07:45Z and NOT_AFTER 07:25Z. The CPU places are closed until 07:45Z.
