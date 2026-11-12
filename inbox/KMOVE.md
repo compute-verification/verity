@@ -1392,3 +1392,11 @@ arm leaves out, is what I can ring three lanes with.
   once timed at C and L; a development row cited by its run until then. **It starts on Fri, once
   lean's merge holds #9225 and `served_y.py`; nothing of it today.** The arm's change is open for
   compute-accounting's read by Mon 16 Nov.
+- **Added 13:30Z, for HASH-124 (from Friday):** benchmarks marked #9301 (`fb8b48d80f0f`; CMP-380,
+  13:29Z): the door's `pearl-plus` C and L rows now read "without y's commitment (y tree not
+  timed)", driven by a new field `Scheme.commits_y` (default false) that a timed run records as
+  `arm.commits_y`. **A new test in `benchmarks/pouw/tests/test_pearl_c_sm90_overhead_arm.py` holds
+  the door's `commits_y` to what the arm's call hashes and expects y's bytes keyed `y_rows`.** When
+  the arm commits y: name them so (or rename either side, as the test's message says), and set
+  `commits_y = True` for `pearl-plus` in the same change; the retimed row then loses the label by
+  itself.
