@@ -75,17 +75,22 @@ their line and exit NOT_STARTED. A claim that can't be made (HOME unreachable or
 pair never runs twice: the twin on HOME still runs. It fails closed: when HOME's own claim can't be written, or HOME is gone,
 no twin runs, and every one exits NOT_STARTED, which `check.py --record` returns as "rerun".
 
-`python3 tools/verity/check/slot.py --status [--json]`: one line per slot, with who holds its lock (the pid in /proc/locks, when that
-process started, its command) or `free`, and the window that blocks it, if any, then a line for each of its windows open now or
-starting within AHEAD_H (6) hours (start, minutes, its comment's first words); then one line per live waiter, a priority one
-marked so. --json prints the same as one JSON object (`status_doc`), which `check.py --slots` reads from every machine. A
-check that came through here also names its run (RESEARCH_RUN_ID), the tree it checks (its working directory, which
-`research run` names by commit) and who asked (`--by NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in
-`check-NAME.who` beside the lock, shown only while its pid holds the lock, so a hand-run `flock` is never shown as the check that
-came before it. A waiting check prints the same lines, the waiters before it only, each time its reason to wait changes, so its
-log says whom it waits behind. Inside a `research run` (RESEARCH_RUN_DIR) it also keeps the run's RUN_SLOT: waiting (since when and
-why), held (which slot, since when, and the last `why` it waited for when it waited) or left (why), so `research status` shows a
-run whose check waits here as `waiting`, not running, and what a run waited behind outlasts its wait.
+`python3 tools/verity/check/slot.py --status [--json]`: one line per slot, with who holds its lock (the pid in /proc/locks, since
+when it has held the slot and for how many minutes, how many it waited in line first, its command) or `free`, and the window
+that blocks it, if any, then a line for each of its windows open now or starting within AHEAD_H (6) hours (start, minutes,
+its comment's first words); then one line per live waiter, a priority one marked so. --json prints the same as one JSON
+object (`status_doc`), which `check.py --slots` reads from every machine. A check that came through here also names its run
+(RESEARCH_RUN_ID), the tree it checks (its working directory, which `research run` names by commit) and who asked (`--by
+NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in `check-NAME.who` beside the lock, with when it joined
+the line and when it took the slot, shown only while its pid holds the lock, so a hand-run `flock` is never shown as the
+check that came before it. A holder with no record of the slot's taking (that `flock`, a check an older slot.py started) is
+listed with when its process started, as that, and no time held: a check is one process from joining the line on, so its
+process's age counts its wait too (`holding`, which keeps that start and age as `since` and `minutes` in the JSON, beside
+the record's `took`, `held_minutes`, `joined` and `waited_minutes`). A waiting check prints the same lines, the waiters
+before it only, each time its reason to wait changes, so its log says whom it waits behind. Inside a `research run`
+(RESEARCH_RUN_DIR) it also keeps the run's RUN_SLOT: waiting (since when and why), held (which slot, since when it waited and
+when it took the slot, and the last `why` it waited for when it waited) or left (why), so `research status` shows a run
+whose check waits here as `waiting`, not running, and what a run waited behind outlasts its wait.
 """
 from __future__ import annotations
 
@@ -724,9 +729,27 @@ def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
             "waiters": waiting(SLOTS.parent / LINE, now)}
 
 
+def _when(who: dict, key: str, who_file: Path) -> datetime | None:
+    """The time ``who``, a holder's record, keeps under ``key`` (`2026-10-01T09:00Z`, with or without seconds); None when it
+    keeps none, and when what it keeps is no time, which is said: its holder is then listed without it."""
+    if not (said := who.get(key)):
+        return None
+    try:
+        if not str(said).endswith("Z"):
+            raise ValueError("a recorded time is UTC and ends in Z")
+        return datetime.fromisoformat(str(said)[:-1] + "+00:00")
+    except ValueError as e:
+        print(f"slot: {who_file}'s `{key}` is no time ({said!r}: {e}); its holder is listed without it", file=sys.stderr)
+        return None
+
+
 def holding(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc")) -> dict | None:
-    """Who holds ``lock`` (None while it's free): its pid, since when and for how many minutes, its command, and the run, tree,
-    asker and time taken its holder recorded in ``who_file``, kept only while that pid holds the lock."""
+    """Who holds ``lock`` (None while it's free): its pid and command, and when that process started (`since`) with its age
+    (`minutes`), which is not when it took the slot: a check that came through here is one process from joining the line on,
+    so its age counts its wait. Then what its holder recorded in ``who_file``, kept only while that pid holds the lock: its
+    run, tree, asker and twin, when it took the slot (`took`) with the minutes it has held it since (`held_minutes`), and when
+    it joined the line (`joined`) with the minutes it waited there (`waited_minutes`). A record that names no time taken (an
+    older slot.py's, or none: a hand-run `flock`) gives none of the four, so nothing here says how long the slot has been held."""
     pid = holder(lock, proc)
     if pid is None:
         return None
@@ -739,15 +762,30 @@ def holding(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc"
            "minutes": round((now - t).total_seconds() / 60) if t else None, "cmd": cmd[:200]}
     who = _read(who_file)
     if who.get("pid") == pid:
-        out.update({k: who[k] for k in ("run", "tree", "commit", "by", "twin", "took") if who.get(k)})
+        out.update({k: who[k] for k in ("run", "tree", "commit", "by", "twin") if who.get(k)})
+        if took := _when(who, "took", who_file):
+            out.update(took=f"{took:%Y-%m-%dT%H:%MZ}", held_minutes=round((now - took).total_seconds() / 60))
+            if joined := _when(who, "joined", who_file):
+                out.update(joined=f"{joined:%Y-%m-%dT%H:%MZ}", waited_minutes=round((took - joined).total_seconds() / 60))
     return out
+
+
+def held_times(h: dict) -> str:
+    """A holder's times as a listing gives them (`holding`): since when it has held its slot and for how long, with how long it
+    waited in line first where its record says; without a record of the slot's taking, when its process started, as that."""
+    if h.get("took"):
+        waited = f"; waited {h['waited_minutes']} min" if h.get("waited_minutes") is not None else ""
+        return f"since {h['took']} ({h['held_minutes']} min{waited})"
+    if h.get("since"):
+        return f"for a time not recorded (its process started {h['since']}, {h['minutes']} min ago)"
+    return ""
 
 
 def held_text(h: dict | None) -> str:
     if h is None:
         return "free"
-    since = f" since {h['since']} ({h['minutes']} min)" if h["since"] else ""
-    return f"held by pid {h['pid']}{since}" + (f" ({describe(h)})" if describe(h) else "") + f": {h['cmd']}"
+    times, who = held_times(h), describe({k: v for k, v in h.items() if k != "took"})
+    return f"held by pid {h['pid']}" + (f" {times}" if times else "") + (f" ({who})" if who else "") + f": {h['cmd']}"
 
 
 def waiters(line: Path, now: datetime, before: str | None = None) -> list[str]:
@@ -1057,9 +1095,10 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     ticket.unlink()
     os.close(tfd)
     slot, fd = got
+    took = f"{now():%Y-%m-%dT%H:%M:%SZ}"
     who = SLOTS.parent / f"check-{slot['name']}.who"
     tmp = who.with_name(f".{who.name}.{os.getpid()}")
-    tmp.write_text(json.dumps(me) + "\n")
+    tmp.write_text(json.dumps({**me, "joined": f"{joined:%Y-%m-%dT%H:%M:%SZ}", "took": took}) + "\n")
     tmp.chmod(0o664)
     os.replace(tmp, who)
     os.set_inheritable(fd, True)
@@ -1068,7 +1107,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
                **({SLOT_MEM_ENV: str(plan)} if (plan := max(slot.get("mem") or 0, budget or 0)) else {}))
-    record_slot(run_dir, {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": f"{now():%Y-%m-%dT%H:%M:%SZ}",
+    record_slot(run_dir, {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": took,
                           **({"why": told} if told else {})})
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
     if said := reserve(slot, now(), priority):
