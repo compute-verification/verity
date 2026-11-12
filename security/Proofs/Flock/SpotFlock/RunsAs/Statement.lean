@@ -123,6 +123,7 @@ def RoundTwo (h : Held) : Prop :=
     {st : Roots} {rec draw : Json},
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw →
     OwnAgrees h own st rec draw c₀ → StmtsAre h m₂ ss → RegHolds h x → SessionsHeld h m₂ →
+    Spot.SecondStage.inputsFailure { own with fixed := #[], supplied := #[] } = none →
     (Spot.SecondStage.check true own (some ss)).codes = #[] →
     stmtOk h x m₁ m₂ c₀ c₁ = true
 
@@ -160,12 +161,14 @@ def drawEvidence : Json → Json
 key in `Challenger.coinsReason` discharges): where `coinsReason` finds no reason against the evidence `coins` for the
 window `w` and the bytes `read` released after `after`, `drawCoins` under `key` reads, from the evidence without its
 key, coins of some family that `read` starts. Today `coinsReason` takes the key from the evidence, so this holds only
-at the key the evidence carries. -/
+at the key the evidence carries. The family is `∃ label` because the base's `coinsReason` lets the evidence name it;
+where `coinsReason` takes each stage's family as an argument, it is that stage's own. -/
 def CheckReadsDraw (key : Spot.Challenger.ChallengerKey) : Prop :=
   ∀ (coins : Json) (w : String) (after read : ByteArray), Spot.Challenger.coinsReason coins w after read = none →
     ∃ label ξ, Spot.Challenger.drawCoins key w label after (drawEvidence coins) = .ok ξ ∧ Starts read ξ
 
-/-- **A stage's bytes are the device's coins, or a break**: `read` starts the coins of some family that a run of the
+/-- **A stage's bytes are the device's coins, or a break**: `read` starts the coins of some family (`∃ label`, the
+base's reading, as at `CheckReadsDraw`) that a run of the
 device `dev` under `key`, one its own ledger opens on the window `w`, released after `after`; or the model's finder
 outputs a break from the evidence (`Properties.Challenger.Break`: a forgery under the key, or a SHA-512 collision
 among what the reader and the device hash). -/
@@ -194,11 +197,23 @@ def RunCoinsFromDevice (key : Spot.Challenger.ChallengerKey) : Prop :=
 
 /-! ## The top statement -/
 
+/-- **The interior record registers no value a replay block may not read, without the verifier's own values**: round
+2's input check (`inputsFailure`) finds nothing in what the verifier holds of the run once the values it pins or holds
+to an earlier record and those it fills itself are dropped. A premise on the run that round 2's passing check does not
+give, decided on the run's records, the replay's program and the templates' reference statements: `inputsFailure`
+reads none of the draws, so the sample, the parts and the drawn units here are empty. -/
+def RegistersNone (i : Spot.Run.Input) (it : Spot.Run.Interior) : Prop :=
+  Spot.SecondStage.inputsFailure
+    { sample := #[], parts := none, interior := it.record, boundary := i.record, drawn := #[],
+      links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
+      refReads := it.circuits.map fun (t, _, _, r) => (t, r) } = none
+
 /-- **A two-stage run `Run.run` accepts is a play `SpotFlock.V h` accepts** (the inner statement: the form's check,
 `VStar.Recursive.SampledTwo.checkBlobsAt`, computes the sessions' verdicts and then runs `Run.run`). At every held copy
 `h` that agrees with what the run reads and is in the model's scope: if `Run.run` accepted the two-stage run `i` with
 interior `it` (`AcceptedTwo`), `x` and `m₁` are the boundary and interior records' bytes, round 2's check gives the
-model's checks (`RoundTwo`, part 3) and Flock accepts each template's session at the statement `m₂` states for it
+model's checks (`RoundTwo`, part 3), the interior record registers no value (`RegistersNone`, a premise on the run
+round 2 does not give) and Flock accepts each template's session at the statement `m₂` states for it
 (`SessionsAccept`, part 4), then on every round-0 coin and second-stage coins that start with the bytes the run read
 (`PlayCoins`), `SpotFlock.V h` accepts the play that sends `m₁`, then `m₂`, then each session's messages
 (`proverSeq`), each session on its own coins (`seqCoins`). -/
@@ -206,7 +221,7 @@ def SpotRunAcceptsPlay : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (h : Held) (H : Msg → Msg) (x m₁ m₂ : Msg)
     (P' : ℕ → Prover Unit) (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin)
     (c₀ : FlockDeploy.Coin) (c₁ : Stage h),
-    AcceptedTwo i it j → HeldMatches i it h → ScopeHolds h →
+    AcceptedTwo i it j → HeldMatches i it h → ScopeHolds h → RegistersNone i it →
     jsonMsg x = some i.record → jsonMsg m₁ = some it.record →
     RoundTwo h → SessionsAccept h H ((it.statements).getD #[]) m₂ P' r' → PlayCoins h i it c₀ c₁ →
       (Claims.run H (proverSeq h [] m₁ m₂ P') (V h) x (fun _ => ()) (seqCoins h (x := x) c₀ c₁ r')).out = .acc

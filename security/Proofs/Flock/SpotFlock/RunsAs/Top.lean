@@ -12,7 +12,8 @@ select, the second stage's and round 2's check with no code. The held copies agr
 the units the draw proves (`proved_select`), and the model's second draw is the run's (part 2, `secondDraw_pad`). What
 the verifier holds is the model's (`OwnAgrees`), round 2 had statements (`statements_some`), and round 2's check gives
 the model's statement check (part 3, `RoundTwo`). The sessions accept (`SessionsAccept`), so the play accepts on its
-coins (part 4, `SeqAccepts`: `accepts_seq` at the coins it builds, before it takes the probability).
+coins (part 4, `accepts_seqCoins`). The interior record registers no value (`RegistersNone`) is a premise on the run
+round 2's check does not give.
 -/
 
 @[expose] public section
@@ -68,20 +69,15 @@ theorem resolve_ne_all {rule : Spot.Select.Rule} {p query} {resolved : Spot.Sele
     simp
   · cases h
 
-/-- **Part 4's pointwise statement**: `accepts_seq` at the coins it builds (`seqCoins`), before it takes the
-probability. Where the statement check passes `m₁` and `m₂` at round 0's coin `c₀` and the second stage's `c₁`, and
-Flock's masked verifier accepts each template's prover `P' t` at its statement on the coins `r' t`, SPOT[Flock] accepts
-`proverSeq m₀ m₁ m₂ P'` on `seqCoins c₀ c₁ r'`. -/
-def SeqAccepts (h : Held) : Prop :=
-  ∀ (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h),
-    stmtOk h x m₁ m₂ c₀ c₁ = true → ∀ (P' : ℕ → Prover Unit) (ω : ℕ → Unit)
-    (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin),
-    (∀ t < h.ms.length, (run H (P' t) (FlockDeploy.V true) (stmtAt h m₂ t) (ω t) (r' t)).out = .acc) →
-    (run H (proverSeq h m₀ m₁ m₂ P') (V h) x ω (seqCoins h (x := x) c₀ c₁ r')).out = .acc
+/-- `RegistersNone` is `inputsFailure` at the run's own, whatever the draws. -/
+theorem registersNone_runOwn {i : Spot.Run.Input} {it : Spot.Run.Interior} (h : RegistersNone i it)
+    (sample : Array ℕ) (strata : Array (String × Array (ℕ × ℕ))) (draw : Json) :
+    Spot.SecondStage.inputsFailure { runOwn i it sample strata draw with fixed := #[], supplied := #[] } = none :=
+  h
 
-/-- **`SpotRunAcceptsPlay`**, at part 4's pointwise statement. -/
-theorem spotRunAcceptsPlay (h4 : ∀ h, SeqAccepts h) : SpotRunAcceptsPlay := by
-  intro i it j h H x m₁ m₂ P' r' c₀ c₁ ha hm hs hx hm₁ hr2 hsa hpc
+/-- **`SpotRunAcceptsPlay`.** -/
+theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
+  intro i it j h H x m₁ m₂ P' r' c₀ c₁ ha hm hs hnone hx hm₁ hr2 hsa hpc
   obtain ⟨hcl, workTable, resolved, draw, rest, read, ht, hres, hsel, -, grain, replay, k, ns, ids, ks, draw₂, read₂,
     strata, hrule, hns, hids, hks, hss, -, hstrata, hcodes⟩ := accepted_steps ha
   obtain ⟨⟨t₀, ht₀⟩, ⟨t₁, ht₁⟩⟩ := hpc
@@ -129,7 +125,8 @@ theorem spotRunAcceptsPlay (h4 : ∀ h, SeqAccepts h) : SpotRunAcceptsPlay := by
     rw [hdec]
     exact ⟨_, rfl⟩
   obtain ⟨s, hps⟩ := hp
-  have hok : stmtOk h x m₁ m₂ c₀ c₁ = true := hr2 hdec hm₁ hsd hown hstm ⟨s, hps, rfl, hs s⟩ hheld hcodes
-  exact h4 h H x [] m₁ m₂ c₀ c₁ hok P' (fun _ => ()) r' hacc
+  have hok : stmtOk h x m₁ m₂ c₀ c₁ = true := hr2 hdec hm₁ hsd hown hstm ⟨s, hps, rfl, hs s⟩ hheld
+    (registersNone_runOwn hnone _ _ _) hcodes
+  exact accepts_seqCoins h H x [] m₁ m₂ c₀ c₁ hok P' (fun _ => ()) r' hacc
 
 end SpotFlock.RunsAs
