@@ -130,6 +130,106 @@ noncomputable def placeCoin {β C : Type} {iF : Fintype C} {iN : Nonempty C} (k 
   let t' : C × ((c : C) → Tape (k c) (s c)) := t
   ((w t'.1, fun c => f c (s c) (t'.2 c)) : C × ((c : C) → Tape (k c) (s c)))
 
+/-! ### The releases' subgames, as `relK` writes them -/
+
+/-- After a fresh coin of family `l` is taken from the layout, leaving `fs'`: its 512 bits, then the releases. -/
+def freshY {β : Type} (k : ℕ) (ts : List OpenTree) (f : List Verity.Release → Game β) (l : String) (b : ByteArray)
+    (fs' : List (String × ℕ)) : Game β :=
+  .coin (Fin 512 → Bool) fun x => relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)
+
+/-- After a frame asking a fresh coin of family `l`. -/
+def freshG {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β)
+    (l : String) (b : ByteArray) : Game β :=
+  optGame (takeCoin l fs) (f []) (freshY k ts f l b)
+
+/-- After a `Hello` the device accepts: the tree's sample, then the releases. -/
+def helloX {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β)
+    (spec : Flock.CoinTree.Spec) (ν : ByteArray) : Game β :=
+  .coin (TreeSample spec) fun t => relK k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) fun log =>
+    f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log)
+
+/-- After a `Hello` frame. -/
+def helloG {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β)
+    (spec : Flock.CoinTree.Spec) (ν : ByteArray) : Game β :=
+  if treeLines ts < maxTreeLines ∧ TreeSpecOk spec then helloX k fs ts f spec ν else f []
+
+/-- After an opening of the tree `T`'s round `p`: the round, then the releases. -/
+def openP {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β)
+    (i sn n : ℕ) (b : ByteArray) (T : OpenTree) (p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)) :
+    Game β :=
+  haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
+  .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun d =>
+    relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i sn n, b, TreeDraw.opened d.1 n⟩ :: log)
+
+/-- After an opening frame finds the tree `T`. -/
+def openT {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β)
+    (i sn n : ℕ) (b : ByteArray) (T : OpenTree) : Game β :=
+  optGame (T.next sn n) (f []) (openP k fs ts f i sn n b T)
+
+/-- After an opening frame. -/
+def openG {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β)
+    (i sn n : ℕ) (b : ByteArray) : Game β :=
+  if treeLines ts < maxTreeLines then optGame ts[i]? (f []) (openT k fs ts f i sn n b) else f []
+
+/-- What the coin map does along `relK k`, from any layout, trees, releases before and continuation. -/
+abbrev PlaceRec (β : Type) (k : ℕ) : Type :=
+  (fs : List (String × ℕ)) → (ts : List OpenTree) → (pre : List Verity.Release) → (f : List Verity.Release → Game β) →
+    (s : Strategy (relK k fs ts f)) → Tape (relK k fs ts f) s → Tape (relK k fs ts f) s
+
+/-! ### The coin map, frame by frame -/
+
+/-- **At a fresh coin**: written with the round's coin's next 4 elements where the locator puts it and they fit. -/
+noncomputable def placeFresh {β : Type} (L : Locate) {K : ℕ} (r : Fin K → FlockDeploy.Coin) (k : ℕ)
+    (rec : PlaceRec β k) (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release)
+    (f : List Verity.Release → Game β) (l : String) (b : ByteArray) (s : Strategy (freshG k fs ts f l b))
+    (t : Tape (freshG k fs ts f l b) s) : Tape (freshG k fs ts f l b) s :=
+  placeOpt (f []) (freshY k ts f l b) (fun _ t => t)
+    (fun fs' s' t' => placeCoin _
+      (fun v => match slot L K pre (.fresh l) b 4 with
+        | some (i, u) => freshVal (r i) u
+        | none => v)
+      (fun x s₃ t₃ => rec fs' ts (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
+        (fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) s₃ t₃) s' t')
+    (takeCoin l fs) s t
+
+/-- **At a `Hello`**: the sample unchanged. -/
+noncomputable def placeHello {β : Type} (k : ℕ) (rec : PlaceRec β k) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (spec : Flock.CoinTree.Spec) (ν : ByteArray)
+    (s : Strategy (helloG k fs ts f spec ν)) (t : Tape (helloG k fs ts f spec ν) s) :
+    Tape (helloG k fs ts f spec ν) s :=
+  placeIte _ (helloX k fs ts f spec ν) (f []) s
+    (fun s' t' => placeCoin _ id
+      (fun tr s₃ t₃ => rec fs (ts ++ [⟨ν, spec, tr, fun _ => 0⟩])
+        (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩])
+        (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩ :: log)) s₃ t₃) s' t')
+    (fun _ t => t) t
+
+/-- **At an opening's round**: the round picked among those whose first `n` coins are the round's coin's next `n`
+elements, where the locator puts it and they fit. -/
+noncomputable def placeRound {β : Type} (L : Locate) {K : ℕ} (r : Fin K → FlockDeploy.Coin) (k : ℕ)
+    (rec : PlaceRec β k) (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release)
+    (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray) (T : OpenTree)
+    (p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)) (s : Strategy (openP k fs ts f i sn n b T p))
+    (t : Tape (openP k fs ts f i sn n b T p) s) : Tape (openP k fs ts f i sn n b T p) s :=
+  placeCoin _
+    (fun dr => match slot L K pre (.opening i sn n) b n with
+      | some (j, u) => openW n (openBits (r j) u n) dr
+      | none => dr)
+    (fun dr s₅ t₅ => rec fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
+      (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) s₅ t₅) s t
+
+/-- **At an opening**: the round written by `placeRound`, where the device opens one. -/
+noncomputable def placeOpen {β : Type} (L : Locate) {K : ℕ} (r : Fin K → FlockDeploy.Coin) (k : ℕ)
+    (rec : PlaceRec β k) (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release)
+    (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray) (s : Strategy (openG k fs ts f i sn n b))
+    (t : Tape (openG k fs ts f i sn n b) s) : Tape (openG k fs ts f i sn n b) s :=
+  placeIte _ (optGame ts[i]? (f []) (openT k fs ts f i sn n b)) (f []) s
+    (fun s' t' => placeOpt (f []) (openT k fs ts f i sn n b) (fun _ t => t)
+      (fun T s₃ t₃ => placeOpt (f []) (openP k fs ts f i sn n b T) (fun _ t => t)
+        (fun p s₄ t₄ => placeRound L r k rec fs ts pre f i sn n b T p s₄ t₄) (T.next sn n) s₃ t₃)
+      ts[i]? s' t')
+    (fun _ t => t) t
+
 /-- **The coin map along the device's releases**, from the releases `pre`, with the run's coins `r` at `K` rounds:
 each fresh coin and each opening the locator puts on a round, written with the round's coin's next elements where they
 fit (`slot`); every other node, and the play after the releases (`f`), unchanged. -/
@@ -142,45 +242,11 @@ noncomputable def placeK {β : Type} (L : Locate) {K : ℕ} (r : Fin K → Flock
     match m, s', t with
     | none, _, t => t
     | some (.fresh l, b), s', t =>
-      placeOpt (f []) (fun fs' => .coin (Fin 512 → Bool) fun x =>
-          relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) (fun _ t => t)
-        (fun fs' s'' t'' => placeCoin _
-          (fun v => match slot L K pre (.fresh l) b 4 with
-            | some (i, u) => freshVal (r i) u
-            | none => v)
-          (fun x s₃ t₃ => placeK L r k fs' ts (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
-            (fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) s₃ t₃) s'' t'')
-        (takeCoin l fs) s' t
+      placeFresh L r k (fun fs ts pre f s t => placeK L r k fs ts pre f s t) fs ts pre f l b s' t
     | some (.hello spec, ν), s', t =>
-      placeIte _ _ _ s'
-        (fun s'' t'' => placeCoin _ id
-          (fun tr s₃ t₃ => placeK L r k fs (ts ++ [⟨ν, spec, tr, fun _ => 0⟩])
-            (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩])
-            (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩ :: log)) s₃ t₃)
-          s'' t'')
-        (fun _ t => t) t
+      placeHello k (fun fs ts pre f s t => placeK L r k fs ts pre f s t) fs ts pre f spec ν s' t
     | some (.opening i sn n, b), s', t =>
-      placeIte _ _ _ s'
-        (fun s'' t'' => placeOpt (f []) (fun T => optGame (T.next sn n) (f []) fun p =>
-            haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
-            .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun dr =>
-              relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log))
-          (fun _ t => t)
-          (fun T s₃ t₃ => placeOpt (f []) (fun p =>
-              haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
-              .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun dr =>
-                relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log))
-            (fun _ t => t)
-            (fun p s₄ t₄ => placeCoin _
-              (fun dr => match slot L K pre (.opening i sn n) b n with
-                | some (j, u) => openW n (openBits (r j) u n) dr
-                | none => dr)
-              (fun dr s₅ t₅ => placeK L r k fs (ts.set i (T.bump p.1))
-                (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
-                (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) s₅ t₅) s₄ t₄)
-            (T.next sn n) s₃ t₃)
-          ts[i]? s'' t'')
-        (fun _ t => t) t
+      placeOpen L r k (fun fs ts pre f s t => placeK L r k fs ts pre f s t) fs ts pre f i sn n b s' t
 
 /-- **The period's game in the releases' continuation form**: the prover's request, then `relK` (`releases_bind`). -/
 theorem game_eq (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
@@ -260,11 +326,66 @@ noncomputable def gapOpt {β γ : Type} (n : Game β) (y : γ → Game β) (gn :
   | none, s => gn s
   | some a, s => gy a s
 
-/-- **The hiding term along the device's releases**, from the releases `pre`, along the frame's play: at each opening the
-locator puts on a round and whose elements fit, the written round's shortfall below uniform over the node's rounds
-(`shortfall`, at the round's coin's uniform `n` elements), plus the chance the class at those elements is empty, plus
-the term after the written round, averaged over the elements and the node's round; at every other coin node the term
-after it, averaged. -/
+/-- What the hiding term is along `relK k`, from any layout, trees, releases before and continuation. -/
+abbrev GapRec (β : Type) (k : ℕ) : Type :=
+  (fs : List (String × ℕ)) → (ts : List OpenTree) → (pre : List Verity.Release) → (f : List Verity.Release → Game β) →
+    Strategy (relK k fs ts f) → ℝ≥0∞
+
+/-- The hiding term at a fresh coin: the term after it, averaged over its bits. -/
+noncomputable def gapFresh {β : Type} (k : ℕ) (rec : GapRec β k) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (l : String) (b : ByteArray)
+    (s : Strategy (freshG k fs ts f l b)) : ℝ≥0∞ :=
+  gapOpt (f []) (freshY k ts f l b) (fun _ => 0)
+    (fun fs' s' => avg fun x : Fin 512 → Bool => rec fs' ts (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
+      (fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) (s' x))
+    (takeCoin l fs) s
+
+/-- The hiding term at a `Hello`: the term after it, averaged over the sample. -/
+noncomputable def gapHello {β : Type} (k : ℕ) (rec : GapRec β k) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (spec : Flock.CoinTree.Spec) (ν : ByteArray)
+    (s : Strategy (helloG k fs ts f spec ν)) : ℝ≥0∞ :=
+  gapIte _ (helloX k fs ts f spec ν) (f []) s
+    (fun s' => avg fun tr : TreeSample spec => rec fs (ts ++ [⟨ν, spec, tr, fun _ => 0⟩])
+      (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩])
+      (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩ :: log)) (s' tr))
+    (fun _ => 0)
+
+open Classical in
+/-- **The hiding term at an opening's round**: where the locator puts it and its elements fit, the written round's
+shortfall below uniform over the node's rounds, plus the chance its class at the run's uniform `n` elements is empty,
+plus the term after the written round averaged over the elements and the node's round; elsewhere the term after it,
+averaged. -/
+noncomputable def gapRound {β : Type} (L : Locate) (K : ℕ) (k : ℕ) (rec : GapRec β k) (fs : List (String × ℕ))
+    (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray)
+    (T : OpenTree) (p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog))
+    (s : Strategy (openP k fs ts f i sn n b T p)) : ℝ≥0∞ :=
+  haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
+  let next := fun dr : TreeOpenable T.nonce T.spec T.sample p.1 p.2 =>
+    rec fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
+      (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) (s dr)
+  match slot L K pre (.opening i sn n) b n with
+  | some _ =>
+    shortfall (fun e : Fin n → Fin 128 → Bool =>
+        openW (t := T.sample) (s := p.1) (r := p.2) (ν := T.nonce) n (bitsOf e)) +
+      avg (fun e : Fin n → Fin 128 → Bool =>
+        if (Finset.univ.filter fun e' : TreeOpenable T.nonce T.spec T.sample p.1 p.2 =>
+            TreeDraw.opened e'.1 n = bitsOf e).Nonempty then 0 else 1) +
+      avg fun e : Fin n → Fin 128 → Bool => avg fun dr => next (openW n (bitsOf e) dr)
+  | none => avg next
+
+/-- The hiding term at an opening: `gapRound` where the device opens a round. -/
+noncomputable def gapOpen {β : Type} (L : Locate) (K : ℕ) (k : ℕ) (rec : GapRec β k) (fs : List (String × ℕ))
+    (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray)
+    (s : Strategy (openG k fs ts f i sn n b)) : ℝ≥0∞ :=
+  gapIte _ (optGame ts[i]? (f []) (openT k fs ts f i sn n b)) (f []) s
+    (fun s' => gapOpt (f []) (openT k fs ts f i sn n b) (fun _ => 0)
+      (fun T s₃ => gapOpt (f []) (openP k fs ts f i sn n b T) (fun _ => 0)
+        (fun p s₄ => gapRound L K k rec fs ts pre f i sn n b T p s₄) (T.next sn n) s₃)
+      ts[i]? s')
+    (fun _ => 0)
+
+/-- **The hiding term along the device's releases**, from the releases `pre`, along the frame's play: the sum, over the
+written openings, of each one's `gapRound` term; fresh coins and `Hello`s add nothing of their own. -/
 noncomputable def gapK {β : Type} (L : Locate) (K : ℕ) :
     (k : ℕ) → (fs : List (String × ℕ)) → (ts : List OpenTree) → (pre : List Verity.Release) →
       (f : List Verity.Release → Game β) → Strategy (relK k fs ts f) → ℝ≥0∞
@@ -272,47 +393,10 @@ noncomputable def gapK {β : Type} (L : Locate) (K : ℕ) :
   | k + 1, fs, ts, pre, f, ⟨m, s'⟩ =>
     match m, s' with
     | none, _ => 0
-    | some (.fresh l, b), s' =>
-      gapOpt (f []) (fun fs' => .coin (Fin 512 → Bool) fun x =>
-          relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) (fun _ => 0)
-        (fun fs' s'' => avg fun x : Fin 512 → Bool => gapK L K k fs' ts (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
-          (fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) (s'' x))
-        (takeCoin l fs) s'
-    | some (.hello spec, ν), s' =>
-      gapIte _ _ _ s'
-        (fun s'' => avg fun tr : TreeSample spec => gapK L K k fs (ts ++ [⟨ν, spec, tr, fun _ => 0⟩])
-          (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩])
-          (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩ :: log)) (s'' tr))
-        (fun _ => 0)
+    | some (.fresh l, b), s' => gapFresh k (fun fs ts pre f s => gapK L K k fs ts pre f s) fs ts pre f l b s'
+    | some (.hello spec, ν), s' => gapHello k (fun fs ts pre f s => gapK L K k fs ts pre f s) fs ts pre f spec ν s'
     | some (.opening i sn n, b), s' =>
-      gapIte _ _ _ s'
-        (fun s'' => gapOpt (f []) (fun T => optGame (T.next sn n) (f []) fun p =>
-            haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
-            .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun dr =>
-              relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log))
-          (fun _ => 0)
-          (fun T s₃ => gapOpt (f []) (fun p =>
-              haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
-              .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun dr =>
-                relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log))
-            (fun _ => 0)
-            (fun p s₄ =>
-              haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
-              let next := fun dr : TreeOpenable T.nonce T.spec T.sample p.1 p.2 =>
-                gapK L K k fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
-                  (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) (s₄ dr)
-              match slot L K pre (.opening i sn n) b n with
-              | some _ =>
-                shortfall (fun e : Fin n → Fin 128 → Bool =>
-                    openW (t := T.sample) (s := p.1) (r := p.2) (ν := T.nonce) n (bitsOf e)) +
-                  avg (fun e : Fin n → Fin 128 → Bool =>
-                    if (Finset.univ.filter fun e' : TreeOpenable T.nonce T.spec T.sample p.1 p.2 =>
-                        TreeDraw.opened e'.1 n = bitsOf e).Nonempty then 0 else 1) +
-                  avg fun e : Fin n → Fin 128 → Bool => avg fun dr => next (openW n (bitsOf e) dr)
-              | none => avg next)
-            (T.next sn n) s₃)
-          ts[i]? s'')
-        (fun _ => 0)
+      gapOpen L K k (fun fs ts pre f s => gapK L K k fs ts pre f s) fs ts pre f i sn n b s'
 
 /-- **The coin trees' hiding term at the period's game** (`hide`): `gapK` from the device's first release, at the
 strategy's request. -/
@@ -387,6 +471,31 @@ theorem placeK_close {β : Type} (L : Locate) {K : ℕ} (r : Fin K → FlockDepl
     (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
     (s' : Strategy (f [])) (t : Tape (f []) s') :
     placeK L r (k + 1) fs ts pre f ⟨none, s'⟩ t = t := rfl
+
+theorem placeK_fresh {β : Type} (L : Locate) {K : ℕ} (r : Fin K → FlockDeploy.Coin) (k : ℕ)
+    (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (l : String) (b : ByteArray) (s' : Strategy (freshG k fs ts f l b)) (t : Tape (freshG k fs ts f l b) s') :
+    placeK L r (k + 1) fs ts pre f ⟨some (.fresh l, b), s'⟩ t =
+      placeFresh L r k (fun fs ts pre f s t => placeK L r k fs ts pre f s t) fs ts pre f l b s' t := rfl
+
+theorem placeK_hello {β : Type} (L : Locate) {K : ℕ} (r : Fin K → FlockDeploy.Coin) (k : ℕ)
+    (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (spec : Flock.CoinTree.Spec) (ν : ByteArray) (s' : Strategy (helloG k fs ts f spec ν))
+    (t : Tape (helloG k fs ts f spec ν) s') :
+    placeK L r (k + 1) fs ts pre f ⟨some (.hello spec, ν), s'⟩ t =
+      placeHello k (fun fs ts pre f s t => placeK L r k fs ts pre f s t) fs ts pre f spec ν s' t := rfl
+
+theorem placeK_open {β : Type} (L : Locate) {K : ℕ} (r : Fin K → FlockDeploy.Coin) (k : ℕ)
+    (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (i sn n : ℕ) (b : ByteArray) (s' : Strategy (openG k fs ts f i sn n b)) (t : Tape (openG k fs ts f i sn n b) s') :
+    placeK L r (k + 1) fs ts pre f ⟨some (.opening i sn n, b), s'⟩ t =
+      placeOpen L r k (fun fs ts pre f s t => placeK L r k fs ts pre f s t) fs ts pre f i sn n b s' t := rfl
+
+theorem gapK_open {β : Type} (L : Locate) (K k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray)
+    (s' : Strategy (openG k fs ts f i sn n b)) :
+    gapK L K (k + 1) fs ts pre f ⟨some (.opening i sn n, b), s'⟩ =
+      gapOpen L K k (fun fs ts pre f s => gapK L K k fs ts pre f s) fs ts pre f i sn n b s' := rfl
 
 theorem dev_nil (L : Locate) (i : ℕ) : dev L [] i = none := by
   simp [dev, usedOf]
