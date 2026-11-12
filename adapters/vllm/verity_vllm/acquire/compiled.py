@@ -259,7 +259,7 @@ def split_graph_wiring(path: str) -> dict[str, Any]:
     sigs: dict[str, list[tuple[str, str]]] = {}
     is_attn: dict[str, bool] = {}
     for name, c in zip(classes[::2], classes[1::2]):
-        fwd = next(filter(None, map(_FWD.match, c.splitlines())), None)
+        fwd = next(filter(None, map(_FWD.match, c.splitlines()[1:])), None)        # the first line is what follows the class's own header
         sigs[name] = _param_kinds(fwd.group(1)) if fwd else []
         is_attn[name] = "unified_attention_with_output" in c
     calls: list[tuple[str, list[str]]] = []
