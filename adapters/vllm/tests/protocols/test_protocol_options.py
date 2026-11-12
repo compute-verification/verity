@@ -30,6 +30,7 @@ from verity_vllm.program.frontend.target_profile import (
     TargetProfile,
     check_reuse,
 )
+from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
 DEFAULT_DIGEST = "86c255b375c6cf028a3bc3b7deeed96fd10b520956325accb8b541fbc90026b1"   # TargetProfile() on main before the field existed
 ALL = ("pouw:ncp-v1", "pous:band-chain/d12/v1", "sampled-proofs:rows-sha512")
@@ -181,6 +182,12 @@ def test_the_record_says_what_each_option_committed_to(monkeypatch):
     assert rec["digest"] == comp.record("d" * 64)["digest"] != comp.record("e" * 64)["digest"]
     assert comp.verdict("d" * 64) == {"protocols": list(ALL[1:]), "record": rec["digest"]}
     assert comp.info()["sampled-proofs:rows-sha512"]["commitment_scheme"] == "rows-sha512"
+
+
+def test_the_records_schema_is_the_registered_id_letter_for_letter():
+    """A Commit's `protocols.json` on disk carries this string, so neither the package's name for it nor the registered
+    id may drift from it."""
+    assert PO.RECORD_SCHEMA == PROTOCOL_COMPOSITION_SCHEMA == "verity-vllm/protocol-composition/v0"
 
 
 def test_an_install_that_raises_leaves_nothing_installed(monkeypatch):
