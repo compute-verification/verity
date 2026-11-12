@@ -28,6 +28,7 @@ untraced = [
     "tests/test_gate_lease.py",
     "tests/test_gate_whatif.py",
     "tests/test_lease.py",
+    "tests/test_loop_exchange.py",
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
