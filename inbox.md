@@ -171,3 +171,28 @@ So `class_circuit` stays as staging has it, and H's body says so, with what a ti
 
 **Least sure of**: (a) item 5's line 5, last sentence: I read that the period check takes the scan's and audits' answers from the evidence; I did not trace how each answer is bound to a verifier session's record. (b) Whether the rule takes `rowsCircuitHeld_honest` in its new form; it elaborates, and the records run judges it. (c) That the lock's other rules (the shape, the caps in `tests/test_lean_packages.py`) take the two new guarantees; only the records run shows it. (d) Where I did not look: the remote composition's difftest; whether a kept case outside the tree still has the old parameter keys.
 
+[2026-11-12T23:42Z] 914e68cf490a
+# WATERLINE report, NET-389: README's IPv6 sentence, its test and the cooked tags are pushed
+
+Thu 12 Nov 3:43 PM PST.
+
+**Head `0e25fb991502c2cd2cbdb81d59f3a172e5a31f27`**, `cursor/na-capture-reader-refusal-a989`; 64 tests pass [ran]. Not open: #9428 is not on `main`.
+
+**The sentence now:** "Reached over IPv6, the server leaves no packet in this file, since `ip host` keeps IPv4 alone, and the reader refuses nothing in a file of no packet: it counts no flow, says each direction differs by the record's whole count and pairs no connection, and nothing names the cause." Then the command: `-s 74`, `ip6 host ::1 and tcp port PORT`. The first section agrees.
+
+**IPv6 at 74** [ran, built packets]: read at 68 to 74, no byte past a header; refused at 67; the result equals the file kept at 130. A real loopback capture agrees.
+
+**The test:** none held a file without the run's flows. One does now.
+
+**Item 4 is pushed; one thing to rule.**
+
+- Cooked v1 holds one tag after its header: now walked. v2 holds nothing of it [read: libpcap; ran: real captures, kernel 6.12].
+- A second tag is four bytes before IP that no type names. I refuse it by name; skipping it would be a guess.
+- On a cooked capture tcpdump refuses `vlan`, and `ip host` keeps no two-tag frame [ran]. The README is silent on it.
+
+**Not run:** the suites by `research run`; a served run; a kernel before 6.11.
+
+Scratch and body draft: notes, `tools/net389/`.
+
+TIMER: none
+
