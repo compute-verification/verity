@@ -615,7 +615,7 @@ def _certified(certified: Mapping[str, Mapping[str, Any]] | None, registered: Ma
     sorted order: each of a value it neither expects a parameter registered under (`registered`) nor fills itself
     (`supplied`), an object of exactly `CERTIFIED_KEYS` (`root` lowercase hex of 64 bytes, `leaves` and `words`
     naturals, `domain` a string) and, optionally, `word_bits`, one of `registered.WIDTHS`, 16 when left out; ValueError
-    otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    otherwise, which the Lean verifier refuses too (`OneStage.paramsParsed`)."""
     if certified is None:
         return {}
     if not isinstance(certified, Mapping) or not all(isinstance(v, str) for v in certified):

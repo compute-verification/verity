@@ -376,6 +376,15 @@ A program's weights, constants and tables are values: committed once, under hidi
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
   (`verity/protocols/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
+- **Certified values.** A registered value that is none of the program's parameters, such as a link's certified rows,
+  is held through `certified`: for each, the entry the verifier built from the registration it read under the
+  deployment's key (`root`, `leaves`, `words`, `domain`, and `word_bits` when not 16). R7 then holds the record's
+  registered values to the program's and the certified ones, each once, and a certified value's entry to the
+  verifier's on every key, its root always (`R7-certified`). A verifier holding one expects a v2 record whatever its
+  program registers, and a record naming a value it holds no entry for is refused (`R7-values`, or the record's keys).
+  A certified value is never one the verifier expects a parameter under, fills, pins, holds or takes as an output.
+  `Stream.register` takes the entries and passes them to the run of record; `register_interiors` takes none, and the
+  audits that read their parameters through `OneStage.paramsOfJson` refuse them.
 - **Reads.** Every port of a statement is either a registered port of the `--registered` file
   (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows' root and
   domain as the registration holds them, and the public header's must be the same (`bind_ports`; `Flock.RegBound`). No
