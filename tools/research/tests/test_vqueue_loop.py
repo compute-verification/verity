@@ -3816,16 +3816,18 @@ def _steps(runs: Runs, sha: str) -> list[str]:
 
 
 def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_from_its_base_s_check(env, monkeypatch):
-    """Three candidates stacked, one PR each.  The lowest, on `main`, runs every step.  The middle one's member changes a
-    README under security/, a Lean input of the conservative set, so it runs lean-audit too, though its base's check does.
-    The top one's changes no Lean input: its check runs every step but lean-audit, its record saying whose verdict on it it
-    takes (``lean_audit_from``)."""
+    """Three candidates stacked, one PR each.  The lowest, on `main`, runs every step.  The middle one's member changes
+    check's `common.py`, which every audit's key holds, so it runs lean-audit too, though its base's check does.  The top
+    one's changes what no audit's key and no records key holds, check's `slot.py`, a test of the Lean check and a README of
+    the Lean tree: its check runs every step but lean-audit, its record saying whose verdict on it it takes
+    (``lean_audit_from``)."""
     from research.landing import AFTER_LANDING
 
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
-    readme = env.put(2, {"security/README.md": "# the Lean tree\n"})
-    env.put(3, {"c.txt": "1\n"})
+    common = env.put(2, {"tools/verity/check/common.py": "# the auditor imports this\n"})
+    env.put(3, {"tools/verity/check/slot.py": "# slots\n", "tools/verity/lean/tests/test_cache.py": "# a test\n",
+                "security/README.md": "# the Lean tree\n"})
     loop, runs = _check(env, monkeypatch, batch=1, depth=3)
     _, built, _ = loop.tick()
     one, (two, three) = built["sha"], (loop.tick()[0]["sha"] for _ in range(2))
@@ -3833,7 +3835,7 @@ def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_fr
     assert [_steps(runs, c) for c in (main, one, two, three)] == [[every] * 3] * 3 + [[free] * 3]
     started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
     assert [started[c]["record"].get("lean_audit_from") for c in (one, two, three)] == [None, None, two]
-    assert loop.world._changed(main, readme) == {"security/README.md"}
+    assert loop.world._changed(main, common) == {"tools/verity/check/common.py"}
 
 
 def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_audits_itself(env, monkeypatch):
@@ -3871,6 +3873,29 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     assert [_steps(runs, c) for c in (lean, top)] == [[every] * 3, [free if takes else every] * 3]
     started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
     assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") == (lean if takes else None)
+
+
+@pytest.mark.parametrize("path, takes", [("verity/protocols/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/pouw/verifier/lean/check/README.md", True)])
+def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits_itself(env, monkeypatch, path, takes):
+    """The candidate's tree no longer lists a file its member deletes, and the audit's declaration says of a path what it
+    says of a file there: the member's change is judged in that tree's files with the paths it changes, so the candidate on
+    a Lean one in flight whose member only deletes a file of a Lean package that an audit reads runs lean-audit itself; one
+    whose member only deletes the package's README takes its base's."""
+    from research.landing import AFTER_LANDING
+
+    pkg = "verity/protocols/pouw/verifier/lean/check"
+    _main_to(env, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/models.json": "{}\n", f"{pkg}/README.md": "# pouw\n"})
+    env.put(1, {f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
+    env.put(2, {path: None})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lean, top = built["sha"], loop.tick()[0]["sha"]
+    every, free = ",".join(AFTER_LANDING), ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+    assert [_steps(runs, c) for c in (lean, top)] == [[every] * 3, [free if takes else every] * 3]
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") == (lean if takes else None)
+    assert path not in loop.world._tree(top)
 
 
 @pytest.mark.parametrize("first", ["its base's check", "its own"])
