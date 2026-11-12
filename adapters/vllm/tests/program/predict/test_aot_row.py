@@ -8,12 +8,11 @@ import json
 
 import pytest
 
+from tests.program.predict.test_steps import _registered
 from verity_vllm.program.predict import aot as A
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.records.predicted_row import FILE, PredictedRow
-
-from tests.program.predict.test_steps import _registered
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 

@@ -20,7 +20,6 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 PHI_SCHEMA = "verity-predict/phi/v1"
@@ -43,7 +42,7 @@ class Phi:
                 "engine": self.engine, "workload": self.workload, "execution": self.execution, "profile": self.profile}
 
     @classmethod
-    def from_json(cls, d: dict) -> "Phi":
+    def from_json(cls, d: dict) -> Phi:
         if d.get("schema") != PHI_SCHEMA:
             raise ValueError(f"phi schema {d.get('schema')!r} != {PHI_SCHEMA!r}")
         return cls(model=dict(d["model"]), target=dict(d["target"]), tp=dict(d.get("tp") or {"world": 1, "rank": 0}),
@@ -65,6 +64,7 @@ class Phi:
         """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
         (`TargetProfile.execution_label`: a `bi-*` row runs the batch-invariant kernels, an `eager` row vLLM's defaults)."""
         from dataclasses import fields
+
         from verity_vllm.program.frontend.target_profile import TargetProfile
         names = {f.name for f in fields(TargetProfile)}
         tp = TargetProfile.default().with_overrides(**{k: (tuple(v) if k == "compute_capability" else v) for k, v in self.target.items()
@@ -87,16 +87,8 @@ class Phi:
 def _prompt_len(r: dict) -> int:
     if r.get("prompt_token_ids") is not None:
         return len(r["prompt_token_ids"])
-    return int(r.get("prompt_len") or r.get("input_len"))
+    return int(r.get("prompt_len") or r["input_len"])
 
 
 def _cap(r: dict) -> int:
     return int(r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens") or 0)
-
-
-def load_phi(path: str | Path) -> Phi:
-    return Phi.from_json(json.loads(Path(path).read_text()))
-
-
-def save_phi(phi: Phi, path: str | Path) -> None:
-    Path(path).write_text(json.dumps(phi.to_json(), indent=1, sort_keys=True) + "\n")

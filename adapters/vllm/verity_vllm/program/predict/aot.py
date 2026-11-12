@@ -48,7 +48,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import WORKLOADS, RowEngine, UsageError, option, row_file, workload_file
+from verity_vllm.config import (
+    WORKLOADS,
+    RowEngine,
+    UsageError,
+    option,
+    row_file,
+    workload_file,
+)
 from verity_vllm.records.predicted_row import FILE, PredictedRow
 
 from . import score as S
@@ -79,6 +86,7 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
     in field order), refused where the fields differ in number or size."""
     from verity.circuits.types import RecordType
+
     from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
     hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
     params = []
@@ -108,7 +116,7 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     desc = {**r.desc, "annotations": S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations") or {}}
     raw = json.dumps(desc, sort_keys=True).encode()
     if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):
-        raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {got[1][:16]}…), "
+        raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {str(got[1])[:16]}…), "
                          f"the trace's {str(traced.get('descriptor_sha256'))[:16]}… ({str(traced.get('correspondence_digest'))[:16]}…)")
     names, params = traced_names(r.program, desc, trace)
     os.makedirs(out, exist_ok=True)
@@ -148,7 +156,7 @@ def _predict_rank(task: tuple[str, int, str, str, list[tuple[str, int, int]]]) -
     out["step"] = getattr(timed("step", lambda: predict(phi, "step", M=int(st["M"]), pos0=int(st["pos0"]))), "digest", None)
     comps = {}
     for name, LP, T in requests:
-        if (r := timed(name, lambda: predict(phi, "request", LP=LP, T=T))) is not None:
+        if (r := timed(name, lambda LP=LP, T=T: predict(phi, "request", LP=LP, T=T))) is not None:
             out["requests"][name] = r.digest
             if (c := timed("workload", lambda: S.request_component(r))) is not None:
                 comps[(LP, T)] = c
@@ -193,7 +201,8 @@ def compare(row_dir: str, row: str, config: str, workers: int = 0, predicted: st
         ranks[r] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
         ranks[r].update({k: got[r][k] for k in ("errors", "secs") if got[r][k]})
     equal = all(v["equal"] for p in ranks.values() for n, v in p.items() if n not in ("errors", "secs"))
-    doc = {"schema": SCHEMA, "row": row, "build": str(Path(row_dir).resolve()), "code_version": S.code_version(), "equal": equal, "ranks": ranks}
+    doc: dict[str, Any] = {"schema": SCHEMA, "row": row, "build": str(Path(row_dir).resolve()), "code_version": S.code_version(), "equal": equal,
+                           "ranks": ranks}
     if predicted is not None:
         doc["predicted"] = compare_row(row_dir, predicted, traced)
         doc["equal"] = equal and doc["predicted"]["equal"]
@@ -204,6 +213,14 @@ def _manifest_facts(path: Path) -> dict[str, Any]:
     from verity_vllm.records.required_manifest import RequiredManifest
     m = RequiredManifest.load(path)
     return {"manifest_digest": m.manifest_digest, "program_digest": m.program_digest, "identities": len(m.identities)}
+
+
+def _request_shape(name: str, where: str) -> tuple[int, int]:
+    """(LP, T) of a predicted request Program's name, `build_request_LP<n>_T<n>` as `write_row` names it."""
+    m = REQUEST.fullmatch(name)
+    if m is None:
+        raise UsageError(f"{where}: {name!r} is no predicted request Program's name (build_request_LP<n>_T<n>)")
+    return int(m[1]), int(m[2])
 
 
 def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dict[str, Any]:
@@ -217,7 +234,7 @@ def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dic
     p, rec = traced["0"], PredictedRow.of(json.loads((path := Path(predicted, FILE)).read_text()), str(path))
     by_shape = {s: p["requests"][n] for n, s in _traced_shapes(row_dir, "0", p).items()}
     parts = {"workload": (p["workload"], rec.workload_digest),
-             **{n: (by_shape.get(tuple(int(x) for x in REQUEST.fullmatch(n).groups())), d) for n, d in rec.requests.items()}}
+             **{n: (by_shape.get(_request_shape(n, str(path))), d) for n, d in rec.requests.items()}}
     out: dict[str, Any] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
     t, q = _manifest_facts(Path(row_dir, "manifest.json")), _manifest_facts(Path(predicted, "manifest.json"))
     out["manifest"] = {"traced": t, "predicted": q, "equal": bool(t["manifest_digest"]) and t == q}
@@ -231,16 +248,18 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     from verity_vllm.pipeline import manifest as MN
     from verity_vllm.program import prefix_plan as PP
     from verity_vllm.query.required import QUERY_OF_RECORD
+
     from .naming import named_program, write_build
     w = json.loads(workload_file(row_file(row)).read_text())
     if PP.prefix_caching(w):
         raise UsageError(f"{row}: the row serves with prefix caching, and its workload Program's cached components are not predicted")
-    config = config or pinned_hf_config(w["model"], RowEngine.of(w).revision)
-    if config is None:
-        raise UsageError(f"{row}: no pinned config.json for {w['model']}@{RowEngine.of(w).revision}; pass --config")
+    revision = RowEngine.of(w).revision
+    found = config or pinned_hf_config(w["model"], str(revision))
+    if found is None:
+        raise UsageError(f"{row}: no pinned config.json for {w['model']}@{revision}; pass --config")
     if os.path.exists(os.path.join(out, "build_summary.json")):
         raise UsageError(f"{out} is a traced row's dir: a predicted row's Build is written into a dir of its own")
-    phi = S.phi_of({"row": row, "workload": w}, config=str(config))
+    phi = S.phi_of({"row": row, "workload": w}, config=str(found))
     os.makedirs(out, exist_ok=True)
     t0, comps, requests = time.time(), {}, {}
     for LP, T in phi.request_shapes():
@@ -261,7 +280,7 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     Path(out, "manifest.json").write_bytes(raw)
     if MN.incomplete_rc(man):
         raise UsageError(f"{row}: the predicted Build's manifest is incomplete (named above), so it has no {FILE}")
-    rec = PredictedRow(row=row, config=str(config), code_version=S.code_version(), requests=requests, workload_digest=wl.digest,
+    rec = PredictedRow(row=row, config=str(found), code_version=S.code_version(), requests=requests, workload_digest=wl.digest,
                        lag=wl.lag, manifest_digest=man["manifest_digest"], manifest_sha256=hashlib.sha256(raw).hexdigest(),
                        program_digest=man["program_digest"], identities=man["populations"]["identities"],
                        secs=round(time.time() - t0, 1))
@@ -329,13 +348,13 @@ class RowOptions:
 
 
 def main(a: EmitOptions | CompareOptions | RowOptions) -> int:
-    if a.cmd == "emit":
+    if isinstance(a, EmitOptions):
         if a.wrapper == "request" and (a.LP is None or a.T is None):
             raise UsageError("--wrapper request needs --LP and --T")
         block = emit(phi_at(a.row, a.rank, a.config), a.wrapper, a.trace, a.out, M=a.M, pos0=a.pos0, LP=a.LP, T=a.T, aot=json.loads(a.aot))
         print(json.dumps({"out": a.out, "digest": block["predicted_digest"], "timings": block["timings"]}))
         return 0
-    if a.cmd == "row":
+    if isinstance(a, RowOptions):
         rec = write_row(a.row, a.out, config=a.config, jobs=a.jobs, log=lambda s: print(s, file=sys.stderr, flush=True))
         print(json.dumps({k: getattr(rec, k) for k in ("row", "workload_digest", "manifest_digest", "program_digest", "identities", "secs")}))
         return 0

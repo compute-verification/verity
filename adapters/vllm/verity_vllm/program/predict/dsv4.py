@@ -44,17 +44,21 @@ class Net:
     DOMAIN = ((8,), "eager", ("float8_e4m3fn",))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
-        from verity_vllm.engine.profiles import family_facts as FF
-        from verity_vllm.observe.fold.profiles.generic import rank_hf_config
-        from verity_vllm.program import model as analytic
-        from verity_vllm.program.frontend import targets as TG
-        from verity_vllm.program.frontend.rules.vllm_dsv4 import COMPRESSORS, FLASHMLA_GEOMETRY
-        from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
         from verity.definitions.registry import dsv4_indexer
         from verity.definitions.registry import dsv4_qnorm_insert as Q
         from verity.definitions.registry.dsa_norm import check_block
         from verity.definitions.registry.dsv4_moe import TOPK as ROUTER_SLOTS
         from verity.definitions.registry.tp_allreduce import settings_of
+
+        from verity_vllm.engine.profiles import family_facts as FF
+        from verity_vllm.observe.fold.profiles.generic import rank_hf_config
+        from verity_vllm.program import model as analytic
+        from verity_vllm.program.frontend import targets as TG
+        from verity_vllm.program.frontend.rules.vllm_dsv4 import (
+            COMPRESSORS,
+            FLASHMLA_GEOMETRY,
+        )
+        from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
         hf, ff = phi.hf_config, FF.facts_for(phi.hf_config)
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
         qc = hf.get("quantization_config") or {}
@@ -145,7 +149,7 @@ class Net:
         rope cache."""
         from verity.definitions.registry import marlin_moe as MM
         C, r = self.C, self.ratios[L]
-        H, HC, D, DR, QL, NH, NHP, E, I, SI, IH, ID, OL, TOPK = (int(C[k]) for k in (
+        H, HC, D, DR, QL, NH, NHP, E, INTER, SI, IH, ID, OL, TOPK = (int(C[k]) for k in (
             "H", "HC_MULT", "HEAD_DIM", "QK_ROPE", "Q_LORA", "NH", "PADDED_HEADS", "NUM_EXPERTS", "I", "SHARED_I", "INDEX_HEADS",
             "INDEX_HEAD_DIM", "O_LORA", "TOPK"))
         OUT, OG = HC * (2 + HC), int(C["O_GROUPS"]) // self.world
@@ -166,12 +170,12 @@ class Net:
             out["attn.indexer.weights_proj.weight"] = ((IH, H), 16)
         out |= compressor("attn.compressor", D)
         out["ffn.gate.weight"] = ((E, H), 16)
-        if L < int(C["HASH_LAYERS"]):
+        if int(C["HASH_LAYERS"]) > L:
             out["ffn.gate.tid2eid"] = ((int(C["VOCAB"]), TOPK), 32)
         else:
             out["ffn.gate.e_score_correction_bias"] = ((E,), 32)
         out |= self._fp8("ffn.shared_experts.gate_up_proj", 2 * SI, H) | self._fp8("ffn.shared_experts.down_proj", H, SI)
-        for k, N, K in (("w13", 2 * I, H), ("w2", H, I)):
+        for k, N, K in (("w13", 2 * INTER, H), ("w2", H, INTER)):
             out |= {f"ffn.experts.routed_experts.{k}_weight": ((E, N, K // 2), 8), f"ffn.experts.routed_experts.{k}_weight_scale": ((E, N, K // MM.GROUP), 8)}
         return out | {"attn_norm.weight": ((H,), 16), "ffn_norm.weight": ((H,), 16)}
 
@@ -183,7 +187,7 @@ class Net:
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
-    def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
+    def model(self, B: Builder, W: Coll, peers: _Peers) -> _Model:
         return _Model(self, B, W, peers)
 
 
@@ -235,8 +239,12 @@ class _Model(dsa._Model):
     def post_pre(self, parts: list[Refs], streams: list[Refs], mix: list, L: int, side: str) -> tuple[list[Refs], list[Refs], list]:
         """The all-reduce of a sublayer's partials, its post into the streams and the pre of layer L's `side` sublayer: the FMA path at
         most `SMALL_FMA_TOKENS` rows, the TF32 pre above (`MhcFusedPostPreRule`) -> (streams, layer input, (post, comb)) per row."""
-        from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, SMALL_FMA_TOKENS
         from verity.definitions.numerics.mhc_twin import tf32_num_split
+
+        from verity_vllm.program.frontend.rules.vllm_mhc import (
+            MHC_GEOMETRY,
+            SMALL_FMA_TOKENS,
+        )
         w = lambda f: self.w[(L, f)].refs  # noqa: E731
         x, mhc = self.all_reduce(parts), self.net.mhc
         if len(x) <= SMALL_FMA_TOKENS:
@@ -274,6 +282,7 @@ class _Model(dsa._Model):
         qn, kn = (self.k("triton_block_rmsnorm", N=N, **net.norm) for N in (QL, D))
         q = [self.call(qn, a.slice(0, QL), w("attn.q_norm.weight")).refs for a in qkv]
         kv = [self.call(kn, a.slice(QL, QL + D), w("attn.kv_norm.weight")).refs for a in qkv]
+        scores: list
         score, ape, scores = self.k("dsv4_compressor_score", W=CW), w("attn.compressor.ape"), []
 
         def state() -> None:
@@ -316,7 +325,11 @@ class _Model(dsa._Model):
         """FlashMLA over the rows each position reads, its window from max(p - window + 1, P) then the compressed rows the history
         holds by then (`Dsv4SparseAttnRule`): one row a decode over each padded to BN rows, at the splits of the planner for the one
         request; more a prefill, each row gathered once and each position's rows, compressed first, padded to its NP pairs of blocks."""
-        from verity.definitions.numerics.flashmla_twin import num_sm_parts, request_splits, sched_meta
+        from verity.definitions.numerics.flashmla_twin import (
+            num_sm_parts,
+            request_splits,
+            sched_meta,
+        )
         C, net, r, P = self.C, self.net, self.net.ratios[L], hist["from"]
         D, DR, NH, NHP, window = (int(C[k]) for k in ("HEAD_DIM", "QK_ROPE", "NH", "PADDED_HEADS", "WINDOW"))
         G, scale, sink = net.G, float(C["ATTN_SCALE"]), self.w[(L, "attn.attn_sink")].refs.slice(0, NH)
@@ -362,11 +375,12 @@ class _Model(dsa._Model):
         """The MoE block over the rows x (`vllm_moe_router`, `vllm_marlin_moe`, op-major): the router logits, the shared expert, each
         row's six experts and weights, the align over the pairs p = t * TOPK + k in pair-index order, per pair the w13 GEMM, the
         clamped SwiGLU and the weighted w2 GEMM; each row's sum of its TOPK rows, plus the shared expert's."""
-        from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
         from verity.definitions.numerics.marlin_moe_rows import moe_block
         from verity.definitions.registry import marlin_moe as MM
+
+        from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
         C, M, H = self.C, len(x), self.H
-        E, TOPK, I, SCALE = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"]), float(C["ROUTED_SCALING_FACTOR"])
+        E, TOPK, INTER, SCALE = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"]), float(C["ROUTED_SCALING_FACTOR"])
         P = M * TOPK
         w = lambda f: self.w[(L, f)]  # noqa: E731
         logits = self.router(x, w("ffn.gate.weight"))
@@ -375,7 +389,7 @@ class _Model(dsa._Model):
             return [self.call(self.k("silu_mul_clamp", I=a.count // 2, LIMIT=float(C["SWIGLU_LIMIT"])), a).refs for a in rows]
 
         shared = self.fp8(swiglu(self.fp8(x, L, "ffn.shared_experts.gate_up_proj")), L, "ffn.shared_experts.down_proj")
-        if L < int(C["HASH_LAYERS"]):
+        if int(C["HASH_LAYERS"]) > L:
             V, table = int(C["VOCAB"]), w("ffn.gate.tid2eid")
             gather = self.k("gather_i32", V=V)
             ids = [concat([self.call(gather, t.refs, strided_view(table, k, V, V * TOPK, TOPK, V)).refs for k in range(TOPK)]) for t in toks]
@@ -399,7 +413,7 @@ class _Model(dsa._Model):
                 _refuse(str(e))
             return self.k(role, E=E, K=K, N=N, TK=cfg[0], TN=cfg[1], GRID=cfg[2], DOT=MM.DOT)
 
-        up, down = launch("marlin_moe_gemm", H, 2 * I, TOPK), launch("marlin_moe_gemm_w", I, H, 1)
+        up, down = launch("marlin_moe_gemm", H, 2 * INTER, TOPK), launch("marlin_moe_gemm_w", INTER, H, 1)
         one = lambda a, p: a.slice(p, p + 1)  # noqa: E731
         a = swiglu([self.call(up, x[p // TOPK], one(ids, p), one(blk, p), par, w("ffn.experts.routed_experts.w13_weight").refs,
                               w("ffn.experts.routed_experts.w13_weight_scale").refs).refs for p in range(P)])
