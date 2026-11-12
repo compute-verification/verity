@@ -73,6 +73,7 @@ __all__ = [
     "read_u16",
     "read_u32",
     "sensitivity",
+    "sha256_file",
     "verify",
     "write_u16",
     "write_u32",
