@@ -45,7 +45,7 @@ LAG_NOT_ON_RECORD = ("lag not attested on the record: the Program declares LAG 1
 SERVED_NONE = (f"r0: the Commit served 11 tokens (last {EOS}) but the Match record's tokens.json served 0 (last None)"
                "{}: not one serving transcript (executed-prefix condition (a))")
 #: every value that tests false: each is nothing stated to a reader that takes a value by its truth
-NOTHING = (None, {}, [], 0, "", False)
+NOTHING: tuple[Any, ...] = (None, {}, [], 0, "", False)
 
 
 def left_out(empty: Any) -> pytest.MarkDecorator:
