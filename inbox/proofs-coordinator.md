@@ -105298,3 +105298,234 @@ The two readings of the program run only where the loop is given `--partition` a
 - That the 22 s are the two readings of the program. The reason for the guess: it is the one large input the four sessions share, and the code reads it twice at each setup.
 - The wait at another program size. The served model's program is 2.77 GB [relayed: the same message]. A session behind the ZK server that gives the loop that program has it read twice at every new sample. Nobody has timed that.
 - One round of four sessions; no session was repeated.
+
+## TWOLEG, Thu 12 Nov 22:27Z: the split as briefs: eight workers, seven of them on B1 and one on B2 with its shared file. Three can compile alone from tonight: the assemblies, the coin map and the cut. Four wait on the form's `Reading`, which I owe by Fri 01:30Z. Every piece is on the accept's path
+
+**In plain words.** This answers the coordinator's 22:20Z message. It keeps the pieces of my 22:15Z entry but writes each as a section a worker can take as its brief alone: its branch, its base, its files, its statement and what it waits on. I made one change so the pieces are independent of the wiring. Each piece now speaks of "the form's check accepts" (a parameter `Acc`) rather than "the sampled verdict accepts". The single fact tying the two is one hypothesis of the assembly, and the wiring supplies it later. Pieces 4 to 7 are then lemmas about the form's check function alone, as `MemberForm/Order.lean` is about `membersTreeReason`. On the coordinator's questions:
+- I take the default refusal: the form refuses a population whose replay blocks are not all one Definition. Friday's layout is one replay block, the select, so the refusal costs Friday nothing.
+- The form's check, the function RUNCOINS's `RunAcceptsPlay` should read, is named `VStar.Recursive.SampledTwo.checkBlobsAt`.
+- The earlier-period signature hole is listed as an open hole of this leg.
+
+Nothing is compiled yet. The try of the three stated files is `r20261112-222508-9f30`, waiting for a slot.
+
+Clock: `date -u` read 22:27Z. Mailbox `inbox/bc-434423a4-04be-59f4-8feb-5ac9c9b2ad71.md` read at 22:19Z: its last message is the coordinator's 21:51Z one. The 22:20Z message came through the hook and is answered here [run].
+
+**Branch** `cursor/proofs-twoleg-c5e5` at `08e3d2b2d7` [run]. Since `42e5e760ff`, one commit to `SampledTwo/Projection.lean`:
+- `CoinsRead`, `MessagesFixed`, `AcceptsRun` and `StmtAt` take `Acc : Verity.Exchange → Prop` in place of `V.Verdict k .sampled`;
+- `ProjectionOf` takes `(∀ o, V.Verdict k .sampled o → Acc o)` as its first hypothesis.
+
+`CutBound`, `ProjectionBound` and `CouplingOf` still read the verdict [run: the diff].
+
+### 1. Answers to the coordinator's 22:20Z points
+
+1. **Weight or count: the refusal** [derived]. The third form refuses where the boundary program's proof blocks under its query are not one stratum, that is, not all instances of the rule's replay Definition. That makes the count share the weight share, so `Accounting` needs no weights.
+   - It is one check in my form, before the run. The exact function is fixed in the form's parse entry by 03:00Z [guess: `Select.strataSizes v.program v.query` of size 1].
+   - Friday: the two-round driver's selection is `TwoStage(grain, replay, k)` "over the class's replay block", and the replay blocks are "the class's spans" [read: `benchmarks/one_stage/two_stage.py`, module docstring at main]. The 19 chunk templates and the combine are templates of the check inside that one replay block, not replay blocks [read: the same docstring's design paragraph, one member per template]. So Friday's population is one Definition and passes [derived].
+   - (b) The population and its number come from the boundary registration (`population` in its record, held by `Registration.check` before any coin, `Run.run`) [read]. No prover-sized N enters `CapsAt` or `UnitsAreReplay` [derived].
+2. **Projection.** Taken as decided. Each piece states its own read at the place the coupling uses it (`Reading`, per form), and no piece reads the one-stage `coinsRead` [read: my files].
+3. **Majority.** Worker H drafts the shared file and moves the averaging lemmas off `Dep`, as its section says.
+4. **Files.** Following the coordinator's 22:20Z message:
+   - Soundness owns the instance; this split names only its interface.
+   - Proofs drafts B1 under `SampledTwo/` and B2.
+   - Mine: the form, `Reading.lean`, `Refused.lean`, `HeldOf.lean`, B3's proof after Daniel's word, and `Leg.lean` until soundness adopts it.
+5. and 6. The sections below each start with a branch name, a base, files and signatures.
+7. **The terms and the function's name.** Worker C's section carries the read finder and the forger. RUNCOINS's `RunAcceptsPlay` should read `VStar.Recursive.SampledTwo.checkBlobsAt` (the form's check at the coins `ξ`, as v2's `checkBlobsAt`), not `Run.run` [derived]. The form's step that ties the sessions' coins is v2's member-tree step (`OneStageZk.membersRun`: `treesOf`, `orderHeld`, `membersTreesHeld`), which the form calls on the interior's audit [read: `OneStageZk.lean`, `membersRun`, at main]. RUNCOINS: please confirm the name in your next entry.
+8. **The earlier-period signature.** Listed under "Not established" as an open hole of the two-round leg. It enters through worker C's forger term and closes with soundness's key pins, Tue 17 Nov [relayed].
+
+### 2. Order on the path
+
+Every piece is on the path of the accept switching on: Daniel's 21:44Z ruling switches it only once the two-round form sits under the one soundness theorem, and that needs all of B1, B2, the instance and B3 [relayed]. The order inside the path:
+- **Now, alone:** A (the assemblies), B (the coin map), C (the cut) and H (the majority, with the shared file).
+- **After `Reading.lean` (mine, Fri 01:30Z):** D (the stages' coins), E (the sessions' coins), F (the messages) and G (the accept, with FRAME's L3).
+- **After soundness's two-stage restatement (Fri 18:00Z):** the instance (soundness's), then the wiring and the lock (lean's, after Daniel's word).
+- **Off the accept's path:** `Refused.lean` is on the wiring's path. It is what lets the wiring land while FORM is off.
+
+For B1, the first three files are A, B and C. What each proves alone:
+- A proves `projection_of` and `coupling_of` from the pieces' `Prop`s, pure probability, compiling on my branch as it is.
+- B proves the coin map's law at the deployed game.
+- C proves the cut from `window_opens` and the every-line statement.
+
+### Common to every section
+
+- **Base.** `cursor/proofs-twoleg-c5e5` at `08e3d2b2d7`. It holds `Proofs.Properties.Verity.SampledTwo.Leg`, `.Projection` and `.Claim`, each a root on its own line in `security/Proofs/lakefile.toml`.
+- **New files.** Put them under `security/Proofs/Properties/Verity/SampledTwo/` and add each as a root on a line of its own. Namespace `Verity.SampledTwo`.
+- **Imports.** `Proofs.Properties.Verity.SampledTwo.Projection` unless a section says more.
+- **Reading.** `Leg.lean` (`Live₂`, `errAt`, `prBad_le`, `CouplingTargetTwo`, `TwoLeg`) and `Projection.lean` (every `Prop` below), both on the base.
+- **Rules.** COMMON.md's rules hold. Name a `Prop` for every assumption you take; no `axiom`, `sorry` or `native_decide`. Compile with `verity lean try FILE` through `research run`.
+- **"Compiles by Fri 18:00Z"** means a passing try at that hour, with only propext, Classical.choice and Quot.sound.
+
+---
+
+### A. The assemblies (`cursor/proofs-assembly-992e`)
+
+- **Files.** `SampledTwo/ProjectionOf.lean` and `SampledTwo/CouplingOf.lean`.
+- **Statements** (the `Prop`s are in `Projection.lean`):
+  ```lean
+  theorem projection_of (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
+      (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : ProjectionOf V k A x θ F c σ
+  theorem coupling_of (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+      (F : Array ByteArray) : CouplingOf V k A θ F
+  ```
+- **The argument of `projection_of`** [derived]:
+  1. Split the verdict on `Good`. The bad half is `CutBound`.
+  2. The good half is at most `Acc ∧ Good`. Move it to the frame's plays by `CoinMapLaw`'s first clause, which costs `hide`.
+  3. On a frame play with `Acc ∧ Good`, either a message differs from the run's, which `MessagesFixed` bounds by `miss`, or every read round's coin is the run's:
+     - `CoinsRead` at `.first`, `.second` and `.sessions`, with `StmtReadsNone` covering `.stmt`, give the device's release;
+     - `CoinMapLaw`'s second clause makes that release `some (r i)`.
+  4. `StmtAt` gives `Rd.stmt = some x`, and `AcceptsRun` then gives the run's accept.
+  5. Use `ENNReal.ofReal_add_le`.
+- **The argument of `coupling_of`** [derived]:
+  1. `Pr[acc]` over tape × coins equals `Pr[acc]` over tape × coins × `A.L.E.C x`.
+  2. Split on `Claims.Rel.ext A.R x (E.eval …).1`: the negated half is `PrBad`, and the other half is `MajorityBound`.
+  3. With `ProjectionBound` and `prBad_le`, the numbers clause closes `CouplingTargetTwo`.
+- **Imports.** `Projection`, plus `Proofs.Core.Game.Tape` for the tape's `Fintype` and `Nonempty`.
+- **Waits on.** Nothing. **Size.** 300 to 700 lines [guess]. **Compiles by Fri 18:00Z:** yes, both. If a `Prop` is unprovable as stated, write the smallest change to it under `NEEDS` to TWOLEG, with a counterexample.
+
+### B. The coin map (`cursor/proofs-coinmap-8b0c`)
+
+- **File.** `SampledTwo/CoinMap.lean`.
+- **What it builds.**
+  - `Frame.place`: write a run's coins into a tape of the period's play at the device's releases for the read rounds, at the deployed composite's game.
+  - `Reading.dev`: the device's release for round `i` in a play's log.
+- **Statement.** `theorem coinMapLaw … : CoinMapLaw V A x θ F c σ Fr Rd hide`, at the deployed composite's Vocab (`Remote.V1` once #9375 lands; until then the composite on the base). Here `Fr.place` and `Rd.dev` are this file's, and `hide` is the coin trees' hiding term.
+- **Reuse.** The one-stage leg's device coin map, `Device.dev` in `security/Proofs/Properties/Verity/Sampled/Device.lean` (soundness's: read it, don't edit). For the tape, use `Verity.Game.Tape` (Fintype in Definitions; `Tape.instNonempty` in `Proofs/Core/Game/Tape.lean`).
+- **Two stages, not one.** The first stage's coins follow the boundary record's digest. The second stage's follow the interior record's digest, on the second challenger session the interior window opens (`two_stage.py`'s "second stage's coins"). The sessions' coins are each session's member tree.
+- **The crux** [guess]. Where each round's release sits on the tape depends on the play before it. The law holds if those positions are a stopping order. Otherwise `hide` is the trees' hiding term, as in the one-stage leg.
+- **Waits on.** Nothing to start. The deployed Vocab's `macs` field once #9375 lands (lean's note). **Size.** 1,500 to 3,000 lines [guess]. **Compiles by Fri 18:00Z:** the definitions and the first clause; the second clause is a stretch.
+
+### C. The cut: the read finder and the forger (`cursor/proofs-cut-9323`)
+
+- **File.** `SampledTwo/Cut.lean`.
+- **What it defines.** `LogIsDevice : Verity.Exchange → Prop`: every line of the challenger's release log that the evidence carries, for both stages' sessions, is a line the device released in `o.log`, in order. This is the `Good` every other piece reads. Write it to agree with RUNCOINS's `EvidenceIsLog` text (`cursor/proofs-runcoins-2d88`, `RunsAs/Statement.lean`). The coordinator ruled at 22:20Z that this is a statement whose other branch is the model's break, not a premise.
+- **Statement.**
+  ```lean
+  theorem cutBound … : CutBound V k θ F c σ LogIsDevice terms
+  ```
+  Here `terms` is the read finder's and the forger's term: a forgery under the challenger's key, or a SHA-512 collision (`findBreak`, `security/Properties/Challenger.lean:344-350` on main).
+- **Reuse.**
+  - `window_opens` (`security/Proofs/Properties/Challenger/Window.lean:304`) for one entry.
+  - PERIODREAD's `LedgerLinesOfDevice`, for every line (elaborated 22:12Z in scratch; ask PERIODREAD for its branch).
+  - The one-stage leg's `Binding.lean` (soundness's: read only).
+- **Two sessions.** The two-stage play has two challenger sessions, so the forger's term counts both logs.
+- **Open hole.** A strategy that puts an earlier period's genuine signature in its evidence sets the error to ⊤ (soundness's 22:00Z finding, `Sampled/Device.lean:468-475`). State `terms` so that this case is the forger's and shows as such. Soundness closes it with key pins on Tue 17 Nov.
+- **Waits on.** Nothing to start; agree `LogIsDevice` with RUNCOINS. **Size.** 800 to 1,800 lines [guess]. **Compiles by Fri 18:00Z:** yes, at one session's log; both sessions are a stretch.
+
+### D. The two stages' coins (`cursor/proofs-stagecoins-71b1`)
+
+- **Files.** `SampledTwo/FirstCoins.lean` and `SampledTwo/SecondCoins.lean`.
+- **Statements.**
+  ```lean
+  theorem coinsRead_first : CoinsRead A formReading FormAccepts LogIsDevice .first
+  theorem coinsRead_second : CoinsRead A formReading FormAccepts LogIsDevice .second
+  ```
+  `formReading` and `FormAccepts` are mine in `SampledTwo/Reading.lean`; `LogIsDevice` is worker C's.
+- **The argument.** The form's check accepts only where `Run.run`'s `coinsHold` holds:
+  - at the boundary record and its window root for the first stage;
+  - at the interior record and its own window root for the second (`interiorSteps`; find by name in `verity/protocols/spot/verifier/lean/Spot/Run.lean`).
+
+  That makes the bytes read the coins `Challenger.coinsReason` opens after the record's digest. `RunCoinsInOrder` (RUNCOINS) states the same; reuse it rather than restating it.
+- **Waits on.** `Reading.lean` (mine, Fri 01:30Z) and worker C's `LogIsDevice`. **Size.** 600 to 1,200 plus 800 to 1,600 lines [guess]. **Compiles by Fri 18:00Z:** the first stage's.
+
+### E. The sessions' coins (`cursor/proofs-sessioncoins-e4a0`)
+
+- **File.** `SampledTwo/SessionCoins.lean`.
+- **Statements.**
+  ```lean
+  theorem coinsRead_sessions : CoinsRead A formReading FormAccepts LogIsDevice .sessions
+  theorem stmtReadsNone : StmtReadsNone A formReading
+  ```
+- **The argument.** The form computes the second stage's verdicts with v2's member form on the interior's audit (`OneStageZk.membersRun`). Where it accepts, `MemberForm.members_read` gives:
+  - each session's coins are its own tree's;
+  - the trees open in order;
+  - each tree closes after its evidence's SHA-512.
+
+  Read `security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean` on main (`opens_in_order`, `closing_read`, `evidence_before`) and its `MemberForm/Evidence.lean` (`evidenceBytes_inj`). The round of the run each session's coins are is `slotOf` in `SpotFlock.V`. FIRSTACCEPT works on the member form's acceptance; read its entries, don't edit its files.
+- **Waits on.** `Reading.lean`. **Size.** 1,000 to 2,000 lines [guess]. **Compiles by Fri 18:00Z:** one session's coins.
+
+### F. The messages and the prover (`cursor/proofs-messages-f55d`)
+
+- **File.** `SampledTwo/Messages.lean`.
+- **What it builds.** The frame's prover `Fr.P`, which reads the strategy's messages off the tape: round 1 the interior record, round `stage + 1` the statements, and each session's round its record.
+- **Statements.**
+  ```lean
+  theorem messagesFixed … : MessagesFixed V A x θ F c σ Fr formReading FormAccepts LogIsDevice miss
+  theorem callsLe … : CallsLe V A x θ F c σ Fr
+  ```
+  Here `miss` is the term for a message that differs from what its digest was recorded under: a SHA-512 collision, since the device records each digest before the coins after it.
+- **Reuse.** SESSIONOF's `Sampled/SessionOf.lean` (`sessionOf`, `live_opensReady`, on `cursor/proofs-sessionof-5c1e`) for one session's record built from the checks.
+- **Waits on.** `Reading.lean`, and worker B's frame for `place`. **Size.** 1,500 to 3,000 lines [guess]. **Compiles by Fri 18:00Z:** `callsLe` and round 1's message.
+
+### G. The accept (`cursor/proofs-accepts-7d08`)
+
+- **File.** `SampledTwo/Accepts.lean`.
+- **Statements.**
+  ```lean
+  theorem acceptsRun … : AcceptsRun A x formReading FormAccepts
+  theorem stmtAt … : StmtAt V A x θ F c σ Fr formReading FormAccepts
+  ```
+- **The argument.** `Run.run`'s accept at the form's own verdicts gives `SpotFlock.next h x as cs` at the messages and coins it read. That is FRAME's L3 (the one accept lemma of `Run.run`, proposed in my 22:15Z entry and awaiting FRAME's yes). Then the verdict round's accept follows from the sessions' verdicts (RUNSAS and RUNCOINS: `roundTwo_of_check`, `RunAcceptsPlay`).
+- **Waits on.** `Reading.lean`, FRAME's L3, and RUNSAS's round 2. **Size.** 800 to 1,800 lines [guess]. **Compiles by Fri 18:00Z:** `stmtAt`.
+
+### H. The majority, with the shared averaging file (`cursor/proofs-majority-cb10`)
+
+- **Files.** The shared file `security/Proofs/Properties/Verity/Majority.lean` and `SampledTwo/Majority.lean`.
+- **The shared file.**
+  - The averaging lemmas of `security/Proofs/Properties/Verity/Recursive/Target.lean`, moved there and stated over a structure of only the fields they read:
+    - the deployment's verifier, the extractor `E` and the relation `R`;
+    - the samples, the weights and the plurality extract;
+    - `bindAt` and `bindBudget`.
+  - The lemmas to move: `units_bound`, `wEvent`, `weight_eq`, `extract_bit`, `minority_le_majority`, `majority_le_coll`, `ex_coll_le`, `drawn_le_weight`, `ex_off_le_bits`, `ex_off_le_units` and `unbound_drawn`. The generic `ex_*` and `pr_*` lemmas go too.
+  - Draft the move on this branch: the shared file, plus `Recursive/Target.lean` reading it. `Recursive/Target.lean` is soundness's: soundness adopts the move.
+- **Statement in `SampledTwo/Majority.lean`.** At the two-stage leg's instance of the structure (`A.L.V`, `A.L.E`, `A.R`):
+  ```lean
+  theorem majorityBound … : MajorityBound V A x θ F c σ Fr (V.extract θ F c σ) bind
+  ```
+  Here `bind` is the recursive leg's `delta` binding term, √(min(W, 2n)·E[budget]/2^256).
+- **What the leg needs past the recursive leg** [derived]. A witness in `RTwo` at the cap opens nearly every boundary position (the footprint reading settled in my 22:15Z entry, section 2). So the majority reaches unsampled boundary bits, and the transcript is the majority over the extractor's witnesses at every boundary position.
+- **Waits on.** Nothing to start. **Size.** 1,000 to 2,000 lines, plus the move [guess]. **Compiles by Fri 18:00Z:** the shared file and the recursive leg reading it.
+
+### The instance (soundness's; for reference)
+
+`SampledTwo/Instance.lean`: `sessionsTwo` and δ := δ_ε, the four premises per template, `coinsRead` per form, and `CoversTwo`. Soundness gives its date with its deployment's pull request (Fri 18:00Z). It supplies:
+- the deployed Vocab;
+- `S₂` (the held copies, via my `heldOf`);
+- the wiring's `∀ o, V.Verdict k .sampled o → FormAccepts o`.
+
+### Mine, in order
+
+1. `SampledTwo/Reading.lean`: `formReading` and `FormAccepts` (the form's check accepts on the play's files), by Fri 01:30Z.
+2. The form `VStarRecursive/SampledTwo.lean` with its twin and difftest, and the exact parse and check in an entry by 03:00Z.
+3. `Refused.lean`.
+4. `SpotFlock/HeldOf.lean`.
+5. B3's proof after Daniel's word.
+
+The form, in one line [read: `OneStageZk.membersRun`, `Spot.Run.run`, `two_stage.py`'s `outcome_of`, at main]:
+1. Parse the boundary's params, the rule (`.twoStage` only), the declared items and outputs, the interior's params with the stream's `proofs` (`{"templates"}`), and the interior audit's v2 member-form params (`{"members"}`), each member's circuit the one its template names.
+2. Run the second stage's sessions by `membersRun` on the interior's audit.
+3. Add to each verdict the four fields round 2 reads, which `flock-verify verify` writes and v2's `verdictJson` doesn't: `public_header_sha512`, `registered_sha512`, `unit_draw` and `session_tables`.
+4. Then `Run.run`.
+5. Accept iff its `symbol` is `"accept"`.
+
+The switch is `VStar.Recursive.SampledTwo.FORM : Bool := Spot.SecondStage.FORM`, so flipping `FORM` flips both [derived].
+
+### STOP RULE
+
+Nothing. The change to `Projection.lean` is in my own new file, which nothing imports, and changes no listed guarantee [run: `git diff 42e5e760ff 08e3d2b2d7 --stat`].
+
+### NEEDS
+
+None this hour.
+
+### To post
+
+The eight proposed branch names, on the issue that holds the map, when the coordinator launches the workers.
+
+### Not established
+
+- Nothing of the leg is compiled; `r20261112-222508-9f30` is waiting for a slot.
+- `projection_of` and `coupling_of` are argued, not proved.
+- Whether the coin map's `hide` is 0 (positions a stopping order) or the trees' hiding is a guess.
+- Whether `Select.strataSizes` of size one is exactly "one Definition" is not checked.
+- RUNCOINS hasn't confirmed the function's name, and FRAME hasn't confirmed that L3 is the one accept lemma.
+- The earlier-period signature hole (soundness's 22:00Z finding) is open in this leg as in the one-stage leg, until the key pins on Tue 17 Nov.
+- The sizes are guesses: B1 7,300 to 15,100 lines, B2 1,000 to 2,000 plus the move, the instance 1,500 to 3,000, and mine 1,200 to 2,400 (the form 700 to 1,000, its twin and difftest 550 to 950, `Refused` 150 to 400, `heldOf` 100 to 300).
