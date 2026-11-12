@@ -47,6 +47,35 @@ def test_a_header_that_states_no_sampling_declares_greedy_and_one_without_a_work
         SR._request_facts(SimpleNamespace(workload={"sampling": {"temperature": None}, "requests": [{"request_id": "a"}]}))
 
 
+@pytest.mark.parametrize("left_out", [None, [], {}], ids=["null", "empty list", "empty table"])
+def test_a_block_the_headers_workload_leaves_out_declares_nothing(left_out):
+    """Its requests, its children, its sampling and the sampling's per-request entries: each absent, null or empty."""
+    one = {"requests": [{"request_id": "a", "seed": 1}], "children": [{"request_id": "a.1", "parent": "a"}],
+           "sampling": {"temperature": 0.5, "per_request": [{"request_id": "a", "top_k": 40}]}}
+    stated = {"a": {"seed": 1, "temperature": 0.5, "top_p": 1.0, "top_k": 40}, "a.1": {"seed": None, "temperature": 0.5, "top_p": 1.0, "top_k": 40}}
+    assert SR._request_facts(SimpleNamespace(workload=one)) == stated
+    greedy = {"seed": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}
+    without = {"requests": {"a.1": {"seed": None}}, "children": {"a": stated["a"]}, "sampling": {"a": greedy, "a.1": greedy | {"seed": None}}}
+    for block, facts in without.items():
+        assert SR._request_facts(SimpleNamespace(workload={k: v for k, v in one.items() if k != block})) == facts, block
+        assert SR._request_facts(SimpleNamespace(workload=one | {block: left_out})) == facts, block
+    no_entries = {"a": stated["a"] | {"top_k": 0}, "a.1": stated["a.1"] | {"top_k": 0}}
+    assert SR._request_facts(SimpleNamespace(workload=one | {"sampling": {"temperature": 0.5}})) == no_entries
+    assert SR._request_facts(SimpleNamespace(workload=one | {"sampling": {"temperature": 0.5, "per_request": left_out}})) == no_entries
+    assert SR._request_facts(SimpleNamespace(workload=left_out)) == {}
+
+
+@pytest.mark.parametrize("program", [{}, {"stop_rule": None}, {"stop_rule": {}}], ids=["absent", "null", "empty"])
+def test_a_workload_program_without_a_stop_rule_states_its_source_alone(tmp_path, program):
+    assert SR._stop_rule(None) == {} and SR._stop_rule(tmp_path) == {}
+    (tmp_path / "build_workload").mkdir()
+    file = tmp_path / "build_workload" / "workload_program.json"
+    file.write_text(json.dumps(program))
+    assert SR._stop_rule(tmp_path) == {"source": str(file)}
+    file.write_text(json.dumps({"stop_rule": {"eos_token_ids": [2], "eos_lag_rows": 1}}))
+    assert SR._stop_rule(tmp_path) == {"eos_token_ids": [2], "eos_lag_rows": 1, "source": str(file)}
+
+
 def _manifest(tmp_path: Path, requests: list[dict], sampling: dict | None) -> Path:
     doc = {"schema": SCHEMA, "model": "m", "engine": {}, "requests": requests,
            "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95}, "greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
