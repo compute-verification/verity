@@ -10,7 +10,6 @@
   "entries": [
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Layer", "detail": ""},
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Model", "detail": ""},
-    {"file": "tests/check/test_pouw_ncp_v2_end_to_end.py", "kind": "var-annotated", "symbol": "_program", "detail": ""},
     {"file": "tests/engine/collectives/analyze.py", "kind": "arg-type", "symbol": "body_report", "detail": "", "count": 2},
     {"file": "tests/engine/collectives/analyze.py", "kind": "return-value", "symbol": "determinism_report.all_entries", "detail": ""},
     {"file": "tests/engine/collectives/analyze.py", "kind": "union-attr", "symbol": "collective_entries", "detail": ""},

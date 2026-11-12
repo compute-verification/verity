@@ -113,9 +113,12 @@ def shard_pin(ckpt_dir: str, *, checkpoints_manifest: str | None, model: str | N
         shas = list(ex.map(lambda fn: sha256_file(os.path.join(ckpt_dir, fn)), shards))
     pin: dict[str, Any] = {"manifest": checkpoints_manifest, "entry": None if entry is None else {"repo": entry.get("repo"), "revision": entry.get("revision")},
                            "shards": {}}
+    # the entry states a shard's sha256 under its files by name, else in its table of sha256 by name; no entry, or one with neither, pins none
+    files = entry.get("files") if entry else None
+    by_name = entry.get("safetensors_sha256") if entry else None
     for fn, sha in zip(shards, shas):
-        files = (entry or {}).get("files")
-        pinned = ((files.get(fn) or {}).get("sha256") if isinstance(files, dict) else None) or ((entry or {}).get("safetensors_sha256") or {}).get(fn)
+        of_file = files.get(fn) if isinstance(files, dict) else None
+        pinned = (of_file.get("sha256") if of_file else None) or (by_name.get(fn) if by_name else None)
         pin["shards"][fn] = {"sha256": sha, "pinned_sha256": pinned, "pinned": (sha == pinned) if pinned else None}
     return pin
 
@@ -151,9 +154,11 @@ class CheckpointIndex:
             raise FileNotFoundError(f"no *.safetensors shard under {ckpt_dir}")
         self.pin: dict[str, Any] = {"manifest": checkpoints_manifest, "entry": None, "shards": {}}
         if pin is not None:
-            if sorted(pin.get("shards") or {}) != self.shards:
-                raise ValueError(f"{ckpt_dir}: the pin covers shards {sorted(pin.get('shards') or {})[:4]}, the checkpoint has {self.shards[:4]} "
-                                 f"({len(pin.get('shards') or {})} vs {len(self.shards)})")
+            pinned = pin.get("shards")   # the other process's shards by name; a pin that states none covers none, refused here as any other cover
+            covered = sorted(pinned) if pinned else []
+            if covered != self.shards:
+                raise ValueError(f"{ckpt_dir}: the pin covers shards {covered[:4]}, the checkpoint has {self.shards[:4]} "
+                                 f"({len(covered)} vs {len(self.shards)})")
             if pin.get("manifest") != checkpoints_manifest:
                 raise ValueError(f"{ckpt_dir}: the pin was taken against manifest {pin.get('manifest')}, this index reads {checkpoints_manifest}")
             self.pin = {"manifest": checkpoints_manifest, "entry": pin.get("entry"), "shards": {fn: dict(pin["shards"][fn]) for fn in self.shards}}

@@ -16,7 +16,6 @@
     {"file": "verity_vllm/acquire/served.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/acquire/sources/narrowed_source.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 22},
-    {"file": "verity_vllm/check/checkpoint_index.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/check/commit_pass.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 13},
     {"file": "verity_vllm/check/commit_rules.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 12},
     {"file": "verity_vllm/check/commit_tokens.py", "kind": "schema-literal", "symbol": "CommitTokens", "detail": "verity-vllm/commit-tokens/v1"},
@@ -26,10 +25,8 @@
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/fold-summary/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/gates/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-ir/query-use/v1"},
-    {"file": "verity_vllm/check/gates.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 53},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "schema-literal", "symbol": "main", "detail": "cb-a/compare/v1"},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/oracle-compare/v1"},
-    {"file": "verity_vllm/check/oracle_compare.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/check/replay/coverage.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/check/replay/evaluate.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
@@ -258,7 +255,6 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "verity-capture/tp2-param-hashes/v0"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_profiler_stop", "detail": "verity-capture/census-rank/v0"},
     {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
-    {"file": "verity_vllm/check/match_oracle.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 24},
-    {"file": "verity_vllm/check/producers.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5}
+    {"file": "verity_vllm/check/match_oracle.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 24}
   ]
 }

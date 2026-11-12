@@ -70,12 +70,18 @@ SCHEMA = "verity-sweep/oracle-compare/v1"
 METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fold's instance output views + SampleEnd ids)"
 
 
+def bound_entries(bmap: dict[str, Any]) -> list[dict[str, Any]]:
+    """The binding map's entries (`commit.binding.build_binding_map`, read back from its file); a map that states none binds nothing."""
+    entries = bmap.get("entries")
+    return entries if entries else []
+
+
 def _foreign_oracle(oracle: MatchOracle, bmap: dict[str, Any], wcheck: dict[str, Any]) -> dict[str, Any]:
     """The result of a Match record whose request table is not this workload's: False, nothing compared."""
     why = "foreign oracle: the Match record is not this workload's -- " + "; ".join(wcheck["problems"][:4])
     return {"schema": SCHEMA, "method": "oracle-compare (Match capture of the same attempt: snapshots + fold + capture log + tokens.json)",
             "result": False, "grade": "foreign-oracle", "why": why, "complete": False, "compared": 0, "equal": 0, "mismatch_n": 0, "mismatch": [],
-            "compared_by_family": {}, "not_compared": {"foreign oracle": len(bmap.get("entries") or [])}, "steps_compared": [], "steps_not_snapshotted": [],
+            "compared_by_family": {}, "not_compared": {"foreign oracle": len(bound_entries(bmap))}, "steps_compared": [], "steps_not_snapshotted": [],
             "attribution": {"complete": False, "pairs": 0, "unverified_n": 0, "ambiguous_steps": []}, "workload_check": wcheck, "oracle": oracle.provenance()}
 
 
@@ -133,11 +139,11 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     padding_not_cmp: Counter = Counter()               # bot-by-enablement entries per Q(P) family: no execution, no oracle value
     padding_pairs: set[tuple[int, str]] = set()
     name_inv = same_name_invocations(bmap)                                       # (step, member name) -> invocations bound
-    for e in bmap.get("entries") or []:
-        ident = e.get("identity") or {}
-        step = int(ident.get("step", -1))
-        if step < 0:
+    for e in bound_entries(bmap):
+        ident = e.get("identity")   # an entry that binds no identity has no step, and is skipped as one whose identity states none
+        if not ident or int(ident.get("step", -1)) < 0:
             continue
+        step = int(ident["step"])
         if e.get("activity") == "bot-by-enablement":
             # a PADDING entry (a padded record's inactive stratum, LIFTING-SPEC v0.7 B9.1) materializes an
             # identity the executed prefix of record left INACTIVE: nothing executed, so the Match oracle holds no value for it and its
@@ -161,8 +167,8 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
         seen.add(key)
         if rid != "*":
             pairs_seen.add((step, rid))
-        enc = e.get("encoding") or {}
-        dtype = str(enc.get("dtype") or "")
+        enc = e.get("encoding")   # the member's dtype and shape; an entry that states no dtype has no byte range to read
+        dtype = str(enc.get("dtype") or "") if enc else ""
         isz = _ITEMSIZE.get(dtype)
         lo, hi = ident.get("element_range") or [0, None]
         if isz is None or hi is None or int(hi) <= int(lo):
@@ -297,9 +303,9 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
 def same_name_invocations(bmap: dict[str, Any]) -> dict[tuple[int, str], int]:
     """(step, member name) -> the number of DISTINCT invocations bound under that name at that step (> 1 = a shared module's metas)."""
     inv: dict[tuple[int, str], set[int]] = {}
-    for e in bmap.get("entries") or []:
-        ident = e.get("identity") or {}
-        if "step" not in ident or e.get("name") is None:
+    for e in bound_entries(bmap):
+        ident = e.get("identity")
+        if not ident or "step" not in ident or e.get("name") is None:
             continue
         inv.setdefault((int(ident["step"]), str(e["name"])), set()).add(int(ident.get("invocation", 0) or 0))
     return {k: len(v) for k, v in inv.items()}
