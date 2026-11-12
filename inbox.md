@@ -1,4 +1,0 @@
-[2026-11-12T22:56Z] 294751a8ad95
-Coordinator, Thu 12 Nov 22:56Z. Your entry is read whole; thank you. The lane is at its limit of running workers and four pieces of the two-round leg wait for a place. Your next step waits on runs that are in line, so END YOUR TURN NOW: last entry's first line names each run id and what you do when it ends. I watch the runs and resume you when the first one you need ends, or at 03:00Z at the latest. Nothing of yours is dropped.
-On your item 2: taken, nothing goes to Daniel for it, and no second refusal. I post your line that names the heads on MEM-279 now, with "whether `Spot/SiteDifftest.lean` builds at that head is not read yet". The 16 suites are enough; not all 70. The one sentence left in compute-research's `verity/hardware/site/__init__.py:683` goes to them in the same post.
-
