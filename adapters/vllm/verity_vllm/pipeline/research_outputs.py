@@ -48,12 +48,15 @@ import os
 import re
 import shutil
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.config import option, row_batch
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
+
+__all__ = ["COMMANDS", "main"]
 
 SCHEMA = "research/outputs/v0.1"
 MAX_FILE = 512 << 20                      # per file; the required-value manifest of a long row is ~100+ MB
@@ -89,6 +92,10 @@ def _read_json(p: Path) -> Any:
         return None
 
 
+def _dict(x: Any) -> dict[str, Any]:
+    return x if isinstance(x, dict) else {}
+
+
 def verdicts(stages_txt: Path) -> dict[str, tuple[str, str]]:
     out: dict[str, tuple[str, str]] = {}
     if not stages_txt.is_file():
@@ -98,11 +105,6 @@ def verdicts(stages_txt: Path) -> dict[str, tuple[str, str]]:
         if len(parts) >= 2:
             out[parts[0]] = (parts[1], parts[2] if len(parts) > 2 else "")
     return out
-
-
-def row_batch(row: str) -> int:
-    m = re.search(r"__b(\d+)__", row)
-    return int(m.group(1)) if m else 1
 
 
 def tp_world(build_summary: Any) -> int:
@@ -119,20 +121,18 @@ def program_digest(d: Path, row: str = "") -> dict[str, Any]:
         s = {}
     world = tp_world(s)
     if world > 1:
-        ranks = s.get("ranks") if isinstance(s.get("ranks"), dict) else {}
+        ranks = _dict(s.get("ranks"))
         wds = [((ranks.get(f"rank{r}") or {}).get("workload") or {}).get("workload_digest") for r in range(world)]
         step = (ranks.get("rank0") or {}).get("build_step") or {}
         # the TP manifest's header digest (`tp-ranks-fold`, required.merge_ranks): the fold of the rank digests its identities are keyed by
-        of_record = tp_ranks_fold_digest(wds) if all(wds) else None
+        of_record = tp_ranks_fold_digest([str(w) for w in wds]) if all(wds) else None
         return {"program_digest": of_record, "request_digest": None, "step_digest": step.get("program_digest"), "workload_digest": None,
                 "rank_workload_digests": wds, "tp": world}
-    req = s.get("request") if isinstance(s.get("request"), dict) else {}
-    step = s.get("step") if isinstance(s.get("step"), dict) else {}
-    wl = s.get("workload") if isinstance(s.get("workload"), dict) else {}
+    req, step, wl = _dict(s.get("request")), _dict(s.get("step")), _dict(s.get("workload"))
     request_digest, step_digest, workload_digest = req.get("program_digest"), step.get("program_digest"), wl.get("workload_digest")
     of_record = (workload_digest or request_digest) if row_batch(row) > 1 else (request_digest or s.get("program_digest"))
     out = {"program_digest": of_record, "request_digest": request_digest, "step_digest": step_digest, "workload_digest": workload_digest}
-    corr = s.get("correspondence") if isinstance(s.get("correspondence"), dict) else {}
+    corr = _dict(s.get("correspondence"))
     cd = s.get("correspondence_digest") or corr.get("digest") or corr.get("correspondence_digest")
     if cd:
         out["correspondence_digest"] = cd
@@ -147,7 +147,7 @@ def _eligible(p: Path) -> bool:
     return p.stat().st_size <= MAX_FILE
 
 
-def _collect(d: Path, rels: list[str], globs: list[str] = ()) -> tuple[list[str], list[str]]:
+def _collect(d: Path, rels: list[str], globs: Sequence[str] = ()) -> tuple[list[str], list[str]]:
     """(present, skipped) relative paths: the listed files plus every eligible file under the listed glob dirs."""
     present: list[str] = []
     skipped: list[str] = []
@@ -341,7 +341,7 @@ COMMANDS = {"write": WriteOptions, "digest": DigestOptions}
 
 
 def main(a: WriteOptions | DigestOptions) -> int:
-    if a.cmd == "digest":
+    if isinstance(a, DigestOptions):
         print(program_digest(Path(a.evidence_dir), a.row).get("program_digest") or "")
         return 0
     if not a.run_dir:
