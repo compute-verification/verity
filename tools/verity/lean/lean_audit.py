@@ -1037,7 +1037,7 @@ ARTIFACT = MK.ARTIFACT
 MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{128}\.json")
 #: what one bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume. A
 #: run that added more writes as many bundles as that takes (`LakeArtifacts.bundle_into`)
-BUNDLE_CAP = 3 << 30
+BUNDLE_BYTES = 3 << 30
 #: a key of `lean-deps-urls.json` naming a bundle of one of `PUBLISHERS`' runs by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
 #: a bundle's name in the directory its audit writes it in (`LakeArtifacts.bundle_into`)
@@ -1102,7 +1102,8 @@ class LakeArtifacts:
         fcntl.flock(f, fcntl.LOCK_EX)
         return f
 
-    def put(self, reports: dict[Path, dict], since: float | None = None, log=print) -> int:
+    def put(self, reports: dict[Path, dict], since: float | None = None, log=print,
+            roots: dict[Path, object] | None = None) -> int:
         """Index each module of the builds of ``reports``' packages (each with what check.py said of its build: its report,
         or `builds`' record of a run that didn't end) that the build compiled (a trace written after ``since``, and not
         one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
@@ -1127,7 +1128,13 @@ class LakeArtifacts:
         compile it again for nothing (`module_keys.settle`) and its stage step gives that reason, and so is each module of
         a build refused for the code its sources run. The log says how many compiled modules `indexable` refused and
         names the first few with its words. Only what
-        the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s."""
+        the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s. check.py's publish
+        names what its build compiled (`"compiled"`) too: in one check.py, another package's build, which may fail, can
+        compile a module of a path dependency the two share. The modules keyed are those of each package's lock's
+        `roots`: ``roots`` gives them by package, as the caller holds the lock (check.py's publish, from the lock its
+        audit loaded, so nothing before the judge reads a lock by its path), and without it each is read from the
+        package's lock (`module_keys.policy_roots`). Either way they are taken as `policy_roots` takes them
+        (`module_keys.as_roots`), so one lock gives the same keys."""
         with self._lock():
             n = 0
             for pkg in sorted(reports):
@@ -1142,7 +1149,7 @@ class LakeArtifacts:
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
-                keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
+                keyed, owners = MK.keys(pkg, MK.policy_roots(pkg) if roots is None else MK.as_roots(roots[pkg])), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
                 if isinstance(only := rep.get("compiled"), list):
@@ -1275,7 +1282,7 @@ class LakeArtifacts:
             tmp.write_text(json.dumps({"key": key}))
             os.replace(tmp, f)
 
-    def bundle(self, dest: Path, cap: int = BUNDLE_CAP, start: int = 0) -> tuple[int, int]:
+    def bundle(self, dest: Path, cap: int = BUNDLE_BYTES, start: int = 0) -> tuple[int, int]:
         """Write the entries `added` from its index ``start`` on as a gzipped tar at ``dest``, each with every artifact it
         names, the entries before the artifacts, up to ``cap`` bytes uncompressed: (the number of entries written (none: no
         file), the index in `added` of the first entry this bundle had no room for, where the next one starts). A bundle
@@ -1309,15 +1316,15 @@ class LakeArtifacts:
             os.replace(tmp, dest)
         return len(todo), stop
 
-    def bundle_into(self, out: Path, cap: int = BUNDLE_CAP) -> tuple[list[Path], int]:
-        """Every entry `added` in bundles of at most ``cap`` bytes each (`bundle`), as many as that takes, at the free
+    def bundle_into(self, out: Path, limit: int = BUNDLE_BYTES) -> tuple[list[Path], int]:
+        """Every entry `added` in bundles of at most ``limit`` bytes each (`bundle`), as many as that takes, at the free
         names `shared_bundles` lists in ``out`` in their order (`lean-artifacts.tar.gz`, then `-2`, ...), the entries
         added first in the first: (those paths, the number of entries written)."""
         free = (d for i in itertools.count(1)
                 if not (d := out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
         dests, n, at = [], 0, 0
         while at < len(self.added):
-            wrote, at = self.bundle(dest := next(free), cap, at)
+            wrote, at = self.bundle(dest := next(free), limit, at)
             if wrote:
                 dests.append(dest)
                 n += wrote
@@ -1333,7 +1340,7 @@ class LakeArtifacts:
 
         The bundles are unpacked one at a time in the order ``urls`` names them, which is the launcher's, newest first
         (`shared_bundles`), until the bytes written to the cache reach ``budget``: a quarter of the cap unless given. A
-        bundle holds up to `BUNDLE_CAP` and the launcher lists dozens, more than the cache's cap together; a quarter is
+        bundle holds up to `BUNDLE_BYTES` and the launcher lists dozens, more than the cache's cap together; a quarter is
         what the prune that follows can make room for (it stops at three quarters, least recently used first) and still
         leave half the cap to what the node itself used last. The bundle the budget stops in, and those after it, are not
         marked: a later run takes what is left of them, when the launcher still lists them.
@@ -1584,9 +1591,10 @@ BUILDING = "building.json"
 def built(out: Path) -> dict[Path, dict]:
     """{package: what check.py said of its build} for each package the check.py with its reports under ``out`` built, or
     began to build: its report in `audit.json`, which says `sandbox` of a package it built, else what it wrote as the build
-    began (`BUILDING`: the package, and whether its builds run in the sandbox), which is all a check.py that was killed
-    leaves, and which is the later of the two when an earlier check.py left its report there. `LakeArtifacts.put` takes
-    either. Both are check.py's own words: ``out`` is outside every directory a build in the sandbox can write."""
+    began (`BUILDING`: the package, and whether its builds run in the sandbox, with the failure once its sampled recompile
+    differs), which is all a check.py that was killed leaves, and which is the later of the two when an earlier check.py
+    left its report there. `LakeArtifacts.put` takes either, and refuses both for a sampled failure. Both are check.py's
+    own words: ``out`` is outside every directory a build in the sandbox can write."""
     found: dict[Path, tuple[int, dict]] = {}
 
     def said(f: Path) -> tuple[int, dict]:
@@ -1636,11 +1644,13 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
     difference; such a pass is never stored here, since its lock changes when drive commits the record (`keep_regenerated`
     stores the pass of the tree with that lock, from the facts document this audit leaves in ``documents``, `check.py
-    --facts-cache`).  What each package's build compiled in the sandbox goes into the artifact cache whether the package
-    passed, failed or check.py was killed (`built`, `LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the
-    module versions it indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Where builds aren't sandboxed
-    (`sandboxed`) none of that happens and no kept build or artifact cache is read: every package builds cold.  Returns
-    (the failed, the audited)."""
+    --facts-cache`).  What each package's build compiled in the sandbox goes into the artifact cache once its build steps
+    and sampled recompile pass, before its audit goes on (check.py's `publish`), and with ``bundle`` (a recorded check)
+    check.py writes those module versions to ``out`` for other nodes then, with the replay entries its kernel had
+    accepted beside them (`--bundle`). What a build compiled whose package failed before that, or whose check.py was
+    killed, goes into this node's cache alone afterwards (`built`, `LakeArtifacts.put`), and into no bundle.  Where
+    builds aren't sandboxed (`sandboxed`) none of that happens and no kept build or artifact cache is read: every
+    package builds cold.  Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
@@ -1676,6 +1686,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
+                            *(["--bundle", str(out)] if bundle and not fresh and not cold else []),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
                             *(["--facts-cache", str(documents)] if documents else []),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
@@ -1700,10 +1711,9 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             ok = [p for p in audited if p in reports and not reports[p].get("failures")]
             kept = {work / p for p in ok}
             try:
-                mine = {at: rep for at, rep in built(out).items() if work in at.resolve().parents}
-                log(f"lean-audit: {artifacts.put(mine, since, log)} module version(s) new in the artifact cache")
-                if bundle and artifacts.added:
-                    log(f"lean-audit: {bundled(*artifacts.bundle_into(out), len(artifacts.added))}")
+                mine = {at: rep for at, rep in built(out).items() if work in at.resolve().parents and "published" not in rep}
+                log(f"lean-audit: {artifacts.put(mine, since, log)} module version(s) new in the artifact cache of builds "
+                    "check.py did not publish")
             except OSError as e:
                 log(f"lean-audit: the artifact cache was not written: {e}")
             builds.give_back(work, kept)
@@ -2127,9 +2137,13 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--prune"]:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
-               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
-               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune(),
-               "lean-audit/unread": prune_facts(root / "lean-audit")}
+               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records")}
+        # a build's `module_keys.stage` reads the index, the records of what `put` couldn't index and the artifacts under
+        # this lock, shared, and `put` and `take` prune under it already
+        artifacts = LakeArtifacts(root / "lean-artifacts")
+        with artifacts._lock():
+            got["lean-artifacts"] = artifacts.prune()
+        got["lean-audit/unread"] = prune_facts(root / "lean-audit")
         print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
         return 0
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):
@@ -2148,9 +2162,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--regenerate", action="store_true", help="the Lean check of `next`: `check.py --regenerate`, so a package whose "
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
-    ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "
-                    "artifact cache as lean-artifacts.tar.gz in --out, and as lean-artifacts-2.tar.gz and so on when one "
-                    "bundle can't hold them, for other nodes to take (`shared_bundles`)")
+    ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: as each build passes, write the module "
+                    "versions it added to the artifact cache as lean-artifacts.tar.gz in --out, and as "
+                    "lean-artifacts-2.tar.gz and so on when one bundle can't hold them, for other nodes to take "
+                    "(`shared_bundles`), with the replay entries the kernel had accepted beside them (`check.py --bundle`)")
     ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: "
                     "`check.py --bookkeeping warn`, so a package that fails only on its lock's bookkeeping passes on the lock "
                     "with it repaired; an unread area above its cap, and a cap of `tests/test_lean_packages.py` the locks "

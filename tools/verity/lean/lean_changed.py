@@ -38,8 +38,8 @@ the try says so, names the path and the `--records` run that builds the dependen
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a slot tree (one per slot), which prints what the audit prints,
 `--update`'s review included, after a build of only what changed since that slot's last run, which restores each module the
 node's artifact cache holds under its key (`check.py --artifacts`, `lean_audit.LakeArtifacts`, the one the audit
-reads); each package whose check.py passes, its report saying it built in the sandbox, puts the modules its build
-compiled there. It first waits for one of the
+reads); each build that passes in the sandbox puts the modules it compiled there (check.py's `publish`). It first waits
+for one of the
 node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where
 hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that started it holds. Where SLOTS lists no `build`
 pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
@@ -114,10 +114,10 @@ Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no
 in a recorded run, into its `result.json`, the Attempt's result. `check` fails its lean-audit step on a report of that kind or
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
 (`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it. The compiled modules it leaves are not a verdict either: in a
-run they go into its `lean-audit/` in bundles (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
-replays every declaration through the kernel. `research run` sends a records run the URLs of the newest such bundles and of
-the checks' (`research.cli.lean_records_urls`, `lean_audit.shared_bundles`), and where builds are sandboxed the run takes
-them into the node's artifact cache before its first build (`sent_urls`), so it restores what another node compiled.
+run they go into its `lean-audit/` as bundles as each build passes (`check.py --bundle`), and a node that restores one
+still replays every declaration through the kernel. `research run` sends a records run the URLs of the newest such bundles
+and of the checks' (`research.cli.lean_records_urls`, `lean_audit.shared_bundles`), and where builds are sandboxed the run
+takes them into the node's artifact cache before its first build (`sent_urls`), so it restores what another node compiled.
 
 The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
 names under `proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
@@ -1291,12 +1291,12 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
     taken; ``rebuild`` and ``moved`` run them all. Before it takes a slot, one line names the packages it audits, in
     order (`audits`). Each package whose records passed or were regenerated is kept (`passed`).
-    What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: the
+    What each of check.py's builds compiled goes into the node's artifact cache once the build passes (check.py's
+    `publish`), and in a run into ``out`` as bundles for other nodes then (`--bundle`), as a recorded check's do. What a
+    build that failed compiled goes into this node's cache alone when check.py ends, whatever its exit (`put_built`: the
     package's, and those of the provers it audits), and what a run that was killed left goes in when the next run takes
-    the tree (`put_left`). In a run, the module versions it added go into ``out``
-    in bundles for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do, and on a node whose builds are
-    sandboxed the bundles other nodes' runs left, whose URLs `research run` sent it (`sent_urls`), go into that cache first
-    (`LakeArtifacts.take`), so its builds restore what they compiled."""
+    the tree (`put_left`). On a node whose builds are sandboxed, the bundles other nodes' runs left, whose URLs `research
+    run` sent it (`sent_urls`), go into that cache first (`LakeArtifacts.take`), so its builds restore what they compiled."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     urls = sent_urls(run_dir, log)
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
@@ -1335,6 +1335,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     except LEAN_SLOT.Refused as e:
         return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip)
     artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
+    shared = out if run_dir and out.is_relative_to(Path(run_dir).resolve()) else None
     if urls and sandboxed():
         try:
             log(f"lean-records: {artifacts.take(urls, log)} module version(s) taken from other nodes' bundles")
@@ -1383,7 +1384,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 def audit(with_update: bool) -> int:
                     nonlocal store, redone
                     got = subprocess.run(check_argv(tree / p, mine_out, with_update, moved, p == pkg, artifacts=store,
-                                                    facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
+                                                    facts_cache=facts_dir(), bundle=shared),
+                                         cwd=tree, env=env, pass_fds=fds).returncode
                     if redone or not got or AUDIT.killed(got) or not (bad := mismatched(mine_out, tree, log)):
                         return got
                     store, redone = None, True
@@ -1399,7 +1401,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 got = audit(up)
                 if again := not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
                     up, got = True, audit(True)
-                put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
+                put_built(artifacts, {at: rep for at, rep in LA.built(mine_out).items() if "published" not in rep}, since,
+                          log, f"lean-records: {p}")
                 if AUDIT.killed(got):
                     killed[p] = got
                 label(mine_out)
@@ -1426,11 +1429,6 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     "it before it is built")
             else:
                 (tree / DIRTY).unlink(missing_ok=True)
-            if run_dir and artifacts.added and out.is_relative_to(Path(run_dir).resolve()):
-                try:
-                    log(f"lean-records: {LA.bundled(*artifacts.bundle_into(out), len(artifacts.added))}")
-                except OSError as e:
-                    log(f"lean-records: nothing bundled for other nodes: {e}")
             records = verdicts(outcomes, new, out, tree, files, skip, log, committed)
             outcome = overall(records)
             return finish(pkg, outcome, (rc or 1) if outcome == FAILED else 0, out, update, "slot", records, log, passes)
@@ -1789,14 +1787,16 @@ def report(out: Path, at: Path) -> dict:
 
 
 def check_argv(at: Path, out: Path, update: bool, moved: Path | None, own: bool, dev: bool = False,
-               artifacts: Path | None = None, facts_cache: Path | None = None) -> list[str]:
+               artifacts: Path | None = None, facts_cache: Path | None = None, bundle: Path | None = None) -> list[str]:
     """check.py on ``at`` (a package's directory), without the kernel replay or the tests, its builds reading the node's
-    ``artifacts`` cache where given; with ``update``, `--update` and `--moved`. Only PKG's run (``own``) keeps a facts
+    ``artifacts`` cache where given, and each build that passes writing what it compiled there and, with ``bundle``, into
+    that directory for other nodes (`--bundle`); with ``update``, `--update` and `--moved`. Only PKG's run (``own``) keeps a facts
     document, its own (`--facts named`, which `trusted_size.py --run` reads); a requirer's keeps none. With ``facts_cache``
     every run also stores its sealed stage-A facts document there (`--facts-cache`, keyed by its build, read back only by
     the key a tree computes: `read_cached_facts`); the run is still a records audit, never the kernel replay."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
             "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
+            *(["--bundle", str(bundle)] if artifacts and bundle else []),
             *(["--facts-cache", str(facts_cache)] if facts_cache else []),
             *(["--update"] if update else []),
             *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), str(at)]

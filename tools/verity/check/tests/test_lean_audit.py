@@ -41,7 +41,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 (out / "argv.json").write_text(json.dumps(a))
@@ -152,7 +152,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--facts-cache"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -203,7 +203,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping", "--facts-cache"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle", "--bookkeeping", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -805,6 +805,28 @@ def test_what_a_failed_or_a_killed_audit_compiled_goes_into_the_artifact_cache_o
     assert put_with[1:] == [{"a": {"sandbox": True}, "b": {"sandbox": False}}], "killed: no report, so what each build began with"
 
 
+def test_a_build_whose_sampled_recompile_differs_stores_nothing_though_check_py_is_killed(tmp_path, monkeypatch):
+    """The one build a sandboxed audit keeps out of this node's cache: one whose sampled recompile differs. check.py writes
+    that failure beside what the build began with, so a check.py killed before its report hands it to `_audit`'s `finally`,
+    whose `put` refuses it."""
+    root = _tree(tmp_path, monkeypatch)
+    real, handed = LA.LakeArtifacts.put, []
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: handed.append(
+        {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
+    sampled = {"sandbox": True, "failures": ["sampled: P: the build's olean differs from its recompile"]}
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
+        'reps, failed = [], []', 'reps, failed = [], []\nfor n, pkg in enumerate(named):\n'
+        '    (out / f"audit-{n}").mkdir()\n'
+        f'    (out / f"audit-{{n}}" / "{LA.BUILDING}").write_text(json.dumps({{"package": str(pkg), **{sampled!r}}}))\n'
+        'sys.exit(137)'))
+    assert LA.run(tmp_path / "out", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+                  log=lambda s: None) == 1
+    assert handed == [{"a": sampled, "b": sampled}]
+    pkg = _package(tmp_path / "built")
+    assert real(LA.LakeArtifacts(tmp_path / "store"), {pkg: sampled}, log=lambda s: None) == 0
+    assert real(LA.LakeArtifacts(tmp_path / "store"), {pkg: SANDBOXED}, log=lambda s: None) == 3, "without it, all three go in"
+
+
 def test_what_check_py_said_of_a_build_is_its_report_or_what_it_wrote_as_the_build_began(tmp_path):
     out, a, b = tmp_path / "out", tmp_path / "pkg" / "a", tmp_path / "pkg" / "b"
     assert LA.built(out) == {}
@@ -850,6 +872,19 @@ def _keys(pkg: Path) -> dict[str, str]:
     keyed = LA.MK.keys(pkg)
     outs = LA.MK.read_digests(keyed)
     return {m: LA.MK.entry_path(Path(), LA.MK.key(m, keyed, outs)).as_posix() for m in keyed}
+
+
+def test_a_put_handed_the_roots_reads_no_lock_and_keys_as_the_lock_would(tmp_path, monkeypatch):
+    """check.py's publish runs before the audit's judge, where no step reads a lock by its path, so it hands `put` the
+    roots of the lock its audit loaded. They key the build as `policy_roots` does from the same lock, whose `roots` may
+    hold any JSON check.py's `load` accepts (`module_keys.as_roots`), and no lock is read."""
+    pkg = _package(tmp_path)
+    (pkg / "lean-audit.json").write_text(json.dumps({"roots": ["P.B", 7]}))
+    read = LA.LakeArtifacts(tmp_path / "read").put({pkg: SANDBOXED})
+    monkeypatch.setattr(LA.MK, "policy_roots", lambda p: pytest.fail(f"{p}'s lock read by its path"))
+    assert LA.LakeArtifacts(tmp_path / "handed").put({pkg: SANDBOXED}, roots={pkg: ["P.B", 7]}) == read == 3
+    assert sorted(os.listdir(tmp_path / "handed" / "keys")) == sorted(os.listdir(tmp_path / "read" / "keys"))
+    assert (LA.MK.as_roots(["P", 7, None]), LA.MK.as_roots("P"), LA.MK.as_roots(None)) == (["P"], [], [])
 
 
 def test_the_artifact_cache_indexes_each_module_under_its_key_after_what_it_imports(tmp_path):
@@ -1125,6 +1160,51 @@ def test_an_artifact_was_last_used_when_an_entry_that_names_it_was(tmp_path):
         "2's first entry was used no later than what went, so it goes: a miss, and the module is built"
 
 
+def test_a_prune_waits_for_a_build_that_stages_from_the_artifact_cache(tmp_path, monkeypatch):
+    """`--prune` removed index entries, the records of modules `put` couldn't index and artifacts without the store's
+    lock, while a build's `module_keys.stage` read them under it (shared): the build then took an entry whose artifacts
+    were gone, or reported a refusal whose record was. It now takes that lock (`LakeArtifacts._lock`), as `put` and
+    `take` do around their prunes. The test holds the lock as a stage does: the prune asks for it and waits, and runs,
+    holding it, once the stage lets go."""
+    root, store = tmp_path / "cache", tmp_path / "cache" / "lean-artifacts"
+    store.mkdir(parents=True)
+    lock, real = store / LA.MK.LOCK, LA.fcntl.flock
+    waits, pruned, rc = threading.Event(), [], []
+
+    def flock(f, op):
+        if getattr(f, "name", None) == str(lock) and op == LA.fcntl.LOCK_EX:
+            waits.set()
+        return real(f, op)
+
+    def prune(self):
+        with open(lock, "a") as other:
+            try:
+                real(other, LA.fcntl.LOCK_SH | LA.fcntl.LOCK_NB)
+                pruned.append("unlocked")
+            except BlockingIOError:
+                pruned.append("held")
+        waits.set()
+        return 0
+
+    def run():
+        try:
+            rc.append(LA.main(["--prune", "--cache", str(root / "lean-audit")]))
+        finally:
+            waits.set()
+
+    monkeypatch.setattr(LA.fcntl, "flock", flock)
+    monkeypatch.setattr(LA.LakeArtifacts, "prune", prune)
+    monkeypatch.setattr(LA.signal, "signal", lambda *a: None)       # `main` sets its SIGTERM handler: main thread only
+    with open(lock, "a") as stage:
+        real(stage, LA.fcntl.LOCK_SH)
+        t = threading.Thread(target=run)
+        t.start()
+        waits.wait()
+        assert not pruned, "the prune ran while a build's stage held the store's lock"
+    t.join()
+    assert rc == [0] and pruned == ["held"], "once the stage let go, the prune ran holding the lock"
+
+
 TAKEN = "taken-v4"
 
 
@@ -1273,7 +1353,7 @@ def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_take
 
 
 def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
-    """Every build bundles what it compiled, up to `BUNDLE_CAP` a bundle, and the launcher lists dozens: together more
+    """Every build bundles what it compiled, up to `BUNDLE_BYTES` a bundle, and the launcher lists dozens: together more
     than the cache may hold. One run takes them in the launcher's order, newest first, and stops at its budget, a quarter
     of the cap; the bundle it stopped in is not marked, and a later run takes what is left of it. Downloads run ahead of
     the unpacking: a bundle fetched and not reached is dropped, unmarked."""
@@ -1572,27 +1652,31 @@ def test_the_heads_a_tree_holds_are_those_the_queues_commits_name_the_newest_fir
 
 def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_path, monkeypatch):
     """The bundle was written only when `RESEARCH_RUN_DIR` was set, which `check.env()` never passes to a step: no recorded
-    check ever wrote one. `check.py` now says so with `--bundle`, inside a recorded run alone."""
-    _tree(tmp_path, monkeypatch)
+    check ever wrote one. `lean_audit.py` now says so with `--bundle`, inside a recorded run alone, and hands its `--out`
+    to `check.py --bundle`, whose builds bundle what they compiled there as each passes (`publish`). Afterwards it puts
+    into this node's cache alone each build check.py's report doesn't say it published, and bundles nothing."""
+    root = _tree(tmp_path, monkeypatch)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
-
     put_with = []
-
-    def put(self, reports, since=None, log=print):
-        put_with.append({p.name: rep for p, rep in reports.items()})
-        self.added = [(f"keys/{'1' * 64}.json", ["e" * 16 + ".olean"])]
-        return 1
-
-    monkeypatch.setattr(LA.LakeArtifacts, "put", put)
-    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, *at: (dest.write_bytes(b"") or 1, 1))
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: put_with.append(
+        {p.name: (r["sandbox"], r["failures"]) for p, r in reports.items()}) or 0)
+    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda *a, **k: pytest.fail("bundled after check.py"))
     for n, bundle in enumerate((False, True)):
         shutil.rmtree(tmp_path / "cache", ignore_errors=True)
-        assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+        out = tmp_path / f"out{n}"
+        assert LA.run(out, tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
                       log=lambda s: None, bundle=bundle) == 1
-        assert (tmp_path / f"out{n}" / "lean-artifacts.tar.gz").exists() == bundle
-        assert {p: (r["sandbox"], r["failures"]) for p, r in put_with[-1].items()} == {
-            "a": (True, []), "b": (True, ["reads docs/outside.txt"])}, \
+        argv = json.loads((out / "argv.json").read_text())
+        assert (Path(argv[argv.index("--bundle") + 1]).resolve() if "--bundle" in argv else None) == \
+            (out.resolve() if bundle else None)
+        assert put_with[-1] == {"a": (True, []), "b": (True, ["reads docs/outside.txt"])}, \
             "each package it built, with check.py's report on it, which says whether it was built in the sandbox"
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
+        'reps[-1]["sandbox"] = True', 'reps[-1]["sandbox"] = True\n    if pkg.name == "a":\n        reps[-1]["published"] = 0'))
+    shutil.rmtree(tmp_path / "cache", ignore_errors=True)
+    assert LA.run(tmp_path / "out2", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+                  log=lambda s: None, bundle=True) == 1
+    assert put_with[-1] == {"b": (True, ["reads docs/outside.txt"])}, "check.py published a's build: it is not put again"
     out = tmp_path / "steps"
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     def step():
