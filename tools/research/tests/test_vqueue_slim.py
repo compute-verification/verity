@@ -712,6 +712,8 @@ def test_a_check_launches_at_once_when_nothing_it_replaces_is_awaited(world, mon
 
 
 def test_a_launch_names_the_runs_it_carries_and_puts_back_what_the_environment_held(world, monkeypatch):
+    """By the setting check.py reads them from (`check.carried_packs`), which settings.py declares under this name."""
+    assert CARRY_ENV == "TRAIN_CARRY_FROM"
     h, base, sha, _ = _harness(world, monkeypatch)
     published, named = _carry(h, monkeypatch)
     published.add("r-a")

@@ -8,6 +8,7 @@ holds then (`check.carried_packs`), as though newest-selection and `GATHER_BYTES
 from __future__ import annotations
 
 import contextlib
+import itertools
 import os
 import random
 from collections import Counter
@@ -22,6 +23,7 @@ from research.vqueue import PENDING, Drop, meets
 from research.vqueue_loop import stamp
 from research.vqueue_slim import CARRY_ENV, CARRY_WAIT_S, judge, replaced, start
 from test_vqueue import MAIN, SEEDS, TICK_S, World, ticks
+from test_vqueue_loop import NEW, _check, _row, env  # noqa: F401  (env: the loop's fixture)
 
 #: how often the loop's ticks judge a waiting check, within one of the world's ticks
 POLL_S = 60.0
@@ -207,6 +209,46 @@ def test_a_rebuild_reruns_no_task_a_shard_it_replaces_passed_once_its_record_is_
     for what in ("a pass carried", "waited for a record", "launched at once beside a drop", "launched without a late record",
                  "landed as built", "bisected"):
         assert seen[what], f"no seed exercised: {what}"
+
+
+@pytest.mark.parametrize("how", ["left", "late"])
+def test_the_loops_rebuild_after_a_drop_waits_for_the_cancelled_shards_records_then_launches_naming_them(env, monkeypatch,
+                                                                                                        how):
+    """The loop under the check that gates, on `test_vqueue_loop`'s fakes: the lower candidate fails, so the upper one is
+    dropped with it while its shards run, and its member, built again on `main`, launches nothing while their records are
+    out: its line's record waits naming them.  A later tick launches it once they ended (``left``), or the first past
+    `CARRY_WAIT_S` after the cancel without them (``late``), each shard naming every one."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"b.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    named, d = [], loop.world.slim_driver()
+    launch = d.launch_postland
+    d.launch_postland = lambda repo, commit, *a, **kw: named.append((commit, os.environ.get(CARRY_ENV))) or launch(
+        repo, commit, *a, **kw)
+    lower = loop.tick()[1]["sha"]
+    upper = loop.tick()[0]["sha"]
+    replaced_ids = sorted(f"c-{n}" for n, (c, *_) in enumerate(runs.launches, 1) if c == upper)
+    runs.end(main)
+    runs.end(lower, 3, "pytest", rows=(_row(NEW),))
+    frozen, reads = loop.now, itertools.count()
+    loop.now = lambda: frozen() + next(reads)              # the drop's line is older than the rebuild's start
+    logged = loop.tick()
+    loop.now = frozen
+    assert sorted(next(r for r in logged if r["action"] == "drop" and r["sha"] == upper)["beside_cancelled"]) == replaced_ids
+    rebuilt = next(r for r in logged if r["action"] == "build")["sha"]
+    waits = next(r for r in logged if r["action"] == "slim" and r["sha"] == rebuilt)["record"]
+    assert (waits["carry"], sorted(waits["wait"]["runs"]), waits["ids"]) == (replaced_ids, replaced_ids, [])
+    assert not [c for c, _ in named if c == rebuilt]
+    if how == "left":
+        runs.end(upper)
+    else:
+        env.clock += CARRY_WAIT_S + POLL_S
+    loop.tick()
+    assert [x for c, x in named if c == rebuilt] == [",".join(replaced_ids)] * SHARDS
+    rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == rebuilt][-1]["record"]
+    assert "wait" not in rec and len(rec["ids"]) == SHARDS
+    assert rec.get("carry_without") == (replaced_ids if how == "late" else None)
 
 
 def test_a_rebuild_launched_without_waiting_reruns_passes_the_shards_it_replaces_left():
