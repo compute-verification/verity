@@ -51,10 +51,16 @@ def query_families_of(manifest: dict[str, Any] | None) -> dict[str, int] | None:
     return dict(Counter(str(r.get("family")) for r in manifest["identities"]))
 
 
+def manifest_rows(manifest: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """The required manifest's rows (`identities`): none where no manifest was supplied, and for a manifest that states none."""
+    rows = manifest.get("identities") if manifest else None
+    return rows if rows else []
+
+
 def runtime_rows_of(manifest: dict[str, Any] | None) -> dict[tuple, tuple[int, int]]:
     """(step, request, op_path, member, invocation) -> (r0, rows) of each identity whose Values are the runtime's rows r0.. (`runtime_rows`)."""
     return {(int(r["step"]), str(r["request_id"]), str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0))):
-            (int(r["runtime_rows"][0]), int(r["runtime_rows"][1]) - int(r["runtime_rows"][0])) for r in (manifest or {}).get("identities") or () if r.get("runtime_rows")}
+            (int(r["runtime_rows"][0]), int(r["runtime_rows"][1]) - int(r["runtime_rows"][0])) for r in manifest_rows(manifest) if r.get("runtime_rows")}
 
 
 def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
@@ -65,7 +71,7 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
     member's rows): the oracle resolves it through the Value's dataflow, not the hint prefix (MatchOracle._promoted_instances)."""
     out: dict[tuple[str, str], dict[str, Any]] = {}
     consumers: dict[tuple[str, str], list[str]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in manifest_rows(manifest):
         if r.get("family") not in ("instance_outputs", "call_boundaries") or not r.get("spec"):
             continue
         key = (str(r.get("op_path")), str(r.get("output_member")))
@@ -88,7 +94,8 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
             continue
         if ent.get("promoted"):
             cl = consumers.setdefault(key, [])
-            for c in r.get("consumers") or []:
+            named = r.get("consumers")   # the reading modules the promoted row names; a row that names none adds none
+            for c in named if named else ():
                 if str(c) not in cl:
                     cl.append(str(c))
     for key, cl in consumers.items():
@@ -116,10 +123,10 @@ def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str
         if id(inst) in seen:
             continue
         seen.add(id(inst))
-        res = prog.get("result") or {}
+        res = prog.get("result")   # the Build's result.json; a Program handed over without one names no implementation path and no rank
         P = from_instances(inst)
         corr = Correspondence.of(P, prog.get("dir"), implementation_paths=Correspondence.implementation_paths_of(res))
-        tpinfo = t if isinstance(t := res.get("tp"), dict) else {}
+        tpinfo = t if res and isinstance(t := res.get("tp"), dict) else {}
         world = int(tpinfo.get("world") or 1)
         program_producer_facts(P, corr, tp=({"world": world, "rank": int(tpinfo.get("rank") or 0)} if world > 1 else None), aliases=aliases, into=out, query=query)
         del P, corr
@@ -208,12 +215,13 @@ def promote_handed_down(manifest: dict[str, Any] | None, derived: dict[tuple[str
 
     picked: dict[tuple[str, str], list[str]] = {}
     for key, d in derived.items():
-        cons = [str(c) for c in (d.get("consumers") or [])]
+        named = d.get("consumers")   # the modules the Programs name as reading the Value; a fact that names none hands nothing down
+        cons = [str(c) for c in named] if named else []
         if cons and not d.get("conflict") and all(under(c, key[0]) for c in cons):
             picked[key] = cons
     rows = 0
     members: dict[str, list[str]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in manifest_rows(manifest):
         if r.get("family") != "instance_outputs" or r.get("promoted"):
             continue
         key = (str(r.get("op_path")), str(r.get("output_member")))
