@@ -37,6 +37,11 @@ def test_an_id_that_starts_with_two_mapped_ids_stays_raw():
     assert [w._tp2_logical_request(r) for r in ("q-abc", "q-ab", "q-ax")] == ["q-abc", "r1", "r0"]
 
 
+def test_the_id_without_its_suffix_is_tried_before_the_ids_it_starts_with():
+    w = _Rank(request_ids={"q": "r0", "q-a": "r1"})
+    assert [w._tp2_logical_request(r) for r in ("q-a-1a2b3c4d", "q-1a2b3c4d", "q-a-b-1a2b3c4d")] == ["r1", "r0", "q-a-b-1a2b3c4d"]
+
+
 @pytest.mark.parametrize("ids", [ABSENT, None, {}], ids=["no map", "map none", "map empty"])
 def test_without_the_drivers_map_a_request_is_labelled_by_its_place_in_the_order(ids):
     w = _Rank(request_ids=ids, request_order=["q-a", 7, "q-c"])
