@@ -71287,3 +71287,28 @@ Not a condition: the body and the test say "difftest", and a reader takes that f
 - Whether the stop stream's own run reads its coins under the verifier's key or under the key the evidence carries; `across` takes the evidence's, as `coinsReason` does. [read `L/ChallengerCoins.lean:105-108`; the stream's side not read]
 - `Stream` and `Fleet` state: their docstrings only. [read]
 - The closing form for T8 is a [guess], and soundness has not seen it.
+
+## COUNT, Thu 12 Nov 05:07Z: ready line for #9112 at `c8b46edd10e4`: it holds #8904's head, lands after it, and no figure moved at the merged head; its quick suites passed, 62 of 62. Yours to mark
+
+Tags as before. Mailbox read at 05:08Z: nineteen sections, all read.
+
+**The ready line.**
+- **The body** on GitHub is the merged head's (28,195 bytes, 05:08Z): the section "It lands after #8904", the merged head's runs under Checked, the plan's new id.
+- **Pull request:** [#9112](https://github.com/compute-verification/verity/pull/9112), `cursor/proofs-count-71ac`, head `c8b46edd10e4f93d1ee4d3548d2f53b00301ec11`. It holds #8904's head `bce41b2dafb3` (with #8893, #8878, #9066) and lands after #8904; the body says so in a section of its own. Merges with `main` at `62bf29346f76` (it moved from `be9a3d566905` since the runs; 60 commits, none in `benchmarks/spot_figures/` or the planner) with no conflict [run: `git merge-tree`, 05:06Z].
+- **Runs at that head:** `r20261112-033611-055a`, exit 0 (the plan, its counts, every table); `r20261112-033649-45ac`, exit 0 (the several-phases scan); `r20261112-033734-2485`, exit 0, the quick suites `suites.py --changed origin/main --quick`: 62 suites, 62 passed, 0 failed (the 57 of the run before the merge, and five more the planner branch under it reaches); run record `art:a996019a133a2503de27ffd4ab15ce25fb21d5c7270069c05494f05d040f6358`; `r20261112-034247-eca9`, exit 0 (the head statement at 160 core-seconds, not in the body, as you ruled).
+- **Runs before the merge, at `c401de8495ac`:** `2f55`, `fb85`, `9e83`, all exit 0.
+- **Records that move:** `{}`. This pull request's own change is Python: the planner and `benchmarks/spot_figures/`. The Lean files in its diff against `main` are #8904's, with #8904's records.
+- **Before and after, one sentence:** before, the cost model sampled each replay block at a rate, with strata by width, and its driver priced a design `main`'s first stage does not draw; after, it samples a whole count of each verification phase's replay blocks, at least one, with strata by template, and prints beside each design the first limit of today's code it meets.
+- **It changes no guarantee's statement and nothing a verifier accepts.** `verity/protocols/spot/optimize.py` is in the verifier's unit by its place, and no verifier module imports the planner's design functions.
+
+**No figure moved at the merged head.** [run]
+- `055a` against `2f55`: `tables.json` equal in every field of its 26 rows of 7 designs; `counts.json` the same bytes (sha256 `26127bcc…a812`); `mix.json` differs only in the commit it names.
+- `45ac` against `fb85`: 231 records, equal.
+- So sections 1 and 5 of my 02:54Z entry, CON-18's tables and `designs.json` (`art:9ce218d3…`) stand unchanged.
+- **The plan at the merged head** is `art:bb16f757df2dfab6fe7a88bfd58289f2de991761beccd8b6efe1abc00efdcf80` (run record `art:9cf535e0…`): K 27, 193 block types, 2,635.9 GB (2,767.7), the same cells, counts and bound as `art:82979b4f…`. Label this one if you label one; it names the head that goes to review.
+
+**A correction to my 03:59Z entry** (said at 04:59Z too). Its section 1 said a by-template plan file written before the merge has `design.merged` null. The plan file has no such field: the two runs' `mix.json` differ only in `planner`, the commit. The field is on the planner's row in memory and in `figure1`'s series, nowhere stored that I put.
+
+**Your 04:19Z rule on 160, as I will write it** (not in #9112): the partition `main` defines 11,531.0 GB (12,107.5) and the best designed configuration 4,773.8 (5,012.4), "measured on one whole core, a kept session from a branch-built prover, not the served engine"; the plan of record's case 2,635.9 (2,767.7) with "assumed 60.56 s" beside it, and 3,337.9 (3,504.8) as its reading if the templated check costs what the units-as-stated check does. Neither replaces the other.
+
+**Next.** Your 04:30Z ask first: the three rows by 06:00Z, in my next entry (run `r20261112-050407-3150`, exit 0, is in). Then the class's counts file, Fri 13 Nov 04:00Z, once the vLLM lane names the class: I have no name yet. The census of record's card as a new pull request on top of #9112, ready line by Fri 13 Nov 08:00Z; I start it now on a branch of its own from `c8b46edd10e4`, and say its name in my next entry.
