@@ -1182,9 +1182,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     let checked : Except String (String × Array Setup) := do
       let (record, proofs) ← files
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
-      let (spec, sts, _) ← st
-      let tabs := sts.map Setup.ofCircuit
-      -- `Zk.verify spec tabs record proofs` (`Zk.verifyOnePass_eq`), a table's two reps' walks made in one pass
+      let (spec, sts, _) ← st; let tabs := sts.map Setup.ofCircuit  -- `Zk.verifyOnePass_eq`: it is `Zk.verify spec tabs`
       if zk then Zk.verifyOnePass spec sts record proofs
       else if stmtTags.upstreamPlain then verifyFiles (plainBytes true) spec tabs record proofs
       else verify spec tabs record proofs
