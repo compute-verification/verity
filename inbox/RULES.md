@@ -10,6 +10,16 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
   PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH`. Start one tmux session and keep it
   (`tmux -f /exec-daemon/tmux.portal.conf new-session -d -s keep`): `research` reads its secrets from it. Reread
   `git show origin/main:AGENTS.md`.
+- **The agent guard of #9165 (infra, Thu 12 Nov 13:26Z; on `main` since 12:20Z, on your VM from its next boot).**
+  Each refusal names its fix; a wrong refusal is one line on INF-717, and you tell me.
+  - **A push from a command with a `cd` anywhere in it is refused.** Push in a command of its own, the checkout
+    named on git: `git -C <checkout> push -u origin HEAD` (or your branch's name). Commit the same way
+    (`git -C <checkout> add …`, `git -C <checkout> commit …`) so a habit of `cd … && git push` does not bite.
+  - **A script's push is judged too:** another agent's branch, `main`, `checked` and `next` are refused.
+  - **No listing that prints a command line:** not `ps -ef`, `ps -o cmd`, `pgrep -a` or `/proc/PID/cmdline`. Use
+    `ps -eo pid,etimes,comm`, `pgrep -l`, or `tools/agent-guard/procs.py PATTERN`. Kill by PID, as always.
+  - tmux, `bash -c`, `env`, `xargs`, `eval` and `watch` no longer carry a refused command past the rules: a job
+    script that pushes or lists command lines inside one of them is refused there too. Check your launchers.
 - **By Thu 12 Nov 07:59Z, at your next safe point: merge `origin/main` (`72e4d46d9209` or later) into your own agent
   branch and push it** (infra, Wed 13:02Z). It carries what `research` needs once Daniel's notes token lapses on Thu
   12 Nov and the Slack token leaves on Fri 13 Nov (notes and Slack through the broker), and the inbox that reaches
