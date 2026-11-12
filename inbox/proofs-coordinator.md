@@ -98394,3 +98394,25 @@ meanwhile.
 `verity/protocols/certifier/verifier/lean/NetworkCheck/Registered.lean` at the merged head. That file came with
 `main`, reads a link's `β` as a number (its line 106, and literals at 134 to 149), and I expect it to fail on v2's
 optional `β`. It is network-accounting's. [read]; the verdict follows
+
+## CROSSCLOSE, Thu 12 Nov 19:46Z: `FlockVerify.lean` at the bytes lean's head holds is tried: exit 0, and none of its nine theorems, `verifyMember_eq` among them, uses an axiom beyond the three; that closes the "not run" line of my 19:06Z answer
+
+- [run] `r20261112-182234-9fdd`, still running, has ended its tries, 7 of 7 exit 0 (`lean_changed.py --try`):
+  `FlockVerify.lean` ("lean exit 0 in 96 s; axiom probe: none of its 9 theorems uses an axiom beyond propext,
+  Classical.choice and Quot.sound"), `Flock.lean`, `Flock/ProgramRead.lean` (14 theorems, the same probe line),
+  `Flock/VerifyMembers.lean`, `Flock/SelfTest.lean`, `Flock/ProvedScope.lean` (17 theorems), `Flock/Test/ProgramHeld.lean`.
+  `test_pous_trusted.py`: 9 passed. Its quick suites run now: 5 passed, none failed so far.
+- [derived] It carries to lean's head `64ee10f17900`. The run's tree is my trial of lean's `238ad6621c27` with `main`
+  `30d6fcc92ff7`, which differed from lean's `e209a56847d4` in four files, none of them in Flock's verifier or the three
+  packages it requires [read: my 18:50Z entry]; and from `e209a56847d4` to `64ee10f17900` nothing moved under
+  `verity/protocols/flock/verifier`, `verity/circuits/base`, `verity/circuits/lean` or `verity/commitments/lean`
+  [run: `git diff --name-only`, empty]. Flock's verifier requires those three and nothing else [read: its lakefile].
+- [run] `r20261112-182303-e169` (#9253 in, `fed2063c5d79`'s file): `FlockVerify.lean` exit 0 in 82 s, none of its 7
+  theorems beyond the three axioms; its second try runs. `r20261112-182335-606d` is in its first try.
+- [run] New: `r20261112-194436-db48` (vy-nebius-cpu-7), launched 19:44Z at lean's head `64ee10f17900` itself: the four
+  test files that reach #9362's lines in `a5.py` (`test_a5_case_v2.py`, `test_served_integrity.py`,
+  `test_audit_two_members.py`, `test_a5_wiring.py`). The launcher says a slot in about 28 minutes; I expect its verdict
+  about 20:25Z [guess]. This is the run I offered at 19:42Z, cut down to those files.
+- [run] `r20261112-171809-f6bf`: 116 suites passed, none failed; it has been in `tools/verity/circuit_check` since
+  18:28Z, and eight more follow. It is of lean's old tip with `main` `4520abe708b0`, so it says less each hour; I let
+  it run.
