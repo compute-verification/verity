@@ -56,3 +56,37 @@ LEANMERGE to network-accounting's coordinator, Wed 11 Nov 5:39 PM PST. The two t
 [2026-11-12T01:40Z] e351a0dc4491
 BOUNDTIE to the coordinator, NET-341, Wed 11 Nov 5:40 PM PST. #9053's body is rewritten (replaced at 5:38 PM PST, 21,385 bytes); the head is still 2eb3cca7a040dcc47b986f49b15f7839a0c048e7 and the pull request is unmarked. New in it: 'The premise, open for both forms' (citing the proofs comment on NET-297 of 2:15 PM PST and what would close it, VLLM-370's port and VLLM-339's check), 'What the certifier signs about a connection today' (13 lines, each [read] with file and line), 'The last commit is text only' (the four checks), and the README's size after a merge with main. Run r20261111-220825-e7f8 [read: its out/suites.log]: certifier verifier 1,339 passed, 0 failed, 1 skipped, 1,126 s; repository 307 passed, 0 failed, 333 s; circuit-check suite 404 passed, 0 failed, 5 skipped, 3,657 s; 3 suites passed, 0 cached, 0 failed; the read guard failed none (no 'read files outside its inputs' line). One read you may want from the new section: connection_rows.attest, which commits and signs the lengths and fails tables, has no caller outside the certifier verifier's tests, at this head or on main at be9a3d566905; the runner (warden_serve.py:777-780, :1095-1098) builds its schedule with no lengths rows. Nothing newer than the 2:15 PM PST comment was on NET-297 at 5:21 PM PST, so your withdrawal of the 1:40 PM line is not there yet. My NET-341 comment of 2:13 PM PST still says the premise is the no-stop form's alone; I posted no new comment, none being asked. A slip: my line about the README says 5:37 PM PST and the clock read 5:36 PM when it was sent.
 
+[2026-11-12T01:44Z] 7e148f135958
+LEANMERGE to network-accounting's coordinator, Wed 11 Nov 5:44 PM PST. Final report on the rename: both tries have ended, each rc 0. One thing needs your word or lean's: the rename takes the area over its unread cap.
+
+**Head** [ran]: `7c99c50d9586475082b6c42c7117a67045e895fc` on `cursor/na-cross-mend-witnesstoys-4d7a`; its parent is `1c506c38cecdb8050bf4dff8676cec1e23c33276`, on the crossed tip `3ff11d118f93be79dd009c2c4e0d7eae2461d411` (still the tip at 5:43 PM PST).
+
+**The diff** [ran]: 3 files, +22 −20, no statement and no proof.
+- `security/Proofs/NetworkCertifier/PeriodWitnesses.lean`: `PooledLeakAccepted_honest` is `PooledLeakAccepted_schedules` (line 31), `PooledLeakAccepted_nontrivial` is `PooledLeakAccepted_fails_at_one_unit` (line 42). The header now says the pair is in `Witnesses` and what the two here add; the first theorem's docstring says "at the fixture `fxQueue`" where it said "at the deployed instance".
+- `security/Proofs/NetworkCertifier.lean`, the docstring at lines 90 to 92: it said `PeriodWitnesses` gives the monitoring period's honest and nontrivial lemmas. Your LEAN-249 comment of 5:38 PM PST says this file is lean's by the registry [read]; I did not check the registry before editing it.
+- `security/Proofs/NetworkCertifier/README.md`, lines 182 and 183: it said "PooledLeakAccepted's pair". 51,591 bytes before, 51,587 after.
+- Left as they are: `WitnessToys.lean:18` and the README's line 178 (they say what the module concludes from, which is still true), `Witnesses.lean`, every lock.
+- `git grep` for the two old names over `security/`, `tools/`, `tests/` now finds only `Witnesses.lean` (164, 206, 509) and the lock.
+
+**The tries, each `--on auto`, once, `tree_sha` the head** [ran; outputs read through the mask]:
+- `r20261112-013641-056f`, `PeriodWitnesses.lean`: rc 0, ended 5:38 PM PST. "lean exit 0 in 58 s"; "axiom probe: none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `r20261112-013740-39ea`, the root `security/Proofs/NetworkCertifier.lean`: rc 0, ended 5:41 PM PST. "Build completed successfully (11066 jobs)", with `Proofs.NetworkCertifier.PeriodWitnesses` and `CountWitnesses` built; "lean exit 0 in 177 s"; "axiom probe: none of its 39 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". No warning names either changed Lean file.
+- Not run: any package's Lean check, the replay, a records run. The files elaborate.
+
+**`check.py` and the witnesses** [read]: the rule takes a guarantee's witnesses from the lock's `witnesses` map only (`tools/verity/lean/check.py:2308`, the loop over the lock's guarantees at 2320, the reads at 2363, 2379 and 2413; `honest_witnesses` at 2117). A suffix is read nowhere: `_honest` and `_nontrivial` occur only in the names a failure message proposes (1926, 2246, 2254 to 2264). The two new names are in no lock, so the witnesses rule never sees them, and no other rule of `check.py` fails on a theorem that no lock lists [read: its `unlisted` codes are all about names a lock holds].
+
+**What the rename does trip: the unread ratchet** (`tools/verity/lean/unread.py`, run by `lean_audit.py`).
+- No lock and no code names anything `PeriodWitnesses.lean` declares now, so it is a wholly unread module of 2 declarations [read: the seeds; the root under `roots` keeps only its own module, `unread.py:655`; my 5:30 PM PST line said 654].
+- The area `Proofs/NetworkCertifier` is capped at 2 modules and 6 declarations on the crossed tree [ran]. The side's own ratchet counted exactly that at `75918e18bbcb`: 2 modules, 6 declarations, 195 lines, one of 120 lines deletable alone [read: `r20261111-034141-2f06`, `out/unread-areas.txt` and `unread.md`]. By their lengths the two are `SampledAuditInstance.lean` (120 lines) and `Warden.lean` (75), three declarations each, and both are byte for byte the same on the crossed tree [ran `sha256sum`; that it is these two is argued, the report does not name them].
+- So the area goes to 3 modules and 8 declarations, over its cap [argued; the ratchet reads the audits' facts and I ran none].
+- What that does [read `lean_audit.py:285`]: in lean's records run it is bookkeeping, the cap is raised to the count and lean is warned. In a pull request's own check it fails.
+- Three ways to close it, none done: lean raises the cap to 3 and 8 in the merge; or the two theorems move to the end of `WitnessToys.lean`, a read module, and `PeriodWitnesses.lean` goes (the count stays 2 and 6, but nothing reads them still); or your option 1.
+
+**For the later issue** [ran `git grep`]: nothing but `PooledLeakAccepted_fails_at_one_unit` reads `pooled_bound_fails` (`PeriodWitnesses.lean:47`; the rest are its declaration and docstrings), and `fxQueue_fits` and `fxRows_wf` are read only by `PooledLeakAccepted_schedules`, `fxQueue_bucket` only by `fxQueue_fits`.
+
+**NET-332** [ran]: my reading of both logs agrees with rc 0, each at `6a285960e2f2`. `r20261111-214832-b9c9`: "lean exit 0 in 34 s", none of its 39 theorems beyond the three axioms. `r20261111-215028-a30c`: 89 passed in 548 s, start to end 11 min 14 s; the slowest test is `test_lean_audit.py::test_service_verify_is_the_same_under_the_adapter` at 72.9 s, the period protocol's slow test 11.3 s.
+
+**Least sure of:** the ratchet's count on the crossed tree, which rests on the side's report and on my reading of the seeds. **Where I did not look:** whether `main`'s merge added a reader of `SampledAuditInstance.lean` or `Warden.lean`; the handle registry.
+
+Everything is pushed and the notes are synced (`tools/na-cross-mend-witnesstoys-leanmerge/`). I posted nothing on Linear.
+
