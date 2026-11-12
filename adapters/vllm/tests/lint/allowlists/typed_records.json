@@ -31,7 +31,7 @@
     {"file": "verity_vllm/check/replay/driver.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/check/replay/evaluate.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/check/replay/index.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
-    {"file": "verity_vllm/check/replay/linkage.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
+    {"file": "verity_vllm/check/replay/linkage.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/check/replay/opening.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 7},
     {"file": "verity_vllm/check/replay/population.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/check/replay/replay_codes.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
