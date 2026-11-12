@@ -18,11 +18,21 @@ kept. The cache holds every composed circuit at once, so it is this job's own, o
 
 GB is 10^9 bytes throughout; the lines it prints give GiB beside it.
 
+With ``--then-window`` the second pass warms another window over the cache the first one's pass filled: a kept compose cache
+offered to a later window. Its lines say which of its templates the cache held (``kept``), and it composes and keeps the rest,
+so the cache can grow past what the first pass left: the floor ends the pass if the disk doesn't take it. ``--take`` then
+takes each template of the last window from the cache as its audit's staging does (`a5.own_composed`), one at a time into a
+directory beside the cache, removing each before the next: a link where the entry was composed under this window's partition
+and program (``bound_here``), else the entry's copy bound to them (`compose_circuit.restamp`, which reads the entry whole and
+holds it to its pin), which is started only if the file system has the circuit's size and the floor free (else ``no room``).
+Each line says how it was taken, its bytes and seconds, and whether the META of the circuit taken is the line's and names this
+window's partition and program.
+
 Under ``$OUT`` (``$RESEARCH_RUN_DIR/out``), all small: ``result.json`` (rewritten after every step, so a killed job leaves
 what it had: the commit, the command lines, each pass's wall time and its templates' seconds and whether the cache held them,
 the cache's size, and every half minute of a pass and at its end the circuits composed so far, the bytes the cache holds
 and the free space, peak memory, the free space before pass 1, after each pass and after the removal), each pass's output
-(``passN.log``, ``passN.err``) and ``sync.log``. Nothing it writes names the machine.
+(``passN.log``, ``passN.err``; the take is pass 3) and ``sync.log``. Nothing it writes names the machine.
 
 Peak memory is read three ways, since a pass forks one process a template and they share the window's pages: the sum of
 resident sets (counts a shared page once a process: an upper bound), the sum of proportional sets (counts it once; read once a
@@ -30,11 +40,11 @@ minute, since the kernel walks every page to answer), and the anonymous memory o
 
 Exit: 0 both passes ran (``result.json`` says whether pass 2 found every template kept); 64 a refused argument; 66 the venv
 didn't sync; 70 too little free space to start; 71 free space under the floor; 72 the deadline; 73 or 74 pass 1 or 2 failed;
-76 the cache is still there (whatever else happened); 77 ended by a signal.
+75 the take failed; 76 the cache is still there (whatever else happened); 77 ended by a signal.
 
 ``--stop-at-gb`` and ``--stop-at-templates`` end a pass early and count it as run: a tryout of the command line on one small
 circuit, with ``--jobs 1 --passes 1``. ``--stand-in`` and ``--free-from`` are the tests' (``tests/test_warm_twice.py``), which
-start no unit (``--guardian detached``).
+start no unit (``--guardian detached``); a stand-in's ``$2`` is its pass's window and ``$3`` is ``warm`` or ``take``.
 """
 from __future__ import annotations
 
@@ -54,6 +64,8 @@ GB, GIB = 10**9, 2**30
 EXIT_ARG, EXIT_SYNC, EXIT_START, EXIT_FLOOR, EXIT_DEADLINE, EXIT_PASS, EXIT_LEFT, EXIT_SIGNAL = 64, 66, 70, 71, 72, 73, 76, 77
 RSS_EVERY_S, PSS_EVERY_S, PROGRESS_EVERY_S, END_WAIT_S = 5.0, 60.0, 30.0, 60.0
 SYNC = "uv sync -q --all-packages --extra torch-cpu"
+#: what a take's line says beside a warm's (`take`)
+TAKEN = ("taken", "bytes", "bound_here", "meta_is_the_lines", "bound_to_window")
 
 # The guardian: started in a transient user unit (else detached), with no environment of the job's, so nothing that ends the
 # job's group or cgroup ends it. It waits for the job's process to go; if the job's directory is still there then, the job
@@ -328,7 +340,8 @@ class Job:
             raise Stop(EXIT_PASS + n - 1, f"PASS {n} FAILED: exit {rec['exit']} (pass{n}.err)")
 
     def read_log(self, n: int, rec: dict) -> None:
-        """`warm`'s lines: a template's {"template", "seconds", "kept", "k_log"}, then ``WARM`` with the totals."""
+        """`warm`'s lines: a template's {"template", "seconds", "kept", "k_log"}, then ``WARM`` with the totals; `take`'s: a
+        template's with how it was taken (``TAKEN``), then ``TAKE``."""
         rows: list[dict] = []
         try:
             lines = (self.out / f"pass{n}.log").read_text(errors="replace").splitlines()
@@ -336,10 +349,11 @@ class Job:
             lines = []
         for ln in lines:
             try:
-                if ln.startswith("WARM "):
-                    rec["warm"] = json.loads(ln[5:])
+                if ln.startswith(("WARM ", "TAKE ")):
+                    rec[ln[:4].lower()] = json.loads(ln[5:])
                 elif ln.startswith("{") and "template" in (d := json.loads(ln)):
-                    rows.append({k: d.get(k) for k in ("template", "seconds", "kept", "k_log")})
+                    rows.append({k: d.get(k) for k in ("template", "seconds", "kept", "k_log")}
+                                | {k: d[k] for k in TAKEN if k in d})
             except ValueError:
                 continue
         rec["rows"], rec["templates"], rec["kept"] = rows, len(rows), sum(bool(r["kept"]) for r in rows)
@@ -374,19 +388,23 @@ class Job:
         a = self.a
         tree = Path.cwd()
         window, parent = Path(a.window).resolve(), Path(a.cache_parent).resolve()
+        windows = [window, *([Path(a.then_window).resolve()] if a.then_window else [window])][:a.passes]
+        if a.then_window and a.passes != 2:
+            raise Stop(EXIT_ARG, "REFUSED: --then-window is the second pass's window: give --passes 2")
         run_dir = Path(os.environ["RESEARCH_RUN_DIR"]).resolve() if os.environ.get("RESEARCH_RUN_DIR") else None
         if not a.stand_in:
             head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
             self.r["commit"] = head
             if not head or (a.commit and not head.startswith(a.commit)):
                 raise Stop(EXIT_ARG, f"REFUSED: the tree is at {head or '(no commit)'}, not --commit {a.commit}")
-            if not window.is_dir():
-                raise Stop(EXIT_ARG, f"REFUSED: no window at {window}")
-            if os.stat(window).st_dev != os.stat(parent).st_dev:
-                raise Stop(EXIT_ARG, "REFUSED: --cache-parent is on another file system than the window")
+            for w in windows:
+                if not w.is_dir():
+                    raise Stop(EXIT_ARG, f"REFUSED: no window at {w}")
+                if os.stat(w).st_dev != os.stat(parent).st_dev:
+                    raise Stop(EXIT_ARG, f"REFUSED: --cache-parent is on another file system than the window {w}")
         if not parent.is_dir() or not os.access(parent, os.W_OK):
             raise Stop(EXIT_ARG, f"REFUSED: --cache-parent {parent} is not a directory this job can write in")
-        for inside in (window, run_dir, tree):
+        for inside in (*windows, run_dir, tree):
             if inside is not None and (parent == inside or inside in parent.parents):
                 raise Stop(EXIT_ARG, f"REFUSED: --cache-parent {parent} is inside {inside}")
         self.refuse_start("at_start")
@@ -419,25 +437,39 @@ class Job:
         cache.mkdir()
         self.r["cache"] = {"dir": str(cache), "guardian": self.guardian()}
         say(f"cache: {cache} (guardian: {self.r['cache']['guardian']})")
-        if a.stand_in:
-            argv = ["bash", "-c", a.stand_in, "stand-in", str(cache)]
-        else:
-            argv = [str(tree / ".venv/bin/python"), "benchmarks/prove_path/records_audit.py", "warm", "--window", str(window),
+        def argv(w: Path, step: str) -> list[str]:
+            if a.stand_in:
+                return ["bash", "-c", a.stand_in, "stand-in", str(cache), str(w), step]
+            if step == "take":
+                return [str(tree / ".venv/bin/python"), str(Path(__file__).resolve()), "take", "--window", str(w), "--law", a.law,
+                        "--compose-cache", str(cache), "--scratch", str(self.root / "taken"), "--floor-gb", str(a.floor_gb)]
+            return [str(tree / ".venv/bin/python"), "benchmarks/prove_path/records_audit.py", "warm", "--window", str(w),
                     "--law", a.law, "--compose-cache", str(cache), "--jobs", str(a.jobs)]
-        for n in range(1, a.passes + 1):
+
+        self.r["second_window"] = bool(a.then_window)
+        for n, w in enumerate(windows, 1):
             self.check()
-            self.run_pass(n, argv, env)
+            self.run_pass(n, argv(w, "warm"), env)
             self.note_free(f"after_pass{n}")
         last = self.r["passes"][-1]
         if a.passes > 1 and last["state"] == "done":
             self.r["pass2_all_kept"] = bool(last["templates"]) and last["kept"] == last["templates"]
             say(f"PASS 2: {last['kept']} of {last['templates']} template(s) were in the cache")
+        if a.take and last["state"] == "done":
+            self.check()
+            self.run_pass(len(windows) + 1, argv(windows[-1], "take"), env)
+            self.note_free("after_take")
+            rows = self.r["passes"][-1]["rows"]
+            self.r["take"] = {how: sum(r.get("taken") == how for r in rows) for how in ("link", "copy", "no room")}
+            self.r["take"]["as_the_audit_reads"] = all(r.get("meta_is_the_lines") and r.get("bound_to_window") for r in rows
+                                                       if r.get("taken") in ("link", "copy"))
+            say("TAKE: " + ", ".join(f"{v} {k}" for k, v in self.r["take"].items()))
         return 0
 
     def run(self) -> int:
         for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
             signal.signal(s, self.on_signal)
-        code, why = 0, "both passes ran" if self.a.passes > 1 else "the pass ran"
+        code, why = 0, ("both passes ran" if self.a.passes > 1 else "the pass ran") + (" and the take" if self.a.take else "")
         try:
             code = self.main()
         except Stop as e:
@@ -490,6 +522,10 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--law", default="subset:1", help="the window's law, as its audit takes it")
     p.add_argument("--jobs", type=int, default=24, help="templates composed at once (`warm --jobs`)")
     p.add_argument("--passes", type=int, default=2, choices=(1, 2))
+    p.add_argument("--then-window", help="the second pass's window, in place of the first's: another window offered the cache "
+                   "the first pass filled")
+    p.add_argument("--take", action="store_true", help="after the passes, take each template of the last window from the "
+                   "cache as its audit's staging does (`take`)")
     p.add_argument("--commit", help="refuse unless the tree's commit starts with this")
     p.add_argument("--min-free-gb", type=float, default=547.0, help="free GB (10^9 bytes) the first pass needs to start")
     p.add_argument("--floor-gb", type=float, default=15.0, help="free GB under which a running pass is ended")
@@ -504,5 +540,62 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+def take(argv: list[str]) -> int:
+    """``warm_twice.py take``, run by the job in the tree's venv with the tree as its working directory: each template of the
+    window that `a5.warm` composes, taken from ``--compose-cache`` at ``--scratch``/circuit.txt as the audit's staging takes
+    it (`a5.own_composed`: a link, or `compose_circuit.restamp`'s copy when the entry was composed under another partition or
+    program), then removed. It composes nothing: a template the cache doesn't hold is ``taken: none``. One JSON line a
+    template, then ``TAKE`` with the totals."""
+    p = argparse.ArgumentParser(prog="warm_twice.py take")
+    p.add_argument("--window", required=True)
+    p.add_argument("--law", required=True)
+    p.add_argument("--compose-cache", required=True)
+    p.add_argument("--scratch", required=True)
+    p.add_argument("--floor-gb", type=float, default=15.0)
+    a = p.parse_args(argv)
+    sys.path.insert(0, str(Path.cwd() / "benchmarks/prove_path"))
+    import records_audit as RA  # the tree's, which puts one_stage on the path
+
+    import a5 as A5
+    import compose_circuit as CM
+
+    t0 = time.time()
+    mine, _doc, sets = RA.verifier_window(Path(a.window), RA.D.parse_law(a.law), None)
+    window_s = round(time.time() - t0, 1)
+    bind = {"partition": mine.partition_digest, "program": mine.partition["program"]}
+    cache, scratch = Path(a.compose_cache), Path(a.scratch)
+    scratch.mkdir(parents=True, exist_ok=True)
+    out, rows = scratch / "circuit.txt", []
+    for t in dict.fromkeys(m.template for m in mine.members):
+        compose, defn = (*sets.get(t, ()), None, None)[:2]
+        if not callable(compose) or getattr(compose, "inputs", None) is None:
+            continue
+        entry = cache / A5.compose_key(compose, defn, t)
+        row: dict = {"template": t, "kept": (entry / "made.json").exists(), "taken": "none"}
+        if row["kept"]:
+            kept = json.loads((entry / "made.json").read_text())
+            src = (entry / "circuit.txt").stat()
+            row |= {"bytes": src.st_size, "bound_here": kept["bind"] == bind, "k_log": kept.get("k_log")}
+            st = os.statvfs(scratch)
+            if not row["bound_here"] and st.f_bavail * st.f_frsize < src.st_size + a.floor_gb * GB:
+                row["taken"] = "no room"
+            else:
+                t1 = time.time()
+                made, _ = A5.own_composed(a, compose, defn, t, out, bind["partition"], bind["program"])
+                meta = CM.head(out)
+                row |= {"seconds": round(time.time() - t1, 1), "taken": "link" if os.path.samestat(out.stat(), src) else "copy",
+                        "meta_is_the_lines": meta == made["meta"],
+                        "bound_to_window": (meta.get("partition") or {}).get("digest") == bind["partition"]
+                        and meta.get("program_sha512") == bind["program"]}
+                shutil.rmtree(scratch)
+                scratch.mkdir()
+        rows.append(row)
+        print(json.dumps(row, sort_keys=True), flush=True)
+    print("TAKE " + json.dumps({"templates": len(rows), **{how: sum(r["taken"] == how for r in rows) for how in
+                                                          ("link", "copy", "none", "no room")},
+                                "verifier_window_s": window_s, "seconds": round(time.time() - t0, 1)}, sort_keys=True))
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(Job(parse()).run())
+    sys.exit(take(sys.argv[2:]) if sys.argv[1:2] == ["take"] else Job(parse()).run())
