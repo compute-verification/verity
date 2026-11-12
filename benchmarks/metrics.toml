@@ -9,3 +9,23 @@ unit = "percent of stock's serving compute"
 better = "lower"
 command = "research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53"
 every = "7d"
+
+[[metric]]
+id = "network-accounting/scan-proving-cost"
+title = "The network certifier's scan: proving seconds for each second of execution phase"
+owner = "network-accounting"
+unit = "proving seconds a second of execution phase"
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
+every = "7d"
+goal = "network/period-bound-checked"
+
+[[metric]]
+id = "network-accounting/scan-verifier-cost"
+title = "The network certifier's scan: the Lean verifier's CPU seconds for each second of execution phase, on one core"
+owner = "network-accounting"
+unit = "Lean verifier CPU seconds a second of execution phase, on one core"
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
+every = "7d"
+goal = "network/period-bound-checked"

@@ -35,7 +35,7 @@ from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
-from verity.protocols.poub.verifier import p2_case, p2_lean
+from verity.protocols.poub.verifier import ledger, p2_case, p2_lean
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -595,6 +595,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     row = SV.piece_row("bandwidth", s.out.parent)
     assert row["verdict"] == "accept" and row["protocol"] == p2_case.PROTOCOL
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": bw["public"]["q_bytes"], "unit": "bytes"}
+    assert row["answer"]["profile"]["named_terms"] == bw["profile"]["named_terms"] == ledger.NAMED_TERMS
     assert bw["profile"]["gamma_terms"] and json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
 
     text = "".join(p.read_text() for d in (public, s.out) for p in sorted(d.iterdir()))

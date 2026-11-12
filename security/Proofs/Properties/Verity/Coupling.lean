@@ -634,7 +634,7 @@ theorem target_of_periods : TargetOfPeriods := by
   unfold Vocab.error Accounting.condError
   split_ifs with hcr
   · classical
-    obtain ⟨-, hcr, hun⟩ := hcr
+    obtain ⟨-, -, hcr, hun⟩ := hcr
     obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) (V.signer θ) θ F c σ
       fun o => acc o ∧ ¬ V.Holds k θ F c σ (.ofAudit b) o).2
     obtain ⟨q, δ, hs, hδ, hb⟩ := h θ F c σ ρ
