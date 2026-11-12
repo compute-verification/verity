@@ -1,18 +1,22 @@
 #!/bin/sh
-# Every 5 min: copy to the public export that nodes and pods fetch fixtures from (`research data export`, the store README's
-# export) every fixture origin/main's fixtures/artifacts.json registers, then each fixture that a pull request marked ready
-# registers at its head and main doesn't (fixtures_export.py: only those ids, and nothing of the head is run), so a newly
-# registered fixture is public before a machine that reads only the export checks it, with nobody running the export by
-# hand. The export never reads the bucket: each object is a conditional PUT (412 = already there), and the export store's
-# record of what landed keeps a pass with nothing new from sending anything. The code that runs is origin/main's, from the
-# clone at /data/infra/fixtures-export-repo, fetched over https with verity-drive's App token (gh_app_token.sh).
+# Every 5 min: copy every fixture origin/main's fixtures/artifacts.json registers to the public export that nodes and pods
+# fetch fixtures from (`research data export`, the store README's export), so a registered fixture reaches it with nobody
+# running the export by hand. The export never reads the bucket: each object is a conditional PUT (412 = already there), and
+# the export store's record of what landed keeps a pass with nothing new from sending anything. The code that runs is
+# origin/main's, from the clone at /data/infra/fixtures-export-repo, fetched over https with verity-drive's App token
+# (gh_app_token.sh). The loop reads no pull request. One is exported only by hand, `pr N`, and then only the ids its head
+# registers that main's registry has never named (fixtures_export.py: nothing of the head is run).
 # Every checkout names a ref that only this script writes, under refs/export/: main's in the clone's own working tree, which
-# agent_watch.sh and store_gc.sh read, and a head's in a worktree of its own. So no other fetch into the clone changes what
-# a pass reads. r2.env's key reads the private store and writes the public bucket; it goes only into the environment.
+# agent_watch.sh and store_gc.sh read, and a pull request's in a worktree of its own. So no other fetch into the clone
+# changes what a pass reads. r2.env's key reads the private store and writes the public bucket; it goes only into the
+# environment.
+# The queue's loop runs its own export with three things of this script's, so none of them changes alone (the README's
+# Fixture export): the one line below that names the bucket, the clone's checkout, which is main's between passes, and the
+# export store's path.
 #   fixtures_export.sh                    the loop, one copy, which post_start.sh starts
 #   fixtures_export.sh once [--dry-run]   one pass in the foreground; --dry-run sends nothing and leaves main's checkout as it is
 #   fixtures_export.sh pr N [--dry-run]   pull request N's new ids, marked or not: by hand, when a lane asks (the README)
-#   fixtures_export.sh export ARGS...     the export itself, as every pass runs it: what fixtures_export.py calls for a head
+#   fixtures_export.sh export ARGS...     the export itself, as every pass runs it: what fixtures_export.py calls for N's head
 # Log: /data/infra/fixtures-export.log. The relay's `fixtures-public` monitor alerts when a registered fixture stays missing.
 LOG=/data/infra/fixtures-export.log
 REPO=/data/infra/fixtures-export-repo
@@ -28,7 +32,8 @@ pass() (
   "$@"
 ) 8> /root/fixtures-export-pass.lock
 
-# The export, with r2.env's key and main's code, of whatever registry its --repo names.
+# The export, with r2.env's key and main's code, of whatever registry its --repo names. The line that names the bucket is
+# the only one of its form in this file, and the queue's loop takes the name from it.
 run_export() {
   (
     set -a; . /root/.config/verity/r2.env; set +a
@@ -47,27 +52,22 @@ main_pass() {
   run_export --repo "$REPO" "$@"
 }
 
-# fixtures_export.py's passes, with the same key and code: `heads [--dry-run]`, the new ids of each pull request marked ready
-# at its head, or `pr N [--dry-run]`, those of one. Each export it runs is this script's.
-pulls() {
-  (
-    set -a; . /root/.config/verity/r2.env; set +a
-    cd "$REPO/tools/research" && PYTHONPATH=src python3.12 /data/infra/fixtures_export.py "$@" --clone "$REPO" --store "$STORE" -- /data/infra/fixtures_export.sh export
-  )
+# fixtures_export.py over one pull request, `N [--dry-run]`, with main's code. Each export it runs is this script's, so the
+# key is in no environment but the export's.
+pull() {
+  (cd "$REPO/tools/research" && PYTHONPATH=src python3.12 /data/infra/fixtures_export.py "$@" --clone "$REPO" -- /data/infra/fixtures_export.sh export)
 }
 
 once() {
-  main_pass "$@"; a=$?
-  echo "pass rc=$a $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)"
-  pulls heads "$@"; b=$?
-  echo "heads pass rc=$b"
-  [ "$a" -eq 0 ] && [ "$b" -eq 0 ]
+  main_pass "$@"; rc=$?
+  echo "pass rc=$rc $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)"
+  return "$rc"
 }
 
 case "${1:-}" in
   "") ;;
   once) shift; [ "$#" -eq 0 ] || [ "$*" = --dry-run ] || { echo "usage: $0 once [--dry-run]" >&2; exit 2; }; pass once "$@"; exit $? ;;
-  pr) pass pulls "$@"; exit $? ;;
+  pr) shift; pass pull "$@"; exit $? ;;
   export) shift; run_export "$@"; exit $? ;;
   *) echo "usage: $0 [once [--dry-run] | pr N [--dry-run]]" >&2; exit 2 ;;
 esac
@@ -77,7 +77,5 @@ flock -n 9 || { echo "$(date -u +%FT%TZ) another copy holds /root/fixtures-expor
 while :; do
   pass main_pass >> "$LOG" 2>&1
   echo "$(date -u +%FT%TZ) pass rc=$? $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
-  pass pulls heads >> "$LOG" 2>&1
-  echo "$(date -u +%FT%TZ) heads pass rc=$?" >> "$LOG"
   sleep 300
 done

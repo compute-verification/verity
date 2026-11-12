@@ -12,8 +12,6 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from research.queue import label_target
-from research.store import labels_sync, vocab
 from research.store.local import LocalStore, manifest_key
 
 CONTROL = Path(__file__).resolve().parents[3] / "infra" / "control"
@@ -23,14 +21,15 @@ GIT = shutil.which("git")
 
 #: `python3.12 -m research data export ...` in the stubbed tests: one JSON line per call, and nothing sent anywhere
 STUB = """
-import json, os, subprocess, sys
+import hashlib, json, os, subprocess, sys
 from pathlib import Path
 argv = sys.argv[1:]
 repo = Path(argv[argv.index("--repo") + 1])
 files = sorted(str(p.relative_to(repo)) for p in repo.rglob("*") if p.is_file() and ".git" not in p.relative_to(repo).parts)
 head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 call = {"argv": argv, "cwd": os.getcwd(), "pythonpath": os.environ.get("PYTHONPATH"),
-        "bucket": bool(os.environ.get("RESEARCH_EXPORT_BUCKET")), "repo": str(repo), "head": head, "files": files,
+        "bucket_sha256": hashlib.sha256(os.environ.get("RESEARCH_EXPORT_BUCKET", "").encode()).hexdigest(),
+        "repo": str(repo), "head": head, "files": files,
         "registry": json.loads((repo / "fixtures" / "artifacts.json").read_text())}
 with open(CALLS, "a") as f:
     f.write(json.dumps(call) + "\\n")
@@ -48,6 +47,11 @@ def git(*args, cwd):
     return subprocess.run([GIT, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
 
+def text_of(f: Path) -> str:
+    """A file's text with the bucket's name blanked, so that an assertion over the text that fails doesn't print the name."""
+    return re.sub(r"(RESEARCH_EXPORT_BUCKET=)[^ ]*", r"\1NAME", f.read_text())
+
+
 class Pod:
     """The made-up pod and origin. A registry is written as {name: path}: the fixture `name` at `path`, tracked there
     unless the path is under fetched/, when its bytes are only in the private store."""
@@ -63,7 +67,7 @@ class Pod:
         self.cfg = tmp / "store.toml"
         self.cfg.write_text(f'[remote]\ntype = "fs"\npath = "{self.vault}"\n[export]\ntype = "fs"\npath = "{self.public}"\n')
         (self.root / ".config" / "verity" / "r2.env").write_text(f"RESEARCH_STORE_CONFIG={self.cfg}\n")
-        #: where a lane puts its fixtures and writes its marks, pushing both to the private store's remote
+        #: where a lane puts its fixtures, pushing each fetched one to the private store's remote
         self.lane = LocalStore(tmp / "lane", config_path=self.cfg)
         self.ids: dict[str, str] = {}
         self.deploy(SCRIPT.read_text())
@@ -82,7 +86,8 @@ class Pod:
     def deploy(self, text: str) -> None:
         """Install a script as /data/infra/fixtures_export.sh, its pod paths and its origin replaced by the made-up ones."""
         at = "--no-checkout git@github.com:compute-verification/verity.git"
-        assert at in text and "/data/infra/" in text and "/root/" in text
+        found = all(s in text for s in (at, "/data/infra/", "/root/"))
+        assert found, "the script names its origin, /data/infra/ and /root/"
         text = text.replace("/data/infra", str(self.data)).replace("/root/", f"{self.root}/")
         self.script.write_text(text.replace(at, f"--no-checkout file://{self.origin}"))
         self.script.chmod(0o755)
@@ -133,34 +138,19 @@ class Pod:
         git("update-ref", f"refs/pull/{n}/head", head, cwd=self.origin)
         return head
 
-    def merge_main(self, n: int) -> str:
-        """Main merged into pull request ``n``'s branch, and its new head."""
-        git("checkout", "-q", f"lane/{n}", cwd=self.origin)
-        git("merge", "-q", "--no-edit", "main", cwd=self.origin)
-        head = git("rev-parse", "HEAD", cwd=self.origin)
-        git("checkout", "-q", "main", cwd=self.origin)
-        git("update-ref", f"refs/pull/{n}/head", head, cwd=self.origin)
-        return head
-
-    def mark(self, n: int, head: str, ready: bool = True, *, minute: int = 0) -> None:
-        """A `ready` label on pr:N@HEAD, as `research queue ready` (or, false, `eject`) leaves it on the store's remote."""
-        target = label_target(n, head)
-        self.lane.add_label(target, vocab.READY, ready, "lane", ts=f"2026-01-01T00:{minute:02d}:00Z")
-        assert labels_sync.push_targets(self.lane, [target])["failed"] == []
+    def env(self) -> dict[str, str]:
+        """This machine's environment with the made-up pod's commands ahead of its own."""
+        path = os.pathsep.join([str(self.bin), *os.get_exec_path()])
+        return {**os.environ, "PATH": path, "TMPDIR": str(self.tmp / "t"), "HOME": str(self.tmp / "home")}
 
     def run(self, *args: str) -> subprocess.CompletedProcess:
-        env = {**os.environ, "PATH": self.path(), "TMPDIR": str(self.tmp / "t"), "HOME": str(self.tmp / "home")}
-        return subprocess.run([str(self.script), *args], env=env, capture_output=True, text=True)
-
-    def path(self) -> str:
-        """This machine's search path behind the made-up pod's commands."""
-        return os.pathsep.join([str(self.bin), *os.get_exec_path()])
+        return subprocess.run([str(self.script), *args], env=self.env(), capture_output=True, text=True)
 
     def calls(self) -> list[dict]:
         return [json.loads(line) for line in self.calls_file.read_text().splitlines()] if self.calls_file.exists() else []
 
-    def heads_calls(self) -> list[dict]:
-        """The exports run for pull request heads: every call but main's, which reads the clone itself."""
+    def pr_calls(self) -> list[dict]:
+        """The exports run for a pull request's head: every call but main's, which reads the clone itself."""
         return [c for c in self.calls() if c["repo"] != str(self.clone)]
 
     def registry(self, fixtures: dict[str, str]) -> dict[str, str]:
@@ -168,9 +158,11 @@ class Pod:
         return {self.fixture(name, path): path for name, path in fixtures.items()}
 
     def clean(self) -> bool:
-        """No worktree, no temporary directory and no one-off ref is left behind."""
+        """After a one-off the clone is as a pass left it: no worktree, no temporary directory, no ref but main's, and main
+        checked out, which is what the queue's loop runs from it."""
         return (git("worktree", "list", cwd=self.clone).count("\n") == 0 and not list((self.tmp / "t").iterdir())
-                and not git("for-each-ref", "refs/export/once/", cwd=self.clone))
+                and git("for-each-ref", "--format=%(refname)", "refs/export/", cwd=self.clone) in ("", "refs/export/main")
+                and git("rev-parse", "HEAD", cwd=self.clone) == self.main)
 
     def public_names(self) -> set[str]:
         """The fixtures whose manifest the public export holds."""
@@ -185,153 +177,21 @@ def pod(tmp_path):
 A, B, C, D = {"a": "pkg/fixtures/a.bin"}, {"b": "fetched/b.bin"}, {"c": "pkg/fixtures/c.bin"}, {"d": "fetched/d.bin"}
 
 
-def test_a_marked_heads_new_ids_are_exported_and_mains_are_not_passed_twice(pod):
-    """One pass: main's registry from main's checkout, then for the marked pull request a registry cut to the two ids its
-    head registers and main doesn't, in a worktree at the head that holds that registry and the one tracked fixture. Both
-    exports run main's code from main's checkout."""
-    pod.commit("main", {REGISTRY: A | B})
-    head = pod.pr(7, {REGISTRY: A | B | C | D, "tools/research/src/research/__main__.py": "raise SystemExit('a head runs nothing')\n"})
-    pod.mark(7, head)
-    p = pod.run("once")
-    assert p.returncode == 0, p.stdout + p.stderr
-    main, (one,) = pod.calls()[0], pod.heads_calls()
-    assert len(pod.calls()) == 2 and main["repo"] == str(pod.clone) and main["head"] == pod.main
-    assert main["registry"] == pod.registry(A | B)
-    assert main["argv"][-2:] == ["--repo", str(pod.clone)] and "--no-previous" not in main["argv"]
-    assert one["registry"] == pod.registry(C | D), "only what main lacks"
-    assert one["head"] == head and one["files"] == [REGISTRY, "pkg/fixtures/c.bin"], "nothing else of the head is checked out"
-    assert one["argv"][:8] == main["argv"][:8] and one["argv"][8:] == ["--repo", one["repo"], "--no-previous"]
-    for call in (main, one):
-        assert call["cwd"] == str(pod.clone / "tools" / "research") and call["pythonpath"] == "src" and call["bucket"], "main's code"
-    assert f"pr 7 at {head[:9]}: 2 new id(s), marked ready\n" in p.stdout and f"pr 7 at {head[:9]}: export rc=0\n" in p.stdout
-    assert f"pass rc=0 {pod.main[:7]}" in p.stdout and "heads pass rc=0\n" in p.stdout
-    assert pod.clean()
-
-
-def test_an_unmarked_or_an_ejected_head_is_not_exported(pod):
-    """Neither a head nobody marked nor one whose newest `ready` label is false (`research queue eject`) gets a worktree
-    or an export; a mark on an older head of the pull request, which registered fewer ids, doesn't count for the new one."""
-    pod.commit("main", {REGISTRY: A})
-    pod.pr(8, {REGISTRY: A | C})
-    ejected = pod.pr(9, {REGISTRY: A | D})
-    pod.mark(9, ejected, minute=1)
-    pod.mark(9, ejected, False, minute=2)
-    pod.mark(10, pod.pr(10, {REGISTRY: A | {"e": "pkg/fixtures/e.bin"}}))
-    pod.pr(10, {REGISTRY: A | {"e": "pkg/fixtures/e.bin", "f": "pkg/fixtures/f.bin"}})
-    p = pod.run("once")
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert [c["repo"] for c in pod.calls()] == [str(pod.clone)], "main's export and no other"
-    for n, count in ((8, 1), (9, 1), (10, 2)):
-        assert re.search(rf"^pr {n} at [0-9a-f]{{9}}: {count} new id\(s\), not marked ready: not exported$", p.stdout, re.M), p.stdout
-    assert "3 pull request(s) on a branch of origin, 3 registering ids main lacks" in p.stdout and pod.clean()
-
-
-def test_a_pass_that_cannot_pull_the_marks_exports_no_head_and_fails(pod):
-    """The mark is pulled from the store's remote each pass. Without a remote the pass doesn't answer from the labels its
-    store already holds: the head it exported a pass ago is not exported, and the heads pass fails, while main's goes on."""
-    pod.commit("main", {REGISTRY: A})
-    pod.mark(7, pod.pr(7, {REGISTRY: A | C}))
-    p = pod.run("once")
-    assert p.returncode == 0 and len(pod.heads_calls()) == 1, p.stdout + p.stderr
-    pod.cfg.unlink()
-    p = pod.run("once")
-    assert p.returncode == 1 and len(pod.heads_calls()) == 1 and len(pod.calls()) == 3, p.stdout + p.stderr
-    assert re.search(r"^pr 7 at [0-9a-f]{9}: 1 new id\(s\), not exported: QueueError: STALE: ", p.stdout, re.M), p.stdout
-    assert "pass rc=0 " in p.stdout and "heads pass rc=1\n" in p.stdout
-
-
-def test_a_head_republishes_nothing_that_main_dropped(pod):
-    """Main registered `b` once and has dropped it. Two heads that branched before the drop still hold `b`, and a third,
-    branched after it, registers `b` again: `b` is in each registry and not in main's, but main has named it, so it is
-    no head's. Only `c`, which one of them added, is exported."""
-    pod.commit("main", {REGISTRY: A | B})
-    pod.mark(7, pod.pr(7, {REGISTRY: A | B | C}))
-    pod.mark(8, pod.pr(8, {"README": "a head that changes no registry\n"}))
-    pod.commit("main", {REGISTRY: A})
-    pod.mark(9, pod.pr(9, {REGISTRY: A | B}))
-    p = pod.run("once")
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert [c["registry"] for c in pod.heads_calls()] == [pod.registry(C)]
-    assert "3 pull request(s) on a branch of origin, 1 registering ids main lacks" in p.stdout
-
-
-def test_a_mark_carries_to_a_merge_of_main_as_in_the_queue_and_so_does_an_ejection(pod):
-    """A merge of main into the marked head leaves the pull request's own change as it was, so the new head needs no new
-    mark, as in the queue; an ejection at the marked head holds at the later one too."""
-    pod.commit("main", {REGISTRY: A})
-    marked = pod.pr(7, {REGISTRY: A | C})
-    pod.mark(7, marked, minute=1)
-    pod.commit("main", {"README": "main moves on\n"})
-    later = pod.merge_main(7)
-    p = pod.run("once")
-    assert p.returncode == 0, p.stdout + p.stderr
-    (one,) = pod.heads_calls()
-    assert one["head"] == later != marked and one["registry"] == pod.registry(C)
-    assert f"#7 at {later[:8]} takes the `ready` labels at {marked[:8]}" in p.stdout
-    pod.mark(7, marked, False, minute=2)
-    p = pod.run("once")
-    assert p.returncode == 0 and len(pod.heads_calls()) == 1 and "not marked ready: not exported" in p.stdout, p.stdout + p.stderr
-
-
-def test_a_push_that_changes_the_pull_request_waits_for_its_own_mark(pod):
-    """A push on top of the marked head that changes anything of the pull request's own, here a file beside the registry it
-    leaves alone, is a head the queue calls unmarked: it is not exported until it is marked itself."""
-    pod.commit("main", {REGISTRY: A})
-    pod.mark(7, pod.pr(7, {REGISTRY: A | C}))
-    later = pod.pr(7, {"README": "a fix\n"})
-    p = pod.run("once")
-    assert p.returncode == 0 and pod.heads_calls() == [] and "not marked ready: not exported" in p.stdout, p.stdout + p.stderr
-    pod.mark(7, later, minute=1)
-    p = pod.run("once")
-    assert p.returncode == 0 and [c["head"] for c in pod.heads_calls()] == [later], p.stdout + p.stderr
-
-
-def test_a_head_whose_registry_cannot_be_read_stops_no_other_head(pod):
-    """A head with a registry that isn't JSON (a conflict left in it) is named and passed over; the marked head beside it
-    is still exported and the pass succeeds."""
-    pod.commit("main", {REGISTRY: A})
-    pod.pr(6, {REGISTRY: "<<<<<<< ours\n{}\n"})
-    head = pod.pr(7, {REGISTRY: A | C})
-    pod.mark(7, head)
-    p = pod.run("once")
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert [c["head"] for c in pod.heads_calls()] == [head] and "; registry unreadable at the head of 6\n" in p.stdout
-
-
-def test_a_head_whose_new_entries_lead_out_of_its_worktree_is_refused_whole(pod):
-    """A new entry at a path outside the repository, or at a link the head tracks, would have the export hash the pod's
-    own files. Neither head gets an export, the heads pass fails naming each, and the marked head beside them is exported."""
-    pod.commit("main", {REGISTRY: A})
-    secret = pod.tmp / "root" / ".config" / "verity" / "r2.env"
-    link = pod.pr(5, {REGISTRY: json.dumps(pod.registry(A) | {"art:" + "5" * 64: "pkg/fixtures/link"}), "pkg/fixtures/link": secret})
-    out = pod.pr(6, {REGISTRY: json.dumps(pod.registry(A) | {"art:" + "6" * 64: "../../root/.config/verity/r2.env"})})
-    head = pod.pr(7, {REGISTRY: A | C})
-    for n, at in ((5, link), (6, out), (7, head)):
-        pod.mark(n, at)
-    p = pod.run("once")
-    assert p.returncode == 1 and [c["head"] for c in pod.heads_calls()] == [head], p.stdout + p.stderr
-    assert f"pr 5 at {link[:9]}: pkg/fixtures/link is a link, which the export would follow out of the worktree" in p.stdout
-    assert f"pr 6 at {out[:9]}: its registry names a path outside the repository (../../root/.config/verity/r2.env)" in p.stdout
-    assert "heads pass rc=1\n" in p.stdout and pod.clean()
-
-
 def test_a_fetch_of_another_ref_between_the_loops_fetch_and_its_checkout_changes_nothing(pod):
     """The loop, one pass of it (its sleep ends it), with somebody else fetching pull request 7's head into the same
-    clone after each of the script's fetches: main's pass still checks out and exports main, and the unmarked pull
-    request's id reaches no export. The log line of main's pass is the success marker the cloud watch reads."""
+    clone after each of the script's fetches: the pass still checks out and exports main, and it is the only export, so the
+    pull request's id reaches none. The log line of the pass is the success marker the cloud watch reads."""
     pod.commit("main", {REGISTRY: A})
     other = pod.pr(7, {REGISTRY: A | C})
     pod.shim("git", INTERLOPER.format(git=GIT))
     pod.run()
     log = pod.log.read_text()
-    main = pod.calls()[0]
+    (main,) = pod.calls()
     assert main["repo"] == str(pod.clone) and main["head"] == pod.main != other and main["registry"] == pod.registry(A), log
-    assert all(pod.ids["c"] not in c["registry"] for c in pod.calls()), "the pull request's id was exported"
-    assert git("rev-parse", "HEAD", cwd=pod.clone) == pod.main
+    assert main["argv"][-2:] == ["--repo", str(pod.clone)] and git("rev-parse", "HEAD", cwd=pod.clone) == pod.main
     watch = tomllib.loads((CONTROL / "cloud_watch.toml").read_text())
     (marker,) = [loop["pattern"] for loop in watch["loop"] if loop["name"] == "Fixture export"]
     assert len(re.findall(marker, log, re.M)) == 1 and re.search(rf"^\S+Z pass rc=0 {pod.main[:7]}", log, re.M), log
-    assert len(pod.calls()) == 1 and re.search(r"^\S+Z heads pass rc=0$", log, re.M), log
 
 
 def test_the_interloper_does_move_what_a_checkout_of_the_last_fetch_reads(pod):
@@ -341,64 +201,103 @@ def test_the_interloper_does_move_what_a_checkout_of_the_last_fetch_reads(pod):
     pod.shim("git", INTERLOPER.format(git=GIT))
     git("clone", "-q", f"file://{pod.origin}", str(pod.clone), cwd=pod.tmp)
     subprocess.run(["sh", "-c", 'git -C "$1" fetch -q origin main && git -C "$1" checkout -q -f --detach FETCH_HEAD', "sh", str(pod.clone)],
-                   env={**os.environ, "PATH": pod.path()}, check=True)
+                   env=pod.env(), check=True)
     assert git("rev-parse", "HEAD", cwd=pod.clone) == other != pod.main
 
 
 def test_neither_the_script_nor_its_helper_reads_the_clones_last_fetch():
     """No FETCH_HEAD in either: the script's checkout names the ref it fetched main into."""
-    for f in (SCRIPT, HELPER):
-        assert "FETCH_HEAD" not in f.read_text(), f.name
-    script = SCRIPT.read_text()
+    script, helper = text_of(SCRIPT), text_of(HELPER)
+    assert "FETCH_HEAD" not in script and "FETCH_HEAD" not in helper
     assert "fetch -q origin +refs/heads/main:refs/export/main && " in script and "checkout -q -f --detach refs/export/main" in script
-    assert script.count(" checkout -") == 1 and HELPER.read_text().count('"checkout"') == 1, "one checkout in each, by name"
+    assert script.count(" checkout -") == 1 and helper.count('"checkout"') == 1, "one checkout in each, by name"
 
 
 def test_a_dry_pass_passes_the_dry_run_on_and_leaves_mains_checkout_as_it_is(pod):
-    """`once --dry-run` after main moved: both exports get --dry-run, and the clone stays on the main it had."""
+    """`once --dry-run` after main moved: the export gets --dry-run, and the clone stays on the main it had."""
     pod.commit("main", {REGISTRY: A})
     assert pod.run("once").returncode == 0
     before = pod.main
-    head = pod.pr(7, {REGISTRY: A | C})
-    pod.mark(7, head)
     pod.commit("main", {"README": "main moved\n"})
     p = pod.run("once", "--dry-run")
     assert p.returncode == 0, p.stdout + p.stderr
-    main, one = pod.calls()[1:]
+    (main,) = pod.calls()[1:]
     assert main["argv"][-3:] == ["--repo", str(pod.clone), "--dry-run"] and main["head"] == before != pod.main
-    assert one["argv"][-4:] == ["--repo", one["repo"], "--no-previous", "--dry-run"] and one["head"] == head
-    assert git("rev-parse", "HEAD", cwd=pod.clone) == before and f"pr 7 at {head[:9]}: export rc=0 (dry run: nothing sent)" in p.stdout
-    assert pod.run("once", "--fresh").returncode == 2 and pod.run("twice").returncode == 2 and len(pod.calls()) == 3
+    assert git("rev-parse", "HEAD", cwd=pod.clone) == before and f"pass rc=0 {before[:7]}\n" in p.stdout
+    assert pod.run("once", "--fresh").returncode == 2 and pod.run("twice").returncode == 2 and len(pod.calls()) == 2
 
 
-def test_the_one_off_exports_one_pull_requests_new_ids_whether_or_not_it_is_marked(pod):
-    """`pr N`: the unmarked head's new id, from a ref and a worktree of its own that are gone afterwards, with main's
-    checkout left where it was; a pull request that registers nothing new, one that doesn't exist and a number that isn't
-    one export nothing."""
-    pod.commit("main", {REGISTRY: A})
+def test_the_one_off_exports_only_the_pull_requests_new_ids_and_leaves_the_clone_as_it_was(pod):
+    """`pr N`: a registry cut to the one id the head registers and main doesn't, in a worktree at the head that holds that
+    registry and the one tracked fixture, exported as main's is, with main's code from main's checkout. The ref and the
+    worktree are gone afterwards. A pull request that registers nothing new, one whose registry can't be read, one that
+    doesn't exist and a number that isn't one export nothing."""
+    pod.commit("main", {REGISTRY: A | B})
     assert pod.run("once").returncode == 0
-    head = pod.pr(7, {REGISTRY: A | C})
+    head = pod.pr(7, {REGISTRY: A | B | C, "tools/research/src/research/__main__.py": "raise SystemExit('a head runs nothing')\n"})
     pod.pr(8, {"README": "no fixture\n"})
+    pod.pr(9, {REGISTRY: "<<<<<<< ours\n{}\n"})
     p = pod.run("pr", "7")
     assert p.returncode == 0, p.stdout + p.stderr
-    (one,) = pod.heads_calls()
-    assert one["head"] == head and one["registry"] == pod.registry(C)
-    assert one["argv"][-3:] == ["--repo", one["repo"], "--no-previous"] and one["files"] == [REGISTRY, "pkg/fixtures/c.bin"]
+    main, (one,) = pod.calls()[0], pod.pr_calls()
+    assert one["head"] == head and one["registry"] == pod.registry(C), "only what main lacks"
+    assert one["files"] == [REGISTRY, "pkg/fixtures/c.bin"], "nothing else of the head is checked out"
+    assert one["argv"][:8] == main["argv"][:8] and one["argv"][8:] == ["--repo", one["repo"], "--no-previous"]
+    assert one["cwd"] == main["cwd"] == str(pod.clone / "tools" / "research") and one["pythonpath"] == "src", "main's code"
     assert f"pr 7 at {head[:9]}: 1 new id(s) against main {pod.main[:9]}\n  {pod.ids['c']}  pkg/fixtures/c.bin\n" in p.stdout
-    assert pod.clean() and git("rev-parse", "HEAD", cwd=pod.clone) == pod.main and not git("for-each-ref", "refs/export/pr/", cwd=pod.clone)
+    assert f"pr 7 at {head[:9]}: export rc=0\n" in p.stdout and pod.clean()
     p = pod.run("pr", "8")
-    assert p.returncode == 0 and "registers nothing that main" in p.stdout and len(pod.heads_calls()) == 1
+    assert p.returncode == 0 and "registers nothing that main" in p.stdout, p.stdout + p.stderr
+    p = pod.run("pr", "9")
+    assert p.returncode == 1 and f"pr 9: {REGISTRY} is not JSON" in p.stdout, p.stdout + p.stderr
     assert pod.run("pr", "99").returncode == 1 and pod.run("pr", "seven").returncode == 2 and pod.run("pr").returncode == 2
-    assert len(pod.heads_calls()) == 1 and pod.clean()
+    assert len(pod.pr_calls()) == 1 and pod.clean()
+
+
+def test_the_one_off_exports_no_id_mains_registry_has_ever_named(pod):
+    """Main registered `b` once and has dropped it. A head that branched before the drop still holds `b`, and another,
+    branched after it, registers `b` again: `b` is in each registry and not in main's, but main has named it, so it is
+    no head's to export. Only `c`, which the first added, is exported."""
+    pod.commit("main", {REGISTRY: A | B})
+    pod.pr(7, {REGISTRY: A | B | C})
+    pod.commit("main", {REGISTRY: A})
+    pod.pr(9, {REGISTRY: A | B})
+    assert pod.run("once").returncode == 0
+    p = pod.run("pr", "7")
+    assert p.returncode == 0 and [c["registry"] for c in pod.pr_calls()] == [pod.registry(C)], p.stdout + p.stderr
+    p = pod.run("pr", "9")
+    assert p.returncode == 0 and "registers nothing that main" in p.stdout and len(pod.pr_calls()) == 1, p.stdout + p.stderr
+
+
+def test_a_head_whose_new_entries_lead_out_of_its_worktree_is_refused_whole(pod):
+    """A new entry at a path outside the repository, or at a link the head tracks, would have the export hash the pod's
+    own files. Neither head gets an export, not even of the good new id it registers beside the bad one."""
+    pod.commit("main", {REGISTRY: A})
+    assert pod.run("once").returncode == 0
+    secret = pod.root / ".config" / "verity" / "r2.env"
+    for n in (5, 6):
+        pod.pr(n, {REGISTRY: A | C})
+    good = pod.registry(A | C)
+    link = pod.pr(5, {REGISTRY: json.dumps(good | {"art:" + "5" * 64: "pkg/fixtures/link"}), "pkg/fixtures/link": secret})
+    out = pod.pr(6, {REGISTRY: json.dumps(good | {"art:" + "6" * 64: "../../root/.config/verity/r2.env"})})
+    for n, at, why in ((5, link, "pkg/fixtures/link is a link, which the export would follow out of the worktree"),
+                       (6, out, "its registry names a path outside the repository (../../root/.config/verity/r2.env)")):
+        p = pod.run("pr", str(n))
+        assert p.returncode == 1 and f"pr {n} at {at[:9]}: 2 new id(s)" in p.stdout and f"pr {n} at {at[:9]}: {why}" in p.stdout, p.stdout
+    assert pod.pr_calls() == [] and pod.clean()
 
 
 def test_the_one_offs_dry_run_names_the_ids_and_sends_nothing(tmp_path):
     """With the real `research data export` and a directory as the public export: `pr N --dry-run` names the head's two new
     ids, one tracked and one fetched, and the export stays empty; without --dry-run those two land there and main's don't,
-    since the one-off passes only the head's."""
+    since the one-off passes only the head's, and a second run sends no object. Nothing in the head's tree ran, though it
+    holds a `research` of its own."""
     pod = Pod(tmp_path, real=True)
     pod.commit("main", {REGISTRY: A | B})
-    head = pod.pr(7, {REGISTRY: A | B | C | D})
+    ran = tmp_path / "ran"
+    head = pod.pr(7, {REGISTRY: A | B | C | D,
+                      "tools/research/src/research/__init__.py": f"open({str(ran)!r}, 'w').close()\n",
+                      "tools/research/src/research/__main__.py": f"open({str(ran)!r}, 'w').close()\n"})
     git("clone", "-q", "--filter=blob:none", f"file://{pod.origin}", str(pod.clone), cwd=pod.tmp)
     p = pod.run("pr", "7", "--dry-run")
     assert p.returncode == 0, p.stdout + p.stderr
@@ -408,29 +307,8 @@ def test_the_one_offs_dry_run_names_the_ids_and_sends_nothing(tmp_path):
     assert "(dry run): 2 id(s)" in p.stderr and "export rc=0 (dry run: nothing sent)" in p.stdout
     assert not [f for f in pod.public.rglob("*") if f.is_file()], "a dry run sent something"
     assert pod.clean()
-    p = pod.run("pr", "7")
-    assert p.returncode == 0 and pod.public_names() == {"c", "d"}, p.stdout + p.stderr
-    assert pod.clean()
-
-
-def test_a_pass_sends_mains_fixtures_and_a_marked_heads_and_the_next_pass_sends_nothing(tmp_path):
-    """With the real `research data export`: main's two fixtures and the marked head's two reach the public export, the
-    unmarked head's doesn't, and nothing in the head's tree ran, though it holds a `research` of its own. A second pass
-    sends no object: the export's record of what landed covers main's ids and the head's."""
-    pod = Pod(tmp_path, real=True)
-    pod.commit("main", {REGISTRY: A | B})
-    ran = tmp_path / "ran"
-    head = pod.pr(7, {REGISTRY: A | B | C | D,
-                      "tools/research/src/research/__init__.py": f"open({str(ran)!r}, 'w').close()\n",
-                      "tools/research/src/research/__main__.py": f"open({str(ran)!r}, 'w').close()\n"})
-    pod.pr(8, {REGISTRY: A | B | {"e": "fetched/e.bin"}})
-    pod.mark(7, head)
-    p = pod.run("once")
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert pod.public_names() == {"a", "b", "c", "d"} and not ran.exists()
     sent = r"export to \S+: (\d+) id\(s\), \d+ blob\(s\); uploaded (\d+) object"        # a manifest and a blob for each id
-    assert re.findall(sent, p.stderr) == [("2", "4"), ("2", "4")], p.stderr
-    p = pod.run("once")
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert re.findall(sent, p.stderr) == [("2", "0"), ("2", "0")], p.stderr
-    assert pod.public_names() == {"a", "b", "c", "d"} and pod.clean()
+    for uploaded in ("4", "0"):                             # the export's record of what landed covers a one-off's ids too
+        p = pod.run("pr", "7")
+        assert p.returncode == 0 and re.findall(sent, p.stderr) == [("2", uploaded)], p.stdout + p.stderr
+        assert pod.public_names() == {"c", "d"} and not ran.exists() and pod.clean()

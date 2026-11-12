@@ -67,8 +67,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "tools/research/src/research/store/labels_sync.py",
           # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)
           "infra/control/vy-control-gate", "infra/control/door_setup.sh",
-          # the fixture export's loop and its passes over pull requests, tested here with the export they run
-          # (`research data export`) and the ready marks they read as the queue does
+          # the fixture export's loop and its one-off over a pull request, tested here with the export they run
+          # (`research data export`)
           "infra/control/fixtures_export.sh", "infra/control/fixtures_export.py",
           "tools/research/src/research/store/fixtures.py", "tools/research/src/research/store/fetchset.py",
           "tools/research/src/research/at_main.py", "tools/research/src/research/guard_notice.py"]
