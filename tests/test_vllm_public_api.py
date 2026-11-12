@@ -438,6 +438,6 @@ def test_the_scan_sees_each_form_and_the_tree():
     got = {(s.module, s.name) for s in _sites_in("x.py", text)}
     assert got == {("verity_vllm.engine.handle", None), ("verity_vllm", "LLM"), ("verity_vllm.protocols", None),
                    ("verity_vllm.config", "_x"), ("verity_vllm.llm", None), ("verity_vllm.config", None), ("verity_vllm.llm", "LLM")}
-    assert ("benchmarks/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
+    assert ("benchmarks/harness/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
     assert not any(s.file.startswith(INTEGRATION) for s in sites())
     assert all((ROOT / f).is_file() for f in NOT_SCANNED)

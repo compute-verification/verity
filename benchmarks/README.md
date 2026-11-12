@@ -60,7 +60,7 @@ results.
 
 `benchmarks/harness/verity_bench` (the distribution `verity-bench`) is the shared harness. It measures what an arm, a
 protocol option or an experimental install, adds to served inference against stock vLLM, through the vLLM
-integration's public interfaces. A spec in `benchmarks/specs/` names a preset, its arms and its sweep, and expands to
+integration's public interfaces. A spec in `benchmarks/harness/specs/` names a preset, its arms and its sweep, and expands to
 points, each with an identity. `verity-bench run SPEC` records one run per point without a passing run, `check` passes
 only when every point has one, `compare` and `table` accept results only when their identities agree, and
 `served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
@@ -120,8 +120,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
-| `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
+| `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
