@@ -51,7 +51,6 @@
     {"file": "benchmarks/network_traces/torch_loop_stub.py", "count": 2},
     {"file": "benchmarks/network_traces/warden_chain.py", "count": 1},
     {"file": "benchmarks/network_traces/warden_serve.py", "count": 6},
-    {"file": "benchmarks/numerical/python/verity_numerical/bench/contract.py", "count": 3},
     {"file": "benchmarks/numerical/python/verity_numerical/bench/generate.py", "count": 1},
     {"file": "benchmarks/numerical/python/verity_numerical/bench/instances_gen.py", "count": 4},
     {"file": "benchmarks/numerical/python/verity_numerical/bench/placement.py", "count": 5},

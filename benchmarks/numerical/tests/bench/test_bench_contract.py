@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
+import shutil
+import subprocess
+from collections.abc import Callable
 
 import pytest
 
@@ -211,6 +215,19 @@ def test_joint_is_canonical_and_checked() -> None:
     assert contract.unit_of("t.joint.witness+lookup") == "s" and contract.unit_of("t.joint.witness") is None and contract.unit_of("cycles.x") is None
 
 
+def test_a_malformed_joint_has_no_unit_and_parse_joint_says_why() -> None:
+    """`unit_of` answers None for every joint name `parse_joint` refuses, whatever is wrong with it, and a joint written
+    in another order of its buckets has seconds."""
+    malformed = {"t.joint.witness": "at least two", "t.joint.witness+fri": "not \\['fri'\\]",
+                 "t.joint.witness+witness": "each bucket once", "t.joint.": "not \\[''\\]"}
+    for name, why in malformed.items():
+        assert contract.unit_of(name) is None, name
+        with pytest.raises(ValueError, match=why):
+            contract.parse_joint(name)
+    assert contract.unit_of("t.joint.lookup+witness") == "s"
+    assert contract.parse_joint("t.joint.lookup+witness") == ("witness", "lookup")
+
+
 def test_measurement_supplies_and_checks_units() -> None:
     assert contract.measurement("t.total", 1.5) == {"name": "t.total", "value": 1.5, "unit": "s"}
     assert contract.measurement("transcript.bytes", 10) == {"name": "transcript.bytes", "value": 10, "unit": "B"}
@@ -256,6 +273,82 @@ def test_probe_hardware_shape() -> None:
     hw = contract.probe_hardware()
     assert set(hw) == {"gpu", "cpu"}
     assert contract._validate_hardware(hw) == []
+
+
+class NoCpuinfo:
+    """Stands in for ``pathlib.Path`` on a machine with no ``/proc/cpuinfo``."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+
+    def read_text(self) -> str:
+        raise FileNotFoundError(self.path)
+
+
+def tools(monkeypatch: pytest.MonkeyPatch, present: tuple[str, ...], answer: Callable[[list[str]], str]) -> list[list[str]]:
+    """Put ``present`` on the path of `contract.probe_hardware`, with ``answer`` (a command's output, or what running it
+    raises) in place of the tools, and no ``/proc/cpuinfo``.  The commands it ran."""
+    ran: list[list[str]] = []
+
+    def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        assert cmd[0] in present and kwargs["text"] and kwargs["capture_output"], cmd
+        ran.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout=answer(cmd), stderr="")
+
+    monkeypatch.setattr(shutil, "which", lambda tool: f"/usr/bin/{tool}" if tool in present else None)
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(contract, "Path", NoCpuinfo)
+    return ran
+
+
+def test_probe_hardware_runs_no_tool_that_is_absent(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    ran = tools(monkeypatch, (), lambda cmd: "")
+    with caplog.at_level(logging.WARNING, logger=contract.__name__):
+        assert contract.probe_hardware() == {"gpu": None, "cpu": None}
+    assert ran == [] and caplog.records == []
+
+
+def test_probe_hardware_reads_what_the_tools_answer(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    def answer(cmd: list[str]) -> str:
+        if cmd[0] == "sysctl":
+            return "Apple M3 Max\n16\n"
+        return "RTX PRO 6000, 580.65, 97887\nRTX PRO 6000, 580.65, 97887\n" if len(cmd) > 1 else "| CUDA Version: 12.9 |\n"
+
+    ran = tools(monkeypatch, ("nvidia-smi", "sysctl"), answer)
+    with caplog.at_level(logging.WARNING, logger=contract.__name__):
+        hw = contract.probe_hardware()
+    assert hw == {"gpu": {"name": "RTX PRO 6000", "driver": "580.65", "cuda": "12.9", "count": 2, "memory_total_bytes": 97887 << 20},
+                  "cpu": {"model": "Apple M3 Max", "count": 16}}
+    assert [cmd[0] for cmd in ran] == ["nvidia-smi", "nvidia-smi", "sysctl"] and caplog.records == []
+    assert contract._validate_hardware(hw) == []
+
+
+@pytest.mark.parametrize("fault", [PermissionError(13, "Permission denied"), subprocess.TimeoutExpired("tool", 10.0),
+                                   UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")], ids=lambda e: type(e).__name__)
+def test_probe_hardware_warns_of_a_tool_it_could_not_read(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+                                                          fault: Exception) -> None:
+    """A tool that is there and cannot be run, or prints what cannot be decoded, leaves the field None as an absent one
+    does, and says so: an absent GPU and an unreadable one are different findings about the machine."""
+    def answer(cmd: list[str]) -> str:
+        if cmd[0] == "nvidia-smi":
+            raise fault
+        return "Apple M3 Max\n16\n"
+
+    tools(monkeypatch, ("nvidia-smi", "sysctl"), answer)
+    with caplog.at_level(logging.WARNING, logger=contract.__name__):
+        assert contract.probe_hardware() == {"gpu": None, "cpu": {"model": "Apple M3 Max", "count": 16}}
+    assert [(r.levelname, r.name) for r in caplog.records] == [("WARNING", contract.__name__)]
+    assert "nvidia-smi" in caplog.text and type(fault).__name__ in caplog.text and "recorded as None" in caplog.text
+
+
+def test_probe_hardware_warns_of_a_sysctl_it_could_not_run(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    def answer(cmd: list[str]) -> str:
+        raise PermissionError(13, "Permission denied")
+
+    tools(monkeypatch, ("sysctl",), answer)
+    with caplog.at_level(logging.WARNING, logger=contract.__name__):
+        assert contract.probe_hardware() == {"gpu": None, "cpu": None}
+    assert [r.levelname for r in caplog.records] == ["WARNING"] and "sysctl" in caplog.text and "PermissionError" in caplog.text
 
 
 # --- comparability -----------------------------------------------------------------------------------------------------
@@ -575,7 +668,7 @@ def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> 
               software={"backend": {"name": "b", "commit": None}, "toolchain": {}}, preprocessing="none", retention="retained",
               instances=None, subcircuit="silu-mul/i8192")
     assert contract.fingerprint(domain="total", **kw)["domain"] == "total"
-    with pytest.raises(ValueError, match="pre-2026-09-27 hardcode"):
+    with pytest.raises(ValueError, match="domain 'finite' is what older results hardcoded"):
         contract.fingerprint(domain="finite", **kw)
     old = {**contract.fingerprint(domain="finite-only", **kw), "domain": "finite"}
     assert contract.validate_fingerprint(old) == [] and contract.identity(old)["domain"] == "finite-only"
