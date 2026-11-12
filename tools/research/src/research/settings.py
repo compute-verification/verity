@@ -7,5 +7,7 @@ import os
 
 def train_trees() -> str | None:
     """TRAIN_TREES: where a lander's worktrees go instead of TMPDIR (train.sh's, drive's auto plans', the after-landing
-    command's); the control pod's loop sets it to its local disk only while that has room.  Unset or empty, None."""
+    command's); the control pod's `infra/control/drive.sh` and the Nebius loop's
+    `tools/research/src/research/pods/nebius/vqueue/loop.sh` always set it, to a directory on a local disk whose old trees
+    they sweep.  Unset or empty, None."""
     return os.environ.get("TRAIN_TREES") or None

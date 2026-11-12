@@ -307,8 +307,8 @@ def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_
 
 
 def test_the_after_landing_tree_goes_under_train_trees_when_set_else_in_the_temporary_directory(tmp_path, monkeypatch):
-    """On the control pod TMPDIR is a network volume, where the tree's add took minutes; TRAIN_TREES, which the loop sets only
-    while its local disk has room, takes it there, as it takes train.sh's, and TMPDIR stays where it is."""
+    """On the control pod TMPDIR is a network volume, where the tree's add took minutes; TRAIN_TREES, which the loops set to a
+    local disk, takes it there, as it takes train.sh's, and TMPDIR stays where it is."""
     import tempfile
 
     repo, tmp, trains = tmp_path / "repo", tmp_path / "tmpdir", tmp_path / "fast" / "trains"
