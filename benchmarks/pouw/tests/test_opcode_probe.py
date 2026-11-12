@@ -17,7 +17,7 @@ import pytest
 
 POUW = Path(__file__).resolve().parents[1]
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
-MACHINE_MODEL = Path(__file__).resolve().parents[1] / "machine_model"
+MACHINE_MODEL = Path(__file__).resolve().parents[2] / "machine_model"
 
 
 def _load(name: str, path: Path):
