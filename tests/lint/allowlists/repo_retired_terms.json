@@ -690,6 +690,7 @@
     {"file": "security/Proofs/Flock/Claims/Bridge/Returns.lean", "count": 59},
     {"file": "security/Proofs/Flock/Claims/Bridge/Transport.lean", "count": 2},
     {"file": "security/Proofs/Flock/Claims/CanonEq.lean", "count": 6},
+    {"file": "security/Proofs/Flock/Claims/ChargeOnce.lean", "count": 5},
     {"file": "security/Proofs/Flock/Claims/Complete/Count.lean", "count": 2},
     {"file": "security/Proofs/Flock/Claims/Complete/Files.lean", "count": 25},
     {"file": "security/Proofs/Flock/Claims/Complete/Json.lean", "count": 1},

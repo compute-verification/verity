@@ -8,15 +8,17 @@ import Proofs.Flock.Claims.Prob
 /-!
 # The monitoring period's step with a charge paid once
 
-`avg_prod_le` (`Periods.lean`) bounds a run's product of adapted factors where each period's factor averages, over
-the period's own coins, at most a bound fixed before them. Here a period's bound may hold one more term: the
-average, over the period's own coins, of a nonnegative charge that reads those coins and the earlier periods'. The
-monitoring period then pays the average, over all its coins, of the charges' sum, once, where the bounds fixed before
-each period's coins multiply (`ex_prod_add_le`). So a quantity the adversary spends across the periods as the earlier
-coins fall (the SHA-512 calls of a prover's budget, say) is charged at its total over the monitoring period, not at
-its largest value in each period.
+`avg_prod_le` (`Soundness/Audit/Periods.lean`) bounds a run's product of adapted factors where each period's factor
+averages, over the period's own coins, at most a bound fixed before them. Here a period's bound may hold one more
+term: the average, over the period's own coins, of a nonnegative charge that reads those coins and the earlier
+periods'. The monitoring period then pays the average, over all its coins, of the charges' sum, once, where the
+bounds fixed before each period's coins multiply (`ex_prod_add_le`). So a quantity the adversary spends across the
+periods as the earlier coins fall (the SHA-512 calls of a prover's budget, say) is charged at its total over the
+monitoring period, not at its largest value in each period.
 
-The averages are `Claims.Ex`, over `ℝ`, where `Periods.lean`'s are `avg`, over `ℝ≥0∞`.
+The averages are `Claims.Ex`, over `ℝ`, where `Periods.lean`'s are `avg`, over `ℝ≥0∞`. The declarations are in that
+module's namespace, and the module is here, with the averages it reads: the audit theorems' directory imports only
+the interaction model, Mathlib and itself.
 
 * `Ex_le_of_forall`: a bound at every sample bounds the average.
 * `Ex_fin_cons`: a uniform run of `T + 1` periods is a uniform period 0 and an independent uniform rest
