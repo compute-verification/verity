@@ -291,7 +291,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         cfg = dict(recs[0]["config"])
         if a.cache == "named":
             cfg["kv_cache_dtype"] = json.loads((out / "serve.json").read_text())["chosen"]["cache_dtype"]
-        due = [{"id": r["request"], "before_step": r["before_step"]} for r in recs if r["kind"] == "arrive"]
+        due = [{"id": r["request"], "before_step": r["before_step"], "after_empty": r.get("after_empty", 0)}
+               for r in recs if r["kind"] == "arrive"]
     model = Path(tempfile.mkdtemp(prefix="fp8-cache-stand-in-"))
     stand_in(model)
     eng = engine(model, cfg, eager=not a.compiled)
@@ -311,7 +312,10 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     def schedule(orig: Any) -> Any:
         def wrapped(*args: Any, **kw: Any) -> Any:
-            while a.phase == "replay" and due and due[0]["before_step"] == trace.scheduled:
+            # a request goes back before the schedule it arrived before: the first at its step, or the one after as many
+            # schedules that scheduled nothing as its arrival says
+            while (a.phase == "replay" and due and due[0]["before_step"] == trace.scheduled
+                   and due[0]["after_empty"] == getattr(trace, "empty", 0)):
                 add(due.pop(0)["id"])
             before = trace.scheduled
             so = orig(*args, **kw)
