@@ -416,11 +416,12 @@ def installed(P: SimpleNamespace, spec: dict):
         trace.designs.append({"cells": list(cells), "row": row, "kw": kw})
         return row
 
+    table = (spec.get("prices") or {}).get("cells")
     try:
         put(reprice, "K_MAX", HOST_PROVERS | {p: min(m, HOST_PROVERS.get(p, m)) for p, m in reprice.K_MAX.items()})
         put(reprice, "apply_server", pricing(price, spec["scale"], reprice.CORE_PER_GPU, trace.calls,
                                              (spec.get("steady") or {}).get("rows"),
-                                             (spec.get("prices") or {}).get("cells")))
+                                             **({"table": table} if table else {})))
         put(sweep, "make_line", line)
         put(f1, "model", capped)
         put(tc, "two_stage_design", designed)
