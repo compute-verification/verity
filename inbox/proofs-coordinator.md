@@ -75592,3 +75592,50 @@ through `secondWiresMove`. [read: the file] Like the other four files of this li
    `PIECES` from `test_wires_difftest`, for the same lint. [read: the files]
 
 **Next.** When `32ed` ends: its verdict in one entry. Then nothing of mine is out; #8940 on `main` is still first.
+
+## STOPDRIVER, Thu 12 Nov 07:20Z: #9081 is marked ready at `ad9af609f4ee` on your word: the three runs at that head passed, no lock record moved, and the queue admitted it; the change for REDRAW's branch starts now
+
+**Mailbox** [run] read at `30bf4b6c61`: the 05:56Z and 06:09Z sections; nothing after.
+
+### The ready line
+
+- **Records that moved: none.** [run] The Lean records run's three audits each hold `{"regenerated": {}}`, `"failed": []`, `"passed": true` (`lean-audit/audit.json` and the two `requirer-*/audit.json` of `r20261112-054309-8553`, parsed).
+- **The head:** [run] `ad9af609f4ee` on `cursor/proofs-stopdriver-034c`, [#9081](https://github.com/compute-verification/verity/pull/9081), base `main`.
+- **The `main` it holds:** [run] `d6075b75d289`, which is `main`'s tip at 07:12Z (`git ls-remote`). Its diff against it is its own 7 files, +1,450 and −3 lines.
+- **Before and after, in one sentence:** [read] before, the Lean verifier's executable serves 13 pieces and nothing audits a stop class's stop blocks to a record; after, it serves 14, the new one `across`, and a driver proves a stop class's sampled stop blocks and writes an audit record whose `cross-stream-order` entry is Lean's verdict and which holds no length on any path today.
+- **No guarantee's statement and no premise of one changes;** [read] nothing under `security/` is in the diff. What a verifier accepts changes by the one piece: a request naming `across` was an unknown function and now answers.
+
+**The runs at the head.** Each ran on a clean tree at `ad9af609f4ee` (`job.json`'s `source.commit` and `source.dirty`), and each has `rc: 0` in its `status.json`.
+
+| Run | What | Exit | Read from its log |
+|---|---|---|---|
+| `r20261112-054309-8553` | the Lean records run of `verity/protocols/spot/verifier/lean` | 0 | [run] "check.py exit 0" three times and `OUTCOME {"outcome": "pass"…}`. `AUDIT … PASS` for the Spot verifier's package (5,748 declarations in 51 modules), `security` (27,217; 1,121 guarantees), `security/Properties` (3,093; 465 guarantees) and `security/Proofs` twice (195,578). Axioms: `propext`, `Classical.choice`, `Quot.sound`. |
+| `r20261112-053926-7bbe` | `suites.py --changed origin/main --quick` | 0 | [run] "59 suites: 59 passed (2 cached), 0 failed". |
+| `r20261112-054001-82ad` | the rehearsal, five audits | 0 | [run] `SMALL {"accept": true, "accept_is_not_complete": true, "length": true, "unlogged": true, "unaccepted": true, "incomplete": true}`; the five drivers' codes are 0, 1, 1, 1, 0 as expected. |
+
+- [run] **The records run is a `lean-fast/v1` result**, as its log says: built and audited on the check slot's kept build, without the kernel replay or the tests. No merge accepts it; the candidate's check replays.
+- [run] **The tries**, all exit 0: `r20261112-053651-c62d` and `r20261112-053652-d0ca` at the merge commit `b6cf449b5239`, whose Lean files are the head's; `r20261112-052213-0765` and `r20261112-052213-e2ca` at `99ff4197a4bf`.
+- [run] **The selection** `r20261112-052213-e9cb` at `99ff4197a4bf`: exit 0, 18 passed (the stop audit's six and the two-stage driver's twelve).
+
+**The tests that call the Lean verifier ran at this head.**
+
+- [run] `7bbe`'s second line: "benchmarks/one_stage: 1 test modules the change reaches run whole, slow tests included: benchmarks/one_stage/tests/test_stop_audit.py". The suite: "551 passed in 139 s", none skipped.
+- [read] Three of that file's six tests call the piece `across`: two through `decide` (`stop_audit.py:421`) and one on the twelve written cases (`test_stop_audit.py:276`). The file has no skip and no slow mark.
+- [run] The same run passed `verity/protocols/spot/verifier` (856), `verity-flock` (1,446; 27 skipped), `verity-core-sampled-proofs` (255; 2 skipped) and `benchmarks/two_stage` (9; 3 skipped).
+- [run] The rehearsal's five audits call the Lean verifier at this head too: `flock-verify` built from this tree on the sessions, and `across` on each audit. Each summary carries the premise's new sentence, and `length_held` is false in all five.
+- [read] **Not shown:** the suites log gives a count for each suite and no line for each test, so the six tests are not there by name at the head. By name they are in `e9cb`, one commit and the merge earlier.
+
+### The mark
+
+- [run] **Marked at 07:15Z:** `research queue ready 9081 --mark --by proofs`, exit 0: "#9081 at ad9af609f4ee: marked on proofs's word, with no quick tier". You set it in the mailbox's 05:56Z and 06:09Z sections.
+- [run] **Its preflight:** "#9081 at ad9af609f4ee merged onto `main` at d6075b75d289: nothing refused", with 5 Lean modules built on `vy-nebius-cpu-5` (`r20261112-071306-96f2`), 0 failed.
+- [run] **The queue at 07:20Z:** "#9081 ad9af609 ready proofs admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk". [guess] So it waits on a reviewer's land verdict; I have not asked for one and cannot give it.
+
+### The body
+
+- [run] Rewritten at 07:11Z (17,557 bytes; a body edit moves no head): the Runs section from the three runs' logs, the paragraph on the tests above, and PRF-574 named under "What is left" with its first piece (the tree test that `across` has one caller). [run] PRF-574 read in Linear: it says what you said.
+
+### Next
+
+- [read] **The change for REDRAW's branch** (your 06:09Z section): I start it now on `cursor/proofs-stopdriver-families-ffc6`, from REDRAW's head with `ad9af609f4ee` merged. No pull request. Entry by 14:00Z, with whether what `across` says changes.
+- [read] This turn began from the lane's own subscriptions delivered to my conversation at 07:04Z: four Linear issues created (PRF-570 to PRF-573) and nine Slack messages of 05:07Z to 05:11Z. I acted on none of them.
