@@ -352,3 +352,21 @@ def test_a_tp_pair_takes_its_coins_after_the_root_over_its_ranks(tmp_path, monke
     assert coins.close() is None
     auditor.end(coins.reserved["session"])
     assert _reason(auditor, [theirs], [root], coins.reserved["session"]) is None
+
+
+@pytest.mark.parametrize(("change", "theirs"), [
+    ({"scheme": "another-scheme"}, "another-scheme "),
+    ({"families": [["positions", 1]]}, f"{CC.SCHEME_TAG} \\[\\('positions', 1\\)\\]"),
+])
+def test_a_challenger_whose_coins_are_not_the_ones_reserved_is_refused_by_name(tmp_path, monkeypatch, change, theirs):
+    """The Commit reads the challenger's commitment when it opens its challenge phase, before any coin: one of another
+    scheme, or of other families than a coin of each a run, is refused with both sides named, and the phase is closed."""
+    auditor = _Auditor(tmp_path, monkeypatch)
+    coins = CC.of_options(_options(), 1, gate_run=auditor.run)
+    session = auditor.sessions[coins.reserved["session"]]
+    session.update(change)
+    with pytest.raises(CoinError, match=f"the challenger's coins are {theirs}.*, not the Commit's {CC.SCHEME_TAG} "):
+        CC.positions(SimpleNamespace(run_root=_root("run 0"), extra={}), coins)
+    assert coins.client is None and coins.close() is None
+    session["thread"].join()
+    assert session["reason"] is None
