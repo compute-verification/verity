@@ -33,6 +33,8 @@ POS = (3, 3, 0, 2, 1, 3)
 TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LAW = {"law": "subset", "k": 2}
+#: the sample the audit record's tests hand it: units 1 and 4 of six
+SAMPLE = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
 #: a 16-bit registration's root: three 64-word rows, salts 01.., 02.., 03..
 ROOT_16 = ("511a71aa555f05f2b992997f7d6fe2af8e225c2a378ace51d54c18642f73193e"
@@ -732,7 +734,7 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
-    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    d = SAMPLE
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
     ok = audit.audit_record(*args, session_registered={"W": reg.root.hex()})
@@ -759,7 +761,7 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
-    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    d = SAMPLE
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64, "registered": {"w": {"value": "W", "root": reg.root.hex()}}}
     assert audit.session_registered({"lean": lean}) == {"W": reg.root.hex()}
     for v in ({**lean, "accepted": False}, {**lean, "accepted": None}, {**lean, "of_record": False}, {**lean, "registered": None},
@@ -1291,7 +1293,7 @@ def test_the_audit_record_holds_a_certified_value_to_a_reported_read():
     (value, mine), = CERTIFIED.items()
     rec = {**served, "registered": [{"value": value, **mine}]}
     assert R.check(rec, lone, Q, **design, ports=ports, certified=CERTIFIED).ok
-    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    d = SAMPLE
     base = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     read = {**base, "registered": {"rows.0": {"value": value, "root": mine["root"]}}}
     renamed = {**base, "registered": {"rows.0": {"value": "unlisted", "root": "ab" * 64}}}

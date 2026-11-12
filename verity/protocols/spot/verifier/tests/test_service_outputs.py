@@ -117,10 +117,11 @@ def _refused(f) -> tuple[str, ...]:
     return e.value.verdict.codes
 
 
-def _close(stream: S.Stream, reg: S.WindowCommitmentRecord, registered: Mapping[str, str] | None = None) -> S.Outcome:
+def _close(stream: S.Stream, reg: S.WindowCommitmentRecord, registered: Mapping[str, str] | None = None,
+           verdicts: Mapping | None = None) -> S.Outcome:
     draw = stream.select(reg)
     assert stream.deliver(draw, [SESSION]) is None
-    return stream.outcome(draw, _lean(registered), {"statement": "stub"})
+    return stream.outcome(draw, _lean(registered) if verdicts is None else verdicts, {"statement": "stub"})
 
 
 def _three_windows(stream: S.Stream) -> str:
@@ -229,12 +230,10 @@ def test_a_stream_holds_a_certified_value_to_a_reported_read():
         stream = _stream(_spec((STATE, ROWS)))
         cand, ports = _window(0, None, [ROWS_ENTRY])
         reg = stream.register(cand, ports, certified=CERTIFIED)
-        draw = stream.select(reg)
-        assert stream.deliver(draw, [SESSION]) is None
         verdicts = _lean()
         if reads is not None:
             verdicts["lean"]["registered"] = reads
-        outcome = stream.outcome(draw, verdicts, {"statement": "stub"})
+        outcome = _close(stream, reg, verdicts=verdicts)
         checks = stream.records[-1]["audit"]["checks"]
         assert not outcome.accepted and not stream.records[-1]["audit"]["accepted"]
         assert checks["certified"] == {"ok": False, "codes": ["certified"],
