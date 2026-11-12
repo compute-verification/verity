@@ -68066,3 +68066,74 @@ Still running: #8893 at its new head, #9051 with each of #8950, #9066 and #8878,
 1. (A) or (B) is still yours to overrule: (B) is what is built.
 2. The goal line in the body. PRF-477 is labelled `proofs/spot-128k-attention-proved`, and that is what I have put; the sibling refusals of round 2 used `proofs/spot-two-stage-sound`. Say if it should be the other.
 3. From step 1, still open: whether "one session answers any number of registration digests" is known, and whose it is. This refusal does not close it.
+
+## LAND2, Thu 12 Nov 02:40Z: #8915's restated statement elaborates on its one file (`r20261112-020536-6af2`, lean exit 0, no axiom beyond the three); its only premise on SHA-512 is `Claims.ExpectedCR` at three machines; the lock's record would name four constants and no new one; one records run is out at that head; not on #8915's branch, not marked
+
+This is the 04:00Z entry. Tags: [run] a run's output I fetched, [read] a file at the place named, [derived] my reading of the checker's rule, [guess].
+
+**0. A correction to my 02:25Z entry first.** The three test runs it named at the new heads of #8878, #8893 and #8904 tested nothing: I put two suites' test files in one `pytest` call, where `test_figure1.py` cannot import the figures' modules (`r20261112-021744-6673` and `r20261112-021814-cc7d` exit 2 at collection, "No module named 'cards'"; I cancelled `r20261112-021901-8963` before it started). Launched again at 02:34Z with one call a file: #8878 `r20261112-023354-bdd5` (cpu-3), #8893 `r20261112-023420-34ed` (cpu-7), #8904 `r20261112-023445-e785` (cpu-13, no Lean in it). The three bodies name these. The suite run on the merged tree, `r20261112-021626-449a`, was not affected and is running.
+
+**1. Where it is.** Branch `cursor/proofs-firsthit-ks-restate-c416`, head `bfe0225d021d`: #8915's head `3468c5485255`, merged with `cursor/proofs-finder-b3a4` at `0188ed442e8d` (which holds `main` at `be9a3d566905`; no conflict), then one commit of three files: `security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean` (the statement and its proof), the nontrivial witness's docstring, and `security/lean-audit.json`. Nothing is pushed onto #8915's branch, and I marked nothing.
+
+**2. The restated statement, as text** (`Flock.Guarantees.SpotFirstHitTwo`) [read: the file at `bfe0225d021d`]:
+
+> Take SPOT[Flock]'s own two-stage verifier at a held state whose session frame is built (`SpotFlock.Built`) and where each value has one address (`SpotFlock.Addresses`), any statement in the two-stage scope (`CompiledTwo.Scope`) and any prover. Suppose SHA-512 meets the linear expected-time bound (`Claims.ExpectedCR`) at three machines made from that prover: `B_conf,X`; the by-class first-hit finder under the statement's roots, at every number `K` of tries it stops at; and the by-class first-hit finder under the interior roots, at every `K`. Then the verifier accepts while its sample holds a proof block incorrect at the boundary trace read at the statement with probability at most
+> `ε = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256`, where `c_R = T·(1 + e_s·N_s) + n_PU·openCalls` and `c_F = T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`,
+> and the threshold form and the headline hold at that `ε` (`CompiledTwo.FirstHitTwoXAt`, unchanged).
+
+`T` is the most SHA-512 calls one run of this prover makes, both parties' calls counted (`Compiled.runCalls`). `N_s`, `K_s`, `K_m` are three expectations over the run's coins: the sessions of a run's sample, the classes of the gates the sample needs, and the classes' representatives its sessions need, session by session. A proof block needs the gates its reveal opens, and a gate's class is its key's. The statement fixes all of these by equations, as it already fixed the verifier `L`; none is a hypothesis on the prover, and it takes no bound on a mass of the prover's runs.
+
+```lean
+def SpotFirstHitTwo : Prop :=
+  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Addresses h →
+    ∀ L, L = SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
+        SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h) →
+      ∀ x s Pt d, L.Scope x → L.parse x = some s → L.partition s = some Pt → L.two s = some d →
+        ∀ needs : ℕ → Finset ℕ,
+          needs = (fun u => (SpotFlock.Reveal.needs (SpotFlock.partition h) s u).toFinset) →
+        ∀ cls : Fin (L.nG x) → Fin (L.nG x),
+          cls = Verity.FirstHit.clsOf (fun g : Fin (L.nG x) => SpotFlock.gateKey h s Pt d g.val) →
+        ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+          ExpectedCR FlockDeploy.sha512
+              (Claims.SamplingGeneric.Compiled.BconfX FlockDeploy.sha512 L.toCompiled Ω P x) →
+            (∀ K : ℕ, ExpectedCR FlockDeploy.sha512
+              (L.toCompiled.finderXCls FlockDeploy.sha512 P x s needs cls K)) →
+            (∀ K : ℕ, ExpectedCR FlockDeploy.sha512
+              (L.finderICls FlockDeploy.sha512 P x s d.part needs cls K)) →
+          ∀ T : ℕ, T = L.toCompiled.runCalls FlockDeploy.sha512 x P →
+          ∀ Ns : ℝ, Ns = Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+              ((L.toCompiled.firstSlots x (L.checked x r)).card : ℝ)) →
+          ∀ Ks : ℝ, Ks = Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+              (((L.toCompiled.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ)) →
+          ∀ Km : ℝ, Km = Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+              (L.toCompiled.sessCountIn x needs (fun l => (L.toCompiled.sampleNeeds x needs l).image cls)
+                (L.checked x r) : ℝ)) →
+            L.FirstHitTwoXAt FlockDeploy.sha512 x s Pt d P (L.toCompiled.runCost x T Ns)
+              (L.toCompiled.firstHitCost x T Ns Ks Km)
+```
+
+- The proof is the form's theorem `CompiledTwo.ksFirstHitTwoX` at the code, with its three bounds supplied by the three lemmas of that branch (`SpotFlock.code_bconfX_le_at`, `code_offRegX_le_cls_at`, `code_offIreg_le_cls_at`) and the binding and the two-stage contract by `SpotFlock.code_contract`. I wrote no lemma of my own. The form (`TwoFirstHitKS.lean`) is unchanged, so `BconfXLe`, `OffRegXLe` and `OffIregLe` remain as definitions the form reads and are no guarantee's premise.
+- A choice of mine you may want otherwise: I bound `needs`, `cls`, `T` and the three expectations by equations in the statement, as it binds `L`, where the sibling guarantee on `cursor/proofs-finder-7c1e` names them through definitions of its own (`SpotFlock.needsAt`, `SpotFlock.clsAt`, `SpotFlock.εoneWaitAt`). Mine adds no definition and shows every quantity in the statement; theirs is shorter to read. [derived] Both give the same record.
+- The two docstrings say "replay limit" where review-23 found the retired word (lines 11 and 32 of the old file). [run, on my VM] `tests/test_retired_terms.py` at this head: 23 passed, and none of its 4 warnings names a file this commit changes. The statement still writes `SpotFlock.cap h`, a name `main` declares, as before.
+
+**3. What the lock's record then names** [derived: `premiseHead` in `tools/verity/lean/Facts.lean` goes past a hypothesis's binders to its head, so `∀ K, ExpectedCR …` is named as `Claims.ExpectedCR`, and an equation names nothing; the record of `Claims.SamplingGeneric.compilerKSRegAt` on `main` lists `Claims.ExpectedCR` under `open` the same way. No records run has ended at this head.]
+
+- `domain`: `SpotFlock.Built`. `open`: `Claims.ExpectedCR` (LEAN-186, due 30 Nov; also in `trust.base` as SHA-512's collision resistance at one finder), `Claims.SamplingGeneric.CompiledTwo.Scope` (LEAN-186), `SpotFlock.Addresses` (PRF-460). These are the four names FINDER's 02:11Z entry expects of `SpotOneWaitTwo`'s record, derived there too.
+- The three entries #8915 added under `open` (`CompiledTwo.BconfXLe`, `OffRegXLe`, `OffIregLe`, PRF-524) are removed, by hand, in this commit. So against `main` the lock gains the guarantee, its witness, its `unwitnessed` entry and its `shape.frozen` line, and no premise.
+- `shape.frozen`'s line for the guarantee is rewritten, by hand, to say what the statement now takes.
+- The guarantee's own record in this commit is still the old one (old type hash, the three bounds under its `open`): it is the records run's to regenerate, and I commit what the run keeps.
+- [derived] The statement now reads the two modules of `cursor/proofs-finder-b3a4` (`SamplingGeneric/TwoOffClassAt.lean`, `SpotFlock/OffClassAt.lean`), so a listed guarantee reads them, and that branch's raise of the `Proofs/Flock` limit in `tools/verity/lean/unread-caps.json` (by 2 modules and 11 declarations) is more than is needed once both are in. That only warns.
+
+**4. Whether it elaborates on one file: yes.** [run] `r20261112-020536-6af2` (`verity lean try security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean`, cpu-7, tree `bfe0225d021d`), exit 0, ended 02:27Z: "lean exit 0 in 950 s", "axiom probe: none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". It built the file's imports first (11,096 jobs, among them the two modules above), and no warning names the file. This is elaboration, not the kernel's replay. I did not try the witness file again: only its docstring changed.
+
+**5. What is not done, and one thing to know about the witness.**
+
+- The nontrivial witness (`Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial`) is unchanged: it shows the conclusion's form false at a verifier whose commitment opens nothing, at the costs 0 and 0. The witnesses rule matches it by the conclusion's head, so the lock still accepts it [derived], but it is at costs 0, not at the guarantee's own two expressions at that verifier. I did not restate it. The honest witness is still missing, as for `SpotKSTwo`.
+- No number is claimed. The old body's `2^-173.4` was arithmetic at two costs chosen by hand; the costs are now expressions of the prover and the sample, and this pull request has no numbers lemma for them (the sibling guarantee has one, `εoneWaitAt_le_513`).
+- The body's line that `SpotFlock.Addresses` fails at a connected registration stays.
+
+**6. Next, and what I wait on.**
+
+- [run] The one records run at this head is out: `r20261112-023105-5f15` (`lean_changed.py --records security/Proofs --update`, placed by `--on auto` on cpu-7), waiting for a check slot since 02:32Z. [guess] It ends about 03:45Z: the try left this head's modules in that machine's cache, and #8940's last records run took 58 minutes after its slot [relayed: LAND3's 01:54Z entry].
+- When it ends: I commit the lock it kept on my branch and compare the record with section 3. Then, unless you say otherwise before then, I fast-forward #8915's branch to that head (my branch holds `3468c5485255`, so it is a fast-forward), replace the body, run the quick tier there, and leave it unmarked for you. Two things that push does, so that you can stop it: #8915's diff then shows the four files of `cursor/proofs-finder-b3a4`, whose own pull request is not open yet, and the queue's mark at `3468c5485255` no longer applies.
+- If `cursor/proofs-finder-b3a4` moves past `0188ed442e8d` before its pull request opens, #8915 needs a merge of it and one more records run.
