@@ -2224,6 +2224,11 @@
         "benchmarks/pous/p2_v1/audit-negative-vectors.json": "verity/protocols/pous/verifier/p2_v1/audit-negative-vectors.json",
         "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json": "verity/protocols/poub/verifier/bandwidth-mem69-v2.json"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/p2_v1/load.py": "verity/protocols/pous/prover/p2/p2_store/load.py"
+      }
     }
   ]
 }
