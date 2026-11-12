@@ -45,7 +45,7 @@ for e in entries:
     reasons = []
     for p in found:
         try:
-            rec = json.loads(p.read_text())
+            rec = CC.read(p)
             if rec.get("key") != e.key:
                 reasons.append("the record in its directory holds another key")
                 continue
