@@ -109177,3 +109177,81 @@ None.
 
 - `projection_of` and `play_params` have not compiled.
 - "Proved" here means the try's elaboration and its axiom probe; no full `check.py` has replayed these through the kernel, and no other agent has red-teamed the statements.
+
+## MESSAGES, Thu 23:34Z: a Lean slot made me wait 13 minutes; the frame's prover, `callsLe` and the statements for the messages elaborated in a run except one word (fixed, retry in line)
+
+**In plain words.** `SampledTwo/Messages.lean` holds the prover the strategy is read as, a proof of `CallsLe` from one premise about the verifier, and the statements that make up `MessagesFixed`. On my first try on vy-nebius-2, everything elaborated except one definition, which needed the word `noncomputable`. The fix is pushed and its try is in line. Two of the brief's statements can't be proved as written:
+- `CallsLe` needs a premise that the verifier's SHA-512 calls fit in `V.cost`, since `cost` is declared and nothing ties it to anything.
+- `MessagesFixed` asks the messages to agree at every round below `k`, so it also asks that the run never stops early. That is the accept piece's fact.
+
+Both changes are under NEEDS. Until they are made, I carry each as a named hypothesis with its owner.
+
+Clock: `date -u` read 23:33Z. Mailbox read at 23:15Z, through your 23:07Z message [run]. Branch `cursor/proofs-messages-f55d` at `1ce7516bcc`, which merges TWOLEG at `655af7bb83` [run].
+
+### Runs
+- `r20261112-231552-e227` (vy-nebius-2, tree `61dc498999`): in line from 23:16Z, took slot p3 at 23:30Z, exited 1 [run].
+  - The imports built, and lean ran on the file in 97 s.
+  - One error: `playHist` reads `Live₂.L`, so it must be `noncomputable`. One warning: `push_neg` is deprecated.
+  - Every other declaration elaborated, including the proofs of `stepWith_pLog`, `run_pLog`, `callsLe_of`, `callsLe`, `messagesFixed_of_reached` and `messagesBound_of`.
+  - There is no axiom answer yet: the probe prints none while an error stands on the file's own lines.
+- The retry at `1ce7516bcc`, with `--siblings`, was launched at 23:32Z and is in line on vy-nebius-2. Its run id is printed only once it takes a slot.
+
+### What the file has
+Everything below elaborated in that run [run], apart from the `playHist` fix.
+- **The prover.**
+  - `proverOf pick := ⟨fun _ hist ω => .ret (pick ω hist)⟩`.
+  - `run_pLog`: such a prover makes no SHA-512 call in any run (`pLog = []`), by induction on `stepWith`.
+  - The frame's prover is `prover V θ F c σ place Rd Dg := proverOf (modePick …)`. At each history it sends the most frequent message (`modeOn`) among the plays `place ω r` whose coins `r` agree with the coins the history shows (`Shows`, `shownCoin`). It counts only messages that open the digest `Dg` records for that round in the play at the history's completion (`opening`, `complete`).
+  - `frame V A x θ F c σ place Rd Dg := ⟨place, prover …⟩`.
+- **`CallsLe`.**
+  - `callsLe_of` proves it for any frame whose prover is a `proverOf`, given `VerifierCallsLe`: for every tape and coins, the run's `vLog.length ≤ V.cost θ F c σ`.
+  - `callsLe` is the same fact at my frame.
+- **The rounds the run reaches.**
+  - `MessagesReached` is `MessagesFixed` with `i < (run …).msgs.length` in place of `i < k`.
+  - `RunsThrough`: on `Acc ∧ Good`, if the messages agree at every round the run reaches, the run reaches `k`.
+  - `messagesFixed_of_reached` (proved) gives `MessagesFixed` from those two.
+- **The forking statements.**
+  - `MissAt i`: the first difference is at round `i`.
+  - `ReachedOfRounds`: the union bound over rounds.
+  - `msgFinder i q`: round `i`'s two-continuation finder. It keeps the coins the play's history before `i` shows, resamples the rest (`merge`), and outputs the two openings where they differ.
+  - `MissBound`: round `i`'s miss is at most √(the finder's success), under three premises:
+    - `MsgOpens`: the message the check reads opens the digest the play records.
+    - `DigestBefore`: round `i`'s digest is fixed by the coins the history before `i` shows.
+    - `RunShown`: the verifier's answers depend on the coins only through those they show.
+  - `MessagesBound`: `MessagesFixed` at `Σ_{i<k} √(finder i's success)`, under those three premises and `RunsThrough`. `messagesBound_of` proves it from `ReachedOfRounds` and `MissBound`.
+- **Sizes.** One file of 324 lines with 7 proved theorems [run]. Left to prove [derived]:
+  - `ReachedOfRounds`, a union bound;
+  - `MissBound`, the forking lemma, which is most of the work;
+  - `RunShown` for `SpotFlock.V`.
+
+  Expected: `callsLe` and round 1's message compiled by 07:00Z; `MissBound` by Fri 18:00Z [guess].
+
+### STOP RULE
+Nothing touched: no guarantee, lock, named assumption, accept or `Sampled.lean`. `git diff --stat origin/cursor/proofs-twoleg-c5e5` shows only `Messages.lean` and one lakefile line [run].
+
+### NEEDS
+1. **TWOLEG: `CallsLe` as written can't be proved at an arbitrary `Vocab`.**
+   - Counterexample [derived]: a vocabulary whose `cost` is `0`. `SpotFlock.V` hashes in the statements' round (`stmtOk`), so any run that reaches that round has a non-empty `vLog`.
+   - Smallest change: `ProjectionOf` takes `VerifierCallsLe V A x θ F c σ Fr.P` (the run's `vLog.length ≤ V.cost`) as a premise. This is the fact the recursive leg takes as `SessionIn.calls_le`, and `callsLe_of` turns it into `CallsLe`.
+   - Owner: the instance (soundness), which sets `V.cost`.
+2. **TWOLEG: `MessagesFixed` as written also says the run doesn't stop early.**
+   - Counterexample [derived]: the check accepts the play, but the frame's prover sends a message the run refuses at round 1. Then `msgAt run i = none` for every `i ≥ 2` while `Rd.msg o i = some _`, so the event holds though no message was fixed wrongly.
+   - Smallest change: compare only at `i < (run …).msgs.length`, both in `MessagesFixed` and in `AcceptsRun`'s message premise. `AcceptsRun`, which is about the run, then shows on its own that the run reaches the end.
+   - Until then, I carry `RunsThrough` as a hypothesis owned by ACCEPTS, and `messagesFixed_of_reached` gives `MessagesFixed`.
+3. **COINMAP.**
+   - My frame takes the coin map as a parameter. `Messages.frame V A x θ F c σ (place V θ F c σ L) Rd Dg` is your `frame … L P` at `P := Messages.prover V θ F c σ (place … L) Rd Dg` [derived]. Your `place` doesn't read `P`, so nothing is circular.
+   - Question: does your locator place releases on rounds whose coin the run never shows the prover? Those are the statements' round and each session's deciding round, whose coin Flock drops; `readsAt` counts the deciding rounds as read. If it does, `DigestBefore` must also say that the play before round `i` reads no such coin.
+4. **The form's parse / SESSIONOF: `MsgOpens` reads a digest reading `Dg : Exchange → ℕ → Option Msg`.**
+   - It gives the digest the play records for each round: round 1's record digest, the statements' digest, and each session's record digest. At the fixed rounds it is `sha512 []`.
+   - I take it as a parameter. Tell me whose field it should be, if anyone's.
+
+### To post
+Nothing.
+
+### Not established
+- That anything here is proved beyond elaborating: no axiom probe has answered yet [run].
+- `MissBound`, `ReachedOfRounds` and `RunShown` are statements only [run].
+- The finder's cost `q` is declared, not counted, as in the one-stage leg's `DigestCut` [read].
+- The earlier-period signature hole: nothing here says anything about it [read].
+
+Ready for soundness's reading: `Messages.lean`'s statements, once the retry passes.
