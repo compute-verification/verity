@@ -469,7 +469,7 @@ def test_the_flag_is_off_by_default_and_on_only_while_the_low_risk_lane_cant_cha
 
 def test_the_shadow_refuses_nothing_so_it_runs_beside_the_low_risk_lane_as_it_is():
     """ "shadow" counts every label, so no lane gains by changing who holds a handle: it needs none of what "on" needs."""
-    flags = DriveFlags.parse(f'signed_verdicts = "shadow"\nlowrisk_excludes = ["*.lean"]\n')
+    flags = DriveFlags.parse('signed_verdicts = "shadow"\nlowrisk_excludes = ["*.lean"]\n')
     assert flags.signed_verdicts == "shadow" and flags.lowrisk_lane
     assert "signed_verdicts=shadow" in flags.line()
 
