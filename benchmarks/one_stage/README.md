@@ -194,7 +194,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   inherits it; with `FC_VERIFIER_CPUS`, the verifiers run on `verifier_cpus` and the provers on the rest), as their
   `count`, their `list` and the `numa_nodes` that hold them. With `--lean`, the last sessions at
   K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. Without
-  `--lean-program` a proof block's verdict is the `NO_PROGRAM` refusal, as in `served_units`. With it, the row's
+  `--lean-program` a proof block's verdict is the `NO_PROGRAM` refusal. With it, the row's
   Program's descriptor is handed to `verify` (`--program`) and the row keeps what the verdict says of it:
   `program_sha512` only when the Program is held to the circuit, else `program_handed_sha512` and `program_note`, which
   on a statement under the provisional unit cover says the Program was handed and not held to the circuit. With
@@ -209,7 +209,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
   spends on one sampled statement of a block's sample.
 - `phase_profile.sh` (with `phase_profile.py`): one GPU prover phase (`PHASE`, default `t.ligerito`) on a pod of its own: the
-  source's build (`AS=base` or `new`) on a served type at full (`UNITS`, default `moe-w13:N=1,SWAP=False`), its transcript
+  source's build (`AS=base` or `new`) on a served type at full (`UNITS`, default the census's decode MoE gate-up block, `census:MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}`), its transcript
   pinned to main's under Flock ZK and Flock's circuit prover, one warm `zk_cost.py` dev process under Nsight Systems with
   CUDA and OS calls traced, and an A/B of base and new.
   `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the

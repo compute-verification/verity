@@ -4,7 +4,7 @@
 # /workspace/jobs/phase) between runs on the pod. STEPS (default setup,build,stage,ident,tl):
 #   setup  CUDA 13.3 (cuda-13.3.sh), Nsight Systems 2026.1.3 and a Python venv, unpacked under KW
 #   build  the source through 70-class-sweep.sh BUILD_ONLY=1, its binaries in KW/AS.env
-#   stage  UNITS (default moe-w13:N=1,SWAP=False, whose transcripts main pins) at full with every unit drawn
+#   stage  UNITS (default W13, the census's decode MoE gate-up block, whose transcripts main pins) at full with every unit drawn
 #          (zk_cost.py stage), once per KW and UNITS
 #   test   TESTS (default the hm96 trees', the arena layout's and level 0's fused folds') under pytest, slow ones included, on
 #          the pod's nvcc and GPU, against b684b12's cuda-ghash from the build's Flock checkout; a skip fails
@@ -14,7 +14,7 @@
 #   an     phase_profile.py again on AS's newest trace (KW/traces; PROVE_OUT: its session records, where they aren't beside it)
 #   session  session_profile.py on AS's newest trace (the tl step's): every phase of a session's prove time, ranked in ms a
 #          session; with GAPS (ms), also the host's calls and the GPU's ops in that window around each rep's device windows
-#   peak   for each build (base and new) and each of PEAK_UNITS (default moe-w13's and gq's statements, `;` between them) at full,
+#   peak   for each build (base and new) and each of PEAK_UNITS (default W13's and gq's statements, `;` between them) at full,
 #          each staged once per KW (gq's stage takes about 50 min): a prover_is_deterministic selftest under Flock ZK and
 #          under Flock's circuit prover, and one Flock ZK dev session, each under nsys with its allocations traced
 #          (device_peak.py: the peak of live device allocations and what was live then) and the GPU's processes sampled every
@@ -24,9 +24,10 @@
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; O=$D/out; mkdir -p $O
 REPO=$(pwd); W=${KW:-/workspace/jobs/phase}; mkdir -p $W; AS=${AS:-new}; STEPS=${STEPS:-setup,build,stage,ident,tl}
-END=${END:-$(( $(date +%s) + 6 * 3600 ))}; ROUNDS=${ROUNDS:-3}; RUNS=${RUNS:-2}; UNITS=${UNITS:-moe-w13:N=1,SWAP=False}
+W13='census:MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}'
+END=${END:-$(( $(date +%s) + 6 * 3600 ))}; ROUNDS=${ROUNDS:-3}; RUNS=${RUNS:-2}; UNITS=${UNITS:-$W13}
 PHASE=${PHASE:-t.ligerito}; ANCHOR=${ANCHOR:-lf_fold_base_pair}
-PEAK_UNITS=${PEAK_UNITS:-moe-w13:N=1,SWAP=False;gq}
+PEAK_UNITS=${PEAK_UNITS:-$W13;gq}
 MAIN_ZK=493e51d79e3d5c9dc0457e7670245e84218a3cb360b133cd3a35206a7ce7106fce3db0bf2db19d7f158f7994bd16f1b03f3bb056b257c0a2ccd6082aa36eaae6
 MAIN_M0=0f0dfa3c0bb8a743e1b40ded2b8813ca27758061f1fb194e68be62435dd521dec815920b33ad22ec3a4b6a7f68b4c5d3a4fc2cdbc80e3501b4088eaba53f2337
 export CUDA_DEVICE_ORDER=PCI_BUS_ID PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
@@ -178,7 +179,7 @@ if has peak; then
   PK="$NSYS profile -t cuda --cuda-memory-usage=true --sample=none --cpuctxsw=none --force-overwrite true"
   IFS=';' read -ra PU <<< "$PEAK_UNITS"
   for U in "${PU[@]}"; do
-    ZU=$W/zk-$(echo "$U" | tr -c "a-zA-Z0-9\n" -); tag=$(echo "$U" | cut -d: -f1)
+    ZU=$W/zk-$(echo "$U" | tr -c "a-zA-Z0-9\n" -); tag=$(echo "${U#census:}" | cut -d: -f1 | cut -d'{' -f1)
     if [ ! -s $ZU/plan.json ]; then
       fits 90 "stage $U" || continue
       nice -n 5 $PY benchmarks/one_stage/zk_cost.py stage --out $ZU --units "$U" --sizes full --draws c:dev > $O/stage-$tag.txt 2>&1
