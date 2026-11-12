@@ -685,6 +685,7 @@ class DsaIndexerAttnRule(StateRule):
         rows_of = {}
         for Nb, rows in blocks:
             N, hb = long_row_keys(Nb, TOPK), Coll(Array(Nb, row), latent.cut(Nb))
+            rest: tuple[Coll, ...]
             if table:
                 fr, rest = ctx.kind("dsa_history_reads", node, V=Nb, TOPK=TOPK, H=L + R), ()
             else:
