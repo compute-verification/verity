@@ -54,7 +54,7 @@ def test_a_rows_shape_reads_a_sweep_without_its_sampling_parameters_as_greedy(tm
     row that samples counts its first request's prompt ids where the request states no prompt length."""
     w = json.loads(SAMPLED.read_text())
     sweep, first = w["sweep"], w["requests"][0]
-    envelope = (max(sweep["input_lengths"]), max(sweep["output_caps"]) - 1, "0,1")
+    envelope = (1024, 127, "0,1")   # the sweep's longest prompt, one step short of its longest answer, and the first two steps
     greedy = [*_left_out("sampling_params"), {"sampling_params": {"temperature": None}}, {"sampling_params": {"temperature": 0}}, {"sampling_params": {"top_p": 0.9}}]
     for params in greedy:
         doc = {**w, "sweep": {**{k: v for k, v in sweep.items() if k != "sampling_params"}, **params}}
