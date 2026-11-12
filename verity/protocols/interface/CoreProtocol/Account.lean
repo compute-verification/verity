@@ -375,7 +375,8 @@ private def certifiedRow (m : Amount) (place reading : String) (total : Option N
     unpriced := m.unpriced }
 
 /-- The rows of amount `m` at `place`, from its accepted answers' readings `rs`, at each reading of the capacity of the
-leaves it is about. None when the site holds no such leaf. -/
+leaves it is about. None when the site holds no such leaf. A free amount of a flow charges the ticks no certified answer
+covers at the capacity, so where the registration holds none for them it prints no amount. -/
 def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (ticks : Nat) (place : Option String) (rs : List Reading) : List Row :=
   let xs := m.part.leavesAt S place
@@ -396,7 +397,10 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
       let n : Nat := match m.side with
         | .verified => amount
         | .free => amount + total.getD 0 * uncovered
-      [certifiedRow m at_ reading (total.map fun c => c * ticks) n error rs.length none]
+      let row : Row := certifiedRow m at_ reading (total.map fun c => c * ticks) n error rs.length none
+      if m.side = .free ∧ total = none ∧ 0 < uncovered then
+        [{ row with status := .notAudited, verified := none, free := none }]
+      else [row]
     else
       let each : List (Nat × Ratio) := rs.map fun r =>
         let fits : Bool := r.certified && (r.capacity.all fun c => decide (c ≤ total.getD c))
@@ -528,6 +532,13 @@ private def worked : Account :=
                   time := .span (.published "windows") ⟨1, 1000000⟩, share := some (.published "eps"),
                   error := .published "delta", pool := .once, uncertified := .safe }] }
 
+/-- A read rate bounded from above over two tiers, one of them a host's, whose rate no sheet states. -/
+private def spare : Account :=
+  { protocol := "toy/spare", head := some (.profile "registration")
+    amounts := [{ metric := "unread", part := .read [.hbm, .dram], key := .published "K", unit := bits, side := .free,
+                  time := .span (.published "span_ns") ⟨1, 1000000000⟩, error := .published "eps",
+                  uncertified := .refused }] }
+
 private def at_ (head : String) (more : List (String × Json) := []) : List (String × Json) :=
   ("registration", .str head) :: more
 
@@ -542,6 +553,9 @@ private def wipe (foreign memory : Nat) (certified : Bool := true) : Answer :=
 private def check (k ns : Nat) (eps : String) (head : String := "h") : Answer :=
   accept "toy/sent" [("K", Lean.toJson k), ("eps", .str eps), ("span_ns", Lean.toJson ns)]
     (at_ head [("link", .str "up0")])
+
+private def unread (k ns : Nat) : Answer :=
+  accept "toy/spare" [("K", Lean.toJson k), ("eps", .str "1/1000"), ("span_ns", Lean.toJson ns)] (at_ "h")
 
 private def credit : Answer :=
   accept "toy/worked" [("delta", .str "1/100"), ("eps", Json.arr #[.str "1/4", .null]),
@@ -572,6 +586,13 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
 #guard registered (.read [.hbm]) hosted == [("registered", 3200)]
 #guard registered (.read [.hbm, .dram]) hosted == [] ∧ registered (.read [.dram]) hosted == []
 #guard registered (.read [.disk]) hosted == [("registered", 0)]
+-- a free amount with ticks no answer covers and no registered capacity to charge them at prints no amount; it prints
+-- its amount, against no capacity, when its answers cover the period
+#guard spare.Formed
+#guard ((rows hosted digest auditor "h" tick 1000 [spare] [unread 3000 400]).take 1).map
+    (fun r => (r.status, r.capacity, r.verified, r.free)) == [(.notAudited, none, none, none)]
+#guard ((rows hosted digest auditor "h" tick 1000 [spare] [unread 3000 1000]).take 1).map
+    (fun r => (r.status, r.capacity, r.verified, r.free)) == [(.certified, none, none, some 3000)]
 -- the example protocol's own answer reads by its account: two units at its profile's error
 #guard (account.amounts.map fun m => (m.read tick passed).map fun r => (r.amount, r.error.toString)) ==
   [some (2, "1/1000000")]
