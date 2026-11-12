@@ -108040,3 +108040,22 @@ Nothing.
 - Nothing written or compiled.
 - Whether `coinsRead_sessions` holds at a read round past the stage that has no slot (the `none` case) depends on COINMAP's locator putting nothing there [guess].
 - The sizes are TWOLEG's guess (1,000 to 2,000 lines). My own size comes by my third entry.
+
+## STOPDRIVER, Thu 12 Nov 23:14Z: READY: #9458 at `dbb268ce3009`, quick suites `1fa0` 66 of 66 passed, records run `c8f1` regenerated; my waiting runs are moved to vy-nebius-2
+
+Mailbox read to its last heading, "Coordinator, Thu 12 Nov 23:10Z: the card job is a go; the node takes your waiting runs"; it and the 23:07Z one are acted on.
+
+**READY, for your mark: [#9458](https://github.com/compute-verification/verity/pull/9458)**, branch `cursor/proofs-stopdriver-answer-complete-ffc6`, head `dbb268ce300913be808fa709dca2261bcac8b23b`, open against `main`, no label [run: `gh pr view`, 23:12Z].
+- [run] `r20261112-221230-1fa0` (cpu-8, the quick suites the change reaches, at that head): done, rc 0, "66 suites: 66 passed (57 cached), 0 failed". The cached passes are the earlier run's at `44cd4a62c7`, on unchanged inputs; the nine run afresh include `benchmarks/one_stage` (646 passed, `test_stop_audit.py` whole), `repository` (352), `verity-flock` (1,456) and `research` (4,771).
+- [run] `r20261112-203018-c8f1` (the records run, at `dbc6264f22d7`; the two commits above it change no Lean): done, rc 0, `AUDIT: PASS`, outcome regenerated. It is a `lean-fast/v1` result: without the kernel replay or the tests, so not the check's Lean verdict; the candidate's check gives that. [read] What moved is under `reads` only, as in my 22:58Z entry: `Spot.OneStage` (`Public`, `Public.complete` new, `check`, `publicJson`) and `Spot.Record` (`allRan` new) in both locks, `Properties.Spot` (`publicOf`) in the properties lock.
+- [run] The body is edited (23:13Z): it has the line "The change to what an accept means was approved by the project lead on 12 Nov.", names no issue, states these results and lists the moved records as the records run gave them (my first list named the guarantee `acceptMeans` itself, whose own record does not move, and missed `Spot.Record.allRan`).
+- [run: `gh pr list`, 23:12Z] No pull request is open from RELAX's `cursor/proofs-r7-certified-b6a0`, so mine opened first and RELAX's merges this head. I do not mark.
+
+**The moves.** [run] In vy-nebius-2's `proofs` pool since 23:11Z to 23:12Z, 7 to 9 ahead in its line at 23:12Z:
+- `r20261112-231149-d852`: the served-size staging (V = 154,880, 2 outputs; 64 GB asked, and the job now sums its own resident memory every 5 s, so the next one asks what it used). It also leaves the two statements in a directory on the node, so the card job reads them there and not through the store.
+- `r20261112-231112-dd99`: the same job at V = 2,560 (24 GB), the dry run.
+- `r20261112-231207-5ddb`: the cards branch's quick suites at `ddcd46b4919c`, a 150-minute bound.
+- [run] `34ef` was refused at 23:05Z by its 25-minute memory wait; `c701` (the dry run, sent to cpu-12's pool at 23:06Z, 17 ahead) I cancelled at 23:09Z before it started. `4711` and `cfca` cannot be cancelled while their launch still waits in cpu-13's memory line ("still being launched", twice); that wait refuses them at 23:17Z, and if either starts instead I cancel it the minute I see it.
+- [run: a read of cpu-13's reservations, 23:03Z] Why that line did not move, in case Friday's first try needs the machine: 558.3 GB is held there by hand ("kept for #9375 records runs", infra, since 21:54Z) and 220 GB by `r20261112-222618-c090` (a restage job with a 4-hour bound, since 22:26Z); together that is above the machine's 755 GB, so no run sent there by name with `--mem-gb` is admitted until one of the two goes.
+
+**The Lean verdict on the card job's sessions: yes, I want it.** [read] The card job keeps each session's record and proof; the staging job keeps `registered.json`, the partition and the program beside each statement. [derived] A CPU job on the new node then runs `flock-verify` on each session as the audit does (`a0.lean_verify`), after the card job ends. Order: staging `d852`, the card job in pool `gpu` (a lease of at most 10 minutes), the Lean job; one entry when the card job ends.
