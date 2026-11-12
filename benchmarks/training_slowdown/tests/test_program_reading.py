@@ -12,7 +12,8 @@ gates on both sides. The Program is read under three statements (`STATED`): noth
 the reading lists. Under each, the Program's reading is never above the trace's: every product it charges is one the
 trace's M holds, with no more MACs and no larger β on either operand, and its blocks at the trace's F, and at its own,
 are at most what the trace's M gives under the same choice of sub-work. With nothing stated or the layout alone it
-charges nothing. Where the readings differ, the Program's is below, each for one cause:
+charges nothing, so the same invariant is also held on a dense step with no table lookup (`_dense`), whose circuit
+alone is charged. Where the readings differ, the Program's is below, each for one cause:
 
 - Rates: each product's operands are paid at most what the trace pays any product of its shape. Attention's scores
   multiply two activations, which `gemm_rate` prices at the least of attention's form and each single token side's,
@@ -176,15 +177,15 @@ class Reading:
     size: float
 
 
-@pytest.fixture(scope="module")
-def readings() -> Reading:
+def read(make, loss, batch: torch.Tensor, stated: dict) -> Reading:
+    """The step of the model ``make()`` builds, on ``batch`` under ``loss`` and AdamW, as a Program read under each of
+    ``stated`` and as a trace at each k."""
     with torch.device("meta"):
-        model = LF.LM(LF.SIZES["tiny"], ctx=CTX, vocab=64)
-    step = step_program(model, LF.square_loss, AdamW(**LF.ADAMW), torch.empty(*BATCH, dtype=torch.long, device="meta"))
+        model = make()
+    step = step_program(model, loss, AdamW(**LF.ADAMW), torch.empty_like(batch, device="meta"))
     torch.manual_seed(0)
-    model = LF.LM(LF.SIZES["tiny"], ctx=CTX, vocab=64)
-    g = capture_step(model, torch.optim.AdamW(model.parameters(), **LF.ADAMW), LF.square_loss,
-                     torch.zeros(*BATCH, dtype=torch.long))
+    model = make()
+    g = capture_step(model, torch.optim.AdamW(model.parameters(), **LF.ADAMW), loss, batch)
     raw = products.raw_on_dial(g)
     size = products.step_gates(g, None)
     r = Reading(step, {}, {}, {}, {}, size)
@@ -195,9 +196,29 @@ def readings() -> Reading:
                                        "tokens": g.tokens})
         r.he[k] = record["he"]
         r.fig[k] = calculator.slowdown({"c_gates": C, "k_bits": k}, record, {"gates": size})
-        for name, lay in STATED.items():
+        for name, lay in stated.items():
             r.work[name, k] = iteration(step, k, lay)
     return r
+
+
+@pytest.fixture(scope="module")
+def readings() -> Reading:
+    return read(lambda: LF.LM(LF.SIZES["tiny"], ctx=CTX, vocab=64), LF.square_loss,
+                torch.zeros(*BATCH, dtype=torch.long), STATED)
+
+
+#: a dense step: no table lookup, a float batch of 32 rows into a linear layer whose contraction, 1024, a block of
+#: up to k = 800000 bits can't make its output's entries below their width from
+DENSE = (32, 1024)
+
+
+def _dense() -> torch.nn.Module:
+    return torch.nn.Sequential(torch.nn.Linear(DENSE[1], 192, bias=False), torch.nn.SiLU(),
+                               torch.nn.Linear(192, 64, bias=False), torch.nn.SiLU(), torch.nn.Linear(64, 64, bias=False))
+
+
+def _square(model: torch.nn.Module, x: torch.Tensor) -> torch.Tensor:
+    return model(x).square().sum()
 
 
 def _ordered(beta, weight) -> tuple:
@@ -277,6 +298,17 @@ def trace_work(r: Reading, k: float) -> WK.Work:
                                for g in r.he[k]["groups"]])
 
 
+def never_above(r: Reading) -> None:
+    """Each of ``r``'s works at each k: every group it charges fits the trace's M, and its blocks, at the calculator's
+    F on the trace and at its own, are at most what the trace's M gives under the same choice of sub-work."""
+    for (name, k), it in r.work.items():
+        assert fits(it, r.he[k]), (name, k)
+        own = WK.bound(it, C)
+        theirs = (r.fig[k]["figure"] or {}).get("F")
+        for F_ in {F_ for F_ in (theirs, own.bound.F if own else 1.0) if F_ is not None}:
+            assert blocks(it, F_) <= blocks(trace_work(r, k), F_), (name, k, F_)
+
+
 @pytest.mark.slow
 def test_the_programs_bound_is_never_above_the_traces(readings):
     """Derives the step, captures it and reads it under each statement at each k (about a minute): what it catches is
@@ -284,18 +316,30 @@ def test_the_programs_bound_is_never_above_the_traces(readings):
     a β above the trace's, or more blocks than the trace's M gives under the same choice of sub-work and F, at any k of
     the dial. With nothing stated, or the layout alone, it charges nothing."""
     r = readings
-    for (name, k), it in r.work.items():
-        assert fits(it, r.he[k]), (name, k)
-        own = WK.bound(it, C)
-        for F_ in {r.fig[k]["figure"]["F"], own.bound.F if own else 1.0}:
-            assert blocks(it, F_) <= blocks(trace_work(r, k), F_), (name, k, F_)
-        assert trace_blocks(r.fig[k]) > 0
+    never_above(r)
     for k in KS:
+        assert trace_blocks(r.fig[k]) > 0
         assert r.work["nothing", k].groups == r.work["layout", k].groups == []
         rope = r.work["rope", k]
         assert rope.premises == ("buf_cos", "buf_sin") and rope.groups and all(g.weight == (False, True)
                                                                                 for g in rope.groups)
         assert rope.left_out["gathered"] == r.he[k]["gathered_macs"]
+
+
+@pytest.mark.slow
+def test_a_dense_steps_circuit_alone_is_charged_and_never_above_its_trace():
+    """A step with no table lookup (`_dense`), read with nothing stated: its first layer's input is free and its
+    contraction long enough that a block can't make the hidden rows below their width up to k = 800000, so the products
+    downstream of it are charged from the circuit alone, each a weight's with an activation's, and from k = 8e6, where
+    the contraction is short of the 4K² branch, the activations cost nothing on both sides. Every charged group fits
+    the trace's M and its blocks are at most the trace's M's under the same choice (`never_above`), here where the
+    Program's figures are not 0."""
+    r = read(_dense, _square, torch.randn(*DENSE), {"nothing": None})
+    never_above(r)
+    for k in KS:
+        it = r.work["nothing", k]
+        assert it.groups and all(g.weight == (False, True) for g in it.groups) and it.left_out["gathered"] == 0
+        assert (blocks(it) > 0) == (k <= 800_000) == (trace_blocks(r.fig[k]) > 0), k
 
 
 @pytest.mark.slow
