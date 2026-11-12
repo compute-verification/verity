@@ -92123,3 +92123,22 @@ No Lean file, lakefile or lock moved on `main` between those two commits [run]. 
 - What `rename.py --moves` gives the locks for the doubled name: not looked at.
 
 **Files** (`inbox/lean80/` on `cursor/verity-proofs-84b5`): `stage4-on-main.txt`, `resolve-check-on-main.txt`, `variants.txt`, `left-behind.txt`, `heads.txt`, `period_proofs_map.A.diff` (the string, the four files, `Order.lean`), `period_proofs_map.B.diff` (the string, the four files, the `sessionTreeReason` table and `sessionTreesPiece` out), and the scripts `sim.py`, `analyze.py`, `q1.py`, `rc.py`, `variant.py`, `heads.py`. The scripts read `move_main/` (`rename.py`, `layout.py` and `resolve_check.py` by `git show origin/main:tools/move/…`) and `maps/` (the six maps by `git show 58a6ce175e9c:tools/move/…`) beside them.
+
+## PERIODREAD, Thu 12 Nov 15:26Z: started on PRF-600: agent `bc-ba8275fd-08f1-5159-bc13-9618bdf6447c`, branch `cursor/proofs-prf600-coins-59c6` from `main` `5c0ae25d6c28`; nothing read past REDRAW's entry yet, nothing built
+
+- **Agent:** `bc-ba8275fd-08f1-5159-bc13-9618bdf6447c` [run: `run-info`]. **Branch:** `cursor/proofs-prf600-coins-59c6`, created from `origin/main` at `5c0ae25d6c28`, no commit of mine on it yet [run: `git worktree add -b`]. **Mailbox:** `inbox/bc-ba8275fd-08f1-5159-bc13-9618bdf6447c.md` does not exist on `cursor/proofs-inbox` at `708c557591c4` [run: `git show`, "does not exist"].
+- Reread before starting: `origin/main`'s `AGENTS.md`, and the testing, writing-runs, lean-proofs and team skills at `origin/main` [run]. REDRAW's 14:50Z entry read whole at `e8ccfb968a7e` [read]. None of the fifteen files its part 1 and part 2 cite on `main` differs between its `3d8530f5268a` and `5c0ae25d6c28` [run: `git diff --stat` over the paths, empty].
+
+**The plan, five lines.**
+
+1. Part 1's reads first, since they may make me wait on you: what reads the answer's `public` (`core_check.py:465`, `block_record.py:185`, `served_verdicts.py:850` `row_of`, any schema, network's onsite record at `1aba053782b2`). If a fixed key set refuses a new key, an entry and I wait.
+2. Part 1's build on my branch: `served_integrity.answer` takes the key's SHA-512 and the session's id from the case the audit wrote for `Spot.OneStageZk`, never from a flag or the `COINS` line, and answers no `accept` where there is no such case; tests beside the file; the quick tier through `research run`.
+3. While that run is out, the design's reads: the ones of REDRAW's my design rests on, checked at `5c0ae25d6c28` (the gate, the close, `PouwCheck.Period`, `Spot/ChallengerSession.lean`, `served_verdicts.sh`), and the same files at lean's merge `f3837f57d113`.
+4. The design entry by Fri 13 Nov 06:00Z, with a Lean signature elaborated if a built tree is within reach; nothing of part 2 built before your word.
+5. Part 1's pull request opened unmarked with `Lane proofs`, then its ready line, by Fri 13 Nov 23:00Z; an entry and a push at least every 60 minutes throughout.
+
+**Not established:** everything. This entry holds no finding of mine about the code.
+
+**To post:** nothing.
+
+Next entry by 16:25Z.
