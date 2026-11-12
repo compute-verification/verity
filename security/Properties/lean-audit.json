@@ -1007,7 +1007,8 @@
   "CoreProtocol.Site",
   "Definitions.Flock.Audit",
   "Definitions.Flock.Game",
-  "Properties.Flock.Nets"
+  "Properties.Flock.Nets",
+  "Properties.Challenger"
  ],
  "witnesses": {
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
@@ -1193,6 +1194,12 @@
   "Properties.NetworkPeriod.rowsCapPublished": {
    "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1400,6 +1407,18 @@
   "Properties.CertifierDevice.issuerVerifies": {
    "type_hash": "11f8ab25570c9b0dcd30644a0ad3a36b753d637c94108f0acaee5d60c4d1f99b",
    "unfolded_hash": "a5e57eeb37704509ed54d1a22e04d20e7f71bb1aca5e006a4f38e7c5b101d5f7"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "type_hash": "d25d13708014dcd8d2eb549d47fd2fdc14f164abb43696f548a4e9609d653c15",
+   "missing": "honest",
+   "why": "an honest instance is a whole withheld session that Challenger.drawCoins reads: a key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin of the family opened under the session's commitment with its salt and path, all as the JSON the reader parses; no proof builds one yet",
+   "unfolded_hash": "98d7bd97e86e28d09418ff820ca59c57e4389a060e9767dbafe18735a2030343"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
+   "missing": "honest",
+   "why": "an honest instance is a whole withheld session that Challenger.coinsReason passes: the evidence's key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin read opened under the session's commitment with its salt and path, all as the JSON the reader parses, with the bytes read; no proof builds one yet",
+   "unfolded_hash": "efc27f982579ec13ebbf8c7ad2c5de5834f478f37618f1581927d4e5ee214873"
   },
   "Properties.Composition.acceptMeans": {
    "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320",
@@ -3872,6 +3891,82 @@
    },
    "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3",
    "unfolded_hash": "1c16068947d528cb1770783ec230022902093b9de5b0f13adaff41feb18468fb"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "owner": "@proofs",
+   "signature": ["Properties.Challenger.Drawn.familyOneCommitment : Properties.Challenger.FamilyOneCommitment"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d25d13708014dcd8d2eb549d47fd2fdc14f164abb43696f548a4e9609d653c15",
+   "unfolded_hash": "98d7bd97e86e28d09418ff820ca59c57e4389a060e9767dbafe18735a2030343"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "owner": "@proofs",
+   "signature": ["Properties.Challenger.Drawn.familyOneCommitmentRead : Properties.Challenger.FamilyOneCommitmentRead"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
+   "unfolded_hash": "efc27f982579ec13ebbf8c7ad2c5de5834f478f37618f1581927d4e5ee214873"
+  },
+  "Properties.Challenger.familyOneCommitmentRead_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Challenger.familyOneCommitmentRead_nontrivial (key : Spot.Challenger.ChallengerKey) :",
+    "  Not",
+    "    (And (Eq (Spot.Challenger.ChallengerKey.ofJson (Spot.getD Lean.Json.null \"key\")) (Except.ok key))",
+    "      (Or",
+    "        (Exists fun s =>",
+    "          And (List.instMembership.mem (Properties.Challenger.idle.runs key.pub) s)",
+    "            (And (Properties.Challenger.OpensOn Properties.Challenger.idle key.pub \"\" s.id)",
+    "              (And (Eq ((s.released \"\" ByteArray.empty).extract 0 ByteArray.empty.size) ByteArray.empty)",
+    "                (And",
+    "                  (Eq",
+    "                    (instHDiv.hDiv (instHSub.hSub (instHAdd.hAdd ByteArray.empty.size Spot.Challenger.COIN_BYTES) 1)",
+    "                      Spot.Challenger.COIN_BYTES)",
+    "                    (instHDiv.hDiv (s.released \"\" ByteArray.empty).size Spot.Challenger.COIN_BYTES))",
+    "                  (∀ (r : ByteArray), List.instMembership.mem (s.roots \"\") r → Eq r ByteArray.empty)))))",
+    "        (Properties.Challenger.Break Properties.Challenger.idle key \"\" Lean.Json.null)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "afc65ff6d938e9848c1ce97c77185720ef020153e4fee4e710f54994734dc192"
+  },
+  "Properties.Challenger.familyOneCommitment_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Challenger.familyOneCommitment_nontrivial :",
+    "  Not",
+    "    (Or",
+    "      (Exists fun s =>",
+    "        And (List.instMembership.mem (Properties.Challenger.idle.runs Properties.Challenger.noKey.pub) s)",
+    "          (And (Properties.Challenger.OpensOn Properties.Challenger.idle Properties.Challenger.noKey.pub \"\" s.id)",
+    "            (And (Eq ByteArray.empty (s.released \"\" ByteArray.empty))",
+    "              (∀ (r : ByteArray), List.instMembership.mem (s.roots \"\") r → Eq r ByteArray.empty))))",
+    "      (Properties.Challenger.Break Properties.Challenger.idle Properties.Challenger.noKey \"\" Lean.Json.null))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ec1d041a4d6531733f15cd11bb2529c77c4d0f94a4746fdd98972e62d8ec336f"
   },
   "Properties.Composition.acceptMeans": {
    "owner": "@proofs",
@@ -11249,6 +11344,14 @@
    },
    "Properties.NetworkPeriod.rowsCapPublished": {
     "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.Challenger.Drawn.familyOneCommitment": {
+    "function": "Spot.Challenger.drawCoins",
+    "outcome": "accept"
+   },
+   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+    "function": "Spot.Challenger.coinsReason",
     "outcome": "accept"
    }
   },
@@ -21123,6 +21226,60 @@
     "MemoryChallenger.Attest.Properties.treeStrings": "9fe54497d44bf235cbf0bc8a00ee3877db7e5260507e2f8b50a5e3690191bf05"
    }
   },
+  "Properties.Challenger": {
+   "digest": "bee13ab4c17ab27ba4cdd5459f2d4bc318e597321fdaac039a5d07a9f38298dc",
+   "definitions": {
+    "Properties.Challenger.Break": "b3a0f36762db752ad1a5316491d82b23edac0d1c519f753243565c1905456fb4",
+    "Properties.Challenger.FamilyOneCommitment": "8b0ae7b6a4e2d3ea52ee7a813b1563f6bca38efe377383bd62e765778426ba8e",
+    "Properties.Challenger.FamilyOneCommitmentRead": "4399add87723e765cb97ecad0e43fff26c733da1cbcab747ae4a308ffc13326b",
+    "Properties.Challenger.Finding": "75d7ee0e9589fbe5704427aad2f4e942b6637855d763d3a36b147c5031eaddd2",
+    "Properties.Challenger.Finding.Valid": "9ee9ebb14acb8b1ecb6a74b7887fc11071864030ffc37081bc26f4adffd4f36c",
+    "Properties.Challenger.Finding.casesOn": "e8f702d22c32eb40c8744755012a722b8f05f76a08fac627913872961c32c713",
+    "Properties.Challenger.Finding.collision": "164392adfb4f419c4b53642ad932bbda400f4f9c2f06301829ca2e55cae3f07c",
+    "Properties.Challenger.Finding.forgery": "587f30eda219d02dffee18cdcb5120a6ff439e266e9e4bbbab8db1b845a79418",
+    "Properties.Challenger.Finding.rec": "66bd11567fda123f8943f0687af19a72378d2b60697ca5fcc4383379c14ca0ff",
+    "Properties.Challenger.History": "00c6669611a458ddc06e76c969c1242f1a611d0d5e89a6ec33b50bff6b400a93",
+    "Properties.Challenger.History.ledger": "0f2ec70d2d69ec52cbc4ed6ed8f23fdb01991558d64efcd2b6b5c3370627de43",
+    "Properties.Challenger.History.runs": "4b3b5a954bae32c4cbee3cf45a5a8b71f40d24825bb77dab9c720791af3c900c",
+    "Properties.Challenger.LmsVerifies": "4039d836ff2b1fab8b9fbec7a208ac23ac2269967ca2fb9e7a6a62069b768497",
+    "Properties.Challenger.OpensOn": "ce36e98cf84d43e06c1191a5d976a06f0a545876f39824a1bb2141b08d45f8b3",
+    "Properties.Challenger.Run": "3eb5f8740dc8fe085a1beb1e9ebbafbd8f8a0fef67133c2a68e94a3d16f26567",
+    "Properties.Challenger.Run.coins": "9d6ef22dd040d3686f3962ae25076ff4fc6156979fe3aeccc89d26b4ef2b7bbd",
+    "Properties.Challenger.Run.commitment": "5808b23d511cd904131a3e42c545d5af3af772daa277785b9392eae207a2e8f0",
+    "Properties.Challenger.Run.ended": "01fc4aed7751bb2006d5c0d95ce935aef6b4ec9b206574beacc6ad1d930e0d81",
+    "Properties.Challenger.Run.epoch": "dbd7c5bc219e3c32f31a4aa90bfdee90dfeb683fb313cb50061f2fbab8f42f1d",
+    "Properties.Challenger.Run.families": "3dda2c7b13aae188a39db681c083d59b2a8aba45a27ad7bf1b824c1f5ba852d7",
+    "Properties.Challenger.Run.host": "038f9fac25f140eaf9a3f277dd5255507973f8cda6727dabbc7106f0ec391f8a",
+    "Properties.Challenger.Run.id": "54811b252c7da409b56bbca6bf0436689e89bd7ba73789db32a49d15ec716418",
+    "Properties.Challenger.Run.leaves": "d484c282ec08f892e17b12d27082dec09d97105df1a9506129d79f9d6ae956e2",
+    "Properties.Challenger.Run.log": "5dfbae95ed9a397edfc51278aa5945f2d573ebe93810aba67c14518b822d3c66",
+    "Properties.Challenger.Run.released": "9c6e1c56ead76105cbc568b7f8c13d61d33ca95ded84cea82ab52b7aba92646b",
+    "Properties.Challenger.Run.roots": "c6630fe5a9525793b05e5c993be783a76f6aaf12043aae38587c04e5b20d51af",
+    "Properties.Challenger.Run.salts": "c7be4693b6847ed6c8e1e9d20fb8b7998889aa5b86f339e03decde4140e0f508",
+    "Properties.Challenger.Run.scheme": "f5590aa1483f927b88e185b6efd1f7bd2a9325fe2e4b733ae46c86dda84360cf",
+    "Properties.Challenger.Signed": "123dd81120ce846c7f91653b327cf12f2046546dcf91269ebf38bed098851eb1",
+    "Properties.Challenger.climbFrames": "d3c26ed7ba2a0fdfe42c02f9401696a39fbf285d448ecebb4cffe023b28f5cb3",
+    "Properties.Challenger.closeHashed": "d08131e9d22cad7046f8e649e5183b0d9a7930a58d1ccfe0312bc13e5b7a39e4",
+    "Properties.Challenger.collisionIn": "9955c2f503c5f3c31f9674865b54de014870ebbd197711d32567ca9c2cc0c1fa",
+    "Properties.Challenger.deviceHashed": "ae5a1fe0d1b31dd6aa6c4c409fad54b657da47e46b749c54acba96b63a209746",
+    "Properties.Challenger.domainHashed": "cfe5a703005348c6f6e2f1e6a1af8eeb638f7cf396535fcbef1a1a52fc8b6a34",
+    "Properties.Challenger.findBreak": "dddfd13afc04608f542047fdc3f283e298ac31eda1d34db30454266680255adf",
+    "Properties.Challenger.fv3Message": "39bca0575fced4d4a7d53f20e41b1a2ed9313f1a3b25cb9127f25adccf7b7143",
+    "Properties.Challenger.ident": "49f563513cd0ef708db228e3a5e746a2335e36223d328ba49788d90004b95274",
+    "Properties.Challenger.idle": "ee6bd0050e42265ddb2cc70ac6a15b20588837c3267206394694f98fc8f0f162",
+    "Properties.Challenger.leafHashed": "ed4d113a0c1fa08fa074c636dff2d42a961d46287a7101f11a2517a830ccf782",
+    "Properties.Challenger.ledgerHashed": "eef6509c98fa4ea7f5ecaeef6b04c21a85142c245d598ef2bd62be8e74bd89d8",
+    "Properties.Challenger.lmsVerifies": "6e95c14ff665460ea247ab688a09cc4d67d7c4d4587d78205373b34003b1a4b3",
+    "Properties.Challenger.logHashed": "0a462f25cc587d136056cb67ffbbd83e79c2e1e64a1befd33b46e0758566559c",
+    "Properties.Challenger.noKey": "949bc3905099fd5213adafa2ab23391644e00a2f30e41ee55324c0433c018924",
+    "Properties.Challenger.openingHashed": "ae3b82261b6077b4c5e5cafdf78ccc0d3805c87268ba97d6beeef289e0027c36",
+    "Properties.Challenger.readHashed": "d22590b8edc03b10b1b2121c65f8e73129d85f22e1aa6ae879592c2cc57d0f03",
+    "Properties.Challenger.recordHashed": "622233b5e0360b7350a438188d0cc705ff33729a26ff5a122d7e27791d6b378c",
+    "Properties.Challenger.signatures": "d9f04348d509e35796cce04fe2ed19ea0f0148478abec983e86649c58f5c55f4",
+    "Properties.Challenger.signedBy": "aa20bf26e607c317bc0a0e65cc0f73c30c376f67c411fe614c928192177aabf9",
+    "Properties.Challenger.taggedMessage": "de28167be1181a6abc80b9f8afe307a304a9c7d17ab06a7ecd7078826cba9590"
+   }
+  },
   "Properties.Composition": {
    "digest": "815600f7107c1bdf999f5320d593fa3da5f90abdac44f647579675a8fa16414b",
    "definitions": {
@@ -23436,8 +23593,10 @@
    }
   },
   "Spot.ChallengerCoins": {
-   "digest": "0c2870734e866b7e4e0af76454b5165a695d79e0a4d4f5af2b9f39f90a559f55",
+   "digest": "08edb9eb3cd59b7b42a6e0b46ffa19399b6c98ab06dd896d3a6a25866b3b537e",
    "definitions": {
+    "Spot.Challenger.COINS_FORM": "c6d23cf67ed8d57dcc00af1d55acbd3c11f32053ca2e574aa8dd4c2567c17d81",
+    "Spot.Challenger.FAMILY_ROOT": "73d04951cb6d6dd23f80140003c5dd9cd93bd72079ccbe9ccadaa50bfcf55d71",
     "Spot.Challenger.LIMITS": "e7bfb471561d80fdee056273c9f5c772f1d8042bb580ecf0c98661c934fb8008",
     "Spot.Challenger.Limits": "a0216a077b6946bf95377c777c0353192d673edebe19b2d0854123fcfef6433e",
     "Spot.Challenger.Limits.form": "228ff1082059ab62675600f06c13a2b45be4f7636b680269693d3e194de14531",
@@ -23454,7 +23613,9 @@
     "Spot.Challenger.SEGMENT_FORM": "c52e73ce8c32b42739c3ed9507c9c2b8652602c5fcc9c9d9691216556e79324f",
     "Spot.Challenger.WITHHELD": "218d71c722297a393b300c9c0d32291a596d31ea111ff6e032acf001e1db8718",
     "Spot.Challenger.arrSize": "1ba24d09e64bb2ca0b304ea389f91ab093599edac9fdd8d71eb7e16507962c55",
-    "Spot.Challenger.challengerStream": "8c772a2279fdbdb8c34c876ce441e7673aa99523286714dadf4ac76e59556f93",
+    "Spot.Challenger.challengerStream": "bf344249321fd12224dcbbf9a0a95a43b345e05bea215fb3cd20c8c720b7cedf",
+    "Spot.Challenger.coinsReason": "5c1b9335dab697be427e7018b7bf3385f693cec0844e1d6f89f643917165a3d7",
+    "Spot.Challenger.readReason": "d4e026a5d6c88c8d1ace2a2cdd5917a2cc5db1037c4079110961ee8987950db5",
     "Spot.Challenger.withheldOn": "0b901e9670b0baeb11447d1b44a31ef6052853b2d04bd530284525d1d902ecf4",
     "Spot.Challenger.withinAt": "f6f5b3c70fda31eee55c13ee910e2ef8c8c3f61205d67d9361ca2859f535e35d"
    }
