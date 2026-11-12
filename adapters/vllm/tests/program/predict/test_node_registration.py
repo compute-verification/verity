@@ -226,6 +226,13 @@ def _flip_checkpoint(d):
      "rank 1: rank1.weights[0] (model.embed_tokens.weight) is"),
     (lambda d: _retree(d, 0, lambda ns: next(n for n in ns if n[0] == "model.norm.weight").__setitem__(0, "model.final_norm.weight")),
      "rank 0: rank0.weights[13] is 'model.norm.weight', which the rank's committed weights tree does not register"),
+    # a field the record leaves out states nothing: no bundle, no request, no Program of record, no committed root
+    (lambda d: (d["out"] / "replay_deferred.json").write_text(json.dumps({"world": WORLD})), "rank 0: replay_deferred.json names no bundle of pair 0"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"].pop("requests")), "holds no Program of record for the rank (['1111111111111111'])"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"].pop("of_record")), "rank1'] holds no Program of record for the rank ([])"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"]["of_record"].pop("1")), "rank1'] holds no Program of record for the rank ([])"),
+    (lambda d: _runs(d, lambda c: c.pop("per_rank")), "is not the committed weights root None"),
+    (lambda d: _runs(d, lambda c: c["per_rank"].pop("1")), "is not the committed weights root None"),
 ])
 def test_a_commit_that_is_not_the_nodes_is_refused_by_name(commit, tamper, named, capsys):
     tamper(commit)
@@ -243,6 +250,19 @@ def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     desc["annotations"]["theta"] = desc["annotations"]["theta"][1:]
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
     assert NR.main(commit["o"]) == 2 and "the descriptor's θ is" in capsys.readouterr().out
+    bare = {k: v for k, v in NODE.desc.items() if k != "annotations"}
+    for desc in ({**bare, "annotations": {}}, bare):   # annotations that hold no θ, and a descriptor without annotations: no θ at all
+        Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
+        assert NR.main(commit["o"]) == 2 and "the descriptor's θ is 0 root nodes" in capsys.readouterr().out
+
+
+def test_a_builds_program_digest_is_its_program_blocks_else_the_one_at_the_results_top(tmp_path):
+    """`program_digest_of` reads a Build's `result.json`: the `program` block's `digest`, else `program_digest` at its top (a
+    result without the block), else none."""
+    for doc, digest in (({"program": {"digest": "aa"}, "program_digest": "bb"}, "aa"), ({"program_digest": "bb"}, "bb"),
+                        ({"program": {}, "program_digest": "bb"}, "bb"), ({}, "")):
+        (tmp_path / "result.json").write_text(json.dumps(doc))
+        assert NR.program_digest_of(str(tmp_path)) == digest
 
 
 def test_a_checkpoint_its_manifest_does_not_pin_is_refused(commit, capsys):

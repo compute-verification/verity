@@ -84,6 +84,45 @@ def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
     assert not (tmp_path / "out" / "descriptor.json.gz").exists()
 
 
+def test_emit_refuses_a_trace_whose_result_names_no_program(tmp_path):
+    """A traced derive dir whose `result.json` has no `program` block names no digest, so it is a trace of another Program."""
+    trace = _trace(tmp_path / "trace")
+    res = json.loads((trace / "result.json").read_text())
+    (trace / "result.json").write_text(json.dumps({k: v for k, v in res.items() if k != "program"}))
+    with pytest.raises(UsageError, match="the trace's Program None… is not the predicted"):
+        A.emit(_phi(TINY), "step", str(trace), str(tmp_path / "out"))
+    assert not (tmp_path / "out").exists()
+
+
+def test_emit_takes_a_traced_descriptor_without_annotations_as_one_that_names_nothing(tmp_path):
+    """A traced descriptor without `annotations` gives the predicted Program under empty ones, the descriptor its `result.json`
+    must then name, and no row of the instance sequence has a name."""
+    trace, out = _trace(tmp_path / "trace"), tmp_path / "out"
+    r = build_program(_phi(TINY), "step", M=1, pos0=8)
+    bare = {k: v for k, v in r.desc.items() if k != "annotations"}
+    (trace / "descriptor.json.gz").write_bytes(gzip.compress(json.dumps(bare, sort_keys=True).encode()))
+    desc = {**bare, "annotations": {}}
+    raw = json.dumps(desc, sort_keys=True).encode()
+    res = json.loads((trace / "result.json").read_text())
+    named = {"descriptor_sha256": hashlib.sha256(raw).hexdigest(), "correspondence_digest": correspondence_digest(desc)}
+    (trace / "result.json").write_text(json.dumps({**res, "program": {**res["program"], **named}}))
+    A.emit(_phi(TINY), "step", str(trace), str(out))
+    assert gzip.decompress((out / "descriptor.json.gz").read_bytes()) == raw
+    with gzip.open(out / "instances.json.gz", "rt") as f:
+        assert {row["name"] for row in json.load(f)["rows"]} == {None}
+
+
+def test_a_descriptor_without_node_hints_names_no_call(tmp_path):
+    """`traced_names` on a descriptor without `annotations`, or whose annotations hold no `node_hints`: no Call has a hint, and
+    the weights record's fields are still the trace's."""
+    trace = _trace(tmp_path / "trace")
+    program = build_program(_phi(TINY), "step", M=1, pos0=8).program
+    name, rec = _weights(program)
+    for desc in ({}, {"annotations": {"correspondence": {"schema": CORRESPONDENCE}}}):
+        hints, params = A.traced_names(program, desc, str(trace))
+        assert hints == {} and dict(params)[name] == str(RecordType(*((f"inner.{n}", t) for n, t in rec.fields)))
+
+
 def test_the_emit_command_prints_the_dir_its_digest_and_its_timings(tmp_path, monkeypatch, capsys):
     """`predict emit`'s stdout is one JSON line: the derive dir it wrote, the predicted Program's digest and `emit`'s timings."""
     trace, out = _trace(tmp_path / "trace"), tmp_path / "out"

@@ -18,10 +18,12 @@ import re
 from pathlib import Path
 
 import pytest
+from verity.definitions.registry.tp_allreduce import settings_of
 
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
+from verity_vllm.program.predict import dsv4
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program
 from verity_vllm.program.predict.model_shape import model_shape, weight_leaves
@@ -207,6 +209,40 @@ def test_mhc_refuses_outside_its_domain(tmp_path):
     cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
     with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
         build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
+
+
+def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quantization_block(tmp_path):
+    """A φ whose engine states no `env` runs its all-reduce under no switch (`tp_allreduce.settings_of` of an empty env), as one
+    whose `env` is empty does.  A checkpoint config without `quantization_config` is refused by that name."""
+    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
+    doc, stated = phi.to_json(), {k: v for k, v in phi.engine.items() if k != "env"}
+    nets = [dsv4.Net(Phi.from_json({**doc, "engine": e}), 1, 8) for e in (stated, {**stated, "env": {}})]
+    assert nets[0].settings == nets[1].settings == settings_of(False, {})
+    bare = {k: v for k, v in phi.hf_config.items() if k != "quantization_config"}
+    with pytest.raises(Unexpressible, match="a checkpoint without its block-FP8 quantization_config"):
+        dsv4.Net(Phi.from_json({**doc, "model": {**phi.model, "hf_config": bare}}), 1, 8)
+
+
+def test_a_phi_that_leaves_a_block_out_declares_nothing_in_it():
+    """φ read from a document without `engine` or `workload` declares no engine argument and no request, and a model without
+    `hf_config` has an empty one.  A request's `max_tokens` is its own, else its `sampling_params`', else 0."""
+    doc = {k: v for k, v in Phi(model={"repo": "org/m"}).to_json().items() if k not in ("engine", "workload")}
+    phi = Phi.from_json(doc)
+    assert (phi.engine, phi.workload, phi.hf_config, phi.requests, phi.request_shapes()) == ({}, {}, {}, [], [])
+    reqs = [{"prompt_len": 3}, {"prompt_len": 3, "sampling_params": {"max_tokens": 5}},
+            {"prompt_len": 3, "max_tokens": 7, "sampling_params": {"max_tokens": 5}}]
+    assert Phi(workload={"requests": reqs}).request_shapes() == [(3, -1), (3, 4), (3, 6)]
+
+
+def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
+    """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
+    row's as with them."""
+    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
+    full = S.phi_of({"row": DSV4, "workload": w}, config=config)
+    bare = S.phi_of({"row": DSV4, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
+    assert bare.workload == {"requests": []} and len(full.requests) == len(w["requests"]) > 0
+    assert {**bare.to_json(), "workload": full.workload} == full.to_json()
 
 
 @pytest.mark.parametrize("sampling,M,digest", [

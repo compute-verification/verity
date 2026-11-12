@@ -50,9 +50,10 @@ def phi_of(rec: dict, *, hf_home: str | None = None, config: str | None = None) 
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
     hf = json.loads(Path(cp).read_text())
+    declared = w.get("requests")   # a manifest that states no requests declares none
     reqs = [{"request_id": q.get("request_id"), "index": q.get("index", i), "prompt_len": q.get("prompt_len") or q.get("prompt_token_ids"),
              "max_tokens": q.get("max_tokens"), "arrive_step": q.get("arrive_step", 0), "n": q.get("n"), "seed": q.get("seed")}
-            for i, q in enumerate(w.get("requests") or [])]
+            for i, q in enumerate(declared)] if declared else []
     target = declared_profile(rec["row"], w)
     if (device := device_name_of_row(rec["row"])) is not None:
         target["device_name"] = device

@@ -79,6 +79,43 @@ def test_a_step_at_a_fused_moe_row_count_without_a_recorded_launch_is_refused():
         PC.predict("QWEN3_30B_A3B", H200, [{"request_id": "r0", "arrive": 0, "prompt_tokens": 50, "max_tokens": 2}], 2)
 
 
+ONE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 9, "max_tokens": 2}]
+
+
+def _pinned(monkeypatch, change) -> None:
+    """Every served pin read through `change`: a pin that states less than the one of record."""
+    load = PC.load_pin
+    monkeypatch.setattr(PC, "load_pin", lambda role, device: change(load(role, device)))
+
+
+def test_a_pin_that_states_no_kernels_of_a_piece_kind_is_refused_by_the_kernel_it_lacks(monkeypatch):
+    _pinned(monkeypatch, lambda pin: {**pin, "kernels": {k: v for k, v in pin["kernels"].items() if k != "middle"}})
+    with pytest.raises(Unmodelled, match="the pin has no kernel triton_red_fused_fused_add_rms_norm_0 in its middle pieces: None"):
+        PC.predict("LLAMA32_1B", RTX, ONE, 2)
+
+
+@pytest.mark.parametrize("change", [
+    lambda pin: {k: v for k, v in pin.items() if k != "moe"},
+    lambda pin: {**pin, "moe": {k: v for k, v in pin["moe"].items() if k != "configs"}},
+], ids=["no-moe-block", "no-configs"])
+def test_a_pin_that_states_no_fused_moe_launch_is_refused_at_the_first_row_count(monkeypatch, change):
+    """A fused-MoE model's pin without its `moe` block, or whose block holds no `configs`, records no launch."""
+    _pinned(monkeypatch, change)
+    with pytest.raises(Unmodelled, match="no fused_moe_kernel launch at 137 rows"):
+        PC.predict("QWEN3_30B_A3B", H200, SCHEDULE, 14)
+
+
+def test_a_traced_build_that_states_no_artifact_differs_in_each_kernel_and_winner_of_the_predicted_one():
+    """`differences` against a traced Build without its `artifact` block names every kernel and winner of the predicted artifact
+    as absent from the pinned one; against one whose artifact differs in nothing but its digest it says so in one line."""
+    m = PC.predict("LLAMA32_1B", RTX, ONE, 2)
+    art = m["artifact"]
+    got = PC.differences(m, {k: v for k, v in m.items() if k != "artifact"})
+    assert sorted(d.split(":")[1].split()[0] for d in got) == ["kernels"] * len(art["kernels"]) + ["winners"] * len(art["winners"])
+    assert got and all(d.startswith("artifact: ") and ": pinned absent, loaded " in d for d in got)
+    assert PC.differences(m, {**m, "artifact": {**art, "digest": "0" * 64}}) == ["artifact digest"]
+
+
 def _workload(tmp_path: Path, schedule: list[dict]) -> str:
     """`schedule` as a sweep workload's file: each request's prompt of that many tokens, arriving at its step."""
     (wl := tmp_path / "workload.json").write_text(json.dumps({"requests": [
