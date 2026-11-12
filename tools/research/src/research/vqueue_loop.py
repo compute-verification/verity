@@ -120,7 +120,7 @@ step it is judged on passed in every shard holding it (`vqueue_slim._passed_earl
 cancels the runs still running one.  Once a candidate's verdict is pass or fail and its runs ended, what it failed of one
 that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the lane of each member
 whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`), read on past its drop while
-they run (`Past.off_gate_running`); a red its base shares rings nobody.
+they or the run beside its base's check run (`Past.off_gate_running`); a red its base shares rings nobody.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), or, for a base a build of the same tick
 rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
@@ -615,8 +615,8 @@ class Past:
         return out
 
     def off_gate_running(self) -> dict[str, dict]:
-        """The drops whose candidate's check passed while its runs still ran steps off the gate (``off_gate_running``,
-        `Loop._drop`), by sha, but those an `off_gate` line has read since (`Loop._off_gate`)."""
+        """The drops whose candidate kept a verdict while its runs or the run beside its base's check still ran
+        (``off_gate_running``, `Loop._drop`), by sha, but those an `off_gate` line has read since (`Loop._off_gate`)."""
         out: dict[str, dict] = {}
         for r in self.lines:
             if r.get("action") == "drop" and isinstance(r.get("off_gate_running"), dict) and r.get("sha"):
@@ -3152,14 +3152,17 @@ class Loop:
         line says how graph2's check, in shadow, read (``graph2``), and one `_follow` keeps is left running (``follow``).
         One decided on a check that gates failed while it ran (an early red) logs when its first failure was written and
         when it was dropped (``early_red``).  One whose check passed while its runs still run steps off the gate
-        (`vqueue_slim._passed_early`) leaves them running, its line keeping their record (``off_gate_running``), which
-        `_off_gate` reads until they end."""
+        (`vqueue_slim._passed_early`) leaves them running; its line keeps their record (``off_gate_running``) while it keeps
+        a verdict and those runs or the run beside its base's check haven't ended, which `_off_gate` reads until both did."""
         w, j = self.world, self._reread(t, c)
         shadow = j.shadow if j is not None else None
         follow = self._follow(c, t)
         cancel = w.cancel(c.sha) if follow is None else "left running, in shadow"
         why = f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}"
         rec, kept = _running(j), (j.record if j is not None else None) or {}
+        base = t.below if c.base == t.main else t.past.slim(c.base)[1]
+        unread = "verdict" in kept and (kept.get("still_running") or isinstance(base, dict) and (
+            "verdict" not in base or base.get("still_running")))
         if "plan" in rec:
             self.slim.abandon(rec)
         ids = list(rec.get("ids") or ())
@@ -3175,7 +3178,7 @@ class Loop:
                            **({"follow": follow} if follow is not None else {}),
                            **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
                            **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
-                           **({"off_gate_running": kept} if kept.get("still_running") else {}),
+                           **({"off_gate_running": kept} if unread else {}),
                            **({"records_cancelled": rids} if rids else {}),
                            **({"records_cancel_failed": rfailed} if rfailed else {}),
                            **({"records_launching": regen} if "launch" in regen else {}),
