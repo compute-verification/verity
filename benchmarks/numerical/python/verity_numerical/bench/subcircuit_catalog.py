@@ -9,7 +9,7 @@ refused).
 **Payload** (a tree): ``subcircuits/<census id>.boolean.json``, the subcircuit's Boolean export
 (``verity_flock.boolean_export.subcircuit``, the website visualizer's dataset) at every variant, so an unchanged circuit is
 the same blob in every build; and ``program-digests/<census id>.json``, an entry's full variant map where it has more than
-:data:`INLINE_VARIANTS` variants (attention's key counts), which the store's 256 KiB cap on meta can't hold inline.
+:data:`INLINE_VARIANTS` variants (attention's key counts), which the store's 256 KiB limit on meta can't hold inline.
 
 **Meta**: ``{schema, census_sha256, entries}``, one entry per census subcircuit in census order:
 
@@ -41,11 +41,13 @@ from typing import Any, Callable, Iterable
 
 from . import census
 
+__all__ = ["KIND", "LOWERING_FIELDS", "RECORDS_KIND", "build", "census_ids", "export", "main", "put", "put_report"]
+
 KIND = "verity/subcircuit-catalog/v1"
 RECORDS_KIND = "circuit-check-report/v1"
 #: an entry with more variants than this holds its program digests in the payload
 INLINE_VARIANTS = 64
-#: the store's cap on an artifact's meta (`research.store.model`)
+#: the store's limit on an artifact's meta (`research.store.model`)
 META_LIMIT = 256 * 1024
 LOWERING_FIELDS = ("lowered", "units_per_instance", "ands", "rows", "reason")
 

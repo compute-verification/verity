@@ -8,6 +8,14 @@
    "and": 2110,
    "type": "07ecea2720d77b1b522b355934ef95bbbb4bcd6c72a2cf6a94f9fc1b58c3b0f0460755bb7c172e9f08af9c7d63a80fb9622cbf240b6ec84f32b68b9c6f9cefad"
   },
+  "MarlinMoeExpertColumnW_v1{E=3,K=128,TK=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 65265,
+   "type": "3506c269f9aea259f070f12d201eba0f9b129c04b55cec3a0a2435746616d27ea11e426abdaef0e7c20318024151eb3929028928f1f2888e1e61f7b0a13c8801"
+  },
+  "MarlinMoeExpertColumn_v1{E=3,K=128,TK=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 64484,
+   "type": "db207550082fd2fdee12bbb031c77e787a2f169128f766522368fcb0144717b99173b86156d9f863af9c5f0ba54adcd6102d286273e261b4239e1bce3ed70984"
+  },
   "MarlinMoeSchedule_v2{KT=2,NT=2,GRID=5}": {
    "and": 6709,
    "type": "01cf4fc01f4af477f27b818c0217b174c9eef79329a6ab99fe50be57d1f7d259cab0967492914f3288540219494f06bc0d9a8735057a18f6af5ccb3a2c6d4836"

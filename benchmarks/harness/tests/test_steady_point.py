@@ -17,7 +17,7 @@ import pytest
 from test_steady import DROP, END, SESSIONS, START, lease, made
 from verity_config import ConfigError
 
-from verity_bench import jobs, kit, settings
+from verity_bench import jobs, kit, served_table, settings
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -29,7 +29,7 @@ from verity_bench.tool import STEADY_POINT
 CIRCUIT = "the circuit of gemm64\n"
 PIN = hashlib.sha512(CIRCUIT.encode()).hexdigest()
 DRIVER, CUDA = "570.86.15", "12.8.93"
-SETUP = "benchmarks/specs/steady-setup.sh"
+SETUP = "benchmarks/harness/specs/steady-setup.sh"
 RECORD = "prove-glm53-flock-steady"
 #: a made-up artifact of the store, and the directory in it that holds a staged statement
 ART, IN_ART = "art:" + "5" * 64, "out/row1"
@@ -87,11 +87,11 @@ def tree(tmp_path: Path, spec: dict | None = None, files: dict | None = None, na
         else:
             doc[key] = change
     root = tmp_path / name
-    for path, text in ({**FILES, "benchmarks/specs/steady.toml": toml(doc)} | (files or {})).items():
+    for path, text in ({**FILES, "benchmarks/harness/specs/steady.toml": toml(doc)} | (files or {})).items():
         if text is not None:
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_text(text)
-    return root, "benchmarks/specs/steady.toml"
+    return root, "benchmarks/harness/specs/steady.toml"
 
 
 def git(root: Path) -> None:
@@ -100,6 +100,38 @@ def git(root: Path) -> None:
     subprocess.run("git init -q && git add . && GIT_AUTHOR_DATE='@1700000000 +0000' GIT_COMMITTER_DATE='@1700000000 +0000' "
                    "git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -qm spec",
                    shell=True, cwd=root, check=True)
+
+
+def test_a_spec_was_added_when_its_first_path_was(tmp_path, monkeypatch):
+    """A spec that moved with its directory was added when the file was added under the former one: the runs recorded
+    under that path started after it, and the pull of the store's attempts reaches back to them."""
+
+    import subprocess
+
+    from verity_bench.vllm.presets import FORMER_SPECS
+
+    def commit(at: int, *argv: str) -> None:
+        when = f"@{at} +0000"
+        for step in (argv, ("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false",
+                                           "commit", "-qm", "specs")):
+            if step:
+                subprocess.run(["git", *step], cwd=root, check=True,
+                               env={**settings.environ(), "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+
+    monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
+    root = tmp_path / "tree"
+    (root / FORMER_SPECS).mkdir(parents=True)
+    (root / FORMER_SPECS / "moved.toml").write_text("moved\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    commit(1700000000)
+    (root / "elsewhere" / "specs").mkdir(parents=True)
+    (root / "elsewhere" / "specs" / "new.toml").write_text("new\n")
+    commit(1700009000, "mv", f"{FORMER_SPECS}/moved.toml", "elsewhere/specs/moved.toml")
+    assert not (root / FORMER_SPECS / "moved.toml").exists()
+    assert served_table.spec_added(root, "moved") == 1700000000
+    assert served_table.spec_added(root, "new") == 1700009000
+    with pytest.raises(ValueError, match="git has no commit adding elsewhere/specs/neither.toml here"):
+        served_table.spec_added(root, "neither")
 
 
 def load(tmp_path: Path, **changes) -> SP.SteadySpec:
@@ -151,7 +183,7 @@ REFUSED_SPECS = [
     ({"spec": {"driver": "v570"}}, "`driver` 'v570' isn't a version"),
     ({"spec": {"cuda_toolkit": ""}}, "`cuda_toolkit` '' isn't a version"),
     ({"spec": {"setup": None}}, "setup"),
-    ({"spec": {"setup": "benchmarks/specs/none.sh"}}, "`setup` 'benchmarks/specs/none.sh' is no script of the source tree"),
+    ({"spec": {"setup": "benchmarks/harness/specs/none.sh"}}, "`setup` 'benchmarks/harness/specs/none.sh' is no script of the source tree"),
     ({"spec": {"setup": "../steady-setup.sh"}}, "is no script of the source tree"),
     ({"spec": {"env": {"CUDA_VISIBLE_DEVICES": "0"}}}, "`env` can't set 'CUDA_VISIBLE_DEVICES'"),
     ({"spec": {"env": {"VERITY_BENCH_STEADY_BIN": "/x"}}}, "`env` can't set 'VERITY_BENCH_STEADY_BIN'"),
@@ -192,8 +224,8 @@ BOUND = {
     "the driver's version": {"spec": {"driver": "570.86.16"}},
     "the CUDA toolkit's version": {"spec": {"cuda_toolkit": "12.9.41"}},
     "the run's environment": {"spec": {"env": {"RUST_MIN_STACK": "2147483648"}}},
-    "which script is the setup": {"spec": {"setup": "benchmarks/specs/other-setup.sh"},
-                                  "files": {"benchmarks/specs/other-setup.sh": FILES[SETUP]}},
+    "which script is the setup": {"spec": {"setup": "benchmarks/harness/specs/other-setup.sh"},
+                                  "files": {"benchmarks/harness/specs/other-setup.sh": FILES[SETUP]}},
     "the block type": {"spec": {"row0": {"type": "gemm32"}}},
     "the statement's units": {"spec": {"row0": {"n": 2}}},
     "the statement's pin": {"spec": {"row0": {"pin": "cd" * 64}}},
@@ -241,8 +273,9 @@ def test_the_identity_names_no_commit_and_each_point_has_its_own(tmp_path):
     root, spec = tree(tmp_path)
     plan = P.make_plan(root / spec, root=root, lookup=lambda spec, item, identity: (None, None))
     covered = SP.closure(root, plan.spec)
-    assert sorted(covered) == ["benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
-                               "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"]
+    assert set(covered) == {"benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
+                            "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"}
+    assert len(covered) == 5
     assert plan.toolchain == P.Sources(plan.toolchain.files_sha256, 5)
     assert jobs.plan_json(plan)["points"][0] == {"point": plan.points[0].point.to_json(), "identity": found["gemm64-k1"],
                                                  "passing_run": None}
@@ -812,15 +845,15 @@ def test_plan_and_check_take_a_steady_spec_and_say_why_a_point_has_no_passing_ru
 
 
 def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_this_machine_alone(tmp_path, monkeypatch):
-    """The remote's attempts are pulled since the spec was added, which git says of a spec under `benchmarks/specs`."""
+    """The remote's attempts are pulled since the spec was added, which git says of a spec under `benchmarks/harness/specs`."""
 
     root, path = tree(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "here"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path, root).config))
     (elsewhere := root / "elsewhere.toml").write_text((root / path).read_text())
-    with pytest.raises(ValueError, match="elsewhere.toml isn't a spec of benchmarks/specs.*--local-only"):
+    with pytest.raises(ValueError, match=f"elsewhere.toml isn't a spec of {served_table.SPECS}, .*--local-only"):
         P.make_plan(elsewhere, root=root)
-    with pytest.raises(ValueError, match="git has no commit adding benchmarks/specs/steady.toml"):
+    with pytest.raises(ValueError, match="git has no commit adding benchmarks/harness/specs/steady.toml"):
         P.make_plan(root / path, root=root)
     assert [point.passing_run for point in P.make_plan(elsewhere, root=root, local_only=True).points] == [None] * 3
 

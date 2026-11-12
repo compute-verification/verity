@@ -3,12 +3,17 @@
 `git_env()` is the environment for a gate's subprocesses: the caller's, less what makes git read a repository other than the
 one at its cwd (`GIT_LOCAL_ENV`: a hook's GIT_DIR, a scratch GIT_INDEX_FILE) and what a caller's process leaks into code it runs
 (`CALLER_ENV`: its import path, the Lean and check slots it holds), with the record merge driver set (`RECORD_DRIVER`).  `refuse()` is the one way a gate says no: a line on stderr
-naming why, and the shared exit code `REFUSED`.
+naming why, and the shared exit code `REFUSED`.  `worktrees_shared()` is what each gate's fetch holds: the clone's worktree
+lock (`WORKTREES_LOCK`), shared.
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import os
+import subprocess
 import sys
+from pathlib import Path
 
 from .clone import RECORD_DRIVER
 
@@ -37,6 +42,25 @@ def git_env(**extra: str) -> dict[str, str]:
         env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = k, v
     env["GIT_CONFIG_COUNT"] = str(n + len(RECORD_DRIVER))
     return {**env, **extra}
+
+
+#: the clone's worktree lock, in its git directory: `tools/move/restack.py` and `research.queue.worktrees_locked` add and
+#: forget each worktree holding it alone, because `git worktree add` writes a placeholder HEAD before the real one, and a
+#: fetch, whose connectivity check reads every worktree's HEAD, holds it shared (`worktrees_shared`)
+WORKTREES_LOCK = "research-worktrees.lock"
+
+
+@contextlib.contextmanager
+def worktrees_shared(repo: Path, env: dict[str, str] | None = None):
+    """The clone's worktree lock (`WORKTREES_LOCK`) held shared, around a fetch in ``repo``; nothing outside a repository."""
+    common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo, capture_output=True, text=True,
+                            env=env if env is not None else git_env()).stdout.strip()
+    if not common:
+        yield
+        return
+    with open(Path(repo, common) / WORKTREES_LOCK, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_SH)
+        yield
 
 
 def refuse(prog: str, why: str) -> int:
