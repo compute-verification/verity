@@ -489,3 +489,293 @@ circuit.
 2. The request's circuit on this path, the draft layer and its accept rule.
 3. Measurements: the longest cache hit read back this way is 384 tokens; nothing at an agentic load or past
    131,072 context. The design does not limit context; this node's memory stops near 400,000 tokens.
+
+## Addendum, Thu 12 Nov 03:49Z (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
+
+**Row 16 stays the route. For this serve none of it is shown bit for bit: every showing was at a BF16 cache, with no
+draft token, at the pin, and the FP8 cache puts another attention kernel under every layer. What serving commits
+changes in two places. The page is the FP8 row as stored, 656 bytes a token a layer (0.57 of BF16's 1,152, not
+half), taken when the scheduler publishes the page, after acceptance, and it holds the draft layer's rows. And each
+decoding request's kept count in each step is a value the logits decide and the certified record does not fix:
+advice for every request, at most 2.585 bits a decoding request a step, until each request's Program checks its own. The FP8 write reads
+nothing outside the token's own row, so zero stand-ins stay enough for the write. For the FP8 read, and for
+anything with draft tokens, that is not established.**
+
+**Sources.** M: vLLM `main` at `20ad1db3fe90` (12 Nov 03:11Z), the newest I could fetch. P: the pin
+`d9105ea8001e`. N: `v0.32.0`. V: our tree at `be9a3d5669`. vLLM paths are under `vllm/` unless they start with
+`recipes/`; V paths under `adapters/vllm/verity_vllm/` unless longer. "The capture map" is
+`adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`. Marks as in entry 2, except that entry 2's [M run] is written [measured] here, M being taken. [relayed,
+prodserve] is vllm-prodserve's two comments on VLLM-377, 03:20Z and 03:23Z, which I read whole. Nothing was run on a
+GPU; every number marked [mine] is arithmetic on numbers read, with its inputs.
+
+**Two of the brief's "what changed" lines, checked.** Model Runner V2 changes nothing: it is the runner we serve on
+at the pin (V `engine/env.py:20`) [read; the lead corrected this on VLLM-377 at 03:20Z]. DeepGEMM is in our serve
+already: the FP8 linears from 32 rows in a step and the index's scores (the capture map `:65-66`,
+`DeepGemmFp8Linear_v1`, `DsaMqaLogits_v3`, `_v4`) [read]. What is new to the circuit is the FP8 cache's write and
+read, the draft layer, the accept rule and, at M, the sampler's noise.
+
+### 1. Row 16 restated, column by column
+
+| Column | Does not change | With an FP8 KV cache | With five draft tokens a step |
+|---|---|---|---|
+| 1. What serving commits beyond stock | The step record. A hash and a host copy of each page. One rank's copy: the write is a function of the token's latent row alone (section 2), and that row is the same on every rank (V `pipeline/boundary_tables.py:8`) [argued]. | The page is the stored FP8 rows: 53,940 B a token a rank against 92,628 [mine: 78 × 656 + 21 × 132; 78 × 1,152 + 21 × 132, which is entry 2's 92.6 KB; 21 of the 78 layers hold index keys, V `engine/profiles/hf_configs/GLM53.config.json`, `indexer_types`]. The hash follows the bytes: 0.021% to 0.026% of one card [mine: 0.58 of the modeled 0.036% to 0.045%]. Not built, not measured. | The draft layer's rows join the page: 54,728 B a token a rank [mine: 79 × 656 + 22 × 132; the draft layer always holds an index, M `models/deepseek_v32/attention.py:185`], 0.59 of BF16's. The page is committed when the scheduler publishes it, not when the GPU writes its last row: a row at a rejected position is written and then overwritten (M `v1/core/sched/scheduler.py:2336-2354`), and a page enters the prefix cache at the update after its step (M `:2394-2415`) [read]. The step record holds each decoding request's kept count in each step, as the GPU saw it (section 3, b). |
+| 2. Advice beyond the common list | None for hits, admission, release buckets and seeds: every request is given its seed before the engine sees it (V `engine/served_seed.py:1-14`) [read]. | None [argued: the write has no choice in it]. | The kept counts: at most log₂ 6 = 2.585 bits a decoding request a step, charged for every request, sampled or not. That is 207 to 239 bits for a 256-token output and 360 to 414 for AgentX's median output of 444 tokens, against 5.6 bits for the length and the ending [mine: 80 to 92 and 139 to 160 steps at 3.19 and 2.77 tokens a step, the recipe's two figures, which are greedy runs on other hardware, M `recipes/models/zai-org/GLM-5.3.yaml:279-282`]. 0 once every request's Program checks its own kept counts and a lemma shows the count unique (section 3, e). |
+| 3. Replay cost of one sampled request | The span's steps on an engine kept up. Flat in the repeated share. [argued] | Pages loaded shrink: 7.2 GB a rank at 131,072 tokens and 7.8 GB at AgentX's 142,016, in place of 12.1 and 13.2 [mine: 54,728 B a token, the draft layer's rows included]. | Fewer and larger steps: 139 to 160 for 444 outputs in place of 444 [mine, same figures]. Each runs six rows a decoding request through the 78 layers, then the draft layer over the same rows, then four passes of one row a request (section 3, a): 1.9 to 2.2 target rows run for each token emitted [mine: 6 over 3.19 and 2.77]. A step's time with drafts on this node: not measured. A hit is one page shorter (section 3, f), which serving and the replay both compute again. |
+| 4. Why bit for bit; what is shown | The premise only: a row's bits depend on its step's shapes and not on the other rows' values. | **Nothing is shown.** Every layer's attention is another kernel: FlashMLA's FP8 sparse kernel, where we serve `FLASH_ATTN_MLA_SPARSE` and FlashAttention 3 over BF16 rows (the capture map `:63-64`) [read]. It is launched once over all the step's rows (section 2). | **Nothing is shown.** No step with draft tokens was ever run through the adapter, which refuses one (V `pipeline/boundary_tables.py:230-231`, `engine/sampler_capture.py:51-53`) [read]. A stand-in's kept count has to be forced from the record, and no code does (section 3, d). |
+| 5. What it needs from the circuit ahead of time | Row 5's Program cut into spans; the size class's replay Definition; a Definition that opens a committed page; the step sizes; ranges past 131,072. DeepGEMM's Definitions exist. | The quantizing write and the 656-byte row; FlashMLA's FP8 sparse kernel at this model's geometry. The write's rule differs between P and M, so it is one Definition a vLLM version (section 2). | The draft layer, layer 78; launches at six rows a decoding request; the accept test under sampling and the resample; the compile slice with a decode row of K + 1 tokens, the roll-back and the hit's dropped page (section 4). |
+| 6. What the guarantee charges | The statement: it is over the circuit [relayed, the lead; I agree]. Entry 2's cell is corrected by CACHE (section 5): what is missing for a shared page and for a span is a counting lemma of the plan check, not a theorem. | Nothing [argued]. | Kept counts are charged as advice until the accept check and its uniqueness lemma (section 3, e). The interior grows by the draft layer's rows: a page a reader opens holds them, so the producer's Program computes them at every position, prefill included [argued]. |
+
+**What is no longer shown bit for bit, plainly.** All of it. Entry 2's five showings were: four targets replayed
+with every other request zero; a 256-token and a 384-token hit read from serving's pages; a 19,170-token prompt; a
+request preempted three times; an all-real control of 307 steps. Each was at vLLM `d9105ea80`, a BF16 cache,
+`FLASH_ATTN_MLA_SPARSE`, no draft token [measured: the runs named in entry 2; the kernels read in the capture map]. Under the
+published line the cached bytes are other bytes, attention is another kernel, every decode step has six rows a
+request and a 79th layer, and at M a sampled token is drawn from another noise generator (section 3, a). The first
+shape-only replay at FP8 without drafts, then one with drafts, are the two runs that put it back (section 6).
+
+### 2. What serving commits for a hit when the cache is FP8
+
+**The page is the FP8 bytes as stored, and the scale is computed from the token's own row alone.** By line:
+
+1. **The published line asks for plain `fp8` on H200s** (M `recipes/models/zai-org/GLM-5.3.yaml:180-187`:
+   "H100/H200 use plain fp8 KV cache"; the command at `:238-249`) [read].
+2. **The engine then picks the backend, and the backend picks the format.** On Hopper the sparse backends are tried
+   in the order `FLASH_ATTN_MLA_SPARSE`, `FLASHMLA_SPARSE`, then FlashInfer's, since this model's cached row is 576
+   wide, not 512 (M `platforms/cuda.py:136-152`; P `:136-152` the same; 512 + 64 in V `GLM53.config.json`) [read].
+   The first refuses any cache type but `auto`, `float16`, `bfloat16` (M
+   `v1/attention/backends/mla/flashattn_mla_sparse.py:43-46`, `:98`; P `:87`, `:176`) [read]. `FLASHMLA_SPARSE`
+   serves every quantized type as `fp8_ds_mla` (M `model_executor/layers/attention/mla_attention.py:362-379`; P
+   `:358-363`; M `flashmla_sparse.py:149-153`: `"fp8",  # alias for fp8_ds_mla`) [read]. If FlashMLA is not in the
+   build (M `v1/attention/ops/flashmla.py:14-45`), FlashInfer's serves plain `fp8` (M
+   `flashinfer_mla_sparse_sm90.py:66`, `:148-152`) [read]. **Which one node A's engine picks is not established by
+   reading**: the start prints "Using %s KV cache format for %s backend" (M `mla_attention.py:538-560`).
+3. **`fp8_ds_mla`, the format I expect** [read M `models/deepseek_v32/common/kernels.py:355-384`; the layout in M
+   `flashmla_sparse.py:77-126`]: a token's row in a layer is 656 bytes: its 512 latent values as E4M3 in four tiles
+   of 128, each tile's float32 scale, and its 64 rotated position values in BF16, not quantized. A tile's scale is
+   its own largest magnitude over 448, floored at 1e-4, rounded up to a power of two (`:368-374`; 448 at `:23-27`;
+   the comment at `:371` says FLT_MIN, the code at `:372` has 1e-4).
+4. **Plain `fp8`** [read M `kernels.py:386-408`]: all 576 values over one scalar the layer holds, which is 1.0 (M
+   `model_executor/layers/attention/attention.py:148-168`) and which nothing under `vllm/` at M recomputes [ran: `rg
+   calculate_kv_scales`, no match]; at 1.0 the division is skipped (M `models/deepseek_v32/attention.py:390-424`).
+5. **The index's keys** are FP8 with one scale a token at the pin already, 132 bytes (M `kernels.py:63-119`,
+   `:409-515`) [read]; nothing changes for them.
+6. **Nothing outside the token's own row is read.** The write is one Triton program a token (M `kernels.py:204`),
+   which loads that token's row, the norm's weight, the rotation at its position and its slot [read]. No batch-mate,
+   no other token of the request, no running statistic, in either format. **So zero stand-ins stay enough as far as
+   the write goes** [read; prodserve's 03:23Z comment reads the same at P and N].
+7. **The rule is not the pin's.** At P the tile's scale is its largest magnitude over 448 floored at FLT_MIN, with
+   no rounding to a power of two [relayed, prodserve: P `kernels.py:263-291`]; at N and M it is rounded [relayed for
+   N; read for M]. The same values give other stored bytes, so the write's Definition is one a version.
+8. **The read side is where a batch-mate could enter, and I could not settle it.** With 8 heads a rank (64 over 8 ranks, V `GLM53.config.json`) the FP8
+   kernel takes every row of the step, prefill and decode, in one launch (M `flashmla_sparse.py:63-74`, `:440-444`,
+   `:1228-1232`, `:1289-1294`), with the heads padded from 8 to 64 (`:723-726`, `:1322-1332`) and a tile scheduler
+   sized from the card's SM count and the number of queries (`:409-426`) [read]. So a row's bits can depend on the
+   step's row count, which the step record holds [argued]. Whether they depend on another row's values is inside
+   FlashMLA's kernel, which is not in vLLM's tree and which I did not read: **not established**. The tree's twin of
+   FlashMLA's sparse decode for DeepSeek V4 on the H200 ports its scheduler from the batch's shape (V
+   `verity/definitions/numerics/flashmla_twin.py:7-9`) [read]; that is another model's row and entry point. vLLM's own code
+   does not quantize the query on this path (M `v1/attention/backend.py:820`; `flashmla_sparse.py` never sets it)
+   [read].
+9. **So serving commits, for a page:** the bytes above for all 79 layers' rows and the 22 index-key rows, as they
+   stand when the scheduler publishes the page (section 3, f). The reader's replay block opens the rows it reads
+   against that root, which is case 4 of the lead's 03:22Z ruling [relayed]. **The Definitions that read the page
+   take FP8 bytes and scales as inputs, never the BF16 values, which serving does not keep** [argued].
+
+### 3. What serving commits for a speculative step: the lead's five sentences against the code
+
+**(a) "The draft tokens and the accept test are values the replay recomputes." Right, with what recomputing
+needs.**
+- The draft layer is the model's layer 78: `enorm`, `hnorm`, `eh_proj` from 2H to H, one decoder block, the shared
+  head (M `models/deepseek_v32/nvidia/mtp.py:61-165`, `:167-268`) [read]. Its block has its own sparse attention,
+  its own index (M `attention.py:185`) and so its own cache rows at every position [read].
+- Its first pass a step runs over the target pass's whole batch, prefill rows and rejected positions included: "we
+  pad each request's query length to include any rejected positions" (M
+  `v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py:142-147`, `:233-246`) [read]. Then four passes of one
+  row a request (M `:391-439`), which reuse the first pass's top-k (M `spec_decode/mtp/speculator.py`, whole file;
+  M `attention.py:214-216`; `index_share_for_mtp_iteration` true in V `GLM53.config.json`) [read].
+- So the draft tokens need no commitment of their own, as the lead's ruling says, but the draft layer reads its own
+  cache rows at every earlier position: for a span or a hit those are committed pages (section 2, item 9) [argued].
+- The accept test (M `spec_decode/rejection_sampler_utils.py`, `_rejection_kernel`, `:519-784`) [read]: one
+  uniform a position, `u = tl_rand32(seed, pos)` (`:615-616`; the seed is mixed with the draft's index only under
+  block verification, which is off); greedy accepts when the draft equals the target's argmax (`:634`); sampled
+  accepts when `target_logprob > log(u) + draft_logprob` (`:716`), and a draft is greedy by default so its log
+  probability is 0 (M `config/speculative.py:734`). The same three lines at P are `:569`, `:587`, `:662`; at N `:572`,
+  `:590`, `:665` [read].
+- **Under sampling the tokens depend on the draft layer's bits, not only the counts.** At the first rejection the
+  token is drawn from the target's distribution with the rejected draft token removed (M `:990-1000`: "the target
+  distribution with the rejected draft token probability zeroed out") [read]. Production samples at temperature 1.0
+  and top-p 0.95 [relayed, the lead, 03:30Z], so the draft layer is in the circuit; it cannot be skipped by taking
+  the kept counts as given, which would do under greedy [argued].
+- **The drawn token's noise is another generator at M and N than at P.** The accept test's uniform stays Philox (M
+  `v1/worker/gpu/sample/gumbel.py:8-13`, `:67-71`), the Gumbel noise of a sampled, resampled or bonus token is a
+  MurmurHash3 (M `gumbel.py:80` on; for N [relayed, prodserve: N `gumbel.py:97-125`]) [read].
+- A request with no seed gets one from `np.random` (M `v1/worker/gpu/sample/states.py:54-58`; P `:53`) [read]. Ours
+  never reaches that line (V `engine/served_seed.py:1-14`) [read].
+
+**(b) "The step record must carry, for each row of each step, how many draft tokens it ran and how many it kept,
+since those set the next step's shapes for every batch-mate." The fields are right; the reason needs correcting.**
+- **A kept count does not change the next step's row count or row order.** Every decoding request is scheduled 1 + K
+  rows whatever it kept, padded with −1 placeholders (M `scheduler.py:1326-1342`, `:1607-1610`; P `:1005`), and the
+  runner orders rows by whether a request has drafts and by its row count (M `v1/worker/gpu/model_runner.py:
+  2598-2610`) [read]. K is fixed: the table that varies it with the batch size is unset by default and adaptive
+  verification is off (M `speculative.py:613`, `:676`; M `scheduler.py:1728-1733`) [read]. The drafts a request runs in a step are
+  fewer than K only near its end (M `scheduler.py:982-997`), which the schedule gives [read].
+- **What a kept count changes** [read M `scheduler.py:2336-2354`: `request.num_computed_tokens -= num_rejected`]:
+  its own request's positions in every later step, so that row's key count and the slots it writes; the step its
+  request finishes in, so every later step's row count and admissions; and the pages allocated. A row's key count is
+  among the shapes a batch-mate's bits depend on (entry 2, "What a request's bits depend on"). **So it does change
+  the sampled request's kernel shapes, through each batch-mate's length, and not through the row count** [argued
+  from the two readings].
+- **The trace has the two numbers already, with one doubt.** A step's row is `[request, first position, length]`
+  and `emitted` counts the tokens each request emitted (V `engine/step_trace.py:229-250`) [read]: the length is 1 +
+  the drafts run, and `emitted` is the kept count + 1 [argued]. The doubt: the first position is the scheduler's,
+  and under async scheduling the CPU's count is "Optimistic CPU mirror of num_computed_tokens (upper bound on GPU
+  value)" (M `v1/worker/gpu/states.py:64-65`; P `:61`), the GPU correcting it from the rejections (M
+  `v1/worker/gpu/input_batch.py:545-562`) [read]. The draft passes also read the batch's largest CPU-side length (M
+  `speculator.py:136-140`) [read]. **Whether the recorded positions are the ones the GPU ran is not established.**
+- The trace's header carries no speculative setting and no cache format, and `benchmarks/serve_tax/replay.py:79-90`
+  builds the replay's engine from the header alone [relayed, prodserve].
+
+**(c) "The sampled request's replay recomputes its own and is refused if they differ." Right as a design; no code
+does it, and comparing tokens is not enough.** Under greedy the tokens are the target's argmaxes whatever was kept,
+so a replay whose kept counts differ can still emit the served tokens in other shapes [argued from M `:634`,
+`:746-752`]. The comparison has to be on the kept count of each step.
+
+**(d) "A batch-mate's enter as shapes only." Right for the speculation's own code; not established for the kernels
+it calls.**
+- **The draft pass for one request reads nothing of another's in the speculator and the sampler:** every kernel
+  there is one Triton program a request: the draft inputs (M `speculator.py`, `_prepare_prefill_inputs_kernel`,
+  `_prepare_decode_inputs_kernel`), the accept test (M `rejection_sampler_utils.py:582`), the counts (M
+  `input_batch.py:545-562`) [read]. What crosses requests is shape: the batch's largest row count and length (M
+  `speculator.py:136-140`) and how many requests share a verify chunk (M `spec_decode/rejection_sampler.py:
+  314-427`) [read].
+- The draft layer's forward is the model's own kernels over the step's rows, so "shapes only" there is entry 2's
+  premise, shown for 78 layers at BF16 and not for this layer or the FP8 kernel: **not established** [argued].
+- **A stand-in's kept count must be forced.** Its values are zeros, so its own accept test gives another count than
+  the served one. vLLM has a hook that forces a request's tokens and accepts a draft only where it equals the
+  forced token (M `v1/worker/gpu/sample/trace_replay.py:137-175`; off by default, M `config/model.py:321-326`; in P
+  `:273`) [read]; on a stand-in's drafts that does not give the served count. No code of ours or vLLM's forces the
+  count itself [ran: `rg -i 'draft|spec_decode|speculative' benchmarks/serve_tax/rebuild.py`, no match].
+
+**(e) "Until the accept rule is a Definition the kept counts are advice: at most log₂(K + 1) bits a step, 2 at
+three, 2.6 at five." Right, read as a decoding request a step and for every request.**
+- 2.585 bits a decoding request a step at K = 5, 2 at K = 3 [mine]. A request's total is column 2's: 207 to 414 bits,
+  37 to 74 times the length and ending [mine].
+- The certified record does not fix them, unlike a length, which the certified output fixes. It holds a release
+  bucket for each output (V `pipeline/advice_code/codec.py:15`), and a step's outputs leave together, so the
+  buckets bound the grouping and fix it only where no two steps of a request share a bucket [read; argued].
+- After the Definition: each request's Program computes its own kept counts and checks them against the record's,
+  and the record's are what the compiler builds every request's shapes from. That is the form the tree has for a
+  greedy two-model serve: "The dynamic accepted length is a value ... the shapes it would have to drive ... are
+  fixed by `A`, and the program's `accepted` outputs are checked against `A`" (V
+  `verity/definitions/registry/spec.py:16-21`) [read]. The count carries no bits once a lemma shows the check's
+  output unique, which it is: the test is a function of the seed, the position, the logits and the drafts [argued;
+  no Lean].
+
+**(f) Not in the five sentences: the page and the hit under `mtp`.**
+- A page is published after acceptance (M `scheduler.py:2394-2415`: "Publish finalized states") [read], so
+  "committed as written" in row 16 must read "committed as published": a hash taken at the GPU's write can hold a
+  rejected row.
+- The draft layer's row at a position is built from the hidden state there and the **next** token, so vLLM drops
+  the trailing block of every hit under `mtp` (M `speculative.py:1888-1899`; M `v1/core/kv_cache_coordinator.py:
+  66-87`) [read]. Hit lengths measured without drafts do not carry over [relayed, prodserve], and the compile
+  slice's cache step has to hold the rule to keep hits at 0 bits [argued].
+- Rows per step: six a decoding request. A step's row count then crosses our two kernel thresholds at fewer
+  requests: DeepGEMM's branch (32 rows or more) from 6 decoding requests, and the fused all-reduce norm (42 rows
+  or fewer) stops at 8 [mine, from the capture map `:65-71`].
+
+### 4. What is missing in the tree for this serve, beyond entry 2's list
+
+One line each; the owner in brackets. "None" is what `rg` over `verity/` and `adapters/` found at V [ran:
+`fp8_ds_mla`, `eh_proj`, `_rejection_kernel`, `murmur`] or what prodserve's table found [relayed]; it is not a claim
+that nobody is building it.
+
+**Definitions** [circuits, CIR-246, unless named]
+- The FP8 cache's write: the tile scale and the 656-byte row, one a vLLM version: none.
+- The FP8 cache's read: FlashMLA's FP8 sparse kernel at 8 heads padded to 64, all the step's rows in one launch:
+  none. `FlashMlaKvRow_v1`, `FlashMlaSplit_v1`, `FlashMlaCombine_v1`, `FlashMlaDecode_v1` exist for DeepSeek V4's
+  row only (V `verity/definitions/numerics/flashmla_twin.py:1-13`).
+- Plain `fp8`'s row and FlashInfer's sparse kernel: needed only if the engine start picks them; none.
+- The draft layer: `eh_proj`'s launch, the shared head and top token, the reuse of top-k between draft passes; its
+  block's parts exist for layers 0 to 77 [relayed, prodserve].
+- The accept rule under sampling: the ratio test, the residual with one token removed, the bonus token. A greedy
+  `Accept_v1{K}` exists for another workload (V `verity/definitions/registry/spec.py:1-21`).
+- The sampler's noise at M: the MurmurHash3 Gumbel draw: none [relayed, prodserve: `rg -i murmur`].
+- DeepGEMM: exists; pinned again at the new build, and reached from 6 decoding requests.
+- The compile slice: a decode row of K + 1 tokens, the roll-back, the draft count near a request's end, the hit's
+  dropped page: none in `verity/protocols/certifier/prover/compile_slice_v6.py` [relayed, prodserve].
+- A kept-count class in the advice code: none, and its charge counts one output a row a step (V
+  `pipeline/advice_code/codec.py:434-447`) [read].
+
+**Captures** [vllm: VLLM-381 for the build, VLLM-379 for drafts]
+- A capture map for this serve: its pins, `FLASHMLA_SPARSE` with `fp8_ds_mla`, the draft layer built (today's map
+  `:74` says it is not), CUDA graphs as the line leaves them (the map is eager).
+- Launches at six rows a decoding request, in the target pass and the draft layer's first pass.
+- The 656-byte row's bytes against the Definition, and one page's bytes at publish against its first hit.
+
+**The step record** [vllm]
+- The header: the speculative setting, the cache format, the vLLM build.
+- A step's row: the kept count the GPU saw, or the proof that `emitted` − 1 is it; the first position the GPU ran.
+- The refusals to lift: a step with draft tokens (V `pipeline/boundary_tables.py:230-231`,
+  `engine/sampler_capture.py:51-53`, `observe/fold/patterns/sampling.py:81`, `:428`) and a cache that is not BF16
+  (V `pipeline/boundary_tables.py:57-58`, `:142-145`: "serve with --kv-cache-dtype auto") [read].
+- The table builder's hook takes positions from the CPU's count (V `pipeline/boundary_tables.py:240-241`), which
+  under drafts is the upper bound of section 3, b [read].
+
+**The replay** [vllm]
+- A stand-in's kept count forced from the record; kept counts compared, not only tokens.
+- The replay's engine built with the served speculative setting and cache format.
+- `benchmarks/serve_tax/rebuild.py:869-870` copies one KV cache group; whether the draft layer makes a second is
+  not established (M `v1/kv_cache_interface.py:1553-1554`).
+
+**The page commitment** [vllm; not built at any cache type]
+- Taken at publish; covering the draft layer's rows and the index keys; the reader opening FP8 bytes.
+
+**The guarantee** [proofs]
+- The plan check's counting lemma for a shared page and a span (CACHE, section 5).
+- The uniqueness lemma for the kept count.
+
+**Outside the circuit, which the line also changes** [vllm]
+- The Rust front end and `--tokenizer-mode glm5_next`: what turns the certified request's bytes into token ids. I
+  did not read what the tree registers for it. The line runs word for word on no release [relayed, vllm-newpin].
+- The context: the recipe's own H200 setting is `--max-model-len 262144` (M `GLM-5.3.yaml:107-109`: "vLLM estimates
+  ~450K max tokens, so the 1M default fails at startup") [read]. That is entry 2's recommended limit.
+
+### 5. `f570` and CACHE
+
+- **`r20261112-025327-f570`: no end in its launcher's note as synced at 03:43Z.** It started at 03:01:07Z with
+  arms `compiled`, `record`, `canonical-topk`, `no-prefix-cache`, `compiled-again`, six repeats, and must end before
+  06:15Z [read
+  `vllm/20261111T2113Z-checkpoint-vllm-servecost-night`, 03:08Z]. No verdict yet; this line is revised when it ends.
+  It is at the pin with a BF16 cache and no drafts, so it prices entry 2's item 9 and nothing of this addendum.
+- **CACHE's entries 3 and 4 are in (03:18Z, `origin/cursor/proofs-cache-7c3e` at `e26fbea9d8`); its final is due
+  05:15Z.** Entry 4 corrects entry 2's column 6 and item 3, and the first "Missing" line of the message for Daniel:
+  `InfluenceTwoPatterns` holds for every split into requests (`security/Definitions/Claims/Guarantees/
+  SamplingTwo.lean:29-35`), so a shared page and a span need no new theorem; what is missing is a counting lemma of
+  the plan check, `RequestsCover`'s first clause (`security/Properties/Spot/TwoStageCheck.lean:58`) [relayed, CACHE;
+  the two Lean places read by me].
+- Its prices on AgentX, world, one year, at 10% of compute [modeled, CACHE's run `r20261112-030533-082f`; relayed]:
+  the cache off 12,552 GB with serving at 46 times stock's compute; the hit recomputed 552,000 GB, 39 times the
+  figure of record's 14,229; the hit read with the plan's request as the replay block 24,882 GB, 1.7 times, on a
+  count not yet proved; the capped form 24.4 million GB, 1,700 times. Entry 2's "1.5 times" and "1,900 times" are
+  superseded by these.
+- Neither CACHE's model nor the figure of record holds a draft token or an FP8 row [read: CACHE's entries; argued].
+
+### 6. Not established, and the one run that settles each
+
+All on node A, so the lead's to place; none launched by me.
+
+1. **Which attention backend and cache format the engine picks under `--kv-cache-dtype fp8`, and whether the draft
+   layer is a KV cache group of its own:** one engine start with the line's flags; the log.
+2. **Zero stand-ins at an FP8 cache, and a hit read from FP8 pages:** `rebuild.py --served --shape-only RID --dummy
+   zero` on a target with a hit, the FP8 flag carried into the replay's engine, no drafts.
+3. **A step with draft tokens replayed bit for bit, first all real, then with stand-ins forced to the recorded kept
+   counts:** one served pass with `mtp` at K = 5 and its replay. It needs the forcing code first.
+4. **Whether the trace's first position and `emitted` − 1 are what the GPU ran under async scheduling:** the same
+   served pass, the trace read against the runner's `num_sampled` and positions.
+5. **Whether a page's bytes at publish are its bytes at its first hit, the draft layer's rows included:** the same
+   pass, hashing a page at both.
+6. **The acceptance length and the step time on this node at production sampling,** which set column 3 and what
+   the kept counts cost as coded advice: the same pass.
+7. **How much of the kept counts the certified release buckets already fix,** which is what they cost as advice
+   after coding: the same pass served through the network certifier, its record's buckets against the trace.
