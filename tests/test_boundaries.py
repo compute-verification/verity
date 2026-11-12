@@ -192,7 +192,7 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
 CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
-              "protocols/certifier/device", "protocols/flock/sigma", "protocols/inference_only/verifier",
+              "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/inference_only/verifier",
               "protocols/recursion", "protocols/remote", "protocols/tests")
 _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
