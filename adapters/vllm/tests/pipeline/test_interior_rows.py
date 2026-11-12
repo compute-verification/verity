@@ -487,6 +487,35 @@ def test_a_token_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(
             SC.piece_rows(logits, ids, c, pad=4)
 
 
+@pytest.mark.parametrize("V,K", [(160, 20), (64, 4)])
+def test_a_greedy_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(tmp_path, V, K):
+    """`sampler_capture.piece_rows` of `GreedySelect_v1{V, N=V / K}`, on the device the sampler's logits are on (CPU torch
+    here), lays every unit's rows out word for word as `pieces` does from the captured span, NaN, ±0, ±inf and ties
+    across chunks included, and padded to a size class by whole tokens; ids its units don't select, a chunk size beside
+    the template's own N, and a template whose pieces it doesn't lay out are refused."""
+    import torch
+    t = f"GreedySelect_v1{{V={V},N={V // K}}}"
+    for s in _greedy_selects(tmp_path, V, K).values():
+        ids = s.data["outs"][f"out.{SAMPLED_MEMBER}"].view("<u4")[:, 0].astype(np.int64)
+        logits = torch.from_numpy(s.data["rows"]["in0"].view(np.int16).copy()).view(torch.bfloat16)
+        got = SC.piece_rows(logits, torch.from_numpy(ids), template=t)
+        padded = SC.piece_rows(logits, ids, pad=s.n + 3, template=t)
+        pieces = IR.pieces(s)
+        assert list(got) == [p.member.template for p in pieces]
+        for piece in pieces:
+            want = {p: a.tolist() for kind in ("rows", "outs") for p, a in piece.data[kind].items()}
+            assert {p: a.numpy().view(np.uint16).tolist() for p, a in got[piece.member.template].items()} == want
+            whole = piece.padded(s.n + 3)
+            want = {p: a.tolist() for kind in ("rows", "outs") for p, a in whole[kind].items()}
+            assert {p: a.numpy().view(np.uint16).tolist() for p, a in padded[piece.member.template].items()} == want
+        with pytest.raises(ValueError, match="the units select"):
+            SC.piece_rows(logits, torch.from_numpy(ids ^ 1), template=t)
+        with pytest.raises(ValueError, match="its chunks are its own"):
+            SC.piece_rows(logits, ids, V // K, template=t)
+        with pytest.raises(ValueError, match="no token select whose pieces are laid out here"):
+            SC.piece_rows(logits, ids, template=f"TokenSelect_v1{{V={V}}}")
+
+
 def test_a_token_selects_pieces_stage_as_the_second_stage_stages_an_interior_member():
     """`named` gives each piece's member the rows the second stage stages it on (`class_statement.member_stager`: row r
     its Definition's input r), at a vocabulary whose combine rows hold a whole SHA-512 block, while `chunk_rows.
