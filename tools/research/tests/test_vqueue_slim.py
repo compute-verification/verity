@@ -387,11 +387,13 @@ def test_a_run_that_failed_before_any_step_is_launch_only_infra_and_one_that_sta
     assert rec["erred_on"] == ["m1"]
 
 
-@pytest.mark.parametrize("shards, on, want", [(0, "m1,m2", ["m2"]), (0, "m1", ["m1"]), (3, "m1,m2,m3,m4", ["m4", "m2", "m3"]),
-                                              (2, "m1,m2,m3", ["m3", "m2"])])
+@pytest.mark.parametrize("shards, on, want", [(0, "m1,m2", ["m2"]), (0, "m1", ["m1"]),
+                                              (3, "m1,m2,m3,m4", ["m4,m2,m3", "m2,m3,m4", "m3,m4,m2"]),
+                                              (2, "m1,m2,m3", ["m3,m2", "m2,m3"])])
 def test_a_launch_again_after_infra_goes_to_other_machines_of_each_shards_set(world, monkeypatch, shards, on, want):
-    """`start` with ``avoid`` (the machines the runs before failed on, ``erred_on``) launches each shard on its set but those,
-    the whole set where that leaves none, and the record keeps them."""
+    """`start` with ``avoid`` (the machines the runs before failed on, ``erred_on``) launches each shard on its set but those
+    (its own machines, then the others it falls back on, `shard_machines`), the whole set where that leaves none, and the
+    record keeps them."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, machines, launch = on, [], h.d.launch_postland
     h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
