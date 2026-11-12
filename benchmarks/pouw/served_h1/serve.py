@@ -113,7 +113,6 @@ if TYPE_CHECKING:
     from multiprocessing.pool import Pool
 
     import torch
-
     from verity.protocols.spot.device.challenger import LiveCommitment
     from verity_vllm.protocols.pouw.h1.receipts import Cubin
 
