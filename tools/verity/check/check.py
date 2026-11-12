@@ -1738,6 +1738,8 @@ OPT_IN = {
         "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
     "verity/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
         "tests/test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
+    "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (
+        "tests/test_figures.py::test_figures_writes_every_figure",)},
     "verity/protocols/remote/verifier/composition": {"VERITY_SLOW": (
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
