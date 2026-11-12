@@ -1,6 +1,7 @@
 """`host_read_tiers.sh` with no card: its dry run prints the lease's line and each size's command and touches nothing;
 under the tree's own gpu-lease, faking eight cards, the lease's line is taken as written and each size runs in turn in
-that lease; a lease that is short drops the last sizes; a failing size is the run's exit and the next still runs; cards
+that lease; a lease that is short drops the last sizes, and one asked for near END is asked shorter by the wait it
+allows; a failing size is the run's exit and the next still runs; cards
 in use, a lease of fewer cards, a failed build and a start outside the hours start nothing; and `launch` sends nothing
 outside the hours. The clock is NOW; host_read.sh, the Python, nvidia-smi and nvcc are stubs."""
 from __future__ import annotations
@@ -18,7 +19,8 @@ GPU_LEASE = RS.parents[1] / "tools/research/src/research/pods/sh/gpu_lease.sh"
 NOW = 2_000_000_000
 EIGHT = "0,1,2,3,4,5,6,7"
 #: what the job reads that the tests leave at its default, whatever the suite's own environment holds
-KNOBS = {"OUT", "DRY", "SIZES", "GIB", "GPUS", "CHUNK_BLOCKS", "LEASE_MIN", "MEM_GB", "CLEAR_MIB", "SIZE_MIN_S", "TAIL_S",
+KNOBS = {"OUT", "DRY", "SIZES", "GIB", "GPUS", "CHUNK_BLOCKS", "LEASE_MIN", "GRANT_S", "MEM_GB", "CLEAR_MIB", "SIZE_MIN_S",
+         "TAIL_S",
          "BUILD_S", "ARCH", "ARGS", "BASE_REV", "EXPECT_COMMIT", "SLOTS", "RESEARCH_SOURCE_SHA", "GPU_LEASE_TIMED",
          "CUDA_VISIBLE_DEVICES", "GPU_LEASE_UUID"}
 
@@ -128,10 +130,31 @@ def test_under_the_trees_gpu_lease_each_size_runs_in_turn_on_the_eight_cards(tmp
 
 
 def test_a_short_lease_drops_the_last_sizes(tmp_path):
-    p, calls, out = run(tmp_path, left=700)
+    p, calls, out = run(tmp_path, left=700, GRANT_S="0")
     assert p.returncode == 10, p.stdout + p.stderr
     assert calls["lease"][0].startswith("8 --wait --timed --max-min 11 ") and sizes(calls) == ["8", "12"]
     assert "partial (exit 10): sizes run: 8 12 GiB in chunks of 65536 blocks; not run: 16 GiB" in p.stdout.splitlines()[-1]
+
+
+@pytest.mark.parametrize("left, minutes, wait, ran", [
+    (4500, 30, 2700, ["8", "12", "16"]),   # far from END: LEASE_MIN
+    (2000, 28, 320, ["8", "12", "16"]),    # GRANT_S short of END, in whole minutes
+    (1000, 11, 340, ["8", "12"]),
+    (500, 5, 200, ["8"]),                  # one size needs five minutes: the wait is what they leave
+    (300, 5, 0, ["8"]),
+])
+def test_a_lease_asked_for_near_end_is_shorter_by_the_wait_it_allows(tmp_path, left, minutes, wait, ran):
+    p, calls, out = run(tmp_path, left=left, BUILD_S="0")
+    assert p.returncode == (0 if len(ran) == 3 else 10), p.stdout + p.stderr
+    assert calls["lease"][0].startswith(f"8 --wait --timed --max-min {minutes} ") and sizes(calls) == ran
+    assert f"for at most {minutes} min (granted within {wait} s, it asks for nothing past END)" in p.stdout
+    assert left - 60 * minutes == wait
+
+
+def test_no_lease_is_asked_for_with_less_than_one_size_before_end(tmp_path):
+    p, calls, out = run(tmp_path, left=299, BUILD_S="0")
+    assert p.returncode == 9 and "before the lease: 4 min to END" in p.stdout.splitlines()[-1], p.stdout + p.stderr
+    assert len(calls["build"]) == 1 and calls["lease"] == [] and calls["driver"] == []
 
 
 def test_a_failing_size_is_the_exit_and_the_next_still_runs(tmp_path):

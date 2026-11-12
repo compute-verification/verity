@@ -12,7 +12,9 @@
 #           is at most ten minutes away, then host_read.sh's build and its gate on the kernels (BUILD_ONLY=1, for ARCH
 #           with CUDA_HOME's nvcc against BASE_REV), then one lease of the machine's own gpu-lease (GPU_LEASE) on GPUS
 #           cards: waited for, so a card another lease holds does not end the run; timed, so the machine is kept quiet
-#           under it; of at most LEASE_MIN minutes and no longer than END allows. Whatever waits or runs is ended at END.
+#           under it; of at most LEASE_MIN minutes, and asked to end GRANT_S seconds before END (later, up to END, where
+#           one size needs it): a request that waits that long for its grant still asks for nothing past END, which a
+#           machine that grants only what ends by its own deadline needs. Whatever waits or runs is ended at END.
 #   lease   inside the lease: the lease holds GPUS distinct cards (exit 7); then each size in turn in its own process,
 #           pinned to DRIVER_CPUS, its record in out/host-SIZE/host_read.json (it states the step and the tier's
 #           size). A size starts on clear cards, no compute process and at most CLEAR_MIB MiB in use on any, waited for
@@ -43,7 +45,7 @@ utc() { date -u -d "@$1" +%FT%H:%M:%SZ; }
 
 set -a
 SIZES=${SIZES:-8 12 16} GIB=${GIB:-700} CHUNK_BLOCKS=${CHUNK_BLOCKS:-65536} GPUS=${GPUS:-8}
-DRIVER_CPUS=${DRIVER_CPUS:-48-87} LEASE_MIN=${LEASE_MIN:-30} MEM_GB=${MEM_GB:-300}
+DRIVER_CPUS=${DRIVER_CPUS:-48-87} LEASE_MIN=${LEASE_MIN:-30} GRANT_S=${GRANT_S:-300} MEM_GB=${MEM_GB:-300}
 CLEAR_MIB=${CLEAR_MIB:-1024} CLEAR_WAIT_S=${CLEAR_WAIT_S:-120} SIZE_MIN_S=${SIZE_MIN_S:-240} TAIL_S=${TAIL_S:-90}
 ARCH=${ARCH:-120a} CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 PY=${PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
@@ -65,7 +67,7 @@ if [ "$STAGE" = launch ]; then
   [ "$(git rev-parse -q --verify "origin/$branch")" = "$EXPECT_COMMIT" ] || refuse "$EXPECT_COMMIT is not origin/$branch"
   BASE_REV=${BASE_REV:-$(git merge-base HEAD origin/main)} || refuse "no BASE_REV, and no merge base with origin/main"
   E=()
-  for v in END NOT_BEFORE EXPECT_COMMIT BASE_REV SIZES NAMES GIB CHUNK_BLOCKS GPUS DRIVER_CPUS LEASE_MIN MEM_GB \
+  for v in END NOT_BEFORE EXPECT_COMMIT BASE_REV SIZES NAMES GIB CHUNK_BLOCKS GPUS DRIVER_CPUS LEASE_MIN GRANT_S MEM_GB \
     CLEAR_MIB CLEAR_WAIT_S SIZE_MIN_S TAIL_S ARCH CUDA_HOME PY GPU_LEASE SMI ARGS GPU_LEASE_WHO; do
     [ -z "${!v+x}" ] || { E+=(--env "$v=${!v}"); export "${v?}"; }
   done
@@ -141,11 +143,15 @@ if [ "$STAGE" = job ]; then
     say "built: $(awk '{ print substr($1, 1, 12), $2 }' "$O/libs.sha256" | sed "s|$B/||" | paste -sd' '); the driver's" \
       "cores: $(tr -d '\t ' <<< "${pin#*:}")"
   fi
-  hours "before the lease" "$SIZE_MIN_S"
-  t=$(now); m=$(((END_S - t) / 60)); [ "$m" -le "$LEASE_MIN" ] || m=$LEASE_MIN
+  one=$(((SIZE_MIN_S + 119) / 60))   # the whole minutes one size needs: its SIZE_MIN_S and the lease's last minute
+  hours "before the lease" $((one * 60))
+  t=$(now); left=$((END_S - t)); m=$(((left - GRANT_S) / 60))
+  [ "$m" -ge "$one" ] || m=$one
+  [ "$m" -le "$LEASE_MIN" ] || m=$LEASE_MIN
   export LEASE_MIN=$m
   LEASE=("$GPU_LEASE" "$GPUS" --wait --timed --max-min "$m" --mem-gb "$MEM_GB" -- bash "$SELF" lease)
-  say "the lease, $GPUS cards for at most $m min, as ${GPU_LEASE_WHO:-the name gpu-lease gives this user}: ${LEASE[*]}"
+  say "the lease, $GPUS cards for at most $m min (granted within $((left - m * 60)) s, it asks for nothing past END), as" \
+    "${GPU_LEASE_WHO:-the name gpu-lease gives this user}: ${LEASE[*]}"
   [ -z "${DRY:-}" ] || exec bash "$SELF" lease
   { echo "# $(utc "$t") before the lease"; "$GPU_LEASE" status 2>&1 | cut -c1-220; echo "# loadavg $(cat /proc/loadavg)"
   } > "$O/beside.before.txt"
