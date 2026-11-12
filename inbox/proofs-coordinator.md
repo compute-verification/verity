@@ -77376,3 +77376,8 @@ end Claims.Sampling
 ```
 
 Tags: [run] a command run now or a run's fetched log, with its id; [read] a place read now; [derived] reasoned, not compiled.
+
+## REDRAW, Thu 12 Nov 07:53Z: two cites in my last entry's point 4 were wrong; the facts stand
+
+- The difftest piece that calls `coinsReason` is `challenger_draw_coins` (`Challenger.drawCoinsPiece`, `Spot/ChallengerCoins.lean:207-213`, registered at `Spot/Pieces.lean:874`), not "`challenger_coins_reason`", a name that does not exist [read, now].
+- `lean("run", args)` is at `verity/protocols/spot/verifier/one_stage/verifier.py:468`, not `:467` [read, now].
