@@ -109628,3 +109628,34 @@ Other workers report 11 to 24 checks ahead of theirs [relayed: MAJORITY, CUT, NE
 - That any of it elaborates; nothing has compiled [run].
 - `InteriorLogged`, `MembersAccepted`, `DevLocal` and `LocatesSessions` are premises, not proved here.
 - The earlier-signature hole: nothing here reads a signature. `InteriorLogged` comes from CUT's `LogIsDevice`, whose forger term carries the hole at a one-play history. The file's docstring says so.
+
+## FIRSTACCEPT, Thu 23:47Z: vy-nebius-2's proofs check line makes my runs wait more than ten minutes (20 to 36 ahead); the accept test is at `subset:1` over one unit, head `7e8fb2a0ca` on `cursor/proofs-firstaccept-5a1c`, run `r20261112-234621-1262` waiting
+
+Read: the coordinator's 23:43Z message (MEMBERS's design refusal), whole.
+
+**Waits on vy-nebius-2** [run, `slot.json`]. These are the proofs pool's check slots. I don't know whether the Lean build slots are the bottleneck:
+- `r20261112-232620-4e37`: waited 20 minutes, from 23:26Z, with 21 to 20 ahead. Cancelled at 23:46Z, unstarted; superseded by the new head below.
+- `r20261112-232750-0337` (records): waiting since 23:29Z, 24 ahead at 23:44Z.
+- `r20261112-234621-1262` (accept, new head): waiting since 23:46Z, 36 ahead.
+
+**Done as the 23:43Z message asks** [run, `git push`]
+- `_audit` takes the design: `_audit(..., design=DESIGN)`, default `test_audit_two_members`' `stratified:1`. The two-member tests are unchanged and keep their design.
+- Committed on `cursor/proofs-firstaccept-320f`, new head `a9d2c56190`. That branch's one-member test now runs one instance under `subset:1` and still tolerates only the public-ports refusal (the branch has no slice change).
+- Merged into `cursor/proofs-firstaccept-5a1c`, new head `7e8fb2a0ca`. There `test_audit_one_member` builds one instance under `subset:1`, audits with `design="subset:1"`, and asserts the draw is `[0]` and the check's `public.drawn == public.proved == [0]`, with exit 0 and accept.
+- This replaces `ac9df926ef`'s two instances and `monkeypatch` of 22:28Z.
+- MEMBERS's merge check is against `7e8fb2a0ca`.
+
+**Anything else of mine running a one-statement audit by strata** [read]:
+- In the tree: none now. Both branches' `test_audit_one_member` are at `subset:1`. `test_audit_two_members`' tests are the several-statement form.
+- Outside the tree: probe 871c's `stratified:1` case, a scratch run that nothing re-runs.
+
+**Not changed by this** [read]: 7cc7's compile results of 23:28Z stand, since the Lean is the same at `7e8fb2a0ca`, and so does records run 0337 (at `55978f017b`, the same Lean).
+
+**Runs**: `r20261112-234621-1262` (accept, suite, provenance) and `r20261112-232750-0337` (records), both on vy-nebius-2, both waiting. I'll move them if the coordinator names a node with a shorter line.
+
+**Not established**
+- The accept under the real change at `7e8fb2a0ca`.
+- The lock records.
+- That the merged tree with WINDOWAT builds.
+
+**NEEDS**: a check slot. Either more check places on vy-nebius-2, or a word on which of cpu-8 and cpu-10 has the shorter line; 7cc7 got a cpu-8 slot in 12 minutes. **To post**: none.
