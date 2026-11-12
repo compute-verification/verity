@@ -130,11 +130,11 @@ def _refs_equal(a: Refs, b: Refs, leaf_limit: int) -> str:
     return "same-references"
 
 
-def compare_bodies(ba, bb, *, leaf_limit: int = 1 << 22, fid: str = "", names: list[str] | None = None) -> DefinitionCorrespondence:
+def compare_bodies(ba, bb, *, leaf_limit: int = 1 << 22, fid: str = "") -> DefinitionCorrespondence:
     """Same body? `identical` (byte-equal encodings), `same-references` (different encodings, same gates and
     reference sequences leaf by leaf), `mismatch`, or `unverified` (a differing encoding beyond `leaf_limit`).
-    Call names are annotations: differences are collected into `names`, never a mismatch."""
-    return _compare_bodies_(ba, bb, leaf_limit, names if names is not None else [], fid)
+    Call names are annotations: a difference in them is never a mismatch."""
+    return _compare_bodies_(ba, bb, leaf_limit, [], fid)
 
 
 def _compare_bodies(fa: SpecializedDefinition, fb: SpecializedDefinition, leaf_limit: int, names: list[str], fid: str) -> DefinitionCorrespondence:

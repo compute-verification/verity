@@ -68,10 +68,10 @@ def test_v1_on_every_other_gate_word():
 
 
 def test_the_row_is_the_element_per_lane():
-    I = 7
+    INTER = 7
     gates = [ONE, NEG_ZERO, NEG_INF, 0xC2C8, 0x4120, 0x7FC0, 0xC0A0]
     ups = [NEG_ZERO, ONE, ONE, ONE, NEG_ZERO, ONE, 0x4049]
-    got = [int(v) for v in evaluate(bind(SiluMul, I=I), gates + ups)]
+    got = [int(v) for v in evaluate(bind(SiluMul, I=INTER), gates + ups)]
     assert got == [V2(g, u) for g, u in zip(gates, ups)]
 
 

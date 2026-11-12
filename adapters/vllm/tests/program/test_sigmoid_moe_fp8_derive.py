@@ -25,23 +25,26 @@ import torch
 import torch.nn as nn
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics.derived_rows import fp8_group_quant_row
 from verity.definitions.numerics.fp8_moe_rows import (
     moe_expert_fp8_block_row,
     silu_mul_fp8_block_quant_rows,
 )
 from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import fp8_moe
 from verity.definitions.registry import moe as MOE
 
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_iface as _vi  # noqa: F401  (defines the vllm_iface stand-ins)
+from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.frontend.targets import wgmma_tile
 
 F8 = torch.float8_e4m3fn
 PROF = dict(mode="profile", profile="b1-eager-v3")
@@ -158,14 +161,12 @@ def test_each_router_pin_refuses_by_name(call, needle, on_target):
 
 class _LaunchedRouter(_Router):
     def forward(self, logits):
-        from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
         with OB.launch_region(0, "tokens"):
             return super().forward(logits)
 
 
 def test_the_router_kernel_is_the_launchs_not_the_requests(on_target):
     """vLLM launches `grouped_topk` over the step's tokens: a request's 2 rows in a step of 1,100 run the warp kernel at 256 experts."""
-    from verity_vllm.program.frontend import targets as TG
     on_target(H200)
     VB.observe_launch_context(TG.parse_launch_context({"batch": [[[M, 0], [1100 - M, 7]]]}))
     with torch.fx.traceback.preserve_node_meta():
@@ -236,7 +237,6 @@ class _InputQuant(nn.Module):
 @pytest.mark.parametrize("ue8m0,family", [(False, "Fp8GroupQuant_v1"), (True, "Fp8GroupQuantUe8m0_v1")])
 def test_per_token_group_fp8_quant_derives_one_row_form_per_row_equal_to_the_twin(ue8m0, family, on_target):
     from verity.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row
-    from verity.definitions.numerics.derived_rows import fp8_group_quant_row
 
     on_target(H200)
     x = _bf16(np.random.default_rng(6), M, 2 * G)
@@ -371,8 +371,9 @@ def test_a_tuned_launch_off_hopper_refuses_by_name(on_target):
 def test_the_wgmma_tile_rule_matches_the_tuned_h200_entries():
     """GLM-5.3's TP8 shard on the H200: the 8x32 and 8x64 tiles are MMAv2; the entries from 16x64 onward are wgmma."""
     entries = {1: (8, 32), 2: (8, 32), 4: (8, 64), 8: (16, 64), 16: (16, 128), 512: (16, 128), 1024: (64, 128), 4096: (64, 128)}
-    got = {m: wgmma_tile({"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "num_warps": 4}, bm < 64 and bn >= 64) for m, (bm, bn) in entries.items()}
-    assert got == {1: False, 2: False, 4: False, 8: True, 16: True, 512: True, 1024: True, 4096: True}
+    got = {m: fp8_moe.sm90_dot(bm, bn, 4, bm < 64 and bn >= 64) for m, (bm, bn) in entries.items()}
+    mmav2, wgmma = HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    assert got == {1: mmav2, 2: mmav2, 4: mmav2, 8: wgmma, 16: wgmma, 512: wgmma, 1024: wgmma, 4096: wgmma}
 
 
 H200_EXPERT_CONFIG = {

@@ -7,13 +7,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity.circuits.defs import bind
+from verity.circuits.defs import Builder, bind
 from verity.circuits.evaluation.bits import evaluate_words
+from verity.circuits.refs import Affine, Coll
 from verity.definitions.registry import boolean_io_shell as BX
 from verity.definitions.registry import io_shell as X
 
 from verity_vllm.engine import served_seed
 from verity_vllm.program.frontend import seed_rule as SR
+from verity_vllm.program.frontend.value_types import type_of_tensor
 
 
 def _col(xs) -> np.ndarray:
@@ -107,12 +109,9 @@ def test_the_wrappers_inputs_are_the_programs_parameters_and_the_check_refuses_a
     """The traced request wrapper's example inputs (`inputs`, bool tensors) type as the predicted Program's `params` at the
     policy's RID, every request-local group the workload Program and the batch rule hold its request's own; a row whose ids
     share no length has no RID, and a policy without one and a seed or inputs of other types are refused by name."""
-    from verity.circuits.defs import Builder
-    from verity.circuits.refs import Affine, Coll
     from verity.circuits.types import Array, Value
 
     from verity_vllm.program import workload as W
-    from verity_vllm.program.frontend.value_types import type_of_tensor
     from verity_vllm.program.predict import batch
 
     assert [type_of_tensor(t) for t in SR.inputs({"rid": 36})] == [t for _, t in SR.params(36)]

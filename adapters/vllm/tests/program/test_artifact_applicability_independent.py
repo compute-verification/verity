@@ -25,6 +25,7 @@ The reference hosts' recorded manifests are `test_artifact_applicability_indepen
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import pathlib
@@ -33,6 +34,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import tokenize
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -120,8 +122,6 @@ def _source_files() -> list[pathlib.Path]:
 
 def _strip_comments_and_docstrings(src: str) -> str:
     """Code-only view: literals in comments/docstrings are documentation, not duplicated construction inputs."""
-    import io
-    import tokenize
     out = []
     try:
         toks = list(tokenize.generate_tokens(io.StringIO(src).readline))

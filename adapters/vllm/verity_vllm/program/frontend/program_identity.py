@@ -30,7 +30,7 @@ def _visit_static(v, visit) -> None:
             _visit_static(x, visit)
 
 
-def check_identity(program: Program, *, registry=REGISTRY, check_registry: bool = True) -> dict[str, SpecializedDefinition | PrimitiveDefinition]:
+def check_identity(program: Program, *, check_registry: bool = True) -> dict[str, SpecializedDefinition | PrimitiveDefinition]:
     """§8.1: within a program a fully qualified specialisation (`Name_vN{statics}`) resolves to exactly one
     body. Two reachable definition objects with the same id must encode the same body; with `check_registry`
     an authored definition whose id a *registered* definition also carries must agree with it as well —
@@ -69,11 +69,11 @@ def check_identity(program: Program, *, registry=REGISTRY, check_registry: bool 
     if check_registry:
         for fid, fn in list(seen.items()):
             if isinstance(fn, PrimitiveDefinition):
-                reg = registry.defs.get(fn.id)
+                reg = REGISTRY.defs.get(fn.id)
                 if reg is not None and reg is not fn and (reg.params != fn.params or reg.ret != fn.ret):
                     raise FrontendError("E_IDENTITY", f"primitive {fid} differs from the registered primitive of that id")
                 continue
-            reg = registry.defs.get(fn.base_id)
+            reg = REGISTRY.defs.get(fn.base_id)
             if reg is None or reg is fn.defn or not isinstance(reg, CompositeDefinition):
                 continue
             try:

@@ -1134,9 +1134,9 @@ class _MarlinLaunches(nn.Module):
 
     def __init__(self, rng, block_m: int = 8) -> None:
         super().__init__()
-        E, H, I = MARLIN_E, MARLIN_H, MARLIN_I
-        self.codes13, self.codes2 = rng.integers(0, 16, (E, 2 * I, H)), rng.integers(0, 16, (E, H, I))
-        self.bytes13, self.bytes2 = rng.integers(118, 128, (E, 2 * I, H // 32)), rng.integers(118, 128, (E, H, I // 32))
+        E, H, INTER = MARLIN_E, MARLIN_H, MARLIN_I
+        self.codes13, self.codes2 = rng.integers(0, 16, (E, 2 * INTER, H)), rng.integers(0, 16, (E, H, INTER))
+        self.bytes13, self.bytes2 = rng.integers(118, 128, (E, 2 * INTER, H // 32)), rng.integers(118, 128, (E, H, INTER // 32))
         def p(a):
             return nn.Parameter(torch.from_numpy(a.astype(np.uint8)), requires_grad=False)
         self.w13, self.w2 = p(MR.pack_e2m1(self.codes13)), p(MR.pack_e2m1(self.codes2))
