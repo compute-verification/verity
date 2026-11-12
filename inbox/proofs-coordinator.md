@@ -91938,3 +91938,57 @@ Answer to your 13:46Z message and the mailbox's 13:45Z section. Mailbox read who
 - **Not covered by this try** [read]: it ran at the first commit. The later commits change `admitReads` (it records the known trees) and split `seat` (`seat` is the slot and the admission; `seatReads` the registrations, at the answer to `Register`). No proof names either [read: grep of `security/`: the model's `.seat` step is `admit (slot …)`], and the try at the head I launch next says so by a run.
 - **Which records move** [derived, from the locks' `reads` sections; the records run at the head to be marked settles it]: in `security/lean-audit.json` and `security/Properties/lean-audit.json`, the digests of `Firewall.Record` and `Firewall.Release` (both files change), and the definitions `Core.Firewall.Event`, `Event.casesOn`, `Event.rec`, `Event.ctorIdx`. [guess] the functions that match on an event (`Tally.step`, `openOf`, `stopOf`, `failures`, `nextOf`, `finished`, `budgetOf`, `unended`) and the unfolded hashes of the six guarantees, if the lock hashes through them. No statement's type changes [read: none names a constructor].
 - **Branch** `cursor/proofs-knownlist-7c1e` at `715f5602e4`, not opened: the event, the list in `Register`'s answer with the five refusals, the verifier's side (`flock-verify known-trees`, `flock-circuit serve --known-trees`), the Python twin with its vector case, the tests, PROTOCOL.md §10.2. Nothing of it but that first commit is compiled yet [read]; the Python twin's own tests pass here (24 passed, pure Python) [run].
+
+## FREEWORDS, Thu 12 Nov 15:20Z: built and pushed (`cursor/proofs-freewords-7c3e` at `4af462922f`); at 4,096 and 8,192 keys both blocks stage to the same `pin`, `class_sha512` and `circuit_bytes` before and after, the positions block's peak falling from 11.96 to 3.37 GiB and from 47.63 to 12.22 GiB; at 16,384 keys the positions block stages in 40.93 GiB to circuits' three values; the mask block at 16,384 and the checks are running
+
+Mailbox read at `f86870e927` (my file last changed in `c2cc199318`): 14:34Z's two answers and 14:48Z's skip are acted on below.
+
+**Built.** Branch `cursor/proofs-freewords-7c3e`, head `4af462922f`, two commits on `main` `8252fe8dff65` [read: `git log`].
+
+- `verity_flock/ir_lower.py`, +144/−35 [read: `git diff --stat 8252fe8dff65 4af462922f`]. My size entry said "about 60 lines net": it is 109 net, the difference being the walk split out so both modes share it (`_singly`), the two step records and their docstrings.
+- `lower_gates(..., reads: Collection[int] | None = None)`. `None`: the caller may read any word, every word stays, decisions taken as the walk goes (main's code path). Given: everything the caller reads afterwards; `wires` holds only those words on return. `ir_lower.lower` passes `reads=call.returns` (site 2, the path a `UnitStager` takes and the one circuits measured). [read: `ir_lower.py` 210-256, 446]
+- **`reads=()` changed meaning** (as ruled 14:34Z; it goes in the body's first lines): it was "nothing besides the gates' operands, keep every word", it is "the caller reads nothing afterwards", so `wires` is empty on return. No caller in the tree passes `()` [read: my 14:27Z table; `test_boolean_lowering.py`'s helper passed `()` for "no reads" and now passes `None`].
+- Both refusals are kept and each has a test: a builder that declines after the walk chose it, and a count left at the end (`AssertionError`) [read: `ir_lower.py` 253, 255; `test_lower_gates_reads.py` `test_a_builder_that_declines_once_chosen_is_an_error`, `test_a_read_counted_and_never_made_is_an_error`].
+- `compact_stage.py` is untouched (14:34Z); its `_Wires`, `_reads` and `lower` go in the body as the follow-up.
+- Tests: `verity/protocols/flock/prover/tests/test_lower_gates_reads.py`, 14 tests, 0.4 s, no clock [run: local, `14 passed in 0.40s` at `4af462922f`]. Each caller kind lowers once with words dropped and once with every word kept (the fixture swaps in `lower_gates` without `reads`) and compares every row in order, the outputs and the `flock-ir-unit/v2` text: a whole unit; a stager's unit (`class_statement.unit_lowering`); a split (`ir_lower.units` over a batch); a cut (cut words inside activations, against the gates alone); a caller with `reads` (`partition_units.lower_class` under `q-word`, `blocks:3`, `scatter:5/1`); an activation lowered by its builder (once, either way); a `wires` passed from call to call. Named words are still there afterwards and equal the kept lowering's; an unnamed one is a `KeyError`. Eight hand mutations of `ir_lower.py` each failed these tests before I reverted them [run: local].
+
+**Measured** (one process a case, `UnitStager` with the circuit written to a file, peak = the process's `VmHWM`; "before" is the same tree with `main`'s `ir_lower.py` (`8252fe8dff65`, sha256 `71317a17…`) loaded in place of its own (sha256 `4162d32e…`), so one tree and one machine give both). [run: `r20261112-145355-baa8`, vy-nebius-cpu-2, done, rc 0, tree `22b2f5df8f`; `ir_lower.py` is the same file at `4af462922f`]
+
+| block | keys | peak GiB, before → after | stager s, before → after | `lower_gates` s | ANDs | `circuit_bytes` | `pin`, `class_sha512`, `circuit_bytes` |
+|---|---|---|---|---|---|---|---|
+| `DsaMaskPositions_v2{N=4096,AT=16384,K=2048}` | 4,096 | 11.961 → 3.367 | 111.6 → 81.8 | 71.1 → 40.8 | 352,178 | 543,563,744 | equal (`a17ce0d6…3f9eb457`, `f5a2271e…afcf1fcf`) |
+| `DsaTopKMaskBlock_v2{N=4096,AT=16384,TOPK=2048}` | 4,096 | 3.958 → 3.423 | 67.4 → 65.0 | 22.2 → 21.8 | 372,646 | 710,047,799 | equal (`869957a1…d1925ae7`, `a615e445…3cf9d23a`) |
+| `DsaMaskPositions_v2{N=8192,AT=16384,K=2048}` | 8,192 | 47.634 → 12.217 | 336.3 → 224.3 | 215.9 → 104.9 | 743,335 | 2,060,833,161 | equal (`6e0489b3…c445a99b`, `62d88032…e031ff6f`) |
+| `DsaTopKMaskBlock_v2{N=8192,AT=16384,TOPK=2048}` | 8,192 | 14.608 → 12.336 | 194.4 → 194.0 | 57.4 → 60.5 | 757,643 | 2,819,183,365 | equal (`9588592c…6aaf1246`, `88de8f80…9b1499d6`) |
+
+- Words left in `wires` when `lower_gates` returns, before → after: 2,259,882 → 65,550; 1,368,070 → 4,096; 4,594,590 → 65,551; 2,744,311 → 8,192 [run: same].
+- At 16,384 keys, after alone (14:48Z): positions `DsaMaskPositions_v2{N=16384,AT=16384,K=2048}` stages in **40.933 GiB**, stager 773.0 s, `lower_gates` 293.5 s, 1,529,756 ANDs, `circuit_bytes` 8,037,823,613; its `pin`, `class_sha512` and `circuit_bytes` equal, whole values, those of circuits' plain run and of their wrapper's run [run: `r20261112-150156-71e3`, vy-nebius-cpu-10, running, tree `22b2f5df8f`; read: `r20261112-102208-aaad` `out/positions.16384.json`, `r20261112-111042-1e37` `out/positions.16384+free-words.json`, fetched with `--all`]. So circuits' caution (their base `19fb19a21e40`) did not bite on this block: same pin. The mask block at 16,384 is running in the same job.
+- Beside circuits' figures for positions at 16,384: plain 173.396 GiB, their wrapper 40.006 GiB [read: the two files above]; mine 40.933 GiB. The two harnesses differ (theirs is `scratch/cir254/stage_profile.py` with its marks and an instance staged; mine stages the unit only), so 0.9 GiB is not a measured difference between the two ways of dropping. One cause I can name and have not measured: mine holds the steps it will lower (a small tuple a gate) where theirs holds an array of last readers after a second walk (168.7 s of their 1,606.5 s). A probe run measures it (below).
+- I launched "before" and "after" at 16,384 at 14:54Z, before I read 14:48Z; I cancelled it at 15:01Z, seven minutes in, and launched "after" alone [run: `r20261112-145445-27db`, cancelled].
+
+**Runs open** (all through `research run --on auto --cwd source --as proofs`):
+
+| run | what | machine | state at 15:20Z |
+|---|---|---|---|
+| `r20261112-150156-71e3` | both blocks at 16,384 keys, after | vy-nebius-cpu-10 | running; positions done, mask block ETA 15:35Z |
+| `r20261112-151802-7e13` | both blocks at 16,384 keys, after, with a probe: resident memory before and after the steps are made, and steps left / words held where it peaks inside `lower_gates` | vy-nebius-cpu-14 | running, ETA 15:50Z |
+| `r20261112-150522-db6c` | `suites.py --changed 8252fe8dff65 --quick` at `4af462922f` | vy-nebius-cpu-13 | running; 11 suites passed, none failed |
+| `r20261112-150547-9904` | `suites.py verity-flock` (slow tests included) at `4af462922f` | vy-nebius-cpu-13 | waiting: it shares the commit's tree with the quick run and waits for that run's Lean build to end [read: its `stderr.log`] |
+| `r20261112-145923-2a32` | `circuit-check --all --jobs 20 --mem-gb 240` at `22b2f5df8f` | vy-nebius-cpu-7 | running since 15:13Z (it waited 13 minutes for a slot with 256 GB) |
+
+- The first quick and slow runs (`r20261112-145607-283e`, `r20261112-145714-0d95`, at `22b2f5df8f`) I cancelled at 15:05Z when the head moved by the two refusal tests; the two above replace them.
+- circuit-check: a target's inputs are found by tracing its run, so I know no way to list "the targets that read `ir_lower.py`" without running them; I run `--all` and will give its report, with the count of targets, in the body. It is at `22b2f5df8f`; `4af462922f` differs from it by one test file, which no target reads [derived: the commit touches only `verity/protocols/flock/prover/tests/test_lower_gates_reads.py`].
+
+**Seen, not changed** (forms as sets): after the change the resident memory when `lower_gates` returns is 40.5 GiB at 16,384 keys (positions) with 65,552 words left in `wires` [run: `r20261112-150156-71e3`]. Circuits' own count for that circuit is 1.37 billion operand entries [read: `positions.16384+free-words.json`, `wires.circuit`]. What share of the 40 GiB is the circuit's rows, and what share is words alive at once in the middle of the walk (their wrapper counted at most 620,592 at once), I have not measured; the probe run says how many words were held at the peak.
+
+**Not established.**
+- The mask block at 16,384 keys (running).
+- Whether the quick tier, the Flock slow tier and `circuit-check --all` pass at this head (running; none has reported a failure yet, the quick tier has passed the 11 suites it has finished, at 15:20Z).
+- What the steps cost at the peak, and where the peak is (probe running).
+- With the sums committed (CIR-265): not measured; no branch is named in my mailbox as of `f86870e927`.
+- Seconds are one sample each on a shared node; I claim the direction on the positions block (a third to a half less) and nothing finer.
+- `lean-agreement` (demanded for `verity/protocols/flock/` under `merge_requires`): the train's, not run by me.
+
+**To post:** nothing yet.
+
+Next entry by 16:15Z.
