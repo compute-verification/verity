@@ -35,6 +35,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
+          "tools/research/src/research/treelock.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "verity/protocols/flock/prover/tests/data/captured-101/slices/silumul-v1-i8192",
           "verity/protocols/flock/prover/tests/data/captured-101/slices/rope-head-d64",

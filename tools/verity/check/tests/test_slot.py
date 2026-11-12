@@ -655,7 +655,7 @@ def test_status_json_is_the_same_state_as_one_object(tmp_path, monkeypatch, caps
     line = tmp_path / SLOT.LINE
     line.mkdir()
     waiter = line / f"{SLOT.PRIORITY}{int((NOW.timestamp() - 300) * 1e9):020d}-4242"
-    waiter.write_text(json.dumps({"pid": 4242, "run": "r-waiting", "by": "lander"}))
+    waiter.write_text(json.dumps({"pid": 4242, "run": "r-waiting", "by": "lander", "mem_gb": 64}))
     wfd = _hold(waiter)
     assert SLOT.main(["--status", "--json"], now=lambda: NOW) == 0
     doc = json.loads(capsys.readouterr().out)
@@ -666,7 +666,7 @@ def test_status_json_is_the_same_state_as_one_object(tmp_path, monkeypatch, caps
     assert d["holder"] is None and d["blocked"].startswith("window 2026-10-01T09:20Z (30 min)") and d["lead"] == 30
     assert d["upcoming"] == [{"start": "2026-10-01T09:20Z", "minutes": 30, "starts_in_min": 20, "note": "Pearl-C4 row"}]
     assert doc["waiters"] == [{"since": "2026-10-01T08:55Z", "minutes": 5, "priority": True, "pid": 4242, "run": "r-waiting",
-                               "by": "lander"}]
+                               "by": "lander", "mem_gb": 64}], "its ask too: what it reserves when it starts, which a placement counts"
     os.close(held)
     os.close(wfd)
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "absent")

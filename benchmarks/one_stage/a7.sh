@@ -11,6 +11,11 @@
 #      A7_SAMPLES (its --samples, the remote session's samples a window)  A7_CACHE (the build cache)
 # Kept in $OUT/a7: a7's records and logs, the public files, the canonical commitments' b || c, the memory map and the sessions
 # (their proofs and records); never a prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
+# The units (`verity.definitions.circuits.requirement_units`) are one of each per step of a stand-in decoder's requirement,
+# their witness rows bound to canonical commitments, and the ledger takes them as its requirement link
+# (`audit.RequirementLink`): its ε the most share of the linked credit the units its sample leaves unproved can carry, its
+# δ the sample's. Checks 1-3 and 5 on each sampled receipt are proved, not opened, in a second statement, by the opening
+# unit (`verity.protocols.poub.verifier.commitments.gates.block_check`).
 set -uo pipefail
 export HZ_CONFIGS=a7 HZ_MEM_GB=${A7_MEM_GB:?}
 [ -n "${A7_CACHE:-}" ] && export HZ_CACHE=$A7_CACHE
