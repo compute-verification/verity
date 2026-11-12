@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.spot.verifier import second_stage as SS, service as SV
+from verity.protocols.spot.verifier import second_stage as SS
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.commitments.windows import rows as CS
@@ -24,12 +24,13 @@ from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_windows as BW
 from verity_vllm.pipeline.boundary_stop import Stop
 
+from tests.pipeline.test_boundary_tables import DESIGN
+
 V, N = 160, 8
 K = V // N
 CHECK = f"GreedySelect_v1{{V={V},N={N}}}"
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": False, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
-DESIGN = SV.selection_law(SV.All(), 1)
 RULE = Stop((7,), 64, 4)
 
 
