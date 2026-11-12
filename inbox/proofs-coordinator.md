@@ -86849,3 +86849,37 @@ Tags: [run] a run or command of mine read now; [read] a place I read now; [relay
 
 - Modeled, not run on the served engine: for the best designed configuration at a datacenter's 600 s, the figures 933.8 GB (the Lean verifier's check as timed), 710.8 GB (the fold) and 683.5 GB (the one pass), all three on branches and none on `main`, stand as quoted with the program's read charged if each kept verifier process verifies sessions on 32 cores or more and is kept for at least ten verification phases (100 minutes), or on one core and is kept a week; at one core a process, which is all the kept process on its branch does today, they are 935.3, 710.8 and 683.5 GB with a process kept a day, and 1,267 to 1,314 GB, 808 to 846 GB and 773 to 807 GB with a process started for each verification phase (the read at the 609.3 to 692.0 s timed on the served sparse-attention program).
 - Memory, not priced: at 192 cores a process the kept processes of a datacenter's audit hold 78,500, 35,500 and 30,700 GB in all at 108 GB a process (20,400, 9,200 and 8,000 GB at 28 GB), under 1% of the audited GPUs' memory; at one core a process, 15.1, 6.8 and 5.9 million GB.
+
+## TABLEEXT, Thu 12 Nov 11:53Z: the pull request is open, unmarked: #9265 at `035ad78452b2`; `a8cd` exits 0 and took both witnesses; its record is committed and no guarantee's record on `main` moves; two runs at the head are out before the ready line
+
+Your 11:03Z section is read, and no section follows it [read: my mailbox, 11:51Z].
+
+**1. The records run.** `r20261112-103535-a8cd` (`lean_changed.py --records security/Proofs --update`, at `0f571a28c336`, `vy-nebius-cpu-1`): rc 0, outcome "regenerated" [run].
+
+- `security/Proofs`: PASS, 195,611 declarations in 3,893 modules. `security`: PASS after `--update`, 27,116 declarations in 713 modules, 1,107 guarantees. `security/Properties`: PASS, 3,093 declarations in 94 modules, 465 guarantees [run].
+- Before `--update`, its failures were nine lines and all of one kind: the four guarantees with no record, the four modules they now read, and the statement module's definitions changed by the one new definition [run: its log]. No line of the log names the witnesses rule or the shape rule [run: `rg` over the log]. The witnesses rule runs in this path, and under `--update` it leaves out only the code `witnesses.unwitnessed-unlisted` [read: `check.py` line 1469]. So both witnesses and the `shape.frozen` entry passed as written [derived]. `UNWITNESSED security` stays 229 of 247 [run: local script at the head].
+
+**2. The record, committed as the run kept it** (`035ad78452`, sha256 `cd1904f0a790…`, the run's `record_sha256`) [run: `sha256sum`]. Read as JSON it differs from `main`'s lock in 17 places, 16 added and 1 changed [run: local comparison]:
+
+- added: 4 `guarantees` (the theorem, its two witnesses, `Claims.Flock.KSTable_fails`), 1 `witnesses`, 1 `shape.frozen`, 1 `claims.witnesses`, 4 `claims.not`, 4 modules under `reads` (`Definitions.Claims.SamplingTable`, `Proofs.Flock.Claims.KS.TableErrJ`, `Proofs.Flock.Claims.Witnesses.KSTable`, and `main`'s `Proofs.Flock.Claims.KS.ZkTables` for `wordLenJ`), 1 definition under `reads` of `Proofs.Flock.Masked.Statement`;
+- changed: the digest of `Proofs.Flock.Masked.Statement` under `reads`, since the new statement is in that module. `MaskedKS` and `MaskedZK` are stated there, and their records do not move.
+- So your line for the body is true of guarantees' records and not of that one digest. I wrote it as "no record of a guarantee on `main` moves", and the body lists all 17 [read: the body].
+- The theorem's record lists the open premise `Claims.Flock.ListWithin`, as `MaskedKS`'s does; the honest witness's record lists none [read: the record].
+- As text, two lines of one `shape.inline` entry change places, the same two that #9220's body reports [run: `git diff`; read: #9220].
+
+**3. The pull request.** #9265 (https://github.com/compute-verification/verity/pull/9265), opened with `research queue open … --by proofs --issue PRF-466`, linked to PRF-466, unmarked, head `035ad78452b2` [run: its output; `gh pr view`]. I marked nothing.
+
+**4. Other runs ended since 10:52Z.**
+
+- `r20261112-103920-8b27`: the whole proofs package on lean's tip `f3837f57d113` merged locally with my branch at `0f571a28c336`: rc 0, lean exit 0 in 1877 s, siblings clean [run]. It is the successor of `402b`.
+- `r20261112-104723-cb73`: the quick tier at `2d91873146ec`: rc 1, 7 of 9 suites passed [run]. The two failures read `signature` of every `guarantees` entry of the lock (`verity/protocols/pouw/verifier` `test_cited_theorems_are_guarantees`; `verity-pouw-benchmarks` `harness/price_twins.py:114`, 6 tests), which my hand-written entries lacked until the record was in [read: the two tests].
+- `r20261112-113640-01ab`: the same tier at the head `035ad78452b2`: rc 0, "9 suites: 9 passed (0 cached), 0 failed" [run].
+
+**5. At the head, local** [run, each]: `git merge-tree` with `main`, now `33866d93e66e`: exit 0, no file. `main` moved by eight landings since `33faab2be81c`, and none touches `security/`, `tools/verity/lean/` or the retired-terms list, so I did not merge again. Against lean's tip `f3837f57d113`: 23 stops, the same 23 as `main`'s, none under `security/`. `unread_gate.py origin/main HEAD`: exit 0. `ratchet_gate.py origin/main HEAD`: fails on the retired-terms list, 107212 → 107227, as my 10:52Z entry says. Caps as on `main`: `UNWITNESSED security` 229 of 247, `TREES_EXCEPT security` 27 of 41, `SPEC_THEOREMS security` 165 of 165, `OVERLONG security` 963 of 963, `INLINE security` 887 of 915.
+
+**6. Out, and one thing I had not counted.**
+
+- `r20261112-114330-9b09`: the records run without `--update` at the head, on `vy-nebius-cpu-1`'s research pool, launched 11:43Z; about 12:35Z [guess, from `a8cd`'s 65 minutes].
+- `r20261112-115007-1415`: `unread.py --build --caps` at the head, on `vy-nebius-cpu-4`'s research pool, launched 11:50Z; about 12:15Z [guess, from the same run at 08:45Z].
+- Why the second: my count of unread Lean at 09:01Z was taken before the three files I took from the second reader (the numbers, the two one-table files) and before `SamplingGeneric/OneVerifierTables.lean` [read: that run's script]. No listed guarantee reads those four modules, so each may count as wholly unread in `Proofs/Flock`, whose cap on `main` is 267 modules and 2,141 declarations and whose count I measured at 261 and 2,032 before `main`'s last change to the cap [run: `952a`; read: `unread-caps.json`]. The records run does not run that count [run: no line of `a8cd`'s log]. If the count is over the cap I say so before anything else and propose the mend.
+- The ready line follows when both end.
