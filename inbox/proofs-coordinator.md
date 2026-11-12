@@ -101827,3 +101827,33 @@ command I ran and read now; [read]; [derived]; [guess].
 **#9452:** as my 20:46Z entry has it; head `378fcba9dae6`, not marked by agreement, waiting on #9375.
 
 **Next:** read `dd1e` and `cb09`, then #9466's ready line or a fix; `git log origin/main` for #9375 at each step.
+
+## ACCOUNTS, Thu 12 Nov 21:14Z: HEAD: the auditor's host: `88363a30fc` on `cursor/proofs-site-v2-1dc6`
+
+[run] pushed 21:01:47Z; `verity lean try` of `CoreProtocol/Registration.lean` `r20261112-205434-155f` and `SiteV2Guards.lean` `r20261112-205434-edf8`, both exit 0 at this commit.
+- A location's kind may be `"auditor-host"`: a machine of the auditor's. Its parent is the site. A certifier's or a challenger's parent is the site or an auditor-host.
+- It is the auditor's own: owner `auditor`, with a key and the key's scheme, held to the auditor's `keys` entry under the host's id, as a device's are. Else `owner`.
+- No link ends at one, and it holds none of the prover's hardware. Else `kind`.
+
+## ACCOUNTS, Thu 12 Nov 21:14Z: HEAD: the time base: `160ab7b9a3` on `cursor/proofs-site-v2-1dc6`
+
+[run] pushed 21:01:47Z; tries `r20261112-205857-90fc` (guards) and `r20261112-205857-4f66` (registration), exit 0, on the tree of `e0167418c1`.
+- A location has a fifteenth key, `"timebase"`: on an auditor-host the SKU of the time base its clock runs on, a string; `null` on every other location.
+- The auditor's JSON has a seventh key, `"timebases"`: a list of `{"id", "sku"}`, the id an auditor-host's. An auditor-host must state the auditor's time base for it. Else `owner`.
+
+## ACCOUNTS, Thu 12 Nov 21:14Z: HEAD: the premise by host: `e0167418c1` on `cursor/proofs-site-v2-1dc6`
+
+[run] pushed 21:01:47Z; tries at this commit: `CoreProtocol.lean` `r20261112-210042-c55a`, `RegistrationMain.lean` `r20261112-210042-9b93`, `Account.lean` `r20261112-205857-405c`, all exit 0.
+- A clock's `drift` is stated on the auditor-host, not on the certifier: the location's `"drift"` is `null` on every location but an auditor-host, and there it is the auditor's figure (`"drift"`: `{"drift", "id"}`, the id the host's), below 1, or `null` when the auditor states none. Else `owner`.
+- A device of the auditor's reads the clock of the auditor-host it is in (`Site.clock?`, `Site.drift?`). A device at the site, or in a host that states no drift, times nothing unless a premise is given.
+- The rows take a premise by host: `{host, drift, premise}`. A premise that names no auditor-host of the Site is refused in words (`premise NAME: HOST is no auditor's host of the Site`), not skipped. A stated figure wins over a premise.
+
+## ACCOUNTS, Thu 12 Nov 21:15Z: your 21:12Z items 2 and 3: compute-research's branch merges clean and comes in whole; the difftest's Lean compiles, its Python test I have not run
+
+**Item 2.** [run, 21:13Z] `git merge --no-commit` of `cursor/compute-research-site-v2-python-7ba6` at `cf9a2c15cb` into the v2 branch at `d9b3740f8c`, in a scratch worktree, then aborted: "Automatic merge went well", 12 files, every one Python or a README (`verity/hardware/site/__init__.py`, `registration.py`, `nodes/__init__.py`, their tests, the two difftests' tests, `benchmarks/certifier_term/`, two READMEs). My branch changes Lean only since their merge of it, so no file is changed on both sides.
+- How it comes in: merged whole, one merge commit on the v2 branch, on the day the pull request opens. Their branch already holds mine up to `0c9e4b54ed`, so a merge keeps their commits as theirs and needs no pick. I merge again if they push after.
+
+**Item 3, the Site's difftest.** [run] `verity lean try` of `Spot/SiteDifftest.lean`: `r20261112-204448-00ca` exit 0 at `0c9e4b54ed00` (with `140b7627fb`), and `r20261112-210042-1be5` exit 0 at `e0167418c1`.
+- What that establishes: the Lean side compiles and reads a device's model at the Site's own unit of time. Not established: the difftest itself. Its Python test (`test_site_difftest.py`) runs the Lean against `verity.hardware.site`, and I have not run it; it cannot pass at `e0167418c1` until their Python writes `"timebase"`, `"timebases"`, the `auditor-host` kind and the drift by host, since the Lean reads exactly those keys.
+
+**The v2 branch now.** [run] `982668328b`: the spec's Site in v2's form, `security/Definitions/Core/Site.lean`, compiles (`r20261112-211104-5668`, exit 0). `d9b3740f8c`: the agreement's maps and witnesses' instances; its try is out. The notice `FOR DANIEL: Site v2` follows in its own entry.
