@@ -104,3 +104,6 @@ the band (`band.SECURE_FIRST`)."""
 
 LEAN_P3_MEETS = Params(n=220, wc=37, k=12)
 """Lean's `p3Scheme`: one segment of `B(220, 12)`, labels of `220 * 37 = 8140` bits."""
+
+
+__all__ = ["OPERATING_POINT", "SALT_BITS", "TAG_BITS"]
