@@ -41,9 +41,12 @@ applicability check fails — a launch that happens to show a registered tiling 
 """
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+from verity.circuits.codec import canonical_json
 
 #: vLLM's default tiling of `matmul_persistent` for bf16 (`batch_invariant.py::matmul_persistent`, `configs[torch.bfloat16]`).
 DEFAULT_TILING: dict[str, int] = {"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 8, "num_warps": 8, "num_stages": 3}
@@ -165,9 +168,6 @@ class GemmTarget:
         """Identity of the pinned tuned table this target consults (an applicability condition); None for a table-less target."""
         if not self.tuned_table:
             return None
-        import hashlib
-
-        from verity.circuits.codec import canonical_json
         return hashlib.sha256(canonical_json({f"{k[0]},{k[1]}": v for k, v in self.tuned_table.items()})).hexdigest()
 
     def describe(self) -> dict:
