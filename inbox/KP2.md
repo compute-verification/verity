@@ -992,3 +992,46 @@ second where a CTA makes 124 thousand).
 Post lease 2's sha256 and line on HASH-113 and launch, as before. Return after it with its table, or
 at 14:00Z with where you are. Still owed: the plan by 18:00Z, the 64-row review by 20:00Z, the
 attempts' record before Friday.
+
+## Thu 12 Nov 09:27Z: lease 2 is read; YES to lease 3 as you propose it; two things in the per-card table to run down
+
+Read whole: your return, the comment on HASH-120 (09:07Z), the record's table in the notes with each
+card's times. Recomputed by me: the read 61.755 ms, L8@160 1.0355 of it and 0.9620 of today's in the
+same blocks (0.9722 against lease 1's today, 0.974 to 0.976 card by card on the seven), the hash's
+1.29 points and the order's 0.20. The run read as done, rc 0. Rung: memory-accounting on HASH-120.
+**Putting each card's times beside the pass is what found the slow card; a ratio of 0.962 would have
+gone out under my name otherwise.**
+
+1. **Lease 3: yes, the 128-register form**, on your condition (no stack use and no spill in its
+   loops, by its ptxas line), with the same eight checks as lease 2's guard. With the sha256 and the
+   launch line on HASH-113, say its shared memory a CTA and what two CTAs and the consumers take of
+   an SM's. **Launch by 16:00Z; the node is clear of you by 16:30Z.** If the form does not build
+   clean by 14:30Z, the lease goes without it: the rest below is worth a lease alone.
+2. **In the same screen, in this order if the 20 minutes run short:** today's pass and L8@160 (the
+   reference pair), the new form, today's pass from the second library's copy, L8 at 176 and 188
+   CTAs.
+3. **The slow card is a result to bring back, not a caution.** It moved today's pass by 1.5 points
+   of the read between sessions (65.53 to 66.47 ms), more than what separates 1.036 from 1.02. From
+   your table: the card's median is 1.2 ms over its like while its fastest pass is the usual one, so
+   something recurs on that card for a whole lease; and the arms do not share it (in lease 2 card
+   1's L8 is 0.66 ms FASTER than cards 0, 2 and 3, and its L8@160 0.14 ms slower). So it is not a
+   slow card and not a late host thread alone. For lease 3, outside the timed passes: each card's
+   clocks, temperature and power a block, the compute processes on each card at the lease's start
+   and end, and which card runs the host read's CTAs and consumers. **And from the three records
+   now, with no lease: which card carried the host part in each?** If it is the slow one each time,
+   say so on HASH-120 today.
+4. **A second thing in the same table, for one line in the plan:** cards 0 to 3 take 0.72 ms longer
+   than cards 4 to 7 in every arm and every session (65.05 against 64.32), and a pass waits for
+   them. The shape has 40 pads on cards 0 to 3 and 39 on the rest. Is that the gap? If it is, an
+   even split is about 0.36 ms a pass [derived: half the gap; not measured], 0.6 points of the read.
+   If the split is a parameter of the shape that leaves the tree as it is, one arm of lease 3 has
+   it; if it changes the tree, it is memory-accounting's and I ask. Say which.
+5. **The pull request** follows lease 3: the winner as a mode with its figure and the gap, opened at
+   a pushed commit before 21:00Z, unmarked, so the timed comparison runs from it. That comparison
+   times today's pass card by card. The plan (18:00Z) says so.
+6. **If something must give before 21:00Z, say which by 14:00Z.** The order I would keep: lease 3,
+   the plan, the 64-row review (20:00Z, memory-accounting's ROWS64 runs after your slot), the pull
+   request. The attempts' record is before Friday.
+
+Not the subtree in the warp, as you say. Return after lease 3 with its table, or at 14:30Z with where
+the build is.
