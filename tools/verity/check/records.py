@@ -25,6 +25,7 @@ import json
 import os
 import posixpath
 import re
+import stat
 import tarfile
 import tempfile
 import threading
@@ -65,21 +66,18 @@ def intact(rel: str, data: bytes) -> bool:
     return hashlib.sha512(data).hexdigest() == posixpath.basename(rel)[:-len(".json")]
 
 
-def needs(rel: str, data: bytes) -> list[str] | None:
-    """The names of the records the record named ``rel``, of bytes ``data``, needs; None when its bytes aren't JSON or a need leaves
-    its version."""
-    try:
-        doc = json.loads(data)
-    except ValueError:
-        return None
+def needs(rel: str, data: bytes) -> list[str]:
+    """The names of the records the record named ``rel``, of bytes ``data``, needs; ValueError when its bytes aren't JSON or a
+    need leaves its version."""
+    doc = json.loads(data)
     got = doc.get("needs", []) if isinstance(doc, dict) else []
     if not isinstance(got, list):
-        return None
+        raise ValueError(f"{rel}: its needs are no list")
     out, top = [], rel.split("/", 1)[0] + "/"
     for n in got:
         p = posixpath.normpath(posixpath.join(posixpath.dirname(rel), n)) if isinstance(n, str) else ""
         if not p.startswith(top):
-            return None
+            raise ValueError(f"{rel}: {n!r} names no record of its version")
         out.append(p)
     return out
 
@@ -99,12 +97,12 @@ def named_in(pack: Path) -> dict[str, int]:
     """`{name: bytes}` of the records the verdict pack ``pack`` lists (`MANIFEST`); empty when it lists none or its list can't be read."""
     try:
         with tarfile.open(pack, "r:*") as tar:
-            try:
-                m = tar.getmember(MANIFEST)
-            except KeyError:
+            if MANIFEST not in tar.getnames():
                 return {}
-            doc = json.loads(tar.extractfile(m).read())
-    except (OSError, ValueError, tarfile.TarError, EOFError, AttributeError):
+            doc = json.loads(tar.extractfile(MANIFEST).read())
+    except (OSError, ValueError, tarfile.TarError, EOFError) as e:
+        print(f"check: circuit records: {pack.name}'s list can't be read ({type(e).__name__}: {e}); none it names is fetched",
+              flush=True)
         return {}
     got = doc.get("records") if isinstance(doc, dict) else None
     return {k: v for k, v in got.items() if isinstance(k, str) and named(k) and type(v) is int and v >= 0} \
@@ -112,9 +110,12 @@ def named_in(pack: Path) -> dict[str, int]:
 
 
 def _on_store(base: Path) -> set[str]:
+    if not (p := base / ON_STORE).is_file():
+        return set()
     try:
-        return set((base / ON_STORE).read_text().split())
-    except OSError:
+        return set(p.read_text().split())
+    except OSError as e:
+        print(f"check: circuit records: {p} can't be read ({type(e).__name__}); the store is asked for each", flush=True)
         return set()
 
 
@@ -123,17 +124,29 @@ def _remember(base: Path, names) -> None:
         try:                                   # a line a write, appended: slots on one node append at once
             with open(base / ON_STORE, "a") as f:
                 f.write("".join(f"{n}\n" for n in names))
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"check: circuit records: {base / ON_STORE} can't be written ({type(e).__name__}); the next check asks the store "
+                  "for these again", flush=True)
 
 
 def _listed(d) -> list[os.DirEntry]:
     """``d``'s entries by name; none once it is gone (circuit-check's expiry may remove a key's directory meanwhile)."""
+    if not os.path.isdir(d):
+        return []
     try:
         with os.scandir(d) as it:
             return sorted(it, key=lambda e: e.name)
-    except OSError:
+    except OSError as e:
+        print(f"check: circuit records: {d} can't be listed ({type(e).__name__}); none in it is named", flush=True)
         return []
+
+
+def _stat(p) -> os.stat_result | str:
+    """The file's stat, not following a link, else why not."""
+    try:
+        return os.lstat(p)
+    except OSError as e:
+        return f"gone ({type(e).__name__})"
 
 
 def _place(p: Path, data: bytes) -> None:
@@ -189,7 +202,12 @@ def fetch(names: dict[str, int], d: Path, get: Callable[[str], bytes], max_bytes
             except Exception:  # noqa: BLE001  (a record the store can't give is built)
                 why = "missing"
             else:
-                why = None if len(data) == names[rel] and intact(rel, data) and needs(rel, data) is not None else "corrupt"
+                why = None if len(data) == names[rel] and intact(rel, data) else "corrupt"
+                if why is None:
+                    try:
+                        needs(rel, data)
+                    except ValueError:
+                        why = "corrupt"
         with lock:
             if why is None:
                 got[rel] = data
@@ -243,15 +261,22 @@ class Publisher:
         self.lock = threading.Lock()
         self.stats = {"put": 0, "already": 0, "failed": 0, "late": 0}
 
-    def _file(self, rel: str, st: os.stat_result) -> tuple[bool, list[str] | None]:
-        """(whether it is a binding's record, the records it needs, None unless its bytes are its name's)."""
+    def _file(self, rel: str, st: os.stat_result) -> tuple[bool, list[str] | str]:
+        """(whether it is a binding's record, the records it needs, or why it counts nowhere)."""
         k = (st.st_size, st.st_mtime_ns)
         if (m := self.read.get(rel)) is None or m[:2] != k:
             try:
                 data = (self.d / rel).read_bytes()
-            except OSError:
-                return False, None
-            m = (*k, binding(data), needs(rel, data) if intact(rel, data) else None)
+            except OSError as e:
+                return False, f"unreadable ({type(e).__name__})"
+            if not intact(rel, data):
+                need = "not the bytes its name digests"
+            else:
+                try:
+                    need = needs(rel, data)
+                except ValueError as e:
+                    need = f"no record ({e})"
+            m = (*k, binding(data), need)
             self.read[rel] = m
         return m[2], m[3]
 
@@ -259,12 +284,7 @@ class Publisher:
         if rel in memo:
             return memo[rel]
         memo[rel] = None
-        try:
-            st = (self.d / rel).stat()
-        except OSError:
-            return None
-        _b, need = self._file(rel, st) if named(rel) else (False, None)
-        if need is None:
+        if not named(rel) or isinstance(st := _stat(self.d / rel), str) or isinstance(need := self._file(rel, st)[1], str):
             return None
         out = {rel}
         for n in need:
@@ -286,12 +306,9 @@ class Publisher:
                     continue
                 for f in _listed(key.path):
                     rel = f"{version.name}/{key.name}/{f.name}"
-                    try:
-                        if named(rel) and f.is_file(follow_symlinks=False) and (st := f.stat()).st_mtime_ns >= self.since_ns \
-                                and self._file(rel, st)[0]:
-                            roots.append(rel)
-                    except OSError:
-                        continue
+                    if named(rel) and not isinstance(st := _stat(f.path), str) and stat.S_ISREG(st.st_mode) \
+                            and st.st_mtime_ns >= self.since_ns and self._file(rel, st)[0]:
+                        roots.append(rel)
         sizes: dict[str, int] = {}
         memo: dict[str, set[str] | None] = {}
         for rel in roots:

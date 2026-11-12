@@ -82,7 +82,7 @@ class _Counted(FsRemote):
             raise KeyError(key)
         super().get(key, path)
         if key.removeprefix(R.PREFIX) in self.garbled:
-            Path(path).write_bytes(Path(path).read_bytes()[:-1] + b" ")
+            Path(path).write_bytes(Path(path).read_bytes().replace(b'"shared":0', b'"shared":1'))     # still JSON, its length
 
 
 def _members(pack: Path) -> dict[str, bytes]:
