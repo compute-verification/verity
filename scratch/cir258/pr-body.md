@@ -34,11 +34,30 @@ No coordinate is over a budget. The pass also checked the two coordinate targets
 
 ## Runs
 
-@@RUNS@@
+Each run is one `research run --on auto` in a research-pool check slot, one at a time. Wait is from queueing to taking the slot, and hold is from taking the slot to the run's end (`slot.json`, `status.json`).
+
+- `r20261112-125302-2646`, at `5652daebfc` (vy-nebius-cpu-2, slot r1; waited about 4 s, held 12:53:31Z–12:57:11Z): circuit-check's update pass on the two families' spots with `--ranges` and `--update-pins`. Result: 10 targets, 0 failures, both rules hold, and one pin written (the K=256 coordinate). I read its `update.json`, `status.txt` and `pins.diff`, and committed that diff as `c00bf07b2258`. Cgroup peak was about 5.3 GiB.
+- `r20261112-125806-3bee`, at `c00bf07b2258` (vy-nebius-cpu-2, slot r1; waited 3 s, held 12:58:32Z–13:01:56Z): the confirming pass, which wrote no pins diff. The reports above are from it.
+- `r20261112-130257-171f`, at `c00bf07b2258` (vy-nebius-cpu-9, slot r7, 22 cores; waited 47 s, held 13:04:17Z–15:18:29Z; peak 71.0 GiB): it ran the two walk tests with `VERITY_CIRCUIT_CHECK_SLOW=1`.
+  - Both `test_every_call_the_suite_checks_is_partitioned` and `test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees` passed, in 4,074 s on 7 workers.
+  - The second test warned about stale `CALLEE_CALLS` entries. Each one it names is passed by `AttnBlockFirst_v3`, and that list was there before this change; neither of this change's entries is among them.
+  - The negative: with the coordinate's entry removed (`negative.diff`, one line), the second test failed in 3,972 s (peak 44.9 GiB). It named `{'ScaledMmFp8BlockCoordinateGivenScale_v2': ['ScaledMmFp8BlockSharedScale_v2']}` as the one family missing. Its wanted list also holds `'F32Mul_v3': ('RMSNormFusedCudaVector8_v4', 'ScaledMmFp8BlockSharedScale_v2')`.
+- `r20261112-152804-9697`, with the base's three files (vy-nebius-cpu-2, slot r5, 15 cores; waited 86 s, held 15:29:55Z–18:11:15Z): `circuit-check --all`, as described below.
+- `r20261112-183018-3636`, at `c00bf07b2258` (vy-nebius-cpu-14, slot r12, 16 cores; waited 19 min 37 s, held 18:50:20Z–21:51:23Z): `circuit-check --all`, as described below.
+- `r20261112-215945-375d`, with the base's three files (vy-nebius-cpu-5, slot r8, 30 cores; waited 97 s, held 22:01:47Z–23:16:53Z): the `tools/verity/circuit_check` suite whole and fresh, then the two walk tests. All passed.
+- @@SUITESRUN@@
 
 ## What the change adds to `check`
 
-@@CHECK@@
+Nothing measurable in time or memory. The only change in what `check` checks is that the two coordinate targets already in the catalog are now checked as Calls.
+
+- **circuit-check step** (`python -m circuit_check --all -q --jobs 16 --mem-gb 96`, no cache, as `check` runs it; `check` passes no `--ranges`, so the new spots don't enter it):
+  - At the base, with the three changed files put back as at `1885cf1fe08c` (run `r20261112-152804-9697`, vy-nebius-cpu-2): 9,678 s, 17,189 targets, 0 failures. The highest target peak was 63.9 GB, and the run's memory-cgroup peak was 101.8 GiB.
+  - At the head `c00bf07b2258` (run `r20261112-183018-3636`, vy-nebius-cpu-14): 10,862 s, the same 17,189 targets, 0 failures. The highest target peak was 63.94 GB, and the cgroup peak was 92.3 GiB.
+  - The two runs check the same target set. Exactly two targets' results differ: `ScaledMmFp8BlockCoordinateGivenScale_v2{K=128,G=128}` (5.35 s at the base, 4.93 s at the head) and `{K=64,G=32}` (4.48 s, 5.26 s). Each goes from `partition.applies: false` to `true`; their gates, units and redundant gates are unchanged. The K=256 coordinate's new pin is not reached by `--all`.
+  - The 1,184 s wall difference is the machines, not the change. The head's catalog prologue was 4,411 s against 3,834 s, and the summed target seconds were 40,760 against 35,992. That is 13 % slower spread across all 17,189 targets, while the targets the change touches differ by under 3 s each (computed from the two reports).
+- **`tools/verity/circuit_check` suite**, whole and fresh, without the opt-in tests: 397 s at the base (run `r20261112-215945-375d`, peak 22.4 GiB) and @@SUITEHEAD@@ at the head (run `r20261112-232130-c3ca`).
+- **The two opt-in walk tests**, which run only in a cold check: 4,104 s at the base (run `r20261112-215945-375d`, peak 73.8 GiB) and 4,075 s at the head (run `r20261112-130257-171f`, peak 71.0 GiB).
 
 ## Not run
 
