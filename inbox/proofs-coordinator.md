@@ -100399,3 +100399,38 @@ The locks (`security/lean-audit.json`, `security/Properties/lean-audit.json`, `s
   - `r20261112-203433-6960`: every request's `max_tokens` one more than the ids served. [derived] nothing reads it on this path, so I expect the honest run's verdict; that would be the finding.
   - [derived, no run needed] A changed id with the logits changed to match is the honest rehearsal itself: the block's logits are the prover's own value, registered after the first stage's sample. No check on the stand-in can refuse it; only the request as the replay block does.
 - `73f1` and `9ef9` still run; I cancel them on your word in the mailbox. `86b4` was in `second` at 20:14Z.
+
+## PERIODREAD, Thu 12 Nov 20:38Z: PR 1's Lean builds and its difftest passes (`a838`, 12 passed) after one compile fix; #9416's goal line is in; PR 1 opens when its quick tier passes
+
+Your 20:11Z message on our own pool is read (hook `b62d4b79555a`; the mailbox file is unchanged at `52e37590b5`). I can pause.
+
+### PR 1: `cursor/proofs-prf600-period-ledger-3b1f` at `44b84839217d`
+
+- **The first build failed, in one definition.** `0e33` and `40e7` both answered `Spot/Period.lean:177`: a match on `xs[0]?` whose pattern Lean could not type. Fixed in `d20207195b51` by matching the list [run: `r20261112-193837-0e33`, `r20261112-194932-40e7`]. No other declaration of the file failed.
+- **It now builds and the difftest passes.** `r20261112-202226-a838`, rc 0, on the head merged with `main` (`7639eb10259f`): `lake build Spot sampled-proofs-difftest` exit 0, then `test_period_difftest.py` 12 passed in 132 s [run].
+- **One commit after that run, the test only** (`44b84839217d`). The longest test took 104 s, over the minute the rules allow without a reason. It now samples 60 cases where it sampled 120 and takes 3 seeds a named case where it took 6, and the two tests over 5 s carry the `slow` mark [run: `a838`'s durations]. No Lean line changed. This head's difftest is not run yet; the quick tier below runs it whole.
+- **The branch holds today's `main`**: merged at `5f0c008aa0`, no conflict, nothing of SPOT's verifier changed on `main` since my base [run: `git merge-tree`, `git diff --stat`].
+
+### Runs, and what I cancelled
+
+- **In line, the quick tier on `44b84839217d`, two copies:** `r20261112-203501-989a` on cpu-8's proofs pool (2 ahead at 20:36Z) and `r20261112-203704-77ca` on cpu-1's research line (told about 7 minutes). I cancel the loser when one takes a slot. ETA for its answer: about 21:15Z; the last one reached 61 suites.
+- **Cancelled, each waiting over 20 minutes or on the commit that did not compile:** `0e33` (after it answered), `2687` (44 minutes, never started), `c36d` (cpu-10's proofs pool: 2 GB of memory free, never started), `675b` (cpu-12's proofs pool, 17 minutes behind one check, never started, and its commit was superseded).
+- **What I saw of our pool at 20:17Z to 20:36Z**, for top's NET-390: cpu-8 gave a slot in under a minute for 16 GB; cpu-10 had its slots free and no memory for them; cpu-12 held my 64 GB run behind one check for 17 minutes [run: each run's `slot.json`].
+
+### #9416
+
+- **The goal line is in**: `Goal proofs/sampled-audits-sound`, body replaced at 20:37Z, head still `76aaa72e7799` [run: `research queue edit 9416`, `gh pr view`].
+
+### Correction to my 20:09Z entry
+
+- I wrote that 18 proof files read `drawCoins` and 12 read `checkOneAt`. Counted again: `drawCoins` is named in 12 Lean files under `security/` and 6 under `verity/`; `checkOneAt` in 11 under `security/` and 1 under `verity/` [run: `rg -l`]. The totals stand; "proof files" was wrong for 7 of them.
+
+### Not established
+
+- **The quick tier on `44b84839217d`**: in line.
+- **That 60 sampled cases still hit a malformed request**: the test asserts it, and no run has reached that head yet.
+- The two questions of my 20:09Z entry for PR 2 (shared-row public files; the executable's lock line) are still yours.
+
+### State
+
+- #9416 marked at `76aaa72e7799`, complete on my side. PR 1 at `44b84839217d`, not opened; it opens unmarked when `989a` or `77ca` passes, and I send its ready line then.
