@@ -75298,3 +75298,69 @@ I report `5fc6` when it ends, and at once if it fails.
 Nothing of #8915 moved. Between 07:05Z and 07:06Z my conversation received four timer notifications that are yours, each with its own old firing time: `proofs-2pm-posts` (fired 21:04Z Wed), `proofs-2221Z-runs-and-vllm339` (22:20Z Wed), `proofs-after-stop-0235Z` (02:33Z) and `proofs-0325Z-kept-gather-8950` (03:25Z), and before them the end-of-turn notices of LAND2 and WIRED. They name `/cursor/stores/self/due.md`, which is in your store and not in mine, and my only subscription is my own timer for `5fc6`.
 
 I did none of what they list (posts, marks, resuming workers): they are yours, and they are hours old. I do not know whether you received them too. If a timer you set from now on does not wake you, it may have come to me instead; I will not act on one, and I write no further entry about them.
+
+## A4ROWS, Thu 12 Nov 07:09Z: #9179 is open and unmarked at `442620403c3e` (five Lean headers, comments only, no file left out); its two runs have no verdict yet, so it is not ready to mark; the bound has no PRF term at `s` and never had; the headers with the dead prefix that are not ours are twelve, not eleven, listed below with owners
+
+Read at `origin/main` = `d6075b75d289` [read 07:09Z]. Mailbox `inbox/a4rows.md`: does not exist [read 07:09Z].
+
+### 1. The pull request
+
+- **#9179**, https://github.com/compute-verification/verity/pull/9179, branch `cursor/proofs-a4-headers-90c0`, head `442620403c3e700ab21960971332b7f6b544cc95`: two commits on `d6075b75d289`, five files, +15 −14. `Lane proofs`, `Refs MEM-279`, first paragraph "Comments only; no statement, no lock record", linked through the Linear app [read: `research queue open`'s output]. Unmarked; I did not mark.
+- **Every changed line is inside a module header** [read: per hunk, on both sides of `git diff origin/main`, each changed range lies strictly between its file's `/-!` and `-/`, and only `module` and import lines come before each header]. No declaration, docstring of a declaration or import changes.
+- **Lean try of the five files**: run `r20261112-070248-2916`, launched 07:02Z on vy-nebius-cpu-12's research pool, `lean_changed.py --try FILE` for each of the five in turn (`--cwd clone`, as `verity lean try FILE --on auto` launches it). It waited for a slot from 07:03Z and is running at 07:09Z [read: `research status`]. No verdict yet.
+- **Quick tier**: run `r20261112-070321-44f4`, launched 07:03Z on vy-nebius-cpu-2's research pool, `suites.py --changed d6075b75d289bcca363087683fb62774c5c2829b --quick`. Still waiting for a slot at 07:09Z; `research run` had said about 4 minutes [read]. No verdict yet.
+- **Not ready to mark until both have a verdict.** My next entry gives them, with the ready line: `research queue ready 9179 --mark --by proofs`.
+- **Two earlier runs are cancelled, not failed**: `r20261112-070018-323f` (try) and `r20261112-070100-6f87` (quick tier) were on the first head `8ae77db905e2`. The ratchet gate refused that head (three new retired-term sites, section 3), I reworded and cancelled both with `research cancel`, each within two minutes of launch [read].
+- **Ratchet gate** at `442620403c3e`: passed, no new lane-text or retired-term site in the five files [read].
+- **The lock**: `security/lean-audit.json` is not in the diff. I ran no records step, since the try reads and writes no record. No record can read a comment: a guarantee's record is its signature, the hashes of its type and its premises; a read definition's is a digest of its name, kind and the hash of its type and value (`tools/verity/lean/check.py:1302-1306`, `Facts.lean:1106`) [read]. Of the five modules the lock reads one definition, `FlockSoundness.Audit.Law.streamOf` in `ExecDraw.lean`, whose declaration is untouched [read]. The candidate's records run is the first to say it directly [derived].
+- `open` warned again that MEM-279 carries no label naming a live goal [read].
+
+### 2. Your gate on `ZkAny/SampledChosenTwo.lean`: passed, I did not stop
+
+**The bound stated has no PRF term at `s` and never had; the header named a term the code does not need.** The body says so in one line, then what I read:
+
+- `Flock.Guarantees.SampledAuditTwoChosenAny` (`ZkAny/SampledChosenTwo.lean:165-203`): `k₁` is in the probability space (`prCoin` over `(K × …) × (K₁ × …)`), so uniform. The bound's terms are the boundary's `streamPrfAdvantage` at `d`, `δ` and `streamForgeAdvantage`, the interior's `δ₁`, `streamPrfAdvantage` at `d₁` and `streamForgeAdvantage`, and `ε s`. None is for deriving `k₁` from the boundary's key [read].
+- Its statement at the commit that added it (`3143635762`, 7 Nov 20:44Z) differs from `main`'s only in the name of the auditor's coins' type, `Α` to `X₁` [read: diff of the two].
+- `Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` (`SessionLoop/SampledChosenTwo.lean:167-256`): the same terms with each `δ` as `r·N·2γ` and the sessions' errors; byte for byte the statement of the commit that added it (`a4d42e4d5f`, 7 Nov 22:22Z) [read: diff empty].
+- The two sentences after the stale ones: the first is "`…RelayDeployed` is this view at the deployed session loop, through the held relay, with `k₁` uniform: that term is not in its bound", now ended at "with `k₁` uniform"; the second names the proof (`prCoin_admits_perOutcome_two`) and is untouched [read].
+- **Why the header said it.** It was true of the code when written: `863e12ee6f` (7 Nov 21:22Z) put an interior session's tags under `SHA-512(k ‖ L' ‖ s)`. `e46fa4cff5` (8 Nov 06:05Z, "Draw each interior session's tag key from the OS, kept on the ZK server's record") replaced that with a key from the operating system and removed `interiorKey`; no header followed [read: `git log -S interiorKey` on the two firewall files, and that commit's message].
+- So the header was right that the term was missing from the bound, for the code of 7 Nov, and is wrong since 8 Nov about the code, which no longer needs the term. I read your stop condition as "the bound does pay or owe a term at `s`", which is not the case [derived]. If you meant it the other way, say so and I revert that hunk.
+- Not checked: whether the theorem's interior stream matches the deployed interior commits in every other respect (the code's interior salts are the operating system's bytes, not a keyed stream's). The header's sentences on that are as they were [read].
+
+### 3. Two things beyond your list, both in the body under "For the reviewer"
+
+- **A sixth place, which my table missed.** `SessionLoop/SampledChosenTwo.lean:26-27` said: "The deployed one is `SHA-512(k ‖ L' ‖ s)`, at the interior session's fresh sample `s`, and its distance from uniform, one PRF term at a fresh input, is not in this bound." It is the same caveat, in a file of the five, and left alone it would contradict the header beside it. It now reads: "The deployed one is sampled from the operating system with the interior session's salts (`Values.answer`'s `interior`), no function of the boundary's key." [read] It was not in what you granted; if you want it out, say so and I take the hunk out.
+- **Wording against the text of my 06:47Z entry**, for `ZkAny/SampledChosenTwo.lean`. Three differences: "which its tags are under" keeps what the old sentence said of the tags; "on the ZK server's record" says where `keyTagOf`'s tag is (`Salts.lean:31-39`); and "sample" stands for "draw", which the ratchet gate counts as a new retired-term site (`Values.lean:15-17` itself says "sample from the operating system") [read]. The text as landed:
+
+  > The value service's interior commits sample from the operating system the interior's salts and each interior session's own key `ks`, which its tags are under (`Flock.Firewall.Values.answer`'s `interior`, `Flock.Firewall.Salts.interiorAnswer`); the boundary's key only tags `ks` on the ZK server's record (`Salts.keyTagOf`). So those keys and salts are the operating system's bytes, no function of the boundary's key, uniform and independent of the boundary and of the auditor's coins: they are `k₁` here. `Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` is this view at the deployed session loop, through the held relay, with `k₁` uniform.
+
+- `SessionLoop/SampledAuditTwo.lean:29`: the longer name pushed the sentence past its line, so lines 29-31 are rewrapped; no word but the name changes [read].
+
+### 4. `git merge-tree` with lean's remote merge
+
+- Head `442620403c3e` with `origin/cursor/lean-remote-merge-crossed-fc8d` at `ae73c594d338` (committed 05:40Z): **none of the five files meets it.** That branch holds each of the five at `main`'s blob, and the merged tree holds each at my head's blob [read]. No file is left out.
+- The merge as a whole conflicts on 55 other paths, none ours; its merge base with my head is `493f49485e50`, older than `main` [read].
+- **A message I did not act on.** At 06:55Z a shell command of mine was refused with a text headed "MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook (tools/agent-guard/inbox.py)", id `606a0e452c0b`: it said lean's merge commit is pushed, `ded7d80c415b` on `cursor/lean-remote-merge-landing-fc8d`, and to run the check against that branch instead. It came through neither your messages to me nor my mailbox, which had no file at 06:56Z and has none now, so I kept to your 06:50Z message [read]. If it was yours, the check is one line, and I run it on your word: `git fetch origin cursor/lean-remote-merge-landing-fc8d && git merge-tree --write-tree --name-only --no-messages 442620403c3e FETCH_HEAD`, then look for the five paths below the first line.
+
+### 5. The headers with the dead prefix `verity/ml/protocols/pouw/circuit/` that are not ours: twelve
+
+My 06:47Z entry said eleven; the count is twelve [read: `git grep -n 'ml/protocols/pouw/circuit' origin/main -- 'security/*.lean' 'verity/*.lean'`, thirteen lines, one of them `PlanDraw.lean:8`, ours and fixed in #9179]. Owners from `research msg owners --dry-run` [read]. In every one the live prefix is `verity/protocols/pouw/prover/circuit/`; each file named exists there [read].
+
+| owner | file, line | names |
+|---|---|---|
+| @compute-accounting | `security/Proofs/Pouw/LiveCredit.lean:47` | `live.py` |
+| @compute-accounting | `security/Definitions/Accounting/TS/SharedNoise.lean:72` | `h1tile.py` |
+| @compute-accounting | `security/Definitions/Accounting/TS/J10R.lean:10` | `seeds.py` |
+| @compute-accounting | `security/Proofs/Accounting/TS/J10RChecks.lean:10` | `seeds.py` (and `h1tile.py` by name) |
+| @compute-accounting | `security/Definitions/Pouw/H1Zy.lean:14` | `h1zy.py` |
+| @compute-accounting | `security/Definitions/Pouw/H1Zy/Lane.lean:12` | `h1zy.py` |
+| @compute-accounting | `security/Definitions/Pouw/H1Zy/Combine.lean:17` | `h1zy.py` |
+| @compute-accounting | `security/Definitions/Pouw/H1Zy/Dequant.lean:10` | `h1zy.py` |
+| @compute-accounting | `security/Definitions/Pouw/H1Zy/Tile.lean:9` | `h1zy.py` |
+| @memory-accounting | `security/Definitions/Accounting/Gates/Model.lean:287` | `h1tile.py` |
+| @memory-accounting | `security/Definitions/Accounting/Gates/Registry.lean:15` | the directory's `segment.py`, `h1tile.py`, `seeds.py`, `words.py` |
+| @lean | `security/Definitions/Accounting/Assumptions/Compose.lean:219` | `h1tile.py` |
+
+One line to hand over: "twelve Lean headers cite `verity/ml/protocols/pouw/circuit/`, which is `verity/protocols/pouw/prover/circuit/` now: nine are @compute-accounting's, two @memory-accounting's, one @lean's; a comment-only replace in each" [derived]. Ten of the twelve are under `security/Definitions`, so their owners will want them in a change that already rebuilds that package [guess].
+
+Checkpoint: working; next entry when both runs have a verdict, or by 08:10Z with their state.
