@@ -67965,3 +67965,29 @@ Your 02:00Z and 02:20Z sections are read (at 02:14Z and 02:22Z). This is the 03:
 - [guess] #9066 against #9027 and #9047 in Lean: #9066 only adds (`Spot/Returned.lean`, one piece `replay_returned` in `Pieces.lean`), and `whole_run/Main.lean` reads `Pieces.run`, which it leaves alone. Not built.
 
 **Waiting on:** `r20261112-014158-2129` (#8940's records, about 02:50Z), then its body and mark; `r20261112-021851-4636` (#8950's quick tier, about 02:50Z if cpu-7 gives it a slot soon). The table's test counts by 05:00Z.
+
+## LAND3, Thu 12 Nov 02:29Z: #8940 is marked ready at `58a598e615b1`, its records run passed with no record regenerated; #8950 waits only on its quick tier and on #9066
+
+**Job A is done: #8940 is marked ready at `58a598e615b1d170e2b9a19440af93f1ba0ac79e`** (02:27Z).
+
+- [run] Records run `r20261112-014158-2129` (cpu-8): exit 0, outcome `pass` for `security`, `security/Proofs` and `security/Properties`; no record directory, so no record was regenerated and the locks at this head are what the fast path records. "security: PASS 27217 declarations in 722 modules ... 1121 guarantees"; "security/Proofs: PASS 195497 declarations in 3886 modules"; "security/Properties: PASS 3093 declarations in 94 modules ... 465 guarantees"; axioms `propext`, `Classical.choice`, `Quot.sound`. It is the fast path: no kernel replay.
+- [run] The mark: "records gate: security: records run r20261112-014158-2129 of 58a598e615b1 passed it on 58a598e615b1's Lean inputs"; "preflight: #8940 at 58a598e615b1 merged onto `main` at be9a3d566905: checks skipped: Lean: not built: 206 modules are or import what it changes, over the 40 the preflight builds; ... the checks that ran passed"; "#8940 is ready at 58a598e615b1". `research queue status` lists it ready.
+- Its body is rewritten for this head (the merge, the one docstring, the three runs, `Refs PRF-540`). It differs from the head ci gave a land verdict (`22adf3144ef0`) by the merge of `main` and that docstring, so it needs ci's word again.
+- [read] Behind it: #9080 already holds this head; #9043 needs `CheckedRun h.stage` in its two new files once this lands.
+
+**#8950, one thing for you from another worker's 02:25Z entry.** Its item 6, the line of `breakeven/headline.py` that compares a block's size class with a design's `merged` and would raise on a design with a stratum a width: [read] #8950 already replaces that line with `opt.two_stage_strata(cells, drow["merged"])`. No separate pull request is needed for it.
+
+**The table's tests, so far** [run, local, each head merged onto `main` at `be9a3d566905`; first count: `test_figure1.py`, `test_headline.py`, `test_binding.py`; second: `test_plancheck.py`, `test_optimize.py`; slow tests not run]:
+
+| tree | first | second | ruff |
+|---|---|---|---|
+| #9066 alone | 97 passed | 69 passed | clean |
+| #8904 at `bce41b2dafb3` | 98 passed | 72 passed | clean |
+| #8950 at `ae26265a8e09` | 99 passed | 72 passed | clean |
+| #8893's old head `4d8451dfd83e` with #9066 | 3 failed, 95 passed | 71 passed | 1 error |
+| #8904's old head `cb795dd94a73` with #9066 | 3 failed, 95 passed | 72 passed | 1 error |
+| #8950's earlier head `f53cf612414e` with #9066 | 2 failed, 97 passed | 72 passed | 1 error |
+
+Still running: #8893 at its new head, #9051 with each of #8950, #9066 and #8878, and `cursor/proofs-count-71ac` alone and with #9066 and #9051.
+
+**Waiting on:** `r20261112-021851-4636`, #8950's quick tier on cpu-7. At 02:28Z it was still in line for a slot behind two others, so [guess] it ends about 03:15Z, past the 03:00Z you set. When it passes I give you #8950's ready line; the mark itself waits for #9066 on `main` unless you say otherwise.
