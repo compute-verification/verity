@@ -12,7 +12,7 @@ verity bench certifier_term                              the inputs, the scopes,
 verity bench certifier_term --json                       the same as one document: value, unit, commit, run, inputs, rows
 verity bench certifier_term --scope world --period year  only those rows (each flag repeats)
 verity bench certifier_term --requests census            the census's request in place of the sampling plan's
-verity bench certifier_term --out DIR                    also DIR/result.json: the amounts of the term of record's row
+verity bench certifier_term --out DIR                    also its result, for DIR: the amounts of the term of record's row
 verity bench certifier_term --out DIR --registration F   with its capacity and verified, read from the registration log F
 verity bench certifier_term --response-ids 1024 --scan-delta D --out DIR   the result of record (The result, below)
 verity bench certifier_term --help                       every parameter and its default
@@ -32,10 +32,11 @@ is null, and the tables print the row's name with the label.
 
 ## The result
 
-With `--out DIR` the runner also writes `DIR/result.json`, through the harness kit's writer (`verity_bench.kit`,
-`benchmarks/harness/README.md`) and through nothing else: the amounts every resource's benchmark reports, for the row
-the term of record is read from, the `scan` row at D_j = 2, at each scope and monitoring period the command prints.
-What it prints doesn't change. Every measurement is the model's and its name says so; none is computed from a run's K.
+With `--out DIR` the runner also writes its result, through the harness kit's writer for `DIR` (`verity_bench.kit`)
+and through nothing else. The kit says where the file is, `DIR/result.json` outside a research run
+(`benchmarks/harness/README.md`). The result holds the amounts every resource's benchmark reports, for the row the
+term of record is read from, the `scan` row at D_j = 2, at each scope and monitoring period the command prints. What
+it prints doesn't change. Every measurement is the model's and its name says so; none is computed from a run's K.
 
 - `certifier_term/modeled/metric`: the term of record, the document's `value`, in GB, against the document's target.
   Its verdict, `within target` or `over target`, is the document's multiple of the target in words. Its row is the

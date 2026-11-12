@@ -2,8 +2,9 @@
 census's reference datacenter and the world, over a week, a month and a year, in bits and GB (the README beside this
 file). It runs the calculator of K, `benchmarks/network_traces/leak_bounds.py`, with ARGS, and prints what that prints.
 
-With `--out DIR` it also writes `DIR/result.json`, through the harness kit's writer (`verity_bench.kit`) and through
-nothing else: the fields every resource's benchmark reports (`measurements`), for the row the term of record is read
+With `--out DIR` it also writes its result, through the harness kit's writer for `DIR` (`verity_bench.kit`) and through
+nothing else; the kit says where the file is, `DIR/result.json` outside a research run (`benchmarks/harness/README.md`).
+The result holds the fields every resource's benchmark reports (`measurements`), for the row the term of record is read
 from, the scan at two release schedules, at each scope and monitoring period the calculator's document holds. Every
 figure is the model's and its name says so (`MODELED`); none is computed from a run's K.
 
@@ -203,9 +204,10 @@ def main(argv: Sequence[str]) -> int:
                                  allow_abbrev=False)
     group = ap.add_argument_group("the runner's own options")
     group.add_argument("--out", type=Path, metavar="DIR",
-                       help="also write DIR/result.json through the harness kit's writer: for the scan at two release "
-                            f"schedules, each scope and monitoring period's free, capacity, verified and {ERROR}, and "
-                            "the term of record, every one modeled; a row whose error is 1 or more carries no amount")
+                       help="also write the result through the harness kit's writer for DIR, which says where the file "
+                            "is (DIR/result.json outside a research run): for the scan at two release schedules, each "
+                            f"scope and monitoring period's free, capacity, verified and {ERROR}, and the term of "
+                            "record, every one modeled; a row whose error is 1 or more carries no amount")
     group.add_argument("--registration", type=Path, metavar="FILE",
                        help="with --out: the registration log a machine's certified boundary link is read from, for "
                             "capacity and verified (default: none, and they are written with no value and why)")
