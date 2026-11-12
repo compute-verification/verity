@@ -250,8 +250,9 @@ def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     desc["annotations"]["theta"] = desc["annotations"]["theta"][1:]
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
     assert NR.main(commit["o"]) == 2 and "the descriptor's θ is" in capsys.readouterr().out
-    for stated in ({"annotations": {}}, {}):   # annotations that hold no θ, and a descriptor without annotations: no θ at all
-        Path(commit["o"].program).write_bytes(gzip.compress(canonical_json({**{k: v for k, v in NODE.desc.items() if k != "annotations"}, **stated})))
+    bare = {k: v for k, v in NODE.desc.items() if k != "annotations"}
+    for desc in ({**bare, "annotations": {}}, bare):   # annotations that hold no θ, and a descriptor without annotations: no θ at all
+        Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
         assert NR.main(commit["o"]) == 2 and "the descriptor's θ is 0 root nodes" in capsys.readouterr().out
 
 
