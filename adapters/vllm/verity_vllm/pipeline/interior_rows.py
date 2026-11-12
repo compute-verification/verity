@@ -514,7 +514,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         raise ValueError("a commitment on the rows' device holds no value the interior registers: a replay block whose "
                          "ports read one commits on the host")
     if returns and device is not None:
-        raise ValueError("a commitment on the rows' device draws its own salts: a replay block whose return round 1 "
+        raise ValueError("a commitment on the rows' device makes its own salts: a replay block whose return round 1 "
                          "commits is committed on the host, under the serve's salts")
     back = _returned(window.members, cells, sample, returns)
     if tables and (served is None or positions is None):

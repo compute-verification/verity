@@ -43,7 +43,7 @@ PICK = bind(CompositeDefinition("BoundaryRowsTestPick", 0, (), lambda S_: ((("x"
                                 lambda B, S_, x: B.call(INC32, x), register=False))
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
-LAW = {"law": "subset", "k": 2}
+DESIGN = {"law": "subset", "k": 2}
 
 
 def _spans(n: int = 5, prompt: int = 3, served: int = 4) -> list[BR.Span]:
@@ -99,12 +99,12 @@ def test_a_class_commits_under_core_window_domains_and_registers_by_both_verifie
     assert (L.n_rho, P.units(L.program, L.grain)) == (4, 5)
     pub = json.loads(json.dumps(c.public()))
     mine = BR.layout_of(pub, PAIR)
-    rec = BR.record(pub, PAIR, LAW)
-    assert rec == c.record(LAW) and rec["window"]["kind"] == "served" and rec["window"]["index"] == c.index_leaf
-    assert R.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
-    assert V.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
+    rec = BR.record(pub, PAIR, DESIGN)
+    assert rec == c.record(DESIGN) and rec["window"]["kind"] == "served" and rec["window"]["index"] == c.index_leaf
+    assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
     other = _layout(n=6)
-    assert R.check(rec, other.program, other.grain, LAW, CS.SCHEME, other.ports()).codes != ()
+    assert R.check(rec, other.program, other.grain, DESIGN, CS.SCHEME, other.ports()).codes != ()
     assert BR.commit(spans, L, 0).roots != c.roots
     with pytest.raises(ValueError, match="not 5 of class"):
         BR.commit(spans[:4], L, 0)
@@ -138,7 +138,7 @@ def test_an_inlined_check_is_checked_by_the_templates_its_body_calls(tmp_path):
     c = BR.commit(_spans(), L, 0)
     pub = json.loads(json.dumps(c.public()))
     assert pub["inline"] is True and BR.layout_of(pub, CHAIN) == L
-    assert V.check(BR.record(pub, CHAIN, LAW), L.program, L.grain, LAW, CS.SCHEME, L.ports()).codes == ()
+    assert V.check(BR.record(pub, CHAIN, DESIGN), L.program, L.grain, DESIGN, CS.SCHEME, L.ports()).codes == ()
     plain = BR.Layout(CHAIN, 0, 1, 4, 4, 5, "a" * 128)
     assert plain.templates == (CHAIN,) and plain.ports()[BR.INGRESS]["domain"] != L.ports()[BR.INGRESS]["domain"]
     assert BR.reopen(BR.write(c, tmp_path / "w0" / "p4-o4"), CHAIN).roots == c.roots
@@ -185,11 +185,11 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     assert pub["ids"] is True and list(pub["values"]) == [*BR.PORTS, "o0"]
     assert pub["values"]["o0"] == {"root": c.roots["o0"].hex(), "words": 2, **L.ports()["o0"]}
     mine = BR.layout_of(pub, PICK)
-    rec = BR.record(pub, PICK, LAW)
+    rec = BR.record(pub, PICK, DESIGN)
     assert mine == L and [r["port"] for r in rec["roots"]] == [*BR.PORTS, "o0"] and rec["window"]["ids"] is True
-    assert R.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
-    assert V.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
-    assert R.check(rec, off.program, off.grain, LAW, CS.SCHEME, off.ports()).codes != ()
+    assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    assert R.check(rec, off.program, off.grain, DESIGN, CS.SCHEME, off.ports()).codes != ()
 
     d = BR.write(c, tmp_path / "w0" / "p4-o4")
     assert (d / BR.SALTS).read_bytes() == b"".join(c.salts[p] for p in L.values)
