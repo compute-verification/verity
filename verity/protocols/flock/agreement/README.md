@@ -104,11 +104,7 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   and agreement tools.
 - `--program`, `--partition` and `--registered` are the verifier's own copies of the program, the partition object and
   the registered reads. Without `--program` every session is refused: a verifier that can't read the Program can't know
-  what it verifies. That check (`programHeld`) is that a Program was handed, and compares nothing. A handed Program is
-  held to the circuit when its digest is META's `program_sha512`: any other is refused in every mode where META binds
-  a `verity/partition/v1` partition (`programBound`), and under `--plain-tables` whatever partition META binds
-  (`programP`). Otherwise, under the provisional unit cover, which binds no Program descriptor to compare with, the
-  session is not refused for it, and its verdict says the Program was not held.
+  what it verifies.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
 - `--coins tree` verifies a plain session on the challenger's keyed coin tree (`FC_COINS=tree`), whose `Hello` names it
   and whose record opens it. Without it a plain session is on seed coins, which `verify` refuses once every check has
@@ -116,6 +112,12 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
 - `verify` takes a plain proof file in one form, the deployed prover's, with the `zk_level0 = None` byte after the pair.
   Under `--upstream-plain`, upstream's builds' form, which no soundness theorem covers, it refuses every session before
   it reads a file; only `agree` reads that form (Agreement with upstream, below).
+
+The refusal of a session without `--program` (`programHeld`) is that a Program was handed, and compares nothing. A
+handed Program is held to the circuit when its digest is META's `program_sha512`: any other is refused in every mode
+where META binds a `verity/partition/v1` partition (`programBound`), and under `--plain-tables` whatever partition META
+binds (`programP`). Otherwise, under the provisional unit cover, which binds no Program descriptor to compare with, the
+session is not refused for it, and its verdict says the Program was not held.
 
 Each session `DIR` holds `session.json` (the `flock-live-session/v1` record) and each table's `<table>.rep0.bin` and
 `<table>.rep1.bin`. `verify` prints one `VERDICT {"accepted", "session", "why", …}` line per session and exits 0 iff all
