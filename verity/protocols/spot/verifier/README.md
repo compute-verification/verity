@@ -199,6 +199,16 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   why it is refused, `MULTI_REFUSED` exactly where every check before the refusal passed; it accepts nothing and never
   exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`).
+- **A monitoring period's sessions in the auditor's ledger** (`Spot/Period.lean`, Lean only; the Python it is held
+  to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
+  challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its
+  layout (`sessionsOf`), and of those the windows, the sessions whose layout holds the sample's family (`windowsOf`),
+  with the lane's other sessions beside them. The monitoring period is a run of the ledger's entries, from the first
+  stamped at or after its start to the first stamped at or after its stop, so monitoring periods that follow one
+  another split the entries exactly whatever the stamps say. It refuses a ledger that does not reach the stop, a
+  window in no period of the lane, a period left open or listing a session that is no window, a reserve never opened
+  and a window that has not ended. It reads the ledger only: no window is audited here, and nothing calls it yet but
+  its difftest.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
