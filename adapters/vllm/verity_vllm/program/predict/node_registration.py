@@ -41,19 +41,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.circuits import codec
-from verity.circuits.program import input_id
-from verity.circuits.types import type_from_json
-
-from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import registered_rows as RR
 from verity_vllm.config import UsageError, option
 from verity_vllm.errors import Refused
 from verity_vllm.log import init_logger
-from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
-from verity_vllm.program.predict import aot as A
-from verity_vllm.program.predict.node import node_parameters
 from verity_vllm.records.schema_ids import NODE_REGISTRATION_SCHEMA
 
 logger = init_logger(__name__)
@@ -91,6 +82,8 @@ def load_descriptor(path: str | os.PathLike) -> dict[str, Any]:
 
 def root_inputs(desc: dict[str, Any]) -> list[tuple[int, int, int]]:
     """(root node, width, members) of each input node of the descriptor's root, in order, read off its JSON (no decode)."""
+    from verity.circuits.program import input_id
+
     callees = desc.get("callees") or []
     out = []
     for k, n in enumerate(desc["definitions"][desc["root"]]["body"]["nodes"]):
@@ -102,6 +95,8 @@ def root_inputs(desc: dict[str, Any]) -> list[tuple[int, int, int]]:
 
 def theta_nodes(desc: dict[str, Any], params, theta: tuple[str, ...]) -> list[int]:
     """The descriptor's θ, once `params` are shown to lower onto its root's input nodes and θ to be exactly theirs in `theta`."""
+    from verity_vllm.pipeline import registration_log as RL
+
     lowered = [(name, w, n) for name, t in params for w, n in RL.lower(t)]
     nodes = root_inputs(desc)
     if [(w, n) for _, w, n in lowered] != [(w, n) for _, w, n in nodes]:
@@ -118,6 +113,9 @@ def theta_nodes(desc: dict[str, Any], params, theta: tuple[str, ...]) -> list[in
 
 def descriptor_theta(path: str, params: list[tuple[str, Any]], theta: tuple[str, ...]) -> tuple[str, list[int]]:
     """The descriptor's Program digest and θ (`theta_nodes`), `params` as `[(name, type JSON)]`."""
+    from verity.circuits import codec
+    from verity.circuits.types import type_from_json
+
     desc = load_descriptor(path)
     return codec.program_digest(desc), theta_nodes(desc, [(n, type_from_json(t)) for n, t in params], theta)
 
@@ -150,6 +148,7 @@ def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, 
     """What rank `rank`'s process registers, once its bundle, Build and trace are shown to be the record's (module docstring)."""
     from verity_vllm.pipeline import cpu_replay as CPU
     from verity_vllm.pipeline import replay_bundle as RB
+
     world = len(P.phis)
     try:
         b = RB.open_bundle(RB.path(out, pair, rank=rank))
@@ -188,7 +187,13 @@ def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, 
 def register_rank(job: dict[str, Any]) -> dict[str, Any]:
     """Rank `job["rank"]`'s θ parameters committed (`registered_rows.commit`) one tensor at a time, each opened against the rank's
     committed weights root, its salts written to `<salts>/<value>.salts`: the entries, without salts."""
+    from verity.circuits.types import type_from_json
+
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.commit import registered_rows as RR
     from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.pipeline import registration_log as RL
+
     t0, r, bundle = time.perf_counter(), int(job["rank"]), Path(job["bundle"])
     tree = json.loads((bundle / "weights" / "tree.json").read_text())
     _folded, why = CPU.tree_refusal(tree, job["root"])
@@ -230,6 +235,11 @@ def each_rank(jobs: list[dict[str, Any]], workers: int) -> Iterator[dict[str, An
 
 
 def register(o: Options) -> dict[str, Any]:
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.pipeline import registration_log as RL
+    from verity_vllm.program.predict import aot as A
+    from verity_vllm.program.predict.node import node_parameters
+
     t0 = time.perf_counter()
     out, salts = Path(o.out).resolve(), Path(o.salts).resolve()
     if salts == out or salts.is_relative_to(out):

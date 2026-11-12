@@ -64,7 +64,6 @@ from verity_vllm.correspondence.runtime import correspondence_digest
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import epoch
-from verity_vllm.pipeline import manifest as MN
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query.required import QUERY_OF_RECORD
 from verity_vllm.records.predicted_row import FILE, PredictedRow
@@ -253,6 +252,7 @@ def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dic
 def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, log=None) -> PredictedRow:
     """A single-GPU row's Build of record at `out` from its declared inputs alone (module docstring): no trace, no vLLM.  The
     checkpoint's `config.json` is `config`, else the pin's (`pinned_hf_config`).  Returns the record it writes beside them."""
+    from verity_vllm.pipeline import manifest as MN
     w = json.loads(workload_file(row_file(row)).read_text())
     if PP.prefix_caching(w):
         raise UsageError(f"{row}: the row serves with prefix caching, and its workload Program's cached components are not predicted")

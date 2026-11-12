@@ -24,7 +24,6 @@ from verity.circuits.codec import descriptor_id
 import verity_vllm
 from verity_vllm.config import DTYPES, RowEngine, RowId
 from verity_vllm.engine.profiles.devices import device_name_of_row
-from verity_vllm.pipeline.global_program import request_id_of
 from verity_vllm.program import workload as W
 from verity_vllm.target_family import declared_profile
 
@@ -105,6 +104,7 @@ def workload_program(phi: Phi, comps: dict | None = None):
     """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
     lag the declared target resolves (`TargetProfile.lag()`); `comps` holds components already built (`request_component`), by
     (LP, T), so a caller that has each request's Program need not hold them all."""
+    from verity_vllm.pipeline.global_program import request_id_of
     reqs = phi.requests
     if any(int(r.get("n") or 1) != 1 for r in reqs):
         raise Unexpressible("a request with n > 1 (parallel sampling) in the workload")
