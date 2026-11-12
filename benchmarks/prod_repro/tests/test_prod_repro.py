@@ -332,7 +332,7 @@ def test_speculative_decoding_and_the_models_own_limit_are_read_from_the_launch_
     corpus_arm(out, "record", [100.0, 101.0], argv=(*spec, "--kv-cache-dtype", "fp8", "--max-model-len=131072"))
     _, txt, r = run(out)
     assert r["settings"]["record"]["speculative_decoding"] == {"state": "on", "by": " ".join(spec),
-                                                               "draft_accepted_share": None, "tokens_per_draft": None}
+                                                               "draft_accepted_share": None, "accepted_per_draft": None}
     assert ("  speculative decoding: on (--speculative-config.method mtp --speculative-config.num_speculative_tokens 5); "
             "compiled: on (") in txt
     # the KV cache's type is the launch line's, and an arm that does not share it is not at the same settings
@@ -391,9 +391,9 @@ def test_a_limit_left_to_vllm_is_the_engines_own_and_the_engine_says_what_the_la
     assert P.settings_differ(mine, other) == ["the context limit"]
     assert P.settings_differ(mine, {**mine, "context_limit": {**mine["context_limit"], "tokens": 4096}}) == ["the context limit"]
     # the drafts' acceptance is the benchmark's counters', beside the launch line that turned them on
-    reps = {"loads": {LOAD: [{"prompt_cached_share": 0.4, "draft_accepted_share": 0.5, "tokens_per_draft": 3.5}]}}
+    reps = {"loads": {LOAD: [{"prompt_cached_share": 0.4, "draft_accepted_share": 0.5, "accepted_per_draft": 2.5}]}}
     spec = P.settings(out / "record", reps, LOAD)["speculative_decoding"]
-    assert spec["by"].endswith("; 50.0% of its draft tokens accepted, 3.50 tokens a draft") and spec["tokens_per_draft"] == 3.5
+    assert spec["by"].endswith("; 50.0% of its draft tokens accepted, 2.50 a draft") and spec["accepted_per_draft"] == 2.5
     # a setting the launch line turns on and the step trace's header does not hold: the replay's engine would lack it
     shutil.rmtree(out / "record")
     line = ("--speculative-config.method", "mtp", "--kv-cache-dtype", "fp8")

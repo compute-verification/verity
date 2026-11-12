@@ -234,8 +234,8 @@ def settings(arm_dir: Path, arm: dict, load: str) -> dict:
     spec_engine, kv_engine = header.get("speculative"), header.get("kv_cache_dtype")
     if isinstance(spec_engine, dict):
         spec_engine = ", ".join(f"{k} {v}" for k, v in sorted(spec_engine.items()))
-    accepted, each = _mean(reps, "draft_accepted_share"), _mean(reps, "tokens_per_draft")
-    drafts = "" if each is None else f"; {100 * (accepted or 0.0):.1f}% of its draft tokens accepted, {each:.2f} tokens a draft"
+    accepted, each = _mean(reps, "draft_accepted_share"), _mean(reps, "accepted_per_draft")
+    drafts = "" if each is None else f"; {100 * (accepted or 0.0):.1f}% of its draft tokens accepted, {each:.2f} a draft"
     given, engine = flag(argv, "--max-model-len"), header.get("max_model_len")
     fitted = fitted_limit(arm_dir) if engine is None and given == "auto" else None
     if engine is not None:
@@ -249,7 +249,7 @@ def settings(arm_dir: Path, arm: dict, load: str) -> dict:
             "speculative_decoding": {"state": ON if spec or spec_engine else OFF,
                                      "by": said(spec, str(spec_engine or ""), "no --speculative-config in the launch line")
                                      + (drafts if spec or spec_engine else ""),
-                                     "draft_accepted_share": accepted, "tokens_per_draft": each},
+                                     "draft_accepted_share": accepted, "accepted_per_draft": each},
             "kv_cache": {"state": kv or kv_engine or "the engine's default",
                          "by": said("--kv-cache-dtype" if kv else "", str(kv_engine or ""),
                                     "no --kv-cache-dtype in the launch line", on=kv != "auto")},
