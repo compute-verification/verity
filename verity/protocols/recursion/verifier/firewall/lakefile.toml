@@ -22,7 +22,7 @@ path = "../../../interface"
 
 [[require]]
 name = "verity_difftest"
-path = "../../../../difftest/lean"
+path = "../../../../../tools/difftest/lean"
 
 [[lean_lib]]
 name = "Firewall"

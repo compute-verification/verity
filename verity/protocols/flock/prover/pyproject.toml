@@ -104,7 +104,7 @@ inputs = [
     "verity/protocols/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
     # lock, the release side's (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
-    "verity/difftest/python/verity_difftest", "verity/difftest/lean", "verity/protocols/recursion/verifier/firewall",
+    "tools/difftest/python/verity_difftest", "tools/difftest/lean", "verity/protocols/recursion/verifier/firewall",
           "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py"]
 parallel = true
 # an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this

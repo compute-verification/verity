@@ -61,7 +61,7 @@ DISAGREE = "disagree"
 ROOT = Path(__file__).resolve().parents[5]
 PACKAGE = ROOT / "verity/protocols/spot/verifier/lean"
 EXE = "sampled-proofs-verifier"
-BUILD_LOCK = ROOT / "verity/difftest/lean/.lake/harness-build.lock"
+BUILD_LOCK = ROOT / "tools/difftest/lean/.lake/harness-build.lock"
 #: The δ the Lean's registration parameters carry, which R1-R8 never read.
 REGISTRATION_DELTA = "1/2"
 

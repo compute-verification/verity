@@ -1043,7 +1043,7 @@ dependencies = [
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity-difftest", editable = "tools/difftest" },
 ]
 
 [[package]]
@@ -2331,7 +2331,7 @@ dev = [
     { name = "verity-circuit-check", editable = "tools/verity/circuit_check" },
     { name = "verity-cli", editable = "tools/verity/cli" },
     { name = "verity-config", editable = "verity/configuration/config" },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity-difftest", editable = "tools/difftest" },
     { name = "verity-flock", editable = "verity/protocols/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-ops", editable = "infra/ops" },
@@ -2482,7 +2482,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-difftest", editable = "verity/difftest" }]
+requires-dist = [{ name = "verity-difftest", editable = "tools/difftest" }]
 
 [[package]]
 name = "verity-core-evaluate"
@@ -2502,7 +2502,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity-difftest", editable = "tools/difftest" },
     { name = "verity-flock", editable = "verity/protocols/flock/prover" },
 ]
 
@@ -2520,7 +2520,7 @@ requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 [[package]]
 name = "verity-difftest"
 version = "0.1.0"
-source = { editable = "verity/difftest" }
+source = { editable = "tools/difftest" }
 dependencies = [
     { name = "hypothesis" },
 ]
@@ -2723,7 +2723,7 @@ requires-dist = [
     { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "scipy", specifier = "==1.18.1" },
     { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity-difftest", editable = "tools/difftest" },
     { name = "verity-exact-kit", marker = "extra == 'exact-kit'", editable = "benchmarks/pouw/exact_kit" },
     { name = "verity-vllm", editable = "adapters/vllm" },
     { name = "z3-solver", specifier = ">=4.13" },

@@ -154,7 +154,7 @@ The properties are stated in `security/Properties/Pouw/Check.lean` and proved in
 `security/Proofs/Properties/Pouw/Check.lean`.
 
 `tests/test_difftest.py`, the suite `verity-pouw-check-difftest`, which `check` runs after the Lean builds, holds
-`core_check.case` to `pouw-check serve` on the shared harness (`verity/difftest/`) as a `ProtocolPort` with the Lean
+`core_check.case` to `pouw-check serve` on the shared harness (`tools/difftest/`) as a `ProtocolPort` with the Lean
 of record, comparing whole answers, reasons included. Its cases are `tests/pouw_check_cases.py`: honest
 execution phases and one mutation per refusal, the case's own framing among them. A run needs an accept, a reject and an
 undecided. The same suite puts `pouw-check-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing

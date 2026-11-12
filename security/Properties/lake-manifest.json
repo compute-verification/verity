@@ -168,7 +168,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/difftest/lean",
+   "../../tools/difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

@@ -1,4 +1,4 @@
-"""`core_identity` against the Python reference, through the core difftest harness (`verity/difftest`).
+"""`core_identity` against the Python reference, through the core difftest harness (`tools/difftest`).
 
 `identity-difftest` (`Identity.Difftest.table`) serves streaming SHA-512 absorbed in pieces (against `hashlib.sha512`),
 `taggedSha512` (against `identity.tagged_sha512`) and `identityDigestSha512` (against `identity.identity_digest_sha512`).

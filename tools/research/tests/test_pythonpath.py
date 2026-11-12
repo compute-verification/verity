@@ -21,7 +21,7 @@ PY = sys.executable
 REAL_ROOTS = ["tools/research/src", "verity/configuration/config", "infra/cluster/src", "infra/ops", "benchmarks/numerical/python",
               "benchmarks/harness", "adapters/vllm", "verity/protocols/flock/prover/python", "tools/verity/circuit_check/src",
               "benchmarks/machine_model", "tools/verity/cli", "tools/verity/graph", "tools/verity/landq",
-              "verity/difftest/python",
+              "tools/difftest/python",
               "benchmarks/pouw/exact_kit", "benchmarks/proof_throughput"]
 
 

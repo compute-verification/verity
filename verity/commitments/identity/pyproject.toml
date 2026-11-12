@@ -18,5 +18,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_identity_difftest.py"]
 # Test-only: `lake` builds this package and, through its path requires, the difftest harness's Lean and the base
 # packages (`Base.Hash`, `Base.Canon` and what they import; the harness requires the circuit format's too).
-inputs = ["verity/difftest/lean", "verity/circuits/base", "verity/circuits/lean",
+inputs = ["tools/difftest/lean", "verity/circuits/base", "verity/circuits/lean",
           "verity/__init__.py", "verity/commitments/__init__.py"]
