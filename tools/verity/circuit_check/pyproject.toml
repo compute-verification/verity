@@ -153,9 +153,13 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_stop.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/serving_templates.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_tables.py",
-          # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins
+          # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins; its row builders import chunk_rows,
+          # interior_rows, serving_rows and interior_links when they run, which a build does where no record of the long
+          # row's units counts
           "adapters/vllm/verity_vllm/pipeline/long_row.py", "adapters/vllm/verity_vllm/pipeline/long_row.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/long_row.circuit-check.json",
+          "adapters/vllm/verity_vllm/pipeline/chunk_rows.py", "adapters/vllm/verity_vllm/pipeline/interior_rows.py",
+          "adapters/vllm/verity_vllm/pipeline/serving_rows.py", "adapters/vllm/verity_vllm/pipeline/interior_links.py",
           "adapters/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/protocols/spot/verifier/__init__.py",
           "verity/protocols/certifier/verifier/cache_step.py", "verity/protocols/certifier/verifier/cache_step.circuit-check.py",
