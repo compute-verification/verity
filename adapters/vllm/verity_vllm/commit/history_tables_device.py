@@ -4,14 +4,14 @@ built, appended to and opened by `protocols/pouw/pouw_cuda/row_table.cuh`'s hist
 
 A `Table` reads as `history.HistoryTable` does where `commit.history_tables.Histories` reads one (its ``make``): ``rows``,
 ``salts``, ``bcs``, ``root``, ``path``, ``entry`` and ``append``, and holds the same root over the same rows under the same
-salts. Its salts are its own: position p's is bytes [192 p, 192 p + 192) of ChaCha20 under `salt_key` (the committer's
-private row key and the table's domain id) with nonce zero, so no two positions or tables share one and none is given.
+salts. A row's salt is `history.HistoryTable`'s: 192 bytes fresh from the operating system at its append, or the one given,
+and never one the table has used. No key derives a salt, so two builds of one table share none.
 The tree is kept whole, (2 capacity - 1) nodes of 64 bytes; an append hashes its rows' leaves and the nodes above them.
 """
 from __future__ import annotations
 
 import ctypes
-import hashlib
+import os
 from collections.abc import Sequence
 from functools import cache
 from typing import Any
@@ -22,25 +22,18 @@ from verity.commitments import history as HT
 from verity.commitments import hm96
 from verity_vllm.commit import row_tables_device as D
 
-__all__ = ["Hist", "SALT_TAG", "Table", "salt_key"]
+__all__ = ["Hist", "Table"]
 
-SALT_TAG = b"verity/history-table/salt/v1\0"
+SALT_BYTES = hm96.SHA512.salt_bytes
 #: a row's bytes at most (`row_table.cuh`'s ``HIST_MAX_SEGS`` segments)
 MAX_ROW_BYTES = 8 * D.SEG_BYTES
 
 
 class Hist(ctypes.Structure):
-    """`row_table.cuh`'s ``Hist``: the domain id, the placeholder's tree leaf, the salt key's ChaCha20 words, the capacity,
-    the row's bytes and the tree's depth."""
-    _fields_ = [("did", ctypes.c_uint64 * 8), ("pad", ctypes.c_uint64 * 8), ("key", ctypes.c_uint32 * 8),
-                ("cap", ctypes.c_uint64), ("L", ctypes.c_uint32), ("depth", ctypes.c_uint32)]
-
-
-def salt_key(key: bytes, domain_id: bytes) -> bytes:
-    """The ChaCha20 key of a table's salts: SHA-512(`SALT_TAG` || ``key`` || ``domain_id``)'s first 32 bytes."""
-    if len(key) != 32 or len(domain_id) != 64:
-        raise ValueError("a 32-byte row key and a 64-byte domain id")
-    return hashlib.sha512(SALT_TAG + key + domain_id).digest()[:32]
+    """`row_table.cuh`'s ``Hist``: the domain id, the placeholder's tree leaf, the capacity, the row's bytes and the tree's
+    depth."""
+    _fields_ = [("did", ctypes.c_uint64 * 8), ("pad", ctypes.c_uint64 * 8), ("cap", ctypes.c_uint64), ("L", ctypes.c_uint32),
+                ("depth", ctypes.c_uint32)]
 
 
 _hp = ctypes.POINTER(Hist)
@@ -73,15 +66,13 @@ def _bytes(words: np.ndarray, dtype: str) -> bytes:
 
 
 class Table:
-    """Table ``value`` of ``program`` (`history.domain`) of ``words``-word rows at ``capacity`` leaves, its salts under
-    `salt_key` of the committer's row key ``key``: its tree on the CUDA ``device`` (a torch device or index), or in host
-    memory hashed by the CPU twin when ``device`` is None."""
+    """Table ``value`` of ``program`` (`history.domain`) of ``words``-word rows at ``capacity`` leaves: its tree on the CUDA
+    ``device`` (a torch device or index), or in host memory hashed by the CPU twin when ``device`` is None."""
 
     word_bits = 16
     schema = HT.SCHEMA
 
-    def __init__(self, program: str, value: str, words: int, capacity: int = HT.CAPACITY, *, key: bytes,
-                 device: Any = None) -> None:
+    def __init__(self, program: str, value: str, words: int, capacity: int = HT.CAPACITY, *, device: Any = None) -> None:
         if not HT.cap_ok(capacity) or capacity > 1 << 30:
             raise ValueError(f"a table's capacity is a power of two from 2 to 2^30, not {capacity!r}")
         if not HT.words_ok(words) or 2 * words > MAX_ROW_BYTES:
@@ -95,7 +86,6 @@ class Table:
         h = self._h = Hist()
         h.did[:] = D._words(self.domain.domain_id).tolist()
         h.pad[:] = D._words(pad).tolist()
-        h.key[:] = np.frombuffer(salt_key(key, self.domain.domain_id), dtype="<u4").tolist()
         h.cap, h.L, h.depth = capacity, 2 * words, capacity.bit_length() - 1
         nodes = 8 * (2 * capacity - 1)
         if device is None:
@@ -126,10 +116,8 @@ class Table:
 
     def append(self, rows: Any, salts: Sequence[bytes] | None = None) -> range:
         """Rows ``rows`` (``(k, words)`` 16-bit words: a numpy array, or a contiguous 16-bit tensor on the table's device) at
-        the table's next ``k`` positions, under the table's own salts; refused past its capacity or with salts given. -> their
-        positions."""
-        if salts is not None:
-            raise ValueError(f"{self.value}: a device table's salts are its own stream (salt_key), never given")
+        the table's next ``k`` positions, each under its salt (default: fresh from the operating system), refused past the
+        capacity or for a salt used before, as `history.HistoryTable.append` refuses them. -> their positions."""
         on_device = self._dev is not None and isinstance(rows, self._torch.Tensor) and rows.is_cuda
         shape = tuple(rows.shape)
         if len(shape) != 2 or shape[1] != self.words or (on_device and (rows.element_size() != 2 or not rows.is_contiguous())):
@@ -137,18 +125,24 @@ class Table:
         at, k = len(self.rows), shape[0]
         if at + k > self.leaves:
             raise ValueError(f"{self.value}: {at + k} rows past the table's capacity of {self.leaves}")
+        given = None if salts is None else [bytes(s) for s in salts]
+        if given is not None and (len(given) != k or any(len(s) != SALT_BYTES for s in given)):
+            raise ValueError(f"{self.value}: one {SALT_BYTES}-byte salt per row")
+        if given is not None and (len(set(given)) != k or not set(given).isdisjoint(self.salts)):
+            raise ValueError(f"{self.value}: a salt is never reused: equal salts on two rows reveal the XOR of their digests")
         if not k:
             return range(at, at)
+        salt = os.urandom(SALT_BYTES * k) if given is None else b"".join(given)
         host = (rows.view(self._torch.int16).cpu().numpy().view(np.uint16) if on_device
                 else np.ascontiguousarray(np.asarray(rows, dtype=np.uint16)))
-        bcs, ys = np.zeros(16 * k, dtype=np.uint64), np.zeros(48 * k, dtype=np.uint32)
+        bcs, ys = np.zeros(16 * k, dtype=np.uint64), np.frombuffer(salt, dtype="<u4").astype(np.uint32)
         if self._dev is None:
             self._check("rt_hist_append_host", _host().rt_hist_append_host(
                 ctypes.byref(self._h), at, k, host.ctypes.data, D._hm(), D._prefixes(), self._tree, bcs, ys))
         else:
             self._device_append(rows if on_device else None, host, at, k, bcs, ys)
         self.rows += [r.copy() for r in host]
-        self.salts += [_bytes(ys[48 * i:48 * i + 48], "<u4") for i in range(k)]
+        self.salts += [salt[SALT_BYTES * i:SALT_BYTES * (i + 1)] for i in range(k)]
         self.bcs += [_bytes(bcs[16 * i:16 * i + 16], ">u8") for i in range(k)]
         return range(at, at + k)
 
@@ -160,12 +154,11 @@ class Table:
         with torch.cuda.stream(d.stream):
             src = rows if rows is not None else torch.from_numpy(host.view(np.int16)).to(d.hm.device)
             out_bc = torch.empty(16 * k, dtype=torch.int64, device=d.hm.device)
-            out_y = torch.empty(48 * k, dtype=torch.int32, device=d.hm.device)
+            y = torch.from_numpy(ys.view(np.int32)).to(d.hm.device)
             self._check("rt_hist_append", d.lib.rt_hist_append(
                 d.stream.cuda_stream, ctypes.byref(self._h), at, k, src.data_ptr(), d.hm.data_ptr(), d.ms.data_ptr(),
-                self._tree.data_ptr(), out_bc.data_ptr(), out_y.data_ptr()))
+                self._tree.data_ptr(), out_bc.data_ptr(), y.data_ptr()))
             bcs[:] = out_bc.cpu().numpy().view(np.uint64)
-            ys[:] = out_y.cpu().numpy().view(np.uint32)
         d.stream.synchronize()
 
     def paths(self, positions: Sequence[int]) -> bytes:

@@ -110,7 +110,7 @@ point's best configuration; committed words = slots / lm), clock64 a CTA on 148 
   a lane-word. q* is 0.0011 (MMA only) and 0.032 (with the loads) at L = 32, and 0.0021 and 0.033 at L = 64.
 - **At L = 32 the TMEM round trip binds the tensor.** Each running sum must leave TMEM before the next k-step lands on
   it, so no more than TMEM's 65,536 words are in flight. The tile's round trip (MMA, commit, loaders, hand-back) is at
-  least 437 clocks in these kernels, which caps the tensor at 0.585 of ρ_T5 even with no reads (self-wait). One MMA warp
+  least 437 clocks in these kernels, which limits the tensor to 0.585 of ρ_T5 even with no reads (self-wait). One MMA warp
   issuing for every tile serializes the commits (at most 0.36 at L = 32), so a tile needs its own issuer. Four tiles of
   128 columns take as long a round trip as two of 256.
 - **ε_tensor at L = 32**, honest's TMEM stage at 0.489 of ρ_T5: T1 gives 51.1%. The tensor table's two-stage LP (mma.sync fills
@@ -195,7 +195,7 @@ above a facet:
 - **2:4 sparse wgmma reaches A3's sparse line only with A in registers.** `wgsprs_s8` (m64n256k64.sp) runs at its dense
   twin's instruction rate, 4095.6 physical (8191 logical) MACs a SM-clock. With A in shared memory (`wgsp_s8`, `_e4m3`,
   `_f16`) it runs at 0.889 of it: 18 KB of operands an instruction at the dense rate is 144 B a SM-clock against the
-  128 B shared port. B is always in shared memory, so the port caps a 2:4 form at 4096/b physical MACs a SM-clock for
+  128 B shared port. B is always in shared memory, so the port limits a 2:4 form to 4096/b physical MACs a SM-clock for
   b-byte operands, each type's dense peak.
 - **SS wgmma's operand reads share the shared-memory port with LDS.** `emp_smem`: wgmma n128 SS reads 94.3 B a SM-clock
   and LDS.128 beside it 28.7, 123.0 of 128; LDS.128 alone 127.96.

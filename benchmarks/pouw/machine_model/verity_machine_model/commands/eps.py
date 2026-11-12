@@ -41,7 +41,7 @@ from verity_machine_model import eps as E
 from verity_machine_model.commands._shared import device_help, pct as _pct, registry as _registry
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     e = sub.add_parser("eps")
     e.add_argument("designs", nargs="*")
     e.add_argument("--device", default=argparse.SUPPRESS, help=device_help())
@@ -235,7 +235,7 @@ def _eps_table(args, pi: E.Machine) -> int:
     return 0
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     pi = E.machine(args.vector or "", args.data)
     if args.uni_issue is not None and E.uniform_issue_charged(pi):
         sheet = "DS_issue" in pi.c.get(E.UNI, {})
