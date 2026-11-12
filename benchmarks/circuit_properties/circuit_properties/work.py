@@ -104,7 +104,7 @@ added to each of two rows, carried apart, whose products by W are charged). The 
 (`RepeatedRows`) where a charged operand whose rows only these rules show distinct holds two equal rows at the point:
 a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1 times v) or
 times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a weight times a
-difference of an input's words.
+difference of an input's words; and where such an operand holds a NaN at the point, which leaves its rows uncompared.
 
 The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
 attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,
@@ -210,17 +210,24 @@ STATED = THETA._replace(stated=True, distinct=False)
 
 
 class RepeatedRows(ValueError):
-    """A charged operand whose rows the reading shows distinct holds two equal rows at the point (`points.check`), or
-    reads values a scan the point doesn't run whole leaves unevaluated (``scan``)."""
+    """A charged operand whose rows the reading shows distinct holds two equal rows at the point (`points.check`),
+    reads values a scan the point doesn't run whole leaves unevaluated (``scan``), or holds a NaN in ``nan`` = (n,
+    rows) of its rows there, which leaves them uncompared."""
 
     def __init__(self, definition: str, node: int, operand: str, rows: tuple[int, int] | None,
-                 member: int | None = None, scan=None) -> None:
-        self.definition, self.node, self.operand, self.rows, self.member, self.scan = \
-            definition, node, operand, rows, member, scan
+                 member: int | None = None, scan=None, nan: tuple[int, int] | None = None) -> None:
+        self.definition, self.node, self.operand, self.rows, self.member, self.scan, self.nan = \
+            definition, node, operand, rows, member, scan, nan
         if scan is not None:
             what = (f"reads the outputs of scan node {scan.node} of {scan.fn}, which the point runs {scan.ran} of its "
                     f"{scan.n} iterations; fix: carry the weight through the outer scan rather than out of a scan "
                     "whose contexts repeat")
+        elif nan is not None:
+            what = (f"holds a NaN in {nan[0]} of its {nan[1]} rows at the point"
+                    + (f" in member {member}" if member is not None else "")
+                    + ", which leaves them uncompared; fix: keep its values finite at the point's words (`points`): a "
+                    "NaN there is an invalid operation (a square root or a logarithm of a negative, inf minus inf, 0 "
+                    "times inf) or an overflow")
         else:
             what = (f"holds rows {rows[0]} and {rows[1]} equal at the point"
                     + (f" in member {member}" if member is not None else "")

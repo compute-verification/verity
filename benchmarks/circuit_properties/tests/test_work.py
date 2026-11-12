@@ -637,16 +637,21 @@ def test_rows_times_an_input_are_left_out_however_the_product_reads_them(form):
     assert WK.read(_rows_times(form, "one-word"), KB).N == (T - 1) * PN * K * N
 
 
+#: a table of so many rows that two tokens that aren't one token pick one row with probability 1/VB
+VB = 4096
+EMB_VB = bind(RP.EmbeddingRef, V=VB, H=K, DT="f32")
+
+
 def _self_cancel(cancel: bool) -> Program:
-    """prev′ = the PN rows looked up by the iteration's tokens, plus (``cancel``) M plus -1 times M, M carried; and
-    prev W^T."""
+    """prev′ = the PN rows looked up by the iteration's tokens in a table of `VB` rows, plus (``cancel``) M plus -1
+    times M, M carried; and prev W^T."""
     def step(B, c, tok, z, zr):
         table, w, prev, m = c
-        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        rows = Coll(ROWS_T, concat([B.call(EMB_VB, tok[p], table).refs for p in range(PN)]))
         new = _add(B, _add(B, m, _mul(B, m, B.call(const(32, 0xBF800000)))), rows) if cancel else rows
         return (_add(B, table, z), _add(B, w, z), new, _add(B, m, zr)), B.batch(LIN, prev, w, axes=(0, None))
 
-    return _loop("SelfCancel" if cancel else "RowsAlone", (("table", TABLE_T), ("w", W_T), ("prev", ROWS_T),
+    return _loop("SelfCancel" if cancel else "RowsAlone", (("table", Array(VB, X_T)), ("w", W_T), ("prev", ROWS_T),
                                                             ("m", ROWS_T)),
                  (("tok", Array(PN, I32)), ("z", X_T), ("zr", ROWS_T)), Array(PN, Y_T), step)
 
@@ -796,17 +801,26 @@ def test_a_narrow_row_is_compared_at_enough_points_to_hold_64_bits():
     assert w.N == (T - 1) * NB and PT.check(p, R, root, reasons).points == 7
 
 
-def test_a_row_with_a_nan_equals_no_row():
-    """sqrt(-(W ⊙ W)) has distinct rows by the reading's rules and a NaN in every word at the point: a NaN row equals
-    none, so its product is charged and the Program not refused."""
+def test_a_row_with_a_nan_is_refused(monkeypatch):
+    """sqrt(-(W ⊙ W)) has distinct rows by the reading's rules and a NaN in every word at the point: no comparison
+    shows a NaN row distinct, so the Program is refused, naming the rows that hold one and the fix; without the
+    point its product is charged."""
     def step(B, c, z):
         w, u = c
         neg = B.batch(F32Neg, Coll(FLAT_W, _mul(B, w, w).refs), axes=(0,))
         root = B.batch(RP.F32Sqrt, neg, axes=(0,)).reshape(W_T)
         return (_add(B, w, z), _add(B, u, z)), B.call(LIN, u, root)
 
-    w = WK.read(_loop("NanRows", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step), KB)
-    assert w.N == (T - 1) * K * N
+    p = _loop("NanRows", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step)
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(p, KB)
+    assert (e.value.operand, e.value.rows, e.value.nan) == ("w", None, (N, N))
+    assert str(e.value).endswith(
+        f"operand 'w', whose rows the reading shows distinct, holds a NaN in {N} of its {N} rows at the point, which "
+        "leaves them uncompared; fix: keep its values finite at the point's words (`points`): a NaN there is an "
+        "invalid operation (a square root or a logarithm of a negative, inf minus inf, 0 times inf) or an overflow")
+    monkeypatch.setattr(PT, "check", lambda *a: None)
+    assert WK.read(p, KB).N == (T - 1) * K * N
 
 
 def test_a_claim_past_a_scan_the_point_does_not_run_whole_is_refused():
@@ -1001,6 +1015,40 @@ def test_a_token_indexed_product_is_charged_at_keep_and_two_activations_are_left
     assert WK.bound(w, C).N == pytest.approx(w.keep * macs)
     assert w.left_out == {"theta": PN * K * (3 * D + N + PN), "gathered": 3 * (T - 1) * PN * K * D, "self": 0,
                           "activations": (T - 1) * PN * K * PN}
+
+
+def _specific_overflow() -> Program:
+    """`_attention_loop`'s O1 = P V1^T, specific, squared and times 2^127 twice, plus the carried Wq: Q, whose rows
+    are specific and distinct, both by the reading's rules; and u Q^T, u carried."""
+    big = const(32, 0x7F000000)
+
+    def step(B, c, tok, z, zn):
+        table, w1, v1, wq, u = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
+        flat = Array(PN * D, F32)
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
+        o1 = B.batch(LIN_P, B.batch(SOFTMAX, h, axes=(0,)), v1, axes=(0, None))
+        q = _add(B, _mul(B, _mul(B, _mul(B, o1, o1), B.call(big)), B.call(big)), wq)
+        return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, wq, z), _add(B, u, z)), \
+            B.call(LIN_A, u, q)
+
+    carry = (("table", TABLE_T), ("w1", Array(D, X_T)), ("v1", V_T), ("wq", ROWS_T), ("u", X_T))
+    return _loop("SpecificOverflow", carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN, F32), step)
+
+
+def test_a_specific_operand_is_left_to_the_specific_rule(monkeypatch):
+    """Q's charge rests on the specific rule, so the point doesn't test its rows: u Q^T is charged and the Program not
+    refused, though Q's rows, past f32's range, are all +inf at the point. Tested for distinct rows alone, Q would
+    be refused."""
+    w = WK.read(_specific_overflow(), KB)
+    (g,) = w.groups
+    assert g.weight == (True, False) and w.N == (T - 1) * K * PN
+    monkeypatch.setattr(PT, "claimed", lambda st: st.distinct)
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_overflow(), KB)
+    assert (e.value.operand, e.value.rows) == ("w", (0, 1))
 
 
 def test_clique():

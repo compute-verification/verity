@@ -1,7 +1,7 @@
 """The reading's distinct rows, tested at a point (`check`).
 
 A charged product's operand that the reading takes as a weight with distinct rows (`Status.distinct`, and not
-specific, no gather's rows, no current input: `claims`) is claimed to have no two equal rows of its contraction's K
+specific: `claims`) is claimed to have no two equal rows of its contraction's K
 words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
 two rows of such an operand are equal there, naming the Definition, the node, the operand and the two rows. The point
 is the claim's own worst case: whoever submits the circuit also picks the data. So every word of an input
@@ -13,7 +13,8 @@ has. The sample is seeded by SHA-512 of the Program's digest, with no other rand
 Rows are equal only where they agree at `points` points, enough to hold 64 sampled bits a row: P = ceil(64 / (K b)),
 b the bits its words hold at the point (`held`), at most those of the narrowest `θ` or registered input and of the
 narrowest rounding the Program holds, so a narrow row (an e2m1 word after a rounding, a one-word row) is not refused
-by chance. A row with a NaN is unequal to every row.
+by chance. A row holding an f32 NaN is refused too: no comparison shows it distinct, and whoever submits the
+circuit can make a NaN at the point.
 
 The evaluation runs top-down along the reader's summaries (`Reader.summary`), a call's output at its caller's words,
 so an identity written through a call is seen, and a view's words are its source's, so an argument passed twice or
@@ -206,9 +207,16 @@ class Tally:
     unrun: list = field(default_factory=list)
 
 
+def claimed(st) -> bool:
+    """Whether a charged operand of status ``st`` is charged for its distinct rows alone: `Status.distinct`, and not
+    specific, whose charge the specific rule carries. A charged operand carries no gather's rows and, unless it is
+    specific, reads no current input (`work.may_repeat`), so those need no test here."""
+    return st.distinct and not st.specific
+
+
 def claims(R, root, reasons) -> dict:
-    """The charged products' operands whose rows the reading shows distinct and nothing else does (not specific, no
-    gather's rows, no current input), by summary and node: (argument, its parameter's name, K)."""
+    """The charged products' operands whose rows the reading shows distinct and nothing else does (`claimed`), by
+    summary and node: (argument, its parameter's name, K)."""
     out: dict = {}
     order = sorted(R.memo.values(), key=lambda s: -s.sid)
     count = {root.sid: 1}
@@ -223,7 +231,7 @@ def claims(R, root, reasons) -> dict:
             nd = bodies[s.sid].body.nodes[site.node]
             names = [n for n, _t in nd.fn.signature()[0]]
             for st, name in ((site.x, site.product.x), (site.w, site.product.w)):
-                if st.distinct and not (st.specific or st.gathered or st.data):
+                if claimed(st):
                     out.setdefault(s.sid, {}).setdefault(site.node, []).append((names.index(name), name, site.k_dim))
     return out
 
@@ -246,8 +254,8 @@ _MEMO: dict = {}
 
 
 def check(program, R, root, reasons) -> Tally:
-    """Refuse ``program`` (`work.RepeatedRows`) where two rows of an operand of `claims` are equal at the point; one
-    pass a Program, memoized by its digest."""
+    """Refuse ``program`` (`work.RepeatedRows`) where two rows of an operand of `claims` are equal at the point or one
+    holds a NaN; one pass a Program, memoized by its digest."""
     cl = claims(R, root, reasons)
     if not cl:
         return Tally(points=0)
@@ -498,7 +506,7 @@ class Walk:
 
     def rows(self, S, k: int, nd, i: int, name: str, K: int, value, L: int) -> None:
         """Refuse where two rows of ``K`` words of argument ``i`` of product node ``k`` are equal at every point, in
-        one activation; a row with a NaN equals none."""
+        one activation, or where a row holds an f32 NaN, which no comparison can show distinct."""
         words, gone = value
         if gone is not None and gone.any():
             self.tally.unrun.append((S.sid, k, name, self.scans[int(gone[gone > 0][0]) - 1]))
@@ -509,15 +517,17 @@ class Walk:
             return
         P, A, R = self.P, L // self.P, W // K
         v = words.reshape(P, A, R, K).transpose(1, 2, 0, 3).reshape(A * R, P * K)
-        w = _operand_width(nd, i)
-        bad = _nan(v).any(axis=1) if w == 32 else np.zeros(A * R, bool)
-        keys = np.concatenate([np.repeat(np.arange(A, dtype=np.uint64), R)[:, None], v], axis=1)[~bad]
-        at = np.flatnonzero(~bad)
+        if _operand_width(nd, i) == 32:
+            bad = _nan(v).any(axis=1).reshape(A, R)
+            if bad.any():
+                a = int(np.flatnonzero(bad.any(axis=1))[0])
+                raise WK.RepeatedRows(self.fns[S.sid].id, k, name, None, member=a if A > 1 else None,
+                                      nan=(int(bad[a].sum()), R))
+        keys = np.concatenate([np.repeat(np.arange(A, dtype=np.uint64), R)[:, None], v], axis=1)
         _keys, inv, cnt = np.unique(keys, axis=0, return_inverse=True, return_counts=True)
         dup = np.flatnonzero(cnt > 1)
         if dup.size:
-            g = dup[0]
-            r1, r2 = at[np.flatnonzero(inv.reshape(-1) == g)[:2]]
+            r1, r2 = np.flatnonzero(inv.reshape(-1) == dup[0])[:2]
             a, (q1, q2) = int(r1 // R), (int(r1 % R), int(r2 % R))
             raise WK.RepeatedRows(self.fns[S.sid].id, k, name, (q1, q2), member=a if A > 1 else None)
 
