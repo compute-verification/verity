@@ -115,7 +115,7 @@ import numpy as np
 import torch
 import torch.nn.modules.module as nn_module
 
-from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, sandbox, starts, stop_record
+from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, gates, sandbox, starts, stop_record
 from .codecs import Identity, Plan, Unencodable
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
 from .data import SPLITS, Data, Stream
@@ -215,10 +215,16 @@ def no_function_modes():
 
 
 def tf32() -> dict:
-    """torch's two readings of its switch for TF32 matrix products, as they stand: with either on a GPU computes a
-    float32 GEMM in TF32, which no dtype of an op says. A record states them beside its device (`Harness.finish`),
-    and `gates.tf32_on` reads them."""
-    return {"cuda_matmul_allow_tf32": bool(torch.backends.cuda.matmul.allow_tf32),
+    """torch's switch for TF32 matrix products, as it stands: on, a GPU computes a float32 GEMM in TF32, which no
+    dtype of an op says. Where torch has `torch.backends.cuda.matmul.fp32_precision`, that reading alone: it reads
+    the switch however a job set it (by it, by `torch.backends.fp32_precision`, by `allow_tf32` or by
+    `set_float32_matmul_precision`), "tf32" when on, while the older two readings raise once a job set it by the
+    first two. Else those two readings, with either on. A record states it beside its device (`Harness.finish`),
+    and `gates.tf32_on` reads it."""
+    matmul = torch.backends.cuda.matmul
+    if hasattr(matmul, "fp32_precision"):
+        return {"cuda_matmul_fp32_precision": matmul.fp32_precision}
+    return {"cuda_matmul_allow_tf32": bool(matmul.allow_tf32),
             "float32_matmul_precision": torch.get_float32_matmul_precision()}
 
 
@@ -966,10 +972,11 @@ def outside_steps(structures: dict, parts: list[dict]) -> dict:
         out["shapes"] = out["shapes"] | p["shapes"]
         mine, its = structures[out["struct"]], structures[p["struct"]]
         log: dict[tuple, list[int]] = {}
-        for phase, role, op, shapes, count, macs, *dtype in mine["log"] + its["log"]:
-            entry = log.setdefault((phase, role, op, shapes, *dtype), [0, 0])
-            entry[0] += count
-            entry[1] += macs
+        for row in mine["log"] + its["log"]:
+            dtype = gates.row_dtype(row)
+            entry = log.setdefault((*row[:4], *([dtype] if dtype else [])), [0, 0])
+            entry[0] += row[4]
+            entry[1] += row[5]
         struct = {"updated": sorted(mine["updated"] + its["updated"], key=lambda u: (u[1], u[0])),
                   "log": sorted([*k[:4], *v, *k[4:]] for k, v in log.items())}
         out["struct"] = structure_id(struct)

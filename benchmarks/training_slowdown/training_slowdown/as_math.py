@@ -43,6 +43,8 @@ import json
 import sys
 from pathlib import Path
 
+from .gates import row_dtype
+
 FORWARD = ("_scaled_dot_product_flash_attention", "_scaled_dot_product_flash_attention_for_cpu",
            "_scaled_dot_product_efficient_attention", "_scaled_dot_product_cudnn_attention")
 #: (gk - dp, pv - 2 dp) a call that asks for fewer gradients than all three, and the subsets that leave it
@@ -135,7 +137,9 @@ def rewrite(log: list, trace: list, flag: tuple[str, int] | None = None) -> tupl
             moved[counts] += macs
 
     backwards = [json.loads(r[3])[0] for r in log if "scaled_dot_product" in r[2] and r[2] not in FORWARD]
-    for phase, role, op, shapes, n, macs, *dtype in log:
+    for row in log:
+        phase, role, op, shapes, n, macs = row[:6]
+        dtype = [d] if (d := row_dtype(row)) else []
         if "scaled_dot_product" not in op:
             add(phase, role, op, shapes, n, macs, dtype=dtype)
             continue
