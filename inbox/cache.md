@@ -283,3 +283,71 @@ FLOPs". The pool read does not give F = 1 (entry 2).
 corpus on a CPU pool: requests and served tokens a session, times between reuses, what splitting a session costs).
 Both about 03:15Z. The draft of the final is `lanes/proofs/20261112T0240Z-report-stock-vllm-departures.md`, synced
 now; it does not yet hold your 02:20Z and 02:28Z asks.
+
+## Entry 4, 03:18Z: the note holds your 02:20Z and 02:28Z asks; one correction to my entries 2 and 3
+
+The note is `lanes/proofs/20261112T0240Z-report-stock-vllm-departures.md`, synced at 03:16Z. It is complete as a
+first draft of `proofs/cached-serving-audit-design`; I will keep checking it until 05:15Z.
+
+**Correction to entries 2 and 3: what is missing is a counting lemma of the plan check, not a theorem of the
+guarantee.** [statements read whole; proofs not read]
+
+- The two-stage scope has no clause on what a replay block reads (`InScopeTwo`,
+  `security/Definitions/Claims/SamplingTwo.lean:183-185`). A value one replay block reads from another is on the
+  writer's boundary, which serving commits (`Prog.Boundary`, `security/Definitions/Claims/Sampling.lean:155-160`).
+- The guarantee holds "at every `δ`, input values `a` and split `req`" (`InfluenceTwoPatterns`,
+  `security/Definitions/Claims/Guarantees/SamplingTwo.lean:29-35`, proved at
+  `security/Proofs/Flock/SamplingGeneric/TwoServed.lean:628`). A request costs at most its served bits, however
+  many of the blocks it reads are wrong. `CapTwo` (lines 41-45) has no such clause either.
+- Only the plan check's lemma, which turns that sum into a number, assumes each request reads one replay block
+  (`RequestsCover`, `security/Properties/Spot/TwoStageCheck.lean:58`, in `TwoStageCheckPatternsSound`, lines 78-85).
+- So a hit read from committed rows, and a long request cut into spans, are covered by the guarantee as proved. The
+  checked number is not: it needs the count for a request that reads several replay blocks. My argument for it,
+  unproved: the worst case is each wrong replay block in a different session, each charged one session's served
+  cap, which is the Glossary's F times S.
+- I assumed a table read is a gate's read of its writer in the circuit the statement is instantiated at. Not
+  verified.
+
+**The read mechanism is on `main`:** history tables, "rows other proof blocks output, committed as one table that
+proof blocks read at hidden positions" (`verity/commitments/history.py:1-12`). The verifier computes the root from
+the writers' public commit strings. A read's binding is proved (`Hash.Guarantees.HistoryReadBinding`,
+`security/Definitions/Hash/Guarantees.lean:156-166`). A table spans phases: a position is written by this phase's
+proof blocks or "carried as rows ... of a value the verifier holds (a window edge's rows of an earlier window)"
+(`verity/protocols/spot/verifier/lean/Spot/HistoryTable.lean:18-23`). Its capacity is a constant, `2 ^ 17` (line
+56), and its property is stated for every capacity (`security/Properties/Spot/HistoryTable.lean:35-42`).
+
+**AgentX, counted over the corpus** [computed, run `r20261112-025248-fa51`; totals equal the dataset card's]:
+
+- 393 sessions, 98,827 requests; 98.31% of prompt tokens are blocks the same session sent earlier, by vLLM's
+  leading-run rule; 45 cached tokens a computed token.
+- A session: 86 requests at the median, 251 on average; 96,027 served tokens at the median, 270,927 on average, 5.06
+  million at most; 2.8 hours long at the median; a request in flight in 7 phases of 600 s at the median.
+- 53% of requests exceed 131,072 prompt tokens and 18% exceed 402,240, the pool a rank.
+- A pool emptied at each edge loses 439% of compute at 600 s and 123% at 3,600 s, against the model's 4.37% at
+  the plan.
+- Cutting sessions so that each piece recomputes its context: 83% more compute at 75,250 served tokens a piece,
+  0.35% at 2,000,000.
+
+**The routes on agent traffic** [modeled, world, one year, GB at 10% of compute; run `r20261112-030533-082f`]:
+
+| Route | GB | Times the figure of record (14,229) |
+|---|---|---|
+| Cache off | 12,552, and serving compute 46 times stock's | |
+| Recompute the hit in the replay (#8403, the figure of record's charge) | 552,000 | 39 |
+| Read, AgentX's mean session one replay block, cap its own served tokens | 24,753 | 1.7 |
+| The same under a cap of 2,000,000 served tokens a session | 41,043 | 2.9 |
+| Read, a replay block the plan's request, each wrong one charged a session's cap of 220,500 tokens (unproved count) | 24,882 | 1.7 |
+| The same at a cap of 2,000,000 | 44,327 | 3.1 |
+| Any request reads one pool (capped form) | 24.4 million | 1,700 |
+
+**Your other asks, in the note:** advice by class (section 7: neither route adds to today's 5.6 bits if the pool's
+model reproduces vLLM's evictions; else 12 bits a request at AgentX's mean prompt); the circuit compiled ahead of
+time (section 8: recomputing a hit needs a circuit that depends on the served record in class G; reading does not,
+except through the hit's length; speculative decoding needs GLM-5.3's draft layers, and positions as values so
+that accepted lengths stop being a fixed list); context length (section 9: with reads nothing in the replay grows
+with context; what contradicts "not a hard limit" is the merging unit that is full at 131,072 keys, the compile
+at 788 GiB, and the pool of 402,240 tokens a rank, which a 1,048,576-token context does not fit with or without
+the audit).
+
+**Runs cancelled as duplicates, never started:** `r20261112-024202-2e5d`, `r20261112-030122-ede5`,
+`r20261112-024625-487a`. Nothing of mine is running.
