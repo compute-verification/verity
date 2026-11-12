@@ -11,7 +11,8 @@ import urllib.error
 
 import pytest
 
-from research.pods import guard, runpod
+from research import remote
+from research.pods import connect, guard, runpod
 
 POD = "abc123def45678"
 #: the headers as RunPod sends them: REST's one `ratelimit` header, GraphQL's one header a window
@@ -194,3 +195,128 @@ def test_a_machine_with_no_key_asked_the_door_and_its_failure_stands(wire, monke
     with pytest.raises(runpod.PodError, match="no RunPod API config at .* and RUNPOD_API_KEY is not set$"):
         runpod.get(POD)
     assert wire.sent == []
+
+
+# ---- the address kept between calls ----------------------------------------------------------------------------------------------------------
+
+@pytest.fixture
+def pod(monkeypatch):
+    """RunPod as `runpod.get` sees it: `answer` is what it gives next (a pod, or an error to raise), `asked` counts the calls, and
+    `up` is the set of addresses that take a connection."""
+    class Pod:
+        answer: object = dict(REST_POD)
+        asked = 0
+        up: set = set()
+        clock = T0
+
+    def get(pod_id):
+        Pod.asked += 1
+        if isinstance(Pod.answer, Exception):
+            raise Pod.answer
+        return Pod.answer
+
+    monkeypatch.setattr(runpod, "get", get)
+    monkeypatch.setattr(runpod, "answers", lambda host, port, timeout=0.0: (host, port) in Pod.up)
+    monkeypatch.setattr(runpod, "clock", lambda: Pod.clock)
+    monkeypatch.setattr(remote, "utc_now_ms", lambda: f"read-{Pod.asked}")      # a target says which read of RunPod it is
+    monkeypatch.setattr(remote, "_TOLD_KEPT", set())
+    monkeypatch.setattr(remote, "POD_TARGET_RETRY_S", 0.0)
+    return Pod
+
+
+MACHINE = {"provider": "runpod", "pod_id": POD, "name": "vy-x"}
+
+
+def test_the_address_is_kept_and_runpod_is_asked_again_only_when_it_stops_answering_or_is_an_hour_old(pod, monkeypatch):
+    first = remote.pod_target(MACHINE)
+    assert first == {"host": "203.0.113.7", "port": 40123, "user": "root", "pod_name": "vy-x-veritor-campaign", "cost_per_hr": 0.16,
+                     "rate_observed_utc": "read-1", "gpu": None} and tuple(first) == runpod.ADDRESS_KEYS and pod.asked == 1
+    second = remote.pod_target(MACHINE)
+    assert second == {**first, "rate_observed_utc": "read-2"} and pod.asked == 2, "kept, but nothing answers at it: RunPod is asked"
+
+    pod.up = {("203.0.113.7", 40123)}
+    pod.clock = T0 + 3599
+    for _ in range(5):
+        assert remote.pod_target(MACHINE) == second, "the address, the rate and the time the rate was read, as kept"
+    assert pod.asked == 2
+
+    pod.answer = {**REST_POD, "publicIp": "203.0.113.9", "portMappings": {"22": 41000}}     # the pod restarted
+    pod.up = {("203.0.113.9", 41000)}
+    moved = remote.pod_target(MACHINE)
+    assert (moved["host"], moved["port"]) == ("203.0.113.9", 41000) and pod.asked == 3
+    assert remote.pod_target(MACHINE) == moved and pod.asked == 3
+
+    pod.clock += runpod.ADDRESS_TTL_S
+    assert remote.pod_target(MACHINE)["port"] == 41000 and pod.asked == 4, "an hour old: asked again though it still answers"
+    monkeypatch.setenv(runpod.ADDRESS_TTL_ENV, "0")
+    remote.pod_target(MACHINE)
+    remote.pod_target(MACHINE)
+    assert pod.asked == 6, "a TTL of 0 asks every time"
+
+
+def test_when_runpod_cannot_be_asked_the_kept_address_stands_while_it_answers(pod, capsys):
+    kept = remote.pod_target(MACHINE)
+    pod.clock += 2 * runpod.ADDRESS_TTL_S
+    pod.answer = runpod.PodError(f"GET /pods/{POD} -> HTTP 429: rate limit exceeded for the day window; GraphQL: URLError: timed out",
+                                 code=429, pod_id=POD)
+    with pytest.raises(remote.Refused, match=rf"pod {POD} \(machine vy-x\): runpod API unavailable: GET /pods/{POD} -> HTTP 429"):
+        remote.pod_target(MACHINE)
+    pod.up = {("203.0.113.7", 40123)}
+    assert remote.pod_target(MACHINE) == kept and remote.pod_target(MACHINE) == kept and pod.asked == 4
+    err = capsys.readouterr().err.splitlines()
+    assert len(err) == 1 and err[0].startswith(f"research: pod {POD} (machine vy-x): runpod API unavailable (GET /pods/{POD} -> HTTP 429")
+    assert f"using its address as read {kept['rate_observed_utc']}, which still takes a connection" in err[0]
+
+
+def test_a_pod_that_is_gone_or_stopped_is_refused_and_its_address_forgotten(pod):
+    remote.pod_target(MACHINE)
+    pod.up = {("203.0.113.7", 40123)}
+    pod.clock += runpod.ADDRESS_TTL_S
+    pod.answer = {**REST_POD, "desiredStatus": "EXITED", "publicIp": "", "portMappings": None}
+    with pytest.raises(remote.Refused, match="is EXITED; no implicit provisioning"):
+        remote.pod_target(MACHINE)
+    assert runpod.kept_address(POD) is None
+
+    pod.answer = dict(REST_POD)
+    remote.pod_target(MACHINE)
+    pod.clock += runpod.ADDRESS_TTL_S
+    pod.answer = runpod.PodError(f"GET /pods/{POD} -> HTTP 404: not found (terminated, or never existed)", code=404, pod_id=POD)
+    with pytest.raises(remote.Refused, match=r"no longer exists on runpod \(HTTP 404"):
+        remote.pod_target(MACHINE)
+    assert runpod.kept_address(POD) is None and not list(runpod._env_dir().glob("address-*"))
+
+
+def test_a_kept_file_that_is_not_a_target_reads_as_none(pod):
+    remote.pod_target(MACHINE)
+    path = runpod._env_dir() / f"address-{POD}.json"
+    target, age = runpod.kept_address(POD)
+    assert age == 0.0 and json.loads(path.read_text()) == {"target": target, "read_at": T0}
+    for text in ("", "{", json.dumps({"target": {"host": "203.0.113.7"}, "read_at": T0}),
+                 json.dumps({"target": {**target, "port": "40123"}, "read_at": T0})):
+        path.write_text(text)
+        assert runpod.kept_address(POD) is None
+    assert runpod.kept_address("../outside") is None
+    runpod.keep_address("../outside", target)
+    assert [p.name for p in runpod._env_dir().iterdir()] == [path.name]
+
+
+# ---- the callers ---------------------------------------------------------------------------------------------------------------------------------
+
+def test_an_ssh_entry_that_names_the_pod_overrides_the_registrys_entry_and_asks_runpod_nothing(pod, monkeypatch, tmp_path):
+    """machines.toml may give a pod's address itself: an `ssh` entry carrying the pod's id binds the name as the registry does, so
+    the two merge, and the address is the entry's."""
+    (tmp_path / "machines.toml").write_text(f'[machines.vy-x]\nprovider = "ssh"\nhost = "198.51.100.4"\nport = 12250\nuser = "root"\n'
+                                            f'pod_id = "{POD}"\nrate_usd_per_hour = 0.16\nproject = "verity"\n')
+    (tmp_path / "machines.d").mkdir()
+    (tmp_path / "machines.d" / "vy-x.toml").write_text(f'provider = "runpod"\npod_id = "{POD}"\nproject = "verity"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    monkeypatch.setenv("RESEARCH_MACHINES_D", str(tmp_path / "machines.d"))
+    monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "no-notes"))
+    machine = remote.resolve_machine("vy-x", "verity")
+    target = remote.pod_target(machine)
+    assert (target["host"], target["port"], target["cost_per_hr"], machine["pod_id"]) == ("198.51.100.4", 12250, 0.16, POD)
+    assert connect.ssh_base("vy-x")[-1] == "root@198.51.100.4" and pod.asked == 0 and not list(runpod._env_dir().glob("address-*"))
+
+    (tmp_path / "machines.toml").unlink()
+    assert remote.pod_target(remote.resolve_machine("vy-x", "verity"))["host"] == "203.0.113.7" and pod.asked == 1, \
+        "without the entry the registry's is read, and RunPod asked once"

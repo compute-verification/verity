@@ -179,6 +179,7 @@ AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which 
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
+_TOLD_KEPT: set[str] = set()     # the pods this process has said it reaches at a kept address because RunPod can't be asked
 PREFLIGHT_TIMEOUT_S = 180
 PREFLIGHT_TAIL = 40              # lines of the preflight's stdout and stderr kept in its report
 
@@ -300,21 +301,36 @@ def ssh_host_target(machine: dict[str, Any]) -> dict[str, Any]:
 
 
 def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
-    """host/port/user/rate for a runpod machine (read-only API call; not RUNNING -> refused) or an ssh one (`ssh_host_target`)."""
+    """host/port/user/rate for a runpod machine or an ssh one (`ssh_host_target`).  A runpod machine's is the one last read from
+    RunPod (`runpod.kept_address`, with the rate and the time it was read) while that read is under `runpod.address_ttl_s()` old and
+    its ssh port still takes a connection; else RunPod is asked (read-only; not RUNNING -> refused) and the answer kept.  When
+    RunPod can't be asked, the kept address stands for as long as it takes a connection, said in one line."""
     if machine.get("provider") == "ssh":
         return ssh_host_target(machine)
     if machine.get("provider") != "runpod":
         raise Refused(f"provider {machine.get('provider')!r} not supported (runpod or ssh)")
     from .pods import runpod
 
-    who = f"pod {machine['pod_id']} (machine {machine.get('name') or '?'})"
+    pod_id = machine["pod_id"]
+    who = f"pod {pod_id} (machine {machine.get('name') or '?'})"
+    kept, age_s = runpod.kept_address(pod_id) or (None, 0.0)
+    if kept and age_s < runpod.address_ttl_s() and runpod.answers(kept["host"], kept["port"]):
+        return kept
     try:
-        pod = runpod.get(machine["pod_id"])
+        pod = runpod.get(pod_id)
     except runpod.PodError as e:                # a dead / terminated pod, no API config, no network: a refusal with the pod's name, not a SystemExit
         if e.code == 404:
+            runpod.forget_address(pod_id)
             raise Refused(f"{who} no longer exists on runpod (HTTP 404: terminated?); no implicit provisioning") from None
+        if kept and runpod.answers(kept["host"], kept["port"]):
+            if pod_id not in _TOLD_KEPT:
+                _TOLD_KEPT.add(pod_id)
+                print(f"research: {who}: runpod API unavailable ({str(e)[:200]}); using its address as read "
+                      f"{kept.get('rate_observed_utc') or '?'}, which still takes a connection", file=sys.stderr)
+            return kept
         raise Refused(f"{who}: runpod API unavailable: {e}") from None
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
+        runpod.forget_address(pod_id)
         raise Refused(f"{who} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
     tgt = runpod.ssh_target(pod)
     # The REST API intermittently answers a RUNNING pod's GET with publicIp="" / portMappings=None (alternating answers within
@@ -328,8 +344,10 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
         tgt = runpod.ssh_target(pod)
     if tgt is None:
         raise Refused(f"{who} has no ssh port mapped yet")
-    return {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
-            "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
+    target = {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
+              "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
+    runpod.keep_address(pod_id, target)
+    return target
 
 
 def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int = 15) -> list[str]:
