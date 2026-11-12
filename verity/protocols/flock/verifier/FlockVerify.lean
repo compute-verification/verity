@@ -966,10 +966,6 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       else plainCoinsArg (argOf args "--coins") (tags.tableNames count)
     | IO.eprintln s!"verify: {COINS_USAGE}"; return 2
   let t0 ← IO.monoMsNow
-  -- `circuits` through a cell and out of it, so the call owns it and its caller holds none of it: after its last use,
-  -- where the parse is asked for, nothing holds what the member before kept, and a circuit file that is another is
-  -- parsed with the earlier one and its parse freed
-  let circuits ← (← IO.mkRef circuits).swap CircuitRead.Readers.anew
   let (circuitH, circuitSha, archived, pubB, compB, tables) ←
     match ← statementInputsBy circuits.hash args (await := false) with
     | .ok x => pure x
