@@ -7,6 +7,7 @@ rep), and each arm's time over (a)'s minus 1. (a) cuBLASLt int8; (b) noised, no 
 stride 32; (d) duo at 64; c2 / d2 duo2. `plain` is this kernel's mainloop on the un-noised operands, `form` the forming
 passes alone, `g0` (b)'s GEMM and peel alone.
 """
+from __future__ import annotations
 
 import csv
 import json
@@ -33,7 +34,7 @@ def over(t: dict[str, float], x: str, y: str = "lt") -> str:
     return f"{100 * (t[x] / t[y] - 1):+.1f}%"
 
 
-def ncu_tensor(path: Path):
+def ncu_tensor(path: Path) -> dict[str, float] | None:
     """Duration-weighted tensor-pipe active % (of elapsed) over the kernels ncu profiled, and the kernels' total ns."""
     if not path.exists():
         return None
@@ -65,7 +66,7 @@ def ncu_tensor(path: Path):
 LINEAR = {(6144, 4096): "q/k/v", (4096, 4096): "o", (28672, 4096): "gate/up", (4096, 14336): "down"}
 
 
-def best(bench):
+def best(bench: list[dict]) -> list[dict]:
     """One row per (m, n, k): each arm at its fastest tile config (its ms, eta and config)."""
     by = {}
     for s in bench:
@@ -78,7 +79,8 @@ def best(bench):
     return list(by.values())
 
 
-def print_best(bench):
+def print_best(bench: list[dict]) -> None:
+    """`best`'s rows as a Markdown table: each arm's η, then its time over (a)'s."""
     rows = best(bench)
     arms = [a for a in ("lt", "b", "c", "d", "c2", "d2", "c3", "c4", "bA", "cA", "c2A") if all(a in r["arms"] for r in rows)]
     print("Each arm at its fastest tile config: η, and time over (a)'s")
