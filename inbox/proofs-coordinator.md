@@ -99102,3 +99102,35 @@ Our 2,635.9 GB is right as the control and stays the pinned test. Our 2,670.3 GB
   - The suite run of #9397 is not in the store, and I ran only the driver's test file, not the suite.
   - The stretch cells on today's table (the other block types' rows of 12 Nov).
 - I pushed nothing but this entry, changed no file of the repository, and wrote nothing to Linear or Slack.
+
+## ACCOUNTS, Thu 12 Nov 20:00Z: the interface package's root builds at v2's merged head `7dbf3bbaffac`; the two lists are on a branch of mine, `cursor/proofs-composites-f4cc` at `a74647c9a2f7`, not yet compiled
+
+**1. The word compute-research waits on: yes.** At `cursor/proofs-site-v2-1dc6` = `7dbf3bbaffac` (the merge of `main` at `0e8d16c3b8be`), the four tries ended exit 0. [run]
+
+| File | Run | Verdict |
+|---|---|---|
+| `verity/protocols/interface/CoreProtocol.lean` (the package's root) | `r20261112-193827-b545` | exit 0, 20 jobs, 842 s wall with the wait for a slot |
+| `CoreProtocol/Account.lean` | `r20261112-193827-c186` | exit 0, 15 jobs, 828 s wall |
+| `CoreProtocol/SiteV2Guards.lean` | `r20261112-193827-0a9c` | exit 0, 9 jobs, 836 s wall |
+| `CoreProtocol/RegistrationMain.lean` | `r20261112-193828-0eae` | exit 0, 13 jobs, 809 s wall |
+
+- Still out: `r20261112-194215-7cf9` (`verity/protocols/certifier/verifier/lean/NetworkCheck/Registered.lean` at the merged head), waiting for a slot since 19:42Z. I expect it to fail: it reads a link's `β` as a number and v2 makes it optional. [derived: line 106 of that file at `7dbf3bbaffac` writes `β := k.β` into a `Nat`; not run]
+- Unchanged from 19:40Z, and not caused by the merge: the agreement's file (`security/Properties/Core/Site.lean`, six errors) and the Site's difftest in sampled proofs (`Spot/SiteDifftest.lean`, which passes a tick to `Site.device`) do not build on this branch. [run: `r20261112-183631-d650`, `r20261112-183631-c7e5`, at `a5b556456c32`; the merge touched neither file]
+
+**2. The two lists (job 3): pushed, not compiled.** Branch `cursor/proofs-composites-f4cc`, head `a74647c9a2f7`, on soundness's `cursor/soundness-list-composite-8fb2` at `5d7e81e24b1b`. No pull request; it waits for #9268 to be on `main`. The two `rfl` lines are not in it. [run: `git push`, 19:57Z]
+
+| What it changes | Where |
+|---|---|
+| The table of composites takes two more lists, each under `verity/composite/v0:` and its ids | `verity/protocols/onsite/verifier/CoreComposites.lean` |
+| A log is registered for one of four lists; a smaller list's name is its ids, comma-separated; the two clauses read the list | `CoreProtocol/Site.lean`, `security/Definitions/Core/Site.lean`, `verity/hardware/site/__init__.py` |
+| A configuration may list them; the verifier's table of ids has them | `verity/configuration/deploy/config.py`, `verity/protocols/spot/verifier/parties.py` |
+| Tests: the Lean's composite over each list against a reference of its own (two tests, 100 cases each); the Site's difftest over all four names; `verity run`'s table | the composition suite, sampled proofs' Lean suite, the CLI's |
+| The two READMEs | `verity/protocols/remote/verifier/composition/README.md`, `security/Properties/Verity/README.md` |
+
+Runs out on it, launched 19:58Z to 19:59Z; ids in my next entry: four tries (`CoreComposites.lean`, `CoreProtocol/Registration.lean`, the agreement's file, soundness's `Soundness/Composite.lean`), the seven suites it touches without their slow tests, and the composition suite's three tests of `product`. Measured today: a try is 35 s to 270 s once it has a slot, and a slot took 2 to 40 minutes.
+
+**3. One thing for you to pass to soundness.** `security/Properties/Verity/README.md` now says the code builds two more lists and that "no lemma here says yet that those two are `Verity.verifier` at their lists". That sentence goes when the two `rfl` lines go in. Both lines compiled at `e055e90b66f9` (`r20261112-184659-e524`). [run]
+
+**Not established.** Whether any of the branch compiles or passes; the records run `r20261112-190320-3867` (which lock records the lists move) is still running after 53 minutes, where earlier ones took about 25.
+
+**I wait on:** your word on job 2 (my 19:46Z entry: the three additions change definitions the thirteen `Properties.Site.*` records read, and one new thing, the type `Kind`). I go on with job 3 meanwhile.
