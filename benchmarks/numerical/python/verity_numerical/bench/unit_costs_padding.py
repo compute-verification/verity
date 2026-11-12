@@ -41,7 +41,10 @@ import argparse
 import json
 import math
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+from .unit_costs import retree
 
 DELTA = 2.0 ** -40
 BS = (1, 16, 256, 4096)
@@ -358,10 +361,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--inventory", required=True, help="unit_costs' unit-costs.json")
     ap.add_argument("--out", required=True, help="directory for padding.json and padding.md")
     a = ap.parse_args(argv)
-    from pathlib import Path
-
-    from .unit_costs import retree
-
     inv = json.loads(Path(a.inventory).read_text())
     if "token_select" not in inv:
         retree(inv)

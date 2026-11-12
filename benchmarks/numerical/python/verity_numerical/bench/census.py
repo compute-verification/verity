@@ -7,7 +7,9 @@ Each file is loaded as ``{id: entry}`` with entries as attribute namespaces (``H
 
 from __future__ import annotations
 
+import ast
 import json
+import operator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -52,9 +54,6 @@ def stood_for_by(subcircuit_id: str) -> str | None:
 
 def evaluate(expr: str, env: dict[str, Any]) -> int:
     """A work-model expression (``+ - * //`` and parentheses over integers and parameter names) evaluated without ``eval``."""
-    import ast
-    import operator
-
     ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
 
     def ev(n: ast.AST) -> int:

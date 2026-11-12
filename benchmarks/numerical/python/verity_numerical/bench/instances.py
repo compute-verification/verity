@@ -44,11 +44,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.definitions.silicon import models as S
+from verity.definitions.silicon import cast, models as S
 from verity.definitions.silicon.errors import InvalidArtifact
 from verity.definitions.circuits.targets.target import FIRST
 
 from .. import settings
+from ..reference import hawkeye_close
 from . import instances_gen as G
 
 __all__ = [
@@ -353,16 +354,12 @@ def _git_head() -> str | None:
 
 
 def _source_digests() -> dict[str, str]:
-    import verity.definitions.silicon.cast as cast_mod
-
-    import verity_numerical.reference.hawkeye_close as hk_mod
-
     files = {
         "verity_numerical/bench/instances.py": Path(__file__),
         "verity_numerical/bench/instances_gen.py": Path(G.__file__),
         "verity/definitions/silicon/models.py": Path(S.__file__),
-        "verity/definitions/silicon/cast.py": Path(cast_mod.__file__),
-        "verity_numerical/reference/hawkeye_close.py": Path(hk_mod.__file__),
+        "verity/definitions/silicon/cast.py": Path(cast.__file__),
+        "verity_numerical/reference/hawkeye_close.py": Path(hawkeye_close.__file__),
     }
     return {k: sha256_file(p) for k, p in files.items()}
 

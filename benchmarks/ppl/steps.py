@@ -20,7 +20,7 @@ import zlib
 import torch
 
 import gates as G
-from matmul import Softmaxed
+from matmul import Softmaxed, exact_mm
 from spec import attention_step, linear_step
 
 GROUP = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv", "self_attn.o_proj": "o",
@@ -1297,7 +1297,6 @@ def emulate(mm, nxt, route: str):
     each plane pair's product exact (FP32 chunks, `matmul.exact_mm`), recombined in float64. Gated (`emulation`) on
     every call: the planes held and the recombined product equal to the int8 one. Returns the emulated product, so
     the arm's perplexity is the emulation's."""
-    from matmul import exact_mm
     acc = nxt(mm)
     x, w = mm.x.float(), mm.weight()
     fmt = "e2m1" if route.startswith("fp4") else "e4m3"
