@@ -186,7 +186,7 @@ def _random_fp32(rng: random.Random, exp_lo: int, exp_hi: int) -> int:
 
 
 def random_cases(n: int, seed: int) -> list[Case]:
-    """``n`` random all-finite cases in six equally weighted mixtures (uniform encodings; magnitudes clustered so the products and
+    """``n`` random all-finite cases in six equally weighted mixtures (uniform encodings; magnitudes close together so the products and
     the accumulator interact; zero accumulator; subnormal-heavy; near overflow; cancellation-heavy with a random accumulator)."""
 
     rng = random.Random(seed)

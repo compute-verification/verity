@@ -23,7 +23,7 @@ records its container's identity (DMI product uuid, kernel boot id, CPU model, p
 
 ``check`` reads the prover run's result and says what keeps it from counting: the result contract (``contract.validate``), the
 protocol (``interaction.protocol_problem``), the interaction record (``interaction.interaction_problem``), a live verifier on another machine for an
-interactive backend, the loopback probe, and that its statement and instance set are the cell's.  ``register`` runs the backend's
+interactive backend, the loopback probe, and that its statement and input set are the cell's.  ``register`` runs the backend's
 registration script, stamps the cell (backend, family, statement, subcircuit, scheme, input set, both machines) into the document, checks it,
 and puts it in the evidence store (``research data put --kind bench-result/v1 --ref run_files=... --preserve``).
 """
