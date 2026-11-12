@@ -1,5 +1,5 @@
 """attn_bf16's kernels as torch functions, `qk(q, k, lens=None, *, out, fill, warps, check_lens, path)` and `pv(p, v,
-lens=None, *, out, kpv, warps, check_lens, path)`, the shapes of the skeleton's `e2e_h200.attention.scores` / `pv`:
+lens=None, *, out, kpv, warps, check_lens, path)`, the shapes of a decoder's attention scores and its `pv`:
 
   qk(q, k)   q (B, H, D), k (B, T, D) or (B, Hkv, T, D)  ->  S (B, H, T)
              S[b,h,j] = GemmCoordinate_v2{K=D, GEMM_HOPPER}(q[b,h,:], k[b,kv(h),j,:])     j < lens[b]
