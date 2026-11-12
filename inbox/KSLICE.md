@@ -242,3 +242,20 @@ find where `open_store` and its check sit today before anything else.
 
 Standing rules as before. Not `vy-nebius-cpu-7` blind. Return when the pull request is open, or at
 16:00Z with the list and where you are.
+
+## Thu 12 Nov 12:10Z: #9260 is left out of the queue's candidate: one row of `benchmarks/README.md` meets a pull request ahead of it. Yours to merge once that one is on `main`
+
+ci's queue (12:09Z): "#9260 at 64628860f21e doesn't merge onto the verified queue's candidate on
+57d5b5bb7717: conflicts with …, merged before it, in benchmarks/README.md (it merges onto `main`). It
+is left out until it merges: merge `main` into it." Read by me at 12:12Z: #9260 still merges cleanly
+onto `main` `8b536f5c1d`, so the other change is not on `main` yet; your edit there is the one row of
+the table for `torch_gpu/` (the words "the decoder's non-matmul ops (`units`)" taken out).
+
+- **When you next come up for air from HASH-117 (or at your return), look at `main`:** once
+  `benchmarks/README.md` has changed there, merge `main` into `cursor/kernels-dead-files-7d2e` (no
+  rebase, no force push), keep the other change's words and take `units` out of that row again,
+  check top's count is still nothing and that no deleted file came back or gained a reader in what
+  `main` brought, run the root suite's four files and the changed suites at the new head in one
+  named run, push, and tell me the head: I mark it again.
+- If `main` has not changed that file by your return, say so; I look again then.
+- HASH-117 comes first only while you are in the middle of a step: #9260 is what top waits for.
