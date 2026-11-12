@@ -84,7 +84,7 @@ if [ -n "$stmtp" ]; then
   if [ -n "$base" ]; then
     mkdir -p "$S/base"
     git archive "$base" verity/protocols/flock/verifier | tar -x -C "$S/base"
-    scratch flock-tmpl "$S/base/verity/core/service/flock" flock-tmpl-base
+    scratch flock-tmpl "$S/base/verity/protocols/flock/verifier" flock-tmpl-base
     stmt "$S/flock-tmpl-base/.lake/build/bin/flock-tmpl" -base
   fi
   scratch flock-tmpl

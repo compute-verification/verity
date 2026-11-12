@@ -22,7 +22,8 @@ inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "verity/conf
           # serving.py takes its tags from the table of domain separators, verity.commitments.domains
           "verity/errors.py", "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto",
           # the tests' g++ builds of pfill.cuh include its SHA-512, pearl_c/sha512.cuh, which includes sha512_rows' sha512x.cuh
-          "benchmarks/pouw/pearl_c/sha512.cuh", "verity/definitions/kernels/sha512.cuh"]
+          "benchmarks/pouw/pearl_c/sha512.cuh", "verity/definitions/kernels/sha512.cuh",
+          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/definitions/kernels/__init__.py", "verity/protocols/pouw/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
