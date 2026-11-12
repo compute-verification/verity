@@ -531,7 +531,7 @@ def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     assert v.check("required_value_coverage/manifest_of_record_verified").outcome == V.PASS
     assert v.runs == {"instrumented": 1, "failed": 0, "control": 1, "not_pass_by_reconstruction": 0, "pairs": [0]}
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
-    out = cli.main(["verdict", "from-record", str(d), "--rc", "0", "--stage-ok", "PASS", "--quiet"])
+    out = cli.main(["verdict", "from-record", str(d), "--rc", "0"])
     assert out == 0 and V.CommitChecks.load(d / "verdict.json").outcome == V.PASS
 
 
