@@ -24,8 +24,9 @@ that hold separately, each a `Prop` here and a theorem in a file of its own, and
   * `CoinMapLaw`: the coin map is uniform, and the device's releases agree with the run's coins (an agreement `Ag`),
     up to the device's coin trees' hiding; `DevAgrees`: on an accepted play whose log is the device's, coins `Ag` holds
     of agree with every release the log holds for a read round, as the check reads it.
-  * `CoinsRead` at each group of coins: on a play the form's check accepts (`Acc`) whose log the check read is the
-    device's (`Good`), the coin the check reads for a round of the group is the device's release for it. Every piece but
+  * `CoinsAgree` at each group of coins: on a play the form's check accepts (`Acc`) whose log the check read is the
+    device's (`Good`), the coin the check reads for a round of the group agrees with whatever the device's release for
+    it agrees with (`CoinsRead`, the two equal, gives it; a stage that read part of a coin has only this). Every piece but
     the coin map's, the cut's and the assemblies' is a lemma about the form's check alone, at `Acc`; that the sampled
     verdict accepts, on a play of the parameters `θ`, only where the check does is the composite's wiring's, one
     hypothesis of `ProjectionOf`.
@@ -136,6 +137,15 @@ def CoinsRead (A : Live₂) (Rd : Reading A) (Acc Good : Verity.Exchange → Pro
   ∀ o : Verity.Exchange, Acc o → Good o → ∀ i, Rd.reads i → groupOf A i = g →
     Rd.coin o i = Rd.dev o.log i
 
+/-- **The coins the check reads at group `g` agree as the device's do** (piece: one per group of coins): on a play the
+form's check accepts whose log the check read is the device's, the coin the check reads for each read round of group
+`g` agrees with every coin the device's release for it agrees with. Not equality: a stage that read `n` bytes of a
+released coin reads that coin's first `n` bytes and zeros past them, while the release carries the whole coin.
+`CoinsRead` gives it. -/
+def CoinsAgree (A : Live₂) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (g : Group) : Prop :=
+  ∀ o, Acc o → Good o → ∀ i, Rd.reads i → groupOf A i = g → ∀ c, Rd.coin o i = some c →
+    ∀ c', (∀ d, Rd.dev o.log i = some d → Rd.agree o i d c') → Rd.agree o i c c'
+
 /-- **The statements' round reads no coin**: the run's verifier reads none at round `stage + 1`. -/
 def StmtReadsNone (A : Live₂) (Rd : Reading A) : Prop :=
   ∀ i, Rd.reads i → groupOf A i ≠ .stmt
@@ -204,8 +214,8 @@ def ProjectionOf (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live�
     (Ag : Verity.Exchange → Coins A x → Prop) (hide miss terms : ℝ≥0∞),
     (∀ o, o.params = θ → V.Verdict k .sampled o → Acc o) →
     CoinMapLaw V A x θ F c σ Fr Ag hide → DevAgrees A x Rd Acc Good Ag →
-    CoinsRead A Rd Acc Good .first → CoinsRead A Rd Acc Good .second →
-      CoinsRead A Rd Acc Good .sessions → StmtReadsNone A Rd → MessagesFixed V A x θ F c σ Fr Rd Acc Good miss →
+    CoinsAgree A Rd Acc Good .first → CoinsAgree A Rd Acc Good .second →
+      CoinsAgree A Rd Acc Good .sessions → StmtReadsNone A Rd → MessagesFixed V A x θ F c σ Fr Rd Acc Good miss →
       CutBound V k θ F c σ Good terms → AcceptsRun A x Rd Acc → StmtAt V A x θ F c σ Fr Rd Acc →
       ProjectionBound V k A x θ F c σ Fr (hide + miss + terms)
 
