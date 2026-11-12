@@ -10,6 +10,9 @@ each step closed by an `o_proj` reading the W_UV product and a sampling event:
   ports the source declares."""
 from __future__ import annotations
 
+from verity_vllm.pipeline import manifest as M
+from verity_vllm.query.manifest import format as MF
+
 __models__ = ("zai-org/GLM-5.3",)
 
 import copy
@@ -136,7 +139,6 @@ def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
 
 
 def test_the_word_check_skips_the_unreturned_indexer_calls(glm):
-    from verity_vllm.pipeline import manifest as M
     P, corr, _man = glm
     r = request_manifest(P, corr, RES, request_id="r0")
     assert r.unreturned == Population(P, corr).unreturned and r.unreturned
@@ -151,7 +153,6 @@ def test_the_manifest_build_word_check_flags_no_indexer_call(glm, tmp_path, monk
     """`manifest.build` as each rank's check runs it, its `16/32` word check included, over the GLM Program: the check it runs names no
     DSA Call (strict, it raised output-not-committed on the unreturned indexer logits and top-k at the end of every rank's check).  The
     fixture's own stand-ins (o_proj's `Gemm_v1{N=4}`, the argmax) are no registered Definitions, so the check runs unstrict here."""
-    from verity_vllm.pipeline import manifest as M
     P, corr, _man = glm
     (tmp_path / "result.json").write_text(json.dumps(RES))
     monkeypatch.setattr(M, "from_instances", lambda _path: P)
@@ -208,7 +209,6 @@ def test_each_attention_value_binds_from_what_the_capture_map_commits(glm):
 def test_the_wrapper_prefix_of_glm53_rows_is_determined_from_the_attention_paths_parent():
     """GLM-5.3's MLA rows sit under `inner.model.model.layers.N.self_attn` while the implementation is `model.layers.N.self_attn.attn`
     (result.json): the prefix is `inner.model.`, not the `model.` default; a Llama-style Attention row keeps its answer."""
-    from verity_vllm.query.manifest import format as MF
     glm = [{"spec": "EmbeddingShard_v1{V=8,H=4}", "name": "inner.model.model.embed_tokens/embedding[0]"},
            {"spec": "RoPEHeadGptJ_v2{D=64}", "name": "inner.model.model.layers.0.self_attn/dsa_norm_rope/k_pe[0]"}]
     assert MF.wrapper_prefix_of(glm, ["model.layers.0.self_attn.attn"]) == "inner.model."

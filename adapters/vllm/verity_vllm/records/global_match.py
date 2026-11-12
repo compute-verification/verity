@@ -20,6 +20,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, only, optional, required
 
+__all__ = ["GlobalMatch", "SCHEMA"]
+
 SCHEMA = "cb-a/global-match/v1"
 #: what the account link doesn't interpret: the checker's provenance, the Program it read, the batch-decomposition evidence (`x09`) and the other criterion's
 INFO = frozenset({"comparator", "rules_version", "utc", "oracle_dir", "log", "global_program", "chronology_unit", "request_id_convention",

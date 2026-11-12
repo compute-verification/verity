@@ -75,3 +75,6 @@ def declaration(committer: str, path_label: str, classes: list[dict], notes: lis
                   "rule": <citation for registered/derived; None for leaves>, "count": <values bound>, "bytes": <bytes bound>,
                   "evidence": <free text: hook names / kernels / tests>}]"""
     return {"schema": DECLARATION_SCHEMA, "committer": committer, "path": path_label, "classes": classes, "notes": notes or []}
+
+
+__all__ = ["Opening", "RunCommitment", "StepCommitment", "declaration"]

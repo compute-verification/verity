@@ -217,7 +217,7 @@ def launch_config(record: dict[str, Any] | None, source: str) -> dict[str, Any]:
     rec = (record or {}).get(source_sha256(source))
     if rec is None:
         raise Unmodelled(f"no launch config recorded for kernel source {source_sha256(source)[:16]}")
-    cands, ran = rec.get("candidates") or [], rec.get("executed") or []
+    cands, ran = rec["candidates"], rec["executed"]
     if len(ran) != 1 or (cands and ran[0] not in cands):
         raise Unmodelled(f"kernel source {source_sha256(source)[:16]}: {len(cands)} candidate configs, its autotuners hold {ran}; one "
                          f"config every instance ran is required")
@@ -241,9 +241,10 @@ def recognize(name: str, source: str, config: dict[str, Any] | None = None, *, c
     if m is None:
         raise Unmodelled(f"{name}: no @triton.jit def")
     head, body = source[:m.start()], "def KERNEL(" + _function_text(source[m.end():])
-    t, got = next(((t, g) for t in TEMPLATES if (g := t.pattern.fullmatch(body))), (None, None))
-    if t is None:
+    found = next(((t, g) for t in TEMPLATES if (g := t.pattern.fullmatch(body))), None)
+    if found is None:
         raise Unmodelled(f"{name}: its source is none of the templates {[t.name for t in TEMPLATES]}")
+    t, got = found
     heur = re.search(r"^@triton_heuristics\.(\w+)\(", head, re.M)
     sig = re.search(r"'signature': (\{[^{}]*\})", head)
     if heur is None or heur.group(1) != t.heuristic:
@@ -270,7 +271,7 @@ def instantiate(name: str, t: Template, lit: dict[str, Any], config: dict[str, A
     if t.config:
         if config is None:
             raise Unmodelled(f"{name} ({t.name}): its launch config is a static and none was given")
-        kw = config.get("kwargs") or {}
+        kw = config["kwargs"]
         lit.update(XBLOCK=kw.get("XBLOCK"), R0_BLOCK=kw.get("R0_BLOCK"), NUM_WARPS=config.get("num_warps"))
     calls = []
     for c in t.calls:
@@ -307,3 +308,7 @@ def numel(ty: Any) -> int:
     if isinstance(ty, Value):
         return 1
     raise Unmodelled(f"type {ty} is not an array of values")
+
+
+__all__ = ["FLAGS", "TEMPLATE", "Template", "Unmodelled", "bound", "holes", "instantiate", "kernel_sources", "launch_config", "recognize",
+           "source_sha256"]

@@ -13,6 +13,8 @@ from verity.circuits.types import RecordType, Type, Value
 
 from verity_vllm.observe.fold.resolver import Supplied
 
+__all__ = ["program_registered_values"]
+
 
 class SuppliedInputs:
     def __init__(self) -> None:
@@ -74,7 +76,7 @@ class SuppliedInputs:
             return {}
         out = {"registration": {"param": self.param["values"], "name": "values", "fields": fields("values")},
                "run": [{"param": self.param[i], "name": params[self.param[i]][0], "request": requests[i]["request_id"], "fields": fields(i)}
-                       for i in sorted(k for k in self.param if k != "values")]}
+                       for i in sorted(k for k in self.param if isinstance(k, int))]}
         if program is not None:
             out["input_nodes"] = input_nodes(program)
         return out

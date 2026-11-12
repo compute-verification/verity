@@ -15,6 +15,7 @@ from verity_vllm.program.frontend.target_profile import (
     canonical_bytes,
     check_reuse,
     load_artifact,
+    moe_experts_class_of,
     parse_target_arg,
     profile_mismatches,
     reuse_mismatches,
@@ -271,7 +272,6 @@ class _Model:
 
 
 def test_moe_experts_class_is_read_back_from_every_fused_moe_layer():
-    from verity_vllm.program.frontend.target_profile import moe_experts_class_of
     TritonExperts, DeepGemmExperts = type("TritonExperts", (), {}), type("DeepGemmExperts", (), {})
     linear = _Layer(fp8_linear=object())
     assert moe_experts_class_of(_Model(linear, _Layer())) is None
