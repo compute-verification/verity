@@ -38,6 +38,8 @@ from verity_vllm.pipeline.match import fold_construction_args
 from verity_vllm.pipeline.row_records import decomp_rc
 from verity_vllm.pipeline.tp.links import read_tp_links
 
+__all__ = ["Options", "main"]
+
 logger = init_logger(__name__)
 
 SCHEMA = "verity/tp2/fold-match/v1"

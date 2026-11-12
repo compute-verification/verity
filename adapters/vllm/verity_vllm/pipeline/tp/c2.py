@@ -19,6 +19,8 @@ from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import replay_bundle as RB
 
+__all__ = ["DEFER_WORLDS"]
+
 logger = init_logger(__name__)
 
 DEFERRED = "replay_deferred.json"

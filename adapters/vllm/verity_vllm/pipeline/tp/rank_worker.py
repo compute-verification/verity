@@ -41,6 +41,8 @@ from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm import settings
 
+__all__ = ["EXTENSION"]
+
 
 def repo_modules_loaded() -> dict[str, Any]:
     """The repo-local files THIS process has imported (sys.modules, filtered to the repo root and vllm-poc) plus

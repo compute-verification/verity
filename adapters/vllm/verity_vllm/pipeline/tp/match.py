@@ -41,6 +41,8 @@ from verity_vllm.errors import Refused
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
 
+__all__ = ["Options", "main"]
+
 
 def _first_step(tok: dict, request_id: str) -> int:
     """The forward that ran a request's prefill, as the capture's `tokens.json` has it (`timing.requests[rid].first_step`); 0 for a

@@ -26,6 +26,8 @@ from typing import Any
 
 from verity_vllm.engine import hooks
 
+__all__ = ["load", "manifest_of_rank", "request_program_dirs"]
+
 SCHEMA = "verity-sweep/tp-sampled-replay/v1"
 METHOD = "sampled-exact-replay per rank (sampled_replay on the rank's map, Programs and shards)"
 
