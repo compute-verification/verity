@@ -90,3 +90,173 @@ LEANMERGE to network-accounting's coordinator, Wed 11 Nov 5:44 PM PST. Final rep
 
 Everything is pushed and the notes are synced (`tools/na-cross-mend-witnesstoys-leanmerge/`). I posted nothing on Linear.
 
+[2026-11-12T01:47Z] c728ad422140
+# NET-345: the crossed head and my branch, reader by reader
+
+TERMGB to coordinator, Wed 11 Nov 2026, 5:47 PM PST. Read only: no commit but this note, no pull request, no remote run. Each claim is marked [ran], [read] or [argued]. The note is `20261112T0147Z-report-net345-table-termgb` (synced): it holds this table, the two sides' figures as run, and the two scripts.
+
+## The answer first
+
+- **Same numbers everywhere but one place.** `terms` and `clock_terms` at a named bound, all of K by links (198 figures) and all of `chain_record.leak` (108 figures) are equal to the last bit on one input [ran].
+- **The one disagreement in meaning is d1's jitter.** The crossed head charges every audit the whole chain's steps; mine charges the chain's steps once. One audit: the same K. With n audits the crossed K is higher by (n − 1) · windows · buckets [ran].
+- **The Lean period check sides with neither by itself: it charges what its case hands it.** Clock form: ⌈log2 Dj^steps⌉ for each audit, by that audit's handed `steps`. Rows form: ⌈log2 Dj^T⌉ once for each link-window's scan, whatever the audits are [read; ran on the Python mirror].
+- **Two names for one bound meet whatever you rule.** `OF_RECORD` is #8777's (line 448 at its head `6b8edbf5de81`), `JITTER_BOUND` is the crossed head's. #8777 and lean's merge together put both in `leak_bounds.py` [read].
+- **What the crossed head has and I never built: the scan's period check at the bound 2** (`scan_period.py:106`). On mine and on `main` it is handed 1 [read].
+
+## What was compared, and how
+
+- **Crossed**: lean's `cursor/lean-remote-merge-crossed-fc8d` at `3ff11d118f93`. For `leak_bounds.py`, `tests/test_leak_bounds.py` and `tests/test_chain_record.py` I took CROSSTICK's close, `a4e1d7e04617` on `cursor/na-cross-main-closes-84ef` (head `33360da0a088`).
+- **Mine**: `cursor/na-k-two-schedules-b4e6` at `95ba862a3fb4`, four commits on #8777's earlier head `f28f4e4acc2d`.
+- **How a figure was run**: each tree in its own process, its own files loaded by path, the same calls with the same arguments, the results compared key by key. The crossed side's `chain_record.py` is git's own merge of the crossed head with `main`, because on CROSSTICK's branch as it stands `chain_record.leak` raises (`leak_bounds` has no `world` until `main` is in) [ran].
+- **The period check's numbers** are from each tree's Python mirror (`verity/protocols/certifier/verifier/network/tests/period_case.py`, `public`). The Lean was read, not built.
+- Paths below are under `benchmarks/network_traces/` unless they name a directory. Crossed line numbers in `chain_record.py` are the crossed head's own; in the three closed files they are the close's.
+
+## The table
+
+### `leak_bounds`
+
+| Reader | Crossed, file and line | Mine, file and line | Same number on one input | Names that differ |
+|---|---|---|---|---|
+| `terms` | `leak_bounds.py:182`, `dj: int = 1` | `:199`, `dj` required | Yes at a named bound: jitter 2,400 at 2 and 0 at 1, the other terms 700, 700, 7,952. With no bound: crossed counts at 1, mine raises `TypeError` [ran] | none |
+| `clock_terms` | `:204`, `dj: int = 1` | `:224`, `dj` required | Yes at a named bound: jitter 480 at 2, 0 at 1. With no bound: crossed counts at 1, mine raises [ran] | none |
+| the bound | `:99` `JITTER_BOUND = 2`, `:100` `JITTER` (the text) | `:126` `OF_RECORD = 2` (#8777's), `:458` `SET_TIME` (#8777's), `chain_record.py:167` `JITTER` | Both 2 [ran] | `JITTER_BOUND` / `OF_RECORD`; `leak_bounds.JITTER` / `chain_record.JITTER` |
+| the helper | `:174` `_jitter`, and `:321` `jitter_bits(steps)` beside it | `:191` `_jitter` only | `_jitter(2, 32)` = 32 and `_jitter(2, 96)` = 96 on both; `jitter_bits` exists only on crossed, same values [ran] | `jitter_bits` has no name on mine |
+| `LinkLoad` | `:231`; `:266` the property `jitter`; `:293` `terms` passes `dj=JITTER_BOUND`, no parameter; `:300` `bits` | `:251`; no property; `:308` `terms(…, dj=OF_RECORD)`; `:316` `bits(…, dj=OF_RECORD)` | Yes at the default: a week as registered gives jitter 6,048,000 on both; a block gives 32 on both; `bits` 36 of 36 equal. At D_j = 1: only mine can be asked [ran] | `link.jitter` / `link.terms(link.block_s, "registered").jitter` |
+| `per_link` | `:374` | `:386`, takes `dj` | 36 of 36 equal [ran] | none |
+| `datacenter` | `:386` | `:399`, takes `dj` | 18 of 18 equal [ran] | none |
+| `at_link_rate` | `:423` | `:436`, takes `dj` | 108 of 108 equal, at 1, 12,500 and 46,870,000 links [ran] | none |
+
+### `chain_record` and `warden_chain`
+
+| Reader | Crossed, file and line | Mine, file and line | Same number on one input | Names that differ |
+|---|---|---|---|---|
+| the certificates step | `chain_record.py:220` `certs` writes `window_buckets`; `warden_chain.py:111` `certificates` writes no such field | `chain_record.py:228` `certs` writes `buckets` (`:253`); `warden_chain.py:128` writes `buckets` | Same value from `certs` (`setup.egress_params.buckets`). Each side reads the other's record as K open. On the network certifier's own chain the crossed d1 is open, mine is counted [ran] | `window_buckets` / `buckets` |
+| `audit_of` | `:672`, no jitter key | `:679`, `"jitter": 0` (`:716`) | Same units, sampled and free: 4, 2, 96 [ran] | the key `jitter` |
+| `network_terms` | `:748`: advice, syncs, cells | `:759`: those and `jitter` (`:770`), `None` where the step names no buckets | Advice 40, syncs 21, cells 0 on both; mine adds jitter 96 [ran] | the key `jitter` |
+| d1's terms | `:758` `d1_terms`: `steps = len(rows) * window_buckets` (`:765`), each audit gets `steps` and `LB.jitter_bits(steps)` | `:773` `d1_terms`: `jitter_bound` (`:788`), the jitter in `network_terms` | **One audit: K 290 and 767 on both. Two audits: crossed 484 and 982, mine 388 and 886. Three: crossed 677 and 1,189, mine 485 and 997** (3 windows of 32 buckets, at δ = 1/2 and 2^-20) [ran] | `d1["K"]["audits"][i]["steps"]` only on crossed; `d1["jitter_bound"]` only on mine |
+| `pooled_k` | `:729`: `jitter` is the audits' sum, `jitter_term: LB.JITTER` | `:739`: `network["jitter"]` plus the audits' sum (`:752`), `jitter_term: JITTER` | The same keys in `terms`; the sum differs as in the row above [ran] | the text of `jitter_term` |
+| `leak` | `:804`; `:867` writes `jitter_per_block`, `jitter_bound`, `jitter_term` | `:815`; `:879` writes `jitter`, `jitter_bound`; the condition names the set-time label | 18 rows, 108 figures, all equal; first row 1,727,208,000 bits a week a link on both [ran] | `terms.jitter_per_block` / `terms.jitter`; the condition's text |
+| `leak_markdown` | `:896` | `:911`, and one more line: the K at D_j = 1 under the set-time label | Same figures; the texts differ [ran] | the heading's words |
+
+### `scan_period`, the tests, the text, `capacity.py`
+
+| Reader | Crossed, file and line | Mine, file and line | Same number on one input | Names that differ |
+|---|---|---|---|---|
+| `scan_period.rows_case` | `scan_period.py:106`: `"jitter": LB.JITTER_BOUND` | `:94`: `"jitter": 1` (`main`: `:97`, the same) | No. The rows form at the bound 2 charges 32 a link-window of 32 buckets: K 384 against 288 on the mirror's input [ran on both mirrors] | none: it is step 3, which I did not build |
+| tests, `leak_bounds` | `tests/test_leak_bounds.py:132-139`, `:194-197` | `tests/test_leak_bounds.py:135`, `:138-160` (the default pinned by signature, `dj` selectable), `:216-219` | The pinned figures agree: 9,176 = 9,144 + 32 on both [read] | as the readers' |
+| tests, `chain_record` | `tests/test_chain_record.py:111`, `:519`, `:601`, `:620-633` (an audit's `steps` 180, jitter 180), `:759` | `tests/test_chain_record.py:116-119`, `:522-541`, `:615-620`, `:637-653` (jitter 96 once), `:779`; `tests/test_warden_chain.py:65-67` | Each pins its own shape of d1 [read] | as the readers' |
+| tests, the scan | `tests/test_scan_zk.py:623`: `p["jitter"] == SP.LB.JITTER_BOUND` | no test pins the scan's handed bound; `main` has none either | not comparable [read] | none |
+| README | `README.md:239-245`, `:297`: D_j = 2, `terms.jitter_per_block`, why D_j = 1 is not met, and that the scan's period check passes the same bound | `README.md:210-212`, `:228-230`, `:241-245`, `:298-300`: D_j = 2, `terms.jitter`, the set-time label, d1's jitter once | Both say T bits a sampling block at D_j = 2 [read] | as the readers' |
+| `PROTOCOL.md` | `verity/protocols/certifier/verifier/PROTOCOL.md:989-999`, `:1085`, `:1233`: still "under J (D = 1)", "1 under J", "D = 1 is no jitter". Its rows are rewritten for the reference schedule; the rows "The shipped schedule, per window" and "A fixed clock, under J" are gone | the same file, `:987`, `:990-991`, `:1057-1060`, `:1066-1067`, `:1215-1217`: D = 2 the term of record, D = 1 only with a set-time card | [read] The crossed text does not say the term of record is at D = 2 | none |
+| the attacks table | `verity/protocols/certifier/verifier/protocol/arbitrary-serving-attacks.md:13`: "Jitter is n·log2 D, which is 0 under J", unchanged from `main` | the same line: a bit a bucket at D = 2, 600 bits a window there, 0 with a set-time card | [read] | none |
+| `capacity.accepted_bound_bits` | `verity/protocols/certifier/verifier/capacity.py:44-49` | the same lines, `main`'s | 121.0 at the default and 217.0 at D = 2 over 96 steps, on both [ran] | none. Only the docstring differs, below |
+
+- **`capacity.accepted_bound_bits`, the crossed head's text of it** [read]: "Lean `Properties.NetworkCertifier.EncardAcceptedObservationsLe`, at `steps = W·T`: the check's accepted sequences number at most `#Ac · #Σ_sync^W · D^n`, which is `A_c + W·log2 #Σ_sync + n·log2 D` bits. With one sync value under J it is the content advice's `A_c` alone."
+  - Mine, which is `main`'s: "Lean `SecurityProofs.EncardAccSeqsLeSync`: accepted sequences number at most `#Ac · #Sync^W · D^n`, which is `A_c + W·log2 #Sync + n·log2 D` bits. It is 0 for a fixed clock and J (`SecurityProofs.EncardAccSeqsLeFixedClock`)."
+  - Both keep `jitter_classes: int = 1, steps: int = 0`, and both of its callers are tests that name no bound (`tests/test_network_certifier_capacity.py`, two lines). `EncardAccSeqsLeFixedClock` is in no file under `security/` or `verity/` of the crossed tree, and in seven of mine.
+
+## d1's jitter: what the Lean period check charges
+
+The file is `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean` [read on both trees; the text of these definitions is the same but for the crossed head's extra `faultyEntries` term].
+
+| | Mine, which is `main`'s | Crossed head |
+|---|---|---|
+| Clock form, an audit's terms: `AuditTerms.of`, `jitter := clog2 (jitter ^ a.steps)` | lines 1198-1200 | 1319-1321 |
+| Rows form, a scan's terms: `Scan.terms`, `jitter := clog2 (jitter ^ s.steps)` | 1205-1207 | 1327-1329 |
+| `terms`, one unit an audit | 1234-1239 | 1359-1362 |
+| `rowsTerms`, one unit a link-window's scan: "The compute audits' own terms are in none" | 1245-1248 | 1371-1373 |
+| a scan's `steps := T`, set by the parser | 794 | 862 |
+| an audit's `steps` read from the case | 652 | 711 |
+| what `steps` is: "`steps`, its monitoring period `k`" | 44-45 | 42-43 |
+
+- **Clock form.** The check charges each audit ⌈log2 Dj^steps⌉ by the `steps` its case hands that audit. Two audits handed the same 96 steps at D_j = 2 are charged 96 each, 192 in all; handed 0 they are charged nothing at any bound [ran on both mirrors: jitter `[96, 96]`, and `[0, 0]`].
+- **Rows form.** The check charges each link-window's scan ⌈log2 Dj^T⌉ once. It never reads an audit's `steps`. Three link-windows of 32 buckets at D_j = 2 are charged 32 each, 96 in all, with one audit or with two [ran on both mirrors: `[32, 32, 32]` in both cases].
+- **The two designs, two audits over the same three windows of 32 buckets** [ran]:
+  - Crossed: 96 for each audit, 192. K 484 at δ = 1/2.
+  - Mine: 96 once. K 388 at δ = 1/2.
+  - The crossed shape is the clock form's if every audit is handed the whole chain's steps. Mine is the rows form's total.
+- **Which is right, as far as I can argue it** [argued]. The guarantee (`security/Definitions/NetworkCertifier/Guarantees/Period.lean:100`, `PeriodLeakAccepted`, the same on both trees) has one factor `Dj ^ k (sw i)` for each window i of the period (line 128), and `Public.units` says a unit is "one a execution phase".
+  - So an audit is one execution phase's, with that phase's own steps, and the k of all units sum to the link's steps over the period: windows · buckets.
+  - Mine gives that total. The crossed head gives it only with one audit, because it hands every audit all the windows' steps.
+  - The crossed count is still an upper bound: it is sound and counts the same steps once for each audit.
+  - This is what I am least sure of. If two audits can truly cover one execution phase (two Programs audited over the same wire), the statement as written still has a factor for each, and then the crossed count is the statement's and mine is below it.
+
+## Row: the six docstrings of `security/Definitions/NetworkCertifier/Guarantees.lean` that say J is D = 1
+
+Nothing changed. Mine is `main`'s file. The crossed head rewrites the file for the reference schedule (118 lines added, 143 removed against `main`) [read].
+
+| Mine, line and statement | What mine says | The crossed head's text of it |
+|---|---|---|
+| 77, `EncardAccSeqsLeFixedClock` | "timing carries nothing beyond the jitter, and nothing at all under J (`D = 1`): the zero-capacity theorem, with content advice" | The statement is gone. No file under `security/` or `verity/` of the crossed tree names it. In its place `EncardAccSeqsLeAdviceBits` (line 67): "at most `2^(E·k) · D^n`, that is `k` bits per execution block plus jitter", with no clause on J |
+| 103, `EncardAccSeqsLeConstantRateFixedClock` | "under J (`D = 1`) nothing at all, at most `#Ac` sequences for the content advice" | The statement is gone |
+| 146, `EncardAccSeqsLeConstantRatePerWindow` | "`log2 #Σ_sync + T·log2 D` bits per window, which is 7 bits at 16 × 8 sync values under J (`D = 1`)" | Line 125: "`\|a\| + g·T·log2 D` bits per execution block, `\|a\|` under J (`D = 1`), whatever came before" |
+| 192, `EncardIngressDecodableLe` | "`n·log2 D` of jitter, none under J's `D = 1`" | Line 173: the same words |
+| 233, `EncardIngressObsDecodableLePerWindow` | "each window `D^T` of jitter, 1 under J" | Line 214: the same words |
+| 263, the section's note on the calibration's numbers | "Σ_sync of 16 × 8 values, and J (D = 1)" | Line 244: "and J (D = 1)", without the sync set |
+
+- One more on the crossed head that mine words differently: line 110, `EncardDecodableLeConstantRate`, "and under J only the advice's" (mine, line 132: "with a fixed clock under J only the content advice").
+- So four of the six survive on the crossed head with J read as D = 1, and two leave with their statements.
+
+## Row: the clock form's `steps: 0`
+
+**Who hands an audit `steps: 0`** [read]:
+
+| Producer | Crossed head | Mine | `main` |
+|---|---|---|---|
+| `benchmarks/prove_path/records_audit.py`, `period` | line 791 | 693 | 694 |
+| `scan_zk.py`, `answers` | 1700 | 1503 | 1503 |
+| `scan_period.py`, `rows_case`, which copies each audit's `steps` into the case | 105 | 93 | 96 |
+
+- Tests pin the zero: `benchmarks/prove_path/tests/test_records_audit.py` (crossed 1124, mine 761, `main` 785) and `tests/test_scan_zk.py` (crossed 601 and 617, mine and `main` 539 and 555). The crossed head has one more, `tests/test_certifier_piece.py:579`.
+- No other line outside tests hands an audit's `steps` on any of the three trees.
+
+**What the period check then charges**:
+- **Clock form: nothing, at any bound.** ⌈log2 Dj^0⌉ = 0. On the mirror an audit of 96 free bits has K 96 at D_j = 1 and at D_j = 2; handed 96 steps it would have K 192 at D_j = 2 [ran on both mirrors].
+- **Rows form: the audits' `steps` are not read.** The scan's steps are T, so the jitter is charged by the bound the case hands: 2 on the crossed head, 1 on mine and on `main` [read].
+- **Who builds a clock-form case: nothing in the tree.** The only writer of a certifier period case outside tests is `scan_period.rows_case`, the rows form, on both trees [read].
+- **Who still takes one**: `chain_record.period_binding` refuses a rows-form answer (crossed line 982, mine 1000), so the block record's certifier entry (`block_entry`, crossed 1006, mine 1024) carries a K only from a clock-form answer. With `steps: 0` that K has no jitter at any bound, while d1's own K beside it charges the jitter on either design [read].
+- **The answers of record**, by named fields of `tests/fixtures/certifier-period-answers.json` [read]: the clock-form answer's audit has jitter 0, with K 2,178,452 at δ = 1/100 and 2,180,068 at δ = 1/1,000,000; the rows-form answer's scan has jitter 0 too, with K 12,200,606 and 12,202,528.
+
+## The three short lists
+
+**What my branch has that the crossed head lacks**
+1. **No default on `terms` and `clock_terms`.** The crossed head and `main` default to D_j = 1, so a caller that names no bound counts at 1 silently [ran].
+2. **A bound the caller can name on K by links**, default the term of record's. The crossed head fixes it inside `LinkLoad.terms`, so no figure at D_j = 1 can be asked [ran].
+3. **The set-time label**: the K at D_j = 1 printed only under `SET_TIME`, in `leak`'s condition and one line of `leak_markdown` [ran].
+4. **The buckets on the network certifier's own chain** (`warden_chain.certificates`), so d1's K is counted there. On the crossed head it is open on that path [ran].
+5. **The text**: `PROTOCOL.md` in six places and the attacks table's row 3. The crossed head's still read J as D = 1 [read].
+6. As you expected, all four. The attacks table is one line.
+
+**What the crossed head has that mine lacks**
+1. **The scan's period check at the bound 2** (`scan_period.py:106`, pinned by `tests/test_scan_zk.py:623`). This is NET-345's step 3 [read].
+2. **Why D_j = 1 is not met, in the constant's text**: "next-bucket host-state channel". Mine says "assumed (J)" and names the set-time card [read].
+3. **Each of d1's audits carries its `steps` and its own jitter in the record** [ran].
+4. `jitter_bits` and `LinkLoad.jitter`, two helpers that return what mine gets from `clock_terms` and `LinkLoad.terms` [ran].
+5. The README's sentence that the scan's period check passes the same bound [read].
+6. Not jitter, in the same files: the period check's `faultyEntries` term, `rows_case`'s `v3c` argument, `PROTOCOL.md`'s and `Guarantees.lean`'s reference-schedule rewrite [read].
+
+**Where the two disagree in meaning, not in name**
+1. **d1's jitter**: for each audit over all the chain's steps (crossed), or once over the chain's steps (mine). Equal at one audit; (n − 1) · windows · buckets apart at n [ran].
+2. **A caller that names no bound**: counted at D_j = 1 (crossed), or refused (mine) [ran].
+3. **A K at D_j = 1**: never given (crossed: "not met"), or given under the set-time label (mine). Both say no run has met D_j = 1 [read].
+4. **Which field of the certificates step holds the buckets.** It is a name, but each side reads the other's record as K open, so a record written under one design is uncounted under the other [ran].
+5. Not a disagreement of designs: the scan's bound, 2 against 1, is step 3 unbuilt on mine.
+
+## Where the two would meet in a merge
+
+My four commits against the crossed head merged with `main`, file by file with `git merge-file`, nothing written to a branch [ran]:
+- Against CROSSTICK's close, base `main`: `leak_bounds.py` 2 conflicts, `tests/test_leak_bounds.py` 2, `tests/test_chain_record.py` 5.
+- Against the crossed head, where `main` and it merge cleanly: `chain_record.py` 8, `README.md` 2, `PROTOCOL.md` 3.
+- None in `warden_chain.py`, `tests/test_warden_chain.py`, `tests/test_certifier_term.py` or the attacks table.
+- So six files, 22 places, and each of the 22 names the jitter, its bound or the buckets (checked by keyword).
+
+## Least sure, and where I did not look
+
+- **Least sure**: the argument on which d1 count the guarantee means (above). I read the statement and `Public.units`' docstring; I did not read the proofs, nor lean's proofs commit on the crossed head.
+- **The crossed side I ran is assembled**, not a whole merged tree: CROSSTICK's close for three files, git's merge with `main` for `chain_record.py`, the crossed head's own files for the rest. A whole merge of the crossed head with today's `main` stops on 49 files, among them `Period.lean` and `period_case.py`, so the mirror I ran for the crossed side is the crossed head's own, before that merge.
+- **The Lean was read, not built or run.** Every number for the period check is the Python mirror's.
+- I did not look for what built the clock-form case of the fixture's answer of record.
+- I read `PROTOCOL.md` on the crossed head only at the lines that name J or D, not whole.
+- I did not read the callers of `records_audit.period` and `scan_zk.answers` past the producing line.
+- I did not check the onsite stand-ins or `onsite_record.py` (ONSITEMAIN's branch), as ruled.
+
