@@ -2,8 +2,10 @@
 (`kernels.marlin_moe_rows`) and their word Definitions: the group on every code at every scale byte, and its quiet-NaN form; the
 divider on edge and random words; the schedule on random and edge words; the steps on random operands at every special scale byte
 and on special activations, and their halves cut at each word of x, which have exactly the step's gates; the coordinates over every cut
-pattern; a pair launch of both kinds over two experts, one outside the expert axis; and the switch finds each word GEMM's Boolean
-version."""
+pattern; a pair launch of both kinds over two experts, one outside the expert axis; the switch finds each word GEMM's Boolean
+version; what the switch returns for the steps and the pair GEMMs, `DOT` bound as the switch binds it, builds its whole
+Program, the composite-bound Definition's, and computes the word; and the switch refuses the five words whose signature has a cut, on
+that signature."""
 from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
@@ -15,9 +17,11 @@ import numpy as np
 import pytest
 
 from verity.circuits.boolean.trace import definition
+from verity.circuits.codec import encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation import bits as BS
+from verity.circuits.program import Program
 from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.types import Array
 from verity.definitions import boolean as SW
@@ -169,3 +173,52 @@ def test_the_switch_finds_each_gemms_boolean_version() -> None:
     st = dict(E=384, K=384, N=7168, TK=128, TN=64, GRID=264)
     for word, bits in ((MM.MarlinMoeExpertGemm, BM.MarlinMoeExpertGemmV2), (MM.MarlinMoeExpertGemmW, BM.MarlinMoeExpertGemmWV2)):
         assert SW.boolean_version(bind(word, **st, DOT=MM.DOT)).id == bind(bits, **st, DOT=DOT).id
+
+
+_PAIR = dict(E=2, K=128, N=2, TK=64, TN=1, GRID=3)
+_SWITCHED = [(MM.MarlinMxfp4Step, BM.MarlinMxfp4StepV2, {}), (MM.MarlinMxfp4StepFromZero, BM.MarlinMxfp4StepFromZeroV2, {}),
+             (MM.MarlinMoeExpertGemm, BM.MarlinMoeExpertGemmV2, _PAIR), (MM.MarlinMoeExpertGemmW, BM.MarlinMoeExpertGemmWV2, _PAIR)]
+
+
+def _operands(rng: np.random.Generator, params, n: int, E: int) -> list[np.ndarray]:
+    """``n`` random operands of a step or a pair GEMM, one array of words per parameter, by its name: finite activations and
+    accumulators, every code, scale bytes about 1.0, experts on the axis, and small blocks and parities."""
+    def f32(a) -> np.ndarray:
+        return np.asarray(a, dtype=np.float32).view(np.uint32)
+
+    by_name = {"acc": lambda k: f32(rng.standard_normal((n, k))), "x": lambda k: _bf16_rows(rng, (n, k)),
+               "q": lambda k: rng.integers(0, 16, (n, k)), "s": lambda k: rng.integers(118, 130, (n, k)),
+               "e": lambda k: rng.integers(0, E, (n, k)), "g": lambda k: f32(rng.random((n, k))),
+               "blk": lambda k: rng.integers(0, 3, (n, k)), "par": lambda k: rng.integers(1, 6, (n, k)),
+               "wq": lambda k: rng.integers(0, 256, (n, k)), "ws": lambda k: rng.integers(118, 130, (n, k))}
+    return [by_name[name](t.leaves).astype(np.uint32) for name, t in params]
+
+
+@pytest.mark.parametrize("word,bits,st", _SWITCHED, ids=[w.name for w, _, _ in _SWITCHED])
+def test_what_the_switch_returns_builds_its_program_and_is_the_word(word, bits, st: dict) -> None:
+    """`boolean_version` binds `DOT` to its own Boolean version, a specialisation, where the tests above bind the composite: the
+    Definition it returns builds its whole Program, which encodes as the composite-bound Definition's, and computes the word on
+    random operands."""
+    ref = bind(word, **st, DOT=MM.DOT)
+    got = SW.boolean_version(ref)
+    assert encode_program(Program(got)) == encode_program(Program(bind(bits, **st, DOT=DOT)))
+    n = 6
+    ops = _operands(np.random.default_rng(23), ref.signature()[0], n, st.get("E", 1))
+    out = np.asarray(BS.evaluate_words(got, *ops)).reshape(n, -1)
+    for i in range(n):
+        assert list(evaluate(ref, *(a[i].tolist() for a in ops))) == out[i].tolist(), i
+
+
+_COORD = dict(K=128, TK=64, DOT=MM.DOT)
+_REFUSED = [(MM.MarlinMoeSchedule, dict(KT=4, NT=3, GRID=7)), (MM.MarlinMxfp4Coordinate, _COORD), (MM.MarlinMxfp4CoordinateW, _COORD),
+            (MM.MarlinMoeExpertCoordinate, dict(E=3, **_COORD)), (MM.MarlinMoeExpertCoordinateW, dict(E=3, **_COORD))]
+
+
+@pytest.mark.parametrize("word,st", _REFUSED, ids=[w.name for w, _ in _REFUSED])
+def test_the_switch_refuses_a_word_whose_signature_has_a_cut(word, st: dict) -> None:
+    """A cut is n 1-bit words, whose bit form (`bit_type`) is one `Array<n, bit>` and not the `_v2`'s n `CUT`s: `boolean_version`
+    refuses the schedule and the four coordinates on the signature, and for no other reason."""
+    with pytest.raises(SW.NoBooleanVersion, match="is not the bit form"):
+        got = SW.boolean_version(bind(word, **st))
+        pytest.fail(f"the switch now returns {got.id} for {word.name}_v1: delete this test, and from `boolean_marlin_moe`'s "
+                    "docstring the sentences that say `boolean_version` refuses the five words whose signature has a cut")
