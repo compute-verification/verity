@@ -215,10 +215,16 @@ def no_function_modes():
 
 
 def tf32() -> dict:
-    """torch's two readings of its switch for TF32 matrix products, as they stand: with either on a GPU computes a
-    float32 GEMM in TF32, which no dtype of an op says. A record states them beside its device (`Harness.finish`),
-    and `gates.tf32_on` reads them."""
-    return {"cuda_matmul_allow_tf32": bool(torch.backends.cuda.matmul.allow_tf32),
+    """torch's switch for TF32 matrix products, as it stands: on, a GPU computes a float32 GEMM in TF32, which no
+    dtype of an op says. Where torch has `torch.backends.cuda.matmul.fp32_precision`, that reading alone: it reads
+    the switch however a job set it (by it, by `torch.backends.fp32_precision`, by `allow_tf32` or by
+    `set_float32_matmul_precision`), "tf32" when on, while the older two readings raise once a job set it by the
+    first two. Else those two readings, with either on. A record states it beside its device (`Harness.finish`),
+    and `gates.tf32_on` reads it."""
+    matmul = torch.backends.cuda.matmul
+    if hasattr(matmul, "fp32_precision"):
+        return {"cuda_matmul_fp32_precision": matmul.fp32_precision}
+    return {"cuda_matmul_allow_tf32": bool(matmul.allow_tf32),
             "float32_matmul_precision": torch.get_float32_matmul_precision()}
 
 

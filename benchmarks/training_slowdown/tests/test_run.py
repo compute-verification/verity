@@ -95,31 +95,59 @@ def test_sgd_run_records_every_step_and_verifies_an_identity_family(tmp_path, th
 
 
 def test_a_record_states_torchs_tf32_switch_as_it_stands_when_it_is_written(tmp_path, theta):
-    """A record states both of torch's readings of its switch for TF32 matrix products, read when the record is
-    written: off as torch starts, and on by whichever reading a job's code set. The record of a job that set it
-    names its float32 products float32, as torch does, which `gates.exact_under_tf32` lists and the grade refuses."""
-    allow, precision = torch.backends.cuda.matmul.allow_tf32, torch.get_float32_matmul_precision()
+    """A record states torch's switch for TF32 matrix products, read when the record is written: off as torch
+    starts, and on however a job's code set it, by `fp32_precision` (torch's own or its global one), whose reading
+    the record states (the older two readings can raise once a job set it so), or by `allow_tf32` or
+    `set_float32_matmul_precision`. From a torch without `fp32_precision` it states the older two. The record of a
+    job that set it names its float32 products float32, as torch does, which `gates.exact_under_tf32` lists and the
+    grade refuses."""
+    matmul = torch.backends.cuda.matmul
 
-    def switched(te):
-        torch.backends.cuda.matmul.allow_tf32 = True
-        sgd(te)
+    def reset():
+        torch.backends.fp32_precision = "none"
+        matmul.fp32_precision = "none"
 
+    def switched(how):
+        def body(te):
+            how()
+            sgd(te)
+        return body
+
+    ways = {"fp32_precision": lambda: setattr(matmul, "fp32_precision", "tf32"),
+            "allow_tf32": lambda: setattr(matmul, "allow_tf32", True)}
+    others = {"the global fp32_precision": lambda: setattr(torch.backends, "fp32_precision", "tf32"),
+              "set_float32_matmul_precision": lambda: torch.set_float32_matmul_precision("high")}
     try:
-        torch.backends.cuda.matmul.allow_tf32 = False
-        torch.set_float32_matmul_precision("highest")
+        reset()
         off = counted(tmp_path / "off", theta, sgd)
-        assert off["tf32"] == {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "highest"} == run.tf32()
+        assert off["tf32"] == {"cuda_matmul_fp32_precision": "none"} == run.tf32()
         assert gates.tf32_on(off) is False and gates.exact_under_tf32(off) == []
-        on = counted(tmp_path / "on", theta, switched)
-        assert on["tf32"]["cuda_matmul_allow_tf32"] is True and gates.tf32_on(on) is True
-        assert gates.exact_under_tf32(on) == ["bwd mm", "fwd mm"] and on["invalid"] == []
-        torch.backends.cuda.matmul.allow_tf32 = False
-        torch.set_float32_matmul_precision("medium")
-        assert run.tf32()["float32_matmul_precision"] == "medium" and gates.tf32_on({"tf32": run.tf32()}) is True
+        for name, how in ways.items():
+            on = counted(tmp_path / name, theta, switched(how))
+            reset()
+            assert on["tf32"] == {"cuda_matmul_fp32_precision": "tf32"} and gates.tf32_on(on) is True, name
+            assert gates.exact_under_tf32(on) == ["bwd mm", "fwd mm"] and on["invalid"] == [], name
+        for name, how in others.items():
+            how()
+            assert run.tf32() == {"cuda_matmul_fp32_precision": "tf32"}, name
+            reset()
+        assert gates.tf32_on({"tf32": {"cuda_matmul_fp32_precision": "ieee"}}) is False
+        legacy = {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "highest"}
+        assert gates.tf32_on({"tf32": legacy}) is False
+        assert gates.tf32_on({"tf32": legacy | {"cuda_matmul_allow_tf32": True}}) is True
+        assert gates.tf32_on({"tf32": legacy | {"float32_matmul_precision": "medium"}}) is True
         assert gates.tf32_on({}) is None and gates.exact_under_tf32(off | {"tf32": None}) == []
     finally:
-        torch.set_float32_matmul_precision(precision)
-        torch.backends.cuda.matmul.allow_tf32 = allow
+        reset()
+
+
+def test_a_record_from_a_torch_without_fp32_precision_states_the_older_two_readings(monkeypatch):
+    """Where torch has no `fp32_precision`, the record states `allow_tf32` and `get_float32_matmul_precision()`."""
+    older = SimpleNamespace(allow_tf32=True)
+    monkeypatch.setattr(torch.backends.cuda, "matmul", older)
+    monkeypatch.setattr(torch, "get_float32_matmul_precision", lambda: "highest")
+    assert run.tf32() == {"cuda_matmul_allow_tf32": True, "float32_matmul_precision": "highest"}
+    assert gates.tf32_on({"tf32": run.tf32()}) is True
 
 
 EPS, LR = 1e-3, 1e-2

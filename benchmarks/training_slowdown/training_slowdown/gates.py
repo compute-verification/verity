@@ -157,12 +157,14 @@ def gather_bits(op: str, dtype: str | None = None) -> tuple[int, str]:
 
 
 def tf32_on(record: dict) -> bool | None:
-    """Whether the record's job ran with torch's switch for TF32 matrix products on, by the two readings of it the
-    record states (`tf32`, which `run.Harness.finish` writes): on where either says so. None for a record that
-    states neither, one written before a record stated them."""
+    """Whether the record's job ran with torch's switch for TF32 matrix products on, by the reading of it the record
+    states (`tf32`, which `run.tf32` writes): `fp32_precision` "tf32", or, from a torch without it, either of the
+    older two on. None for a record that states none, one written before a record stated the switch."""
     stated = record.get("tf32")
     if stated is None:
         return None
+    if "cuda_matmul_fp32_precision" in stated:
+        return stated["cuda_matmul_fp32_precision"] == "tf32"
     return bool(stated["cuda_matmul_allow_tf32"]) or stated["float32_matmul_precision"] != "highest"
 
 

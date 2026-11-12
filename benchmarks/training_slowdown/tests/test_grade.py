@@ -708,8 +708,7 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     job holds as θ's, so it lists no weight), of the traced step's own shape. Its trace says more than the grade
     reads, and a refused one has no ρ."""
     assert set(G.TRACE) < set(ran["trace"]) and ran["trace"]["capture"] == products.CAPTURE
-    assert ran["tf32"] == {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "highest"}
-    assert gates.tf32_on(ran) is False
+    assert ran["tf32"] == {"cuda_matmul_fp32_precision": "none"} and gates.tf32_on(ran) is False
     assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"] == {}
     f = G.traced(ran, G.rows_of(ran)[-1])["formalism"]
     assert f["trace"]["products"]["rows"] == [products.priced(r, products.CAPTURE) for r in ran["trace"]["rows"]]
