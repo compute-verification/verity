@@ -109389,3 +109389,63 @@ I estimate that at 500 to 700 lines, about half of what is written. It does not 
 - That `law_placeK`'s pattern match goes through Lean's structural recursion.
 - That `CoinMapHolds` holds at `ElemAgrees` with `hide = gapOf`. It is sized, not written.
 - That `split` as proposed is the one CUT's `PrintsTwo` reads.
+
+## ACCEPTS, Thu 23:40Z: acceptsRun is written as a proof from five named premises, and the try compiling it is in line (my first try waited 13 minutes for a Lean slot on vy-nebius-2)
+
+A Lean slot made me wait more than ten minutes: my first try `r20261112-231403-b965` waited in line from 23:14:54Z to 23:27:30Z for a slot on vy-nebius-2 [run]. It then failed, but not on my file. The base `cursor/proofs-twoleg-c5e5` at `ba0f71ad30` did not compile: `VStarRecursive/SampledTwo.lean:241` (`Array Nat` given where `Array Int` was expected) and `Projection.lean:205,221` (`X` is a token) [run]. The base has since fixed both (`506b009d58`, `655af7bb83`). I merged it into my branch and launched try `r20261112-233803-98af`, with a 12 GB slot and a 2700 s timeout, on both my files. It was waiting for a slot at 23:38Z. Nothing of mine has compiled yet, so I call nothing proved.
+
+Branch `cursor/proofs-accepts-7d08` is at `e00f3a3ea5`. Its two files, both new and each a lakefile root:
+
+- `SampledTwo/Accepts.lean` (about 265 lines) holds the statements and `stmtAt`'s proof. Its contents:
+  - `stmtAt` is a full proof [derived, not compiled]. It rests on one premise, `CaseCommits C`: the instance's case of a play carries that play's commitment bytes. The instance owes it.
+  - `out_eq_of_msgAt`, `acceptsRun_of_proverAt`, and the five premises `AcceptsRunOf` names.
+- `SampledTwo/AcceptsProof.lean` (about 420 lines) holds `theorem acceptsRun : AcceptsRunOf A x C S dev`, a proof with no gap left beyond the five premises [derived, not compiled]. It also holds:
+  - byte-prefix lemmas;
+  - the fact that `SpotFlock.V` accepts only at its verdict round (`next_ne_acc`), so an accepted run has every round's message;
+  - the fact that the sessions leave no round uncovered (`slot_of_lt`);
+  - the form's reading unfolded round by round.
+
+Do the three shapes fit? Not directly [derived]. `SpotRunAcceptsPlay` concludes for one prover (`proverSeq`) on one coin vector (`seqCoins`). `AcceptsRun` needs every prover whose messages match the reading, on every coin vector that agrees with the reading on a prefix of each coin's bytes. My bridge works as follows:
+
+1. Two runs on the same coins whose provers send the same messages decide alike (`out_eq_of_msgAt`). So one accepted prover per play is enough (`ProverAt`).
+2. From the coins `r` I build `seqCoins`. Round 0 is `r`'s round 0, the second stage is `r`'s rounds 1 to `stage`, and each session's coins are `r`'s rounds in that session.
+3. `r`'s round-0 coin starts with the bytes the run read, because the coin the form chose is those bytes padded with zeros and `r` agrees with it on that prefix. The same holds coin by coin for the second stage.
+4. `seqCoins` equals `r` at every round the verifier reads, so `proverSeq`'s run on `r` is its run on `seqCoins`, which is accepted.
+5. Its messages are the check's: `[]`, the interior record, `[]`, the session statements, then the sessions' messages, then `[]` at the verdict round.
+
+`Round2.roundTwo_of_check` enters only inside `PlayAccepts`, as one of `SpotRunAcceptsPlay`'s premises.
+
+The five premises of `acceptsRun`, each a named `Prop` with its owner:
+
+- `PlayAccepts A C S P'`: at an accepted play, a session statements' message `m₂` was read, each session has its template's rounds, and `proverSeq` is accepted on every coins `SeqCoinsRead` describes. Owner: RUNCOINS (`SpotRunAcceptsPlay`, with RUNSAS's round 2), restated at the form's records. Once our bases meet, I derive it from `SpotRunAcceptsPlay` in a third file.
+- `SessionMsgs A C S P'`: `proverSeq`'s message at each session round is `S.msg` there. Owner: workers E and F (the sessions' reading).
+- `SourcesFit A C`: an accepted run read at most one coin's bytes in its first stage and at most `stage` coins' in its second. Owner: TWOLEG or the form. Without it, `coinOf` is `none`, and the check's agreement says nothing.
+- `ReadsOnly h`: `SpotFlock.V` reads a coin only at the rounds `readsAt` names. Owner: RUNCOINS's `accepts_of_reads` in equality form, or I prove it myself.
+- `CoinsCover h`: every byte string of one coin's length is some coin's bytes, and likewise for `stage` coins. This is true because any 16 bytes decode to an `F128`. Owner: me, next.
+
+Size: 2 files, about 685 lines. No theorem in my two files is left beyond the premises above. After this try I prove `CoinsCover`, then `ReadsOnly` unless RUNCOINS has it, then the bridge from `SpotRunAcceptsPlay`. I expect `stmtAt` and `acceptsRun` to compile by 03:00Z, after one or two rounds of fixing errors.
+
+Ready for soundness's reading: none yet. Both files will be once `r20261112-233803-98af` or its follow-up compiles.
+
+### STOP RULE
+
+Nothing. No listed guarantee, lock or form changes, and nothing turns the accept on or touches `Sampled.lean`. No step rests on the switch being off.
+
+### NEEDS
+
+- RUNCOINS:
+  - `AcceptedTwo` reads `Spot.Run.run i` at the default FORM, but the base calls `Spot.Run.run i true`. One of them must change for `SpotRunAcceptsPlay` to meet the form.
+  - `accepts_of_reads` in the equality form of `ReadsOnly` (same prover, coins equal at the `readsAt` rounds, same transcript). Say if you won't, and I will prove it.
+- TWOLEG: `SourcesFit` is the form's to give, as a lemma from the check's accept or as the two size checks in the check. Bridging `SpotRunAcceptsPlay` also needs `jsonMsg (recordMsg j) = j` wherever `recordMsg j` is `some`.
+- Workers E and F: `SessionMsgs`, and that `S.stmts o` is `some` at an accepted play (`PlayAccepts` now concludes it).
+- Soundness / instance: `CaseCommits`.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- Nothing of mine has compiled. `stmtAt` and `acceptsRun` are untested text.
+- `PlayAccepts`, `SessionMsgs`, `SourcesFit`, `ReadsOnly`, `CoinsCover` and `CaseCommits` are not proved.
+- The earlier-period signature hole stands. The leg's device history holds one play, so a genuine challenger signature from an earlier period makes the error ⊤. This is said in `Accepts.lean`'s docstring.
