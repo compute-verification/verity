@@ -85,7 +85,6 @@
     {"file": "benchmarks/pouw/harness/ledger.py", "count": 3},
     {"file": "benchmarks/pouw/harness/refs.py", "count": 1},
     {"file": "benchmarks/pouw/harness/sass_gate.py", "count": 3},
-    {"file": "benchmarks/pouw/hidden_zk/summarize.py", "count": 2},
     {"file": "benchmarks/pouw/issue_ceiling/issue_ceiling.py", "count": 3},
     {"file": "benchmarks/pouw/issue_ceiling/issue_sched.py", "count": 1},
     {"file": "benchmarks/pouw/nvfp4_sm120/nvf4_bench.py", "count": 1},

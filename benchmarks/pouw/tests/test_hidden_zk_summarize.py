@@ -29,7 +29,7 @@ TILE_FORM = ("refused: rows that are neither all sha512/row/v1 rows of 16 · wor
              "16 · words bits whose segments end in their last block, one output port per output row: a "
              "statement form the soundness proof does not cover")
 #: a session's verdict, once every check has passed, when it has no sample
-NO_DRAW = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
+NO_SAMPLE = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 #: a sampled session's verdict, once every check has passed, without the verifier's program (`ProvedScope.NO_PROGRAM`)
 NO_PROGRAM = ("refused: a session without the verifier's program (--program): a verifier that cannot read the Program "
               "cannot know what the statement computes, nor which of its values are registered")
@@ -80,6 +80,15 @@ def test_each_lean_check_is_held_to_its_verdict(tmp_path):
     assert s["as_expected"] is False and s["lean"]["st-output_claim_false"]["verdict"] is None
 
 
+def test_a_file_that_is_not_json_reads_as_absent_and_is_named_on_stderr(tmp_path):
+    d = _staged(tmp_path)
+    (d / "stage.time").write_text('{"exit": 0, "wall')
+    p = subprocess.run([sys.executable, str(SUMMARIZE), str(tmp_path)], check=True, capture_output=True, text=True,
+                       env={k: v for k, v in os.environ.items() if not k.startswith("HZ_")})
+    assert json.loads((d / "summary.json").read_text())["stage_time"] is None
+    assert f"{d / 'stage.time'} is not JSON" in p.stderr
+
+
 def test_a_stage_only_config_claims_nothing(tmp_path):
     _staged(tmp_path)
     assert _summary(tmp_path)["as_expected"] is False
@@ -89,7 +98,7 @@ def test_a_stage_only_config_claims_nothing(tmp_path):
     assert s["zk"] is None and s["controls"] == {} and s["lean"] == {} and s["circuit_sha512"] == "ab"
 
 
-def test_a_hiding_tile_is_covered_and_drawn_so_its_honest_checks_are_refused_only_for_want_of_a_program(tmp_path):
+def test_a_hiding_tile_is_covered_and_sampled_so_its_honest_checks_are_refused_only_for_want_of_a_program(tmp_path):
     d = _staged(tmp_path, "hidden")
     _proved(d, {"honest-own": NO_PROGRAM, "st-honest": NO_PROGRAM, "st-output_claim_false": False})
     s = _summary(tmp_path, "hidden-k64")
@@ -100,7 +109,7 @@ def test_a_hiding_tile_is_covered_and_drawn_so_its_honest_checks_are_refused_onl
     assert (s["lean_accepted"], s["lean_refused_no_program"]) == (0, 2)
     # no other verdict is as expected for it: not an acceptance a verifier without the Program gave (counted as the
     # acceptance it is), nor a session without a sample (D12), nor its rows' form
-    for why in (True, NO_DRAW, TILE_FORM):
+    for why in (True, NO_SAMPLE, TILE_FORM):
         _proved(d, {"honest-own": why})
         s = _summary(tmp_path, "hidden-k64")
         assert s["lean"]["honest-own"]["as_expected"] is False and s["as_expected"] is False

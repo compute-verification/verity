@@ -2,7 +2,7 @@
 
 What one H200 (sm_90a) and one B200 (sm_100a) do a SM a clock, as gated opcode probes: the tensor measurements M3
 (wgmma) and M4 (tcgen05), the scalar pipes that bound the fold, the uniform datapath, and the honest Dither GEMM with
-its duo fold on wgmma and on tcgen05, checked word for word. The machine model's census lines for both cards
+its duo fold on wgmma and on tcgen05, checked word for word. The ACCEL model's census lines for both cards
 (`../machine_model/data/devices/sm_90/`, `sm_100/`) are written from these runs. Everything here builds with CUDA 13.0
 on any machine and passes the SASS gate there; the rates and the GEMM's exactness need the GPU.
 
@@ -15,6 +15,7 @@ Each job is the command of a `research run` from a pushed commit, on a node with
 research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
   --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
 research run --on B200 ... -- bash benchmarks/pouw/dc/run.sh sm100
+research run --on H200 ... -- bash benchmarks/pouw/dc/run.sh sm90jb   # the stress of the H200's rows: probes only
 ~~~
 
 H200 and B200 name a node with that card, and CPU_NODE below a CPU node. A run builds and SASS-gates everything before
@@ -22,7 +23,9 @@ it touches the GPU (103 gates on sm_90a, 68 on sm_100a; `gate-build.txt`), then 
 shapes, each dump rechecked by `dgemm_ref.py` (`dgemm/gate-<shape>/`), the bench only if all three are exact
 (`dgemm/bench.jsonl`), fp8acc (sm100, `fp8acc/`), the probes with nvidia-smi sampled every 200 ms (`probes/`, `scalar/`:
 `rows.jsonl`, `gate.json`, `times.jsonl`; `env/smi.csv`), and `analyze.py` (`analysis.json`, `verdict.json`), all under
-the run's `out/`. A run is about 6 minutes on the GPU. `DC_BUILD_ONLY=1` builds and gates without a GPU.
+the run's `out/`. A run is about 6 minutes on the GPU. `DC_BUILD_ONLY=1` builds and gates without a GPU. `sm90jb`
+builds and gates `probes/sm90_jbreak.cu` in place of `sm90_wgmma.cu` and times only its `jb` probes (`DC_ONLY`, `^jb`
+unless set), with no GEMM gate, no bench and no `analyze.py`: `gate-build.txt`, `sass/`, `env/` and `probes/`.
 
 The other five jobs are each a script of their own, started the same way; a script's header gives its outputs and exit
 codes:
@@ -71,6 +74,8 @@ uv run python benchmarks/pouw/dc/emp.py TIME_RUN_OUT BUILD_RUN_OUT/sass [--json 
 | `probes/sm100_tcgen05.cu` | M4: tcgen05.mma kind::i8 M 64/128 × N 32–256, f8f6f4 E4M3 N 128/256, f16 BF16 (one thread issues, 4 a loop, into TMEM); tcgen05.ld 32x32b.x{1,4,16,32,64,128}, 16x64b.x16, 16x128b.x8, 16x256b.x4 alone; tcgen05.ld, mma.sync and lanes (mix, IMAD, LOP3, duo, redux, reduce) beside the saturated MMA, block-timed and exact (`ldU_`, `mmaU_`, `syncU_`, `tclaneU_`: one role fixed, the other until it ends); `tcliU_` the honest LI loop (TMEM load then LI fold a segment) with no checkpoint, with LI-CP-W's redux reduction, and with its 5-shuffle fallback, so the ratio is what the checkpoint costs the latency-bound loop; `tcliU_floor` the floor program of `dither-2s-licpw-redux-ldtm0-l32` (LI-CP-W redux on words already in registers, ♭'s 544 : 512 : 24 a UTCIMMA, 12 lane warps), so its issue is the most the floor's own mix gets beside the tensor |
 | `probes/scalar.cu` | Every family: IADD3, LOP3, IMAD, FFMA, SHF, LEA.HI, SHFL, mix, duo, redux (one `redux.sync.xor.b32`) and reduce (the same by 5 butterfly shuffles + 5 XORs) alone, and the pairs that assign them to pipes (M3's INT32-pipe question, M4d). redux/reduce are LI-CP-W's per-segment checkpoint reduction |
 | `probes/lanes.cuh` | The lane ops all three share |
+| `probes/wg_common.cuh` | The sm_90a probes' shared pieces (`sm90_wgmma.cu`, `sm90_jbreak.cu`): one shared-memory operand tile, the wgmma forms as types, and the commit group |
+| `probes/sm90_jbreak.cu`, `probes/sm90_jbreak.inc`, `gen_jbreak.py` | The stress of the rows the H200 design reads (JI90_0–2, JPA90_0/1, JPI90_0/1, issue, M): facet_break's sm_120 break (few accumulators, one-read lanes by an immediate, 2 warps a SMSP) moved beside wgmma (`jb_`: each warpgroup 4 wgmma a commit group into one of NS accumulator sets, then R lane ops), its exact points (`jbU_`: lane warps run until the wgmma warpgroups end), the lanes alone (`jba_`), and the wgmma kinds the design's menu clause reads (f16, tf32, s8 RS) in honest's shape (`jbk_`, exact `jbkU_`). `sm90_jbreak.inc` is the probe list, one line a probe with its loop's declared opcode counts, which `gen_jbreak.py` writes; `run.sh sm90jb` times it |
 | `dc.cuh` | The K-major no-swizzle operand layout and its descriptors (wgmma and tcgen05), the instruction descriptor, mbarrier and tcgen05 wrappers, and duo (floored_gemm's) |
 | `gen_wgmma.py`, `wgmma.cuh` | The wgmma wrappers (up to 128 accumulator registers an operand list), generated |
 | `dgemm.cu` | The honest Dither GEMM, s8 C = X Wᵀ with every 32-step s32 prefix word folded by duo (3 ops a word): `dg90` (wgmma m64n128k32, accumulators in registers) and `dg100` (tcgen05.mma 128×256×32 into TMEM, tcgen05.ld to registers). Modes `cpuref`, `gate` (0xA5 poisoning, no-write control, a mismatch rerun with LBO/SBO exchanged) and `bench` (fold, no fold, cuBLASLt int8) |
@@ -93,6 +98,7 @@ uv run python benchmarks/pouw/dc/emp.py TIME_RUN_OUT BUILD_RUN_OUT/sass [--json 
 The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
 pipe.py's SASS profile and q*, uniform.py's tables, fit and writer, emp.py's facet pricing and event clock),
+`../tests/test_dc_jbreak.py` (sm90_jbreak.inc current),
 `../tests/test_dc_pipe.py` (the build gate's register limit, ε_tensor at L = 32 under the balance and under the round
 trip), `../tests/test_dc_uniform.py` (the table writer),
 `../tests/test_dc_s8_mma.py` (the SASS reader, and the word check on the sm_120 step's own words),

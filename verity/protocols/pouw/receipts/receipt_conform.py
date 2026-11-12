@@ -29,8 +29,12 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-# a sibling, not a package member: its readers put this directory on sys.path, as running this file does
-import receipt_folds as F
+# Its sibling under the name this module has: the package's (`verity.protocols.pouw.receipts.receipt_folds`), or the bare
+# name when this file is run or imported from its own directory on `sys.path`.
+if __package__:
+    from . import receipt_folds as F
+else:
+    import receipt_folds as F
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
