@@ -44,11 +44,10 @@ SASS_OK = {"IMMA.16832.S8.S8"}
 def proved_fraction(nc: int | None, xin: bool, S: int | None) -> float:
     """The fold's proved fill fraction under Theorem K (the filler receipt break). duo (NC 2) binds every
     word: PHI, provisional (binding proved for runs of one to four words, DuoQuadNoKernel; longer runs and the served
-    receipt's projected form open). The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words
-    (PHI/2); round 3's rem fill K, taken at PHI under ram, was 2× this. The r9 XOR-family folds (NC 4 with -DPFILL_LI
-    or -DPFILL_XIN13) read at the same proved half (a run may pick a
-    complement flip from the data, so Theorem K certifies only >= 1/2 of the words); their fuller reading waits on r10's
-    select-charging lemma, so it isn't credited here."""
+    receipt's projected form open). The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies
+    half the words (PHI/2), not PHI. The r9 XOR-family folds (NC 4 with -DPFILL_LI or -DPFILL_XIN13) read at the same
+    proved half (a run may pick a complement flip from the data, so Theorem K certifies only >= 1/2 of the words);
+    their fuller reading waits on the select-charging lemma, so it isn't credited here."""
     if nc is None:
         return PHI
     if nc == 2:

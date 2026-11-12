@@ -157,7 +157,7 @@ def test_theorem_k_hypothesis_on_the_committed_word(kind):
     input bits: it needs integer operands affine in the bits (the bits tile's bytes are the bits) and a target whose
     (a_k, b_k') coefficients are odd exactly when k = k' (F_2 rank 2K). A word is Σ_k A_k B_k, so its second difference
     in (a_u, b_v) is that coefficient at every base point: 1·[u = v] on bits. The ±1 tile is K's mutation: its
-    coefficient is 4, 0 mod 2, and the F_2 rank is 0 (round 6 §1, "K is vacuous on even coefficients")."""
+    coefficient is 4, 0 mod 2, and the F_2 rank is 0: K is vacuous on even coefficients."""
     k, rng = 32, np.random.default_rng(7)
 
     def word(a: int, b: int) -> int:
