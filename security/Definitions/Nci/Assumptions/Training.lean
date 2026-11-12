@@ -17,8 +17,7 @@ guarantees that read them move to it. It is about the reference circuit, not a d
 and `PartialSumsIncompressible` are false on a declared circuit, whose wiring the prover controls, and that does not
 reach it. The reference circuit runs the chain gate for gate, one gate
 per product, with ordinary matrix multiplications and no Strassen-like algorithm; that is a stated assumption, and in
-Lean it is the `Chain` the guarantees take. The packed forms relax it to at most `k`
-products to a gate, as in `Dot16` steps (`PackedChain`, `PackedTrainingIncompressible`).
+Lean it is the `Chain` the guarantees take.
 
 The chain guarantees restated on it (`Nci.Guarantees.IncompressibleContainedTraining`) conclude what the support forms
 do from a weaker premise, since the support forms with `WeightsIncompressible` imply it; the thread guarantees read only

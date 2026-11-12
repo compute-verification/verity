@@ -34,6 +34,14 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
       "(the dispatcher sets it from the spec; a point refuses any other)"),
     S("VERITY_BENCH_LIB_CACHE", str, None, WHERE, "the node's cache of the libraries setup/vllm_encoded.sh builds, each under its "
       "recipe's and sources' digest; unset, /workspace/research/cache/verity-bench-libs"),
+    # ---- a steady-state point's node side (steady_point.sh, steady_node.py)
+    S("VERITY_BENCH_STEADY_PY", str, None, WHERE, "the Python (3.12 with numpy and blake3) the spec's setup made on the "
+      "node, which runs a steady-state point's node side, the stager and the script that times the provers"),
+    S("VERITY_BENCH_STEADY_BIN", str, None, WHERE, "the prover the spec's setup built on the node, which a steady-state "
+      "point's provers and verifiers run; its SHA-256 is in the point's record"),
+    S("VERITY_BENCH_STEADY_SCRATCH", str, "/dev/shm", WHERE, "where a steady-state point stages its statement and keeps "
+      "the provers' session files, in a directory of its own that it removes at its end"),
+    S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the card gpu-lease gave a steady-state point's timed step"),
     # ---- research run's (the point's run directory and record)
     S("RESEARCH_RUN_DIR", str, ".", WHERE, "the run directory a point writes result.json in"),
     S("OUT", str, None, WHERE, "the directory a point writes its outputs in; unset, RESEARCH_RUN_DIR/out"),

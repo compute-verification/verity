@@ -1,15 +1,14 @@
 # A timed prover run (a bench cell) on the Nebius cluster: queue provers, priority prover-bench.
 #
-#   sky jobs launch -n bench-<cell> tools/research/src/research/pods/nebius/sky/jobs/prover-bench.yaml \
-#     --env CMD='...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#   tools/research/src/research/pods/nebius/sky/submit.sh prover-bench bench-<cell> --env CMD='...'
 #
 # Benches run alongside Builds, so each is labelled ov.noisy=true (pod label, and OV_NOISY in the run's environment for its
 # record). The quiet hour, 12:30-13:30Z, admits no config run (quiet_hour.sh): a bench re-measured then is submitted with
 #   sed 's/ov.noisy: "true"/ov.noisy: "false"/; s/OV_NOISY: "true"/OV_NOISY: "false"/' prover-bench.yaml > /tmp/quiet-bench.yaml
 # Record the clocks with every timed result.
 # Resources: 18 vCPU, so the M0 prover's 17-core bursts aren't throttled mid-measurement; its RAM peak of 2-17 GiB.
-# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
-#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
+# The job runs from the tree at $SRC on the host's /workspace (no upload). submit.sh ships this checkout there, sets SRC and mints
+# the job's store key; a launch by hand that names AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY would hand it the shell's own pair.
 name: prover-bench
 
 resources:

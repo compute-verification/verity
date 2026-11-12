@@ -176,6 +176,8 @@ class ProgramIndex:
         # a warm Program's cached-prefix input (`cached_prefix.layout_of`), and per request reading it the producers' rows (`populate`)
         self.kv_prefix: dict[str, Any] | None = CP.layout_of(program_dir)
         self.cached_prefix: dict[str, CP.CachedPrefix] = {}
+        # per warm request whose Program recomputes its hit instead (`recomputed_prefix`, `populate`): its C and certified prompt
+        self.recomputed: dict[str, tuple[int, list[int]]] = {}
         self.segs = RM.segment_steps(self.rows, inst.get("checks"))
         self._seg_lo = [lo for lo, _hi in self.segs]
         self.by_i = {int(r["i"]): r for r in self.rows}
@@ -266,12 +268,12 @@ class ProgramIndex:
 
     def ids_params(self) -> set[int]:
         """The Program parameter(s) carrying the declared prompt ids: every parameter that is not the registered `weights` record, not a
-        sampler input (`seed`, `splits`), not the `schedule` witness, not a supplied input (`values`, `run_<i>`) and not a warm Program's
+        sampler input (`seed`), not the `schedule` witness, not a supplied input (`values`, `run_<i>`) and not a warm Program's
         cached prefix -- the same reading `_gather_inputs` resolves a `['p', a, k, k+1]` slice by (the committed `input_token_ids` row
         k - C of the arrival step)."""
         pfx = self.kv_prefix["input"] if self.kv_prefix else None
         return {a for a, n in enumerate(self.pnames)
-                if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM, RM.SCHEDULE_PARAM) and a not in self.supplied and a != pfx}
+                if n not in ("weights", SEED_PARAM, RM.SCHEDULE_PARAM) and a not in self.supplied and a != pfx}
 
     def embed_op_path(self) -> str | None:
         """The op_path of the Program's Embedding rows (the `input_token_ids` identity lives under it as member `in`): the first row whose

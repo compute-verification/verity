@@ -2,8 +2,10 @@
 (`verity_vllm.pipeline.serve_admit.TickGate`, through its `install`) in front of the replay's vLLM scheduler, served in
 simulated physical time with wall-clock jitter, schedules exactly the batches `replay.replay(tick=...)` computes from the
 certified release buckets alone, under sync and async scheduling, and the same jitter without the gate changes them. v1
-registered with the tick sends no decision and no order entry, its timing counts code in 0 bits, and its string round
-trips; the same trace registered without the tick needs decisions. A tick-served trace-corpus directory gets the same
+registered with the tick sends no decision, no order entry and no hit, which the replay's block pool gives, so every
+window's segment costs 0 bits and the string holds the length terms alone (it is empty where the registration sends no
+lengths), and it round trips; a hit other than the pool's, and an abort, are refused. The same trace registered
+without the tick needs decisions. A tick-served trace-corpus directory gets the same
 from v1's table (`v1.main`), which the GLM-5.3 tick load point is measured with. And what the tick refuses."""
 
 from __future__ import annotations
@@ -228,28 +230,87 @@ def tick_case(asy: bool):
     return e, rec, V.advice_of(tr, rec), V.Registered(e, (EOS,), row_order="scheduling", T=10, tick=R.Tick(*TICK))
 
 
+def _past_the_bound(e, adv) -> list[int]:
+    """The steps of the advice's prefix-cache hits that the cumulative pool bound doesn't cover: the blocks of every
+    request admitted through the step past the pool less its null block."""
+    life = [-(-(q.prompt_len + q.output_len) // e.block_size) for q in adv.requests]
+    seen, filled, out = set(), 0, []
+    for s, st in enumerate(adv.steps):
+        filled += sum(life[x.request] for x in st.rows if x.request not in seen)
+        seen |= {x.request for x in st.rows}
+        out += [s for x in st.rows if x.cache_hit and filled > e.num_gpu_blocks - 1]
+    return out
+
+
 @pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
-def test_v1_sends_no_timing_under_the_tick(asy):
+def test_v1_sends_only_lengths_under_the_tick(asy):
+    """A tick-served run whose prefix-cache hits come past the pool bound, with preemptions: every hit is the replay's
+    block pool's, so no window's segment sends anything. Each window is charged its length terms alone, and 0 bits,
+    the string empty, where the registration sends no lengths. Either way it decodes back to the advice and its streams
+    exactly, under a book fit on the windows at the tick's table caps too."""
     e, rec, adv, reg = tick_case(asy)
+    assert _past_the_bound(e, adv) and any(x.preempted for st in adv.steps for x in st.rows)
     wins = V.residual(adv, rec, reg)
-    assert len(wins) == V.windows(rec, reg.T) > 1
-    assert not any(w.arrived or w.order for w in wins) and any(w.hits for w in wins)
+    assert len(wins) == V.windows(rec, reg.T) > 1 and wins == [CV.Window()] * len(wins)
+    tails = [sum(n for _v, n in t) for t in V.length_tails(rec, reg)]
+    assert sum(tails) == sum(q.max_tokens.bit_length() + 1 for q in rec.requests)
+    fit = dataclasses.replace(reg, book=CV.fit_book([wins], V.TICK_TABLE_CAPS))
+    for r in (reg, fit, *(dataclasses.replace(x, send_lengths=False) for x in (reg, fit))):
+        want = tails if r.send_lengths else [0] * len(wins)
+        data = V.encode(adv, rec, r)
+        assert V.bits_by_window(data, rec, r) == dict(enumerate(want)) and len(data) == -(-sum(want) // 8)
+        assert r.send_lengths or data == b""
+        got = V.decode_full(data, rec, r)
+        assert got.advice == adv and got.streams == V.streams(adv, rec)
+
+
+@pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
+def test_a_hit_other_than_the_pools_and_an_abort_are_refused(asy):
+    """No string carries a hit: decode refuses a window that sends one, even a shortfall of 0, under a
+    book with room for it (one without the tick: the tick's registration refuses such a book), and an advice whose row
+    takes a block less than the pool's hit has no string. An abort, an output the stop rule doesn't end, is refused at
+    encode and at decode, by name."""
+    e, rec, adv, reg = tick_case(asy)
+    if not asy:
+        book = CV.Book.uniform(dataclasses.replace(V.CAPS, hits=64))
+        plain = dataclasses.replace(reg, tick=None, book=book)
+        wins, tails = V.residual(adv, rec, plain), V.length_tails(rec, plain)
+        assert V.decode(CV.pack(CV.encode(wins, book, tails).bitlist())[0], rec, plain) == adv
+        for h in (0, 1):
+            data = CV.pack(CV.encode([dataclasses.replace(wins[0], hits=(h,)), *wins[1:]], book, tails).bitlist())[0]
+            with pytest.raises(V.AdviceCodeError, match="a window sends hits"):
+                V.decode(data, rec, plain)
+    B = e.block_size
+    s, k = next((s, k) for s, st in enumerate(adv.steps) for k, x in enumerate(st.rows) if x.cache_hit >= B
+                and x.sources[-1].n >= B and not x.preempted)
+    x = adv.steps[s].rows[k]
+    *src, last = x.sources
+    src += [dataclasses.replace(last, n=last.n - B)] if last.n > B else []
+    assert sum(y.n for y in src) == x.cache_hit - B
+    short = dataclasses.replace(x, cache_hit=x.cache_hit - B, start=x.start - B, n=x.n + B, sources=tuple(src))
+    rows = adv.steps[s].rows
+    step = dataclasses.replace(adv.steps[s], rows=(*rows[:k], short, *rows[k + 1:]))
+    with pytest.raises(V.AdviceCodeError, match="schedule isn't the replay's"):
+        V.encode(dataclasses.replace(adv, steps=(*adv.steps[:s], step, *adv.steps[s + 1:])), rec, reg)
+    k = next(k for k, q in enumerate(rec.requests) if len(q.output) > 1 and q.output[-1] == EOS != q.output[-2])
+    q = rec.requests[k]
+    aborted = V.Record((*rec.requests[:k], dataclasses.replace(q, output=q.output[:-1], release=q.release[:-1]),
+                        *rec.requests[k + 1:]))
     data = V.encode(adv, rec, reg)
-    assert V.decode(data, rec, reg) == adv
-    assert sum(V.bits_by_window(data, rec, reg).values()) == sum(V.string_of([CV.Window(hits=w.hits) for w in wins],
-                                                                             reg, V.length_tails(rec, reg))[1])
+    for run in (lambda: V.encode(adv, aborted, reg), lambda: V.decode(data, aborted, reg)):
+        with pytest.raises(V.AdviceCodeError, match=f"request {q.id}: its output isn't one the stop rule ends"):
+            run()
 
 
 def test_without_the_tick_the_same_run_needs_decisions():
-    """Registered without the tick, the same sync run's advice sends decisions, and more hits (the lookups of the
-    questions its open steps ask), so more bits; its string isn't one the tick's registration reads. Under async
-    scheduling the arrival decisions, indexed by step, can't place an admission that follows a ``schedule()`` that ran no
-    row at the same step index, which the tick made here, so without the tick that run has no v1 advice at all."""
+    """Registered without the tick, the same sync run's advice sends decisions, so more bits; its string isn't one the
+    tick's registration reads. Under async scheduling the arrival decisions, indexed by step, can't place an admission
+    that follows a ``schedule()`` that ran no row at the same step index, which the tick made here, so without the tick
+    that run has no v1 advice at all."""
     _, rec, adv, reg = tick_case(False)
     plain = dataclasses.replace(reg, tick=None)
     pw = V.residual(adv, rec, plain)
-    assert sum(len(w.arrived) for w in pw) > 0
-    assert sum(len(w.hits) for w in V.residual(adv, rec, reg)) < sum(len(w.hits) for w in pw)
+    assert sum(len(w.arrived) for w in pw) > 0 and not any(w.hits for w in pw)
     data, pdata = V.encode(adv, rec, reg), V.encode(adv, rec, plain)
     assert V.decode(pdata, rec, plain) == adv
     assert sum(V.bits_by_window(pdata, rec, plain).values()) > sum(V.bits_by_window(data, rec, reg).values())
@@ -261,14 +322,17 @@ def test_without_the_tick_the_same_run_needs_decisions():
 
 
 def test_a_count_capped_at_0_costs_nothing():
-    """`TICK_CAPS` caps the decisions and the order entries at 0, so their counts code in 0 bits: a window whose every
-    count is capped at 0 costs nothing, and under v1's own caps an empty window costs bits."""
-    zero = dataclasses.replace(V.TICK_CAPS, hits=0, resumes=0, lag=0)
-    assert (V.TICK_CAPS.arrived, V.TICK_CAPS.order) == (0, 0)
-    assert list(CV.encode([CV.Window()] * 3, CV.Book.uniform(zero)).lens) == [0, 0, 0]
-    assert all(n > 0 for n in CV.encode([CV.Window()] * 3, CV.Book.uniform(V.CAPS)).lens)
-    assert sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) < \
-        sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.CAPS)).lens)
+    """A count capped at 0 codes in 0 bits. `TICK_CAPS` caps every count at 0, so a window's segment costs nothing; v1's own caps
+    hold the hits, the resumes and the lag bits at 0, so an empty window costs only its decisions' and order entries'
+    counts, less than under caps with room for the other three."""
+    counts = ("arrived", "hits", "resumes", "order", "lag")
+    assert [getattr(V.TICK_CAPS, c) for c in counts] == [0] * 5
+    assert (V.CAPS.hits, V.CAPS.resumes, V.CAPS.lag) == (0, 0, 0) and V.CAPS.arrived and V.CAPS.order
+    assert V.TABLE_CAPS == dataclasses.replace(V.CAPS, arrived=V.TABLE_CAPS.arrived, order=V.TABLE_CAPS.order)
+    assert list(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) == [0, 0, 0]
+    roomy = dataclasses.replace(V.CAPS, hits=1 << 12, resumes=1 << 12, lag=1 << 12)
+    own, more = (sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(c)).lens) for c in (V.CAPS, roomy))
+    assert 0 < own < more
 
 
 def write_corpus(d: Path, e, ios, times, run: Served, *, tick: bool) -> Path:
@@ -306,9 +370,10 @@ def write_corpus(d: Path, e, ios, times, run: Served, *, tick: bool) -> Path:
 
 
 @pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
-def test_the_corpus_table_charges_no_timing_under_the_tick(tmp_path, capsys, asy):
-    """v1's table over two tick-served runs of the plan with different jitter, and under sync scheduling the first one's
-    view without the tick (`test_without_the_tick_the_same_run_needs_decisions`: under async it has no advice)."""
+def test_the_corpus_table_charges_only_lengths_under_the_tick(tmp_path, capsys, asy):
+    """v1's table over two tick-served runs of the plan with different jitter, each charged its length terms and nothing
+    else, and under sync scheduling the first one's view without the tick
+    (`test_without_the_tick_the_same_run_needs_decisions`: under async it has no advice)."""
     e, (ios, times) = engine(asy), plan()
     runs = [serve(e, ios, times, seed) for seed in (1, 2)]
     dirs = [write_corpus(tmp_path / f"tick{k}", e, ios, times, run, tick=True) for k, run in enumerate(runs)]
@@ -324,14 +389,16 @@ def test_the_corpus_table_charges_no_timing_under_the_tick(tmp_path, capsys, asy
     assert V.main([*labels, "--stops", str(EOS), "--T", "10", "--jobs", "1", "--out", str(out)]) == 0
     assert "| tick0 (certified tick) |" in capsys.readouterr().out
     rows = {r["trace"]: r for r in json.loads(out.read_text())["rows"]}
+    lengths = sum(io.max_tokens.bit_length() + 1 for io in ios)
     for t in (rows["tick0"], rows["tick1"]):
         assert t["tick"] == {"bucket_us": TICK[0], "sat_us": TICK[1], "free_us": TICK[2]}
         assert (t["decisions"], t["order_entries"], t["steps"]) == (0, 0, rows["tick0"]["steps"])
+        assert t["length_bits"] == lengths > 0
         for book in ("held_out", "uniform"):
-            assert t[book]["timing_bits"] == 0 and t[book]["round_trip"]
+            assert t[book]["bits"] == lengths and t[book]["timing_bits"] == 0 and t[book]["round_trip"]
     if not asy:
         t, p = rows["tick0"], rows["plain"]
-        assert p["tick"] is None and p["decisions"] > 0 and t["hits_sent"] < p["hits_sent"]
+        assert p["tick"] is None and p["decisions"] > 0
         assert all(p[book]["timing_bits"] > 0 and p[book]["round_trip"] for book in ("held_out", "uniform"))
         assert t["uniform"]["bits"] < p["uniform"]["bits"]
 
@@ -368,8 +435,10 @@ def test_what_the_tick_refuses():
             R.Tick(bad, 1, 1)
     assert dataclasses.asdict(tk) == sa.Tick(*TICK).record()
     assert [tk.close(b) for b in range(4)] == [sa.Tick(*TICK).close(b) for b in range(4)]
-    with pytest.raises(V.AdviceCodeError, match="arrived and order are 0"):
-        V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(V.CAPS))
+    for caps in (V.CAPS, *(dataclasses.replace(V.TICK_CAPS, **{c: 1}) for c in ("arrived", "hits", "resumes", "order",
+                                                                                   "lag"))):
+        with pytest.raises(V.AdviceCodeError, match="arrived, hits, resumes, order and lag are 0"):
+            V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(caps))
     with pytest.raises(V.AdviceCodeError, match="replay.Tick"):
         V.Registered(e, (EOS,), tick=sa.Tick(*TICK))
     V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(V.TICK_CAPS))

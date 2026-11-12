@@ -1,6 +1,6 @@
 """`proved_ticks`: PoUW's proved block-ticks for a window's declared work, the figure network accounting's joint ledger
 credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placed.public(plan, ticks=...)`, where
-its tests place PoUW's compiled Program on a block).
+`tests/test_proved_ticks_placed.py` places PoUW's compiled Program on a block).
 
     uv run python benchmarks/pouw/proved_ticks.py     the hand-checked point: H1 + fx1 on DS-120
 
@@ -60,7 +60,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent))     # appended: network accounting's tests import this module by path
+sys.path.append(str(Path(__file__).parent))     # appended: the tests import this module by path
 import eps_budget as EB
 from verity_machine_model import headline
 from verity_machine_model.eps import PRODUCTS, design, honest, table

@@ -1,6 +1,6 @@
-"""Advice v1's whole window charged: its decisions, the hits it sends past the pool bound, the arrival order's
-deviations and the requests' length terms, every count and every value as `code_v1` codes them, with the carry chained
-from window to window (`verity/protocols/certifier/verifier/protocol/charge-chain.md`, "The whole window").
+"""A whole window charged: its decisions, its hits (advice v1 sends none), the arrival order's deviations and the
+requests' length terms, every count and every value as `code_v1` codes them, with the carry chained from window to
+window (`verity/protocols/certifier/verifier/protocol/charge-chain.md`, "The whole window").
 
     ChargeCount_v2{N, H, O, L}  (book, carry, en[N], bit[N], hen[H], short[H], oen[O], p[O], r[O], qen[L], mt[L],
                                  olen[L]) -> (ok, bits[CW], carry')
@@ -9,14 +9,14 @@ from window to window (`verity/protocols/certifier/verifier/protocol/charge-chai
     carry = (n0[3], n1[3], run[2], pos[32], rank[25])
 
 `ChargeCount_v1` (`arith_encode`) charges a window that sends only decisions: it codes `window_code`'s four other
-counts (n_hits, n_resumes, n_order, n_lag) as 0. Advice v1 never sends resumes or lag bits. The replay derives
-preemptions and the certified O forces every lag row, and the advice code (`advice_code.codec`) refuses a window that
-sends either. It does send two of the four: past the pool bound, a shortfall for each lookup the replay reads (`hits`),
-and, where the arrivals deviate from release order (the client's ingress), an order entry for each deviating arrival
-(`order`). This unit charges them. It counts `window_code._window`'s segment for the whole window with the counting
+counts (n_hits, n_resumes, n_order, n_lag) as 0. Advice v1 never sends hits, resumes or lag bits. Every hit is the
+replay's block pool's, past the pool bound too, the replay derives preemptions and the certified O forces every lag
+row, and the advice code (`advice_code.codec`) refuses a window that sends any. It does send one of the four: where
+the arrivals deviate from release order (the client's ingress), an order entry for each deviating arrival (`order`).
+This unit charges the whole window, hits included. It counts `window_code._window`'s segment for the whole window with the counting
 encoder (`arith_encode`, "The counting variant"), in `window_code`'s order:
 1. n_arrived, then each decision at the book's KT estimate for min(run, 2): `ChargeCount_v1`'s gates;
-2. n_hits, then each hit's value (v1's sent shortfall, in hit units);
+2. n_hits, then each hit's value, in hit units (0 under v1);
 3. n_resumes, 0;
 4. n_order, then each entry's position gap and rank step;
 5. n_lag, 0;
@@ -139,7 +139,7 @@ class Window:
     values in the order its reader asks for them, as `code_v1` codes them. `arrived`, the replay's decisions; `hits`,
     each sent hit in hit units; `resumes`, the resumed rows' positions; `order`, each entry a step's position and its
     new requests' certified ingress indices; `lag`, async mode's bits. `reference_window` charges the residual v1
-    sends, which has no resumes and no lag bits and one index an order entry, in slots: `arrived` in (en, bits),
+    sends, which has no hits, resumes or lag bits and one index an order entry, in slots: `arrived` in (en, bits),
     `hits` in (hen, short) and each entry (p, (r,)) in (oen, p, r). That residual is the spec's `Window` (`ds`,
     `hits`, `order`)."""
 

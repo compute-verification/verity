@@ -6,11 +6,11 @@
   },
   "DsaTopKDigitCount_v1{N=6,AT=8,K=1}": {
    "and": 3002,
-   "type": "9b118650b25d3ae1a52ec0d7d80a3d8e05ba54bbf1386eaa2223feb7d8c101b479370ebe966002ff1710e42b299a57b8b8bc63b69bda7498a0c33c854aef80eb"
+   "type": "a72b53dcd0b644e162a2ef9ab0fc1fe91a192b519942887f9bed2432b80dbaa3830037de1e5b96736f4d743e7cdb89844578d5cbd94e6603db166e56f0afb703"
   },
   "DsaTopKDigitCount_v1{N=6,AT=8,K=3}": {
    "and": 3098,
-   "type": "55ee72b7b2470cac9d4770369d577909fb594e800cbcf8e14744dfd7ae3eec4535a3470056b3bbdcdb192a9164cdc65d619dc378aa27bc38569ea0fe26ba1388"
+   "type": "0126d59fa656352991f77ec1175639b32131bac4756ab3898b63ba70484f645b2b0f6d83225c5d73fada08b6e8e7f0de21711c7f3e9e6060551eb7bc1c33e778"
   },
   "DsaTopKDigitCount_v1{N=8,AT=0,K=0}": {
    "and": 4275,
@@ -30,15 +30,15 @@
   },
   "DsaTopKDigitPick_v1{M=2,K=0,TOPK=4}": {
    "and": 24194,
-   "type": "5323da23423e39d6dbf8c3d021b9d1fa46d8582dd28d5b270f9b1163a79243c6514954d3fc9515da399d3e279d848775bd773358c73e1c81a9548c45b0313947"
+   "type": "6dc1501b43a832d43c85e6cf20aac253a7217c5b2c8d5fed299e3143e01d79f4991869147eda7a978be996bc1a9ed9ffeb384fccd7f6458d1e61e1185c3786a9"
   },
   "DsaTopKDigitPick_v1{M=2,K=1,TOPK=4}": {
    "and": 24960,
-   "type": "4fe9b7f3000ab19c3e961d1d401124c3dd41a67c0bb14ea43ce70a10626358848ed695033e26264b29eb027143d8e9faef330d6470fde603251676bcee79718c"
+   "type": "42a5f6f4ad58d7b04799d4649e0d60e493391069e6a295208c090362e3a3f420cd801bfa74c35059fed6b1de60e07b6ec9ff2d67ba5bcac164b9a9fab2d1c30f"
   },
   "DsaTopKDigitPick_v1{M=2,K=3,TOPK=4}": {
    "and": 33187,
-   "type": "ca1155fed8d2093c10d193d3e26a6407cf2991a71351718fd8917c93439fdf34ca1c454597a75b6e90a0e27ecad66a7111dc7372dd619fa6df4e08658168b3c6"
+   "type": "155e0eed505280eb2506620078613ffccf10eaf4dbb3de3bb548b2bccf885468dacfe6f23e7ab3f9a3c727a73d6c905a167d91eeadfcbaf48773ab46896096a1"
   },
   "DsaTopKKeyCompare_v1": {
    "and": 65,
@@ -46,11 +46,15 @@
   },
   "DsaTopKMaskBlock_v1{N=6,AT=8,TOPK=4}": {
    "and": 515,
-   "type": "5bb53ea0d502659b825872bab9d7ce72ab0d1400be3bb143f57b582389ce70aa8719b244179e4300d08df87dda4a2d166f40b6eda9e6e70bb3cb9dba182e8f07"
+   "type": "25fc3a52add339ace5fb9542122093b60d90b984c05236f88d85bdecdc7675c9d836eeda7d7365ff833f14de867af1359796bab8e7b2913e2bfc4b91fa6bd0cf"
   },
   "DsaTopKMaskBlock_v1{N=8,AT=0,TOPK=4}": {
    "and": 599,
-   "type": "0e77bf5e18102c4756c163017c9e646746877467ecc02d00a79c00772398d9addd99c27c999a65f0750961e19f8e901ad35953fc8eddf3d1b299bdcda280c372"
+   "type": "bf4b760dd77984dddf3e9b3daf569ba35d5e2686fd02c8fdae0e2422deff2d377b2769f426023b508e1368698ac93ab32c6922effceec6f223a459a7e4a117ea"
+  },
+  "DsaTopKMaskWhole_v1{N=14,TOPK=4}": {
+   "and": 2126,
+   "type": "bc0e270c2790e06cf36d8c7a31e5e4ed2219e08dda0d125846c7931c1aeb8d19a416dbb7de74473103508e85ede28362eb455ea1e92cbd019ee31ff99ff8ab03"
   },
   "DsaTopKPopCount_v1{N=6}": {
    "and": 4,
@@ -59,6 +63,20 @@
   "DsaTopKPopCount_v1{N=8}": {
    "and": 7,
    "type": "1b941b8a9843edefe008201b6ec850f8becf31cde0341c079b0b151db354045311fc33cafb014c5dc3a300643a04b335dabd7d873032f4bd2dd76147ad56d891"
+  }
+ },
+ "digests": {
+  "DsaTopKDigitPick_v1{M=8,K=0,TOPK=2048}": {
+   "sha512": "8c7fa1604b1cdafa1127f436147417cc0b3cea7535c3e6d81a3a5555d3228984004284635f0e6ab1876e447510e00b64db9a917e98096c9525d7609db1c18e28"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=1,TOPK=2048}": {
+   "sha512": "2e778d23f6fd855e6581d1328fd9e265fbd36328a43a3ac4512e2d179b1613dc14ab6c6f491db984cc7ea0955218cce7398eec4bc1fb95d6e8b42f6359f15145"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=2,TOPK=2048}": {
+   "sha512": "a77d31ec3fcb38f78d528bffd968013ee83cfe2bdeec30558e67f7ebf65d2cea191d8fdbf082eb4a39cc2b16ade4051d57150e75e67159e15f18e138f966746c"
+  },
+  "DsaTopKDigitPick_v1{M=8,K=3,TOPK=2048}": {
+   "sha512": "18ff9ecd5e05f3db95769544975b9cb0101bf2de82c6d9628b1199b926f138938bbcdbb943645b0709025615b284238ab8d43340dc9b431e64715a804c71a7f4"
   }
  }
 }

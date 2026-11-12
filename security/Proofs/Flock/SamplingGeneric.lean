@@ -3,6 +3,7 @@ module
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.SessCount
 public import Proofs.Flock.SamplingGeneric.Assemble
 public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Session
@@ -10,6 +11,9 @@ public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
 public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Reg
+public import Proofs.Flock.SamplingGeneric.RegAt
+public import Proofs.Flock.SamplingGeneric.RegX
+public import Proofs.Flock.SamplingGeneric.RegCanon
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
 public import Proofs.Flock.SamplingGeneric.Deployed
@@ -24,12 +28,23 @@ public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
+public import Proofs.Flock.SamplingGeneric.TwoReg
+public import Proofs.Flock.SamplingGeneric.TwoRegMiss
+public import Proofs.Flock.SamplingGeneric.TwoRegX
+public import Proofs.Flock.SamplingGeneric.TwoRegFirstHit
+public import Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass
+public import Proofs.Flock.SamplingGeneric.RunExtAt
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitAt
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassAt
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbers
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassCount
 
 /-!
 # The sampled compiler in the claims core, at Flock
 
 The compiled extractor's failure event, its probability and `Compiled.KS` from the split are in
-`SamplingGeneric/Fails.lean`.
+`SamplingGeneric/Fails.lean`; the sessions' weights at the gates their blocks need, counted by block
+(`Compiled.sum_sessions_le`), in `SamplingGeneric/SessCount.lean`.
 
 `Arg.ofFlock` is Flock's `E^rep` at the deployed decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 at that decoder (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E D D.decode`'s, `Flock.κ`'s
@@ -48,11 +63,22 @@ opening checks' count, `Compiled.OpenCallsLe`, without which they fail (`Counter
 `SamplingGeneric/Counter.lean`). A session's coins in a compiled run, `coinsOf` and `place`, invert each other
 (`SamplingGeneric/Coins.lean`). The committed form, against the incorrect set of the plurality trace the prover's tape
 fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so
-**`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`).
+**`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`). The same form against the incorrect
+set of the trace read at the statement, the plurality over the prover's tape and the coins together, which no tape
+moves, follows from the same bound and the rewinding lemma over the tapes and the runs
+(`SamplingGeneric/RegX.lean`: `compilerKSRegX_of`), so **`CompilerKSRegX` is proved** (`compilerKSRegX`). At two stages
+the committed form's event, against the committed boundary trace and each replay block's committed interior, follows the
+same way, the interior's rewinding at the first stage's coins and its conflicts a second binding finder's collisions
+(`SamplingGeneric/TwoReg.lean`: `CompiledTwo.eventTwo_le`).
 
 `CompilerKSAt` reads `KS`'s two hash terms at a budget on the prover's whole SHA-512 work rather than at the calls the
 oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected reruns and own calls bound its binding
-finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`). At two stages the
+finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`). The committed form's
+binding terms read at a budget too: `B_conf` declared at `T` a run costs at most
+`2T·(1 + n_sess·e_s) + 2·n_PU·openCalls` in expectation at the contract (`SamplingGeneric/RegAt.lean`), so
+**`CompilerKSRegAt` is proved** (`compilerKSRegAt`); on every coin it costs at most
+`2T·(1 + n_sess·ρ_s) + 2·n_PU·openCalls`, so **`CompilerKSRegAtSB` is proved** too (`compilerKSRegAtSB`), at
+`StrictBirthday` in place of `ExpectedCR`. At two stages the
 extractor is `Compiled.E` at the two-stage verifier's own waits' counts, and the two-stage contract gives the facts
 its cost reads, so **`CompilerEfficientTwo` and `CompilerKSAtTwo` are proved** (`compilerEfficientTwo`,
 `compilerKSAtTwo`, `SamplingGeneric/TwoKSAt.lean`).
@@ -84,7 +110,16 @@ rates `q_ρ`, the admissible sets' count and their patterns' count are at most `
 blocks (`SamplingGeneric/TwoRankin.lean`: **`AdmissibleTwoRankin`** and **`AdmissibleTwoRankinPatterns`** are proved).
 At a first stage that catches each replay block at rate `r₁` and a second stage that samples each cell at rate `r₂`,
 `P̄_a ≤ (1 − r₁·r₂)^m`, `m` the replay blocks the footprint marks incorrect, so a footprint in `M̄_δ` marks fewer than
-every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved).
+every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved). At two stages, the
+committed form's incorrect set is the grid's incorrect proof blocks at the committed traces, and reads no second-stage
+coin (`SamplingGeneric/TwoCap.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.FregTwo_forkOn`). So at rates `r₁` and
+`r₂` the run's sample misses it with probability at most `(1 − r₁·r₂)^{|W|}`, `W` the replay blocks wrong at the
+committed boundary trace, and the committed form's event gives its threshold form and the headline
+(`SamplingGeneric/TwoRegMiss.lean`: **`CompilerKSRegTwo`**, **`CompilerMissTwo`** and **`CompilerHeadlineTwo`** are
+proved, `CompiledTwo.ksRegTwo_of_event`). Those lemmas read the boundary trace as a parameter, so the same three hold
+with the boundary read at the statement, where the replay blocks wrong at the boundary are one set at every tape
+(`SamplingGeneric/TwoRegX.lean`: **`CompilerKSRegTwoX`**, **`CompilerMissTwoX`** and **`CompilerHeadlineTwoX`** are
+proved).
 -/
 
 @[expose] public section
@@ -120,11 +155,23 @@ theorem compilerKSReg : CompilerKSReg := compilerKSReg_of sessionKSOf
 /-- **Flock's committed form**: the compiler's at `Arg.ofFlock`. -/
 theorem flockKSReg : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := flockKSReg_of_compilerKSReg compilerKSReg
 
+/-- **The committed form at the trace read at the statement**: `CompilerKSRegX` from the sessions' bound
+(`compilerKSRegX_of`). -/
+theorem compilerKSRegX : CompilerKSRegX := compilerKSRegX_of sessionKSOf
+
 /-- **Bits**: `CompilerKS` and `CompilerEfficient` (`compilerBits_of`). -/
 theorem compilerBits : CompilerBits := compilerBits_of compilerKS compilerEfficient
 
 /-- **KS read at a time budget**: `CompilerKS` and `CompilerEfficient` (`compilerKSAt_of`). -/
 theorem compilerKSAt : CompilerKSAt := compilerKSAt_of compilerKS compilerEfficient
+
+/-- **The committed form read at a time budget**: `CompilerKSReg` and `B_conf`'s expected cost
+(`compilerKSRegAt_of`). -/
+theorem compilerKSRegAt : CompilerKSRegAt := compilerKSRegAt_of compilerKSReg
+
+/-- **The committed form read at a time budget and the strict birthday bound**: `CompilerKSReg` and `B_conf`'s cost on
+every coin (`compilerKSRegAtSB_of`). -/
+theorem compilerKSRegAtSB : CompilerKSRegAtSB := compilerKSRegAtSB_of compilerKSReg
 
 end Claims.SamplingGeneric
 

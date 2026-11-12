@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
-import Proofs.Flock.VBridge.Family.Names
+import Proofs.Flock.VBridge.Family.UnitName
 import Proofs.Flock.Verifier.HmNets
 
 /-!
