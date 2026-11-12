@@ -12,8 +12,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.commitments import row_table as RT
+
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
 

@@ -10,6 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytest.importorskip("torch")   # the helpers imported next derive a Program with torch
+
 from tests.pipeline.test_single_request_build_path import (
     _compose,
     _derive,
