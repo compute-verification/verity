@@ -8,6 +8,7 @@ public import Flock.Public
 public import Flock.WindowRecord
 public import NciCheck.Desc
 public import NciCheck.DefinitionDigest
+public import Spot.Record
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
 meta import CoreProtocol.Profile
@@ -16,6 +17,7 @@ meta import Flock.Public
 meta import Flock.WindowRecord
 meta import NciCheck.Desc
 meta import NciCheck.DefinitionDigest
+meta import Spot.Record
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
@@ -144,11 +146,16 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
   for that registration's digest, accepted with one level of the scan's 2T units sampled `subset:k` or stratified,
   sampling no more than the level holds and no more of a stratum than the stratum holds, its strata's sizes summing
-  to the level's (`factsOf` refuses a profile that fails any of the three), and its `bound`;
+  to the level's (`factsOf` refuses a profile that fails any of the three); the level is the registration's own
+  sample, its `population` under its `law` (`sampleOf`), so its strata, the units of each and how many each holds are
+  the ones registered before any coin, and a profile of another is refused by name; and its `bound` is at least
+  one-stage's bound of that sample at the profile's δ, which the check computes itself (`Spot.Bound.boundOf`, over the
+  strata of a stratified sample), refusing a smaller one;
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units sampled `subset:k` or stratified (a work sampling design's
-  sample is stratified), held to the same three (`factsOf`), and its `bound`, at any sample: this is the consistency
+  sample is stratified), held to the same three, to its registration's sample and to that sample's bound (`factsOf`),
+  at any sample: this is the consistency
   check (each audit's answer is its registration's, and in the rows form its outputs are the scan's `prog` and its
   `SCAN_STATE` the scan's state, below), and what a sample in part leaves unproved is in `K` (in the rows form, a tied
   audit's `faulty_entries` and δ, below);
@@ -1135,12 +1142,28 @@ def tiedOf : Form → Commitment → Nat → Bool
 def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
 
+/-- The sample a registration states, as one-stage's profile has it: its `population` units under the design of its
+`law` (`Spot.Record.profileDraw`, which one-stage publishes as its profile's level), a `subset:k` or a stratified one
+(a work sampling design's is stratified); none where the registration names neither, or a Bernoulli sample, which the
+period check reads no profile of. A registration is committed before any coin, so the strata of its sample, the units
+of each and how many each holds, are fixed there. -/
+def sampleOf (reg : Json) : Option (Nat × Core.SamplingDesign) := do
+  let n ← Spot.nat? (reg.getObjValD "population")
+  match ← Spot.Record.profileDraw (reg.getObjValD "law") with
+  | .subset k => pure (n, .subset k)
+  | .stratified ss => pure (n, .stratified ss)
+  | _ => none
+
 /-- An accepted scan's or audit's facts: one level sampled `subset:k` or stratified (a work sample's profile is
 stratified, its `Σ k_s` sampled), and its bound. A profile that names more sampled than its level holds is no sample
 of the level and is refused. So is a stratified one that names more sampled of a stratum than the stratum holds, or
 whose strata's sizes do not sum to the level's size: with both held, a level sampled whole is every stratum sampled
-whole. -/
-def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts := do
+whole. The level is then held to the sample its registration `reg` states (`sampleOf`): a profile of another size or
+draw, a stratum renamed, resized or sampled otherwise among them, is refused, so the strata are the registered ones.
+And the public's `bound` is held to that sample: the check computes one-stage's bound on incorrect proof blocks at the
+profile's δ itself (`Spot.Bound.boundOf`, over the strata of a stratified sample, never from its totals) and refuses a
+smaller `bound`. That the answer is its audit's own verifier's is not checked here. -/
+def factsOf (what : String) (reg : Json) (prof : Core.Integrity) (pub : Json) : Found Facts := do
   let #[l] := prof.levels | refuse s!"{what}: profile: not one level"
   let drawn ← match l.draw with
     | some (.subset k) => pure k
@@ -1153,8 +1176,17 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
     let held := ss.foldl (fun n st => n + st.size) 0
     unless held = l.size do
       refuse s!"{what}: profile: strata of {held} units in a level of {l.size}: their sizes do not sum to the level's"
+  let some (n, d) := sampleOf reg
+    | refuse s!"{what}: registration: no sample: its population and law name no subset or stratified sample"
+  unless n = l.size ∧ some d = l.draw do
+    refuse s!"{what}: profile: not the registration's sample: its level of {l.size} units and its draw are not the \
+      registration's {n} units under its law"
   match Flock.J.nat pub "bound" "public" with
-  | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b }
+  | .ok b =>
+    let need := Spot.Bound.boundOf l.size d prof.delta
+    if need ≤ b then pure { units := l.size, drawn, delta := prof.delta, wrong := b }
+    else refuse s!"{what}: public: bound {b}: below the sample's bound {need} at its delta (Spot.Bound.boundOf of \
+      the registration's sample)"
   | .error e => refuse s!"{what}: {e}"
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
@@ -1176,7 +1208,7 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
     refuse s!"{what}: the scan's prog is no compute audit's output: no scan/prog<j> entry's root and domain are an \
       output port's of an audit's registration"
   let (prof, pub) ← answered what reg x.answer
-  let f ← factsOf what prof pub
+  let f ← factsOf what reg prof pub
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
   pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
 
@@ -1187,7 +1219,7 @@ def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) : Found Fact
   let what := s!"audit {i}"
   unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
   let (prof, pub) ← answered what reg x
-  let f ← factsOf what prof pub
+  let f ← factsOf what reg prof pub
   unless f.units == a.units do refuse s!"{what}: profile: {f.units} units, not its Program's {a.units}"
   pure f
 
@@ -1481,10 +1513,18 @@ def protocol : Core.Protocol where
 -- one that names more sampled than the level has, 3 of 2 or strata of 2 of 1 and 1 of 1, then one that names more
 -- sampled of a stratum than the stratum has, strata of 2 of 1 and 0 of 1 in a level of 2, then one whose strata's
 -- sizes do not sum to the level's, strata of 1 of 2 and 1 of 2 or of 1 of 1 alone in a level of 2, each before the
--- bound is read
+-- registration's sample and the bound are read; `reg size d` is a registration of `size` units under `d`, its strata
+-- tiling the units in order
 #guard
+  let law := fun (d : Core.SamplingDesign) => match d with
+    | .subset k => Json.mkObj [("law", "subset"), ("k", toJson k)]
+    | .stratified ss => Json.mkObj [("law", "stratified"), ("strata", Json.arr (ss.foldl (fun (lo, out) st =>
+        (lo + st.size, out.push (Json.mkObj [("template", .str st.name), ("k", toJson st.k),
+          ("units", Json.arr #[Json.arr #[toJson lo, toJson (lo + st.size)]])]))) (0, #[])).2)]
+    | _ => Json.null
+  let reg := fun (size : Nat) (d : Core.SamplingDesign) => Json.mkObj [("population", toJson size), ("law", law d)]
   let facts := fun (size : Nat) (d : Core.SamplingDesign) =>
-    match (factsOf "x" ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
+    match (factsOf "x" (reg size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
       (Json.mkObj [("bound", toJson (1 : Nat))])).toOption with
     | some ⟨units, k, _, b⟩ => some (units, k, b)
     | none => none
@@ -1494,8 +1534,16 @@ def protocol : Core.Protocol where
     facts 2 (.stratified #[⟨"a", 1, 2⟩, ⟨"b", 1, 0⟩]) == none &&
     facts 2 (.stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) == none && facts 2 (.stratified #[⟨"a", 1, 1⟩]) == none
 #guard
+  let law := fun (d : Core.SamplingDesign) => match d with
+    | .subset k => Json.mkObj [("law", "subset"), ("k", toJson k)]
+    | .stratified ss => Json.mkObj [("law", "stratified"), ("strata", Json.arr (ss.foldl (fun (lo, out) st =>
+        (lo + st.size, out.push (Json.mkObj [("template", .str st.name), ("k", toJson st.k),
+          ("units", Json.arr #[Json.arr #[toJson lo, toJson (lo + st.size)]])]))) (0, #[])).2)]
+    | _ => Json.null
+  let reg := fun (size : Nat) (d : Core.SamplingDesign) => Json.mkObj [("population", toJson size), ("law", law d)]
   let reason := fun (d : Core.SamplingDesign) =>
-    match factsOf "x" ⟨#[], #[], false, #[], #[⟨"unit", none, 2, some d⟩], ⟨1, 100⟩, #[]⟩ (Json.mkObj []) with
+    match factsOf "x" (reg 2 d) ⟨#[], #[], false, #[], #[⟨"unit", none, 2, some d⟩], ⟨1, 100⟩, #[]⟩
+      (Json.mkObj []) with
     | .error (_, r) => r
     | .ok _ => ""
   reason (.subset 3) == "x: profile: 3 sampled of 2 units: more than the level holds" &&
@@ -1504,6 +1552,65 @@ def protocol : Core.Protocol where
       "x: profile: stratum 'a': 2 sampled of 1 units: more than the stratum holds" &&
     reason (.stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) ==
       "x: profile: strata of 4 units in a level of 2: their sizes do not sum to the level's"
+-- the level is its registration's sample: a profile is refused by name where its `k` is another, a stratum is
+-- renamed, the strata are resized or sampled otherwise at the same totals, its size is another or its draw is of the
+-- other kind, and where the registration names no sample (no law, a Bernoulli one, no population)
+#guard
+  let law := fun (d : Core.SamplingDesign) => match d with
+    | .subset k => Json.mkObj [("law", "subset"), ("k", toJson k)]
+    | .stratified ss => Json.mkObj [("law", "stratified"), ("strata", Json.arr (ss.foldl (fun (lo, out) st =>
+        (lo + st.size, out.push (Json.mkObj [("template", .str st.name), ("k", toJson st.k),
+          ("units", Json.arr #[Json.arr #[toJson lo, toJson (lo + st.size)]])]))) (0, #[])).2)]
+    | _ => Json.null
+  let reg := fun (size : Nat) (d : Core.SamplingDesign) => Json.mkObj [("population", toJson size), ("law", law d)]
+  let reason := fun (r : Json) (size : Nat) (d : Core.SamplingDesign) =>
+    match factsOf "x" r ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
+      (Json.mkObj [("bound", toJson size)]) with
+    | .error (_, e) => e
+    | .ok _ => ""
+  let two : Core.SamplingDesign := .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]
+  let other := "x: profile: not the registration's sample: its level of 4 units and its draw are not the \
+    registration's 4 units under its law"
+  let unsampled := "x: registration: no sample: its population and law name no subset or stratified sample"
+  reason (reg 4 two) 4 two == "" && reason (reg 4 (.subset 2)) 4 (.subset 2) == "" &&
+    reason (reg 4 (.subset 2)) 4 (.subset 1) == other &&
+    reason (reg 4 two) 4 (.stratified #[⟨"a", 2, 1⟩, ⟨"c", 2, 1⟩]) == other &&
+    reason (reg 4 two) 4 (.stratified #[⟨"a", 1, 1⟩, ⟨"b", 3, 1⟩]) == other &&
+    reason (reg 4 two) 4 (.stratified #[⟨"a", 2, 2⟩, ⟨"b", 2, 0⟩]) == other &&
+    reason (reg 4 two) 4 (.subset 2) == other && reason (reg 4 (.subset 2)) 4 two == other &&
+    reason (reg 5 (.subset 2)) 4 (.subset 2) ==
+      "x: profile: not the registration's sample: its level of 4 units and its draw are not the registration's 5 \
+        units under its law" &&
+    reason (Json.mkObj [("population", toJson (4 : Nat))]) 4 two == unsampled &&
+    reason (Json.mkObj [("population", toJson (4 : Nat)),
+      ("law", Json.mkObj [("law", "bernoulli"), ("p", "1/2")])]) 4 two == unsampled &&
+    reason (Json.mkObj [("law", law two)]) 4 two == unsampled
+-- the bound is the sample's, computed here: 3 of 10 at δ = 1/10 leave at most 4 incorrect, so a `bound` of 3 is
+-- refused and 4 and 5 pass; strata of 9 of 10 and 1 of 10 at δ = 1/100 leave at most 10, so 9 is refused, where
+-- their totals, 10 of 20, would leave 5; a level sampled whole leaves none, and any `bound` passes
+#guard
+  let law := fun (d : Core.SamplingDesign) => match d with
+    | .subset k => Json.mkObj [("law", "subset"), ("k", toJson k)]
+    | .stratified ss => Json.mkObj [("law", "stratified"), ("strata", Json.arr (ss.foldl (fun (lo, out) st =>
+        (lo + st.size, out.push (Json.mkObj [("template", .str st.name), ("k", toJson st.k),
+          ("units", Json.arr #[Json.arr #[toJson lo, toJson (lo + st.size)]])]))) (0, #[])).2)]
+    | _ => Json.null
+  let reg := fun (size : Nat) (d : Core.SamplingDesign) => Json.mkObj [("population", toJson size), ("law", law d)]
+  let reason := fun (size : Nat) (d : Core.SamplingDesign) (δ : Core.Ratio) (b : Nat) =>
+    match factsOf "x" (reg size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], δ, #[]⟩
+      (Json.mkObj [("bound", toJson b)]) with
+    | .error (_, e) => e
+    | .ok f => if f.wrong == b then "" else "another bound"
+  let strata : Core.SamplingDesign := .stratified #[⟨"a", 10, 9⟩, ⟨"b", 10, 1⟩]
+  reason 10 (.subset 3) ⟨1, 10⟩ 3 ==
+      "x: public: bound 3: below the sample's bound 4 at its delta (Spot.Bound.boundOf of the registration's \
+        sample)" &&
+    reason 10 (.subset 3) ⟨1, 10⟩ 4 == "" && reason 10 (.subset 3) ⟨1, 10⟩ 5 == "" &&
+    reason 20 strata ⟨1, 100⟩ 9 ==
+      "x: public: bound 9: below the sample's bound 10 at its delta (Spot.Bound.boundOf of the registration's \
+        sample)" &&
+    reason 20 strata ⟨1, 100⟩ 10 == "" && Spot.Bound.boundOf 20 (.subset 10) ⟨1, 100⟩ == 5 &&
+    reason 10 (.subset 10) ⟨1, 10⟩ 0 == ""
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
