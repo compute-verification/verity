@@ -96227,3 +96227,42 @@ For the table: R7's admission | RELAX | `cursor/proofs-r7-certified-b6a0` at `0b
 - [guess] A message sent to this id through the guard's inbox reaches whichever turn runs a shell command first; I run
   none after this push. A resume while a turn of this agent still runs may start two again.
 - Open choices: none from this turn.
+
+## CLOSEROUND, Thu 12 Nov 19:08Z: #9230 holds `main` at `0582899c4392` (head `7528097f5ff7`, a plain merge, no path of its crossed a move); its quick tier `r20261112-190307-2302` is out until about 20:15Z; against lean's #9375 it stops only where `main` stops; yes to holding the closing round; the ready line follows the run
+
+Not the ready line: that is one entry once the run is read. The VM was reset again (worktrees and the notes checkout
+gone; remade, nothing unpushed was lost). Mailbox read 19:00Z: its newest section is yours of 16:07Z. Tags: [run] a
+command I ran and read now; [read]; [relayed]; [derived]; [guess]. Nothing marked, nothing posted.
+
+- **The merge** [run, 19:01Z]: `git merge --no-ff origin/main` in the twin's branch, no conflict. Head
+  `7528097f5ff71f9f661a9435344cc9b0ba1de315`, parents `649165225a67` and `0582899c4392`. Pushed 19:02Z, no force;
+  `gh pr view 9230` reads that head, `MERGEABLE`. `origin/main` was still `0582899c4392` at 19:07Z.
+- **No restack was needed, so `restack.py` was not run** [run: `git diff --name-status -M`, `rg`]. `main` holds two
+  layout moves the branch lacked (`tools/move/specs_map.toml`, `tools/move/machine_model_map.toml`). None of the
+  twin's nine files is under a path either retires, and none names an old path or module.
+- **What the merge changed in the nine** [run]: one file, `verity/protocols/spot/verifier/lean/pyproject.toml`, where
+  `main` added a test to the `untraced` list the twin adds one to; the registered driver kept both. The other eight
+  have the patch id they had before the merge. The diff against `main` is the nine files, 1,052 added and 19 removed:
+  no Lean file, no lock, no lakefile, so **#9230 does not wait behind #9375 on that ground**.
+- **The run:** `r20261112-190307-2302`, `suites.py --changed 0582899c4392 --quick` at the head, on vy-nebius-cpu-8's
+  pool (node 2 takes no `--on auto` job until 23:30Z); waiting for a slot at 19:06Z, ten ahead. ETA about 20:15Z
+  [guess: the tool gives 31 min to a slot; `4b49` took 38 min in its slot].
+- **Against lean's #9375** (`cursor/lean-remote-merge-onmain-fc8d` at `e209a56847d4`, based on `main` at
+  `30d6fcc92ff7`) [run: `git merge-tree`]: three stopped paths, the same three `main` at `0582899c4392` stops in
+  alone, each file's merged content the same bytes with and without the twin:
+  `benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml`, `benchmarks/harness/specs/prefill.toml`
+  and the root `pyproject.toml`. None is the twin's. Lean's branch changes one of the nine, `a5.py`, which merges with
+  no stop. It does not change `Spot/OneStageZk.lean`, where `membersRun` is, and its change to `one_stage/proofs.py`
+  only adds functions [read]. Not run: any suite on that merged tree.
+- **Other heads** [run]: #9237 at `9d4aec0111fb`, clean. #9319 at `0e7b13e39bd1`, one region in `a5.py`, the one
+  `main` has against it since #9199 landed (the members' loop), the hunk the same with and without the twin.
+- **Your question:** yes, from Mon 16 Nov I hold the closing round outside Lean as its worker, and what is left of it
+  waits on #9230 and then #9237 landing (the rename pull request of your 12:58Z ruling), on lean's #9375 on `main`
+  (the twin's move into `proofs.py`), and, for a window of several members to be accepted and not answered
+  `MULTI_REFUSED`, on the Lean verifier taking the per-member form, which is MEMBERS' and soundness's proof and not
+  mine [derived: my 06:36Z and 08:03Z entries, your rulings of 06:41Z and 12:58Z].
+- **PRF-603:** your 15:57Z and 16:07Z sections reached me at 19:00Z (I was not resumed between). I start it now from
+  `origin/main`, which holds REFUSE's #9348 [run: `8fe73485fcad` is an ancestor]; its ready line by Fri 13 Nov 02:00Z
+  as you set. One thing found on the way in, for that entry: the history root's negative is refused through a Lean
+  `reject`, which `verifier.lean` returns in the same shape as "can't run", so `a5_memo._answered` alone does not
+  separate the two there [read].
