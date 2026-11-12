@@ -201,6 +201,7 @@ class Model(nn.Module):
         for layer in self.layers:
             hidden_states, residual = layer(positions, hidden_states, residual, pad)
         if last_only:
+            assert residual is not None
             hidden_states, residual = hidden_states[-1:], residual[-1:]
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
@@ -408,6 +409,7 @@ class HFDecoderLayer(nn.Module):
             k = self.k_proj(h).view(1, T, self.KVH, self.D).transpose(1, 2)
             v = self.v_proj(h).view(1, T, self.KVH, self.D).transpose(1, 2)
             if position_embeddings is None:  # layer-local rotary (a single-layer example); HF computes it once at model level
+                assert self.rotary_emb is not None
                 position_ids = torch.arange(T).unsqueeze(0)
                 position_embeddings = self.rotary_emb(h, position_ids)
             cos, sin = position_embeddings

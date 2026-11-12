@@ -101,7 +101,7 @@ class BaseWeights:
         info = header[name]
         lo, hi = info["data_offsets"]
         np_dtype, dtype = self.DTYPES[info["dtype"]]
-        raw = np.fromfile(p, dtype=np.uint8, count=hi - lo, offset=start + lo)
+        raw: np.ndarray = np.fromfile(p, dtype=np.uint8, count=hi - lo, offset=start + lo)
         return torch.from_numpy(raw.view(np_dtype).copy()).view(dtype).reshape(info["shape"])
 
     def weight(self, module: str) -> torch.Tensor:

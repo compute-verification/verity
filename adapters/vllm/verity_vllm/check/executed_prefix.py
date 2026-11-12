@@ -43,6 +43,19 @@ def load_match_account(match_dir: str | None) -> dict[str, Any]:
     return out
 
 
+def requests_of_record(epr: dict[str, Any]) -> dict[str, Any]:
+    """The executed prefix of record's entry for each request, by r<i> (`commit.executed_prefix.executed_prefix_of_record`): none where
+    it states none, null or leaves the key out.  Such a record places no prefix, so neither account link is required."""
+    stated = epr.get("requests")
+    return stated if stated else {}
+
+
+def _generated(entry: dict[str, Any]) -> list[Any]:
+    """The ids a request's entry of the Match record's tokens.json says were served: none where it states none, null or leaves the key out."""
+    stated = entry.get("generated_token_ids")
+    return stated if stated else []
+
+
 def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order: dict[str, str], declared_lag: int | None,
                           served_tokens: dict[str, list[int]] | None = None) -> dict[str, Any]:
     """Conditions (a) and (b) of the module docstring: the executed prefix of record is ACCEPTED only when the Commit's own served tokens are linked to the served
@@ -57,9 +70,10 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
     is the FULL generated_token_ids list equality; without it, length + last token.  Returns {"ok", "required",
     "problems", "tokens_equal", "g6", ...}."""
     problems: list[str] = []
-    reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
+    reduced = sorted(r for r, v in requests_of_record(epr).items() if v.get("eos_stop"))
     required = bool(reduced)
-    res: dict[str, Any] = {"required": required, "reduced_requests": reduced, "tokens_json": None, "global_match": None, "notes": list(account.get("notes") or []),
+    notes = account.get("notes")
+    res: dict[str, Any] = {"required": required, "reduced_requests": reduced, "tokens_json": None, "global_match": None, "notes": list(notes) if notes else [],
                            "match_dir": account.get("match_dir"),
                            "rule": "(a) n_exec from the LINKED serving transcript (Commit served == Match tokens.json == G6 account); "
                                    "(b) lag attested declared == tokens.json == G6; the committer's own count is never sufficient by itself"}
@@ -71,20 +85,23 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                             f"capture/tokens.json is not beside the Commit ({'; '.join(res['notes']) or 'no account'}) -- never sufficient by itself (executed-prefix condition (a))")
     else:
         by_rid: dict[str, dict[str, Any]] = {}
-        for e in tok.get("requests") or []:
-            r = order.get(str(e.get("request_id")))
-            if r is not None:
-                by_rid[r] = e
-        tj_lag = (tok.get("lag") or {}).get("value") if isinstance(tok.get("lag"), dict) else None
+        entries = tok.get("requests")
+        if entries:
+            for e in entries:
+                r = order.get(str(e.get("request_id")))
+                if r is not None:
+                    by_rid[r] = e
+        lag_block = tok.get("lag")
+        tj_lag = lag_block.get("value") if isinstance(lag_block, dict) else None
         eq: dict[str, bool | None] = {}
-        for rid, rec in (epr.get("requests") or {}).items():
+        for rid, rec in requests_of_record(epr).items():
             e = by_rid.get(rid)
             if e is None:
                 eq[rid] = None
                 problems.append(f"{rid}: not in the Match record's tokens.json (request ids {sorted(by_rid)[:8]}): the serving transcript does not cover it")
                 continue
             try:
-                m_served = [circuit_token_id(t) for t in (e.get("generated_token_ids") or [])]
+                m_served = [circuit_token_id(t) for t in _generated(e)]
             except ValueError as err:
                 eq[rid] = False
                 problems.append(f"{rid}: the Match record's tokens.json served an id that is no circuit's: {err}")
@@ -112,11 +129,11 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
             elif m_exec is not None and int(m_exec) != int(rec["executed_prefix_len"]):
                 problems.append(f"{rid}: tokens.json executed_prefix_len {m_exec} != this rule's {rec['executed_prefix_len']} (served {c_served}, cap {rec['cap']}, LAG {epr.get('lag')}) (executed-prefix condition (a))")
         res["tokens_json"] = {"path": account.get("tokens_path"), "sha256": account.get("tokens_sha256"), "lag": tj_lag,
-                              "async_scheduling": (tok.get("lag") or {}).get("async_scheduling") if isinstance(tok.get("lag"), dict) else None,
+                              "async_scheduling": lag_block.get("async_scheduling") if isinstance(lag_block, dict) else None,
                               "tokens_equal": eq, "tokens_equal_rule": ("full generated_token_ids list" if served_tokens is not None else "length + last token"),
                               "requests_n": len(by_rid),
                               # a_r AS THE MATCH RECORD SERVED IT, per request (the fact the not-executed class reads)
-                              "served_by_request": {r: len(e.get("generated_token_ids") or []) for r, e in by_rid.items()},
+                              "served_by_request": {r: len(_generated(e)) for r, e in by_rid.items()},
                               "executed_by_request": {r: e.get("executed_prefix_len") for r, e in by_rid.items()}}
         res["tokens_equal"] = all(v is True for v in eq.values()) if eq else None
         if declared_lag is not None and (tj_lag is None or int(tj_lag) != int(declared_lag)):
@@ -154,7 +171,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                     r = f"r{e.index}"
                 if r is not None:
                     g6_by_r[r] = L
-            for rid, rec in (epr.get("requests") or {}).items():
+            for rid, rec in requests_of_record(epr).items():
                 L = g6_by_r.get(rid)
                 if L is None:
                     problems.append(f"{rid}: no G6 lengths_by_request entry (G6 covers {sorted(g6_by_r)[:8]}): not in the Match account (executed-prefix condition (a))")
@@ -166,10 +183,12 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
             res["global_match"]["requests_linked"] = sorted(g6_by_r)
             res["global_match"]["lengths_by_request"] = {r: {k: L.get(k) for k in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted")} for r, L in g6_by_r.items()}
     # (b) on every leg, one boolean the C2 population's class reads: declared == tokens.json == G6.declared == G6.record_attests
-    _legs = [declared_lag, (res.get("tokens_json") or {}).get("lag"),
-             ((res.get("global_match") or {}).get("lag") or {}).get("declared"), ((res.get("global_match") or {}).get("lag") or {}).get("record_attests")]
+    # `res` holds each block as this function built it: None where its record is not beside the Commit, else with its `lag` stated
+    tokens_json, global_match = res["tokens_json"], res["global_match"]
+    g6_lag = global_match["lag"] if global_match else {}
+    _legs = [declared_lag, tokens_json["lag"] if tokens_json else None, g6_lag.get("declared"), g6_lag.get("record_attests")]
     res["lag_attested"] = (declared_lag is not None and tok is not None and gm is not None and all(v is not None and int(v) == int(declared_lag) for v in _legs)
-                           and not ((res.get("global_match") or {}).get("lag") or {}).get("variable_lag"))
+                           and not g6_lag.get("variable_lag"))
     res["problems"] = problems
     res["ok"] = not problems
     res["classification"] = ACTIVE_REFERENCE_ONLY
