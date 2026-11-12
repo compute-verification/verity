@@ -1,3 +1,4 @@
+import contextlib
 import math
 from fnmatch import fnmatchcase
 
@@ -216,9 +217,11 @@ def test_a_loaded_state_steps_at_its_groups_own_rates_and_one_from_before_them_a
     assert continued(dials | {"gain_lr": 0.002}, before_own_rates=False) == [0.01 * factor, 0.002 * factor]
 
 
-def test_three_rates_under_one_optimizer_are_torchs_three_groups():
+def test_three_rates_under_one_optimizer_are_torchs_three_groups(monkeypatch):
     """AdamW over the whole model with a rate for the gains and one for the embedding, on a cosine schedule, against
-    torch's AdamW over three groups stepped at those rates: the same weights."""
+    torch's AdamW over three groups stepped at those rates: the same weights. What is held is the update's rule, so
+    the route's forward runs in float32 as the reference's does: torch's autocast is a no-op while the test runs."""
+    monkeypatch.setattr(torch, "autocast", lambda *args, **kwargs: contextlib.nullcontext())
     dials = subset.DIALS | {"lr": 0.01, "gain_lr": 0.002, "embed_lr": 0.003, "weight_decay": 0.05, "warmup": 2,
                             "schedule": "cosine"}
     torch.manual_seed(0)
