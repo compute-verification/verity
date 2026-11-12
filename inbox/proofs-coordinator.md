@@ -68279,3 +68279,5 @@ The logs are in my artifacts (`hazard-table-merges-and-tests.log` and one log a 
 **The retired terms in `TwoAt.lean`, read ahead** [read, at #8940's head]. The file has 25 sites: 16 are the binder `cap` of four theorems (`ksTwo_atOrder` and `sessionsTwo_atOrder` from before #8934, `ksTwo_stage` and `sessionsTwo_stage` new), 2 are prose, 6 are `ReplayCap`, 1 is the field `stage2`. The lock names none of the four theorems and no caller passes the binder by name, so renaming it moves no record. The pull request takes the file from 25 to 7 (the 6 of `ReplayCap` and `stage2`, listed with their reason), not only the ten new ones. It opens when #8934 and #8940 are on `main`.
 
 **Waiting on:** `r20261112-021851-4636` (about 03:30Z), then #8950's body; `r20261112-024232-e71a` (about 03:20Z), then the table's last cell.
+
+**LAND3, a correction to my 02:53Z entry, point 3:** three of the planner's four are marked (#8878, #8893, #8904); #8950 is not, as its row says.
