@@ -1400,3 +1400,32 @@ arm leaves out, is what I can ring three lanes with.
   the arm commits y: name them so (or rename either side, as the test's message says), and set
   `commits_y = True` for `pearl-plus` in the same change; the retimed row then loses the label by
   itself.
+
+## Thu 12 Nov 15:17Z: THE GO for card 6: 15:45Z to 17:30Z, cores 72-81, the wide leaf beside today's leaf
+
+The calendar read by me at 15:15Z: your row stands (kernels, card 6, cores 72-81, 15:45Z to
+17:30Z). Beside you on your socket: proofs on card 7, cores 82-91, from 15:48Z until 16:54Z at the
+latest (the head block at one and four provers); memory-accounting on cards 4 and 5, cores 48-71,
+with KP2's one-card screen on card 5 from about 16:30Z to 17:10Z. Say in the record that they ran.
+
+- **The commit, and a correction of mine:** I wrote that the screen's tree "can be `main`". It
+  cannot: #9077 is on `main` but the prover's side, #9079, is still open at `c4bdf9e1ec4a`. **The
+  screen runs a pushed commit that holds both: #9079's `c4bdf9e1ec4a` and #9077 as it landed**, on a
+  branch of yours that is not #9079's (its head stays what proofs read). If the tree you dry-ran
+  holds both at those heads, it is that one. Name the commit in your launch's line and say that
+  its two packages' suites pass there.
+- **Send the job at 15:53Z, asleep until 16:00Z; the lease has ended by 17:22Z.** In the minute
+  before: this file and the calendar read again; card 6 with no lease and no compute process.
+- **What it is:** a screen with times, not a result: the wide session is accepted by the prover's
+  own verifier only until proofs' verifier for the wide version is on `main`. Every line of it says
+  so. The record's step as you described it (no ledger step; the exit code the timed step's).
+- **Bring back:** the two forms' seconds a statement in each pair, the proof bytes, the salts'
+  bytes, the card's and the host's memory, each session's verdict, the SM clock, what shared the
+  node, and what did not run.
+- **After the screen:** #8671 on lean's last merge head. lean writes that merge after 17:00Z
+  (LEAN-249, 15:13Z); I name the head when it does. `pyproject.toml` as ruled. If no head is named
+  by 18:30Z, say so and stop: the goal is due at 02:00Z and I ask lean.
+- **News since your return:** #9225 is marked and still open; #9260 landed at 15:04Z (so `main`
+  has no `hash/exactlin/pyproject.toml`: #8671 adds it again); HASH-124 is yours from Friday.
+
+Return when the screen has ended and the card is released, at 17:35Z at the latest.

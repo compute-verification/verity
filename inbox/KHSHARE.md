@@ -1478,3 +1478,30 @@ in the fused reads. "The CPU result stands on its own."
   worker checks them as members of one kept verifier process the hour they exist. So on Friday,
   each time that put has run for a run: one worker comment on HASH-112 with the run and its two art
   ids, and say so in your return; I ring.
+
+## Thu 12 Nov 15:17Z: THE GO for card 3: 15:45Z to 17:15Z, cores 36-45, the head block's level walk's first run on a card
+
+The calendar read by me at 15:15Z: your row stands (kernels, card 3, cores 36-45, 15:45Z to 17:15Z).
+Beside you on the node in those hours: memory-accounting on cards 0, 4 and 5, proofs on card 7,
+KMOVE on card 6, vllm on cards 1 and 2. **Behind you: memory-accounting has cards 3 and 7 from
+17:15Z to 17:28Z, and circuits has card 3 from 17:30Z. So you are off card 3 by 17:15Z, whatever
+step you are in.**
+
+- **Launch `firstcard.sh` (`91bff2cb…`, 149 of 149) at `f9fc32ff3f`**, as dry-run. In the minute
+  before: this file and the calendar read again; proofs' staged directory on the node (read only);
+  card 3 with no lease and no compute process; if the launch cannot connect, stop and say so.
+- **Bring back:** the twin's verdict on the card for both head-block circuits (words differing,
+  with the control), the two paths' proofs compared byte for byte, the firewall case in proofs'
+  words ("ran in a device build, asked for the device"), the device prover on a host witness (the
+  two sessions), step E's verdict and seconds, the timed binary's sha256, and what did not run.
+- **If the twin differs anywhere on the card: stop, nothing is pushed, and Friday's rows do not
+  run until I have read it.**
+- **After the run, today:** the `PROTOCOL.md` sentence as one commit; the design note final by
+  18:00Z with step E's time and the cut's section; and the hours the head block's four-prover rows
+  need on next week's H200 at its two-card size (I name them to infra on Friday).
+- **For Friday** (the lines above this section): proofs' ask for the two art ids a run; the pinned
+  `steady.sh`'s diff before the go.
+- The agent guard's rules are in `inbox/RULES.md` ("Every turn", the last bullets): a push in a
+  command of its own with `git -C`, no listing that prints a command line.
+
+Return when the run has its verdict and the card is released, at 17:30Z at the latest.
