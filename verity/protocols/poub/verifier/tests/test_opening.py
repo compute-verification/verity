@@ -1,17 +1,21 @@
 """`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
 accepted; the same window over a store that lost its first sampled block is rejected on codec at that draw; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
-system's (pinned from Flock's commit strings), and an appended block's payload in the witness is its block decoded."""
+system's (pinned from Flock's commit strings), and an appended block's payload in the witness is its block decoded. The
+opening unit's compression is pinned as the commitments' own."""
 
 from __future__ import annotations
 
 import copy
 import hashlib
+import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from remote_bandwidth_fakes import Clock, Entropy
+from verity.commitments import gates
 from verity.protocols.poub.verifier import audit, codec, coins, opening as O, receipts
 from verity.protocols.poub.verifier.receipts import Plan
 
@@ -126,3 +130,14 @@ def test_the_plan_link_and_the_public_rows(store) -> None:
     for key in O.public(d, seed, S, w.c3.values):
         off = dict(a, **{key: [a[key][0] ^ 1, *a[key][1:]]})
         assert O.check(d, off, seed, S, w.c3.values, salt, bc) == "malformed", key
+
+
+def test_the_opening_units_compression_is_pinned_as_the_commitments_own() -> None:
+    """`RowCompress_v1`, the opening unit's SHA-512 compression, has the AND rows and the type circuit-check pins for
+    `Sha512Compress_v1` (`verity.commitments.gates`' `lms` pins), the rows the sampling planner prices a compression at
+    (`optimize.SHA512_ROWS`): both lower `compress_gadget`."""
+    here = Path(__file__).resolve().parents[1] / "commitments" / "gates"
+    unit = json.loads((here / "block_check.circuit-check.json").read_text())["definitions"]
+    shared = json.loads(Path(gates.__file__).with_name("lms.circuit-check.json").read_text())["definitions"]
+    row, compress = unit["RowCompress_v1"], shared["Sha512Compress_v1"]
+    assert (row["and"], row["type"]) == (compress["and"], compress["type"])
