@@ -453,6 +453,24 @@ def _same(a: float, b: float) -> bool:
     return math.isclose(a, b, rel_tol=1e-9)
 
 
+def _timed_alone(priced: Mapping, share: float) -> tuple[str, str]:
+    """The mark of the proving a plan prices from measured statements, ``share`` of its proving time, and what is
+    said of it. Such a block type is timed alone, one session on a card. What it costs with the plan's provers
+    sharing a GPU is the planner's factor, and the row's plan records the share of its proving at the factor that is
+    assumed (`_sources`, `default`). The share is measured only where the plan records that and it is 0."""
+
+    default, alone = (priced.get("sources") or {}).get("default"), "each is timed alone, one session on a card"
+    if default is None:
+        return "modeled", (f"{alone}, and the rows don't record how the plan prices it with its provers sharing a GPU "
+                           "(no `split.basis`)")
+    if not default:
+        return "measured", f"{alone}, and the plan prices none of its proving at the planner's assumed default"
+    least = max(0.0, share - (1 - default))
+    return "modeled", (f"{alone}, and with its provers sharing a GPU the plan prices {_part(default)} of its proving "
+                       f"at the planner's assumed default (`{DEFAULT_BASIS}`)"
+                       + (f": at least {_part(least)} of the proving time, in these families" if least > 0 else ""))
+
+
 def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
             network_check: float, row: str) -> list[dict]:
     """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
@@ -467,6 +485,15 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
         return {"part": part, "input": name, "value": value, "unit": unit, "mark": mark, "source": source}
 
     audit, both, net = "compute audit", "both", "network certifier"
+    priced = head["priced"] or {"ways": {}}
+    default = (priced.get("sources") or {}).get("default")
+
+    def how(way: str, its: float) -> tuple[str, str]:
+        if way != "measured":
+            return "modeled", ""
+        mark, words = _timed_alone(priced, its)
+        return mark, "; " + words
+
     out = [
         one(audit, "planner_rows", sum(len(p["pinned"]) for p in points.values()), "row", "modeled",
             f"{where}: the planner's row `{row}` at its step `{head['step']}`, each of {len(points)} scopes at "
@@ -479,11 +506,15 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
             "bound, a premise no run measures"),
         one(audit, "output_bits", head["output_bits"], "bit/request", "assumed",
             f"{where} `S`: the most bits a request's output holds, which no check certifies"),
-        *(one(audit, f"proving priced {way}", p["share"], "of proving time", "measured" if way == "measured" else "modeled",
-              f"`{RECORD}` ({head['priced']['run']}) {_plan(head['priced'])}, "
+        *(one(audit, f"proving priced {way}", p["share"], "of proving time", how(way, p["share"])[0],
+              f"`{RECORD}` ({priced['run']}) {_plan(priced)}, "
               f"block {'families' if len(p['families']) > 1 else 'family'} {', '.join(list(p['families'])[:2])}"
               f"{f' and {len(p["families"]) - 2} smaller' if len(p['families']) > 2 else ''}; how each is priced is the "
-              f"rows' account (`split.families`)") for way, p in (head["priced"] or {"ways": {}})["ways"].items()),
+              f"rows' account (`split.families`){how(way, p['share'])[1]}") for way, p in priced["ways"].items()),
+        *([one(audit, "proving priced at the planner's assumed default", default, "of proving time", "assumed",
+               f"`{RECORD}` ({priced['run']}) {_plan(priced)}, `split.basis` `{DEFAULT_BASIS}`: the planner's default "
+               "factor for what a block type costs with the plan's provers sharing a GPU, where no run has timed it so")]
+          if default else []),
         one(audit, "network_check_share", network_check, "", "assumed",
             "no run: the network check's own proving as a share of total compute, which the planner's rows don't "
             "count (--network-check-share)"),
@@ -694,10 +725,12 @@ def _how(priced: Mapping | None) -> str:
     largest = sorted(((s, family, way) for way, p in priced["ways"].items() for family, s in p["families"].items()),
                      reverse=True)[:3]
     plan = "its own plan at the pinned budget nearest" if priced["of"] == "rows" else "its plan"
+    alone = "measured" in priced["ways"] and _timed_alone(priced, priced["ways"]["measured"]["share"])[1]
     return (f"of the row's proving time, by {plan}, β = {_part(priced['beta'])} ({priced['run']}), "
             + "the share in block families priced each way is "
             + ", ".join(f"{_pct(p['share'])} {way}" for way, p in priced["ways"].items())
-            + ": the largest families are " + ", ".join(f"{family} ({_pct(s)}, {way})" for s, family, way in largest))
+            + ": the largest families are " + ", ".join(f"{family} ({_pct(s)}, {way})" for s, family, way in largest)
+            + (f". Of the families priced measured, {alone}" if alone else ""))
 
 
 def _by_source(sources: Mapping | None) -> str:
