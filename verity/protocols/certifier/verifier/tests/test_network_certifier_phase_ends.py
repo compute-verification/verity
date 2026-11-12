@@ -19,10 +19,10 @@ from verity.commitments.identity import tagged_sha512
 from verity.protocols.certifier.verifier import connection_rows as CR
 from verity.protocols.certifier.verifier.active import VirtualClock
 from verity.protocols.certifier.verifier.certificate import Issuer
-from verity.protocols.certifier.verifier.tests.test_network_certifier_content_tables import (CON, GONE, LEN_DIGEST, LINK,
-                                                                                             leaves, leaving, mixed)
-from verity.protocols.certifier.verifier.tests.test_network_certifier_lengths import (B, LEN, PLAIN, D, R, T, answer,
-                                                                                      id_req, traffic)
+from verity.protocols.certifier.verifier.tests.test_network_certifier_content_tables import (
+    CON, GONE, LEN_DIGEST, LINK, leaves, leaving, mixed)
+from verity.protocols.certifier.verifier.tests.test_network_certifier_lengths import (
+    B, LEN, PLAIN, D, R, T, answer, id_req, traffic)
 from verity.protocols.certifier.verifier.tests.test_network_certifier_warden import TAU, Server, records, run
 from verity.protocols.certifier.verifier.warden import LENGTHS_FORMS, Warden, WardenParams, cells
 
@@ -68,7 +68,8 @@ def test_form_2_is_a_value_of_its_own_digest_and_a_schedule_at_form_1_leaves_wha
     assert LEN.digest.hex() == LEN_DIGEST and CON.digest.hex() == CON_DIGEST
     assert len({PLAIN.digest, LEN.digest, TWO.digest, CON.digest, TWO_CON.digest}) == 5
     assert CR.tables_of(TWO) == CR.tables_of(LEN) and CR.tables_of(TWO_CON) == CR.tables_of(CON)
-    assert (TWO.stride_releases, TWO.span) == (LEN.stride_releases, LEN.span) and SPAN == D + (LEN.egress_cells - 1) // R
+    assert (TWO.stride_releases, TWO.span) == (LEN.stride_releases, LEN.span)
+    assert SPAN == D + (LEN.egress_cells - 1) // R
     assert WardenParams(**json.loads(json.dumps(dataclasses.asdict(TWO_CON)))) == TWO_CON
     for bad in (0, 3, True, "2", 2.0):
         with pytest.raises(ValueError, match="lengths is 1 or 2"):
@@ -207,7 +208,8 @@ def test_an_execution_phase_is_handed_only_where_it_and_the_ones_beside_it_were_
     assert [w for w, _ in one.lengths] == [0, 3, 4]
     (straddler,) = [r for stride in dict(one.lengths)[3] for r in stride]
     (read,) = [r for stride in CR.of_records(LEN, *records(one)[:2], order_of(one))[3] for r in stride]
-    assert (straddler.order, read.order) == (5, 5) and straddler.request_bytes == len(id_req(6, 100)) > read.request_bytes
+    assert (straddler.order, read.order) == (5, 5)
+    assert straddler.request_bytes == len(id_req(6, 100)) > read.request_bytes
     log = {e["ordinal"]: e for e in one.log}
     assert (log[6]["admitted"], log[6]["ingress_end"]) == (3 * T - 2, 3 * T)
     for windows, tick, without in ((3, 3, [0, 1]), (3, 2 * T + 3, [1, 2]), (1, 3, [0]), (2, T, [0, 1])):

@@ -70,14 +70,14 @@ cap and its reason enter the parameters' digest, so every record head binds them
 neither and keeps its digest. The period check reads the cap with the schedule and publishes it (`max_tokens_cap`).
 
 **The lengths rows** (`WardenParams.lengths`, none by default; 1 and 2 are their forms, `LENGTHS_FORMS`): a schedule
-may have its network certifier keep, of each request it releases, its place in the release order, its request's bytes, its response's
-outputs and whether it failed, a row of K = `WardenParams.stride_releases` slots a slot stride. Such a schedule has the
-id egress form, `ingress_buckets` ≤ D, a cell that holds an id request's head and first prompt field
-(`io_request.layout`), at most 2^16 egress cells, D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection ends
-within a window of its admission, and a K one proof block returns a row of (`connection_rows.check_slots`);
-`WardenParams` takes no other. The form enters the parameters' digest; a schedule
-without lengths rows hashes nothing of it and keeps its digest, and its network certifier does nothing of this section.
-With lengths rows the network certifier:
+may have its network certifier keep, of each request it releases, its place in the release order, its request's
+bytes, its response's outputs and whether it failed, a row of K = `WardenParams.stride_releases` slots a slot stride.
+Such a schedule has the id egress form, `ingress_buckets` ≤ D, a cell that holds an id request's head and first prompt
+field (`io_request.layout`), at most 2^16 egress cells, D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection
+ends within a window of its admission, and a K one proof block returns a row of (`connection_rows.check_slots`);
+`WardenParams` takes no other. The form enters the parameters' digest; a schedule without lengths rows hashes nothing
+of it and keeps its digest, and its network certifier does nothing of this section. With lengths rows the network
+certifier:
 - releases no connection whose client has failed: once a client's problem is set (ingress, malformed, cap) it cuts no
   further request cell of it, so the connection has no `END`, no place in the release order and nothing for the
   server. Every released connection therefore ends at an egress slot, in its `END` or a server's `FAIL`, and holds its
@@ -123,8 +123,9 @@ the same head. The hand copies an execution phase's ids and makes nothing else: 
 signed by whoever takes the hand, never on the tick.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
-and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a schedule without content
-rows hashes nothing of them and keeps its digest, and its network certifier keeps and hands what it did.
+and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a
+schedule without content rows hashes nothing of them and keeps its digest, and its network certifier keeps and hands
+what it did.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response

@@ -308,7 +308,8 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
 
     assert edited(lambda lines, salts: None) == []
     neither = "execution phase {} has neither connection rows nor the network certifier's word that it has none"
-    unhanded = "execution phase {} has connection rows, and it or an execution phase beside it wasn't published complete"
+    unhanded = ("execution phase {} has connection rows, and it or an execution phase beside it wasn't published "
+                "complete")
     unregistered = "execution phase {}'s connection rows aren't registered"
 
     def lost(lines, salts) -> None:
