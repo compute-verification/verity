@@ -121,10 +121,6 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 ## Before the PR
 
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
-- A PR whose new proof modules no guarantee reads yet lists each in its body with the guarantee that will read it and
-  the date that guarantee is listed by, and where they take their area past its cap in
-  `tools/verity/lean/unread-caps.json`, it raises the cap it finds (`main`'s, or that of the PR it stacks on) by what it
-  adds, never to `main`'s count plus that; one that fits under the cap leaves the line alone.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
