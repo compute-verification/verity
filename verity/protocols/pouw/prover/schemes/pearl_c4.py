@@ -1334,7 +1334,16 @@ class PearlC4:
 #: the private names these four had, which readers outside the module still import
 _E2M1_MIDPOINTS, _F2, _pair_excess, _scale_value = E2M1_MIDPOINTS, E2M1_SIGNED_HALVES, pair_excess, scale_value
 
-__all__ = ["E2M1_MIDPOINTS", "E2M1_SIGNED_HALVES", "FORMATS", "HASHINGS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4",
-           "check_registration", "clean", "dnf", "e2m1", "form", "hw_scales", "labelled", "line", "line_block",
-           "pair_excess", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "scale_value", "seed_b", "tile_debit",
-           "unit_seed_a", "word_replay"]
+__all__ = ["ATOM", "B_OVF", "B_OVF_MIN_N", "DEAD_RHO_SQ", "DELTA", "DENSE_CORRECTION", "E2M1_MIDPOINTS",
+           "E2M1_SIGNED_HALVES", "F1_B_OVERFIT", "F1_EPS", "FFMA_UNITS", "FLOOR", "FORMATS", "FORMING_CREDITED",
+           "FORMING_UNCREDITED", "FOUR", "GAMMA_FOLD", "HASHINGS", "HEAD_INTERLEAVE", "INT8_LEAF_SLOTS",
+           "INT8_PATCH_SLOTS", "K_BETA", "LABELS", "LABEL_BLOCKS", "LINES_PER_BLOCK", "MXFP4", "NAMES", "NOISE_F_SCALE",
+           "NVFP4", "ONE", "PEEL_K", "R", "R1_TOLERANCE", "REGISTRATION_STACKS", "ROLE_EA", "ROLE_EB", "ROLE_FA",
+           "ROLE_FB", "ROTATION_8", "SIXTH", "SPAN_K", "TILE", "TOP", "UE4M3_MIN", "UE4M3_NORMAL", "UE4M3_TOP",
+           "VO_ROTATION", "Debit", "Fmt", "Formed", "PearlC4", "b_ovf", "basis", "bf16_row", "block_scale", "chain",
+           "change_probabilities", "change_probabilities_exact", "check_registration", "check_scale_bytes", "clean",
+           "dead_blocks", "dnf", "e2m1", "e2m1_value", "e_tilde", "form", "gram", "hw_scales", "int8_depth_cost",
+           "int8_saving", "labelled", "line", "line_block", "modal_byte", "noise_atom", "noise_sigma", "pair_excess",
+           "parse_row", "peel_factors_a", "peel_factors_b", "pow2_word", "quantize", "row_f1", "row_passes", "row_seed",
+           "salt_dead", "scale_bytes_ok", "scale_dyadic", "scale_value", "seed_b", "split_saving", "split_units",
+           "stats", "tile_debit", "two_four_windows", "ue4m3", "ue4m3_word", "ue8m0_up", "unit_seed_a", "word_replay"]

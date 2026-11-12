@@ -495,5 +495,6 @@ def replay_key(record: dict[str, str]) -> Key:
     return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
 
 
-__all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS", "Receipt",
-           "SaltWindows", "TileAnchors", "WORD_BITS", "public_ports", "region_bytes", "region_words", "replay_key"]
+__all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS",
+           "Receipt", "SOURCE_BYTES", "SaltWindows", "TileAnchors", "WORD_BITS", "public_ports", "region_bytes",
+           "region_words", "replay_key"]

@@ -164,5 +164,5 @@ def signed(v: int) -> int:
     return sx(v, 32)
 
 
-__all__ = ["Call", "Result", "e1_row", "evaluate", "f1_col", "key", "node", "product", "root", "row_digest", "strip_digest",
-           "weight_outputs"]
+__all__ = ["Call", "Result", "dequant", "e1_row", "evaluate", "f1_col", "key", "node", "product", "root", "row_digest",
+           "strip_digest", "weight_outputs"]
