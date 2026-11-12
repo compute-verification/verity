@@ -156,7 +156,10 @@ undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
-meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
+meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices). Each
+wipe's `eps` leaves out its labels' and coins' PRF advantage (SHA-512 as PRF: not priced, not assumed), and the table
+says so beside each number that is short by it: the count and its δ hold at p = `eps`, before those terms
+(`holds_at`), and T·`eps` is short by their sum over the T wipes (`except_with`).
 `wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.configuration.deploy`), the
 reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
 `wipe_party.serve` signs.
