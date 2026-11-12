@@ -168,6 +168,18 @@ def test_one_ranks_record_that_did_not_pass_fails_that_rank_alone_by_name(pair, 
     assert cov["value_correspondence"]["result"] is (component == "weights_pin")
 
 
+def test_a_ranks_replay_line_and_pin_line_say_each_of_its_counts_under_its_own_word(pair, tmp_path, capsys):
+    _replayed(pair, linkage={"result": False, "pairs": 3, "linked": 2, "why": "step 2: input ids differ"},
+              pin=PIN | {"result": False, "why": "weights off the record", "mismatched": [{"served_name": "w.down"}], "missing": ["w.up", "w.gate"],
+                         "unpinned": ["w.a", "w.b", "w.c"]})
+    assert pair.run(*_of_record(tmp_path)) == 1
+    said = capsys.readouterr().out.splitlines()
+    assert ("[tp2commit] sampled replay rank 1: result True grade complete population 6 strata 2 picked 4 evaluated 4 equal 4 mismatch 0 not_evaluated 0 "
+            "weights self-consistent True (not a pin) wall 1.5s; boundary linkage False 2/3; ") in said
+    assert ("[tp2commit] weights pin rank 1: result False root_of_record abababababababab compared 2 mismatched 1 missing 2 unpinned 3 shards_pinned True; "
+            "weights off the record") in said
+
+
 def test_under_a_manifest_ranks_that_replayed_and_pinned_nothing_fail_by_each_name(pair, tmp_path, capsys):
     assert pair.run(*_of_record(tmp_path)) == 1
     c = pair.rows()[1]["commit"]

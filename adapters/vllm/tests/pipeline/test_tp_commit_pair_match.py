@@ -133,7 +133,23 @@ def test_one_rank_that_does_not_agree_with_the_match_record_fails_alone_by_name(
     summary = pair.read("summary.json")
     # a rank with no oracle beside a rank that passed its own is not a rank whose oracle failed: the fold names no reason for it
     assert (summary["pass"], summary["oracle_compare"]["result"], summary["oracle_compare"]["why"]) == (False, False, folded)
-    assert pair.read("coverage.json")["value_correspondence"]["components"]["oracle_compare"]["result"] is False
+    # the correspondence is the oracle's compare with the linkage, not the linkage alone: a rank's attribution may hold where its oracle does not
+    vc = pair.read("coverage.json")["value_correspondence"]
+    assert (vc["result"], vc["components"]["oracle_compare"]["result"]) == (False, False)
+    assert vc["components"]["linkage"]["result"] is ("attribution" not in rank1)
+
+
+def test_a_rank_that_failed_a_gate_before_the_match_records_keeps_that_reason_first(pair, tmp_path):
+    def no_map(answer: dict[str, Any]) -> None:
+        _compared(attribution=None)(answer)
+        if answer["binding"] is not None:
+            answer["binding"]["error"] = "no map"
+    pair.alter("tp2_commit_finalize", 0, _compared())
+    pair.alter("tp2_commit_finalize", 1, no_map)
+    assert pair.run("--match-dir", str(_match(tmp_path))) == 1
+    c = pair.rows()[1]["commit"]
+    assert c["per_rank"]["1"]["commit_fail_reason"] == "binding map / coverage error: no map; also: request attribution vs Match record: not run"
+    assert (c["per_rank"]["0"]["commit_pass"], c["commit_fail_reason"]) == (True, f"rank 1: {c['per_rank']['1']['commit_fail_reason']}")
 
 
 def test_the_match_oracle_line_names_the_first_moe_align_witness_that_differs_over_the_ranks(pair, tmp_path, capsys):

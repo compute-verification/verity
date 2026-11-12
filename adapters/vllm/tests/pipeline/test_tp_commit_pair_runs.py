@@ -19,6 +19,7 @@ from tests.pipeline import test_tp_commit_pair as TP
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline.tp import commit as TPCM
+from verity_vllm.pipeline.tp import lease as TPL
 
 driver, commit, pair = TO.driver, TO.commit, TP.pair
 
@@ -151,12 +152,15 @@ def test_a_value_check_one_rank_fails_fails_the_commit_whose_pair_passed(pair, c
 
 
 def test_a_value_check_one_rank_did_not_answer_fails_the_commit(pair):
+    pair.alter("tp2_commit_value_check", 0, _says(t6_4=LATE_READ))
     pair.lose("tp2_commit_value_check", 1)
     assert pair.run("--value-check") == 1
     check = pair.read("value_check.json")
     assert (check["verdict"], check["ranks_answered"], sorted(check["per_rank"])) == ("FAIL", [0], ["0"])
     assert pair.read("summary.json")["value_check"] == {"verdict": "FAIL", "per_rank": {"0": "PASS"}}
-    assert pair.read("t6_4_check.json")["result"] is False
+    # the late-read record of the rank that answered holds; the Commit's, a rank short, does not
+    late = pair.read("t6_4_check.json")
+    assert (late["per_rank"]["0"]["result"], late["result"]) == (True, False)
 
 
 LATE_READ = {"applicable": True, "result": True, "layers_compared": 2, "equal_pairs": 4, "missing_pairs": 0, "clone_mismatches": 0, "out_tensors_vs_clone": 6,
@@ -208,6 +212,14 @@ def test_a_traced_run_follows_the_pairs_and_keeps_each_arms_profile_and_roots(pa
     assert [f"[tp2commit] traced torch {arm}: 0.500s steps 4 -> {trace / f'torch.{arm}'}" in printed for arm in ("control", "instrumented")] == [True, True]
     # the Commit's verdict is its pair's: the traced run is no row of it
     assert [row["arm"] for row in pair.rows()] == ["control", "instrumented"] and pair.read("summary.json")["pass"] is True
+
+
+@pytest.mark.parametrize("flags,stops", [((), ["work.trace"]), (("--value-check",), [])], ids=["the Commit's last run", "a value check after it"])
+def test_a_traced_run_gives_the_gpus_back_unless_a_value_check_runs_after_it(pair, tmp_path, monkeypatch, flags, stops):
+    stopped: list[str] = []
+    monkeypatch.setattr(TPL, "stop", lambda llm, rpc_timeout, after: stopped.append(after))
+    assert pair.run("--trace-dir", str(tmp_path / "trace"), "--trace-ranks", "0", *flags) == 0
+    assert stopped == stops
 
 
 @pytest.mark.parametrize("arm,fails,code,decided", [("control", False, 0, None), ("instrumented", False, 0, True), ("instrumented", True, 1, False)],
