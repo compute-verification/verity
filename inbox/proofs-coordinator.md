@@ -104712,3 +104712,76 @@ Mailbox read at `bf6f5af8a8` (nothing new since 21:51Z). **I can pause now.**
 **The hours I gave stand:** `CommittedOnce` proved in a run by Fri 22:00Z, with a word by Fri 12:00Z on whether it holds.
 
 **Need from you:** the word on A24's two forms and `Numbered`; the PR 2 words (a `shared_rows` file refused under `names`; `members` as its own code; no executable before PR 3).
+
+## TWOLEG, Thu 12 Nov 22:15Z: the split: the projection in eight pieces, plus the majority, the instance and the claim at replay blocks, each stated on `cursor/proofs-twoleg-c5e5` at `42e5e760ff` and elaborating on `r20261112-221319-0b73`; `footprint` is settled; `Live₂` no longer fixes the run's statement
+
+**In plain words.** The large unbuilt part of the two-stage leg is the projection: reading a play of the period's game as a run of SPOT's two-stage verifier. It now has eight pieces, each stated in Lean on my branch, so a worker can take one and prove it in a new file without waiting on the others. The pieces are cut where the one-stage leg cuts: how the run's coins are placed in the play and hidden before release, which coin the check reads for each of the three groups of coins, the messages fixed before their coins, the read finder and forger, the check's accept, and the assembly. The majority and the instance are one piece each. The claim at replay blocks is stated and its two theorems are written with their proofs. Two things changed from the map. First, `footprint` marks a replay block wrong wherever the witness leaves a position of its boundary unopened, which is what the claim needs. Second, the run's statement is the boundary registration's record, which comes with the commitment, so the session of record no longer fixes it and the coupling picks it per commitment.
+
+Clock: `date -u` read 22:15Z. Trees: [main] `origin/main` `5f0c008aa0`; [base] `origin/cursor/proofs-two-round-base-84b5` `3aeb727bea`. My branch: `cursor/proofs-twoleg-c5e5` at `42e5e760ff`. Mailbox read at 22:14Z: nothing after the 21:54Z message.
+
+### 1. What changed in the leg's statements since 21:48Z
+
+- [derived] `Live₂` held the run's statement `x`, but `S₂ θ F` cannot see the commitment, and `x` (the boundary registration's record, as `SpotFlock.V`'s statement) is the commitment's. Now `Live₂` is `{h, δ, ε}`. `errAt A x P` and `prBad_le A hKS x hs hδ P` take the statement, and `CouplingTargetTwo` reads `∃ x Ω _ _ P, (A.L.Scope x ∨ prob Verdict = 0) ∧ prob Verdict ≤ ofReal (PrBad … x P) + terms c σ ∧ (finderCR → premises → ofReal (A.errAt x P) + terms c σ ≤ delta)`. `TwoLeg`'s first hypothesis is now `A.KS ∧ 0 ≤ A.δ`, because scope moved into the coupling. `twoLeg`'s proof splits on the disjunct. [read: `SampledTwo/Leg.lean` at `42e5e760ff`]
+- [read] `r20261112-214217-2e5f` still tries the 21:48Z text of `Leg.lean`; `r20261112-221319-0b73` tries the new text with the two new files.
+
+### 2. `footprint` at a position the witness does not open (your item 4), settled
+
+[read: `Definitions/Claims/Sampling.lean:151-182` (`Prog.read`, `Prog.Correct`, `Prog.refIn`) and `:354` (`Wit.val`), `Definitions/Claims/SamplingTwo.lean:119-131` (`wrongIn`, `footprint`), at [main]]
+- `wrongIn` checks proof block `v` of replay block `ρ` at `refIn rb (w.val …) ι`. Inside `ρ`, a gate that `ρ`'s boundary does not commit reads from the relation's interior `ι`. Every other gate reads `w.val`, the witness's first passing opening there, which is `none` where it opens none.
+- `Prog.Correct` asks that every value a proof block reads from outside itself is not `none`, and that every gate its boundary commits has a committed value equal to the computed one.
+- [derived] A gate on `ρ`'s boundary sits in some proof block of `ρ`, and is on that block's boundary too. So a boundary position the witness leaves unopened makes that proof block incorrect at every `ι`, and `ρ` is wrong. Interior positions are never unopened, because `ι` supplies them. This is `Accounting.unbound`'s reading at the replay blocks: wrong, or an unopened value on `io`. So `RTwo`'s failure past the cap holds as I derived it. It is now `not_rTwo_of_wrong` in `SampledTwo/Claim.lean`, and `holds_of_rTwo` gives the claim on any witness in the relation.
+- [derived] The same reading settles the map's open point on B2's unsampled bits. A witness in `RTwo` at the cap opens every boundary position of all but at most `ε·n` replay blocks, sampled or not, so the majority's binding argument reaches those bits through the boundary commitment's binding.
+
+### 3. The pieces (statements in `SampledTwo/Projection.lean` unless named; each proof goes in the new file named, under `security/Proofs/Properties/Verity/SampledTwo/`)
+
+Shared data, all in `Projection.lean`:
+- `Frame V A x θ F c σ`, with fields `place` (the coin map: a tape with a run's coins written at the device's releases) and `P` (the prover). `Frame.out ω r` is the play on `place ω r`.
+- `Reading A`, the two-stage form's read of a play by run round. Its fields are `coin`, `msg`, `reads` and `stmt`, owed by the form (mine, its parse at 03:00Z), and `dev`, the device's release for a round in a log, owed by the coin map.
+- `groupOf A i`, which puts round 0 in the first stage, rounds 1 to `stage` in the second, `stage + 1` in the statements' group, and later rounds in the sessions'. [read: [main] `SpotFlock/Code.lean` `next`, `V`, `order`]
+
+| piece | new file | proves | reads | waits on | size [guess] | owner |
+|---|---|---|---|---|---|---|
+| P1 the coin map and the coin trees' hiding | `CoinMap.lean` | defines `Frame.place` and `Reading.dev`; `CoinMapLaw V A x θ F c σ Fr Rd hide`, `hide` the trees' hiding at `2^-257` a leaf | `Sampled.Leaves`, `TreeMask`, `TreeGap`, `OpenEmpty`, `OpenGap`, `OpenErr`, `LeafErr`, `CoinMap`, `CouplingAt`; `Proofs.Core.Game.Tape` | nothing | 1,500 to 3,000 | soundness or proofs |
+| P2 the first stage's coins | `FirstCoins.lean` | `CoinsRead V k A Rd Good .first`: round 0's coin read is the device's release after the boundary registration's digest | `Sampled.LinkFirst`, `LinkRead`, `Binding` | the form's `coin` (03:00Z), P1's `dev`, P6's `Good` | 600 to 1,200 | proofs |
+| P3 the second stage's coins | `SecondCoins.lean` | `CoinsRead … .second`: rounds 1 to `stage`, after the interior registration's digest | `Sampled.RecordRounds`, `RoundsRead`, `Trees` | as P2 | 800 to 1,600 | proofs |
+| P4 the sessions' coins | `SessionCoins.lean` | `CoinsRead … .sessions`: each template's session one tree of the log, after the statements | `Sampled.MemberForm/`, `Trees`, `Counts` | as P2 | 1,000 to 2,000 | proofs |
+| P5 the messages and the prover | `Messages.lean` | defines `Frame.P`, the most likely message at each round's digest; `MessagesFixed … miss`, `miss` a √ of each two-continuation finder (round 1's interior record, round `stage + 1`'s statements, each session's record); `CallsLe` | `Sampled.Messages` (`DigestCut`, `Core.Game.TwoRun`), `Digest`, `DigestTie` | the form's `msg` | 1,500 to 3,000 | proofs |
+| P6 the read finder and the forger | `Binding.lean` | `CutBound V k θ F c σ Good terms` at `Good := Binding.Logged readsTwo`, `readsTwo` being `readsV2` restated over the three groups' releases | `Sampled.Binding`, `Device`, `Lines` | the form's read of the log | 800 to 1,800 | proofs |
+| P7 the accept | `Accepts.lean` | `AcceptsRun V k A x Rd`, `StmtAt …`, `StmtReadsNone A Rd` | FRAME's L3, `SpotFlock/HeldOf.lean`, `SpotFlock/Code.lean`'s `next_*` | L3, `heldOf`, the form | 800 to 1,800 beyond L3 | proofs, with FRAME |
+| P8 the two assemblies | `ProjectionOf.lean`, `CouplingOf.lean` | `theorem projection_of : ProjectionOf V k A x θ F c σ`; `theorem coupling_of : CouplingOf V k A θ F` | `Projection`, `Proofs.Core.Game.Tape` | nothing | 300 to 700 | proofs; can be compiled tonight |
+| B2 the witness fixed at registration | `Majority.lean` | defines `majority` (each boundary bit read most often off the extracted witnesses in the relation, as `Recursive.Dep.extract`); `MajorityBound V A x θ F c σ Fr (majority …) bind`, `bind` as `Recursive.Dep.delta`'s binding term, from `holds_of_rTwo` and a collision hypothesis as `spotRecursive`'s `hcoll` | `Projection`, `Claim`, `Recursive.Target`'s averaging lemmas, restated off `Dep` in the new file and not edited | nothing | 1,000 to 2,000 | soundness, or proofs |
+| the instance | `Instance.lean` | defines `sessionsTwo θ F : Option Live₂` from the parsed parameters and `heldOf`, with `δ := δ_ε` meeting `CapsAt dd Pt (ε·n) δ`; proves `TwoLeg`'s first two hypotheses, `UnitsAreReplay` at the two-stage parameters, and `CouplingOf`'s scope and numbers hypotheses | `Leg`, `Claim`, `HeldOf`, `Sampled.Instance`, `Sampled.SessionOf` (SESSIONOF's) | the form's parse, `heldOf`, soundness's instance shape | 1,500 to 3,000 | soundness |
+| B3 the claim at replay blocks | `Claim.lean` (on my branch) | `ReplayCorrect`, `wrongReplay`, `CapsAt`, `UnitsAreReplay`; `wrongReplay_subset`, `not_rTwo_of_wrong`, `holds_of_rTwo` with proofs | `Proofs.Flock.SamplingGeneric.Guarantees` | the run | written | proofs (me) |
+
+[derived] With every piece, `ProjectionOf` follows by union bounds. The coins read equal the device's releases, which P1 places at the run's coins; the messages agree off `miss`; and the accept then holds by P7. `CouplingOf` follows by splitting the accept on whether the extracted witness is in the relation: the part outside is `PrBad`, the part inside is at most `bind`. I wrote both arguments out, not in Lean. B1 in all is 7,300 to 15,100 lines [guess], up from 6,000 to 12,000 at 21:48Z, because P5 and P6 restate more than I had counted.
+
+### 4. What the two-round instance can reuse from the branches you named [read unless marked]
+
+- `cursor/proofs-sessionof-5c1e` (`7a5098e31a`), `Sampled/SessionOf.lean`: it builds a session from the parameters and files under one `Prop` of what the check computes (`SessionChecks`, `ChecksWitness.live`), and proves it set up (`sessionOf_setsUp`) and ready for openings (`live_opensReady`). The two-stage instance takes the same shape: `heldOf` from the parameters, and one `sessionOf`-like build per template, whose `live_opensReady` gives `SessionsReady` per template.
+- [run: `git ls-remote origin` at 22:00Z] `cursor/soundness-prf579-rest-8fb2` and `cursor/soundness-live-deployment-8fb2` do not exist on origin. `cursor/soundness-prf579-8fb2` does, at `0e12a1ba43` ("LogOpensRecorded is no longer an open premise"), and the instance restates that premise over three groups of coins. I have not read its proof.
+
+### 5. One accept lemma, with FRAME
+
+I propose that FRAME's L3 is the one accept lemma: `Spot.Run.run` ending `accept` at `FORM = true` gives, at the transcript it read, `SpotFlock.next (heldOf p)`'s accept at each round. Its first piece, as FRAME has it, is `SecondStage.check true own stmts` with no failure giving `stmtOkAt` at each template. P7 adds only the run's semantics (`Claims.run` at the read messages and coins) and the form's wrapper, which computes the verdicts and then calls `Run.run`. So the lemma is written once, in FRAME's file, and P7 cites it. FRAME, please confirm that L3 concludes in `SpotFlock.next h x as cs` at the messages and coins read, or name the shape it does conclude in, and I fit P7 to it.
+
+### 6. Lean's notes, applied
+
+- [read] Each new root is on a line of its own in `security/Proofs/lakefile.toml` (`Leg`, `Projection`, `Claim`). [read: `cursor/proofs-sessionof-5c1e` `c430907eed`] A new root changes PoUS's `TRUSTED.sha256`; a PR from my branch regenerates it.
+- [read] None of my files builds a `Vocab`, so #9375's `macs` asks nothing of them. `Instance.lean` will build one, and it sets `macs` once #9375 is on `main`.
+
+### STOP RULE
+
+Nothing in this entry. The three modules are new, no guarantee reads them, no lock record moves, and the verifier is untouched. A PR from the branch would also set the area's unread-ratchet entry (the lean-proofs skill).
+
+### To post
+
+To the workers you launch on P1 to P8, B2 and the instance: section 3, unchanged, with "cut from `cursor/proofs-twoleg-c5e5` at `42e5e760ff` or later; statements in `SampledTwo/Projection.lean`, `Leg.lean` and `Claim.lean`; your proof goes in the new file named; propose a change to a statement in an entry, don't edit it". To FRAME: section 5.
+
+### Not established
+
+- That the three files elaborate: `r20261112-221319-0b73` was waiting for a proofs slot at 22:15Z, ETA unknown, since waits have reached an hour today. Until it ends, a worker cutting from the branch builds on unchecked text.
+- That `holds_of_rTwo` and `not_rTwo_of_wrong` compile: written, not run.
+- That `ProjectionOf` and `CouplingOf` are provable as stated: I derived the arguments in section 3, not in Lean.
+- That one-stage's hiding term carries to P1: the two-stage play opens more trees, so its leaf count may need a new bound.
+- That `Reading.dev`'s type (`FlockDeploy.Coin` per round) matches how the device's releases are bytes; P1 decides it.
+- Every size.
