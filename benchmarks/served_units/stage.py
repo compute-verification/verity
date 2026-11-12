@@ -34,10 +34,9 @@ activation of the circuit's template (``Extract.claimedUnits``), and a class her
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
 overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
 (`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width
-in the template's word view, `census_leaves`) and statement (`chunk_rows.statement`: the MUFU reads of a sparse MLA split
-part or key block of at least ``chunk_rows.SLOT_KEYS`` keys in Flock's lookup slots, its unit cut into stage nets under the
-lowering's automatic per-net AND limits, which keep it within the GPU prover's slot types; RMSNorm's inline, and a Boolean
-``_v2`` template's flat, its MUFU reads in gates) under
+in the template's word view, `census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU
+reads in Flock's lookup slots, its unit cut into stage nets under the lowering's automatic per-net AND limits, which keep it
+within the GPU prover's slot types; RMSNorm's inline, and a Boolean ``_v2`` template's flat, its MUFU reads in gates) under
 its unit name, so the statement is the served one but for its binding: its ``class_sha512`` is the served composer's. The
 circuit is streamed to circuit.txt once, every input's outputs checked against the Program's reference (``twin`` null).
 ``census:NAME`` stages any other block type of the serving rows the same way, its values seeded by the same rule and its
@@ -76,8 +75,6 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     router-slots  served, its EX2 and RCP reads in gates; ``router-slots`` is its slots form (the per-slot outputs).
     dsa-q-row   `CENSUS`: DsaIndexerQ_v2{H=32,D=128,ROPE=64}, DSA's indexer query row as served, its EX2 reads in gates.
     mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
-    mla-first-block  `CENSUS`: SparseMlaHeadBlock_v1{NVIS,FIRST=true}, one head's first visited key block of a chain (default
-                NVIS = 63, the partial block's most keys).
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
@@ -246,8 +243,6 @@ CENSUS: dict[str, Census] = {
     "dsa-q-row": Census("DsaIndexerQ_v2", {}, "H=32,D=128,ROPE=64"),
     "mla-split-part": Census("SparseMlaSplitPart_v1", {}, 'T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
                              'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
-    "mla-first-block": Census("SparseMlaHeadBlock_v1", {"DR": 64, "DV": 512, "NVIS": 63},
-                              'FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
     "rmsnorm-v8": Census("RMSNormFusedCudaVector8_v1", {}, f"N=6144,EPS={_EPS},BLOCK=256"),
 }
 

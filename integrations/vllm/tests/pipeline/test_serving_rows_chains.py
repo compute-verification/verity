@@ -146,8 +146,7 @@ def units(ms, tmpls, S: dict = TOY, rows: int = 1) -> dict[tuple, int]:
 
 def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
     """The units `sparse_mla.head_chain` cuts the row into, each a ``chain`` template; a whole block's EX2 reads go in lookup
-    slots, and a partial first block's from `chunk_rows.SLOT_KEYS` keys (inline, GLM-5.3's first block of about 40 keys or more
-    is past the GPU prover's 32-bit offsets), a smaller one's and the end's inline."""
+    slots, a partial first block's and the end's inline."""
     assert SRW.unit_templates(row()) == ((row(), 1), (F8, 2), (B16, 4), (E, 2))
     assert row(GLM) == SERVED
     assert SRW.unit_templates(SERVED) == ((SERVED, 1), (block(2, GLM), 8), (block(None, GLM), 16), (end(GLM), 8))
@@ -156,7 +155,6 @@ def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
         ("chain", F8, "inline"), ("chain", B16, "slots"), ("chain", E, "inline")]
     assert [CR.reads(SRW.template(t)) for t in (block(2, GLM), block(64, GLM), block(None, GLM), end(GLM))] == [
         "inline", "slots", "slots", "inline"]
-    assert [CR.reads(SRW.template(block(k, GLM))) for k in (CR.SLOT_KEYS - 1, CR.SLOT_KEYS, 63)] == ["inline", "slots", "slots"]
     assert [SRW.template(t).word for t in (block(8, boolean=True), block(boolean=True), end(boolean=True))] == TMPLS
     assert [CH.kind(SRW.template(t)) for t in TMPLS] == ["first", "block", "end"]
     DV, DR = TOY["DV"], TOY["DR"]
@@ -165,7 +163,7 @@ def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
                                                 ("in4", V2, 4 * 32, ["l_prev"]), ("in5", V2, 32 * DV, ["o_prev"])],
                                                [(V2, (0,)), (V2, (1,)), (V2, (2,))])
     assert CR.unit_rows(SRW.template(E)) == ([("in0", V2, 4 * 32, ["l"]), ("in1", V2, 32 * DV, ["o"])], [(V2, (0,))])
-    with pytest.raises(ValueError, match="visits a first block of 8, not NVIS=16"):
+    with pytest.raises(ValueError, match=re.escape("a row of T=40 keys in NS=1 splits holds no unit ('block', 16, True) of it")):
         CH.positions(SRW.template(block(16)), spec_statics(row()))
 
 

@@ -7,9 +7,9 @@ The device gate runs first and nothing else runs when it fails (exit 3):
 
   gate     nvidia-smi driver, compute capability and `multi_processor_count` against `--min-driver`, `--want-cc`, `--want-sms`.
   binary   the SASS and PTX the installed `_vllm_fa2_C` carries (cuobjdump): a cubin for this arch, or the driver's JIT of compute_80 PTX.
-  mufu     `program/kernels/cuda/mufu_probe.cu` built two ways, as PTX for compute_80 (JIT-compiled by the driver, as FA2 is) and natively for
-           this arch: each build's ex2 / rcp tables against core's library tables (sha256), and `verify` of the pinned tables and reduction
-           rule (FRAC_MODE 4) on all 2^32 inputs.
+  mufu     `verity/ml/definitions/numerics/cuda/mufu_probe.cu` built two ways, as PTX for compute_80 (JIT-compiled by the driver, as FA2
+           is) and natively for this arch: each build's ex2 / rcp tables against core's library tables (sha256), and `verify` of the
+           pinned tables and reduction rule (FRAC_MODE 4) on all 2^32 inputs.
   launch   the kernel of every case (torch.profiler): `Flash_fwd_kernel_traits<D, kBlockM, kBlockN, kNWarps, ...>` against kBlockM 64 and
            `b1.fa2_kblock_n(D)`.
   cases    per head dim, `fa_tap_exactness.cases(2)` without softcap or window, a `wide` case (every operand word scaled by 2^U(-8, 8)),
@@ -54,7 +54,8 @@ SCHEMA = "verity-vllm/fa2-target-capture/v1"
 RECORD = "fa2_target_capture.json"
 HDIMS = (64, 96, 128, 256)
 KBLOCK_M = 64
-MUFU_SRC = Path(__file__).resolve().parents[2] / "verity/ml/definitions/numerics/cuda/mufu_probe.cu"
+REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
+MUFU_SRC = REPO_ROOT / "verity/ml/definitions/numerics/cuda/mufu_probe.cu"
 #: (heads, KV heads, head dim) of the pinned checkpoints whose attention is plain FA2 (`engine/profiles/hf_configs`; Gemma-2's softcap and
 #: window launch another kernel instantiation)
 MODELS = {"smollm2-135m": (9, 3, 64), "smollm2-360m": (15, 5, 64), "pythia-160m": (12, 12, 64), "qwen2.5-0.5b": (14, 2, 64),

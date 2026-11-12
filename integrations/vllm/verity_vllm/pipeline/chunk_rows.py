@@ -25,42 +25,34 @@ def s8_words(K: int) -> int:
 
 
 #: the whole-row templates whose MUFU table reads `reads` lays out in lookup slots: the attention rows (in neither ``CUT`` nor
-#: ``SPLITS``, so the whole row is the unit), and the per-key-block Calls the window circuit cuts their heads into
+#: ``CHAINS``, so the whole row is the unit), and the per-key-block Calls the window circuit cuts their heads into
 #: (`window_circuit.CUTS`: FA2's v18 by `AttentionHead_v19`, FA3's v4 by `AttentionHead_v20`), each reading EX2 a score or
 #: RCP once
 SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5", "AttnBlock_v4", "AttnHeadEnd_v1")
-#: the fewest keys of a sparse MLA key block, a ``CHAINS`` block's NVIS or a ``SPLITS`` part's T, whose EX2 reads, one a key,
-#: `reads` lays out in lookup slots (a whole block of fewer keys reads in slots too): inline, a block's reads reach the GPU
-#: prover's 32-bit offsets at about 40 keys
-SLOT_KEYS = 32
 
 
 def reads(tp: Any) -> str:
     """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
-    once per statement) for a ``SPLITS`` part of at least `SLOT_KEYS` keys or one whole block (inline, step 16's 64-key part's
-    EX2 reads are 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots), for a whole attention row (``SLOT_ROWS``:
+    once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN: inline, step 16's 64-key split part's EX2 reads
+    were 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole attention row (``SLOT_ROWS``:
     inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
     622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB; in slots, 314M nonzeros for 8,473,952 ANDs, 37 an AND,
     k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
-    an AND inline) at their served shapes. A ``CHAINS`` block reads as a split part of its NVIS keys does (slots from
-    `SLOT_KEYS` keys or for a whole block), its end inline as the combine. A ``STAGES`` stage reads in slots: a stats part or a
-    probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table (its EX2 is gates), so it lowers
-    flat either way."""
-    from verity_vllm.pipeline import chain_rows as CH, split_rows as SP
+    an AND inline) at their served shapes; a ``CHAINS`` end, column end and combine inline as that combine. A ``STAGES`` stage
+    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table
+    (its EX2 is gates), so it lowers flat either way."""
+    from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
         return "slots"
-    if tp.layout == "chain":
-        S = spec_statics(tp.word)
-        return "inline" if CH.kind(tp) == "end" or int(S["NVIS"]) < min(SLOT_KEYS, int(S["BN"])) else "slots"
-    if tp.layout != "split" or SP.combine(tp):
+    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block"):
         return "inline"
     S = spec_statics(tp.word)
-    return "slots" if int(S["T"]) >= min(SLOT_KEYS, int(S["BN"])) else "inline"
+    return "slots" if int(S["NVIS"]) >= int(S["BN"]) else "inline"
 
 
 def statement(tp: Any) -> dict[str, Any]:
@@ -74,20 +66,19 @@ def statement(tp: Any) -> dict[str, Any]:
 
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
-    (`interface.unit_rows`) under its cuts (`split_rows.cuts`, a ``SPLITS`` combine's), parameter g's row ``in<g>``, or
+    (`interface.unit_rows`) under its cuts (`chain_rows.cuts`, a ``CHAINS`` combine's), parameter g's row ``in<g>``, or
     ``in<g>.<s>`` for its row s when cut. The one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
     codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row ``o0``: each operand
     packed with its scale in one row is the layout serving commits (`serving_rows`' s8 row tables), where
     `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity_vllm.pipeline import split_rows as SP
+    from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_statics
 
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split", "chain", "stage", "slots", "read", "expert",
-                         "fused"):
+    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "expert", "fused"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
     g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
 
@@ -95,7 +86,7 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
         nm, _, s = row.partition("#")
         return f"in{g[nm]}" + (f".{s}" if s else "")
 
-    in_rows, out_rows = IF.unit_rows(tp.fn, SP.cuts(tp) if tp.layout == "split" else None)
+    in_rows, out_rows = IF.unit_rows(tp.fn, CH.cuts(tp) if tp.layout == "chain" else None)
     return [(port(p), *rest) for p, *rest in in_rows], out_rows
 
 

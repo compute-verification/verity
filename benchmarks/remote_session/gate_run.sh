@@ -10,6 +10,8 @@
 #   benchmarks/remote_session/gate_run.sh whatif PERIOD         # once fire has ended: gate_whatif.sh over its records
 #
 #   1. checkpoint  checkpoint.sh with CHECK_ONLY=1 on PROVER_NODE: the pinned checkpoint's files against core's pin.
+#                  With FETCH=1, checkpoint.sh as it stages a role: what the snapshot lacks fetched from the Hub and the
+#                  pinned directory linked, then the same check.
 #   2. probe       gate.sh probe on GATE_ON (the machine with GATE_KEY): the challenger host's key is PIN, PERIOD unused
 #                  and no period of the lane open, COMMIT on origin/main's first-parent line, the verifier host pinned at it
 #                  and idle. Nothing is written to a gate.
@@ -35,7 +37,13 @@
 # LEASE_ON names the GPUs the prover leases (`gpu-lease --on`, default any ENGINES free ones) and LEASE_MEM_GB its host
 # memory (default 32 GB an engine). LEASE_BY (a UTC time) is when the prover must hold its GPUs, or nothing runs: the
 # prover asks through gate_lease.sh (sent beside) from LEASE_FROM (default now) and gives up a minute before LEASE_BY,
-# and fire opens no period for a lease that began after it. PROVER_RUN names a prover already launched for PERIOD,
+# and fire opens no period for a lease that began after it. ARENA_GIB (default 62) is each engine's weights arena
+# (`engine.py --arena-gib`) and so the host's ARENA_BLOCKS, its 4 KiB blocks, and UTIL (default 0.8) vLLM's share of a
+# card (`--util`); PACED is the host run's sessions (default gate.sh's four), one word a session of PLAN, and
+# PACE_PASS_MS the pass the host counts their groups at (default gate.sh's): it splits a stretch's samples among
+# T_MS/(K·PACE_PASS_MS) groups, so where the node's pass is longer than it, as a larger arena's is, the groups take
+# longer than the stretch. No session is late for it.
+# PROVER_RUN names a prover already launched for PERIOD,
 # which step 4 fires against (step 3 launches none); default the one `prover` recorded in PERIOD.env, which launches
 # step 3 alone, so the prover can take its slot before the hosts are pinned at COMMIT and the probe passes (its tree is
 # recorded as prover_commit). A dry run's ids go to PERIOD.dry.env. --dry-run runs steps 1 and 2
@@ -65,7 +73,7 @@ WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
 LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES))} LEASE_BY=${LEASE_BY:-} LEASE_FROM=${LEASE_FROM:-}
 SLOTS=${SLOTS-/workspace/research/locks/gpu/slots} CHECKPOINT_WAIT_S=${CHECKPOINT_WAIT_S:-900} SLOT_WAIT_S=${SLOT_WAIT_S:-3600}
-PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625}
+PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625} ARENA_GIB=${ARENA_GIB:-62} UTIL=${UTIL:-0.8}
 VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@81.85.1.145}
 STATE=$HOME/.research/gate-runs/$PERIOD${DRY:+.dry}.env
 mkdir -p "$(dirname "$STATE")"
@@ -121,7 +129,8 @@ launch() {
 GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
   --env "MODEL=$ROLE" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
   ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"}
-  ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"})
+  ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"} --env "ARENA_BLOCKS=$((ARENA_GIB * 262144))" ${PACED:+--env "PACED=$PACED"}
+  ${PACE_PASS_MS:+--env "PACE_PASS_MS=$PACE_PASS_MS"})
 gate_step() {
   # NAME VERB GB research-run-args...: gate.sh VERB on GATE_ON in GB of memory, waited for (a dry step, or GATE_MEM=0
   # where reservations are full and a fire queued behind them would outwait the prover's tunnel, reserves none)
@@ -172,10 +181,12 @@ if [ "$VERB" = prover ]; then
 elif [ "$CHECKPOINT" = 0 ]; then
   echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
 else
-  echo "== 1. checkpoint on $PROVER_NODE"
+  echo "== 1. checkpoint on $PROVER_NODE${FETCH:+ (FETCH: what the snapshot lacks is fetched first)}"
   on_node "$CHECKPOINT_WAIT_S" 1200 bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"'
+  ONLY=(--env CHECK_ONLY=1)
+  [ -z "${FETCH:-}" ] || ONLY=()
   launch checkpoint --on "$PROVER_NODE" --cwd source --send "$HERE/checkpoint.sh" \
-    --timeout "$((CHECKPOINT_WAIT_S / 60 + 20))m" --wait --env CHECK_ONLY=1 --env "ROLE=$ROLE" -- "${NODE_CMD[@]}" || exit 3
+    --timeout "$((CHECKPOINT_WAIT_S / 60 + 20))m" --wait "${ONLY[@]}" --env "ROLE=$ROLE" -- "${NODE_CMD[@]}" || exit 3
 fi
 if [ "$VERB" != prover ]; then
   echo "== 2. probe on $GATE_ON"
@@ -184,7 +195,7 @@ fi
 echo "== 3. prover on $PROVER_NODE"
 PROVER=(--on "$PROVER_NODE" --cwd source --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
-  --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
+  --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib $ARENA_GIB --util $UTIL"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
   --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
   --env VLLM_NO_USAGE_STATS=1 --env DO_NOT_TRACK=1 --env GPU_LEASE_TIMED=1)

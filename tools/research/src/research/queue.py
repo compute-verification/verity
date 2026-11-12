@@ -4611,7 +4611,7 @@ class Preflight:
         """The commit to merge the head onto, how to name it, and `next`'s members up to it.  The members are the merges of `next`
         that the landing branch's tip (`main`'s when that can't be fetched) doesn't contain, by their trailers, past the commits
         without them (`queue_merges`); the commit is the one below the PR's newest merge among them, else `next`'s tip, or with no
-        `next` that landing tip."""
+        `next`, or one that doesn't hold `main` when `main` is the landing branch (no queue above it), that landing tip."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/preflight/main",
              f"+refs/pull/{pr.number}/head:refs/queue/preflight/pr")
         missing = lambda: _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode   # noqa: E731
@@ -4631,6 +4631,8 @@ class Preflight:
             raise QueueError(f"git ls-remote {self.remote}: {(r.stderr or r.stdout).strip()[-200:]}")
         _git(self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{BRANCH}:refs/queue/preflight/{BRANCH}")
         tip = _out(self.repo, "rev-parse", f"refs/queue/preflight/{BRANCH}")
+        if into == "main" and _git(self.repo, "merge-base", "--is-ancestor", main, tip, check=False).returncode:
+            return main, f"`{into}` at {main[:12]} (`{BRANCH}` at {tip[:12]} doesn't hold it)", []
         members = queue_merges(self.repo, main, tip)
         if own := next((m for m in reversed(members) if m.pr == pr.number), None):
             below = _out(self.repo, "rev-parse", f"{own.commit}^1")

@@ -44,6 +44,7 @@ from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.ops.scalar import BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.ml.circuits.refs import Coll, Strided, array_of, broadcast, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.definitions.evidence import EVIDENCE
 
 from .dsa import I32Sub, U32And
 from .flashmla import U32Ge
@@ -61,9 +62,12 @@ SEG_CARRY = Tuple(I32, I32, I32, I32)
 M32 = 0xFFFFFFFF
 #: the most bits a sort key may have: an `I32Le_v1` operand that is nonnegative compares as unsigned
 KEY_BITS = 31
-_CONF = ("model-untested: read from embedding_dense_backward_cuda's two kernels with scalar_t float, held to "
-         "numerics.torch_kernels' model on f32 words (tests/test_torch_embedding_f32.py); tests/test_torch_training_gpu.py's "
-         "embedding backward on an f32 table's gradient, at M <= 3072 and above, on a cc 12.0 GPU would hold it to the kernels")
+_CAPTURE = EVIDENCE["cc12_embedding_backward_capture"]
+_CONF = ("exact-model-tested: up to FEATURE_MAX ids (embedding_backward_feature_kernel), every captured word of an f32 table's "
+         "gradient on cc 12.0 with 188 SMs (torch 2.14.0+cu130), 2,048 ids into V = 32,000 at H 512, 768, 1,024 and 1,536 (each "
+         "entry's first 256 features), uniform and Zipf ids, deterministic or not, is numerics.torch_kernels' feature model's "
+         f"(capture {_CAPTURE['run_record']}, fit {_CAPTURE['fit']}), and tests/test_torch_embedding_f32.py holds these "
+         "Definitions to that model on f32 words; above FEATURE_MAX (the sort kernels) only the model holds them, no capture")
 
 
 def _c(B, v: int, w: int = 32) -> Coll:

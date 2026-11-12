@@ -260,9 +260,8 @@ def test_the_replay_takes_the_commits_workers_unless_told_otherwise():
 
 
 def test_a_workers_baseline_is_the_word_replays_unless_measured():
-    """The baseline `driver.fit_pool` adds to each pick's stated peak; the Boolean replay states its picks' and keeps the baseline."""
-    from verity_vllm.pipeline import boolean_replay as BR
-    assert CPU.worker_peak(BR.Options(bundle="b", row_dir="r", checkpoint_dir="c", out="o")) == 250 << 20
+    """The baseline `driver.fit_pool` adds to each pick's stated peak: the calibration's, unless measured."""
+    assert CPU.worker_peak(CPU.Options(bundle="b", row_dir="r", checkpoint_dir="c")) == 250 << 20
     assert CPU.worker_peak(CPU.Options(bundle="b", row_dir="r", checkpoint_dir="c", worker_peak_gb=1.5)) == int(1.5 * (1 << 30))
 
 

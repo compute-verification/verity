@@ -21,8 +21,7 @@ Three kinds of type (`stage.py`'s docstring has each):
   K = 6144; any other by `census:NAME`, the name verbatim), one whole Definition a proof block, staged like a `UNITS`
   type on bf16 rows, held to the Program's reference; FlashInfer's FP8 linear and its quantisation part, the MoE router
   and DSA's indexer query (`fi`, `fi-quant`, `router-row`, `router-slots`, `dsa-q-row`) are their Boolean `_v2`
-  templates as served, flat, their MUFU reads in gates; `mla-first-block` is a sparse MLA chain's first key block, its
-  EX2 reads in lookup slots from `chunk_rows.SLOT_KEYS` keys.
+  templates as served, flat, their MUFU reads in gates.
 
 Files:
 
