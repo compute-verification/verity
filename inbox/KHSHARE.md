@@ -1274,3 +1274,41 @@ unchanged. Return as said there, with the three launch lines and item 1's runs.
   also asks that a kept proof carries its statement's `program-word.json` from the same staging;
   yours is proofs' staged head block, whose program is `art:84d25bec…/out/head/program-word.json`,
   as you have it.
+
+## Thu 12 Nov 08:50Z: your 08:47Z return is read; proofs is rung with `f9fc32ff3f`; my words on your six readings, and two small things before Thursday
+
+Read: your return, `c-three-lines.md`, `c-merged-main-2.md`, and the three-lines commit's diff whole
+(`no_recheck = firewall_on(st) && device`; clean). Checked: the head and its two commits; runs `7d09`,
+`79b3`, `7b90`, `4795` done rc 0. Rung proofs (HASH-112) with the head, what the three lines do, what
+is shown and what is not.
+
+**One correction for your record, and it is the kind that costs trust:** `c-three-lines.md` cites
+`r20261112-063042-3e5f` as showing the case runs and holds the refusal. That run's state is failed,
+exit 6 (your control's time cap). The case's own line may have passed inside it, but a failed run
+cited as "shown" without its exit is not a citation. I cited `r20261112-073258-79b3` to proofs
+instead, where the case passes with a frame and the run exits 0. Say a run's exit with its id.
+
+**Your six readings:**
+1. Friday's gate takes the head block's firewall case only where Thursday saw it pass in under 60 s: **yes.**
+2. "The twin on that tree first" is the gate's two equality cases on the merged tree's own build with
+   `FC_SALTS_KEYED=all` set: **yes.**
+3. Card 2 is refused without `MERGE` unless `FORM=head`: **yes.**
+4. The 13:00Z cutoff applies to any further merge of `main`: **yes. Thursday runs `f9fc32ff3f`, and
+   Friday's cards 6 and 3 time that same head**, whatever `main` does to the prover meanwhile; a
+   later merge waits until after Friday's rows.
+5. The node script rebuilt on KSTEADY's current `steady.sh`, `ROWS` refused: **yes.**
+6. The gate on the timed binary: **do not read anything on node A for it.** Have Thursday's and
+   Friday's jobs put the timed binary's device code (or the binary, if it is small enough for the
+   run's custody: say its size) under `$OUT`, with its sha256 in the row, so the gate runs on a CPU
+   node on exactly what was timed. Then no hash comparison with a CPU build is needed at all.
+
+**Two small things now, on CPU nodes, back by 12:00Z:**
+- **Your control `zk_worker_wire`:** it stopped at its time cap twice at `90c428b40e` and gave no
+  verdict. Run it at `ffc7c70a0f` (the commit before the three lines) and at `main`, same cap and
+  one with the cap doubled: slow everywhere, or a hang the three lines brought? I told proofs I
+  would say. If it is a hang at `90c428b40e` only, tell me at once: the three lines then come off
+  before Thursday (the 13:00Z rule) and Thursday runs `ffc7c70a0f` merged with `main`.
+- Item 6 above in both jobs, and both dry runs' last lines again.
+
+Then nothing until my go at 15:25Z. The keyed-salts form on card 2 is on (proofs named the branch;
+your scratch merge's CPU checks are in): Friday is three cards as your three lines say.
