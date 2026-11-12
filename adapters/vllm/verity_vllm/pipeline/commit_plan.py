@@ -28,6 +28,8 @@ from verity_vllm.log import init_logger
 from verity_vllm.pipeline import source_identity as SI
 from verity_vllm.query.manifest import format as MF
 
+__all__ = ["Options", "key", "keyed", "main", "write"]
+
 logger = init_logger(__name__)
 
 SCHEMA = "verity-vllm/commit-plan/v1"

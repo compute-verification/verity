@@ -45,6 +45,9 @@ from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline.replay_plan import Planner
 
+__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "deferred_records", "discard", "open_bundle",
+           "partial", "path", "seal", "seal_all", "weights_extra", "write_store", "write_store_files"]
+
 logger = init_logger(__name__)
 
 SCHEMA = "verity-vllm/replay-bundle/v1"

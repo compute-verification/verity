@@ -73,6 +73,10 @@ from verity_vllm.pipeline.telemetry.admission import CALIBRATION
 from verity_vllm.pipeline.timeline import Timeline
 from verity_vllm.program.compiled_relations import warm_vml
 
+__all__ = ["OnRead", "Options", "Refused", "WORDS", "main", "manifest_of", "of_record", "open_weights", "opener",
+           "provider", "registered_roles", "replay_args", "tensor_root_of", "tree_refusal", "weights_attest",
+           "worker_peak"]
+
 logger = init_logger(__name__)
 
 ATTESTS = ("every weight field the replay consumed, composed from the checkpoint (or carried in the bundle), has the committed tensor root, "

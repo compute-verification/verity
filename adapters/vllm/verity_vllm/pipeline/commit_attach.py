@@ -26,6 +26,8 @@ from verity_vllm.check.commit_rules import (
 from verity_vllm.commit import binding as BD
 from verity_vllm.log import init_logger
 
+__all__ = ["attach_of_record", "classes_of_record"]
+
 logger = init_logger(__name__)
 
 

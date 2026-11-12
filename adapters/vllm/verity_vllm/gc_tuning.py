@@ -32,6 +32,8 @@ from collections.abc import Iterator
 
 from verity_vllm import settings
 
+__all__ = ["tune", "tuned"]
+
 ENV = "VERITY_GC_THRESHOLDS"
 TUNED = (100_000, 50, 1000)
 LEAVE = ("default", "off", "none", "0")
