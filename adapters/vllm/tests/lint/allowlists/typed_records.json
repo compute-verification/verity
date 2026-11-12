@@ -175,7 +175,6 @@
     {"file": "verity_vllm/pipeline/launch_context.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/pipeline/layout.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 10},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-gen/spec-tokens/v1"},
-    {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/match.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/instances/v1"},
     {"file": "verity_vllm/pipeline/match.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/instances/v2"},

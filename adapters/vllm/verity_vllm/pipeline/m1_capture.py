@@ -182,9 +182,10 @@ def capture_protocols(wl: dict, args: Options, model: object) -> tuple[Compositi
     return protocols, list(protocols.entries) if protocols is not None else []
 
 
-def request_rows(wl: dict, tokens: dict, per_req: dict, lag: int | None) -> list[dict]:
+def request_rows(wl: dict, tokens: dict, per_req: dict | None, lag: int | None) -> list[dict]:
     """A row of tokens.json for each request of the workload, said as it is made: the tokens served beside the accepted record's, the
-    realized schedule, and the two lengths, kept distinct.  served_output_len = the tokens served (generated_token_ids, the answer up
+    realized schedule (`per_req`, the run's timing by request: None where the timing has none, and a request it has no record of has
+    no realized step and did not stop early), and the two lengths, kept distinct.  served_output_len = the tokens served (generated_token_ids, the answer up
     to and including the EOS or the limit); executed_prefix_len = served + LAG on an EOS stop before the limit (the post-EOS row is
     active internal computation whose sampled token is NOT served), None on such a stop under an unattested lag.  Both are a function
     of the served tokens + the recorded fact, never of the trace; GM-01 G6 verifies them against the rows the record actually holds."""
@@ -194,7 +195,8 @@ def request_rows(wl: dict, tokens: dict, per_req: dict, lag: int | None) -> list
         acc = wl["accepted"].get(rid)
         gen = tokens.get(rid, [])
         eq = (acc is not None and gen == acc[: len(gen)] and len(gen) == len(acc)) if acc is not None else None
-        steps_r = per_req.get(rid) or {}
+        timed = None if per_req is None else per_req.get(rid)
+        steps_r: dict = {} if timed is None else timed
         served = len(gen)
         limit = int(r["max_tokens"])
         eos_stop = (str(steps_r.get("finish_reason")) == "stop") and served < limit
@@ -348,7 +350,7 @@ def main(args: Options) -> None:
     # unattested (no default).
     asched = va.resolved_async_scheduling(eng.llm)
     lag = None if asched is None else (1 if asched else 0)
-    rows = request_rows(wl, tokens, timing.get("requests") or {}, lag)
+    rows = request_rows(wl, tokens, timing.get("requests"), lag)
     doc = {"requests": rows, "per_step_sampled": per_step, "timing": timing, "observer": not args.no_observer, "protocols": protocol_entries,
            "profile_id": header.profile_id if header is not None else None, "case": case, "model": eng.cp["repo"],
            # [coverage D87] the serving profile / context class the workload declares and the realized shape of this run
