@@ -3,6 +3,8 @@ module
 public import Proofs.Properties.Verity.SampledTwo.Reading
 public import Proofs.Flock.Claims.Recursion.DeploySessions
 public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.Recursion.Inner
+public import Proofs.Properties.Verity.Sampled.Messages
 
 /-!
 # The two-stage leg's messages: the frame's prover, and the messages fixed by their digests
@@ -82,14 +84,18 @@ noncomputable def shownCoin (m : Msg) : Option FlockDeploy.Coin := by
   classical
   exact if h : ∃ c : FlockDeploy.Coin, c.bytes = m then some h.choose else none
 
+/-- **The coin the history `hist` shows at round `j`**, if its answer there shows one. -/
+noncomputable def shownAt (hist : List (Msg × Msg)) (j : ℕ) : Option FlockDeploy.Coin :=
+  (hist[j]?).bind fun e => shownCoin e.2
+
 /-- **The run's coins agree with every coin the history `hist` shows**: at each round before the history's end whose
 answer shows a coin, the run's coin is that coin. -/
 def Shows {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) (r : Coins A x) : Prop :=
-  ∀ (j : Fin (A.L.V.k x)) (e : Msg × Msg), hist[j.val]? = some e → ∀ c, shownCoin e.2 = some c → r j = c
+  ∀ (j : Fin (A.L.V.k x)) c, shownAt hist j.val = some c → r j = c
 
 /-- **The coins the history `hist` shows, `y` at every other round.** -/
 noncomputable def merge {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) (y : Coins A x) : Coins A x :=
-  fun j => ((hist[j.val]?).bind fun e => shownCoin e.2).getD (y j)
+  fun j => (shownAt hist j.val).getD (y j)
 
 /-- **The completion of a history**: the coins it shows, `default` at every other round. -/
 noncomputable def complete {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) : Coins A x :=
@@ -211,7 +217,7 @@ theorem messagesFixed_of_reached (V : Vocab d α) (A : Live₂) (x : Msg) (θ : 
 /-! ## The first difference -/
 
 /-- **The run's history before round `i`**, as its prover sees it. -/
-def runHist (t : Claims.Transcript) (i : ℕ) : List (Msg × Msg) := Claims.histOf (t.msgs.take i)
+def runHist (t : Claims.Transcript) (i : ℕ) : List (Msg × Msg) := (t.msgs.take i).map RecDeploy.histOf
 
 /-- **The history before round `i` of a run whose messages are `ms`**, against `A.L.V` at the statement `x` and the
 coins `r`: each round's message, with the verifier's answer to the messages up to it. -/
@@ -240,6 +246,320 @@ def ReachedOfRounds (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F
     (∀ i < A.L.V.k x, ENNReal.ofReal (Claims.Pr (MissAt Fr Rd Acc Good i)) ≤ miss i) →
       MessagesReached V A x θ F c σ Fr Rd Acc Good (∑ i ∈ Finset.range (A.L.V.k x), miss i)
 
+/-- **The messages fixed at the rounds the run reaches, round by round**: a run whose messages differ from the check's
+at a round it reaches differs first at one of them, below `k`. -/
+theorem reachedOfRounds (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) : ReachedOfRounds V A x θ F c σ := by
+  classical
+  intro Fr Rd Acc Good miss h
+  unfold MessagesReached
+  refine le_trans (ENNReal.ofReal_le_ofReal ((Claims.Pr_mono fun s hs => ?_).trans
+    (Verity.Game.pr_exists_le (fun i => MissAt Fr Rd Acc Good i) (Finset.range (A.L.V.k x))))) ?_
+  · obtain ⟨hA, hG, hex⟩ := hs
+    have hlen := Claims.Recursion.run_length_le FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2
+    refine ⟨Nat.find hex, Finset.mem_range.2 (lt_of_lt_of_le (Nat.find_spec hex).1 hlen), hA, hG,
+      (Nat.find_spec hex).1, (Nat.find_spec hex).2, fun j hj => ?_⟩
+    by_contra hne
+    exact Nat.find_min hex hj ⟨lt_trans hj (Nat.find_spec hex).1, hne⟩
+  · rw [ENNReal.ofReal_sum_of_nonneg fun i _ => Claims.Pr_nonneg _]
+    exact Finset.sum_le_sum fun i hi => h i (Finset.mem_range.1 hi)
+
+/-! ## Forking at one round
+
+On a finite space split into classes, where each member's message is a function of its class (`F`) and a sampler
+redraws a member of the same class uniformly (`res`), a member whose message is not its class's most likely one is at
+most as likely as the square root of two members of one class having two different messages. -/
+
+section Fork
+
+open Classical
+
+variable {X Y κ : Type} [Fintype X] [Fintype Y]
+
+/-- **The members of `x`'s class** under `cls`. -/
+noncomputable def classOf (cls : X → κ) (x : X) : Finset X := Finset.univ.filter fun x' => cls x' = cls x
+
+theorem mem_classOf (cls : X → κ) {x x' : X} : x' ∈ classOf cls x ↔ cls x' = cls x := by
+  simp [classOf]
+
+theorem classOf_card_pos (cls : X → κ) (x : X) : (0 : ℝ) < (classOf cls x).card :=
+  Nat.cast_pos.2 (Finset.card_pos.2 ⟨x, (mem_classOf cls).2 rfl⟩)
+
+theorem classOf_eq (cls : X → κ) {x x' : X} (h : cls x' = cls x) : classOf cls x' = classOf cls x := by
+  unfold classOf
+  rw [h]
+
+/-- **A sum is the sum of each member's class average.** -/
+theorem sum_classAvg (cls : X → κ) (g : X → ℝ) :
+    ∑ x, (∑ x' ∈ classOf cls x, g x') / (classOf cls x).card = ∑ x, g x := by
+  have h : ∀ x, (∑ x' ∈ classOf cls x, g x') / ((classOf cls x).card : ℝ) =
+      ∑ x', if cls x' = cls x then g x' / ((classOf cls x').card : ℝ) else 0 := by
+    intro x
+    rw [Finset.sum_div]
+    unfold classOf
+    rw [Finset.sum_filter]
+    refine Finset.sum_congr rfl fun x' _ => ?_
+    by_cases hx : cls x' = cls x
+    · rw [if_pos hx, if_pos hx, hx]
+    · rw [if_neg hx, if_neg hx]
+  rw [Finset.sum_congr rfl fun x _ => h x, Finset.sum_comm]
+  refine Finset.sum_congr rfl fun x' _ => ?_
+  rw [← Finset.sum_filter, Finset.sum_const, nsmul_eq_mul]
+  have hfe : (Finset.univ.filter fun x => cls x' = cls x) = classOf cls x' := by
+    unfold classOf
+    exact Finset.filter_congr fun _ _ => eq_comm
+  rw [hfe, mul_div_left_comm, div_self (classOf_card_pos cls x').ne', mul_one]
+
+/-- `x'` has a message, at `x`'s class, other than the class's most likely one. -/
+def bad (cls : X → κ) (F : κ → X → Option Msg) (v : κ → Msg) (x x' : X) : Prop :=
+  ∃ m, F (cls x) x' = some m ∧ m ≠ v (cls x)
+
+/-- `x` and `x'` have two different messages at `x`'s class. -/
+def fork (cls : X → κ) (F : κ → X → Option Msg) (x x' : X) : Prop :=
+  ∃ u w, F (cls x) x = some u ∧ F (cls x) x' = some w ∧ u ≠ w
+
+/-- The members of `x`'s class with a message other than its most likely one. -/
+noncomputable def badCount (cls : X → κ) (F : κ → X → Option Msg) (v : κ → Msg) (x : X) : ℝ :=
+  (((classOf cls x).filter (bad cls F v x)).card : ℝ)
+
+/-- The members of `x`'s class with a message other than `x`'s. -/
+noncomputable def forkCount (cls : X → κ) (F : κ → X → Option Msg) (x : X) : ℝ :=
+  (((classOf cls x).filter (fork cls F x)).card : ℝ)
+
+/-- **Fewer members differ from the most likely message than from any other.** -/
+theorem card_ne_le (s : Finset X) (f : X → Option Msg) (u v : Msg)
+    (h : (s.filter fun x => f x = some u).card ≤ (s.filter fun x => f x = some v).card) :
+    (s.filter fun x => ∃ m, f x = some m ∧ m ≠ v).card ≤ (s.filter fun x => ∃ m, f x = some m ∧ m ≠ u).card := by
+  have key : ∀ a, (s.filter fun x => f x = some a).card + (s.filter fun x => ∃ m, f x = some m ∧ m ≠ a).card =
+      (s.filter fun x => (f x).isSome).card := by
+    intro a
+    rw [← Finset.filter_card_add_filter_neg_card_eq_card (s := s.filter fun x => (f x).isSome)
+      (fun x => f x = some a), Finset.filter_filter, Finset.filter_filter]
+    congr 2
+    · exact Finset.filter_congr fun x _ => by cases f x <;> simp
+    · exact Finset.filter_congr fun x _ => by cases f x <;> simp
+  have hu := key u
+  have hv := key v
+  omega
+
+/-- **The forking bound**: where each class's sampler is uniform on it (`hunif`), `v` is each class's most likely
+message (`hmode`) and a miss has a message other than its class's most likely one (`hmiss`), a miss is at most as
+likely as the square root of a member and a redrawn member of its class having two different messages. -/
+theorem miss_le_sqrt [Nonempty X] [Nonempty Y] (cls : X → κ) (res : X → Y → X) (F : κ → X → Option Msg)
+    (v : κ → Msg) (Miss : X → Prop)
+    (hunif : ∀ x (φ : X → ℝ), (∑ y, φ (res x y)) * (classOf cls x).card =
+      Fintype.card Y * ∑ x' ∈ classOf cls x, φ x')
+    (hmode : ∀ x m, ((classOf cls x).filter fun x' => F (cls x) x' = some m).card ≤
+      ((classOf cls x).filter fun x' => F (cls x) x' = some (v (cls x))).card)
+    (hmiss : ∀ x, Miss x → bad cls F v x x) :
+    Claims.Pr Miss ≤ Real.sqrt (Claims.Pr fun s : X × Y => fork cls F s.1 (res s.1 s.2)) := by
+  have hn : (0 : ℝ) < Fintype.card X := Nat.cast_pos.2 Fintype.card_pos
+  have hm : (0 : ℝ) < Fintype.card Y := Nat.cast_pos.2 Fintype.card_pos
+  have hN : ∀ x, (0 : ℝ) < (classOf cls x).card := classOf_card_pos cls
+  have hA : Claims.Pr Miss ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card X := by
+    rw [Claims.Pr_eq_sum]
+    refine div_le_div_of_nonneg_right ?_ hn.le
+    calc (∑ x, if Miss x then (1 : ℝ) else 0) ≤ ∑ x, if bad cls F v x x then (1 : ℝ) else 0 :=
+          Finset.sum_le_sum fun x _ => by
+            by_cases hx : Miss x
+            · rw [if_pos hx, if_pos (hmiss x hx)]
+            · rw [if_neg hx]
+              split_ifs <;> norm_num
+      _ = ∑ x, badCount cls F v x / (classOf cls x).card := by
+          rw [← sum_classAvg cls (fun x => if bad cls F v x x then (1 : ℝ) else 0)]
+          refine Finset.sum_congr rfl fun x _ => ?_
+          rw [Finset.sum_boole]
+          unfold badCount
+          congr 3
+          exact Finset.filter_congr fun x' hx' => by
+            rw [mem_classOf] at hx'
+            unfold bad
+            rw [hx']
+  have hrow : ∀ x, (∑ y, if fork cls F x (res x y) then (1 : ℝ) else 0) =
+      Fintype.card Y * (forkCount cls F x / (classOf cls x).card) := by
+    intro x
+    have h1 := hunif x fun x' => if fork cls F x x' then 1 else 0
+    have h2 : (∑ x' ∈ classOf cls x, if fork cls F x x' then (1 : ℝ) else 0) = forkCount cls F x := by
+      rw [Finset.sum_boole]
+      rfl
+    rw [h2] at h1
+    rw [mul_div_assoc', eq_div_iff (hN x).ne']
+    exact h1
+  have hge : ∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2 ≤
+      ∑ x, forkCount cls F x / (classOf cls x).card := by
+    rw [← sum_classAvg cls (fun x => forkCount cls F x / (classOf cls x).card)]
+    refine Finset.sum_le_sum fun x _ => ?_
+    have hstep : ∀ x'' ∈ (classOf cls x).filter (bad cls F v x), badCount cls F v x ≤ forkCount cls F x'' := by
+      intro x'' hx''
+      obtain ⟨hcx, u, hu, -⟩ := Finset.mem_filter.1 hx''
+      have hc : cls x'' = cls x := (mem_classOf cls).1 hcx
+      unfold badCount forkCount
+      rw [classOf_eq cls hc]
+      refine Nat.cast_le.2 (le_of_le_of_eq (card_ne_le (classOf cls x) (F (cls x)) u (v (cls x)) (hmode x u)) ?_)
+      congr 1
+      refine Finset.filter_congr fun x' _ => ?_
+      unfold fork
+      constructor
+      · rintro ⟨w, hw, hne⟩
+        exact ⟨u, w, by rw [hc, hu], by rw [hc]; exact hw, Ne.symm hne⟩
+      · rintro ⟨u', w, hu', hw, hne⟩
+        rw [hc, hu] at hu'
+        rw [hc] at hw
+        cases hu'
+        exact ⟨w, hw, Ne.symm hne⟩
+    have hsq : badCount cls F v x ^ 2 ≤ ∑ x'' ∈ classOf cls x, forkCount cls F x'' := by
+      calc badCount cls F v x ^ 2
+            = ∑ _x'' ∈ (classOf cls x).filter (bad cls F v x), badCount cls F v x := by
+              rw [Finset.sum_const, nsmul_eq_mul, sq]
+              rfl
+        _ ≤ ∑ x'' ∈ (classOf cls x).filter (bad cls F v x), forkCount cls F x'' := Finset.sum_le_sum hstep
+        _ ≤ ∑ x'' ∈ classOf cls x, forkCount cls F x'' :=
+            Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) fun _ _ _ => by
+              unfold forkCount
+              positivity
+    have hcl : ∀ x'' ∈ classOf cls x, forkCount cls F x'' / ((classOf cls x'').card : ℝ) =
+        forkCount cls F x'' / ((classOf cls x).card : ℝ) := fun x'' hx'' => by
+      rw [classOf_eq cls ((mem_classOf cls).1 hx'')]
+    rw [Finset.sum_congr rfl hcl, ← Finset.sum_div, div_div, div_pow, ← sq]
+    exact div_le_div_of_nonneg_right hsq (by positivity)
+  have hB : (∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) / Fintype.card X ≤
+      Claims.Pr fun s : X × Y => fork cls F s.1 (res s.1 s.2) := by
+    rw [Claims.Pr_eq_sum, Fintype.sum_prod_type, Fintype.card_prod, Nat.cast_mul]
+    dsimp only
+    rw [Finset.sum_congr rfl fun x _ => hrow x, ← Finset.mul_sum, mul_comm (Fintype.card X : ℝ), ← div_div,
+      mul_div_cancel_left₀ _ hm.ne']
+    exact div_le_div_of_nonneg_right hge hn.le
+  have hCS : (∑ x, badCount cls F v x / (classOf cls x).card) ^ 2 ≤
+      (Fintype.card X : ℝ) * ∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2 := by
+    have := Finset.sum_mul_sq_le_sq_mul_sq Finset.univ (fun _ => (1 : ℝ))
+      (fun x => badCount cls F v x / (classOf cls x).card)
+    simpa [Finset.card_univ] using this
+  have hA0 : 0 ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card X :=
+    div_nonneg (Finset.sum_nonneg fun x _ => div_nonneg (by unfold badCount; positivity) (hN x).le) hn.le
+  calc Claims.Pr Miss ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card X := hA
+    _ = Real.sqrt (((∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card X) ^ 2) :=
+        (Real.sqrt_sq hA0).symm
+    _ ≤ Real.sqrt (Claims.Pr fun s : X × Y => fork cls F s.1 (res s.1 s.2)) := by
+        refine Real.sqrt_le_sqrt ?_
+        rw [div_pow]
+        calc (∑ x, badCount cls F v x / (classOf cls x).card) ^ 2 / (Fintype.card X : ℝ) ^ 2
+            ≤ ((Fintype.card X : ℝ) * ∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) /
+                (Fintype.card X : ℝ) ^ 2 := div_le_div_of_nonneg_right hCS (by positivity)
+          _ = (∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) / Fintype.card X := by
+              rw [sq (Fintype.card X : ℝ), mul_div_mul_left _ _ hn.ne']
+          _ ≤ _ := hB
+
+end Fork
+
+/-! ## The frame's prover at one round -/
+
+section Mode
+
+open Classical
+
+/-- **The most likely value is at least as frequent as any other.** -/
+theorem modeOn_spec {β : Type} [Fintype β] (S : β → Prop) (f : β → Option Msg) (m : Msg) :
+    (Finset.univ.filter fun b => S b ∧ f b = some m).card ≤
+      (Finset.univ.filter fun b => S b ∧ f b = some (modeOn S f)).card := by
+  by_cases hex : ∃ m b, S b ∧ f b = some m
+  · have hP : ∃ m₀, (∃ b, S b ∧ f b = some m₀) ∧ ∀ m', (Finset.univ.filter fun b => S b ∧ f b = some m').card ≤
+        (Finset.univ.filter fun b => S b ∧ f b = some m₀).card := by
+      obtain ⟨m₁, b₁, hb₁⟩ := hex
+      have hne : ((Finset.univ.filter S).biUnion fun b => (f b).toFinset).Nonempty :=
+        ⟨m₁, Finset.mem_biUnion.2 ⟨b₁, by simp [hb₁.1], by simp [hb₁.2]⟩⟩
+      obtain ⟨m₀, hm₀, hmax⟩ := Finset.exists_max_image _
+        (fun m => (Finset.univ.filter fun b => S b ∧ f b = some m).card) hne
+      refine ⟨m₀, ?_, fun m' => ?_⟩
+      · obtain ⟨b, hb, hfb⟩ := Finset.mem_biUnion.1 hm₀
+        exact ⟨b, (Finset.mem_filter.1 hb).2, Option.mem_toFinset.1 hfb⟩
+      · by_cases hm' : m' ∈ (Finset.univ.filter S).biUnion fun b => (f b).toFinset
+        · exact hmax m' hm'
+        · have h0 : (Finset.univ.filter fun b => S b ∧ f b = some m') = ∅ := by
+            refine Finset.filter_eq_empty_iff.2 fun b _ hb => hm' ?_
+            exact Finset.mem_biUnion.2 ⟨b, by simp [hb.1], by simp [hb.2]⟩
+          rw [h0, Finset.card_empty]
+          exact Nat.zero_le _
+    unfold modeOn
+    rw [if_pos hex]
+    exact (Classical.epsilon_spec hP).2 m
+  · have h0 : (Finset.univ.filter fun b => S b ∧ f b = some m) = ∅ :=
+      Finset.filter_eq_empty_iff.2 fun b _ hb => hex ⟨m, b, hb⟩
+    rw [h0, Finset.card_empty]
+    exact Nat.zero_le _
+
+theorem shows_merge {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) (y : Coins A x) : Shows hist (merge hist y) := by
+  intro j c h
+  simp only [merge, h, Option.getD_some]
+
+theorem merge_of_shows {A : Live₂} {x : Msg} {hist : List (Msg × Msg)} {r : Coins A x} (h : Shows hist r) :
+    merge hist r = r := by
+  funext j
+  unfold merge
+  rcases hs : shownAt hist j.val with _ | c
+  · rfl
+  · exact (h j c hs).symm
+
+/-- **Every coin the history shows fixes as many redraws**: the redraws that `merge` takes to two coins the history
+shows are as many. -/
+theorem fiber_card {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) {r r' : Coins A x} (hr : Shows hist r)
+    (hr' : Shows hist r') :
+    (Finset.univ.filter fun y => merge hist y = r).card = (Finset.univ.filter fun y => merge hist y = r').card := by
+  refine Finset.card_nbij' (fun y j => if (shownAt hist j.val).isSome then y j else r' j)
+    (fun y j => if (shownAt hist j.val).isSome then y j else r j) ?_ ?_ ?_ ?_
+  · intro y hy
+    simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq, Finset.mem_filter] at hy ⊢
+    funext j
+    unfold merge
+    rcases hs : shownAt hist j.val with _ | c
+    · simp
+    · exact (hr' j c hs).symm
+  · intro y hy
+    simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq, Finset.mem_filter] at hy ⊢
+    funext j
+    unfold merge
+    rcases hs : shownAt hist j.val with _ | c
+    · simp
+    · exact (hr j c hs).symm
+  · intro y hy
+    simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq, Finset.mem_filter] at hy
+    funext j
+    rcases hs : shownAt hist j.val with _ | c
+    · have := congrFun hy j
+      simp only [merge, hs, Option.getD_none] at this
+      simp [hs, this]
+    · simp [hs]
+  · intro y hy
+    simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq, Finset.mem_filter] at hy
+    funext j
+    rcases hs : shownAt hist j.val with _ | c
+    · have := congrFun hy j
+      simp only [merge, hs, Option.getD_none] at this
+      simp [hs, this]
+    · simp [hs]
+
+/-- **`merge` redraws uniformly among the coins the history shows.** -/
+theorem sum_merge {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) (φ : Coins A x → ℝ) :
+    (∑ y, φ (merge hist y)) * ((Finset.univ.filter fun r => Shows hist r).card : ℝ) =
+      (Fintype.card (Coins A x) : ℝ) * ∑ r ∈ Finset.univ.filter (fun r => Shows hist r), φ r := by
+  have hS : ∀ y ∈ (Finset.univ : Finset (Coins A x)),
+      merge hist y ∈ Finset.univ.filter fun r => Shows hist r :=
+    fun y _ => Finset.mem_filter.2 ⟨Finset.mem_univ _, shows_merge hist y⟩
+  have hfib : ∀ ψ : Coins A x → ℝ, ∑ y, ψ (merge hist y) =
+      ((Finset.univ.filter fun y => merge hist y = complete hist).card : ℝ) *
+        ∑ r ∈ Finset.univ.filter (fun r => Shows hist r), ψ r := by
+    intro ψ
+    rw [← Finset.sum_fiberwise_of_maps_to hS (fun y => ψ (merge hist y)), Finset.mul_sum]
+    refine Finset.sum_congr rfl fun r hr => ?_
+    rw [Finset.sum_congr rfl (fun y hy => by rw [(Finset.mem_filter.1 hy).2]), Finset.sum_const, nsmul_eq_mul,
+      fiber_card hist (Finset.mem_filter.1 hr).2 (shows_merge hist _)]
+    rfl
+  have h1 := hfib fun _ => 1
+  simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_one] at h1
+  rw [hfib φ, h1]
+  ring
+
+end Mode
+
 /-! ## The miss at one round -/
 
 /-- **The message the check reads opens the digest the play records** (the form's parse's, and the sessions' reading
@@ -259,35 +579,44 @@ def DigestBefore {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArray} {F : 
   ∀ (ω : TapeOf V θ F c σ) (r r' : Coins A x), Acc (Fr.out ω r) → Good (Fr.out ω r) →
     Shows (playHist A x r (playMsgs Rd (Fr.out ω r)) i) r' → Dg (Fr.out ω r') i = Dg (Fr.out ω r) i
 
-/-- **The verifier's answers depend on the run's coins only through the coins they show** (a fact about `SpotFlock.V`:
-an answer is a coin's bytes, or a function of the messages and the coins earlier answers showed): at any prover, two
-run coins that agree with every coin the history before round `i` shows give the same rounds before `i`. -/
+/-- **The verifier's answers show the run's coins, and depend on them only through what they show** (a fact about
+`SpotFlock.V`: an answer is its round's coin's bytes, or a function of the messages and the coins earlier answers
+showed): at any prover, the run's coins agree with every coin its history before round `i` shows, and any coins that
+do give the same rounds before `i`. -/
 def RunShown (A : Live₂) (x : Msg) : Prop :=
-  ∀ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r r' : Coins A x) (i : ℕ),
-    Shows (runHist (Claims.run FlockDeploy.sha512 P A.L.V x ω r) i) r' →
-      (Claims.run FlockDeploy.sha512 P A.L.V x ω r').msgs.take i =
-        (Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.take i
+  ∀ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Coins A x) (i : ℕ),
+    Shows (runHist (Claims.run FlockDeploy.sha512 P A.L.V x ω r) i) r ∧
+      ∀ r', Shows (runHist (Claims.run FlockDeploy.sha512 P A.L.V x ω r) i) r' →
+        (Claims.run FlockDeploy.sha512 P A.L.V x ω r').msgs.take i =
+          (Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.take i
+
+/-- **The frame's run's history before round `i`**, at the tape `ω` and the run's coins `r`. -/
+noncomputable def histAt (V : Vocab d α) {A : Live₂} {x : Msg} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ)
+    (Rd : Reading A) (Dg : Verity.Exchange → ℕ → Option Msg) (i : ℕ) (ω : TapeOf V θ F c σ) (r : Coins A x) :
+    List (Msg × Msg) :=
+  runHist (Claims.run FlockDeploy.sha512 (prover V θ F c σ place Rd Dg) A.L.V x ω r) i
 
 /-- **Round `i`'s two-continuation finder**, at `q` SHA-512 calls on every coin: on a tape `ω` and run coins `r` and
-`y`, the play's history before round `i` at `r`, and the coins it shows with `y` at every other round (`merge`); its
-output the two messages the plays at the two coins read at round `i` that open the history's digest, where they
-differ. -/
+`y`, the frame's run's history before round `i` at `r`, and the coins it shows with `y` at every other round
+(`merge`); its output the two messages the plays at the two coins read at round `i` that open the history's digest,
+where they differ. -/
 noncomputable def msgFinder (V : Vocab d α) {A : Live₂} {x : Msg} (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ) (Rd : Reading A)
     (Dg : Verity.Exchange → ℕ → Option Msg) (i q : ℕ) : Claims.Finder where
-  S := TapeOf V θ F c σ × Coins A x × Coins A x
+  S := (TapeOf V θ F c σ × Coins A x) × Coins A x
   out s :=
-    let hist := playHist A x s.2.1 (playMsgs Rd (outOf V θ F c σ place s.1 s.2.1)) i
-    match opening (outOf V θ F c σ place) Rd Dg i s.1 hist s.2.1,
-      opening (outOf V θ F c σ place) Rd Dg i s.1 hist (merge hist s.2.2) with
+    match opening (outOf V θ F c σ place) Rd Dg i s.1.1 (histAt V θ F c σ place Rd Dg i s.1.1 s.1.2) s.1.2,
+      opening (outOf V θ F c σ place) Rd Dg i s.1.1 (histAt V θ F c σ place Rd Dg i s.1.1 s.1.2)
+        (merge (histAt V θ F c σ place Rd Dg i s.1.1 s.1.2) s.2) with
     | some m, some m' => if m = m' then none else some (m, m')
     | _, _ => none
   cost _ := q
 
 /-- **Round `i`'s miss is at most the square root of its finder's success**: at the frame's prover, where the message
 the check reads opens the digest the play records, the digest for round `i` is fixed by the coins the history before
-it shows, and the verifier's answers depend on the coins only through those they show. -/
+it shows, and the verifier's answers show the run's coins and depend on them only through what they show. -/
 def MissBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) : Prop :=
   ∀ (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
@@ -299,9 +628,9 @@ def MissBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Arr
 /-! ## The messages' bound -/
 
 /-- **The messages' bound at the frame's prover**: where the message the check reads opens the digest the play records,
-each round's digest is fixed by the coins the history before it shows, the verifier's answers depend on the coins only
-through those they show, and the run reaches every round, `MessagesFixed` holds at the sum over the rounds of the
-square roots of their finders' successes. -/
+each round's digest is fixed by the coins the history before it shows, the verifier's answers show the run's coins and
+depend on them only through what they show, and the run reaches every round, `MessagesFixed` holds at the sum over
+the rounds of the square roots of their finders' successes. -/
 def MessagesBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) : Prop :=
   ∀ (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
@@ -312,13 +641,12 @@ def MessagesBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F :
         (∑ i ∈ Finset.range (A.L.V.k x),
           ENNReal.ofReal (Real.sqrt ((msgFinder V θ F c σ place Rd Dg i q).Pr Verity.sha512Msg)))
 
-/-- **The messages' bound from its two steps**: the messages fixed at the rounds the run reaches, round by round, and
-each round's miss. -/
+/-- **The messages' bound from each round's miss.** -/
 theorem messagesBound_of (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (V.game θ F c)) (hR : ReachedOfRounds V A x θ F c σ) (hM : MissBound V A x θ F c σ) :
+    (σ : Verity.Game.Strategy (V.game θ F c)) (hM : MissBound V A x θ F c σ) :
     MessagesBound V A x θ F c σ := by
   intro place Rd Acc Good Dg q hO hB hS hT
   exact messagesFixed_of_reached V A x θ F c σ _ Rd Acc Good _ hT
-    (hR _ Rd Acc Good _ fun i hi => hM place Rd Acc Good Dg i q hO (hB i hi) hS)
+    (reachedOfRounds V A x θ F c σ _ Rd Acc Good _ fun i hi => hM place Rd Acc Good Dg i q hO (hB i hi) hS)
 
 end Verity.SampledTwo.Messages
