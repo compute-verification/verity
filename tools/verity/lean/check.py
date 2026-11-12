@@ -1471,7 +1471,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for n in sorted(set(listed_escapes) - set(found)):
         fails.append(Failure("escape.stale", n, f"escape: {n} is listed under `escapes` but is not one; remove the entry"))
     fails += verifier_failures(policy.get("verifier"), facts.get("verifier"), update)
-    fails += claim_failures(policy, facts) + witness_failures(policy, facts, own)
+    fails += claim_failures(policy, facts)
+    fails += [x for x in witness_failures(policy, facts, own) if not (update and x.code == "witnesses.unwitnessed-unlisted")]
     fails += four_name_failures(policy, facts)
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
@@ -2314,10 +2315,14 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     other, with or without `--update`. An entry {type_hash, missing, why} exempts only the half `missing` names, of a
     guarantee whose `witnesses` entry lists the other (`unwitnessed_entry`). An entry beside the witnesses it would exempt,
     or of a witness, does nothing (the witnesses are held to their form) and `--update` drops it, so a PR that brings
-    witnesses and one that lists the guarantee land in either order. An entry whose guarantee the lock doesn't list yet
-    stands for one a PR ahead on `next` brings. `--update` keeps an entry only while its guarantee is in scope without witnesses and says the same
-    (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, so the list only shrinks
-    (`tests/test_lean_packages.py` holds its size)."""
+    witnesses and one that lists the guarantee land in either order. An entry of a name the lock's `guarantees` doesn't
+    list exempts nothing today, and would exempt a guarantee listed under that name later with the same statement: it
+    fails `witnesses.unwitnessed-unlisted`, as a `witnesses` entry of no guarantee fails `witnesses.stale`, and `--update`
+    drops it, its own audit not failing on it (`judge`). `--update` keeps an entry only while its guarantee is in scope
+    without witnesses and says the same (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, so the list
+    only shrinks (`tests/test_lean_packages.py` holds its size). A merge can drop the entry of a guarantee one side
+    still lists: for that case alone the failure of a guarantee without witnesses (`witnesses.missing`) prints the entry
+    at its statement as built, in the form the lock run writes (`repaired`), to be written back."""
     ws, allow = policy.get("witnesses", {}), policy.get("unwitnessed", {})
     if not isinstance(ws, dict) or not isinstance(allow, dict):
         return [Failure("witnesses.form", None, "witnesses: `witnesses` is {guarantee: {honest: [theorem], nontrivial: "
@@ -2326,6 +2331,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     for g in sorted(set(ws) - set(guarantees)):
         fails.append(Failure("witnesses.stale", g, f"witnesses: `witnesses` lists {g}, which is not a guarantee of this "
                              f"package; remove the entry"))
+    for g in sorted(set(allow) - set(guarantees)):
+        fails.append(Failure("witnesses.unwitnessed-unlisted", g, f"witnesses: `unwitnessed` lists {g}, which is not a "
+                             f"guarantee of this package; run `check.py --update`, which drops the entry, or remove it"))
     for g in sorted(g for g, v in allow.items() if unwitnessed_entry(v) is None):
         fails.append(Failure("witnesses.form", g, f"witnesses: unwitnessed[{g}] is its type hash, or {{type_hash, missing: "
                              f"honest or nontrivial, why}} for a guarantee whose `witnesses` entry lacks that half, each "
@@ -2370,8 +2378,14 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             skip = half
         if g not in ws:
             if why:
+                unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
+                back = pin.get("type_sha256")
+                back = {"type_hash": back, "unfolded_hash": unfolded} if unfolded else back
                 fails.append(Failure("witnesses.missing", g, f"witnesses: {g} lists no witnesses that it says something, "
-                                     f"and the rule holds it to them ({why}): {witness_shapes(g, pin, policy, own)}"))
+                                     f"and the rule holds it to them ({why}): {witness_shapes(g, pin, policy, own)}. "
+                                     f"Only if `unwitnessed` listed it and a merge dropped the entry, write the entry "
+                                     f"back: {json.dumps({g: back}, ensure_ascii=False)[1:-1]}; a new guarantee gets "
+                                     f"its witnesses, not an entry (`UNWITNESSED` only shrinks)"))
             continue
         w = ws[g]
         honest = w.get("honest") if isinstance(w, dict) else None
@@ -2526,15 +2540,14 @@ def instance_failure(n: str, g: str, role: str, binders: int, allowed: int) -> F
 def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
     """The `unwitnessed` entries an `--update` writes: each of a guarantee still in scope without witnesses (`witness_scope`)
     whose statement is the one it was listed with, under the hash of its new record (``kept``) when it says the same under
-    another (moved, `--moved`, or lifted, `lifted_into`), and each of a guarantee the lock doesn't list yet, as it is (one a
-    PR ahead on `next` brings). An entry without `unfolded_hash` of a guarantee whose statement is a definition gets one
-    only when its hash is that of the statement unfolded (the text before a lift), never at its type hash, which a
-    restated body leaves as it is. Every other entry drops, and none is added."""
+    another (moved, `--moved`, or lifted, `lifted_into`). An entry without `unfolded_hash` of a guarantee whose statement is
+    a definition gets one only when its hash is that of the statement unfolded (the text before a lift), never at its type
+    hash, which a restated body leaves as it is. Every other entry drops, one of a name that is neither a guarantee of the
+    lock nor among the records the update writes (``kept``) with them, and none is added."""
     out, ws, guarantees = {}, policy.get("witnesses") or {}, policy.get("guarantees") or {}
     wit = claim_witnesses(policy)
     for g, v in sorted((policy.get("unwitnessed") or {}).items()):
         if g not in guarantees and g not in kept:
-            out[g] = v
             continue
         h, half = unwitnessed_entry(v) or (None, None)
         pin, rec, new = facts["pins"].get(g, {}), guarantees.get(g) or {}, kept.get(g) or {}
@@ -3095,6 +3108,7 @@ BOOKKEEPING = Codes({
     "open.unlisted", "assumptions.outside-module", "domain.uncovered", "open.seed",    # under `open`, on the default ticket
     "witnesses.missing", "witnesses.unwitnessed-changed",                              # under `unwitnessed`, as it is now
     "witnesses.stale", "witnesses.assumed-stale", "shape.properties-stale", "shape.frozen-stale",   # dropped
+    "witnesses.unwitnessed-unlisted",                                                  # dropped from `unwitnessed`
     "guarantees.no-owner", "assumptions.no-owner", "open.no-owner", "domain.no-owner",               # owned
     "trust.gap-gone", "trust.gap-stale",                                               # dropped from `trust_gap`
 })
@@ -3126,9 +3140,9 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     listed under `open` on ``ticket`` (`bookkeeping_ticket`; `open_seed` first, which goes), an entry without an owner given
     its guarantees' (the first, of several) or ``ticket``'s, each guarantee failing `witnesses.missing` or
     `witnesses.unwitnessed-changed` under `unwitnessed` with its statement's hashes as built, each entry of no guarantee
-    (`witnesses.stale`, `witnesses.assumed-stale`, `shape.properties-stale`, `shape.frozen-stale`) dropped, and `trust_gap`
-    as an update keeps it (`trust_gap_kept`).  The audit then judges the package on it (`audit`): what still fails there
-    fails."""
+    (`witnesses.stale`, `witnesses.assumed-stale`, `shape.properties-stale`, `shape.frozen-stale`; an `unwitnessed` one,
+    `witnesses.unwitnessed-unlisted`, as the update drops it) dropped, and `trust_gap` as an update keeps it
+    (`trust_gap_kept`).  The audit then judges the package on it (`audit`): what still fails there fails."""
     new = judge(policy, facts, files, update=True, ticket=ticket)[1]
     out = policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "unwitnessed",
                                         "trust_gap") if k in new}
@@ -3189,6 +3203,8 @@ def bookkeeping_repairs(fails: list[str], lock: dict, ticket: dict, was: dict | 
                     f"`open_default_issue`: the next PR gives it one")
         elif c == "open.seed":
             what = "`open_seed` consumed"
+        elif c == "witnesses.unwitnessed-unlisted":
+            what = "its `unwitnessed` entry dropped: no guarantee has it"
         elif c.startswith("witnesses.") and c not in ("witnesses.stale", "witnesses.assumed-stale"):
             what = "listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and `nontrivial` witnesses"
         elif c == "trust.gap-gone":
