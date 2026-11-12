@@ -7,9 +7,13 @@ The Program is the training-step frontend's step (`step_program`) as the body of
 parameters and AdamW's two moments, each iteration's inputs its three scalars and its batch, the rope tables shared. Its
 work an iteration is what a third iteration adds to two, the iteration a trace's step stands for (its weights an update
 away from θ). Both readings are in one unit: the trace's rows priced at f32, the Program's dtype, and |C| in Boolean
-gates on both sides. The Program's reading is never above the trace's: every product it charges is one the trace's M
-holds, with no more MACs and no larger β on either operand, and its blocks at the trace's F are at most the trace
-figure's. Where they differ, the Program's is below, each for one cause:
+gates on both sides. The Program is read under three statements (`STATED`): nothing beside it, its layout
+(`work.Layout`: the batch's words as rows by positions), and the layout naming the rope tables positional, a premise
+the reading lists. Under each, the Program's reading is never above the trace's: every product it charges is one the
+trace's M holds, with no more MACs and no larger β on either operand, and its blocks at the trace's F, and at its own,
+are at most what the trace's M gives under the same choice of sub-work. With nothing stated or the layout alone it
+charges nothing. With the rope tables named its blocks can exceed `he_figure`'s, which keeps one of three sub-works by
+its ρ rather than by blocks. Where the readings differ, the Program's is below, each for one cause:
 
 - Rates: each product's operands are paid at most what the trace pays any product of its shape. Attention's scores
   multiply two activations, which `gemm_rate` prices at the least of attention's form and each single token side's,
@@ -17,7 +21,9 @@ figure's. Where they differ, the Program's is below, each for one cause:
 - Gathered rows: every product of two operands that depend on θ′ reads the embedding's rows, which no op a Program
   states can be shown to make position-specific (the rope tables are inputs of unstated values, the causal mask a
   constant laid along an axis the Program doesn't name), so the Program charges nothing on this step; the trace's M
-  holds its products after the rope and the mask.
+  holds its products after the rope and the mask. The layout alone changes nothing: every member of the mask's batch
+  reads two positions' rows, a query's and a key's. Naming the rope tables makes Q and K specific, and the Program
+  charges the projections downstream of them, leaving the gathered products where the trace does.
 - The dots only the Program writes as products: the softmax's backward, two `DotRef`s a row, carries the same rows,
   and the sums and means the frontend writes as a product with a repeated constant are `θ`'s.
 - The head's products and attention's: from `HEAD_K` the Program gives no bound, since it doesn't say which products
@@ -113,9 +119,9 @@ def _key(g: WK.Group) -> tuple:
     return (g.product, g.widths, g.weight, g.out_width, g.k_dim, g.dims, g.rates, g.bits, g.beta, g.reason)
 
 
-def iteration(step: Program, k: float) -> WK.Work:
+def iteration(step: Program, k: float, layout: WK.Layout | None = None) -> WK.Work:
     """The work a third iteration adds to two, at k."""
-    two, three = WK.read(loop(step, 2), k), WK.read(loop(step, 3), k)
+    two, three = WK.read(loop(step, 2), k, layout=layout), WK.read(loop(step, 3), k, layout=layout)
     before = {_key(g): g for g in two.products}
     out = []
     for g in three.products:
@@ -123,7 +129,7 @@ def iteration(step: Program, k: float) -> WK.Work:
         g = dataclasses.replace(g, macs=g.macs - (b.macs if b else 0), wires=g.wires - (b.wires if b else 0))
         if g.macs:
             out.append(g)
-    return WK.Work(k, three.gates - two.gates, out, three.r_step, three.keep)
+    return WK.Work(k, three.gates - two.gates, out, three.r_step, three.keep, layout, three.premises)
 
 
 def primitives(step: Program) -> Counter:
@@ -151,10 +157,17 @@ def primitives(step: Program) -> Counter:
     return Counter({k: n * sum(compile_bits(boolean_version(by_id[k[1]])).counts.values()) for k, n in counts.items()})
 
 
+#: what is stated beside the Program: nothing; the batch's layout, two rows of positions; and the layout naming the
+#: rope tables positional
+STATED = {"nothing": None, "layout": WK.Layout("batch", *BATCH),
+          "rope": WK.Layout("batch", *BATCH, ("buf_cos", "buf_sin"))}
+
+
 @dataclasses.dataclass
 class Reading:
     step: Program
-    #: by k: the Program's work an iteration, the trace's priced rows, `he_of_rows`' M and `he_figure`'s figure
+    #: by (statement, k): the Program's work an iteration; by k: the trace's priced rows, `he_of_rows`' M and
+    #: `he_figure`'s figure
     work: dict
     rows: dict
     he: dict
@@ -179,7 +192,8 @@ def readings() -> Reading:
         r.rows[k] = [products.priced(row, None) for row in blk["rows"]]
         r.he[k] = F.he_of_rows(r.rows[k], k, None, g.tokens)
         r.fig[k] = F.he_figure(r.he[k], C, size)
-        r.work[k] = iteration(step, k)
+        for name, lay in STATED.items():
+            r.work[name, k] = iteration(step, k, lay)
     return r
 
 
@@ -191,11 +205,53 @@ def _ordered(beta, weight) -> tuple:
     return tuple(sorted((a, b), reverse=True))
 
 
-def held(g: WK.Group, he: dict) -> bool:
-    """Whether the trace's M holds a group of ``g``'s kinds and contraction with at least its MACs and β."""
-    mine = _ordered(g.beta, g.weight)
-    return any(t["weight"] == list(g.weight) and t["k_dim"] == g.k_dim and t["macs"] >= g.macs and
-               all(m <= th + 1e-9 for m, th in zip(mine, _ordered(t["beta"], t["weight"]))) for t in he["groups"])
+def fits(work: WK.Work, he: dict) -> bool:
+    """Whether the trace's M holds every group the Program charges: its MACs (a token-indexed group's at the work's
+    `keep`, as M's are) go into M's groups of its kinds and contraction whose β is at least its own on each operand,
+    none past its MACs (a flow from the charged groups to M's)."""
+    mine = [(g, g.macs * (1.0 if all(g.weight) else work.keep)) for g in work.groups]
+    theirs = he["groups"]
+    ok = [[j for j, t in enumerate(theirs) if t["weight"] == list(g.weight) and t["k_dim"] == g.k_dim and
+           all(m <= th + 1e-9 for m, th in zip(_ordered(g.beta, g.weight), _ordered(t["beta"], t["weight"])))]
+          for g, _m in mine]
+    left = [m for _g, m in mine]
+    room = [t["macs"] for t in theirs]
+    flow = {}
+    while True:
+        prev, queue, seen = {}, [("s", None)], {("s", None)}
+        end = None
+        while queue and end is None:
+            node = queue.pop(0)
+            if node[0] == "s":
+                nxt = [("g", i) for i, m in enumerate(left) if m > 1e-6]
+            elif node[0] == "g":
+                nxt = [("t", j) for j in ok[node[1]]]
+            else:
+                nxt = [("g", i) for i in range(len(mine)) if flow.get((i, node[1]), 0) > 1e-6]
+                if room[node[1]] > 1e-6:
+                    end = node
+                    break
+            for v in nxt:
+                if v not in seen:
+                    seen.add(v)
+                    prev[v] = node
+                    queue.append(v)
+        if end is None:
+            return all(m <= 1e-6 * max(1.0, sum(left)) for m in left)
+        path, v = [], end
+        while v != ("s", None):
+            path.append(v)
+            v = prev[v]
+        path.reverse()
+        amount = min([room[end[1]], left[path[0][1]]] +
+                     [flow[(b[1], a[1])] for a, b in zip(path, path[1:]) if a[0] == "t"])
+        for a, b in zip(path, path[1:]):
+            if a[0] == "g":
+                flow[(a[1], b[1])] = flow.get((a[1], b[1]), 0) + amount
+            else:
+                flow[(b[1], a[1])] -= amount
+        left[path[0][1]] -= amount
+        room[end[1]] -= amount
 
 
 def trace_blocks(fig: dict, k: float, size: float) -> float:
@@ -203,30 +259,50 @@ def trace_blocks(fig: dict, k: float, size: float) -> float:
                     b=fig["b_y"], F=fig["F"]).blocks if fig["N"] else 0.0
 
 
+def blocks(work: WK.Work, F_: float | None = None) -> float:
+    b = WK.bound(work, C, F=F_)
+    return b.bound.blocks if b else 0.0
+
+
+def trace_work(r: Reading, k: float) -> WK.Work:
+    """The trace's M as a work, each activation at most β(k) as `he_figure` charges it, its MACs already at M's share
+    a sequence's start leaves."""
+    bk = MC.beta(k)
+    return WK.Work(k, r.size, [WK.Group("trace", tuple(g["width"]), tuple(g["weight"]), g["b_y"], g["k_dim"], g["macs"],
+                                        g["wires"], frozenset(),
+                                        beta=tuple(b if w else min(b, bk) for b, w in zip(g["beta"], g["weight"])))
+                               for g in r.he[k]["groups"]])
+
+
 @pytest.mark.slow
 def test_the_programs_bound_is_never_above_the_traces(readings):
-    """Derives the step, captures it and reads both at each k (about a minute): what it catches is a Program reading
-    that charges work the trace's M doesn't hold, or a β above the trace's, at any k of the dial."""
+    """Derives the step, captures it and reads it under each statement at each k (about a minute): what it catches is
+    a Program reading, from the circuit alone or with its layout stated, that charges work the trace's M doesn't hold,
+    a β above the trace's, or more blocks than the trace's M gives under the same choice of sub-work and F, at any k of
+    the dial. With nothing stated, or the layout alone, it charges nothing."""
     r = readings
+    for (name, k), it in r.work.items():
+        assert fits(it, r.he[k]), (name, k)
+        own = WK.bound(it, C)
+        for F_ in {r.fig[k]["F"], own.bound.F if own else 1.0}:
+            assert blocks(it, F_) <= blocks(trace_work(r, k), F_), (name, k, F_)
+        assert trace_blocks(r.fig[k], k, r.size) > 0
     for k in KS:
-        it, he, fig = r.work[k], r.he[k], r.fig[k]
-        assert all(held(g, he) for g in it.groups)
-        theirs = trace_blocks(fig, k, r.size)
-        at_theirs, own = WK.bound(it, C, F=fig["F"]), WK.bound(it, C)
-        assert (at_theirs.bound.blocks if at_theirs else 0.0) <= theirs
-        assert (own.bound.blocks if own else 0.0) <= theirs
-        assert theirs > 0
+        assert r.work["nothing", k].groups == r.work["layout", k].groups == []
+        rope = r.work["rope", k]
+        assert rope.premises == ("buf_cos", "buf_sin") and rope.groups and all(g.weight == (False, True)
+                                                                                for g in rope.groups)
+        assert rope.left_out["gathered"] == r.he[k]["gathered_macs"]
 
 
 @pytest.mark.slow
 def test_every_product_pays_at_most_what_the_trace_pays_its_shape(readings):
     """Each of the Program's products (m, K, n) is a shape the trace has a product of, each operand's rate at most
-    the least the trace's products of that shape pay it, and every product with two θ′ operands carries the
-    embedding's rows, so the Program charges nothing."""
+    the least the trace's products of that shape pay it, under every statement; from the circuit alone, or with the
+    layout and no input named positional, every product with two θ′ operands carries the embedding's rows."""
     r = readings
     traced = sum(row["count"] * row["macs"] for row in r.rows[KS[0]])
-    for k in KS:
-        it = r.work[k]
+    for (name, k), it in r.work.items():
         lins = [g for g in it.products if g.product.startswith("LinearRef")]
         assert sum(g.macs for g in lins) == traced == r.he[k]["candidates_macs"]
         rows = [row for row in r.rows[k] if all(row["affected"])]
@@ -239,11 +315,11 @@ def test_every_product_pays_at_most_what_the_trace_pays_its_shape(readings):
                     if (dm, d["k"], dn) == (m, kk, n):
                         least = [min(least[0], ra), min(least[1], rb)]
             assert math.isfinite(least[0]), g.dims
-            assert g.rates[0] <= least[0] + 1e-9 and g.rates[1] <= least[1] + 1e-9, (g.dims, g.rates, least)
-        assert it.groups == [] and it.r_step is None
-        assert it.left_out["self"] == 0 and it.left_out["activations"] == 0
-        dots = [g for g in it.products if g.product.startswith("DotRef")]
-        assert {g.reason for g in lins} == {"gathered"} and {g.reason for g in dots} == {"gathered", "theta"}
+            assert g.rates[0] <= least[0] + 1e-9 and g.rates[1] <= least[1] + 1e-9, (name, g.dims, g.rates, least)
+        assert it.r_step is None and it.left_out["self"] == 0
+        if name != "rope":
+            dots = [g for g in it.products if g.product.startswith("DotRef")]
+            assert {g.reason for g in lins} == {"gathered"} and {g.reason for g in dots} == {"gathered", "theta"}
 
 
 @pytest.mark.slow
@@ -252,7 +328,7 @@ def test_both_sizes_are_boolean_gates_and_differ_by_what_each_prices(readings):
     their Definition's gates, and the rest of the Program's |C| is the trace's and the primitives no MAC of the
     trace's prices, less what the trace prices its elementwise MACs at beyond the Program's multiplies and divisions."""
     r = readings
-    step, it, rows, size = r.step, r.work[K0], r.rows[K0], r.size
+    step, it, rows, size = r.step, r.work["nothing", K0], r.rows[K0], r.size
     assert it.gates == WK.boolean_gates(step)
     split = primitives(step)
     assert sum(split.values()) == it.gates

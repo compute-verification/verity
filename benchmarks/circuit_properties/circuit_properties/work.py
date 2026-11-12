@@ -25,10 +25,11 @@ For `min_cut.bound`'s inputs it reads:
   and the product's token side.
 * Which are charged (`Work.groups`; the others are `Work.left_out` by why): a product both of whose operands depend on
   θ′ in every word ("theta" else), neither of which carries a gather's rows ("gathered"), whose operands are no one
-  array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op and
-  every carry, since no op a Program states can be shown to make them specific to a position (a mask's and a rope
-  table's positions are an axis the Program doesn't name). A weight gradient and attention's products are both
-  products of two activations, which a Program tells apart only by where their outputs go, which its author chooses.
+  array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op,
+  since no op a Program states can be shown to make them specific to a position (a mask's and a rope table's
+  positions are an axis the Program doesn't name), but not through a carry: a carried word reads no current input, so
+  it is no row's. A weight gradient and attention's products are both products of two activations, which a Program
+  tells apart only by where their outputs go, which its author chooses.
 * Each operand's `β`, as `he_of_rows` derives it from the rate ρ at the operand's width w (its type's, at most the
   source bits its values hold): w where ρ pays it, else w·ρ/(w + ρ). Where an adapter's rank shows (`Work.r_step`,
   the least contraction of a product of two θ′ operands that widens it 4K-fold or more, one of them reading no input,
@@ -53,6 +54,19 @@ word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F 
 Two limits follow. A Program with no scan has no carried word, so no θ′ and no bound. And from the circuit alone,
 every product downstream of a gather by the batch is left out: a model whose first op is a table lookup by its tokens
 is charged nothing.
+
+`Layout` states, beside the Program, the one thing that limit needs: which external input holds the tokens and how its
+words lay out as rows by positions (the last axis the positions). It is off by default, and under it rows become
+specific to a position by three rules and no other, none from an input's name, shape or size:
+
+* (a) A batch's members are positions only where data flow shows it: a member reads the gathered rows of one
+  position's index word, one to one; a member reading two positions' rows (a score's query and key) is none.
+* (b) Rows become specific at an op that combines them member by member over positions with a constant whose words,
+  as the Program states them, differ between the positions of a row.
+* (c) An external input whose values the Program doesn't state (the rope tables) makes nothing specific, unless the
+  layout names it positional: then the reading takes it and lists it in `Work.premises`, a premise it couldn't check.
+
+A specific value is no gather's rows, and any op one of whose arguments is specific gives a specific value.
 
 `bound` takes the most blocks over the sub-works whose products are at least a threshold β_w·β_x, at least a
 contraction length and of one kind or both, each at the least β_w·β_x, the least `b` and the ω of its own products,

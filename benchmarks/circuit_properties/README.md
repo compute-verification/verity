@@ -50,7 +50,10 @@ reaches; every input is free like θ (the carry is iterated to a fixed point, so
 distinct contexts do). A product is charged where both operands depend on θ′ in every word, neither carries a gather's
 rows, the two are no one array and not two activations; `Work.left_out` holds the rest by why. Its limits: a Program
 with no scan has no bound; and a gather's rows by the batch stay a gather's rows through every op, so from the circuit
-alone every product downstream of a model's table lookup is left out. `work.bound(work, c)` is the most blocks over its
+alone every product downstream of a model's table lookup is left out. `read(..., layout=work.Layout(...))` states,
+off by default, which input holds the tokens and how its words lay out as rows by positions, under which three rules
+(the module docstring's a, b and c) make rows specific to a position; an input it names positional is a premise the
+reading lists in `Work.premises`. `work.bound(work, c)` is the most blocks over its
 sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
 has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a
 training loop's reading beside its trace's, never above it.
