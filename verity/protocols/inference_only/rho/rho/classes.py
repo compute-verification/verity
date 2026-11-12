@@ -70,7 +70,7 @@ REFERENCE = "reference"
 
 @dataclass(frozen=True)
 class Structure:
-    """The elementary uncertified cap `q_U(U) = ω_max U / s_×`: what an uncertified or a unregistered gate holds under a bound
+    """The elementary uncertified cap `q_U(U) = ω_max U / s_×`: what an uncertified or an unregistered gate holds under a bound
     (`theorem`'s `u`), and the most any block holds, `u c`."""
 
     name: str

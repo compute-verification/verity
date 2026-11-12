@@ -1,5 +1,5 @@
 # The exclusion bound: the elementary uncertified cap q_U(U) = omega_max U / s_times (rho/classes.py Structure), what
-# an uncertified or a unregistered gate holds under a bound. A scenario picks one by `structure`, else structure.default.
+# an uncertified or an unregistered gate holds under a bound. A scenario picks one by `structure`, else structure.default.
 # s_times and units.gates_per_flop must come from one source (basis, as units.basis says it; Structure.check refuses a
 # mix): the bound holds a gate at u/w = omega_max 2G / (kappa s_times) of the reference's weight. A structure's
 # `evidence` (art: ids) is what measured its s_times, cited beside it.
