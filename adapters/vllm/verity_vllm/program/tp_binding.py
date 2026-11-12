@@ -92,7 +92,8 @@ def _segments(rs: list[tuple[str, int, int, int]], world: int, what: str) -> lis
     total = sum(hi - lo for *_, lo, hi in rs)
     if total % world:
         raise ValueError(f"{what}: its parts are {total} leaves, not {world} equal segments")
-    n, out, at = total // world, [[] for _ in range(world)], 0
+    n, at = total // world, 0
+    out: list[list[tuple[str, int, int, int]]] = [[] for _ in range(world)]
     for space, idx, lo, hi in rs:
         while lo < hi:
             seg, off = divmod(at, n)
@@ -178,8 +179,8 @@ def pair(ranks: Sequence[RankSites]) -> RequestBinding:
     for key in sorted(keys):
         ids = [x.fns[x.sites[key][0]].id for x in ranks]
         if len(set(ids)) != 1:
-            r = next(r for r, i in enumerate(ids) if i != ids[0])
-            raise ValueError(f"collective {key[0]}'s [{key[1]}, {key[2]}): rank 0 combines it with {ids[0]}, rank {r} with {ids[r]}")
+            other = next(j for j, i in enumerate(ids) if i != ids[0])
+            raise ValueError(f"collective {key[0]}'s [{key[1]}, {key[2]}): rank 0 combines it with {ids[0]}, rank {other} with {ids[other]}")
         sites.append(Site(*key, tuple(x.sites[key][:2] for x in ranks), tuple(x.sites[key][2] for x in ranks),
                           tuple(x.readers.get(key, ()) for x in ranks)))
     return RequestBinding(world, tuple(x.digest for x in ranks), tuple(sites), {x.rank: x.fns for x in ranks})

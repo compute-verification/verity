@@ -67,7 +67,7 @@ def _all_trees(ranks: tuple[int, ...]):
 
 
 def _random_tree(rng, world: int):
-    nodes = list(range(world))
+    nodes: list = list(range(world))
     while len(nodes) > 1:
         i, j = sorted(rng.choice(len(nodes), 2, replace=False))
         b, a = nodes.pop(j), nodes.pop(i)
