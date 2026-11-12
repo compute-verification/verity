@@ -180,7 +180,7 @@ def _gpu_branches():
         yield mode.seen
 
 
-def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *,
+def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
                 gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
     """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`. `gpu`: traced
     as a GPU runs it (`_gpu_branches`): its CUDA branches, and the layout's `tf32` the cuda.matmul.allow_tf32 its calls ran
@@ -188,8 +188,7 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
-    if isinstance(optimizer, torch.optim.Optimizer):
-        optimizer = AdamW.from_torch(optimizer)
+    adamw = AdamW.from_torch(optimizer) if isinstance(optimizer, torch.optim.Optimizer) else optimizer
     wrap = _Loss(model, loss_fn)
     pnames = [n for n, _ in wrap.named_parameters()]
     bnames = [n for n, _ in wrap.named_buffers()]
@@ -205,7 +204,7 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
         grads, loss = grad_and_value(lambda p: functional_call(wrap, (p, bufs), (batch,)))(params)
         new_p, new_m, new_v = [], [], []
         for i, n in enumerate(pnames):
-            p2, m2, v2 = optimizer.update(params[n], grads[n], ms[i], vs[i], decay, neg_step_size, bc2_sqrt)
+            p2, m2, v2 = adamw.update(params[n], grads[n], ms[i], vs[i], decay, neg_step_size, bc2_sqrt)
             new_p.append(p2)
             new_m.append(m2)
             new_v.append(v2)
@@ -247,7 +246,8 @@ class StepSurvey:
     refused: Unsupported | None = None   # a refusal no hole stands in for (outside the rules): no census
 
 
-def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
+def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
+                mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, cc: tuple[int, int] | None = None, name: str = "TrainStep",
                 exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
     """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc, tf32=...)`, with
@@ -309,7 +309,9 @@ def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | t
     "reference" lowers every op to the reference vocabulary's exact f32 arithmetic (`rules.training`). `cc` (the compute capability
     `cublas_bf16.TRAIN_CC`): the step as that GPU runs it (`export_step(..., gpu=True)`), its bf16 matrix products as its cuBLAS
     computes them instead, at the shapes its capture covers, and its f32 ones refused under cuda.matmul.allow_tf32 (TF32 GEMMs)."""
-    return step_report(model, loss_fn, optimizer, example_batch, mode=mode, cc=cc).result
+    report = step_report(model, loss_fn, optimizer, example_batch, mode=mode, cc=cc)
+    assert isinstance(report, DeriveReport)  # a refusal is a DeriveReport too; a StepSurvey comes only with survey=True
+    return report.result
 
 
 def in_bits_beyond_theta(program: Program, gates: GateSet) -> int | parts.Unsupported:

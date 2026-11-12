@@ -1105,8 +1105,6 @@
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "misc", "symbol": "TopkSoftmaxRule.emit", "detail": ""},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "misc", "symbol": "_topk_softmax_checks", "detail": ""},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "attr-defined", "symbol": "Bound.specialize", "detail": ""},
-    {"file": "verity_vllm/program/frontend/train_step.py", "kind": "arg-type", "symbol": "step_program", "detail": ""},
-    {"file": "verity_vllm/program/frontend/train_step.py", "kind": "union-attr", "symbol": "step_program", "detail": ""},
     {"file": "verity_vllm/program/frontend/triton_capture.py", "kind": "arg-type", "symbol": "_make_run.run", "detail": ""},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "arg-type", "symbol": "cached_wrapper", "detail": "", "count": 2},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "operator", "symbol": "ChunkedGreedyRequest.forward", "detail": ""},
