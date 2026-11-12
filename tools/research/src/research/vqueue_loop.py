@@ -15,8 +15,9 @@ its refs are left as drive keeps them.  `ready` is the open PRs drive would land
 mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working out, `--move-carry-jobs` heads
 at once in jobs detached from the tick, which outlive it), with a land verdict by a non-owner (its head's, or with
 drive.toml's `verdict_carry` "on" at `main` one the verdict carry takes from another of its heads whose commits since only
-merge trusted ones, `Landing._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule (drive.toml's
-`lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by its merge), not on
+merge trusted ones, `Landing._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule
+(`queue.lands_on_mark`, which `research queue review`'s rows read too: drive.toml's `lowrisk_lane` and `lowrisk_excludes` at
+`main`; never a held PR's, nor a move PR's, which is otherwise any PR, built by its merge), not on
 `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains, and held by no candidate
 on `main`'s chain it isn't a member of (one that is reaches `main` with that candidate: it is logged once a head and
 candidate, `riding`, and nobody is told); `files` is its change against its merge base with `main`, `lean` drive's
@@ -190,8 +191,8 @@ from .landing import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Landing, cancel_r
 from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (LEAN_SOURCES, PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, _who, base_drivers,
-                    conflicting_files, flags_at, forces_cold, label_verifier, lean_change, lowrisk, merged_tree,
-                    moves_between, priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
+                    conflicting_files, flags_at, forces_cold, label_verifier, lands_on_mark, lean_change, merged_tree,
+                    moves_between, own_files, priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
@@ -808,7 +809,6 @@ class World:
         landed = (main, old) if old else (main,)
         pulled = {n for n, e in entries.items() if e.state != "ready" and self._pulled(e, state["ejected"].get(str(n)))}
         flags = flags_at(self.repo, main)
-        excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
         self._deltas = {k: v for k, v in self._deltas.items() if k[2] == landed}
@@ -827,7 +827,7 @@ class World:
             took = []
             for n in admitted:
                 p, held = entries[n].pr, (why[n] or "").startswith("held")
-                if why[n] is None or n in carried or not p.move and not held and lowrisk(files[n], excludes):
+                if why[n] is None or n in carried or lands_on_mark(flags, p, why[n], files[n]):
                     took.append(n)
                 elif held:
                     left[n] = (p.head, why[n])
@@ -1033,9 +1033,9 @@ class World:
         return out
 
     def _changed(self, main: str, head: str) -> frozenset[str]:
-        """The files ``head`` changes against its merge base with ``main``."""
+        """The files ``head`` changes against its merge base with ``main`` (`own_files`)."""
         if (key := (head, main)) not in self._files:
-            self._files[key] = frozenset(_out(self.repo, "diff", "--name-only", "--no-renames", f"{main}...{head}").splitlines())
+            self._files[key] = own_files(self.repo, main, head)
         return self._files[key]
 
     def _tree(self, sha: str) -> list[str]:
