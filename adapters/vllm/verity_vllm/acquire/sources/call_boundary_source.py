@@ -221,8 +221,8 @@ class CallBoundarySource:
 
         got = [(self._request(logical_request(rid, self.plan.order)), int(hi) - int(lo)) for rid, lo, hi in rows]
         declared = self.plan.composition.get(e)
-        members = sorted(() if declared is None else declared.items())
-        if sorted(got) != members:
+        ran, members = sorted(got), sorted(declared.items() if declared else ())
+        if ran != members:
             self.error(f"call boundaries: engine step {e} ran (request, rows) {got} in this order; the manifest declares "
                        f"{members}: nothing of the step is committed")
             return None
