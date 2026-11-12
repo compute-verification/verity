@@ -34,6 +34,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "floored_gemm"))
 from derive import BN, NCT, U_TAG, WM, mix32, tile_receipts  # noqa: E402
 
+__all__ = ["tile_receipts", "xin13_receipts", "xin_keys"]
+
 _spec = importlib.util.spec_from_file_location("fgemm_ref", HERE.parent / "floored_gemm" / "ref.py")
 fref = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fref)
