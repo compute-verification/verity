@@ -144,7 +144,8 @@ class Runner:
             view[1] = first + n - (drafts - kept)
             view[0] = view[1] + 1
         ids = list(so.num_scheduled_tokens)
-        self.out = ModelRunnerOutput(req_ids=ids, req_id_to_index={rid: i for i, rid in enumerate(ids)}, sampled_token_ids=sampled)
+        index = {"req_id_to_index": {rid: i for i, rid in enumerate(ids)}} if "req_id_to_index" in ModelRunnerOutput.__dataclass_fields__ else {}
+        self.out = ModelRunnerOutput(req_ids=ids, sampled_token_ids=sampled, **index)
         done.set_result(None)
         return done
 
