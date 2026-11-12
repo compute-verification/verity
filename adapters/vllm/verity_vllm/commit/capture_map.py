@@ -23,6 +23,9 @@ from typing import Any
 from verity_vllm.commit.identity import format_id, value_id
 from verity_vllm.config import MANIFESTS
 
+__all__ = ["LAYER_VAR", "MAPS", "at_layer", "captures", "committer_names", "dim", "empty_names", "evaluate",
+           "layer_set", "load", "of_checkpoint", "route_sites", "row_count_of", "rows_differ", "symbols", "tap_layers"]
+
 SCHEMA = "verity-vllm/capture-map/v0"
 MAPS = MANIFESTS / "capture-maps"
 #: a tap's Program today: registered and conformance-tested; being built (on a named branch); a registered family whose kernel

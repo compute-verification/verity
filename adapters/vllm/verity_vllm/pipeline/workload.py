@@ -59,6 +59,7 @@ from verity_vllm.engine import served
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import GENERATED_WORKLOAD_SCHEMA
 
 __all__ = ["Options", "main"]
 
@@ -66,7 +67,7 @@ logger = init_logger(__name__)
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = WORKLOAD_SCHEMA
-SWEEP_SCHEMA = "verity-sweep/workload/v1"
+SWEEP_SCHEMA = GENERATED_WORKLOAD_SCHEMA
 SAMPLING = {
     "greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
     "stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0},

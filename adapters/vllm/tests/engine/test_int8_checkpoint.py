@@ -150,7 +150,9 @@ def test_base_entry_refuses_another_recipe():
         F.base_entry(entry, [], I.INT8)
 
 
-@pytest.mark.parametrize("entry", [{"role": "X"}, {"role": "X", "recipe": None}, {"role": "X", "recipe": {}}])
+@pytest.mark.parametrize("entry", [{"role": "X"}, {"role": "X", "recipe": None}, {"role": "X", "recipe": {}}, {"role": "X", "recipe": 0},
+                                   {"role": "X", "recipe": ""}, {"role": "X", "recipe": False}, {"role": "X", "recipe": []}],
+                         ids=["absent", "null", "empty", "zero", "empty text", "false", "empty list"])
 def test_an_entry_without_a_recipe_is_refused_by_its_role(entry):
     with pytest.raises(F.UsageError, match="^X: recipe None is not 'verity-int8-channel127/v1'$"):
         F.base_entry(entry, [], I.INT8)
