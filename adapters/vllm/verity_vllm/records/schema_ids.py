@@ -48,6 +48,39 @@ SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
 #: which `predict` writes
 ADMISSION_PLAN_SCHEMA = "verity/admission-plan/v1"
 
+# --- the Build (`verity_vllm.pipeline`)
+#: the Build's result, a derive dir's `result.json`, which `pipeline.build.run` makes
+DERIVE_STEP_SCHEMA = "cb-a/derive_step/v3"
+#: `construction_manifest.json`, what the construction read and which rules fired, which `pipeline.build._write_manifest`
+#: writes
+CONSTRUCTION_MANIFEST_SCHEMA = "cb-a/construction_manifest/v3"
+#: the construction's version (its rules and the hash of its sources), which `pipeline.build.construction_version`
+#: returns and the Build's result holds
+CONSTRUCTION_VERSION_SCHEMA = "cb-a/aot-artifact/v1"
+#: the head of a derive dir's instance sequence, `instances.json.gz`, which `pipeline.build_instances.write_instances`
+#: writes
+INSTANCE_SEQUENCE_SCHEMA = "cb-a/instance-sequence/v2"
+#: an entry of the Program cache (`pipeline.program_cache.SCHEMA`)
+PROGRAM_CACHE_ENTRY_SCHEMA = "verity-vllm/program-cache-entry/v1"
+#: a generated workload's plan (`pipeline.workload.SWEEP_SCHEMA`), which `plan` returns; not a row's workload file,
+#: whose id `records.workload.SCHEMA` owns
+GENERATED_WORKLOAD_SCHEMA = "verity-sweep/workload/v1"
+#: neutrality's report, `neutrality.json`, which `pipeline.neutrality`'s `main` writes
+NEUTRALITY_REPORT_SCHEMA = "verity-vllm/neutrality/v1"
+
+# --- the Match's driver (`verity_vllm.pipeline`)
+#: a Match run's manifest, `run.json`, which `pipeline.match.write_manifest` writes
+MATCH_RUN_SCHEMA = "verity-gen/run/v1"
+#: a Match run's `stages.json`, which `pipeline.match.save_stages` writes
+MATCH_STAGES_SCHEMA = "verity-gen/stages/v1"
+#: the realized Program's `program.json` (`pipeline.match.PROGRAM_SCHEMA`), which `persist_program` writes
+REALIZED_PROGRAM_SCHEMA = "verity-gen/program/v1"
+#: the head of the realized Program's `instances.jsonl` in its record form (`pipeline.match.INSTANCES_SCHEMA`), which
+#: `persist_program` writes
+REALIZED_INSTANCES_SCHEMA = "verity-gen/instances/v1"
+#: the same head in the compact form, operand references as progressions (`pipeline.match.INSTANCES_SCHEMA_V2`)
+REALIZED_INSTANCES_PROGRESSIONS_SCHEMA = "verity-gen/instances/v2"
+
 # --- the row driver (`verity_vllm.pipeline`)
 #: a row's `config_record.json` (`pipeline.config_record.SCHEMA`), which `record` writes
 CONFIG_RECORD_SCHEMA = "verity-vllm/config-record/v1"
@@ -141,6 +174,13 @@ STATIC_SCHEDULE_SCHEMA = "verity-vllm/static-schedule/v1"
 INT8_K_SCALES_SCHEMA = "verity-vllm/int8-k-scales/v1"
 #: an int8 checkpoint's error report, which `engine.int8_checkpoint.report` writes
 INT8_ERROR_REPORT_SCHEMA = "verity-vllm/int8-error-report/v1"
+#: a served run's step trace (`engine.step_trace.SCHEMA`): `StepTrace` writes it in the header, the trace's first record,
+#: and `load` refuses a trace that opens with any other
+STEP_TRACE_SCHEMA = "verity-vllm/step-trace/v1"
+
+# --- the target-family preflight (`verity_vllm.target_family`)
+#: the preflight's record, which `target_family.check` writes
+TARGET_FAMILY_SCHEMA = "verity-sweep/target-family/v1"
 
 # --- the ahead-of-time compiler (`verity_vllm.program.predict`)
 #: a phi (`program.predict.phi.PHI_SCHEMA`), which `Phi.from_json` refuses any other than
