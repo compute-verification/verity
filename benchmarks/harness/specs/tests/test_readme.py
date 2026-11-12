@@ -18,6 +18,6 @@ def test_the_readme_has_a_line_for_every_spec_and_sweep() -> None:
             ids.add(doc["id"])
     listed = re.findall(r"^- `([a-z0-9-]+)`: ", (SPECS / "README.md").read_text(), re.M)
     missing, stale = sorted(ids - set(listed)), sorted(set(listed) - ids)
-    assert not (missing or stale), ("benchmarks/specs/README.md lists each spec and sweep once, as `- `ID`: what it "
+    assert not (missing or stale), ("benchmarks/harness/specs/README.md lists each spec and sweep once, as `- `ID`: what it "
                                     f"measures` in its group: add {missing}, remove {stale}")
-    assert len(listed) == len(set(listed)), "a spec or sweep is listed twice in benchmarks/specs/README.md"
+    assert len(listed) == len(set(listed)), "a spec or sweep is listed twice in benchmarks/harness/specs/README.md"

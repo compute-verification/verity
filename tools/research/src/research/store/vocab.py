@@ -238,6 +238,9 @@ TASKS_GRAPH = "tasks_graph"
 VERITY_GRAPH = "verity_graph"
 #: On `task:<key>`, by the executor's worker that ran a graph/v2 task (`verity graph run`): its result/v1 document.
 TASK_RESULT = "result"
+#: On `commit:<sha>`, by the executor: the verdict of that commit's `ready:` check once none of its merge-gate tasks is still
+#: to end, a JSON object the queue's loop reads in place of asking the executor (`research.vqueue_loop`).
+READY_VERDICT = "ready_verdict"
 #: On `commit:<sha>`, by the control pod's nightly loop (infra/control/nightly_check.py): what the uncached check of that commit
 #: of `main` said; the label's ref is its run.
 NIGHTLY_CHECK = "nightly_check"
@@ -444,6 +447,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        pattern=r"art:[0-9a-f]{64}"),
     _k(TASK_RESULT, GROUP_VERIFICATION, TEXT, "on task:<key>, by the executor's worker that ran a graph/v2 task (`verity graph run`): "
        "its result/v1 document, pass or fail (an error is never one); a key with any fail is failed (`research.executor.fold_results`)"),
+    _k(READY_VERDICT, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: a JSON object, the verdict of that commit's "
+       "`ready:` check once none of its merge-gate tasks is still to end ({check, state, why, counts, failed, infra, flaky: "
+       "[{task, key, why, ...}]}); the queue's loop reads it in place of asking the executor (`research.vqueue_loop`)"),
     _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
        "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
        "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),

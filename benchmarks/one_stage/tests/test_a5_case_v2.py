@@ -316,3 +316,28 @@ def test_the_per_member_case_is_written_beside_the_others_and_changes_none(tmp_p
                   session_roots={}, served=[], per_member="v2 verifies --zk sessions; this audit's are plain")
     assert (other / "case-v2-members-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
     assert sorted(f.name for f in other.iterdir()) == ["case-python.json", "case-v2-members-error.txt", "case.json"]
+
+
+def test_the_audit_record_says_whether_the_case_for_the_compiled_check_was_written(tmp_path, monkeypatch, stub_case):
+    """`case_written`, what the audit record carries as ``case_v2``: written where `write_case` left ``case-v2.json``,
+    else not, with why in the words of the file that says so: v2's refusal of the audit's form, the v1 case's own
+    failure, or neither file."""
+    zk = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(), "params": {}}
+    monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)
+    (one := tmp_path / "one").mkdir()
+    write(one, {})
+    assert a5.case_written(one) == {"written": True}
+    (two := tmp_path / "two").mkdir()
+    write(two, a5.v2_proof([{}, {}], zk=True))
+    assert a5.case_written(two) == {
+        "written": False,
+        "why": "ValueError: v2 verifies one table's session on its circuit and public file; this audit drew 2 members"}
+    (plain := tmp_path / "plain").mkdir()
+    write(plain, a5.v2_proof([{}], zk=False))
+    assert a5.case_written(plain) == {"written": False, "why": "ValueError: v2 verifies --zk sessions; this audit's are plain"}
+    (failed := tmp_path / "failed").mkdir()
+    monkeypatch.setattr(stub_case, "params", lambda *a, **k: 1 / 0)
+    write(failed, {})
+    assert a5.case_written(failed) == {"written": False, "why": "ZeroDivisionError: division by zero"}
+    (none := tmp_path / "none").mkdir()
+    assert a5.case_written(none) == {"written": False, "why": "the audit wrote none, and no reason"}

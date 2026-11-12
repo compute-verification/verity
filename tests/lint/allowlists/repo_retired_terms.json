@@ -3411,8 +3411,6 @@
     {"file": "benchmarks/served_units/prove_time.sh", "count": 1},
     {"file": "benchmarks/served_units/stage.py", "count": 1},
     {"file": "benchmarks/served_units/summarize.py", "count": 1},
-    {"file": "benchmarks/specs/README.md", "count": 1},
-    {"file": "benchmarks/specs/llama31-8b-fp8-1gpu-commit-served.toml", "count": 2},
     {"file": "benchmarks/spot_figures/README.md", "count": 10},
     {"file": "benchmarks/spot_figures/cards.py", "count": 1},
     {"file": "benchmarks/spot_figures/figure1.py", "count": 33},
@@ -5544,6 +5542,8 @@
     {"file": "verity/protocols/inference_only/verifier/nci/lean/NciCheck/RecordText.lean", "count": 2},
     {"file": "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_record_reference.py", "count": 1},
     {"file": "verity/protocols/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py", "count": 3},
-    {"file": "verity/protocols/certifier/verifier/network/tests/test_nci_record_difftest.py", "count": 3}
+    {"file": "verity/protocols/certifier/verifier/network/tests/test_nci_record_difftest.py", "count": 3},
+    {"file": "benchmarks/harness/specs/README.md", "count": 1},
+    {"file": "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml", "count": 2}
   ]
 }
