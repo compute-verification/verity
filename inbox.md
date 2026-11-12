@@ -1,0 +1,3 @@
+[2026-11-12T06:41Z] 1725ea837523
+ci 10:4x PM PST, for LEANADMIT's design: with #9141 live and --lean 0 (pins only), Lean-INPUT plain PRs (the audits class: 25 of them now, e.g. #9000 tools/verity/check, #8814 lean-audit.json, #9135) are held out of every batch while ANY Lean batch is staged, and the next pin is staged at the tick after a Lean batch is built, so they only get that one tick: starvation. Tonight I hold the next pin (#8510) out by hand for one build. Your admission must give Lean-input PRs a place in every build (e.g. a batch that audits anyway above the staged one, or beside it on the same base), and a test that a Lean-input PR is built within N ticks while Lean batches keep coming.
+
