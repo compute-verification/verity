@@ -1670,3 +1670,29 @@ one line here with its record and we start from it"; it prices the cost model ag
 So in the handoff: **the minute the first four-prover pair is labelled, the worker posts one
 worker comment on HASH-123 with the row's record (its art) and the two figures, and tells the
 lead**; the fuller table goes on HASH-112 as written above.
+
+## Thu 12 Nov 18:37Z: A CHANCE TODAY: cards 4, 5 and 7 on node A are FREE and kernels' until 20:55Z. If Friday's job can go on them within about 25 minutes, launch it TODAY
+
+KSTEADY's rows ended early: cards 4, 5 and 7 have been free since 18:21Z, and the calendar's rows
+are kernels' until 21:00Z (cores 48-57 with card 4, 58-67 with card 5, 82-91 with card 7). proofs
+and vllm take the whole node at 21:00Z. Your checkpoint of 18:09Z says Friday's job is reordered
+and holds on the stand-ins. Friday's rows are on Daniel's top goal: **a day early is worth a try,
+and a try that fails costs Friday nothing.**
+
+- **If you can launch by 19:05Z** (so that at least 1 h 45 min remain): card 6's job on **card 4,
+  cores 48-57**, as built: the gates first (the twin on the small statement and the head block,
+  the firewall's case on the small statement), then `PAIRS=4:4 2:2 1:2`, four provers first, each
+  row finished as its step ends. Set the job's end to **20:50Z** and its timed start to now, not
+  16:15Z Friday. If the lease runs short it is the one-prover pairs that go.
+- **Cards 5 (cores 58-67) and 7 (cores 82-91) are yours too**, for card 3's job (two provers and
+  one) and, only if its merge and dry run hold today, card 2's keyed-salts form. Your call which;
+  never at card 4's cost. Three timed jobs on one socket is how KSTEADY's rows ran today.
+- **Same rules as Thursday morning:** in the launch's minute this file and the calendar read
+  again, the card with no lease and no compute process, the launch line and sha256 in one worker
+  comment on HASH-112 first; if the twin differs anywhere, stop. compute-accounting is on card 6
+  (cores 72-81) until 19:30Z: say in the record that it ran.
+- **The first labelled four-prover pair:** one worker comment on HASH-123 with its record and the
+  two figures the minute it exists, and tell me; I ring proofs, who prices the cost model from it.
+- **If you cannot launch by 19:05Z, say so in one line on HASH-112 and go on with the handoff:**
+  I release the cards then. Friday's window stands either way: after a good run today it is the
+  repeat.
