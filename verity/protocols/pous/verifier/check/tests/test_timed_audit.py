@@ -53,7 +53,9 @@ def test_a_difference_is_reported(compared, capsys):
 @pytest.mark.slow
 def test_the_deployments_record_agrees_from_its_files():
     """The record the GPU run writes at the certificate's point: eight segments (2^19 leaves) and twenty audits of 105,
-    judged from files as the harness keeps them; and one wrong label in the last audit rejects it both ways."""
+    judged from files as the harness keeps them; and one wrong label in the last audit rejects it both ways. No other
+    test hands `pous-timed-audit` a record of this size: the rest hold at most 2^16 leaves and 210 answers, which a
+    reader whose time grows with the square of the audit file's length still gets through in seconds."""
     from verity.protocols.pous.verifier.schemes import p2 as P2
 
     s = ta.Store(P2.P2Params(*P2.POINT, segments=P2.CERT_BLOCKS // P2.POINT[2]), b"deployment")

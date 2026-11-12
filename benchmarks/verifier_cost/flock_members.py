@@ -23,6 +23,10 @@ process's start and its one read of the program. A kept process's peak RSS is th
 `rss_kb` is the process's resident memory when that member's `MEMBER` line arrives: what the process holds, beside
 whatever runs next to it, until the next member's line.
 
+Every process runs in `verifier_env`, as the verifier's Python callers start it: under the verifier's allocator setting
+unless this job's environment sets a value of its own. The setting changes the memory a process holds and its seconds,
+so `members.json` records the value the processes ran under (`env`); figures under two values are not one figure.
+
 The guard, without which no figure counts: each kept member's `VERDICT` lines are byte for byte those `verify` printed
 for it alone in the same round, its `MEMBER` line carries that exit status and its index, every member is accepted,
 and the kept process exits 0. `DIR/members.json` (`verity/flock-members/v2`) has the rows, each with its call's index,
@@ -42,6 +46,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+from verity.protocols.spot.verifier.one_stage.proofs import VERIFIER_ENV, verifier_env
 
 SCHEMA = "verity/flock-members/v2"
 STAGE = re.compile(r"^(.+): (\d+) ms$")
@@ -90,22 +96,24 @@ def resident_kb(pid: int) -> int:
     return int(line.split()[1])
 
 
-def alone(cmd: list[str], args: list[str], out: str) -> dict:
-    """One `verify` on a member's arguments, its output in `out`.out and its stage lines in `out`.err."""
+def alone(cmd: list[str], args: list[str], out: str, env: dict[str, str]) -> dict:
+    """One `verify` on a member's arguments in `env`, its output in `out`.out and its stage lines in `out`.err."""
     t0 = time.monotonic()
     with open(f"{out}.out", "wb") as o, open(f"{out}.err", "wb") as e:
-        p = subprocess.Popen([*cmd, "verify", *args], stdout=o, stderr=e)
+        p = subprocess.Popen([*cmd, "verify", *args], stdout=o, stderr=e, env=env)
         rc, rss = reaped(p)
     return {"exit": rc, "wall_s": round(time.monotonic() - t0, 3), "max_rss_kb": rss, "verdict": Path(f"{out}.out").read_bytes()}
 
 
-def kept(cmd: list[str], once: list[str], lines: list[bytes], out: str) -> tuple[dict, list[dict]]:
-    """One `verify-members` on `lines`: the process, and an answer a member reached (its lines up to `MEMBER`, its wall)."""
+def kept(cmd: list[str], once: list[str], lines: list[bytes], out: str, env: dict[str, str]) -> tuple[dict, list[dict]]:
+    """One `verify-members` on `lines` in `env`: the process, and an answer a member reached (its lines up to `MEMBER`, its
+    wall)."""
     answers: list[dict] = []
     closed = None
     t0 = time.monotonic()
     with open(f"{out}.err", "wb") as e:
-        p = subprocess.Popen([*cmd, "verify-members", *once], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=e)
+        p = subprocess.Popen([*cmd, "verify-members", *once], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=e,
+                             env=env)
         assert p.stdin is not None and p.stdout is not None
         for line in lines:
             t1 = time.monotonic()
@@ -164,6 +172,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     core = a.core if a.core is not None else max(os.sched_getaffinity(0))
     cmd = ["taskset", "-c", str(core), a.lean]
+    env = verifier_env()
     lines = [json.dumps(calls[c]).encode() + b"\n" for c in order]
     rows: list[dict] = []
     processes: list[dict] = []
@@ -172,7 +181,7 @@ def main() -> int:
         singles = []
         for i, c in enumerate(order):
             load = os.getloadavg()[0]
-            one = alone(cmd, calls[c], f"{out}/r{r}.alone{i}")
+            one = alone(cmd, calls[c], f"{out}/r{r}.alone{i}", env)
             got = stages(Path(f"{out}/r{r}.alone{i}.err").read_text(errors="replace"))
             if len(got) != 1:
                 failures.append(f"round {r}: member {i} alone printed {len(got)} `inputs:` lines, not 1")
@@ -183,7 +192,7 @@ def main() -> int:
                          **{k: one[k] for k in ("wall_s", "exit", "max_rss_kb")}})
             print(f"FM {json.dumps(rows[-1])}", flush=True)
         load = os.getloadavg()[0]
-        process, answers = kept(cmd, once, lines, f"{out}/r{r}.kept")
+        process, answers = kept(cmd, once, lines, f"{out}/r{r}.kept", env)
         got = stages(Path(f"{out}/r{r}.kept.err").read_text(errors="replace"))
         processes.append({"round": r, "load": load, **process})
         print(f"FM {json.dumps({'way': 'kept-process', **processes[-1]})}", flush=True)
@@ -214,7 +223,8 @@ def main() -> int:
                                           ("kept_later", "kept", later), ("kept_changed", "kept", changed))
                for key in ("before_check_ms", "inputs_ms", "setup_ms", "session_ms", "wall_s", "rss_kb")}
     doc = {"schema": SCHEMA, "lean_sha256": hashlib.sha256(Path(a.lean).read_bytes()).hexdigest(), "members": n,
-           "order": order, "rounds": a.rounds, "core": core, "once": once, "rows": rows, "kept": processes,
+           "order": order, "rounds": a.rounds, "core": core, "env": {name: env[name] for name in VERIFIER_ENV},
+           "once": once, "rows": rows, "kept": processes,
            "guard": {"ok": not failures, "failures": failures}, "summary": summary}
     (out / "members.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"FM {json.dumps({'guard': doc['guard'], 'summary': summary})}", flush=True)

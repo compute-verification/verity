@@ -735,69 +735,25 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
                     cleared="*Cleared:* the public export holds every fixture main registers.")]
 
 
-#: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` an after-landing run passed
-DRIVE_STATE = "root/.research/queue/verity.state.json"
-DRIVE_LOG = "data/drive/drive.log"
-UNVERIFIED_S = 3 * 3600
+#: the verified queue's decision log on the control pod (the live loop's `--log`), its last line's `at` the last decision
 VQUEUE_DECISIONS = "data/vqueue/live/decisions.jsonl"
-DRIVE_TICK_STALE_S = 30 * 60
-TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
-
-
-def drive_ticking(ctx: Ctx) -> bool:
-    """Whether drive's log (`DRIVE_LOG`) has a `tick rc=` line from the last `DRIVE_TICK_STALE_S`: drive is alive, so its own
-    `_behind` alarm speaks for a main left unverified."""
-    try:
-        with open(ctx.root / DRIVE_LOG, "rb") as f:
-            f.seek(max(0, f.seek(0, 2) - (1 << 20)))
-            ticks = TICK_RE.findall(f.read())
-    except OSError:
-        return False
-    return bool(ticks) and ctx.now - datetime.strptime(ticks[-1].decode(), "%Y-%m-%dT%H:%M:%SZ").replace(
-        tzinfo=timezone.utc).timestamp() < DRIVE_TICK_STALE_S
+UNVERIFIED_S = 3 * 3600
 
 
 def unverified_main(ctx: Ctx) -> list[Finding]:
-    """`main` has carried commits no after-landing run verified for over 3 h (hundreds of PRs can land on an unverified main for
-    days with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
-    main, timed from the oldest landing after it: main's first-parent commits after it, drive's `Queue: #N` merges, each
-    committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
-    GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
-    hundreds hold no landing. One event per further hour behind, to ci and top, until an after-landing run verifies
-    main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
-    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead.
-
-    Since main moves only through the verified queue (drive stopped for good), its decisions file
-    (`VQUEUE_DECISIONS`) is read instead when it exists: one event per further hour once the queue has decided nothing for
-    `UNVERIFIED_S`, a loop stopped or stuck; a queue that decides is ci's, which it rings itself."""
-    if (decisions := ctx.root / VQUEUE_DECISIONS).exists():
-        lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
-        last = json.loads(lines[-1]).get("at") if lines else None
-        since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
-        if (behind := ctx.now - since) < UNVERIFIED_S:
-            return []
-        hours = int(behind // 3600)
-        return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
-                        f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
-    if drive_ticking(ctx):
-        return []
-    state = json.loads((ctx.root / DRIVE_STATE).read_text())
-    verified = ((state.get("drive") or {}).get("postland") or {}).get("verified")
-    if not verified:
-        raise RuntimeError(f"/{DRIVE_STATE} names no drive.postland.verified")
-    repo = os.environ.get("RESEARCH_DEPLOY_REPO") or "/data/watchers/repo"
-    ctx.sh(["git", "-C", repo, "fetch", "-q", "origin", "main"], timeout=120)
-    landed = [ln.split() for ln in ctx.sh(["git", "-C", repo, "log", "--first-parent", "--format=%H %ct",
-                                           f"{verified}..FETCH_HEAD"], timeout=60).splitlines() if ln.strip()]
-    if not landed:
-        return []
-    since = float(landed[-1][1])
+    """The verified queue, the one path `main` moves by, has decided nothing for over `UNVERIFIED_S`: a loop stopped or stuck,
+    and every marked PR waits with nobody outside ci told. Timed from its decisions file's (`VQUEUE_DECISIONS`) last
+    decision, else the file's own time; one event per further hour, to ci and top, until the queue decides again. A queue
+    that decides is ci's, which it rings itself; a file this can't read is the monitor's own finding, in time."""
+    decisions = ctx.root / VQUEUE_DECISIONS
+    lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
+    last = json.loads(lines[-1]).get("at") if lines else None
+    since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
     if (behind := ctx.now - since) < UNVERIFIED_S:
         return []
     hours = int(behind // 3600)
-    return [Finding(f"{verified[:12]}:{hours}", f"*`main` has gone {hours} h without a passing post-landing check*: its last "
-                    f"verified commit is `{verified[:12]}`, and {len(landed)} landing(s) followed it, the first at {iso(since)}.",
-                    owners=("ci", "top"))]
+    return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
+                    f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
 
 
 #: the control pod's nightly loop's state (infra/control/nightly_check.py): `last`, its newest outcome and when it was read;
@@ -1556,8 +1512,9 @@ MONITORS: list[Monitor] = [
             "it; a loop that isn't running is restarted with `setsid -f /data/infra/fixtures_export.sh`.",
             every_s=900, for_s=1800, unread_s=4 * 3600),
     Monitor("unverified-main", "ci", "warn", "relay", unverified_main,
-            "Read the newest post-landing run's verdict line (drive.log's 'told @ci' line names it): land the red suite's fix, or "
-            "revert the PR that broke it (AGENTS.md: main always passes). It rings again each hour until a post-landing run passes.",
+            "Read the end of the live loop's decision log (`/data/vqueue/live/decisions.jsonl`) and its output on the control "
+            "pod: start a loop that stopped again, or fix what a stuck one fails on each tick. It rings again each hour until "
+            "the queue decides again.",
             every_s=600, events=True, unread_s=3600),
     Monitor("nightly-check", "infra", "warn", "relay", nightly_check,
             "On the control pod, read /data/watchers/log/nightly-check.log (each pass says what it did) and status.json (is "

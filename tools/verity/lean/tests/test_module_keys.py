@@ -688,6 +688,30 @@ def test_a_module_file_is_indexed_where_lake_handed_its_compile_the_modules_lean
     assert "and not ['R.Q']" in MK.indexable("R.L", keyed, pkgs), "a legacy file loads everything it imports, transitively"
 
 
+#: `R.F` imports `R.D` by a `public import` and by a private `meta import`, which `keys` folds into one `public meta
+#: import`; `R.D` imports `R.S` privately, and `R.T` imports `R.F`
+FOLD = {"r/R/T.lean": "module\n\npublic import R.F\n", "r/R/F.lean": "module\n\npublic import R.D\nmeta import R.D\n",
+        "r/R/D.lean": "module\n\nimport R.S\n", "r/R/S.lean": "module\n"}
+
+
+def test_a_build_lake_handed_less_than_its_key_reads_is_indexed_where_the_rest_is_read_for_its_code_alone(tmp_path):
+    """`R.T`'s key reads `R.S`'s code through the fold, where Lean loads `R.D`'s code only for `R.F`'s own compile, so Lake
+    hands `R.T` no `R.S`. Refused for that, `R.T` would be compiled in every build: a key that reads more than its compile
+    is indexed. One that left out a module the key reads more than the code of, or handed one it doesn't read, is not."""
+    root = _workspace(tmp_path, FOLD)
+    pkgs, keyed = MK.workspace(root)[0], MK.keys(root, ["R.T"])
+    lib = root / ".lake" / "build" / "lib" / "lean"
+
+    def handed(*ms: str) -> str | None:
+        _setup(root, "R.T", "r", {m: lib / MK.path_of(m, ".olean") for m in ms})
+        return MK.indexable("R.T", keyed, pkgs)
+
+    assert MK.loads("R.T", keyed) == {"R.F": MK.PUBLIC, "R.D": MK.PUBLIC | MK.CODE, "R.S": MK.CODE}
+    assert handed("R.F", "R.D") is None and handed("R.F", "R.D", "R.S") is None
+    assert handed("R.F", "R.S") == "Lake imports [] and not ['R.D'] of the workspace"
+    assert handed("R.F", "R.D", "R.A") == "Lake imports ['R.A'] and not [] of the workspace"
+
+
 def _entry(store: Path, key: str, scope: str, mod: str, h: str, files: dict[str, bytes], inputs: dict | None = None) -> dict:
     """``mod``'s index entry under ``key``, with its artifacts, as `LakeArtifacts.put` writes it: with what its key read
     (``inputs``), it is also the entry the module was last indexed under."""
@@ -769,10 +793,11 @@ def test_a_build_keys_each_module_from_the_digests_its_imports_entries_name(tmp_
     assert MK.stage(store, root, [], tmp_path / "cache2")[0] == {("d", "5" * 16): "D.X"}, "D.X's olean is another"
 
 
-def test_an_entry_records_what_its_key_read_and_a_miss_says_which_input_differs(tmp_path):
+def test_an_entry_records_what_its_key_read_and_a_miss_says_which_inputs_differ(tmp_path):
     """Each entry records its key's inputs (`record`): its vars, the env's parts, each file's digest and what it read of
     each module it loads. A build that doesn't restore a module says why against the entry the module was last indexed
-    under: the first input that differs, or that it reads a module that isn't restored."""
+    under: every input that differs, in one phrase, or that it reads a module that isn't restored. The first alone was
+    read as the cause of a miss whose source had changed too."""
     files = {"r/lakefile.toml": LIBS, "r/R/A.lean": "import D.X\n", "r/S.lean": "", "r/T.lean": ""}
     root = _workspace(tmp_path / "ws", files)
     store = tmp_path / "store"
@@ -810,6 +835,11 @@ def test_an_entry_records_what_its_key_read_and_a_miss_says_which_input_differs(
     (root / "lean-toolchain").write_text(TOOLCHAIN)
     (root / "lake-manifest.json").write_text(_manifest(root, lambda d: d["packages"][1].update(rev="abd")))
     assert missed()[0] == {"the fetched packages": 2, "reads a module not restored": 2}
+    (root / "T.lean").write_text("-- edited\n")
+    assert missed() == ({"the fetched packages": 1, "the fetched packages and its source": 1, "reads a module not restored": 2},
+                        {"the fetched packages": "D.X", "the fetched packages and its source": "T",
+                         "reads a module not restored": "R.A"}), "T's pins and its source both differ, and the line names both"
+    (root / "T.lean").write_text("")
     (root / "lake-manifest.json").write_text(_manifest(root, lambda d: d["packages"][1].update(rev="abc")))
     _stock(store, MK.keys(root, ["T"]), {"D.X": ("5" * 16, {"9" * 16 + ".olean": b"X'", "b" * 16 + ".ilean": b"x"})})
     assert missed() == ({"an output it reads": 1, "reads a module not restored": 1},
@@ -820,6 +850,14 @@ def test_an_entry_records_what_its_key_read_and_a_miss_says_which_input_differs(
     _stock(store, MK.keys(root, ["T"]), stock)
     (store / "artifacts" / ("c" * 16 + ".olean")).write_bytes(b"not what R.A's entry names")
     assert missed()[0] == {"an artifact of its entry differs": 1, "reads a module not restored": 1}
+    was = e["inputs"]
+    assert MK.differs(was, was) == MK.GONE and MK.differs(was, None) == MK.NEVER
+    other = {"vars": was["vars"] | {"library": "S"}, "env": {p: "0" for p in was["env"]},
+             "files": {"r/R.lean": "0", "r/lakefile.toml": "0", "r/notes.txt": "0"}, "reads": {}}
+    assert MK.differs(was, other) == ("its library, the toolchain, the fetched packages, its source, its lakefile, "
+                                      "an input file and an output it reads")
+    assert MK.differs(was, was | {"reads": {}}) == "an output it reads"
+    assert MK.differs(was, was | {"files": was["files"] | {"r/notes.txt": "0"}, "reads": {}}) == "an input file and an output it reads"
 
 
 def _held(keyed: dict, mod: str, files: dict[str, bytes], h: str = "0" * 16) -> Path:
@@ -901,6 +939,40 @@ def test_a_build_takes_no_trace_in_the_build_of_a_package_it_requires_by_path(tm
     traces["D.X"].write_text('{"depHash": "1111')
     was = held()
     assert took() == {} and held() == was, "a trace of d's that isn't JSON is d's build's to remove"
+
+
+def test_a_build_settles_the_build_of_a_path_dependency_its_run_does_not_audit(tmp_path):
+    """`d` is in the tree only as `r`'s path dependency, and its build there is a copy of a kept build that no build of
+    `d`'s own will settle. Left as it is, `D.X`, which the cache lacks, is never indexed, and every module of `r` that
+    loads it is recorded as one the cache could not index, in each build that takes such a copy. Named to the stage
+    step, `d`'s build is settled with `r`'s: `D.X` loses its trace where the cache lacks it or holds another version,
+    and keeps it where the cache holds what the tree does. The first build of a run that reaches a module there settles
+    it; a later one of the same run leaves it, since an earlier build has compiled it and the cache holds it only when
+    the run ends."""
+    root = _workspace(tmp_path / "ws")
+    d, store = (tmp_path / "ws" / "d").resolve(), tmp_path / "store"
+    keyed = MK.keys(root, ["R.B"])
+    held = {m: files for m, files in (("D.X", X), ("R.A", A), ("R", R), ("R.B", B))}
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}
+    caches = iter(range(99))
+
+    def took(seen: set, also=(d,)) -> dict:
+        why: dict = {}
+        MK.stage(store, root, ["R.B"], tmp_path / "cache" / str(next(caches)), report=why, settled=True, also=also, seen=seen)
+        return why["took"]
+
+    run: set = set()
+    assert took(run) == {MK.ABSENT: 4} and not any(t.exists() for t in traces.values()), "D.X goes with r's three"
+    assert run == {(d, "D.X")}
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}     # the run's first build compiled all four
+    assert took(run) == {MK.ABSENT: 3} and traces["D.X"].exists(), "a second build of the run leaves what the first settled"
+    _stock(store, keyed, {"D.X": ("1" * 16, X), "R.A": ("2" * 16, A), "R": ("3" * 16, R)})
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}
+    assert took(set()) == {MK.ABSENT: 1} and traces["D.X"].exists(), "the cache holds D.X as the tree does; R.B it lacks"
+    traces["D.X"] = _held(keyed, "D.X", {"9" * 16 + ".olean": b"another X", "b" * 16 + ".ilean": b"x"})
+    assert took(set(), also=()) == {} and traces["D.X"].exists(), "not named: d's build stays whole"
+    assert took(set(), also=(root,)) == {} and traces["D.X"].exists(), "the root named is no path dependency"
+    assert took(set()) == {MK.REPLACED: 1} and not traces["D.X"].exists(), "another version than the cache's: Lake restores it"
 
 
 def test_a_module_above_one_that_is_compiled_keeps_its_trace_when_the_cache_holds_it_as_the_tree_does(tmp_path):

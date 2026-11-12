@@ -6,12 +6,13 @@ import Mathlib.Tactic.Finiteness.Attr
 /-!
 # Advice v1's whole window charged (`ChargeCount_v2`): every term, as `code_v1` codes it
 
-Definitions only. They mirror `verity/ml/protocols/certifier/window_charge.py`'s `reference_window` one for one, with
-each Python name in its docstring: `ChargeCount_v2{N, H, O, L}`'s charge, the length of `window_code.code_window`'s
-segment for the whole window, counted by advice v1's counting encoder (`AdviceV1.countStep` and `AdviceV1.finish`, from
-`arith_encode.py`'s references), and of the length terms' tail after it.
+Definitions only. They mirror `verity/protocols/certifier/prover/window_charge.py`'s `reference_window` one for one,
+with each Python name in its docstring: `ChargeCount_v2{N, H, O, L}`'s charge, the length of
+`window_code.code_window`'s segment for the whole window, counted by advice v1's counting encoder
+(`AdviceV1.countStep` and `AdviceV1.finish`, from `arith_encode.py`'s references), and of the length terms' tail after
+it.
 
-A window sends its decisions, its hits (v1's sent shortfalls, in hit units), its order entries (each deviating
+A window's advice is its decisions, its hits (in hit units; advice v1 sends none), its order entries (each deviating
 arrival's position and rank) and its length terms (each request's output_len and finish, for the requests whose body
 lands in it). Its symbols, in `window_code.code_window`'s order, all in one segment with one finish:
 1. n_arrived, then each decision at the book's KT estimate for its context `min(run, 2)`, as in v1;
@@ -28,10 +29,10 @@ each a plain tail after the segment (`window_code.Encoder.raw`, `lengths.tails`)
 (`AdviceV1.Carry`) and the last order entry's position and rank, each `+ 1` (0 before the session's first entry),
 chained from window to window under `window-charge` (`window_charge.check_chain`); the length terms carry nothing.
 
-**Scope.** Every advice v1 window: v1 sends hits, order entries and length terms, and never resumes or lag bits (the
-`codec.py` refuses a window that sends either), so the two are coded as 0. With no hits, no order entries and no
-length terms the symbols are `ChargeCount_v1`'s, with the n_hits, n_resumes, n_order and n_lag tables' bin 0 for its
-`zeros`. A registration that sends no length terms gives every window none.
+**Scope.** Every advice v1 window: v1 sends order entries and length terms, and never hits, resumes or lag bits
+(every hit is the replay's block pool's, and `advice_code.codec` refuses a window that sends any), so the three are
+coded as 0. With no order entries and no length terms the symbols are `ChargeCount_v1`'s, with the n_hits, n_resumes,
+n_order and n_lag tables' bin 0 for its `zeros`. A registration that sends no length terms gives every window none.
 
 **What is left.** That `ChargeCount_v2`'s circuit computes `window` is not proved in Lean. circuit-check holds the
 circuit to the Python reference, and these definitions are held to that reference by the window charge's difftest

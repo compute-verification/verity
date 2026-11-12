@@ -13,6 +13,8 @@
 # members by their spec's index) adds $OUT/mixed: the specs' members in one kept process in that order, so a member
 # whose circuit file is another than the one before's is timed and the process's peak RSS holds the change of file.
 # env: FM_MEM_GB (the job's --mem-gb)  FM_SPECS  FM_MEMBERS=3  FM_ROUNDS=2  FM_ORDER  FM_CACHE  FM_PORT=7611  FM_CORE
+#      MIMALLOC_PURGE_DELAY (the allocator setting flock_members.py's processes run under; unset: the verifier's own,
+#      proofs.py's VERIFIER_ENV)
 set -uo pipefail
 SPECS=$(cat <<'EOF'
 expert-gemm-small	MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=384}"},K=768,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}
