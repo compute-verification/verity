@@ -106,7 +106,6 @@
     {"file": "verity_vllm/commit/store_dump.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/config.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/engine/build.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/engine/chunks.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "schema-literal", "symbol": "build_manifest", "detail": "verity-vllm/profile/v1"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},

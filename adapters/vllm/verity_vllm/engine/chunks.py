@@ -159,7 +159,8 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
     loop's step fields STAND (a) when the derived lag contradicts `resolved_lag`, and (b) when the corrected model fails this function's own
     consistency check; the contradiction is a named problem and `corrections.applied` is False -- never a silent rewrite, never a lag
     inferred from the trace as the record's lag."""
-    recs: dict[str, dict] = timing.get("requests") or {}
+    held = timing.get("requests")
+    recs: dict[str, dict] = held if held else {}
     nonempty = list(collector.nonempty)
     n_it = len(nonempty)
     problems: list[str] = list(collector.errors)
@@ -322,7 +323,7 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
             timing["engine_steps"] = loop_blk["engine_steps"]
         timing["output_lag_steps"] = loop_blk["output_lag_steps"]
         for rid, rec in recs.items():
-            for k, v in (loop_blk["requests"].get(rid) or {}).items():
+            for k, v in loop_blk["requests"][rid].items():      # written above for every request of `recs`
                 if v is None:
                     rec.pop(k, None)
                 else:
@@ -337,7 +338,7 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
            "steps_scheduled_tokens": sched_steps if use_sched else None,
            "max_prefill_chunks": max(n_chunks, default=0),
            "chunked_prefill_observed": any(n > 1 for n in n_chunks),
-           "partial_prefill_steps_total": sum(len(r.get("partial_prefill_steps") or []) for r in recs.values()),
+           "partial_prefill_steps_total": sum(len(r["partial_prefill_steps"]) for r in recs.values()),
            "internal_request_ids": internal_ids or None,
            "consistent": not problems, "problems": problems[:32], "corrections": corrections}
     timing["chunk_attribution"] = out
