@@ -80155,3 +80155,70 @@ Mailbox read 09:09Z: nothing after your 07:47Z section [run: `git show origin/cu
 - `r20261112-085328-b163` (about 09:40Z [guess]): read `status.json` and the last lines of `stdout.log` in its run directory, put its verdict in #9220's body in place of the "not finished" line (`land3/bodies/twoat-body-b.md` in the notes is the body as sent), and write the ready line above with its exit and outcome. No second records run: this is the one for this head.
 - #9112 on `main`: then #8950's rework (merge `main`, close the two regions of `headline.py`, drop `widths`, name the plans by the margin and the held sampling scale, rewrite the slow test, print the table again, take the lane's labels out of its title and body), one quick tier, the ready line to you.
 - Checkpoint note: `lanes/proofs/20261112T0851Z-report-land3-twoat-terms.md` (your 08:40Z brief is copied in it).
+
+## COUNT, Thu 12 Nov 09:13Z: #9112 is mended at `366a6ece9985` (the three limits read from the challenger's module, one test, `main` at `19fb19a21e40` merged). 4 rows now meet no limit, 14 keep the release log's lines at 8,388,608, no GB figure moves. Ready line below, waiting only on the quick suites `r20261112-083739-72bb` (ETA about 09:28Z). #9185 is merged onto it at `5a4b6dc7102b`; its control passed, its suites `r20261112-090213-b15c` finish about 09:48Z
+
+Mailbox read: 27 sections, the last 08:34Z, read at 09:09Z. Tags as before.
+
+**1. The mend.** [read: the head's `benchmarks/spot_figures/total_cost.py` and `tests/test_total_cost.py`]
+- `LOG_LINES = challenger.MAX_TREE_LINES` (8,388,608), `DRAW_BYTES = challenger.MAX_COINS * challenger.COIN_BYTES` (2^30), and the 127 is derived: `TREE_TABLES = (challenger.MAX_TREE_COINS // STREAM_COINS - 1) // 2`, with `STREAM_COINS = 2 ** 9 * 512`. One test, `test_the_challengers_limits_are_the_challenger_modules`, holds the three to the module and checks 127 is the largest count `LiveChallenger.sample_tree`'s inequality takes.
+- The suite may import the module: `verity/protocols/spot` is a declared input of the suite, and `total_cost`'s imports of `plancheck` and `optimize` already loaded the challenger. What stays a literal is a stream's size (2^9 rounds of 512 coins): it is `verity_flock.rec_live`'s, and `verity_flock` is not a declared input. The test bounds it by the challenger's `MAX_ROUNDS_LOG` and `MAX_BLOCK` only.
+- How it went stale: I wrote the literals at 02:07Z Thu on a tree without #8914, which had landed at 01:32Z; the merge that brought #8914 in did not touch them. [read: git log]
+- **No first hold reached me.** No mailbox section before 08:11Z names either line or a reader's hold; `gh pr view 9112` shows no review or comment; `research queue status` showed #9112 ready and admitted at `c454bb68` before the mend, and at 09:12Z shows both pull requests waiting, not marked at their new heads. [read]
+
+**2. The reruns at `366a6ece9985`** (all `research run`, all exit 0). [run]
+- `r20261112-083757-a8b5`, the plan, counts and tables: against `r20261112-061248-5ac7`, `counts.json` is the same bytes; the plan differs in the commit it names and one design's limit sentence; `tables.json` differs in 18 fields, every one a `limit`.
+- `r20261112-083756-f7c6`, the several-phases scan: 148 fields differ from `r20261112-061314-8c0e`, every one a `limit`.
+- `r20261112-083843-c645`, the driver's three rows: the same bytes as `r20261112-072120-453d` (11,712.7 / 5,907.5 / 1,722.1 GB, world year, ×1.05, modeled).
+- **No GB figure moves**, as you expected: no bound reads a limit.
+
+**3. Which rows' first limit changes.** [run `a8b5`, `f7c6`]
+- **4 rows now meet no limit**, all at 1,536 machines' 600 s with sessions of at most one table: the partition `main` defines (12,441.8 GB, 13,063.9 at ×1.05; 3,267,384 lines), the best designed configuration (5,181.6, 5,440.7; 3,391,976 lines), and served today's J = 1 row and its plan's row, which are one design (25,432.1, 26,703.7; 3,298,924 lines).
+- **14 rows keep the release log's lines as their first limit**, now at 8,388,608: J = 1 at a datacenter's 600 s (the three bits-a-request rows) and over the whole year on every configuration, the plan of record's case at 1,536 machines (14,303,117 lines), and served today's rows at a datacenter's and over the year.
+- No row stops at the coin bytes at 2^30. No row's table limit moves (1, 64, 127, 200 as before).
+- A datacenter's 600 s as several verification phases, sessions of at most one table: within every limit of the challenger's on `main` from **4, 5 and 14 phases** (the partition `main` defines, the best designed configuration, the plan of record's case), where the literals gave 25, 51 and 96. Each phase's GB figure is as before.
+- `main`'s verifier still refuses every one of these designs' second stages (several sessions a template), so "meets no limit" is the challenger's, the provers' and the proved scope's limits only. The body says so.
+
+**4. My sentences that gave 2^20 lines or 2^26 bytes as `main`'s**, one line each. [read: my entries]
+- 22:20Z Wed, section 5: "2^20 coins of 64 bytes (67,108,864) at the challenger". True when written; stale since #8914 landed. At a datacenter's size "every one but one table a block type past the challenger's" still holds at 2^30. At a pod's size the two J = 200 columns (191,205,248 and 92,417,886 bytes) were past it and are now within.
+- 01:41Z Thu, item 3: "the figure uses `main`'s limits (2^20 lines, 2^20 coins); #8914's 2^23 and 2^24 are a column in the body only". Wrong when written: #8914 was on `main`.
+- 02:54Z Thu: "each phase fits #8914's limits" (they are `main`'s); "on `main`'s limits it fits at 25 / 52 / 96 phases" (it is 4 / 5 / 14); the legend's "(2^20)" and "(2^20 coins of 64 bytes)". Its J = 1 rows' "(at 2^23 too)" was right.
+- 03:21Z Thu: "on `main`'s limits (2^20 lines, 2^26 coin bytes) … 51 phases … 96 and not at 95". And `designs.json` (`art:9ce218d3…`): its `first_limit_main` and `fits_main_limits` are at the literals; its `first_limit_with_8914` and `fits_limits_with_8914` are `main`'s. I have not replaced the file; say if you want it put again.
+- 05:17Z Thu: its J = 1 rows' "the release log's lines" stand at both values.
+- Any J = 1 row I gave at 1,536 machines' 600 s on the partition `main` defines, the best designed configuration or served today as past the release log: it now meets no limit.
+- The 20:46Z six lines hold no such sentence. #9112's body did; it is replaced (below).
+
+**5. The three files.** [read: `git diff` of blobs]
+- `verity/protocols/spot/optimize.py` and `verity/protocols/spot/verifier/tests/test_optimize.py`: untouched, the same blobs as at `c454bb683c8e`.
+- `verity/protocols/spot/verifier/lean/tests/test_difftest.py`: I did not edit it; the merge of `main` made it `main`'s file (the stack landed), so it is no longer in the pull request's diff.
+- The diff against `main` is now 15 files: those two and 13 under `benchmarks/spot_figures/`.
+
+**6. The merge-tree step**, against lean's branch at `f3837f57d113` (it moved again since your `a88eee998fa2`; read 09:05Z). [local]
+- #9112's head stops in 13 files. `main` at `19fb19a21e40` stops in 12 by itself (I count 12, you wrote 14).
+- **The one my head adds: `verity/protocols/spot/optimize.py`.**
+- `test_optimize.py` is among `main`'s 12, but my copy differs from `main`'s, so the merged file still has to keep my hunks.
+- #9185's head: the same 13, the same one added.
+
+**7. #9112's body** is replaced (35,727 bytes; a copy is `/opt/cursor/artifacts/count_pr_9112_body.md`). [read: `gh pr view`]
+- It no longer calls #8914 open. Its limits are 2^23 lines and 2^30 bytes, read from the module.
+- A section "A correction" states the mend, the 4 and the 14 rows, and that no figure moved.
+- "It lands after #8904" became "It holds `main` at `19fb19a21e40`".
+- One sentence waits: the suites' verdict at the head. I put it in when `72bb` ends.
+
+**8. Ready line, #9112.** Head `366a6ece99856ee30dc4aede579caef33ef1a47f`. `Lane proofs`, `Refs PRF-577`. No Lean touched. Against lean's branch it adds one stop beyond `main`'s: `verity/protocols/spot/optimize.py`. **Ready to mark when `r20261112-083739-72bb` reads exit 0 with 0 failed**; it took its slot at 08:46Z and `f420` took 42 minutes in its slot, so about 09:28Z. I do not call it ready before that.
+
+**9. #9185.** [run, read]
+- Head `5a4b6dc7102b`: #9112's new head merged in. Two files met by hand, both its own: `breakeven/headline.py` (its deletion of the FlashInfer-in-slots tables stays, with `main`'s renamed `HOST_PROVERS`) and `tests/test_headline.py` (the steady-state row's test).
+- `r20261112-090208-7acb`, exit 0, at that head: the control, the rows and the figures are the same bytes as `r20261112-072030-0564`'s. 193 block types, no planner input differing by more than 1e-9, 2,635.9 GB (2,767.7 at ×1.05, assumed 60.56 s), rows 6,770.4 / 4,887.1 / 1,452.5 GB with 98% / 95% / 88% of their proving seconds at the planner's assumed default price.
+- `r20261112-072155-f420` at the old head `d5b8ad2f528c`: exit 0, 62 suites, 62 passed (3 from the cache), 0 failed.
+- `r20261112-090213-b15c`, the quick suites at the new head: in its slot since 09:06Z, about 09:48Z.
+- Its body has the line you asked for (the card's FP8 block matmul is the census's word form at N=4, which no served partition names; 0.4% / 0.5% / 1.9% of the three rows' proving seconds, 1.0% of the plan of record's) and the new base.
+- Its ready line comes when `b15c` is read and #9112's head has not moved.
+
+**10. The AND estimate (your 08:34Z item 2), by reading only.** [read at `5a4b6dc7102b`, except where tagged]
+- **The two counts are of #9185's card.** `SparseMlaCombine_v1{NSPLIT=5,DV=64,…}` is 1,560,795 ANDs at `k_log` 23; the 64-key head block `SparseMlaHeadBlock_v1{…NVIS=64,FIRST=false…}` is 37,568,903 at `k_log` 27. `main`'s card holds neither.
+- **No row of the plan takes `ands` as a block type's work.** `total_cost.priced` (line 406) prices a block type from its `k_log`: a named type at the `proof_overhead` card's seconds, a type priced by Definition and K at those seconds times 2^Δk, any other at the median rate times 2^`k_log`; a table's blocks are `table_blocks(k_log)`. The planner's cell is (n, bits, stratum, prove, fixed, cap, commit bytes). `optimize.CostModel` does price per AND, but nothing under `benchmarks/spot_figures/` builds one.
+- **Where `ands` is read:** `headline.copy_stratum` (`headline.py:271`), the median of seconds an AND over the strata priced "measured" with no MACs, which prices the page-copy stratum in every driver row, and the combine is one of its samples; `reprice.verify_per_and` (`reprice.py:232`), the median the memory-checked pool's verifier share uses (`sweep.py:274`); `levers.py`, which carries the field through a split. `total_cost.py:1005`'s `ands` is the scope's work times the card's ANDs a MAC, not the workload card's.
+- **What +7.4% and +4.5% move in the figure of record:** at an unchanged `k_log`, no table count and no block type's own price. On the cost line, at most the page copy's price, if the combine is at the median or crosses it; I have not computed which. [guess: small either way, it is one stratum]
+- **Does `k_log` move?** The census sets it by `m1_families.block`: the unit's slot at the estimate's ANDs plus its port bits. By hand on that slot: 1,676,431 + 11,424 is under 2^21, and 37,568,903 × 1.045 + 632,128 is about 39.9 million, under 2^26. So the same rule gives 23 and 27 at the staged counts. [derived; I did not run Flock's placement, and circuits has the staged size itself]
+- **Should PRF-577's item wait for the card?** No. Yes to the card carrying the staged count, and ask circuits for the staged `k_log` beside it, since `k_log` is what the plan prices. If both stay 23 and 27, the card's change moves no figure but the page copy's median. If the head block staged at 2^28, its seconds would double and a table would hold 128 of it where it holds 256: the cost line and a table count both. [derived]
