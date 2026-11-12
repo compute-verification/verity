@@ -87,6 +87,8 @@ from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.compact import idx_values as _idx_values
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
 
+__all__ = ["Options", "derived_shape", "main"]
+
 logger = init_logger(__name__)
 
 # the within-step criterion of record: `dag` accepts a request whose projection
@@ -446,12 +448,14 @@ def _compare_request(reads: _RequestReads, item) -> tuple:
             ent["criterion"] = "dag-multiset over the live cone (chunked prefill)"
         elif not seq_equal and not diff and within_step == "dag":
             ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record; sequence differs)"
-    ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (cmp.get("splits_values") or {}).get("equal", True)
+    splits = cmp.get("splits_values")   # the two sides' own split counts held against each other; absent when either side binds none
+    ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (splits is None or splits["equal"])
     ent["totals"] = cmp["totals"]
     ent["a_steps"], ent["b_steps"] = cmp["a"]["steps"], cmp["b"]["steps"]
-    bad = [s for s in cmp["steps"] if not s["spec_seq_equal"] or (s.get("wiring") or {}).get("operands_different")]
+    # a step whose spec sequences are equal is wired (`compare_steps`); one whose sequences do not align is compared no further
+    bad = [s for s in cmp["steps"] if not s["spec_seq_equal"] or s["wiring"]["operands_different"]]
     ent["first_divergences"] = [{"step": s["step"], "n_a": s["n_a"], "n_b": s["n_b"], "div": s.get("first_divergences_T_normalised", [])[:2],
-                                 "wiring_examples": (s.get("wiring") or {}).get("examples", [])[:3]} for s in bad[:3]]
+                                 "wiring_examples": s["wiring"]["examples"][:3] if "wiring" in s else []} for s in bad[:3]]
     ent["n_divergent_steps"] = len(bad)
     if prof is not None:
         prof["seconds"] = round(time.time() - prof["t_start"], 3)

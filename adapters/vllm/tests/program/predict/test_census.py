@@ -44,7 +44,8 @@ from verity.definitions.registry import tp_allreduce as TA
 from tests.program import test_derive_neutrality as GLM
 from tests.program.predict.test_predict import FIX, TINY, _phi
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity_vllm.program.predict.build import build_program, model_shape
+from verity_vllm.program.predict.build import build_program
+from verity_vllm.program.predict.model_shape import model_shape
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
