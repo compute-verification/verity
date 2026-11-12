@@ -85033,3 +85033,48 @@ branch has not run, so this is an expectation, not a result.
 
 Next, in order: read `7a9f`, fix the tensor loop, push the branch, open the unmarked pull request under PRF-587 (stacked
 on #9209), and tell you its number.
+
+## MEMBERS, Thu 12 Nov 11:17Z: `4309` cancelled and what it showed; PRF-585 is built and pushed (`cursor/proofs-members-files-61d4` at `0429a81f9848`), three runs out; `audit_record`'s clause is in it; one reading of the naming rule to check
+
+Clock read: 11:17Z. Mailbox read through the 11:02Z section. Tags: [run] a run's own output read by me, [read] a file read by me, [relayed], [derived], [guess].
+
+**1. `r20261112-084112-4309`: cancelled by me at 10:28Z by its run id, after 107 minutes.** [run]
+- 49 of its 60 suites had finished: 47 passed, one cached, one failed.
+- The one failure is `benchmarks/one_stage`: 571 passed, 2 failed, both tests of `test_audit_two_members.py`, each refused with the one-leaf clause's reason. Its window's two members are one unit each, so every output port of theirs is one leaf.
+- `verity-vllm` passed (14,925 passed, 505 skipped, 5,196 s); `verity-network-traces` passed (542).
+- 11 suites never finished, `verity-flock` among them. So the universal circuit's fixture at 64 instances was never verified with the clause in: the run does not show that port refused or passed.
+- What it shows: the clause refuses an honest statement of one instance on the real prover and verifier, as the list of 09:32Z said. Nothing else among the 49 failed.
+
+**2. PRF-585's state.** Branch `cursor/proofs-members-files-61d4`, head `0429a81f9848`, three commits on `main` `33faab2be81c`, pushed. No pull request yet: it opens when the suites and records runs pass.
+- **The check** [read: my diff]: `runMembers` reads every member of the parameters before any session (`membersFiles`): its statement as a sampled member's (`Member.statement`), then what a session's verdict checks of the files alone (`StepAt.filesHeld`: the scope, the files' ports and roots, `Flock.KsScope.filesOf`, the population check). A statement's session then runs at the statement that pass read, so a sampled member's files are still read once.
+- **`Flock/KsScope.lean`** gains `filesOf` (`checkOf` without the session's sample) with `checkOf_iff` and `filesOf_ok`. `checkOf`'s body is untouched, so the two proofs that unfold it are not moved.
+- **The property** (`Spot/OneStageZk.lean`): `membersRun_files`: where `membersRun p ms c e sts bs = .ok r`, there are roots with `rootsOf ms c.record = .ok roots` and every `m ∈ ms` has `m.FilesHeld (m.slice c.record roots) bs`, whatever the statements name. `checkMembersAt` still accepts nothing.
+- **The writer** (`one_stage/proofs.py` `members_v2`): the blobs now hold the circuit and public files of each member with no session, after the statements' files; two tests' expected blobs follow.
+- **Sizes** [read]: `Spot/OneStageZk.lean` 1,713 to 1,870 lines (cap 2,000); `Flock/KsScope.lean` 284 to 336.
+- **Tries** [run]: `r20261112-104920-0a26` (`Flock/KsScope.lean`: lean exit 0, none of its 11 theorems beyond the three axioms); `r20261112-110340-92ce` (`Spot/OneStageZk.lean --siblings`, the text at the head: lean exit 0 in 9 s, none of its 15 theorems beyond the three axioms, no sibling declares a name it does: 19 imported, 28 not checked for want of a build). One try between them failed on a proof step of mine (`r20261112-110047-6430`), mended.
+- **The two-member audit on the real prover and verifier passes with the writer's change** [run: `r20261112-110655-b1e1`, `test_two_sampled_members_pass…`: 1 passed in 101.60 s]. That run then failed on my own timing harness, which did not compile; it is relaunched (below).
+
+**3. Runs out, all on head `0429a81f9848`.**
+- Suites, whole, of what the change from `33faab2be81c` touches: `r20261112-110753-e3ca` on vy-nebius-cpu-14, launched 11:07Z. `4309` had 49 of 60 suites of the same reach after 107 minutes, so I expect it past 13:00Z [guess]; its own limit ends it by 15:08Z.
+- Records (`lean_changed.py --records verity/protocols/flock/verifier --update`, a clone): `r20261112-110654-154d` on vy-nebius-cpu-11, launched 11:06Z; limit 180 minutes.
+- Timing of the files half (two-member window, a step at a time, and the same window with the last member's statement left out and its committed file another's): `r20261112-111312-1988` on vy-nebius-cpu-6, launched 11:13Z.
+- Cancelled by me, by run id: `r20261112-105559-70b1` and `r20261112-105559-6e33` (launched one commit behind the head), `r20261112-110655-9526` (launched with `--quick`, which leaves out the slow tests that take the change through the real prover and verifier). Failed on my harness alone: `r20261112-105559-e473`.
+- `main` is at `33866d93e66e` now, 52 commits on; none touches the Spot or Flock verifier trees or the two Python files of the change [read: `git diff --stat`]. I did not merge it: the runs would start over.
+
+**4. `audit_record` (NET-352, item 1): the Lean record check does not hold it; the per-member run does; the clause is now a theorem in PRF-585.**
+- **Not held by the record check** [read]: `Spot/Record.lean` `checks` (110-140) mirrors `audit_record`: it takes `provedUnits` and the verdicts as two inputs. v1's `OneStage.verdictOf` (`Spot/OneStage.lean` 463-472) accepts on the verdicts it is handed, as `one_stage/audit.py` 147-150 does. Nothing there ties a verdict's `units` to `proved_units`.
+- **Held by v2's run** [read]: the verdicts are the verifier's own (`r.out`, never the evidence's: `checkMembersAt` passes `{ e.base with verdicts := r.out }`, `Spot/OneStageZk.lean` 1249-1258 on `main`). `runMembers` holds the units the accepted sessions proved, sorted, to the evidence's `proved_units` (`provedHeld`, 617-619, called at 1162-1171 on `main`). A session's proved units are read off its member's public file (`push`, 582-594; `provedUnits`, 371-378), which the population check holds to exactly the member's units (`Member.heldAt`, `unitsHeld`, 903-938). `Record.checks`' `proved` holds `proved_units` to the sample (`Draw.checkProvedFull`, `Spot/Draw.lean` 240-247), and `coinsWhy` the sample to the coins (`Spot/OneStage.lean` 544-555). So a sampled unit whose member has no accepted session of this run refuses the run.
+- **The clause, built** (commit `0429a81f9848`, no code change): `membersRun_proved`: `membersRun p ms c e sts bs = .ok r → r.all = true → r.proved.qsort (· < ·) = e.base.provedUnits`, from `runMembers_proved`.
+- **What it does not say** [read]: that each unit of `r.proved` was pushed by an accepted session of the member that holds it. That is the walk through `step` and `push` which `security/Proofs/Properties/Spot/Credited.lean` (240-340) makes for the one statement's `run`; nothing makes it for `runMembers`. It belongs with the theorem that lets the form accept, soundness's window bridge.
+- **Python's hole stays Python's**: `audit_record` is still handed `proved_units` and the verdicts apart. Whoever owns `one_stage/audit.py` closes it there, or the driver takes its verdicts from the Lean check.
+
+**5. The naming rule: network-accounting's reading is right for a registration's own root. One thing to say at once: the "one rule" of their item 2 would also rename a member's own rows.**
+- Today a member's own rows are read as the value `committed/<member>/<port>` (`verity/commitments/windows/rows.py` `own_value`, 927-931), on purpose not the port's name: v1's record check takes a read named as a root's port for a registered value and refuses it unless the record lists that value (`Spot/Record.lean` `ownRegistered` 99-101, `checks` 129-139).
+- The one rule I will propose for PRF-586 in the 22:00Z entry is value = the record's own name for the tree, for all three kinds, with the record check taking off a read of a port at its own root (`Record.lessOwnReads`, 368-370, which the two-stage record already uses). Under it `own_value` returns the port, and their 45 lines name the member's own rows that way too. [derived; soundness's to rule, nothing built]
+
+**6. Three findings from the build, none fixed here.**
+- **The form refuses a window whose members look up different pinned tables** [read: `tablesHeld`, `Spot/OneStageZk.lean` 402-406 on `main`]. Each member's statement holds its circuit's lookups to exactly the tables the blobs hold, and the blobs are one set a window. Before PRF-585 that bound the sampled members to one set of tables; with the every-member pass it binds every member. `a5`'s `members_proof` collects the tables of sampled members only. A window with a GEMM member and a member that looks up a table is refused. The mend is a member's inputs holding only its own circuit's tables; it changes what a member's statement is, so it is not PRF-585's.
+- **The files pass reads the members' shared program once a member** [read]: `programDigest` (`StepAt.ofOwn`) and `Program.parse` with `Partition.strata` (`Member.population`), and nothing is kept from one member to the next. Timing and the lever follow with the timing run.
+- **No executable reaches `membersRun`** [read]: `protocol` refuses the form's keys and the `members` command only parses, so the check runs in `#guard`s and in my scratch harness only.
+
+**Not done, not known:** the suites and records runs have not ended; the timing has no number yet; items 2 to 5 of NET-352 and NET-329's ask 4 are read and come in the 22:00Z entry, sooner if the timing is in.
