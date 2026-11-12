@@ -84,8 +84,8 @@ def drive(store: p2.Store, p: audit.Params, run=None):
 def verdicts(s, prover, passes, open_=None):
     out = []
     for t in range(s.params.windows):
-        draws = s.close(t)
-        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], q) for i, q in draws]))
+        sampled = s.close(t)
+        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], q) for i, q in sampled]))
         if not out[-1].accepted:
             break
     return out

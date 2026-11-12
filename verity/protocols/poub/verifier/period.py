@@ -35,7 +35,7 @@ from fractions import Fraction
 from typing import Any, Protocol
 
 from verity.commitments.identity import canonical_json_bytes
-from verity.protocols.pous.verifier.period import Period, Run
+from verity.protocols.pous.verifier.period import Run
 from verity.protocols.spot.verifier.profile import WINDOW_DELTA
 
 from . import audit, codec, pooled, receipts
@@ -232,7 +232,7 @@ def case_of(s: audit.AuditRun, events: Sequence[dict[str, Any]]) -> dict[str, An
 def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
             window_ns: int = 100_000_000, deadline_ns: int = 500_000_000, codec_: codec.Codec = codec.DEFAULT,
             verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
-            sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Period:
+            sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Run:
     """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
     registration it draws from `coins`, its challenger's coins, its clock and its log, which are the case."""
     n, root = prover.register()
@@ -272,8 +272,8 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
             break
     if s.outcome is not None:
         prover.end(*s.disclose())
-    return Period(answer(s), case_of(s, events))
+    return Run(answer(s), case_of(s, events))
 
 
-__all__ = ["DELTA", "PROTOCOL", "Local", "Period", "Prover", "answer", "case_of", "certified", "opened", "payloads",
+__all__ = ["DELTA", "PROTOCOL", "Local", "Prover", "Run", "answer", "case_of", "certified", "opened", "payloads",
            "registration_json", "registration_of", "run", "session"]

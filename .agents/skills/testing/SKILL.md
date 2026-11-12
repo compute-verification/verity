@@ -29,6 +29,7 @@ $R "$S"                         # every suite whose inputs changed since it last
 $R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
+python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD   # here, in a second, before the pre-mark run: the no-growth lints on your change
 $R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # the pre-mark run; the mark's tier runs it on the head merged onto main
 $R "$S --fresh"                 # ignore the cache, Lake's artifact cache too: what the suites test is compiled
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
@@ -165,5 +166,5 @@ and false-positive rulings live in its dashboard, not the repository.
 
 ## Before a PR
 
-The suites your change touches pass with no read outside their inputs (the pre-mark run, the team skill), and a new or
+The suites your change touches pass with no read outside their inputs (the pre-mark run above), and a new or
 changed circuit passes `circuit-check` (AGENTS.md "Circuits").

@@ -224,3 +224,6 @@ def decode_segment(params: DenseParams, prims: Primitives, salt: bytes, s: int, 
 
 DENSE = Codec("dense-chain/v1", encode_segment, decode_segment)
 """The dense scheme as a codec (a selectable alternative to the band, `band.BAND12`)."""
+
+
+__all__ = ["DenseParams", "dom", "encode_segment", "reference"]

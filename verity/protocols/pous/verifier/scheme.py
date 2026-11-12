@@ -141,3 +141,6 @@ def decode(params: Params, prims: Primitives, salt: bytes, blocks: Sequence[byte
     if len(blocks) != params.blocks:
         raise ValueError(f"expected {params.blocks} blocks, got {len(blocks)}")
     return b"".join(decode_segment(params, prims, salt, s, blocks[s * n:(s + 1) * n]) for s in range(params.segments))
+
+
+__all__ = ["P3"]

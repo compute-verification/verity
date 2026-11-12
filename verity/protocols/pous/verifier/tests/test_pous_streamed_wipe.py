@@ -61,10 +61,10 @@ def test_label_format():
 
 
 def test_the_sampled_indices_are_uniform_and_come_from_the_coin_secret():
-    idx = sw.draw_indices(b"coins", SERVER, SESSION, N, K)
+    idx = sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     key = derive(b"coins", sw.COIN_DOMAIN, {"server": SERVER, "session": SESSION, "n": N})
     assert idx == tuple(key.uniform(N, j) for j in range(K))
-    assert all(0 <= i < N for i in idx) and idx != sw.draw_indices(b"other", SERVER, SESSION, N, K)
+    assert all(0 <= i < N for i in idx) and idx != sw.sample_indices(b"other", SERVER, SESSION, N, K)
 
 
 @pytest.mark.parametrize("batch", [1, 2, 8, K])
@@ -81,7 +81,7 @@ def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
     uncovered = f"batch size {batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
     assert v.reasons == (() if batch == 1 else (uncovered,))
     assert v.public() == {"accepted": batch == 1, "egress_mib": 1}
-    assert c.coins() == sw.draw_indices(b"coins", SERVER, SESSION, N, K)
+    assert c.coins() == sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     assert c.params.covered == (batch == 1)
 
 
@@ -163,6 +163,13 @@ def test_verdict_fails_closed():
     r = signed.batches[0]
     forged = dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt_ns=r.receipt_ns + 1), *signed.batches[1:]))
     assert "the signature does not verify" in sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons
+
+    def raises(*_):
+        raise ValueError("a malformed signature")
+
+    for verify in (raises, lambda *_: False, lambda *_: None):  # a scheme that raises, refuses or says nothing
+        got = sw.verdict(signed, c.commitment, trusted=trusted, schemes={signed.scheme: verify})
+        assert not got.accepted and got.reasons == ("the signature does not verify",)
     more = dataclasses.replace(signed, egress_bits=0)
     assert not sw.verdict(more, c.commitment, trusted=trusted, schemes=ts.SCHEMES).accepted
 
