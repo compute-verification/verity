@@ -14,8 +14,18 @@ Every call that reaches RunPod is one line of ``api-calls.log`` under
 API, the call, the status, the counts RunPod says are left, and who called.
 The address ``research`` last read for a pod is kept there too
 (``address-<pod id>.json``), so a call that names the pod asks RunPod again only
-when that address is over ``ADDRESS_TTL_S`` old (``$RESEARCH_POD_ADDRESS_TTL_S``;
-0 asks every time) or no longer takes a connection (``remote.pod_target``).
+when that address is over ``ADDRESS_TTL_S`` old or the host there does not hold
+the host key recorded for it (``remote.pod_target``).
+
+Who is at an address is RunPod's word or a host key, never that a port takes a
+connection.  An address RunPod has just given is dialled as it always was
+(``StrictHostKeyChecking=no``), and is kept only when the host there proves a
+host key at that moment, which ``known_hosts()`` then records for the address
+(``keep_address``).  A kept address is dialled without RunPod's fresh word only
+after the host there has proved that same key in a handshake (``kept_stands``),
+and every ssh command this process then builds for it checks the key strictly
+(``ssh_command``).  A host refused for its key is not dialled: the address is
+forgotten and RunPod asked.
 
 Where the laptop files are absent (a cloud VM with only the Cursor secrets) the
 environment stands in, and a file that exists always wins:
@@ -44,7 +54,6 @@ import hashlib
 import json
 import os
 import re
-import socket
 import subprocess
 import sys
 import threading
@@ -64,13 +73,18 @@ DEFAULT_IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 CALL_LOG = "api-calls.log"
 CALL_LOG_MAX = 4 << 20              # bytes; past it the log becomes `api-calls.log.1` (one older file is kept) and a new one starts
 ADDRESS_TTL_S = 3600.0              # how long a pod's kept address is used before RunPod is asked again
-ADDRESS_TTL_ENV = "RESEARCH_POD_ADDRESS_TTL_S"
-ADDRESS_KEYS = ("host", "port", "user", "pod_name", "cost_per_hr", "rate_observed_utc", "gpu")    # a runpod machine's target
-ANSWERS_TIMEOUT_S = 5.0
+ADDRESS_KEYS = ("host", "port", "user", "pod_name", "cost_per_hr", "rate_observed_utc", "gpu")    # a runpod machine's target, as kept
+HOST_KEY_CONNECT_S = 5              # ssh's ConnectTimeout for the handshake that asks a host for its key (`host_key`) ...
+HOST_KEY_S = 20.0                   # ... and the whole handshake's bound
 #: what the GraphQL reads ask of a pod: the fields `_as_rest` turns into REST's
 POD_FIELDS = ("id name desiredStatus costPerHr createdAt machineId machine { gpuTypeId } "
               "runtime { ports { ip isIpPublic privatePort publicPort type } }")
-clock = time.time
+#: the clock of the kept addresses and the call log, and the runner of `host_key`'s ssh and `drop_key`'s ssh-keygen: a test's stand-ins
+clock, run = time.time, subprocess.run
+#: the kept addresses (host, port) this process dials without RunPod's fresh word (`kept_stands`): `ssh_command` checks the host
+#: key at one strictly
+_KEPT: set[tuple[str, str]] = set()
+_SAID: set[str] = set()
 
 
 class PodError(RuntimeError):
@@ -225,6 +239,13 @@ def _caller() -> str:
     return ",".join(words) or "?"
 
 
+def _say(what: str) -> None:
+    """One line on stderr, once a process."""
+    if what not in _SAID:
+        _SAID.add(what)
+        print(f"research: {what}", file=sys.stderr)
+
+
 def _note_call(api: str, method: str, what: str, status: int | None, headers: Any) -> None:
     """One line of the call log (module docstring) for a call sent to RunPod: `status` is its HTTP status, `none` when no answer
     came, and the counts left are read from the answer's headers.  Best effort: nothing here, a full disk included, may fail the
@@ -326,51 +347,118 @@ def _address_file(pod_id: str) -> Path | None:
 
 
 def kept_address(pod_id: str) -> tuple[dict[str, Any], float] | None:
-    """(the target `remote.pod_target` last read for the pod, its age in seconds), or None; a file that is not such a target
-    (`ADDRESS_KEYS`) reads as none."""
+    """(the target `remote.pod_target` last read for the pod, marked `kept`, its age in seconds), or None.  The mark is put on
+    here and never stored: the file holds `ADDRESS_KEYS` and nothing else, so no file can say its address needs no check, and one
+    that is not such a target is removed and reads as none."""
+    path = _address_file(pod_id)
+    if path is None or not path.is_file():
+        return None
     try:
-        doc = json.loads(_address_file(pod_id).read_text())
+        doc = json.loads(path.read_text())
         target, read_at = doc["target"], float(doc["read_at"])
-        if set(target) == set(ADDRESS_KEYS) and isinstance(target["host"], str) and target["host"] and type(target["port"]) is int:
-            return target, max(0.0, clock() - read_at)
-    except Exception:  # noqa: BLE001
-        pass
-    return None
+        if set(target) != set(ADDRESS_KEYS) or not (isinstance(target["host"], str) and target["host"]) or type(target["port"]) is not int:
+            raise ValueError("not a kept target")
+    except (OSError, ValueError, KeyError, TypeError):
+        forget_address(pod_id)
+        return None
+    return {**target, "kept": True}, max(0.0, clock() - read_at)
 
 
 def keep_address(pod_id: str, target: dict[str, Any]) -> None:
-    """Keep `target` for the pod's next lookup.  Best effort: an address that could not be kept is read from RunPod again."""
+    """Keep the target RunPod has just given for the pod, for its next lookup, if the host there now proves a host key that is
+    from here the key recorded for the address (`_recorded`): a kept address always has the key its host held when RunPod gave
+    it.  This process's ssh to the address is as RunPod's word allows from here (`ssh_command`).  An address that is not kept is
+    read from RunPod at the next call."""
+    host, port = target["host"], target["port"]
+    _KEPT.discard((host, str(port)))
+    path = _address_file(pod_id)
+    if path is None:
+        return
+    if not _recorded(host, port):
+        forget_address(pod_id)
+        return
     try:
-        path = _address_file(pod_id)
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{threading.get_ident()}")
-        tmp.write_text(json.dumps({"target": target, "read_at": clock()}))
+        tmp.write_text(json.dumps({"target": {k: target[k] for k in ADDRESS_KEYS}, "read_at": clock()}))
         os.replace(tmp, path)
-    except Exception:  # noqa: BLE001
-        pass
+    except OSError as error:
+        _say(f"pod {pod_id}'s address can't be kept, so RunPod is asked for it at each call: {type(error).__name__}: {error}")
 
 
 def forget_address(pod_id: str) -> None:
+    path = _address_file(pod_id)
+    if path is None:
+        return
     try:
-        _address_file(pod_id).unlink()
-    except Exception:  # noqa: BLE001
-        pass
+        path.unlink(missing_ok=True)
+    except OSError as error:
+        _say(f"pod {pod_id}'s kept address can't be removed: {type(error).__name__}: {error}")
 
 
-def address_ttl_s() -> float:
+def _known_as(host: str, port: int) -> str:
+    """The address as known_hosts names it."""
+    return host if port == 22 else f"[{host}]:{port}"
+
+
+def host_key(host: str, port: int, *, fresh: bool = False) -> str:
+    """Whether the host at `host:port` holds the host key `known_hosts()` records for that address, by one ssh handshake of its
+    own (no shared connection) that checks the key and asks for no login: "held" when it proved the key (only then does ssh get
+    as far as being denied a login it never asked for), "refused" when ssh refused it for its key (the host there proves another
+    or, unless `fresh`, none is recorded for the address), "silent" when nothing there finished a handshake.  `fresh`: RunPod has
+    just given the address, so a host with no key recorded there has its key recorded (ssh's `accept-new`) and holds it.  A kept
+    address's use rests on this; that a port takes a connection says nothing of who is there."""
+    base = _ssh_command(host, port, "root", checking="accept-new" if fresh else "yes")
+    argv = [*base[:-1], "-o", "BatchMode=yes", "-o", "PreferredAuthentications=none", "-o", "ControlPath=none",
+            "-o", f"ConnectTimeout={HOST_KEY_CONNECT_S}", base[-1], "true"]
     try:
-        return max(0.0, float(os.environ[ADDRESS_TTL_ENV]))
-    except (KeyError, ValueError):
-        return ADDRESS_TTL_S
+        r = run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=HOST_KEY_S)
+    except (OSError, subprocess.TimeoutExpired):
+        return "silent"
+    if "Host key verification failed" in r.stderr:
+        return "refused"
+    return "held" if r.returncode == 0 or re.search(r"^\S+@\S+: Permission denied \(", r.stderr, re.M) else "silent"
 
 
-def answers(host: str, port: int, timeout: float = ANSWERS_TIMEOUT_S) -> bool:
-    """Whether `host:port` takes a TCP connection: a pod that restarted has left its old address."""
+def drop_key(host: str, port: int) -> None:
+    """Remove what `known_hosts()` records for the address."""
+    name, recorded = _known_as(host, port), known_hosts()
+    if not recorded.is_file():
+        return
     try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
+        r = run(["ssh-keygen", "-R", name, "-f", str(recorded)], stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                timeout=HOST_KEY_S)
+        failed = f"ssh-keygen exits {r.returncode}" if r.returncode else ""
+    except (OSError, subprocess.TimeoutExpired) as error:
+        failed = type(error).__name__
+    if failed:
+        _say(f"the host key recorded for {name} can't be removed ({failed}): until it is, RunPod is asked for that address at each call")
+
+
+def _recorded(host: str, port: int) -> bool:
+    """Whether the host at the address RunPod has just given proves a host key that is, from here, the key recorded for the
+    address.  A key recorded for an earlier host there is dropped first: RunPod's word is fresher than the record, and is the
+    only thing a record is dropped on."""
+    answer = host_key(host, port, fresh=True)
+    if answer == "refused":
+        drop_key(host, port)
+        answer = host_key(host, port, fresh=True)
+    return answer == "held"
+
+
+def kept_stands(pod_id: str, target: dict[str, Any]) -> bool:
+    """Whether the pod's kept address may be dialled without RunPod's fresh word: the host there has just proved the key recorded
+    for that address (`host_key`), which is the key its host held when RunPod gave it (`keep_address`).  From then on every ssh
+    command this process builds for the address checks that key strictly (`ssh_command`), until RunPod gives the address again.
+    A host refused for its key is not the pod as far as anything here can tell: the address is forgotten, so RunPod is asked."""
+    at = (target["host"], str(target["port"]))
+    answer = host_key(target["host"], target["port"])
+    if answer == "held":
+        _KEPT.add(at)
+        return True
+    if answer == "refused":
+        forget_address(pod_id)
+    return False
 
 
 def create(args: argparse.Namespace) -> None:
@@ -463,6 +551,14 @@ def ssh_target(pod: dict[str, Any]) -> tuple[str, int] | None:
 
 
 def ssh_command(host: str, port: int, *, user: str = "root") -> list[str]:
+    """The ssh command every `research` connection to a machine starts from (`remote.ssh_argv`, `connect.ssh_for`, and what they
+    are made into: rsync's `-e`, git's `ext::`).  It records a host's key at the first connection and connects whatever the key,
+    as RunPod's word or a registry entry names the address; at a kept address in use (`kept_stands`) it connects only to the
+    host that proves the recorded key."""
+    return _ssh_command(host, port, user, checking="yes" if (host, str(port)) in _KEPT else "no")
+
+
+def _ssh_command(host: str, port: int, user: str, *, checking: str) -> list[str]:
     return [
         "ssh",
         "-i",
@@ -470,7 +566,7 @@ def ssh_command(host: str, port: int, *, user: str = "root") -> list[str]:
         "-p",
         str(port),
         "-o",
-        "StrictHostKeyChecking=no",
+        f"StrictHostKeyChecking={checking}",
         "-o",
         f"UserKnownHostsFile={known_hosts()}",
         "-o",

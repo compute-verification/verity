@@ -1,13 +1,17 @@
 """How `research` reaches a RunPod machine without asking RunPod at every call (pods/runpod.py, remote.pod_target): the address
-last read is kept and used while it still takes a connection; a read asks GraphQL when REST gives no answer; and every call sent
-to RunPod is one line of the call log, with the counts RunPod says are left. No network: `urlopen` answers from a queue, the
-connection probe is a function the test sets, and the clock is the test's."""
+last read is kept and used only where the host there proves the host key recorded for it, by ssh commands that check that key; a
+read asks GraphQL when REST gives no answer; and every call sent to RunPod is one line of the call log, with the counts RunPod
+says are left. No network and no ssh: `urlopen` answers from a queue, OpenSSH's client is a function that says what ssh says of a
+command built here, and the clock is the test's."""
 from __future__ import annotations
 
 import email.message
 import io
 import json
+import re
+import subprocess
 import urllib.error
+from pathlib import Path
 
 import pytest
 
@@ -199,15 +203,60 @@ def test_a_machine_with_no_key_asked_the_door_and_its_failure_stands(wire, monke
 
 # ---- the address kept between calls ----------------------------------------------------------------------------------------------------------
 
+A, B = ("203.0.113.7", 40123), ("203.0.113.9", 41000)
+#: what OpenSSH's client says, told to check a host's key, of a host it has no key for and of one that proves another
+NO_KEY_RECORDED = ("No ED25519 host key is known for [{}]:{} and you have requested strict checking.\r\n"
+                   "Host key verification failed.\r\n")
+ANOTHER_KEY = ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n"
+               "@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\r\n"
+               "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n"
+               "IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!\r\n"
+               "Offending ED25519 key in /home/u/.local/state/research/runpod/known_hosts:1\r\n"
+               "Host key for [{}]:{} has changed and you have requested strict checking.\r\n"
+               "Host key verification failed.\r\n")
+DOWN = runpod.PodError(f"GET /pods/{POD} -> HTTP 429: rate limit exceeded for the day window; GraphQL: URLError: timed out",
+                       code=429, pod_id=POD)
+ELSEWHERE = {**REST_POD, "publicIp": B[0], "portMappings": {"22": B[1]}}
+
+
 @pytest.fixture
 def pod(monkeypatch):
-    """RunPod as `runpod.get` sees it: `answer` is what it gives next (a pod, or an error to raise), `asked` counts the calls, and
-    `up` is the set of addresses that take a connection."""
+    """RunPod as `runpod.get` sees it, and the hosts as ssh does. `answer` is what RunPod gives next (a pod, or an error to raise)
+    and `asked` counts the calls. `hosts` is the host key of whoever is at each address, `recorded` the key known_hosts holds for
+    each, and `ran` every command `runpod` ran about a host's key. `ssh` is OpenSSH's client on a command built here: what it says
+    on stderr, having recorded a new host's key unless told to be strict, and refused a changed one unless told to check none."""
     class Pod:
         answer: object = dict(REST_POD)
         asked = 0
-        up: set = set()
         clock = T0
+        hosts: dict = {}
+        recorded: dict = {}
+        ran: list = []
+        keygen_exits = 0
+
+        @staticmethod
+        def ssh(argv: list[str]) -> str:
+            host = next(a for a in argv if re.fullmatch(r"root@[\d.]+", a)).removeprefix("root@")
+            at, checking = (host, int(argv[argv.index("-p") + 1])), checks(argv)
+            if at not in Pod.hosts:
+                return f"ssh: connect to host {host} port {at[1]}: Connection refused\r\n"
+            if checking != "no" and Pod.recorded.get(at, Pod.hosts[at]) != Pod.hosts[at]:
+                return ANOTHER_KEY.format(*at)
+            if checking == "yes" and at not in Pod.recorded:
+                return NO_KEY_RECORDED.format(*at)
+            Pod.recorded.setdefault(at, Pod.hosts[at])      # checking none, a changed key is warned of and left as recorded
+            return f"root@{host}: Permission denied (publickey).\r\n" if "PreferredAuthentications=none" in argv else ""
+
+        @staticmethod
+        def logs_in(target: dict) -> bool:
+            """Whether the launcher's ssh for the target gets a shell on the host there."""
+            return Pod.ssh(remote.ssh_argv(target["host"], target["port"], user=target["user"])) == ""
+
+        @staticmethod
+        def handshakes() -> list[tuple[str, str]]:
+            """(the address, how the key was checked) of each ssh `runpod` ran, and ("ssh-keygen", the name dropped) of each drop."""
+            return [("ssh-keygen", c[2]) if c[0] == "ssh-keygen" else (f"{c[-2].removeprefix('root@')}:{c[c.index('-p') + 1]}", checks(c))
+                    for c in Pod.ran]
 
     def get(pod_id):
         Pod.asked += 1
@@ -215,8 +264,20 @@ def pod(monkeypatch):
             raise Pod.answer
         return Pod.answer
 
+    def run(argv, **_kwargs):
+        Pod.ran.append(list(argv))
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 255, "", Pod.ssh(argv))
+        assert argv[:2] == ["ssh-keygen", "-R"] and argv[3:] == ["-f", str(runpod.known_hosts())]
+        host, port = re.fullmatch(r"\[(.+)\]:(\d+)", argv[2]).groups()
+        if not Pod.keygen_exits:
+            Pod.recorded.pop((host, int(port)), None)
+        return subprocess.CompletedProcess(argv, Pod.keygen_exits, "", "")
+
     monkeypatch.setattr(runpod, "get", get)
-    monkeypatch.setattr(runpod, "answers", lambda host, port, timeout=0.0: (host, port) in Pod.up)
+    monkeypatch.setattr(runpod, "run", run)
+    monkeypatch.setattr(runpod, "KNOWN_HOSTS", Path("/nonexistent/known_hosts"))
+    runpod.known_hosts().touch()
     monkeypatch.setattr(runpod, "clock", lambda: Pod.clock)
     monkeypatch.setattr(remote, "utc_now_ms", lambda: f"read-{Pod.asked}")      # a target says which read of RunPod it is
     monkeypatch.setattr(remote, "_TOLD_KEPT", set())
@@ -224,53 +285,244 @@ def pod(monkeypatch):
     return Pod
 
 
+@pytest.fixture
+def registry(monkeypatch, tmp_path):
+    """The registry names the pod `vy-x`."""
+    (tmp_path / "machines.d").mkdir()
+    (tmp_path / "machines.d" / "vy-x.toml").write_text(f'provider = "runpod"\npod_id = "{POD}"\nproject = "verity"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    monkeypatch.setenv("RESEARCH_MACHINES_D", str(tmp_path / "machines.d"))
+    monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "no-notes"))
+    return tmp_path
+
+
 MACHINE = {"provider": "runpod", "pod_id": POD, "name": "vy-x"}
+BUILDERS = ("runpod.ssh_command", "remote.ssh_argv", "remote._compressed", "remote.git_push_url", "connect.ssh_for",
+            "connect.SshTransport.argv", "connect.SshTransport.rsync_args")
+AT_A, AT_B = "203.0.113.7:40123", "203.0.113.9:41000"
 
 
-def test_the_address_is_kept_and_runpod_is_asked_again_only_when_it_stops_answering_or_is_an_hour_old(pod, monkeypatch):
+def checks(command) -> str:
+    """How an ssh command, an rsync `-e` or a git `ext::` URL checks the host's key: its one StrictHostKeyChecking option."""
+    option, = re.findall(r"StrictHostKeyChecking=([\w-]+)", command if isinstance(command, str) else " ".join(command))
+    return option
+
+
+def commands(target: dict) -> dict[str, object]:
+    """Every ssh command `research` builds for a target, by its builder: ssh's own argv, rsync's `-e` and git's `ext::` URL."""
+    host, port = target["host"], target["port"]
+    launcher, pods = remote.ssh_argv(host, port, user=target["user"]), connect.ssh_for(host, port, user=target["user"])
+    built = {"runpod.ssh_command": runpod.ssh_command(host, port, user=target["user"]), "remote.ssh_argv": launcher,
+             "remote._compressed": remote._compressed(launcher), "remote.git_push_url": remote.git_push_url(launcher, "/workspace/src.git"),
+             "connect.ssh_for": pods, "connect.SshTransport.argv": connect.SshTransport(pods).argv("true"),
+             "connect.SshTransport.rsync_args": connect.SshTransport(pods).rsync_args("/workspace/src")}
+    assert tuple(built) == BUILDERS
+    return built
+
+
+def test_a_kept_address_is_used_for_an_hour_where_its_host_proves_the_key_it_held_when_runpod_gave_it(pod):
+    pod.hosts = {A: "the pod's key"}
     first = remote.pod_target(MACHINE)
     assert first == {"host": "203.0.113.7", "port": 40123, "user": "root", "pod_name": "vy-x-veritor-campaign", "cost_per_hr": 0.16,
                      "rate_observed_utc": "read-1", "gpu": None} and tuple(first) == runpod.ADDRESS_KEYS and pod.asked == 1
-    second = remote.pod_target(MACHINE)
-    assert second == {**first, "rate_observed_utc": "read-2"} and pod.asked == 2, "kept, but nothing answers at it: RunPod is asked"
+    assert pod.handshakes() == [(AT_A, "accept-new")] and pod.recorded == {A: "the pod's key"}, "the host RunPod named proved a key"
+    assert checks(runpod.ssh_command(*A)) == "no", "RunPod's word: dialled as ever"
 
-    pod.up = {("203.0.113.7", 40123)}
     pod.clock = T0 + 3599
     for _ in range(5):
-        assert remote.pod_target(MACHINE) == second, "the address, the rate and the time the rate was read, as kept"
-    assert pod.asked == 2
+        assert remote.pod_target(MACHINE) == {**first, "kept": True}, "the address, the rate and the time the rate was read, as kept"
+    assert pod.asked == 1 and pod.handshakes()[1:] == [(AT_A, "yes")] * 5 and checks(runpod.ssh_command(*A)) == "yes" and pod.logs_in(first)
 
-    pod.answer = {**REST_POD, "publicIp": "203.0.113.9", "portMappings": {"22": 41000}}     # the pod restarted
-    pod.up = {("203.0.113.9", 41000)}
+    pod.answer, pod.hosts = ELSEWHERE, {B: "the pod's next key"}            # the pod restarted elsewhere: nothing is at A
     moved = remote.pod_target(MACHINE)
-    assert (moved["host"], moved["port"]) == ("203.0.113.9", 41000) and pod.asked == 3
-    assert remote.pod_target(MACHINE) == moved and pod.asked == 3
+    assert (moved["host"], moved["port"]) == B and "kept" not in moved and pod.asked == 2 and checks(runpod.ssh_command(*B)) == "no"
+    assert remote.pod_target(MACHINE) == {**moved, "kept": True} and pod.asked == 2
+    assert pod.handshakes()[6:] == [(AT_A, "yes"), (AT_B, "accept-new"), (AT_B, "yes")], "a silent host has no key dropped"
 
     pod.clock += runpod.ADDRESS_TTL_S
-    assert remote.pod_target(MACHINE)["port"] == 41000 and pod.asked == 4, "an hour old: asked again though it still answers"
-    monkeypatch.setenv(runpod.ADDRESS_TTL_ENV, "0")
-    remote.pod_target(MACHINE)
-    remote.pod_target(MACHINE)
-    assert pod.asked == 6, "a TTL of 0 asks every time"
+    again = remote.pod_target(MACHINE)
+    assert (again["host"], again["port"]) == B and "kept" not in again and pod.asked == 3 and pod.handshakes()[9:] == [(AT_B, "accept-new")], \
+        "an hour old: RunPod is asked, whatever the host would prove"
+    assert checks(runpod.ssh_command(*B)) == "no", "RunPod's fresh word stands as it always did"
 
 
-def test_when_runpod_cannot_be_asked_the_kept_address_stands_while_it_answers(pod, capsys):
+def test_every_ssh_command_for_a_kept_address_checks_the_host_key_and_for_a_fresh_one_connects_as_before(pod, registry):
+    pod.hosts = {A: "the pod's key"}
+    fresh = remote.pod_target(MACHINE)
+    assert "kept" not in fresh and {name: checks(c) for name, c in commands(fresh).items()} == dict.fromkeys(BUILDERS, "no")
+
     kept = remote.pod_target(MACHINE)
-    pod.clock += 2 * runpod.ADDRESS_TTL_S
-    pod.answer = runpod.PodError(f"GET /pods/{POD} -> HTTP 429: rate limit exceeded for the day window; GraphQL: URLError: timed out",
-                                 code=429, pod_id=POD)
+    assert kept["kept"] is True and {name: checks(c) for name, c in commands(kept).items()} == dict.fromkeys(BUILDERS, "yes")
+    by_name = connect.ssh_base("vy-x")
+    assert checks(by_name) == "yes" and by_name[-1] == "root@203.0.113.7" and pod.asked == 1
+    assert commands(kept)["connect.SshTransport.rsync_args"][0] == "-e" and commands(kept)["remote.git_push_url"].startswith("ext::ssh ")
+    assert checks(runpod.ssh_command(*B)) == "no", "another address is not this one"
+
+    src = Path(runpod.__file__).parents[1]
+    writers = sorted(str(p.relative_to(src)) for p in src.rglob("*.py") if "StrictHostKeyChecking=" in p.read_text())
+    assert writers == ["pods/nebius/fleet.py", "pods/runpod.py"], \
+        "a pod's ssh options are written in one place, runpod.ssh_command, which every builder above starts from (fleet.py's are a Nebius VM's)"
+
+
+def test_an_address_is_kept_only_if_its_host_proves_a_key_when_runpod_gives_it(pod):
+    first = remote.pod_target(MACHINE)                  # no host answers there yet
+    assert "kept" not in first and runpod.kept_address(POD) is None and pod.handshakes() == [(AT_A, "accept-new")]
+    assert remote.pod_target(MACHINE)["rate_observed_utc"] == "read-2" and pod.asked == 2, "not kept: RunPod is asked at each call"
+
+    pod.hosts = {A: "another tenant's key"}             # a command that still holds RunPod's answer dials later, as it always could,
+    assert pod.logs_in(first) and pod.recorded == {A: "another tenant's key"}       # and records the key of whoever is there by then
+    assert runpod.kept_address(POD) is None, "a key first recorded after RunPod's word makes no address kept"
+    pod.answer, pod.hosts[B] = ELSEWHERE, "the pod's key"
+    assert remote.pod_target(MACHINE)["host"] == B[0] and pod.asked == 3 and runpod.kept_address(POD)[0]["host"] == B[0]
+
+
+def test_a_kept_address_with_no_recorded_key_asks_runpod(pod):
+    pod.hosts = {A: "the pod's key"}
+    remote.pod_target(MACHINE)
+    pod.recorded.clear()                                # the record is lost
+    target = remote.pod_target(MACHINE)
+    assert "kept" not in target and target["rate_observed_utc"] == "read-2" and pod.asked == 2 and checks(runpod.ssh_command(*A)) == "no"
+    assert pod.handshakes() == [(AT_A, "accept-new"), (AT_A, "yes"), (AT_A, "accept-new")] and pod.recorded == {A: "the pod's key"}
+    assert pod.ran[1] == ["ssh", "-i", str(runpod.ssh_key()), "-p", "40123", "-o", "StrictHostKeyChecking=yes",
+                          "-o", f"UserKnownHostsFile={runpod.known_hosts()}", "-o", "ServerAliveInterval=30",
+                          "-o", "BatchMode=yes", "-o", "PreferredAuthentications=none", "-o", "ControlPath=none",
+                          "-o", "ConnectTimeout=5", "root@203.0.113.7", "true"], "one handshake of its own that asks for no login"
+
+
+def test_a_host_refused_for_its_key_is_not_dialled_and_the_address_runpod_gives_is(pod, capsys):
+    pod.hosts = {A: "the pod's key"}
+    remote.pod_target(MACHINE)
+    assert remote.pod_target(MACHINE)["kept"] is True and pod.asked == 1
+
+    pod.answer, pod.hosts = ELSEWHERE, {A: "another tenant's key", B: "the pod's next key"}     # its old address is someone else's
+    del pod.ran[:]
+    moved = remote.pod_target(MACHINE)
+    assert (moved["host"], moved["port"]) == B and "kept" not in moved and pod.asked == 2
+    assert pod.handshakes() == [(AT_A, "yes"), (AT_B, "accept-new")]
+    assert pod.recorded == {A: "the pod's key", B: "the pod's next key"}, "no record is dropped for an address RunPod did not just give"
+    assert json.loads((runpod._env_dir() / f"address-{POD}.json").read_text())["target"]["host"] == B[0]
+    assert checks(runpod.ssh_command(*A)) == "yes", "no command built here dials the refused host unchecked"
+    assert checks(runpod.ssh_command(*B)) == "no" and remote.pod_target(MACHINE) == {**moved, "kept": True}
+
+    pod.answer, pod.hosts = DOWN, {B: "another tenant's key"}               # and when RunPod can't be asked, the command is refused
     with pytest.raises(remote.Refused, match=rf"pod {POD} \(machine vy-x\): runpod API unavailable: GET /pods/{POD} -> HTTP 429"):
         remote.pod_target(MACHINE)
-    pod.up = {("203.0.113.7", 40123)}
-    assert remote.pod_target(MACHINE) == kept and remote.pod_target(MACHINE) == kept and pod.asked == 4
-    err = capsys.readouterr().err.splitlines()
-    assert len(err) == 1 and err[0].startswith(f"research: pod {POD} (machine vy-x): runpod API unavailable (GET /pods/{POD} -> HTTP 429")
-    assert f"using its address as read {kept['rate_observed_utc']}, which still takes a connection" in err[0]
+    assert runpod.kept_address(POD) is None and checks(runpod.ssh_command(*B)) == "yes" and capsys.readouterr().err == ""
+    with pytest.raises(remote.Refused, match="runpod API unavailable"):
+        remote.pod_target(MACHINE)
+    assert pod.handshakes()[2:] == [(AT_B, "yes"), (AT_B, "yes")], "with no kept address no host is asked for a key"
+
+
+def test_a_pod_back_at_its_address_with_a_new_host_key_is_kept_again_once_runpod_gives_the_address(pod, capsys):
+    pod.hosts = {A: "the pod's key"}
+    remote.pod_target(MACHINE)
+    assert remote.pod_target(MACHINE)["kept"] is True
+    pod.hosts = {A: "the pod's key after its restart"}
+    del pod.ran[:]
+    again = remote.pod_target(MACHINE)
+    assert "kept" not in again and pod.asked == 2 and checks(runpod.ssh_command(*A)) == "no", "RunPod has just given this address"
+    assert pod.handshakes() == [(AT_A, "yes"), (AT_A, "accept-new"), ("ssh-keygen", "[203.0.113.7]:40123"), (AT_A, "accept-new")], \
+        "refused as kept; RunPod asked; its word is fresher than the record, which is dropped and made again"
+    assert pod.recorded == {A: "the pod's key after its restart"}
+    assert remote.pod_target(MACHINE) == {**again, "kept": True} and pod.asked == 2
+
+    pod.hosts, pod.keygen_exits = {A: "a third key"}, 1         # a record that can't be dropped: not kept, RunPod asked each time
+    for asked in (3, 4):
+        assert "kept" not in remote.pod_target(MACHINE) and pod.asked == asked and checks(runpod.ssh_command(*A)) == "no"
+    said, = capsys.readouterr().err.splitlines()
+    assert runpod.kept_address(POD) is None and said == (
+        "research: the host key recorded for [203.0.113.7]:40123 can't be removed (ssh-keygen exits 1): until it is, RunPod is asked "
+        "for that address at each call")
+
+
+def test_when_runpod_cannot_be_asked_the_kept_address_stands_only_where_its_host_proves_the_recorded_key(pod, capsys):
+    pod.hosts = {A: "the pod's key"}
+    first = remote.pod_target(MACHINE)
+    pod.clock += 2 * runpod.ADDRESS_TTL_S
+    pod.answer = DOWN
+    for _ in range(2):
+        assert remote.pod_target(MACHINE) == {**first, "kept": True}
+    assert pod.asked == 3 and {name: checks(c) for name, c in commands(first).items()} == dict.fromkeys(BUILDERS, "yes")
+    said, = capsys.readouterr().err.splitlines()
+    assert said.startswith(f"research: pod {POD} (machine vy-x): runpod API unavailable (GET /pods/{POD} -> HTTP 429")
+    assert said.endswith("using its address as read read-1, where the host holds the key recorded for it")
+
+    pod.hosts = {}                                  # nothing answers there: refused, and the address kept for when the pod is back
+    with pytest.raises(remote.Refused, match=rf"pod {POD} \(machine vy-x\): runpod API unavailable: GET /pods/{POD} -> HTTP 429"):
+        remote.pod_target(MACHINE)
+    assert runpod.kept_address(POD) is not None
+
+    pod.hosts, pod.recorded = {A: "the pod's key"}, {}      # a host, and no key recorded for the address: refused, and forgotten
+    with pytest.raises(remote.Refused, match="runpod API unavailable"):
+        remote.pod_target(MACHINE)
+    assert runpod.kept_address(POD) is None and checks(runpod.ssh_command(*A)) == "yes"
+    assert pod.recorded == {} and pod.handshakes() == [(AT_A, "accept-new")] + [(AT_A, "yes")] * 4, "no key is recorded without RunPod's word"
+
+
+def test_a_kept_address_under_an_hour_old_whose_host_is_silent_is_refused_when_runpod_cannot_be_asked(pod):
+    pod.hosts = {A: "the pod's key"}
+    remote.pod_target(MACHINE)
+    pod.hosts, pod.answer = {}, DOWN
+    with pytest.raises(remote.Refused, match="runpod API unavailable"):
+        remote.pod_target(MACHINE)
+    assert pod.asked == 2 and pod.handshakes() == [(AT_A, "accept-new"), (AT_A, "yes")], "asked for its key once, not again after RunPod failed"
+
+
+def test_the_mark_is_never_stored_so_a_later_process_asks_the_host_for_its_key_too(pod, monkeypatch):
+    pod.hosts = {A: "the pod's key"}
+    fresh = remote.pod_target(MACHINE)
+    path = runpod._env_dir() / f"address-{POD}.json"
+    assert remote.pod_target(MACHINE) == {**fresh, "kept": True} and json.loads(path.read_text()) == {"target": fresh, "read_at": T0}
+    runpod.keep_address(POD, {**fresh, "kept": True})
+    assert json.loads(path.read_text()) == {"target": fresh, "read_at": T0}, "a marked target is stored without its mark"
+
+    monkeypatch.setattr(runpod, "_KEPT", set())                    # a later process, and by then another tenant has the address
+    pod.hosts, pod.answer = {A: "another tenant's key"}, DOWN
+    assert checks(runpod.ssh_command(*A)) == "no", "it knows the address only through pod_target, which asks the host first"
+    with pytest.raises(remote.Refused, match="runpod API unavailable"):
+        remote.pod_target(MACHINE)
+    assert pod.asked == 2 and not path.exists()
+
+    path.write_text(json.dumps({"target": {**fresh, "kept": True}, "read_at": T0}))
+    assert runpod.kept_address(POD) is None and not path.exists(), "a file that carries the mark is no address"
+
+
+@pytest.mark.parametrize(("exits", "stderr", "verdict"), [
+    (255, "root@203.0.113.7: Permission denied (publickey).\r\n", "held"),
+    (255, "Warning: Permanently added '[203.0.113.7]:40123' (ED25519) to the list of known hosts.\r\n"
+          "root@203.0.113.7: Permission denied (publickey,password).\r\n", "held"),
+    (0, "", "held"),
+    (255, NO_KEY_RECORDED.format(*A), "refused"),
+    (255, ANOTHER_KEY.format(*A), "refused"),
+    (255, "ssh: connect to host 203.0.113.7 port 40123: Connection refused\r\n", "silent"),
+    (255, "ssh: connect to host 203.0.113.7 port 40123: Connection timed out\r\n", "silent"),
+    (255, "kex_exchange_identification: Connection closed by remote host\r\nConnection closed by 203.0.113.7 port 40123\r\n", "silent"),
+    (255, 'Load key "/home/u/.runpod/ssh/key": Permission denied\r\nConnection reset by 203.0.113.7 port 40123\r\n', "silent"),
+    (255, "", "silent"),
+    (subprocess.TimeoutExpired("ssh", 20.0), "", "silent"),
+    (FileNotFoundError(2, "No such file or directory: 'ssh'"), "", "silent"),
+], ids=["denied-login", "denied-login-after-recording", "let-in", "no-key-recorded", "another-key", "connection-refused",
+        "connection-timed-out", "closed-before-keys", "reset-before-keys", "said-nothing", "ssh-timed-out", "no-ssh"])
+def test_a_host_holds_its_recorded_key_only_when_ssh_checked_the_key_and_got_as_far_as_login(monkeypatch, exits, stderr, verdict):
+    ran = []
+
+    def run(argv, **kwargs):
+        ran.append((argv, kwargs))
+        if isinstance(exits, Exception):
+            raise exits
+        return subprocess.CompletedProcess(argv, exits, "", stderr)
+
+    monkeypatch.setattr(runpod, "run", run)
+    assert runpod.host_key(*A) == verdict and runpod.host_key(*A, fresh=True) == verdict
+    assert [checks(argv) for argv, _ in ran] == ["yes", "accept-new"], "a kept address's host; a host RunPod has just named"
+    for argv, kwargs in ran:
+        assert argv[-2:] == ["root@203.0.113.7", "true"] and argv[argv.index("-p") + 1] == "40123"
+        assert kwargs == {"stdin": subprocess.DEVNULL, "capture_output": True, "text": True, "timeout": runpod.HOST_KEY_S}
 
 
 def test_a_pod_that_is_gone_or_stopped_is_refused_and_its_address_forgotten(pod):
+    pod.hosts = {A: "the pod's key"}
     remote.pod_target(MACHINE)
-    pod.up = {("203.0.113.7", 40123)}
     pod.clock += runpod.ADDRESS_TTL_S
     pod.answer = {**REST_POD, "desiredStatus": "EXITED", "publicIp": "", "portMappings": None}
     with pytest.raises(remote.Refused, match="is EXITED; no implicit provisioning"):
@@ -286,38 +538,37 @@ def test_a_pod_that_is_gone_or_stopped_is_refused_and_its_address_forgotten(pod)
     assert runpod.kept_address(POD) is None and not list(runpod._env_dir().glob("address-*"))
 
 
-def test_a_kept_file_that_is_not_a_target_reads_as_none(pod):
-    remote.pod_target(MACHINE)
+def test_a_kept_file_that_is_not_a_target_is_removed_and_reads_as_none(pod):
+    pod.hosts = {A: "the pod's key"}
+    fresh = remote.pod_target(MACHINE)
     path = runpod._env_dir() / f"address-{POD}.json"
-    target, age = runpod.kept_address(POD)
-    assert age == 0.0 and json.loads(path.read_text()) == {"target": target, "read_at": T0}
-    for text in ("", "{", json.dumps({"target": {"host": "203.0.113.7"}, "read_at": T0}),
-                 json.dumps({"target": {**target, "port": "40123"}, "read_at": T0})):
+    assert runpod.kept_address(POD) == ({**fresh, "kept": True}, 0.0) and json.loads(path.read_text()) == {"target": fresh, "read_at": T0}
+    for text in ("", "{", "[]", json.dumps({"target": {"host": "203.0.113.7"}, "read_at": T0}),
+                 json.dumps({"target": {**fresh, "port": "40123"}, "read_at": T0}), json.dumps({"target": fresh, "read_at": None})):
         path.write_text(text)
-        assert runpod.kept_address(POD) is None
+        assert runpod.kept_address(POD) is None and not path.exists()
     assert runpod.kept_address("../outside") is None
-    runpod.keep_address("../outside", target)
-    assert [p.name for p in runpod._env_dir().iterdir()] == [path.name]
+    runpod.keep_address("../outside", fresh)
+    runpod.forget_address("../outside")
+    assert [p.name for p in runpod._env_dir().iterdir()] == ["known_hosts"]
 
 
 # ---- the callers ---------------------------------------------------------------------------------------------------------------------------------
 
-def test_an_ssh_entry_that_names_the_pod_overrides_the_registrys_entry_and_asks_runpod_nothing(pod, monkeypatch, tmp_path):
+def test_an_ssh_entry_that_names_the_pod_overrides_the_registrys_entry_and_asks_runpod_and_no_host_nothing(pod, registry):
     """machines.toml may give a pod's address itself: an `ssh` entry carrying the pod's id binds the name as the registry does, so
-    the two merge, and the address is the entry's."""
-    (tmp_path / "machines.toml").write_text(f'[machines.vy-x]\nprovider = "ssh"\nhost = "198.51.100.4"\nport = 12250\nuser = "root"\n'
+    the two merge, and the address is the entry's, dialled as an ssh machine's always was."""
+    (registry / "machines.toml").write_text(f'[machines.vy-x]\nprovider = "ssh"\nhost = "198.51.100.4"\nport = 12250\nuser = "root"\n'
                                             f'pod_id = "{POD}"\nrate_usd_per_hour = 0.16\nproject = "verity"\n')
-    (tmp_path / "machines.d").mkdir()
-    (tmp_path / "machines.d" / "vy-x.toml").write_text(f'provider = "runpod"\npod_id = "{POD}"\nproject = "verity"\n')
-    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
-    monkeypatch.setenv("RESEARCH_MACHINES_D", str(tmp_path / "machines.d"))
-    monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "no-notes"))
     machine = remote.resolve_machine("vy-x", "verity")
     target = remote.pod_target(machine)
     assert (target["host"], target["port"], target["cost_per_hr"], machine["pod_id"]) == ("198.51.100.4", 12250, 0.16, POD)
-    assert connect.ssh_base("vy-x")[-1] == "root@198.51.100.4" and pod.asked == 0 and not list(runpod._env_dir().glob("address-*"))
+    assert "kept" not in target and {name: checks(c) for name, c in commands(target).items()} == dict.fromkeys(BUILDERS, "no")
+    by_name = connect.ssh_base("vy-x")
+    assert by_name[-1] == "root@198.51.100.4" and checks(by_name) == "no"
+    assert pod.asked == 0 and pod.ran == [] and not list(runpod._env_dir().glob("address-*"))
 
-    (tmp_path / "machines.toml").unlink()
+    (registry / "machines.toml").unlink()
     assert remote.pod_target(remote.resolve_machine("vy-x", "verity"))["host"] == "203.0.113.7" and pod.asked == 1, \
         "without the entry the registry's is read, and RunPod asked once"
 

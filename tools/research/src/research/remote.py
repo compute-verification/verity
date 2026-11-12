@@ -302,9 +302,11 @@ def ssh_host_target(machine: dict[str, Any]) -> dict[str, Any]:
 
 def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
     """host/port/user/rate for a runpod machine or an ssh one (`ssh_host_target`).  A runpod machine's is the one last read from
-    RunPod (`runpod.kept_address`, with the rate and the time it was read) while that read is under `runpod.address_ttl_s()` old and
-    its ssh port still takes a connection; else RunPod is asked (read-only; not RUNNING -> refused) and the answer kept.  When
-    RunPod can't be asked, the kept address stands for as long as it takes a connection, said in one line."""
+    RunPod (`runpod.kept_address`, with the rate and the time it was read, marked `kept`) while that read is under
+    `runpod.ADDRESS_TTL_S` old and the host there proves the host key recorded for the address (`runpod.kept_stands`: ssh to it is
+    then strict about that key); else RunPod is asked (read-only; not RUNNING -> refused) and its answer returned unmarked, to be
+    dialled as RunPod's word always was, and kept if the host there proves a key (`runpod.keep_address`).  When RunPod can't be
+    asked, the kept address stands on the same proof, said in one line, and without it the machine is refused."""
     if machine.get("provider") == "ssh":
         return ssh_host_target(machine)
     if machine.get("provider") != "runpod":
@@ -314,7 +316,8 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
     pod_id = machine["pod_id"]
     who = f"pod {pod_id} (machine {machine.get('name') or '?'})"
     kept, age_s = runpod.kept_address(pod_id) or (None, 0.0)
-    if kept and age_s < runpod.address_ttl_s() and runpod.answers(kept["host"], kept["port"]):
+    asked = kept is not None and age_s < runpod.ADDRESS_TTL_S           # whether the host at the kept address was asked for its key
+    if asked and runpod.kept_stands(pod_id, kept):
         return kept
     try:
         pod = runpod.get(pod_id)
@@ -322,11 +325,11 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
         if e.code == 404:
             runpod.forget_address(pod_id)
             raise Refused(f"{who} no longer exists on runpod (HTTP 404: terminated?); no implicit provisioning") from None
-        if kept and runpod.answers(kept["host"], kept["port"]):
+        if kept and not asked and runpod.kept_stands(pod_id, kept):
             if pod_id not in _TOLD_KEPT:
                 _TOLD_KEPT.add(pod_id)
                 print(f"research: {who}: runpod API unavailable ({str(e)[:200]}); using its address as read "
-                      f"{kept.get('rate_observed_utc') or '?'}, which still takes a connection", file=sys.stderr)
+                      f"{kept.get('rate_observed_utc') or '?'}, where the host holds the key recorded for it", file=sys.stderr)
             return kept
         raise Refused(f"{who}: runpod API unavailable: {e}") from None
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
