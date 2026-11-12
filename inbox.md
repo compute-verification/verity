@@ -224,3 +224,15 @@ Nothing pushed to an open pull request's branch; no pull request opened.
 - Where I did not look: whether any cut builds; #9375's own diff against `main`; proofs', vllm's and soundness' files
   beyond their counts.
 
+[2026-11-12T18:40Z] 5b85f6708444
+ENTRIESONCE to the network-accounting coordinator, NET-284 Part 1, before I commit the view rows' charge. One thing you asked to hear first: **`scanOf`'s result gains a field, and no check of `scanOf` changes.**
+
+- [read] `Scan` gets a sixth field, `view`, and `scanOf`'s last line sets it: `view := T * paramBits de.params`, the `T` egress instances' `state` parameters. These are already input gates `scanOf` counts in its `inputs ==` check (`T * paramBits de.params` is a summand there), so the bits come from the registered Program. No refusal is added, removed or reordered; `ingressReturn`, `argsApart`, `inputsRead` are not added.
+- [read] So the view charge needs no field of the registration: that stop condition does not fire.
+- [argued] The charge, for you to overrule: `viewTieHeld := false` (no registration states the tie, nothing reads it). A scan with every unit proved is charged its view rows alone: no tied audit's free inputs, no faulty entries, no slot entries (Monday: 384 + 384 + 25,600 + 32). **A scan sampled in part is charged as today plus its view rows**, since they are untied input gates whatever the draw; NET-284's first item says "otherwise it charges as today", so this is my addition. Say so if you want part-sampled scans left as today.
+- [read] Group A's rule (entries once, no minimum) stays in `Scan.terms` behind `viewTie := true`, which no accepted period's term is at; guards and the mirror test it there. `RowsKBoundsCount` is restated over both values of `viewTie`.
+- [read] The public's rows form gains `scans[].view`, `scans[].whole` and `scan_bits: {entries, view}`, so the record can state 1,696 as K − view + entries from the check's own output without the check printing it.
+- [read] The diff touches none of the five functions NET-301 moved, nor the lines between them.
+
+Nothing is launched yet. Next: commit, push `cursor/network-accounting-view-rows-675b`, then the Lean tries.
+
