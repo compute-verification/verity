@@ -71553,3 +71553,97 @@ Each cell: one execution phase in calls / in compressions; a year in calls / in 
 - **A test that hands a plain session another Program and expects acceptance: none found** [read: every `verify` call under `verity/`, `benchmarks/`, `adapters/` and `tools/` that passes `--program` hands the statement's own descriptor, except the two that expect a refusal]. The slow tier is the check by run: `r20261112-045403-b74d` (`suites.py verity/protocols/spot/verifier -- -k "test_proofs or test_form_refusals"`, `dd687ec2b2e9`) exit 0, 64 passed [run]; the prover suite's is still waiting.
 - **Still out, at `dd687ec2b2e9`** [run, `research status` 05:14Z]: `r20261112-045336-e572` (`suites.py verity-flock -- -k test_lean`, waiting for a slot on `vy-nebius-cpu-7`), `r20261112-045603-3b59` (records, running on `vy-nebius-cpu-10`; the last took 67 min), `r20261112-045648-65b2` (the one more quick run, running on `vy-nebius-cpu-10`; the last took 51 min).
 - **Next**: when those three pass I open the pull request and write the ready line here. If one fails on my change I fix it and say so first.
+
+## COUNT, Thu 12 Nov 05:17Z: at the cost model's fixed seconds only 200 tables a session is under 300 GB, and 64 gives 348.5; 64 or fewer get under 300 only if a block type's later sessions pay a fraction of the fixed seconds; no row is over 100 bits
+
+Tags: [run] is `r20261112-050407-3150` (exit 0, source `c8b46edd10e4`, run record `art:3b81fba3c93402e3bd03d67493c01b073f9af931b4fc356c40e7c4f749556ad8`; a local run gives the same file) unless a line says otherwise. Mailbox read at 05:16Z: twenty sections, all read, your 05:07Z among them. Every figure below is **modeled**: the cost model's seconds. No session of any of these shapes has run.
+
+**First, as you asked: at the cost model's fixed seconds, every row under 300 GB needs more than 64 tables a session.** All of this is the best designed configuration; the other two never get under 716.3 GB.
+- **64 tables a session: 348.5 GB (365.9).** The Lean verifier and the CPU prover take it; the GPU prover takes one table a session.
+- **200 tables a session: 296.2 GB (311.0), and it needs the limit raised.** 180 tables gives 301.2, 128 gives 311.8, 100 gives 323.1 [local]: under 300 is only at the scope's own edge.
+- **64 tables or fewer get under 300 GB another way: a block type's sessions after its first in a verification phase pay a fraction of a statement's fixed seconds** (a prover's stream and a verifier that keep the statement loaded). At 64 tables the fraction is 0.3 (296.2) [local]; 0.2 gives 291.3 (305.9). At 16 tables it is 0.05 (291.3) [local]. At one table it is 0.005 (296.2; 0.01 gives 323.1) [local]. At 0 every session size gives the same 273.4 GB (287.1).
+- **No row is over 100 bits**, at any session size or fraction. The fourth section says why.
+
+**What raising the limit to 200 touches, as far as I read** [read at `c8b46edd10e4`]:
+- Two constants: `Tags.MAX_TABLES` (`Flock/Tags.lean:85`; thrown at `Flock/HmRow.lean:2492` and `:2650` and `Flock/With/Setup.lean:1156`, read by `FlockVerify.lean:1624` and `Flock/ProvedScope.lean:433`), and the prover's own `MAX_TABLES` (`flock-circuit.rs:59`).
+- The names. `Tags.tableNames` pads to two digits, so past 99 a name has three and the names no longer sort in table order, which the constant's comment states. A third digit changes every table's name, and the name is in each stream's domain (`Tags.tableDomain`), so it changes the transcript of every session of several tables, not only the long ones.
+- Proofs that fix it at 64: `security/Proofs/Flock/Claims/Complete/ZkTables/Link.lean:109` (`MAX_TABLES = 64 := rfl`, for the link message's length), `Files.lean:260` and `:374`, `Scope.lean:129`; the test `Flock/Test/TableCap.lean` (refused at 65). Other files under `security/Proofs/Flock/` read it by name only.
+- Beside it: the challenger's coin commitment holds 127 tables a session (`challenger.MAX_TREE_COINS`), so 200 is past that too; and the analysis has proved instances of the reruns at 1, 2, 16 and 200 tables (#9086, open), none at 64.
+- **The planner never refused 200 tables.** `two_stage_design` takes whatever statement size it is handed. `total_cost.limits` (in #9112) prints "out of reach" with the limits passed before such a row's bound; it refuses nothing. The one design that prints no bound is one session a block type past 200 tables.
+
+**What each row is.** A datacenter's 600 s (12,500 machines) as one verification phase, 28,000 bits a request, the 10% point's budget, the planner's by-template design with whole counts. A block type's first session of the phase pays its statement's fixed seconds in full; each later session of that type pays them times the fraction. Fraction 1 is the cost model as #9112 has it; a control in the run checks that type by type. The head statement is at 160 core-seconds where the configuration charges 250, and at the assumed 60.56 in the plan of record's case, as you ruled at 04:19Z. GB is the bound, ×1.05 in brackets. The three shares are of the 10% budget; the rest is replay, the interior's commitment and what whole counts leave unspent. Every row is also past the release log's lines, on `main` and at #8914's limits.
+
+**The best designed configuration (258 block types; head statement at 160 core-seconds).** One statement of every block type costs 4,420 GPU-seconds of fixed seconds, 91% of them the verifier's. Modeled.
+
+| tables a session, at most | later sessions' fixed seconds, times | GB (×1.05) | K | sampled proof blocks | sessions | binding, bits | prover's fixed | verifier's fixed | proof blocks | first limit of today's code |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 64 | 1 | 348.5 (365.9) | 51 | 3,189.6 M | 41,248 | 84.1 | 1.4% | 19.5% | 68.9% | the GPU prover's 1 table |
+| 64 | 0.2 | 291.3 (305.9) | 61 | 3,815.0 M | 49,332 | 83.9 | 0.3% | 4.8% | 82.5% | the GPU prover's 1 table |
+| 64 | 0 | 273.4 (287.1) | 65 | 4,065.2 M | 66,023 | 83.8 | 0.0% | 0.1% | 87.9% | the GPU prover's 1 table |
+| 200 | 1 | 296.2 (311.0) | 60 | 3,752.5 M | 15,642 | 82.3 | 0.5% | 7.4% | 81.1% | needs the limit raised (64) |
+| 200 | 0 | 273.4 (287.1) | 65 | 4,065.2 M | 30,648 | 82.1 | 0.0% | 0.1% | 87.9% | needs the limit raised (64) |
+| 16 | 1 | 573.3 (601.9) | 31 | 1,938.8 M | 100,098 | 86.9 | 3.3% | 47.2% | 41.9% | the GPU prover's 1 table |
+| 16 | 0.2 | 335.3 (352.1) | 53 | 3,314.7 M | 171,057 | 86.1 | 1.1% | 16.2% | 71.7% | the GPU prover's 1 table |
+| 16 | 0 | 273.4 (287.1) | 65 | 4,065.2 M | 222,314 | 85.8 | 0.0% | 0.1% | 87.9% | the GPU prover's 1 table |
+| 1 | 1 | 4,865.6 (5,108.8) | 52 | 203.3 M | 167,824 | 94.1 | 5.5% | 79.2% | 4.4% | the release log's lines |
+| 1 | 0.5 | 2,721.3 (2,857.3) | 26 | 406.5 M | 335,522 | 93.1 | 5.5% | 79.2% | 8.8% | the release log's lines |
+| 1 | 0.2 | 1,267.3 (1,330.7) | 28 | 875.6 M | 722,543 | 92.0 | 4.8% | 68.3% | 18.9% | the release log's lines |
+| 1 | 0.05 | 507.7 (533.1) | 35 | 2,189.0 M | 1,806,186 | 90.7 | 3.0% | 42.7% | 47.3% | the release log's lines |
+| 1 | 0 | 273.4 (287.1) | 65 | 4,065.2 M | 3,358,423 | 89.8 | 0.0% | 0.1% | 87.9% | the release log's lines |
+| 1 | verifier's 0, prover's 1 | 592.4 (622.0) | 30 | 1,876.2 M | 1,548,185 | 90.9 | 50.9% | 0.1% | 40.6% | the release log's lines |
+| 1 | prover's 0, verifier's 1 | 4,600.2 (4,830.2) | 55 | 215.0 M | 177,519 | 94.0 | 0.0% | 83.7% | 4.6% | the release log's lines |
+
+**The partition `main` defines (193 block types; head statement at 160 core-seconds).** One statement of every block type costs 3,233 GPU-seconds of fixed seconds, 92% of them the verifier's. Modeled.
+
+| tables a session, at most | later sessions' fixed seconds, times | GB (×1.05) | K | sampled proof blocks | sessions | binding, bits | prover's fixed | verifier's fixed | proof blocks | first limit of today's code |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 64 | 1 | 895.4 (940.2) | 20 | 1,208.5 M | 37,427 | 85.5 | 2.3% | 18.0% | 73.9% | the GPU prover's 1 table |
+| 64 | 0.2 | 746.2 (783.5) | 24 | 1,450.2 M | 44,875 | 85.3 | 0.6% | 4.4% | 88.6% | the GPU prover's 1 table |
+| 64 | 0 | 716.3 (752.1) | 25 | 1,510.6 M | 50,254 | 85.2 | 0.0% | 0.1% | 92.3% | the GPU prover's 1 table |
+| 200 | 1 | 778.6 (817.5) | 23 | 1,389.8 M | 13,871 | 83.7 | 0.9% | 6.7% | 84.9% | needs the limit raised (64) |
+| 200 | 0 | 716.3 (752.1) | 25 | 1,510.6 M | 18,748 | 83.6 | 0.0% | 0.1% | 92.3% | needs the limit raised (64) |
+| 16 | 1 | 1,489.1 (1,563.5) | 24 | 725.1 M | 89,671 | 88.3 | 5.6% | 43.1% | 44.3% | the GPU prover's 1 table |
+| 16 | 0.2 | 852.8 (895.4) | 21 | 1,268.9 M | 156,855 | 87.5 | 2.0% | 15.2% | 77.5% | the GPU prover's 1 table |
+| 16 | 0 | 716.3 (752.1) | 25 | 1,510.6 M | 189,507 | 87.2 | 0.0% | 0.1% | 92.3% | the GPU prover's 1 table |
+| 1 | 1 | 11,531.0 (12,107.5) | 22 | 83.1 M | 164,327 | 95.4 | 10.3% | 79.0% | 5.1% | the release log's lines |
+| 1 | 0.5 | 6,342.1 (6,659.2) | 40 | 151.1 M | 298,692 | 94.5 | 9.3% | 71.9% | 9.2% | the release log's lines |
+| 1 | 0.2 | 3,131.9 (3,288.5) | 81 | 305.9 M | 604,774 | 93.5 | 7.6% | 58.3% | 18.7% | the release log's lines |
+| 1 | 0.05 | 1,279.1 (1,343.1) | 14 | 845.9 M | 1,672,233 | 92.1 | 5.2% | 40.3% | 51.7% | the release log's lines |
+| 1 | 0 | 716.3 (752.1) | 25 | 1,510.6 M | 2,986,730 | 91.2 | 0.0% | 0.1% | 92.3% | the release log's lines |
+| 1 | verifier's 0, prover's 1 | 2,102.2 (2,207.3) | 17 | 513.6 M | 1,015,321 | 92.8 | 63.5% | 0.1% | 31.4% | the release log's lines |
+| 1 | prover's 0, verifier's 1 | 10,570.1 (11,098.6) | 24 | 90.6 M | 179,250 | 95.3 | 0.0% | 86.2% | 5.5% | the release log's lines |
+
+**The plan of record's case (193 block types; head statement at the assumed 60.56 core-seconds).** One statement of every block type costs 471 GPU-seconds of fixed seconds, 36% of them the verifier's. Modeled.
+
+| tables a session, at most | later sessions' fixed seconds, times | GB (×1.05) | K | sampled proof blocks | sessions | binding, bits | prover's fixed | verifier's fixed | proof blocks | first limit of today's code |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 64 | 1 | 746.2 (783.5) | 24 | 1,450.2 M | 44,875 | 85.3 | 2.8% | 1.1% | 88.6% | the GPU prover's 1 table |
+| 64 | 0.2 | 716.3 (752.1) | 25 | 1,510.6 M | 46,741 | 85.2 | 0.6% | 0.2% | 92.3% | the GPU prover's 1 table |
+| 64 | 0 | 716.3 (752.1) | 25 | 1,510.6 M | 50,253 | 85.2 | 0.0% | 0.0% | 92.3% | the GPU prover's 1 table |
+| 200 | 1 | 716.3 (752.1) | 25 | 1,510.6 M | 15,058 | 83.6 | 0.9% | 0.4% | 92.3% | needs the limit raised (64) |
+| 200 | 0 | 716.3 (752.1) | 25 | 1,510.6 M | 18,708 | 83.6 | 0.0% | 0.0% | 92.3% | needs the limit raised (64) |
+| 16 | 1 | 814.0 (854.7) | 22 | 1,329.3 M | 164,321 | 87.4 | 10.3% | 4.0% | 81.2% | the GPU prover's 1 table |
+| 16 | 0.2 | 716.3 (752.1) | 25 | 1,510.6 M | 186,712 | 87.2 | 2.3% | 0.9% | 92.3% | the GPU prover's 1 table |
+| 16 | 0 | 716.3 (752.1) | 25 | 1,510.6 M | 189,445 | 87.2 | 0.0% | 0.0% | 92.3% | the GPU prover's 1 table |
+| 1 | 1 | 2,558.2 (2,686.2) | 7 | 423.0 M | 836,124 | 93.1 | 52.3% | 20.6% | 25.8% | the release log's lines |
+| 1 | 0.5 | 1,628.0 (1,709.4) | 11 | 664.7 M | 1,313,899 | 92.4 | 41.1% | 16.2% | 40.6% | the release log's lines |
+| 1 | 0.2 | 1,116.8 (1,172.6) | 32 | 966.8 M | 1,911,132 | 91.9 | 23.9% | 9.4% | 59.1% | the release log's lines |
+| 1 | 0.05 | 812.2 (852.8) | 44 | 1,329.4 M | 2,627,801 | 91.4 | 8.2% | 3.2% | 81.2% | the release log's lines |
+| 1 | 0 | 716.3 (752.1) | 25 | 1,510.6 M | 2,986,730 | 91.2 | 0.0% | 0.0% | 92.3% | the release log's lines |
+| 1 | verifier's 0, prover's 1 | 2,102.2 (2,207.3) | 17 | 513.6 M | 1,015,306 | 92.8 | 63.5% | 0.0% | 31.4% | the release log's lines |
+| 1 | prover's 0, verifier's 1 | 1,276.3 (1,340.2) | 28 | 846.0 M | 1,672,252 | 92.1 | 0.0% | 41.2% | 51.7% | the release log's lines |
+
+**What the larger session buys, read off the shares.** At one table a session and fraction 1, fixed seconds are 85% of the budget in the best designed configuration, 89% in the partition `main` defines and 73% in the plan of record's case; proof blocks get 4%, 5% and 26%. At 64 tables fixed seconds are 21%, 20% and 4%; at 200 tables 8%, 8% and 1%. The bound follows the share proof blocks get, not the session's size: the same share at one table a session gives the same bound.
+- **Both parts must go, the verifier's first.** Best designed, one table a session: the verifier's alone at 0 gives 592.4 GB (622.0); the prover's alone at 0 gives 4,600.2 (4,830.2). The verifier's is 91% of a statement's fixed seconds there, because that configuration adds 1,006 core-seconds a statement for the Lean verifier reading the program's file.
+- **The other two configurations stop at 716.3 GB (752.1) whatever the sessions**: 25 sampled replay blocks at 60.4 million sampled proof blocks each (0.1% of a replay block's 58.1 billion), 92% of the budget on the proof blocks themselves. Under 300 GB there needs cheaper proof blocks, which is the best designed configuration's partition.
+
+**Why no row is over 100 bits.** The binding column is 121.7 − log2(J × the phase's sampled proof blocks) bits (4,130 classes a sampled proof block, assumed; the reruns of a session of J tables) [derived, and it reproduces every row]. Over 100 bits is at most 3.44 million sampled proof blocks a phase at one table a session. Under 300 GB is about 3,750 million (60 sampled replay blocks at 62.5 million sampled proof blocks each); one sampled replay block at that sample is 95.8 bits by itself. Larger sessions and cheaper sessions both lower the bits. Smaller phases raise them and raise the bound more: over 24 phase counts from 1 to 12,500, the least bound over 100 bits is 1,967.5 GB (2,065.8), the best designed configuration in 256 phases at fraction 0, and 6,295.8 (6,610.6) at fraction 1 in 80 phases [run `r20261112-051004-e6cd`, exit 0, run record `art:57be0e2fe0b216b0f02c92f8f7002dd5786d8ccd0c13387cac8435f3277c9fb5`; equal to a local run]. So under 300 GB and over 100 bits meet only if the classes term changes. That is not a sessions question, and I have not worked on it.
+
+**Where a non-head type's fixed seconds come from** [read: `cards/verifier_cost.glm-5.3.json`, `cards/proof_overhead.glm-5.3.json`, `reprice.apply_server`, and the rows of the pricing run `r20261111-163515-2cd7`]. The verifier's part is the Lean verifier as a fresh process a statement, setup included (`r20261109-191738-c631`, `r20261109-211436-1bcd`: eleven types measured; 95 of the 192 priced types sit at the measured types' median, 60.56 core-seconds, assumed), plus, in two of the three configurations, the pricing run's flag of 1,006 core-seconds a statement. The prover's part is the `proof_overhead` card's fixed seconds a statement (`flock-circuit prove --zk --gpu`, warm, full statements; 22 runs from `r20261106-074634-13c4`), priced as the long-running proof server with its statement cache warm, a stream and not a fresh process, then scaled to benchmarks' steady rows.
+
+**How I split a statement's fixed seconds** (the cost model holds one number):
+- The best designed configuration and the partition `main` defines: the verifier's part is the pricing run's own (`verifier_s_a_statement` of each type in its rows), the prover's the rest [run `2cd7`'s record]. One type's recorded verifier part is 0.4% over its fixed seconds (`AllReduceMnnvl_v1`); I took all of its fixed seconds as the verifier's.
+- The plan of record's case holds no split. I took each type's verifier part from the other configurations less what their flags add [derived]. Neither part comes out negative in any of its 193 types, and the prover's part agrees with theirs in 180 of the 181 types the two price alike.
+- `PageCopy`, which the pricing run's types leave out: the assumed 60.56 core-seconds, and the 1,006 where the flag adds it.
+
+**Two times in my 05:07Z entry** read 05:08Z; both were 05:06Z (the mailbox read and the body's edit). #9112's ready line there stands: head `c8b46edd10e4`, quick suites 62 of 62, yours to mark.
