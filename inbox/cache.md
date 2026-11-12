@@ -546,3 +546,19 @@ the end). No tree code changed. Nothing of mine is running.
 - [unread] The scheduler's rule at the new build, and `advice_code/replay.py`.
 
 **Unchanged by the new build:** the line for 07:00Z in entries 5 and 6, the two counts, and every figure in GB.
+
+**Added 04:21Z, read at `v0.34.0rc1` after the lines above** (so two of entry 7's "not read" are now read):
+- [read] **The scheduled count.** A decode row is padded to 1 + K tokens or left out of the step, "Prefer to not
+  schedule than schedule un-padded", unless the context limit is near
+  (`vllm/v1/core/sched/scheduler.py:1362-1380`); the drafts are cut to what was scheduled (`:1026-1037`). So under
+  (b)'s route the count costs 0 bits except at the context limit: a row left out is a choice of batch, which the
+  advice code already carries.
+- [read] **One more switch to pin off:** K can follow the batch's size from a configured table
+  (`num_speculative_tokens_per_batch_size`, `scheduler.py:318-332, 1765-1769`). Off unless set. Set, it is a
+  registered table and a function of the batch, so still no advice, but a Program a value of K.
+- [read] **The noise:** the Gumbel noise has MurmurHash3 helpers and the accept test's `u` keeps Philox, "retained
+  Philox helper for rejection sampling" (`vllm/v1/worker/gpu/sample/gumbel.py:9, 67-70, 81-105`). So the accept
+  test's draw is the same at both builds, your fact 6, and the token select's Definition is per build, your fact 1.
+- [read] Our advice code "refuses what it doesn't model (priority policy, spec decode, …)"
+  (`adapters/vllm/verity_vllm/pipeline/advice_code/replay.py`, docstring), your fact 7.
+- The note is at notes commit `7977a30cab`. Entry 7's header said 04:20Z; it was pushed at 04:17Z.
