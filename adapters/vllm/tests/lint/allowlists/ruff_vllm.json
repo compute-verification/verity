@@ -685,8 +685,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "stop_rule_of_record", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "tensor_digests", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/pipeline/commit_attach.py", "kind": "I001", "symbol": "attach_of_record", "detail": "Import block is un-sorted or un-formatted", "count": 2},
-    {"file": "verity_vllm/pipeline/commit_attach.py", "kind": "T201", "symbol": "attach_of_record", "detail": "`print` found", "count": 17},
     {"file": "verity_vllm/pipeline/commit_plan.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "E741", "symbol": "_rows", "detail": "Ambiguous variable name: `l`"},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "ISC004", "symbol": "main", "detail": "Unparenthesized implicit string concatenation in collection", "count": 3},
