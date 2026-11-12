@@ -107329,3 +107329,35 @@ Mailbox read to "Coordinator, Thu 12 Nov 22:21Z: go on the served-size statement
 **3. Way (b): Friday's second try does not need it.** [read] The proof server starts a card's prover at that card's first statement (`proof_server.py:519-528`, called from `submit`, `:398`), and the audit stages every sampled statement before its first session (`a5.py:1005` before `:1007`), so through staging the driver has no process on any card. [relayed, your 21:12Z] The lease is vllm's for the whole job and the driver asks for none, so nothing way (b) could release is the driver's. [read] It would matter only for a rehearsal under `SMALL_GPU=1` at the served vocabulary, whose `gpu-lease` is around all of `second` (`two_stage_small.sh`): that one should not be sent as it is.
 
 **4. Job A (#9458, head `dbb268ce3009`).** [run] The records run `r20261112-203018-c8f1` ended rc 0: `AUDIT: PASS`, outcome regenerated (a `lean-fast/v1` result at `dbc6264f22d7`; the two commits above it change no Lean). [read] What moved is under `reads` only: `Spot.OneStage` (`Public`, `Public.complete` new, `check`, `publicJson`) and `Spot.Record` (`allRan` new) in both locks, and `Properties.Spot` (`publicOf`) in the properties lock; no guarantee's own record differs. [run] `r20261112-221304-9f8c` did not pass and will not: my command made a fresh environment with no pytest in it (rc 2, no test ran). Its test, `test_stop_audit.py`'s, is inside `r20261112-221230-1fa0`'s `benchmarks/one_stage` suite, so the ready line will name `1fa0` alone; it is running on cpu-8.
+
+## ADDRWC, Thu 23:02Z: my width and copy facts now give FRAME's `WidthFact` and `CopyFact`; at FRAME's `addressOf` the width needs every wire's reader port as wide as its writer's, which no check holds
+
+Here is where the work stands. FRAME's `AddressFacts.lean` is on the base, and I merged it. Its width and copy facts are mine stated for every gate at once, at an address map. I added the two bridges: `widthFact_of_ref` and `copyFact_of_ref`, which takes `Counted` from FRAME's `RowFact`. At FRAME's `addressOf`, a wired gate takes its writer's place, so its width is the writer port's. The width fact asks that width of the reader's own port. So it holds only where every wire's reader port is as wide as its writer's output port, and nothing in the verifier holds that today. A run elaborated 8 of `Copy.lean`'s 9 theorems with no error; the ninth failed on a misnamed lemma, now fixed. The run checking the current head is queued.
+
+Branch `cursor/proofs-addrwc-60f3`, SHA `d73e6afe1c`, with the base merged at `b8ca168549`. Runs:
+- `r20261112-221841-8986`, done: 8 of 9 theorems elaborated with no error; `copies_of_ref` failed on a name (`tagsAt_typed` is in `Exec`).
+- `r20261112-224001-6be6`, cancelled: superseded before it got a check slot.
+- `r20261112-225834-e334`, queued for a check slot: the current head, every theorem. ETA depends on the queue, which held about a dozen runs at 22:58Z. [guess] 00:00Z to 00:30Z.
+
+**Reconciled with FRAME's `AddressFacts.lean`.** [read]
+- `CheckedRun.WidthAt` and `CopyAt` are my `WidthHolds` and `CopyHolds` bodies, word for word.
+- `WidthFact h addr` = for all `i`, `WidthHolds h (addr i) i`.
+- `CopyFact h addr` = for all `i`, `CopyHolds h (addr i) i`.
+- New: `widthFact_of_ref` gives `WidthFact` from `WidthRef` at each `addr i`. `copyFact_of_ref` gives `CopyFact` from `RowFact` and `CopyRef` at each `addr i`. [derived] Neither is compiled until `r20261112-225834-e334` passes.
+
+**GAP, now at `addressOf`.** [read] `addressOf` gives a gate the place of the gate `wireMap` sends it to (`OneTreeFact` asks the same), and `placeAt` sizes the place by that gate's member's port. So a wired reader's gate gets the place `16 · words(writer's output port)`. `WidthAt` at the reader's unit asks that it be `16 · words(reader's own session port)`. [derived] `WidthFact h (addressOf h)` therefore needs, for every wire, the reader port's words to equal the writer output port's. [read] Round 2 doesn't compare them. `SecondWires.wiresWide` asks only that the writer write every bit of the reader port, and no check calls it. Where they differ, honest serving fails the row's path check, but a run with a SHA-512 collision passes it, so `WidthFact` is false there as a plain premise. Ways to close it:
+- `wiresWide`, or a new conjunct of `readsOk`, requires the reader port's `words` to equal the writer output port's, and the statement check calls it;
+- or the reader's session port is the writer's.
+
+[guess] The copy has a twin condition: a wired source bit and the written bit it reads must sit at the same bit of the row. I expect that holds by construction, but I have not read `wireMap` closely enough to say.
+
+**To post** (for whoever owns `Spot.SecondWires` and `readsOk`): "The address premise's width fact needs every wire's reader port to have exactly its writer output port's `words`; `SecondWires.wiresWide` asks only that the writer write every bit of the reader port, and no check calls it. Can `wiresWide` require equal `words` and `readsOk` call it?"
+
+**NEEDS.** None now: both modules are lakefile roots on lines of their own, and FRAME's `AddressFacts.lean` is the place to import them when FRAME wants `WidthFact` and `CopyFact` from them.
+
+**Size.** 2 files, about 640 lines. 0 theorems left to write; the work left is whatever `r20261112-225834-e334` reports. [guess] Both compiled by 00:30Z Fri, depending on the queue. Next: `WidthRef` and `CopyRef` at `addressOf` specifically, and whether the copy's bit positions agree by construction.
+
+**Not established.**
+- Nothing in `Copy.lean` is compiled yet. 8 of its 9 theorems elaborated with no error in `r20261112-221841-8986`, but that file failed, so no axioms were shown.
+- The bridges and the merged base are untested.
+- Whether `WidthRef` and `CopyRef` hold at `addressOf` for the demonstration's registrations.
