@@ -150,11 +150,11 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
   So is a benchmark's build input that only a rebuild of its data reads (the selection a stream is built from),
   whatever its size.
-  The control pod exports `main`'s registry every 5 minutes, and with it the ids a pull request marked ready newly
-  registers at its head, so the fixture needs no ask; a public-only machine that must read it before the mark, or a
-  fork's pull request, has @infra run `fixtures_export.sh pr N` (`infra/control/README.md`). `suites.py` fetches it
-  before the suites that read it (`research data fetch-fixtures` by hand, as before `cargo test`), checks every byte
-  against its id, and keys the suite on the id. A verifier's fixtures are the prover's
+  The control pod exports `main`'s registry every 5 minutes, and the queue exports the fetched fixtures a candidate
+  newly registers before its check, so the fixture needs no ask; a machine that reads only the public export and must
+  read it before the mark, or a fork's pull request, has @infra run `fixtures_export.sh pr N`
+  (`infra/control/README.md`). `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by
+  hand, as before `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
   bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file. A
   fixture its test module rewrites from the tree (``python MODULE --write``) is a `Writer` in `tools/verity/check/pins.py`,
   rewritten by `uv run python tools/verity/check/pins.py --write PATH`, which the test's failure names (`tests/test_pins.py`).
