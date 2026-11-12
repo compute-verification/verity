@@ -47,7 +47,8 @@ from . import reference
 from .params import REAL, TINY, Params, Reject
 from .step import check_step_expr, gen_step
 
-__all__ = ["SPECS", "Spec", "exhaustive", "single_hint_search", "z3_gadget", "z3_group_step", "main"]
+__all__ = ["GOLDILOCKS", "M31", "ModZ3Ctx", "QueryResult", "SPECS", "Spec", "exhaustive", "render", "single_hint_search",
+           "z3_gadget", "z3_group_step", "main"]
 
 P40 = 2**40 - 87                 # a 40-bit prime (relation.py's stated field size)
 M31 = 2**31 - 1                  # Mersenne31
@@ -473,14 +474,12 @@ def single_hint_search(p: Params, cases: Iterable[tuple[int, list[int], list[int
                        seed: int = 0) -> SingleHintResult:
     """For each input, each hint of the honest witness is replaced by every other value of its contract range
     (or ``sample`` values when the range is large); the checker must reject, or accept with the same output."""
-    from .reference import dot
-
     rng = random.Random(seed)
     res = SingleHintResult(repr(p))
     t0 = time.perf_counter()
     ctx = IntCtx()
     for c, a, b in cases:
-        y = dot(p, c, a, b)
+        y = reference.dot(p, c, a, b)
         h = gen_step(p, c, a, b)
         assert check_step_expr(ctx, p, c, a, b, h) == y
         res.inputs += 1

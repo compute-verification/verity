@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from model import Layer
     from spec import Arm, Step
 
+__all__ = ["MM", "Next", "Product", "Run", "Softmaxed", "exact_mm", "int_mm", "run_chain", "terminal"]
+
 FP32_EXACT = 2 ** 24
 FP64_EXACT = 2 ** 53
 #: rows of each product recomputed in float64 on the check window

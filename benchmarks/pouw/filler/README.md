@@ -90,4 +90,7 @@ nothing beyond the standard library, numpy, the receipts reference and `verity_m
 three arm runners build with `nvcc` and take a lease.
 
 The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
+A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
+directories on pytest's `pythonpath`. `test_comm_report.py` still loads `comm/report.py` by file, since the harness
+has a `report.py` too.
 `../tests/test_budget.py`, `test_eps_budget.py` and `test_lean_headline_dc.py` test `benchmarks/pouw`'s own modules.
