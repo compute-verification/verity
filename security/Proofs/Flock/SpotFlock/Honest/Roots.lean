@@ -91,7 +91,6 @@ theorem registeredEntry_none {own : Spot.SecondStage.Own} (hf : own.fixed = #[])
   have hv' : Spot.getD e "value" = .str v := by
     revert hv
     cases Spot.getD e "value" <;> simp [Spot.jsonStrIs]
-    intro h; rw [h]
   unfold Spot.SecondStage.inputsFailure at hin
   have hall : ∀ (ns : Array String) (mn : Array (String × Array (Array (String × String)))) (w : String),
       ((own.links.getD #[]).filter (·.value == w)).all (Spot.SecondStage.openedRow own ns mn) =
@@ -102,7 +101,7 @@ theorem registeredEntry_none {own : Spot.SecondStage.Own} (hf : own.fixed = #[])
   apply hn
   simp only [hall, hmine, hf, Bool.not_and_self, Bool.not_false, Bool.true_or, Bool.and_true,
     Array.any_empty, Bool.or_false, Bool.not_eq_true']
-  rfl
+  simp
 
 theorem readsOk_at {h : Held} {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {t : ℕ}
     (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : readsOk h t x m₁ xS c₀ c₁ = true := by
@@ -141,7 +140,7 @@ theorem reads_held (hR : RefPorts R) {r : CheckedRun (held R B desc q c₀).stag
       ∀ v, Spot.SecondStage.registeredEntry (ownOf (held R B desc q c₀) st rec draw r.c₀).interior v = none := by
   obtain ⟨Pt, d, spec, hx, -, -, -, hok, -⟩ := hr
   obtain ⟨st, hdx, hsr⟩ := parse_roots _ hx
-  have hok0 := stmtOkAt_of _ hok (t := 0) (by decide)
+  have hok0 := stmtOkAt_of _ hok (t := 0) (show 0 < (held R B desc q c₀).ms.length from Nat.zero_lt_one)
   obtain ⟨st', rec, draw, hst', hrec, hdraw, hin⟩ := inputs_of_readsOk (readsOk_at hok0)
   rw [hdx] at hst'
   obtain rfl := Option.some.inj hst'
@@ -169,7 +168,7 @@ theorem bit_held (hR : RefPorts R) (hM : PortsMember (held R B desc q c₀))
   have hj : 0 < r.sts.size := CheckedRun.sts_pos hr
   obtain ⟨Pt, d, spec, hx, -, -, -, hok, -, -, -, -, -, hset⟩ := hr
   have hlt : templateOf (held R B desc q c₀).ms r.u < (held R B desc q c₀).ms.length := by
-    rw [ht0]; decide
+    rw [ht0]; exact Nat.zero_lt_one
   obtain ⟨ins, spec', sts, hset', hnamed⟩ := named_port_of_stmtOk _ hok hlt
   have he : some (ins, spec', sts) = some (r.ins, spec, r.sts) := hset'.symm.trans hset
   obtain ⟨rfl, -, rfl⟩ : ins = r.ins ∧ spec' = spec ∧ sts = r.sts := by simpa using he
@@ -196,8 +195,10 @@ theorem regNamed_name (hM : PortsMember (held R B desc q c₀)) {r : CheckedRun 
   | none => rw [hi] at hreg; cases hreg
   | some own =>
     rw [hi, Option.bind_some, hports] at hreg
-    rw [beq_iff_eq.1 (Array.find?_some hreg)]
-    exact beq_iff_eq.1 (List.find?_some hp)
+    have hn := Array.find?_some hreg
+    have hq := List.find?_some hp
+    simp only [beq_iff_eq] at hn hq
+    rw [hn, hq]
 
 /-- **A needed gate's address at the instance** is its own position's: the member's first port of its row, and the
 place and slot of its position. -/
@@ -215,7 +216,7 @@ theorem rootsWired_held (hR : RefPorts R) (hM : PortsMember (held R B desc q c�
     r.rootsWired id (returned (held R B desc q c₀)) i = r.s.roots := by
   have ht0 := (templateOf_held R B desc q c₀ hM hr).1
   obtain ⟨Pt, d, spec, hx, -⟩ := hr
-  have hprog : r.s.prog = bitsProgs (held R B desc q c₀).ms := parse_prog _ hx
+  have hprog : r.s.prog = Properties.Spot.bitsProgs (held R B desc q c₀).ms := parse_prog _ hx
   have hbd : (r.s.prog.wired id (returned (held R B desc q c₀))).Boundary (cutBlock id r.rb) i = true := by
     rw [hprog, wired_id_keep]
     rcases hb.2 with ⟨-, hin⟩ | ⟨-, hw, hout, -⟩
@@ -269,15 +270,16 @@ theorem rootsHold_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀)
       unfold readsInterior
       rw [hl, hnone]
       rfl
-    unfold readRoots
-    rw [hdx, hrec, hdraw, if_neg (by rw [hri]; decide), hsr]
+    simp only [readRoots, hdx, hrec, hdraw, hri, Bool.false_eq_true, ↓reduceIte]
+    exact hsr
   · exfalso
     rw [hport] at hnone
     unfold regNamed at hnone
     rw [hown, Option.bind_some, (templateOf_held R B desc q c₀ hM hr).2] at hnone
     apply Array.find?_eq_none.1 hnone reg₀ hregm
-    rw [hrn]
-    exact beq_iff_eq.2 (beq_iff_eq.1 (List.find?_some hp)).symm
+    have hq := List.find?_some hp
+    simp only [beq_iff_eq] at hq ⊢
+    rw [hrn, hq]
 
 /-- **`OneTreeFact` at the instance**: the wiring map moves nothing, and the roots hold (`rootsHold_held`). -/
 theorem oneTreeFact_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀))

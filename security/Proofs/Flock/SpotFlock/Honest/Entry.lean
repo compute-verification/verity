@@ -99,16 +99,12 @@ theorem entryFact_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀)
     · have hk : readKeyAt (held R B desc q c₀) r.x r.m₁ r.c₀ r.c₁ (templateOf (held R B desc q c₀).ms r.u)
           reg.name reg.value = .port l.value := by
         obtain ⟨st, rec, draw, hdx, hrec, hdraw, -, hnone⟩ := reads_held R B desc q c₀ hR hr
-        unfold readKeyAt
-        rw [hdx, hrec, hdraw, ht0]
-        show readKey (ownOf (held R B desc q c₀) st rec draw r.c₀) R.name reg.name reg.value = _
-        unfold readKey
-        have hl'' : Spot.SecondStage.linkOf (ownOf (held R B desc q c₀) st rec draw r.c₀) R.name reg.name =
-            some l := by
-          rw [hname]
+        have hl'' : Spot.SecondStage.linkOf (ownOf (held R B desc q c₀) st rec draw r.c₀)
+            ((held R B desc q c₀).names.getD (templateOf (held R B desc q c₀).ms r.u) "") reg.name = some l := by
+          rw [ht0, hname]
           exact hl
-        rw [hl'', hnone]
-        rfl
+        simp only [readKeyAt, hdx, hrec, hdraw, readKey, hl'', hnone, Option.isSome_none, Bool.false_eq_true,
+          ↓reduceIte]
       unfold entryAt
       rw [hslot.1, hk]
     · rw [hslot.2]
@@ -126,8 +122,9 @@ theorem entryFact_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀)
     unfold regNamed at hnone
     rw [hown, Option.bind_some, hports] at hnone
     apply Array.find?_eq_none.1 hnone reg₀ hregm
-    rw [hrn]
-    exact beq_iff_eq.2 (beq_iff_eq.1 (List.find?_some hp)).symm
+    have hq := List.find?_some hp
+    simp only [beq_iff_eq] at hq ⊢
+    rw [hrn, hq]
 
 /-! ## The width at the instance -/
 
