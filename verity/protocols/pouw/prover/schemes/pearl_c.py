@@ -55,7 +55,7 @@ peel      P_A = [bf16(E′_A) ‖ RNE_bf16(A′·F_B)],  P_B = [RNE_bf16(Σ_p fm
 ~~~
 
 Only ρ depends on A alone (about 4 units per element).  The model adopts s, ρ and α as its own FP8 quantizer (e4m3(α·x)
-with PoUW off), and the accounting is the cheap-binding lane's ``Costs.adopted``: 68 units per element, 64 of them credited
+with PoUW off), and the accounting is Lean's ``Costs.adopted``: 68 units per element, 64 of them credited
 (the noise atom and the cast), at the H100's prices.  Every price is a device's (`Prices`): `H100_PRICES` (sm_90) for
 the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120`, measured) for sm_120's atom.  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings sample the same seeds.
 
