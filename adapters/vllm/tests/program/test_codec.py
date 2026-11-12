@@ -350,7 +350,7 @@ def test_v1_kv_cache_arguments_alias_the_previous_position_and_denote_the_same_p
     from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1
     from verity.circuits.codec import encode_program as enc
 
-    from verity_vllm.program.descriptor_equivalence import canonical_runs
+    from tests.program.descriptor_equivalence import canonical_runs
     LP, STEPS = 4, 2
     desc = enc(Program(bind(b1.Serve, C=b1.B0_CONFIG, LP=LP, STEPS=STEPS)))
     assert desc["schema"] == SCHEMA_V1
