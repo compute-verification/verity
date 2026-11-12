@@ -19,6 +19,7 @@ cells' head (`WR.Cells.commit` and `WR.registration`). `far` puts the span at th
 certificate can name, and `edge` puts it under the schedule `EDGE`, whose tail is one execution phase and no bucket
 less. `registered` gives the parameters the registered hardware (`site`): the site of a registration log's view, in
 which the link joins a host and a network certifier that registers the key, and the head of the log it was read at.
+A change to the registered hardware takes its forms in turn by the seed (`SITE_FORMS`).
 
 This is test-side Python (it imports `verity_difftest`, which the certifier's package may not), so it lives beside
 the count's difftest (`test_network_span_protocol.py`)."""
@@ -163,6 +164,9 @@ def _schedule(r: random.Random) -> Schedule:
 #: What the registered hardware's refusals of the parameters say, in Lean and in the mirror, by the change each is
 #: aimed at (`NetworkCheck.Registered`).
 REGISTERED_REASONS = {"site-link": "the network certifiers' links there are [", "site-key": "network certifier cert0"}
+#: How many forms each change to the registered hardware has. `build` takes them in turn by the seed, so that many
+#: seeds in a row show each form once.
+SITE_FORMS = {"site-link": 6, "site-key": 5, "site-alone": 2, "site-form": 23}
 
 
 def site(r: random.Random, link: str, key: str, elsewhere: str,
@@ -358,18 +362,22 @@ def build(m: str, seed: int) -> dict:
     params = {"key": lms.public_key(key).hex(), "link": link, "lms": {"H": H, "N": N, "W": W, "toy": toy},
               "schedule": schedule_json(_other_schedule(r, sched) if m == "schedule" else sched),
               "session": session.hex()}
-    if m in ("registered", "site-link", "site-key", "site-alone", "site-form"):
+    if m == "registered" or m in SITE_FORMS:
+        def form(forms: list) -> Any:
+            assert len(forms) == SITE_FORMS[m], (m, len(forms))
+            return forms[seed % len(forms)]
+
         registered_key = params["key"]
         if m == "site-key":
-            registered_key = r.choice([lms.public_key(_key(i, 1)).hex(), registered_key.upper(), registered_key[:-2],
-                                       registered_key + "0", ""])
-        joins = r.choice([None, ("cert0", R.OUTSIDE), ("node0", "node1"), ("node0", R.OUTSIDE), ("cert0", "cert1"),
-                          ("cert0", "node9")]) if m == "site-link" else ("node0", "cert0")
+            registered_key = form([lms.public_key(_key(i, 1)).hex(), registered_key.upper(), registered_key[:-2],
+                                   registered_key + "0", ""])
+        joins = form([None, ("cert0", R.OUTSIDE), ("node0", "node1"), ("node0", R.OUTSIDE), ("cert0", "cert1"),
+                      ("cert0", "node9")]) if m == "site-link" else ("node0", "cert0")
         params |= {"head": r.randbytes(DIGEST_BYTES).hex(), "site": site(r, link, registered_key, elsewhere, joins)}
         if m == "site-alone":
-            del params[r.choice(["head", "site"])]
+            del params[form(["head", "site"])]
         elif m == "site-form":
-            params = r.choice(_bad_sites(params))
+            params = form(_bad_sites(params))
     e_json = {"phases": phases}
     c_bytes, e_bytes = b"".join(span.mark_bytes(x) for x in marks), D.canonical(e_json).encode()
     if m == "params":

@@ -22,7 +22,8 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from period_case import _key, schedule_json
-from span_case import ACCEPT, EDGE, EXPECT, MUTATIONS, REASONS, REGISTERED_REASONS, REJECT, _Leaves, build, reference
+from span_case import (ACCEPT, EDGE, EXPECT, MUTATIONS, REASONS, REGISTERED_REASONS, REJECT, SITE_FORMS, _Leaves, build,
+                       reference)
 from verity.protocols.certifier.verifier import registered, span
 from verity.protocols.certifier.verifier.certificate import Certificate, CertifiedMark, Direction, Issuer
 
@@ -121,14 +122,29 @@ def test_each_rejection_has_its_own_reason(server):
             whats[(m, next((w for w, _ in span.records("") if f"the {w} certificate" in reason), None))] += 1
     for m in both:
         assert all(whats[(m, w)] for w, _ in span.records("")), whats
-    # a refusal of the parameters by the registered hardware names what is public there: the link, the site's network
-    # certifiers' links, the certifier and its registered key
-    for m, why in REGISTERED_REASONS.items():
-        for n in range(6):
+
+
+@lean
+def test_the_registered_hardware_refuses_the_parameters(server):
+    """Lean and the mirror refuse the parameters on every form of each change to the registered hardware: a link that
+    is none of the site's, or that joins something else than a network certifier and a host; a certifier that
+    registers another key, or one that is not lower-case hex; a site without a head and a head without a site; a site
+    that is not one a registration log's view writes. A refusal by the registered hardware names what is public
+    there, in the same words on both sides: the link, the site's network certifiers' links, the certifier and its
+    registered key. With the site, an honest span's answer is the one without it."""
+    for m, forms in SITE_FORMS.items():
+        for n in range(forms):
             case = build(m, n)
-            assert why in reference(case)["reason"], (m, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
-            assert verdict == REJECT and why in json.loads(out)["reason"], (m, n, out)
+            assert verdict == REJECT, (m, n, out)
+            if m in REGISTERED_REASONS:
+                mirror, lean_why = reference(case)["reason"], json.loads(out)["reason"]
+                assert REGISTERED_REASONS[m] in mirror and mirror == lean_why, (m, n, mirror, lean_why)
+    for n in range(2):
+        case = build("registered", n)
+        bare = case | {"params": {k: v for k, v in case["params"].items() if k not in ("head", "site")}}
+        (verdict, out), (bare_verdict, bare_out) = D.replay(PORT, case, server), D.replay(PORT, bare, server)
+        assert verdict == bare_verdict == ACCEPT and json.loads(out) == json.loads(bare_out), (n, out, bare_out)
 
 
 @lean
@@ -170,7 +186,7 @@ def test_every_change_reaches_its_verdict_in_the_mirror():
     """The mirror accepts the honest spans, rejects every other change, and rejects each for its reason, which holds
     no number: a reason names no execution phase."""
     for m, verdict in EXPECT.items():
-        for n in range(2):
+        for n in range(SITE_FORMS.get(m, 2)):
             case = build(m, n)
             out = reference(case)
             assert out["verdict"] == verdict, (m, n, out)
