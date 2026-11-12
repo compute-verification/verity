@@ -15,6 +15,7 @@ import pytest
 
 from research import auto, cores, remote
 from research.cli import main
+from research.pods.nebius import slot_only
 
 REPO = Path(__file__).resolve().parents[3]
 N2, CPU1, CPU5 = auto.AUTO_NODE, "vy-nebius-cpu-1", "vy-nebius-cpu-5"
@@ -28,6 +29,13 @@ NODES, SPILL = (CPU1, "vy-nebius-cpu-3", CPU5), auto.spill
 def cpu_nodes(monkeypatch):
     """`auto.read` asks NODES, not the CPU nodes in the registry of the machine these tests run on."""
     monkeypatch.setattr(auto, "spill", lambda machines=None: tuple((m, auto.SPILL_POOL) for m in NODES))
+
+
+@pytest.fixture(autouse=True)
+def no_slot_py_of_the_machines_own(monkeypatch, tmp_path):
+    """The probe reads a pool by the machine's own slot.py where it has one, and the machine these tests run on may: here it
+    has none unless a test installs one."""
+    monkeypatch.setattr(slot_only, "NODE_SLOT", str(tmp_path / "no-copy" / auto.SLOT_PY))
 
 
 def share(free: int = 0, waiters: int = 0, size: int = 48, fits: bool | None = None) -> dict:
@@ -520,12 +528,34 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert failing == {m: "exit 1: no python here" for m in (N2, *NODES)}
 
 
+def test_the_probe_reads_a_pool_by_the_machines_own_slot_py_where_it_has_one(tmp_path, monkeypatch):
+    """A pool's runs wait by the machine's own slot.py, so its line is read by that copy: a launcher's tree older or newer
+    than the machine's copy would count the line by other rules than the ones that admit its waiters. A machine without a
+    copy is read by the tree's. Here each slot.py is a stand-in that says which it is."""
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "no-claims")
+    src, own = tmp_path / "src", Path(slot_only.NODE_SLOT)
+    stand_in = "import os\ndef status_doc(now):\n    return {{'copy': {!r}, 'file': os.environ['CHECK_SLOTS'], 'slots': [], 'waiters': []}}\n"
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text(stand_in.format("the tree's"))
+
+    def read() -> dict:
+        return auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]
+
+    assert read()["copy"] == "the tree's"
+    own.parent.mkdir(parents=True)
+    own.write_text(stand_in.format("the machine's"))
+    assert read() == {"copy": "the machine's", "file": slot_only.POOLS["research"], "slots": [], "waiters": []}
+    own.write_bytes(b"\xff\xfe not text")
+    assert read()["copy"] == "the tree's", "a copy that can't be read is none"
+
+
 def test_the_probe_counts_a_pools_free_memory_as_its_slots_count_the_live_reservations(tmp_path, monkeypatch, node_2):
     """A pool's `free_gb` is what a lane run would find free there, which `choose` places by. Slots with peaks= count the
     live lane reservations as a crowd reaches them (slot.py's `reserved_gb`), so the probe counts them the same way, with the
     tree's own slot.py: counted whole, a pool whose slots would start the job reads as short of memory and the job goes to
     wait elsewhere. Here the machine's memory is a stated 200 GiB and six live runs each reserved 30 GiB and reached none."""
-    from research.pods.nebius import slot_only
     slots, ramlock, src = tmp_path / "locks" / "research" / "slots", tmp_path / "ramlock", tmp_path / "src"
     slots.parent.mkdir(parents=True)
     ramlock.mkdir()
@@ -1213,8 +1243,6 @@ def test_on_auto_counts_a_runs_limit_from_its_start_and_its_custody_key_outlasts
     slot the limit itself, which slot.py counts from the slot taken (here 40 min after the runner's start, on a clock the test
     gives). The custody key is minted at launch, so by default it outlasts that sum: under the default lifetime a 150-min
     run is refused for a `--timeout 23400` it never passed."""
-    from research.pods.nebius import slot_only
-
     launched = []
     monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: DOWN, CPU1: pool(*_held(5), waiters=7, minutes=29)})
     monkeypatch.setattr(remote, "launch", _refusing(launched))

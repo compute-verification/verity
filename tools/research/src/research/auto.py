@@ -7,7 +7,8 @@ quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of s
 cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
 --on` uses, as `python3 -` with research.cores and the source tree's tools/verity/check/slot.py inlined (both stdlib only):
 node 2 for its share's live claims and waiters, and each CPU node (`spill`) for its pool's `slot.py --status --json` and the
-memory slot.py finds free there (`free_gb`, read once a pool). `choose` then takes, in order:
+memory slot.py finds free there (`free_gb`, read once a pool). A pool is read by the machine's own slot.py where it has one
+(slot_only.NODE_SLOT), the copy its runs wait by, and by the inlined one where it has none. `choose` then takes, in order:
 
   - the pool with the most places for the job, the first by number among equals. A place is a slot that fits the job (not
     trains-only, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
@@ -217,8 +218,15 @@ def once(f):
     return first
 
 
+def pool_src():
+    try:
+        return Path(NODE_SLOT).read_text()       # the copy this machine's pool runs wait by
+    except (OSError, UnicodeDecodeError):
+        return SLOT_SRC
+
+
 def pool_doc(pool, slots):
-    m = load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots})
+    m = load("auto_slot_" + pool, pool_src(), {"CHECK_SLOTS": slots})
     if not (hasattr(m, "memory_gb") and hasattr(m, "reserved_gb")):
         return m.status_doc(datetime.now(timezone.utc))
     # slot.py reads the machine's memory and every live reservation's process tree for each slot with mem=; once is the same answer
@@ -319,7 +327,7 @@ def share_cpus(source: Path) -> str | None:
 
 def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: float | None = None, lean: bool = False) -> bytes:
     """The probe a machine runs as `python3 -`; `now` (an epoch) stands in for the machine's clock when HOLD_FILE is read. With
-    `lean` it reads the machine's Lean slots too, with the source tree's lean_slot.py."""
+    `lean` it reads the machine's Lean slots too, with the source tree's lean_slot.py and the slot.py beside it."""
     from . import cores, remote
     from .pods.nebius import slot_only
 
@@ -328,7 +336,8 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: f
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
             "HOLD": HOLD_FILE, "NOW": now,
             "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
-            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS, "NULL": NULL_DEVICE, "GIT": GIT, "NO_START": NO_START}
+            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS, "NULL": NULL_DEVICE, "GIT": GIT, "NO_START": NO_START,
+            "NODE_SLOT": slot_only.NODE_SLOT}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
