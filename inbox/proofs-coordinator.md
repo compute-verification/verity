@@ -91218,3 +91218,37 @@ Mailbox read at `2c721cd493` (your 14:03Z note; nothing to act on). Lines are at
 2. The `compact_stage` deletion as a last commit in this pull request, or a follow-up. Without an answer: in this pull request, as its own commit.
 
 **Next:** branch `cursor/proofs-freewords-<hex>`, the change, the tests; next entry by 15:25Z.
+
+## FRAME, Thu 12 Nov 14:30Z: ready to mark #9176 at `99f2f3ba2cf13851729be7a710c6ccc7fd5c3c70`; it holds #9116's head and lands after it; all six runs at the merge pass
+
+**ready to mark #9176 at `99f2f3ba2cf13851729be7a710c6ccc7fd5c3c70`.** It changes nothing a guarantee says or rests on [read: the records run's review names no guarantee]. It is open, not a draft, unmarked, at that head [run: `gh pr view`, 14:30Z]. I do not mark.
+
+**The head.** `99f2f3ba2cf1` = `a2f8506cf865` (my 13:48Z entry: #9116's `3a580254f8bf` and `main` `3d8530f5268a` merged in, the eight files closed as unions) plus one commit, exactly the lock record the records run kept: the committed file's sha256 is the run's `record_sha256`, `7bc7eb2d4357...` [run: `sha256sum`, and the run's OUTCOME line]. By the lane's rule that commit needs no new run.
+
+**The notice line for the lock: it stands as written at 12:40Z, and nothing moves beyond it.** What `Flock.SecurityProofs.SpotKSTwo` and `SpotExfilTwo` read changes in `Spot.SecondStage.Own` (it gains `supplied` and `fixed`), and with it in `SpotFlock.ownOf` and `SpotFlock.codesOk`; no guarantee's record moves [run: `r20261112-134152-2e21`'s `review.txt`: `Own`, `Own.fixed`, `Own.supplied`, `codesOk`, `ownOf`, each read by those two]. The hashes are new ones, since `Own` now holds #9116's `returns` before the two fields; `Own.returns` is #9116's record, not this change's [run: the kept record against `main`'s lock].
+
+**Runs at the merge `a2f8506cf865`, each its own run, each read from its log** [run, each]:
+
+- records, `r20261112-134152-2e21`: rc 0, 13:42:28Z to 14:24:10Z, outcome `regenerated`. The verifier's package, `security/Proofs` and `security/Properties` pass; `security`'s record is regenerated and committed as above.
+- the difftest, `r20261112-134237-6eb2`: rc 0, `DIFFTEST_EXIT 0`, 262 passed, 2 skipped (13:43:01Z to 13:57:18Z).
+- the verifier's suite, `r20261112-134305-0d25`: rc 0, `VERIFIER_EXIT 0`, 926 passed (13:43:27Z to 13:55:12Z).
+- `benchmarks/two_stage`, `r20261112-134331-d6ca`: rc 0, `TWOSTAGE_EXIT 0`, 10 passed, 3 skipped (13:43:52Z to 13:54:54Z).
+- `benchmarks/one_stage`, `r20261112-134357-912d`: rc 0, `ONESTAGE_EXIT 0`, 585 passed, 2 skipped (13:44:20Z to 14:05:19Z).
+- the adapter's `tests/pipeline`, `tests/records` and `tests/engine/test_sampler_capture.py`, `r20261112-134424-1dd9`: rc 0, `VLLM_EXIT 0`, 2,423 passed, 18 skipped (13:44:31Z to 14:15:53Z).
+
+Each log's first line is `HEAD_AT a2f8506cf865...`. The whole quick tier was not run again, as you said.
+
+**It merges** [run: `git merge-tree`, each, between 14:28Z and 14:31Z]:
+
+- onto `main` `8252fe8dff65`: exit 0.
+- **#9116's head moved at 14:12Z: the queue carried it across the landed move, to `d7ac2f984a43`** = `3a580254f8bf` with `main` `3d8530f5268a` [run: `git log`; `3a580254f8bf` is its ancestor]. Merging that head into mine changes no file: the merged tree is my head's tree, `61ebc06bea9a` [run]. So I pushed no further merge. The queue's order also merges: `main` with #9116's head exit 0, then this head onto that exit 0, and the result differs from `main` with #9116 in this change's 16 files and no other [run: on a scratch commit in no branch].
+- against lean's merge branch `origin/cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`): 31 stops, the same 31 as `main`'s, none beyond. Two of the 31 are files this change touches. `verity/protocols/spot/verifier/README.md`: its one stopped hunk is the same with and without the change. `verity/protocols/spot/verifier/lean/tests/test_difftest.py`: its one stopped hunk differs from `main`'s by `(REPLAY_RETURNS, 200)`, a line #9116 adds; it is the same hunk #9116's own head has against that branch [run: the three merged trees compared].
+- with #9229's head `ffaeab2592d3`: exit 0. With #9212's head `26c177fe3a94`: it stops in six files, as a stacked change over a hand-closed merge would; #9212 takes this head next and I close them there.
+
+**`main`'s move since the runs** (`3d8530f5268a` to `8252fe8dff65`, 40 commits, 24 files): no Lean file, lakefile, lock or Lean-check code, and none of this change's 16 files [run: `git diff --name-only`]. So by your 13:12Z rule there is no candidate to run a records run on, and nothing reruns.
+
+**One thing that is yours to overrule**, from my 13:48Z entry: #9116's difftest helper `_returned` now has its verifier fill the value its interior registers, so #9116's test still reads `second-return` alone. The body says so.
+
+**Body** updated at 14:29Z: an Order paragraph (holds #9116 at its marked head, lands after it, the codes' order), the lock paragraph, and the third merge with its runs [run: `research queue edit`, 11,224 bytes].
+
+**Next, in this order:** #9212 takes this head (six files by hand, then its records run and the same suites); #9229 takes it (no stop; its records run builds #9043's modules over the new `readsOk`); #9080 takes #9274's head `2b77dc50d89f` (merged here already, not pushed: `RevealsWired.lean:620` passes the agreement, the cap is #9274's 273 / 2,309 plus 2 and 64) and this head, then its records run and quick tier, then its ready line. Each once.
