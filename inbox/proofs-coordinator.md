@@ -74731,3 +74731,33 @@ repetition); the most that one pass for both repetitions, a session's tables and
 from the template's description, with where today's `Zk.verify` stands against the rule that a verifier's work follows
 the description; what bounds a table's blocks and the verifier's seconds a block at 4, 16 and 64 times more; the
 prover's per-table part.
+
+## LAND2, Thu 12 Nov 06:32Z: #8915's ready line at `3b8adbc4d315`: three reasons in the lock end at "frame", the body says a notice and not a gate; the fast path was not run; `d69e` is still running, ETA 07:00Z [runs `43e5`, `523f`, `fd06`, `ef98`, `d69e`]
+
+**What it moves in the lock**, first, as you asked. One new guarantee, `Flock.SecurityProofs.SpotFirstHitTwo`, with its nontrivial witness. Its record has `SpotFlock.Built` under `domain` and `Claims.ExpectedCR`, `Claims.SamplingGeneric.CompiledTwo.Scope` and `SpotFlock.Addresses` under `open`, each open on `main` already. The three bounds are not in the lock. No existing statement, premise or constant moves.
+
+**The ready line for #8915.**
+- **Head:** `3b8adbc4d315440079159076d1c8b747a72b737b` on `cursor/proofs-firsthit-ks-2c8e`, fast-forwarded from `156b922756a2` without force. It is `156b922756a2` plus one commit that changes three lines of `security/lean-audit.json` and nothing else:
+  ```
+  -   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
+  +   "why": "honest instance needs a built two-stage layout and frame"
+  ```
+  three times, at lines 5330, 5335 and 5340: `unwitnessed`'s entries for `SpotExfilTwo`, `SpotFirstHitTwo` and `SpotKSTwo`.
+- **Where the text comes from:** the lock alone. The sentence is nowhere else in the tree, and `check.py --update` carries an entry's `why` over as it finds it.
+- **Same bytes as the other two pull requests:** the line equals #8495's two (`61bcac57cd12`) and #9149's one (`93937aab616d`).
+- **No other string this pull request adds to the lock has an issue's id or a date in it.** I ran the export's own finder (`tests/lint/test_repo_lane_text.py`) over every string the lock has at this head and not on `main`; the `owner`, `issue` and `due` fields aside, which the export strips, it reports none.
+- **Merges with `main` as of 06:25Z:** `git merge-tree` with `d6075b75d289` reports no conflict. Nor with #9149's head in either order, where the merged lock has the four reasons ended at "frame" and no bracket left; nor with #8495's head.
+- **Runs, none at this head:** `43e5` at `a4c05ccf1820` (records, on `main` at `be9a3d566905`); `523f`, `fd06` and `ef98` at `d4e75ba274d8`, the merge of `156b922756a2` onto `main` at `d6075b75d289`. This head differs from what they ran by the three lines.
+- **The fast path was not run.** It is `lean_changed.py --records`, which builds, and this VM has no built tree, so it is hours and not a minute. What I ran instead, without a build, in 0.2 s:
+  - the lock parses, and `check.text(lock)` equals the file's bytes, so it is laid out as `check.py` writes it;
+  - `check.py` reads of such an entry's `why` only that it is a non-empty string (`unwitnessed_entry`).
+- **One fact for the candidate.** `lean_changed.py --inputs-key` gives `security/Proofs`, `security` and `security/Properties` each a new key at this head: the lock's bytes are in all three. So the candidate's check reuses no pass of `43e5` and runs the three.
+- **The two gates that read git alone,** at this head: `unread_gate.py` exits 0; `ratchet_gate.py` exits 1 on the same 11 sites as before, and is off the merge gate.
+- **The body is replaced** and read back. Its first paragraph is the line on what it moves, and the next says a lock record's change is a notice to Daniel and that it is marked like any other.
+- **Order:** #9097, then #8915, then #9149.
+
+**`d69e`** (`r20261112-061454-d69e`, `vy-nebius-cpu-11`): running, on its slot since 06:18:51Z. It is the try of `SpotFirstHit.lean` at `1eba5da6fc96`, the merge of `156b922756a2` and #9149's head onto `main`. ETA 07:00Z. I report it when it ends, and at once if it fails.
+
+**Two notes.**
+- **Not this pull request's:** `main`'s reason for `NetTiming.SecurityProofs.PooledLeakCarried` under `unwitnessed` names `CIR-190`, by the same finder. #8495's lock has one mention of it fewer than `main`'s. I left it.
+- **The mailbox:** read, all of it. I take the hook's text as yours from here and read the mailbox when it points there.
