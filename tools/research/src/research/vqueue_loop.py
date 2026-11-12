@@ -107,8 +107,9 @@ it, or until `FOLLOW_S` after its enqueue, or until `KEPT_MAX` newer ones run be
 says `unfinished`; one line a candidate either way.  Each compare line holds, in seconds, how long graph2's verdict took from
 its enqueue (`graph2_s`; to the give-up, of an unfinished one) and the check's from its launch (`check_s`).  Since nothing
 there waits on graph2, its reading of a candidate, and its word that a followed check still runs, stand `G2_READ_S` between
-ticks (`Shadow`, kept beside the log), so `graph2_s` is that coarse while the check runs: one is read again at once once
-the candidate's check ended, at its drop, and after an enqueue, a rerun or a cancel of it.  The steps the
+ticks (`Shadow`, kept beside the log), and a tick reads `G2_FRESH` candidates' afresh at most, so `graph2_s` is that coarse
+while the check runs: one is read again at once once the candidate's check ended, at its drop, and after an enqueue, a
+rerun or a cancel of it.  `--no-graph2-shadow` reads none.  The steps the
 check leaves out (policy.toml's `off_gate`, drive.toml's `warn_steps`) still run: once a candidate's verdict is pass or fail,
 what it failed of one that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the
 lane of each member whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`); a red
@@ -292,6 +293,9 @@ VERDICT_ENTRIES = {"failed": ("task", "key", "why", "tests", "error"), "infra": 
 #: where the check gates, how long a candidate's graph2 reading, in shadow, stands, and a followed check's word that it still
 #: runs (`Shadow`): each graph2 `verdict` is megabytes and seconds, and a reading settles every task of its graph
 G2_READ_S = 600
+#: where the check gates, how many candidates' graph2 readings a tick reads afresh when nothing forces it (`Loop._read`):
+#: each lists the check's whole graph and pulls each pending task's results, so the rest keep the reading kept of them
+G2_FRESH = 1
 #: the file beside the log the shadow's readings are kept in between ticks (`Shadow`)
 G2_READS = "graph2-reads.json"
 #: the directory beside the log of the after-landing jobs (`Loop._moved`), each a directory of its job, and their output
@@ -414,10 +418,11 @@ class Shadow:
             got = {}
         self.docs: dict[str, dict] = got if isinstance(got, dict) else {}
 
-    def get(self, kind: str, sha: str, key: str = "") -> dict | None:
+    def get(self, kind: str, sha: str, key: str = "", any_age: bool = False) -> dict | None:
+        """The reading kept of ``sha`` under ``key``, while it stands (whatever its age, with ``any_age``), else None."""
         d = (self.docs.get(sha) or {}).get(kind)
         if not (isinstance(d, dict) and d.get("key") == key and isinstance(at := d.get("at"), (int, float))
-                and 0 <= self.now() - at < self.read_s):
+                and (any_age or 0 <= self.now() - at < self.read_s)):
             return None
         self.used.add(sha)
         return d
@@ -2160,7 +2165,7 @@ class Loop:
     ``shards`` shards (N of ci.toml's plan, or `auto:N`: `vqueue_slim.shard_count`), alone.  ``records`` is
     `research.vqueue_records` (its `start`, `judge` and `commit`), or None to start every candidate's check at once, with no
     records run before it (`vqueue.Snapshot.records`).  Where the check gates, graph2's readings stand ``g2_read_s`` between
-    ticks (`Shadow`).  ``after`` is the tick's own command, which the steps after `main` moved run detached as, with
+    ticks (`Shadow`), and a tick reads at most ``g2_fresh`` afresh that nothing forces (`_read`).  ``after`` is the tick's own command, which the steps after `main` moved run detached as, with
     `--after-landing` (`_moved`); None runs them in the tick.  Each tick gives ``timing`` a line of its steps' seconds on
     ``clock`` and the peak resident size after each (``peak``, `Steps`)."""
 
@@ -2168,8 +2173,9 @@ class Loop:
                  shadow: bool = False, dry_run: bool = False, batch: int = BATCH, depth: int = DEPTH, lean: int = LEAN,
                  pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
                  out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False,
-                 gate: str = GRAPH2_GATE, shards: int | str = SHARDS, records=None, g2_read_s: float = G2_READ_S,
-                 after: list[str] | None = None, clock: Callable[[], float] = time.monotonic,
+                 gate: str = GRAPH2_GATE, shards: int | str = SHARDS, records=None, graph2_shadow: bool = True,
+                 g2_read_s: float = G2_READ_S, g2_fresh: int = G2_FRESH, after: list[str] | None = None,
+                 clock: Callable[[], float] = time.monotonic,
                  peak: Callable[[], float] = _peak_gb, timing: Callable[[str], None] = print):
         if gate not in GATES or gate == CHECK_GATE and (slim is None or not _sharded(slim, shards)):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
@@ -2178,11 +2184,15 @@ class Loop:
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
         self.gate, self.shards = gate, shards
+        #: whether graph2's verdict is read in shadow where the check gates (`--no-graph2-shadow` turns it off): each read
+        #: lists every task of a candidate's check and pulls each pending task's results, which the check's gate never needs
+        self.graph2_shadow = graph2_shadow or gate != CHECK_GATE
         self.now, self.out, self.state, self.tree_ejects, self.records = now, out, state, tree_ejects, records
         self.after, self.clock, self.peak, self.timing, self.steps = after, clock, peak, timing, Steps(clock, peak)
-        self.reads = Shadow(self.log_path.parent / G2_READS, now, g2_read_s) if gate == CHECK_GATE else None
+        self.reads = Shadow(self.log_path.parent / G2_READS, now, g2_read_s) if gate == CHECK_GATE and graph2_shadow else None
         if world is not None:
             world.reads = self.reads
+        self.g2_fresh = self.fresh_left = g2_fresh
         #: the candidates this tick's snapshot took graph2's reading of from `reads`
         self.stale: set[str] = set()
         #: the last tick this loop ran: a tick that logs nothing still counts
@@ -2276,18 +2286,26 @@ class Loop:
               ) -> tuple[Judged, dict | None]:
         """Candidate ``sha``'s verdict on graph2's results (`World.verdict`), list-failed when the log holds no enqueue of it,
         and the reading `Shadow` kept it from, else None: where the check gates, one read under the same key (its base and the
-        results set aside there and on it) less than `G2_READ_S` ago, unless ``fresh`` or its check
-        ended since (the record of its run, as the log holds it, has a verdict; ``ended`` says so of a read after this
-        tick's judging found it).  A reading read is kept."""
+        results set aside there and on it) less than `G2_READ_S` ago, or of any age once this tick read `G2_FRESH` afresh
+        (pending, none kept), unless ``fresh`` or its check ended since (the record of its run, as the log holds it, has a
+        verdict; ``ended`` says so of a read after this tick's judging found it).  A reading read is kept."""
         rec = p.slim(sha)[1]
         ended = isinstance(rec, dict) and "verdict" in rec if ended is None else ended
         key = _digest([base, p.since(sha), p.since(base)])
-        if self.reads is not None and not fresh and (kept := self.reads.get("judged", sha, key)) is not None \
-                and (kept.get("check_ended") or not ended):
-            self.stale.add(sha)
-            self.reads.hits += 1
-            return _unshadowed(kept), kept
-        j = self.world.verdict(sha, base, p.since(sha), p.since(base))
+        if self.reads is not None and not fresh:
+            kept = self.reads.get("judged", sha, key)
+            if kept is None and self.fresh_left <= 0:
+                kept = self.reads.get("judged", sha, key, any_age=True) or {
+                    "state": PENDING, "note": f"graph2's reading waits for a later tick: {self.g2_fresh} a tick"}
+            if kept is not None and (kept.get("check_ended") or not ended):
+                self.stale.add(sha)
+                self.reads.hits += 1
+                return _unshadowed(kept), kept
+        if self.graph2_shadow:
+            j = self.world.verdict(sha, base, p.since(sha), p.since(base))
+            self.fresh_left -= 1
+        else:
+            j = Judged(Verdict(PENDING), note="graph2's shadow isn't read (--no-graph2-shadow)")
         if not j.listed and not p.tries(sha):           # pushed, and its enqueue failed or never ran
             j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it",
                        graph2=j.graph2, listed=False, theirs=j.theirs)
@@ -2444,6 +2462,7 @@ class Loop:
             self.world.g2 = {"reads": 0, "bytes": 0, "s": 0.0}
         if self.reads is not None:
             self.reads.used, self.reads.hits = set(), 0
+        self.fresh_left = self.g2_fresh
         try:
             return self._tick()
         finally:
@@ -3337,7 +3356,9 @@ class Loop:
         ones graph2 says still run (read newest first, so the oldest give way; its line names them, ``followed``), it is
         read once more, and one that still hasn't ended is cancelled and gets its compare line all the same: `unfinished`,
         with how long it ran and how many of its tasks on the merge gate ended.  Either line closes it: a candidate has one.  A read that fails is
-        logged and reads as pending: graph2 only shadows here, so it stops no tick."""
+        logged and reads as pending: graph2 only shadows here, so it stops no tick.  None with the shadow off."""
+        if not self.graph2_shadow:
+            return []
         w, recs, kept = self.world, [], []
         w._theirs, w._listed = {}, {}
         try:
@@ -3569,6 +3590,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes and messages, and do none of "
                                                           "them; its own main is refs/vqueue/shadow in the clone")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
+    ap.add_argument("--no-graph2-shadow", action="store_true",
+                    help=f"with --gate {CHECK_GATE}, read no graph2 verdict in shadow (no compare lines, no followed drops); "
+                         "graph2's checks are still enqueued")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
@@ -3628,7 +3652,8 @@ def main(argv: list[str]) -> int:
         after = None if a.shadow or a.dry_run else [sys.executable, "-m", "research", "queue", "vqueue", *argv]
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
-                    shards=a.shards, records=None if a.no_records else vqueue_records, after=after)
+                    shards=a.shards, records=None if a.no_records else vqueue_records, graph2_shadow=not a.no_graph2_shadow,
+                    after=after)
         if a.once or a.dry_run:
             loop.tick()
             return 0

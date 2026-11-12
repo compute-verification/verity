@@ -4314,6 +4314,24 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose
     assert [r["posting"] for r in env.lines() if r["action"] == "posting"] == ["ring"]
 
 
+def test_under_gate_check_with_the_graph2_shadow_off_no_graph2_verdict_is_read_and_the_check_alone_judges(env, monkeypatch):
+    """--no-graph2-shadow: the check gates as before, and no tick reads graph2's verdict of a candidate or of a followed
+    drop (`World.verdict`, `World._verdict_of`), each of which lists every task of a check and pulls each pending task's
+    results; no compare line comes of it."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER, graph2_shadow=False)
+
+    def read(*_a, **_k):
+        raise AssertionError("graph2's verdict was read in shadow")
+
+    monkeypatch.setattr(loop.world, "verdict", read)
+    monkeypatch.setattr(loop.world, "_verdict_of", read)
+    runs.end(main)
+    runs.end(sha)
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim"] and logged[1]["record"]["verdict"]["state"] == PASS
+    assert loop.tick() == [] and not [r for r in env.lines() if r["action"] in ("compare", "graph2")]
+
+
 @pytest.mark.parametrize("base", ["passed", "failed"])
 def test_under_gate_check_a_ratchet_gate_naming_no_merge_it_fails_rings_its_owner_unless_its_base_failed_it_so(
         env, monkeypatch, base):
@@ -5031,3 +5049,28 @@ def test_after_landing_runs_the_steps_at_main_and_writes_what_they_did(tmp_path)
     assert L._after_landing(W(), d) == 0
     assert json.loads((d / "result.json").read_text()) == {"done": False, "told": ["stacked:2<1"],
                                                            "error": "RuntimeError: push refused"}
+
+
+def test_under_gate_check_a_tick_reads_one_candidate_s_graph2_reading_afresh_and_the_others_wait_their_turn(env, monkeypatch):
+    """A fresh reading lists the check's whole graph and pulls each pending task's results, so a tick reads `G2_FRESH` (one)
+    afresh: the lowest candidate whose reading is out first, each other keeping the one kept of it, or pending, till its turn."""
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    built = [r["sha"] for _ in range(2) for r in loop.tick() if r["action"] == "build"]
+    assert len(built) == 2
+    low, high = built
+    read: list[str] = []
+    verdict = loop.world.verdict
+    monkeypatch.setattr(loop.world, "verdict", lambda s, *a, **k: read.append(s) or verdict(s, *a, **k))
+    loop.reads.docs.clear()
+    loop.tick()
+    assert read == [low]
+    loop.tick()
+    assert read == [low, high]
+    loop.tick()
+    assert read == [low, high]
+    env.clock += L.G2_READ_S
+    loop.tick()
+    loop.tick()
+    assert read == [low, high, low, high]
