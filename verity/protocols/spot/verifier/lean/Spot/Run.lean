@@ -75,8 +75,8 @@ def RECEIPT : String := "verity/registration-receipt/v1"
 
 /-- A two-stage run's interior registration and second stage: the challenger's copies for the interior registration
 (its program, the population of the replay sample's proof blocks, under the check's query), one replay block's Program,
-the interior values, the record and its place in the log, the second stage's coins, their evidence and the challenger
-key the verifier holds them to (`key`, beside `family`; the history is the run's, `Input.main`), its audit
+the interior values, the record and its place in the log, the second stage's coins and their evidence, read under the
+run's challenger key and its copy of main's history (`Input.key`, `Input.main`: a run has one challenger), its audit
 record's proved units, instances, served units and session roots, the second-stage sessions' statements
 (`SecondStage.Stmt`), and the circuit file each template's sessions verify against, by SHA-512, with the reference
 header and registered reads round 2 holds their statements to (`SecondStage.headerOk`, `SecondStage.valuesOk`), as the
@@ -92,7 +92,6 @@ structure Interior where
   source : ByteArray
   coins : Json := Json.null
   family : Option String := none
-  key : Option Challenger.ChallengerKey := none
   provedUnits : Option (Array Int)
   instances : Option Int
   served : Json
@@ -230,7 +229,7 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   let receipt ← receipt it.record i.challenger it.received
   let (draw, read) ← Select.selectSecond sample ns ks it.source
-  if let some code := coinsCode it.key i.main it.coins it.record v.windowRoot it.family (it.source.extract 0 read) then
+  if let some code := coinsCode i.key i.main it.coins it.record v.windowRoot it.family (it.source.extract 0 read) then
     return .error ("second", #[code])
   return .ok (it, receipt, draw, Select.secondLaw sample ns ks, read)
 

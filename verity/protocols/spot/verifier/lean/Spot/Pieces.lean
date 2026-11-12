@@ -661,8 +661,8 @@ that read coins must carry), the challenger's family the stream read them from (
 sample that read none), and the verifier's challenger key (`key`, `ChallengerKey.from_json`'s form, or null for a
 verifier that holds none) and its copy of main's first-parent history (`main`), which the evidence is read under; under
 a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
-"record", "received", "source", "coins", "family", "key", "proved_units", "instances", "served", "session_roots",
-"statements"}` in the same forms, `replay` one replay block's program object, its params' `proofs` the auditor's naming
+"record", "received", "source", "coins", "family", "proved_units", "instances", "served", "session_roots",
+"statements"}` in the same forms, its coins read under the run's `key` and `main`, `replay` one replay block's program object, its params' `proofs` the auditor's naming
 each template's
 circuit file, reference header and registered reads (`Run.templateCircuits`), and no `links` or `wires`, which the
 verifier derives; null otherwise.
@@ -708,11 +708,9 @@ def run (j : Json) : V Json := do
     | _ => throw s!"{what} family is not a string"
   let family ← familyOf j "the run's"
   let interiorFamily ← familyOf (getD j "interior") "an interior's"
-  let keyOf (x : Json) : V (Option Challenger.ChallengerKey) := match getD x "key" with
+  let key ← match getD j "key" with
     | .null => pure none
     | k => some <$> Challenger.ChallengerKey.ofJson k
-  let key ← keyOf j
-  let interiorKey ← keyOf (getD j "interior")
   let interior ← match getD j "interior" with
     | .null => pure none
     | it => do
@@ -746,7 +744,7 @@ def run (j : Json) : V Json := do
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins", family,
             key, main := getD j "main",
-            interior := interior.map fun it => { it with family := interiorFamily, key := interiorKey } }
+            interior := interior.map fun it => { it with family := interiorFamily } }
 
 /-- `second_stage.check`'s input, read: the two-stage form allowed or not (`allow`), the first stage's replay sample,
 the interior program and query, whose strata make the parts, the interior and boundary registrations' records, the
