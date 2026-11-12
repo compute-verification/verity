@@ -307,7 +307,7 @@ class TP2CaptureWorkerExtension:
     def tp2_close(self) -> dict[str, Any]:
         import torch
 
-        v = self._tp2
+        v: dict[str, Any] = self._tp2
         cap, rank = v["cap"], v["rank"]
         torch.cuda.synchronize()
         stats = cap.close()
@@ -1293,7 +1293,7 @@ class TP2CaptureWorkerExtension:
         evs = kernel_trace.load_trace(tr)
         ks = kernel_trace.kernels_of_trace_events(evs)
         summary = kernel_trace.summarize_kernels(ks)
-        cpu_ops = {}
+        cpu_ops: dict[str, int] = {}
         for e in evs:
             if e.get("ph") == "X" and e.get("cat") == "cpu_op":
                 cpu_ops[e.get("name", "")] = cpu_ops.get(e.get("name", ""), 0) + 1
