@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
+from verity.circuits.refs import Strided
 from verity.definitions.numerics import torch_kernels as TK
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.ops import scalar as SC
@@ -298,6 +299,16 @@ def test_static_amounts_across_a_wide_tensor(rules) -> None:
 
     g = torch.Generator().manual_seed(22)
     _check(f, torch.randint(0, 4, (rows * 8,), generator=g), torch.randint(-2 ** 62, 2 ** 62, (rows,), generator=g), rules=rules)
+
+
+@pytest.mark.parametrize("shape", [(5,), (5, 1)])
+def test_a_column_of_a_matrix_is_one_box_and_reads_back_leaf_for_leaf(shape) -> None:
+    """One leaf of each of five rows of four, as `Strided` writes a column (an inner run of one), is one box whose stride along
+    the rows is the row length (`training_views._boxes`), and the box's references are the column's again (`_refs`)."""
+    column = Strided("node", 3, 2, 1, 4, 0, 5)
+    boxes = TV._boxes(column, shape, "a column")
+    assert [(b.lo, b.hi, b.leaf0, b.st[0]) for b in boxes] == [((0,) * len(shape), shape, 2, 4)]
+    assert list(TV._refs(shape, boxes, "a column")) == list(column) == [("node", 3, 2 + 4 * row) for row in range(5)]
 
 
 @BOTH
