@@ -5,7 +5,7 @@ point and every other reached search row, on te_core.algorithm_policy's columns 
 
     python plot2_final.py build --finals FINALS_JSON --policy TABLES_JSON --out DIR
     python plot2_final.py put DIR [--note FILE] [--dry]
-    python plot2_final.py put-fit BODY [--dry]
+    python plot2_final.py put-fit BODY [--note FILE] [--dry]
 
 Run from benchmarks/covert_witness of te_core's checkout (node_loop's RESCORE). FINALS_JSON is
 islands/integrator/finals_table.py's out/finals-table.json, TABLES_JSON a search table (te_core.algorithm_policy's
@@ -36,10 +36,11 @@ DIR/algorithm-policy.png (`figure`, both axes log at the same length per decade)
 console's copy drops DETAIL's cells, then only overlay rows off the headline data, then other overlay rows (`cut`);
 `put` stores DIR/tables/ in the evidence store, cuts again with its art id in the note and PUTs the cut. It PUTs
 nothing where the route serves algorithm-policy rows priced by a newer te_core (te_core.algorithm_policy's
-`kept_data`). With `--note`, the note is FILE's text, the stored tables' art id where it says `ART`; a text without
-it, or over the route's limit with it, is refused before anything is stored. training/frontier-fit stays the search
+`kept_data`). With `--note`, the note is FILE's text, the stored tables' art id (`cited`) where it says `ART`; a text
+without it, or over the route's limit with it, is refused before anything is stored. training/frontier-fit stays the search
 refresh's unless `put-fit` PUTs it: BODY is the console body a search build wrote (te_core.algorithm_policy's
-console/frontier-fit.json), sent as it is, under the same rule for a newer te_core's rows.
+console/frontier-fit.json), sent as it is but for its note where `--note` gives FILE's text, under the same rule for
+a newer te_core's rows.
 
 `--dry` stores nothing and PUTs nothing: it prints the sha256, bytes, rows and note length of the body the put would
 send, and what te_core.console's `put` would refuse it for. `put --dry` has no art id, so its body carries `NO_ART`
@@ -89,9 +90,15 @@ ROWS = (f"Per start, g: finals points (p_any: reaching seeds' mean C over the fi
 #: the note's sentence on what a rotation's product is priced as (te_core.rotations names it, te_core.gates prices it
 #: and te_core.tiles reads its operands at 32 bits), and what stays as traced: a part's affected and token shares are
 #: its traced step's, whose circuit holds the rotation as an f32 product, so a part whose log merges a cut's rotations
-#: with a block's attention products keeps shares measured at that price
+#: with a block's attention products keeps shares measured at that price; the second, its first clause alone, where
+#: the whole doesn't fit the route's note
 ROTATIONS = ("Rotations are at the TF32 product; a part mixing a cut's rotation with attention products keeps the "
-             "traced shares, measured at the f32 price.")
+             "traced shares, measured at the f32 price.", "Rotations are at the TF32 product.")
+#: the note's sentence on the width an attention call's products are priced at (te_core.gates', the card's fused
+#: kernel's), and S at 32 bits over S at 16, least and largest over the page's rows: the as-if re-pricing's
+#: part1r/rows-page.tsv, its S_factor column
+ATTENTION = ("Attention's products are priced at 16 bits, as the card computes them; at 32 bits S is 0.43 to 0.67 of "
+             "this.")
 #: the figure's inches per decade, on both axes, so an iso-S line S = p·rho_own runs at 45 degrees
 DECADE_IN = 1.5
 #: where a `--note` text names the stored tables' art id, and what a dry run puts there
@@ -101,6 +108,11 @@ NO_ART = "art:" + "0" * 64
 STRIP_IN, NO_RHO = 0.4, {"untraced": ("x", "reached, not yet traced"),
                          "refused": ("+", "refused (data- or batch-dependent program)"),
                          "failed": ("1", "reached, trace failed"), "none": ("|", "rho_own infinite or unmeasured")}
+
+
+def cited(art: str) -> str:
+    """The stored tables' art id as a note cites it: `art:` and its first 12 hex digits."""
+    return art[:len("art:") + 12]
 
 
 def run_of(row: list) -> str:
@@ -256,7 +268,8 @@ def build(fin: dict, search: dict) -> tuple[dict, dict]:
 def note(cells: list[dict], art: str | None = None, said: str = "", brief: str = "") -> str:
     """The panel's note within the route's `console.NOTE_MAX`: what a row is (`ROWS`, at its first length that fits),
     the split's cells by start, else their count, and the cut's words (`said`), else `brief`'s; the headline's label,
-    the rotations' price (`ROTATIONS`) and the art id stay whole."""
+    attention's price (`ATTENTION`) and the art id (`cited`) stay whole, and the rotations' (`ROTATIONS`) is whole where
+    any text fits, else its first clause."""
     split = {}
     for c in cells:
         if c["split"] == SEARCH:
@@ -265,10 +278,10 @@ def note(cells: list[dict], art: str | None = None, said: str = "", brief: str =
     where = "; ".join(f"{s} {'all g' if gs == every[s] else ', '.join(gs)}" for s, gs in split.items())
     count = f"{sum(c['split'] == SEARCH for c in cells)} of {len(cells)} cells"
 
-    def text(rows: str, where: str, cut: str) -> str:
+    def text(rotations: str, rows: str, where: str, cut: str) -> str:
         return (f"{rows} Finals on the search split: {where}. rho_own: search trace, {ap.OWN_K_LABEL}. S = p rho_own. "
-                f"{ROTATIONS}" + (f" {cut}" if cut else "") + (f" Tables {art}." if art else ""))
-    tries = [(rows, *x) for rows in ROWS for x in ((where, said), (count, said), (count, brief))]
+                f"{ATTENTION} {rotations}" + (f" {cut}" if cut else "") + (f" Tables {cited(art)}." if art else ""))
+    tries = [(rot, rows, *x) for rot in ROTATIONS for rows in ROWS for x in ((where, said), (count, said), (count, brief))]
     return next((t for t in (text(*x) for x in tries) if len(t) <= console.NOTE_MAX), text(*tries[-1]))
 
 
@@ -481,14 +494,20 @@ def dry(q: dict) -> str:
             f"nothing PUT")
 
 
-def put_fit(path: Path, dry_run: bool) -> int:
-    """PUT a search build's console body of te_core.frontier_fit's panel as it is (module docstring); then GET the
-    panel, which must be the body as numbers (`readback`). 0 where the route serves it, else 1."""
+def put_fit(path: Path, dry_run: bool, note: Path | None = None) -> int:
+    """PUT a search build's console body of te_core.frontier_fit's panel as it is, its note `note`'s text where given
+    (module docstring); then GET the panel, which must be the body as numbers (`readback`). 0 where the route serves
+    it, else 1."""
     from te_core import frontier_fit
 
     q = json.loads(path.read_text())
     if q.get("id") != frontier_fit.PANEL:
         raise SystemExit(f"plot2_final: {path} is {q.get('id')}'s body, not {frontier_fit.PANEL}'s")
+    if note is not None:
+        q["note"] = " ".join(note.read_text().split())
+        if len(q["note"]) > console.NOTE_MAX:
+            raise SystemExit(f"plot2_final: the route refuses {note}: note {len(q['note'])} characters of "
+                             f"{console.NOTE_MAX}")
     if bad := console.refused(q):
         raise SystemExit(f"plot2_final: the route refuses {path}: {bad}")
     if keep := ap.kept_data(q, console.served().get(frontier_fit.PANEL)):
@@ -524,10 +543,11 @@ def main(argv=None) -> int:
     u.add_argument("--dry", action="store_true", help="store nothing and PUT nothing: what the put would send")
     f = sub.add_parser("put-fit")
     f.add_argument("body", type=Path, help="a search build's console/frontier-fit.json")
+    f.add_argument("--note", type=Path, default=None, help="the note's text, in place of the body's")
     f.add_argument("--dry", action="store_true", help="PUT nothing: what the put would send")
     args = a.parse_args(argv)
     if args.cmd == "put-fit":
-        return put_fit(args.body, args.dry)
+        return put_fit(args.body, args.dry, args.note)
     tables = args.out / "tables"
     if args.cmd == "build":
         fin, search = json.loads(args.finals.read_text()), json.loads(args.policy.read_text())
@@ -562,7 +582,7 @@ def main(argv=None) -> int:
         raise SystemExit(f"plot2_final: {args.note} cites no stored tables: write {ART} where their art id goes")
 
     def body(art: str) -> dict:
-        q = cut(p, cells, art, None if text is None else text.replace(ART, art))
+        q = cut(p, cells, art, None if text is None else text.replace(ART, cited(art)))
         if len(q["note"]) > console.NOTE_MAX or console.refused(q):
             raise SystemExit(f"plot2_final: the route refuses the cut: note {len(q['note'])} characters of "
                              f"{console.NOTE_MAX}; {console.refused(q)}")

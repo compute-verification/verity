@@ -53,7 +53,7 @@ def test_a_put_takes_its_note_from_a_file_and_names_the_stored_tables_in_it(rout
     note.write_text("Corrected: what moved.\nTables {art}.\n")
     assert P2.main(["put", str(d), "--note", str(note)]) == 0
     assert seen["stored"] == [d / "tables"]
-    assert [q["note"] for q in seen["put"]] == [f"Corrected: what moved. Tables {ART}."]
+    assert [q["note"] for q in seen["put"]] == [f"Corrected: what moved. Tables {ART[:16]}."]
     assert json.loads((d / "console" / f"{ap.NAME}.json").read_text()) == seen["put"][0]
 
 
@@ -63,7 +63,7 @@ def test_a_note_that_cites_no_tables_or_is_over_the_routes_limit_is_refused_befo
     note.write_text("Corrected: what moved.")
     with pytest.raises(SystemExit, match="cites no stored tables"):
         P2.main(["put", str(d), "--note", str(note)])
-    note.write_text("x" * (console.NOTE_MAX - len(ART) + 1) + "{art}")
+    note.write_text("x" * (console.NOTE_MAX - len(P2.cited(ART)) + 1) + "{art}")
     with pytest.raises(SystemExit, match=f"note {console.NOTE_MAX + 1} characters of {console.NOTE_MAX}"):
         P2.main(["put", str(d), "--note", str(note)])
     assert seen["stored"] == [] and seen["put"] == []
@@ -76,11 +76,11 @@ def test_a_dry_put_stores_nothing_puts_nothing_and_says_what_it_would_send(route
     monkeypatch.setattr(console, "refusal", lambda q: "9 files of te_core differ here")
     assert P2.main(["put", str(d), "--note", str(note), "--dry"]) == 0
     assert seen["stored"] == [] and seen["put"] == [] and not (d / "console" / f"{ap.NAME}.json").exists()
-    body = console.body(panel(ap.PANEL, f"Corrected: what moved. Tables {P2.NO_ART}."))
-    assert len(P2.NO_ART) == len(ART)
+    body = console.body(panel(ap.PANEL, f"Corrected: what moved. Tables {P2.cited(P2.NO_ART)}."))
+    assert len(P2.NO_ART) == len(ART) and P2.cited(ART) == "art:" + "1" * 12
     assert capsys.readouterr().out.strip() == (
         f"dry: {ap.PANEL}: sha256 {hashlib.sha256(body).hexdigest()}, {len(body)} bytes, 2 rows, note "
-        f"{len('Corrected: what moved. Tables .') + len(ART)} characters; console.put would refuse: 9 files of te_core "
+        f"{len('Corrected: what moved. Tables .') + 16} characters; console.put would refuse: 9 files of te_core "
         f"differ here; nothing stored, nothing PUT")
 
 
@@ -99,6 +99,25 @@ def test_the_fits_body_is_put_as_a_build_wrote_it_and_read_back(route, capsys):
     (d / "other.json").write_bytes(console.body(panel(ap.PANEL, "n")))
     with pytest.raises(SystemExit, match=f"not {frontier_fit.PANEL}'s"):
         P2.main(["put-fit", str(d / "other.json")])
+
+
+def test_the_fits_put_takes_its_note_from_a_file_and_refuses_one_over_the_routes_limit(route, capsys):
+    d, seen = route
+    q = panel(frontier_fit.PANEL, "the build's note")
+    body = d / "frontier-fit.json"
+    body.write_bytes(console.body(q))
+    note = d / "note.txt"
+    note.write_text("The fit's note,\nfrom a file.\n")
+    sent = q | {"note": "The fit's note, from a file."}
+    assert P2.main(["put-fit", str(body), "--note", str(note), "--dry"]) == 0 and seen["put"] == []
+    raw = console.body(sent)
+    assert f"sha256 {hashlib.sha256(raw).hexdigest()}, {len(raw)} bytes, 2 rows, note 28 characters" in \
+        capsys.readouterr().out
+    assert P2.main(["put-fit", str(body), "--note", str(note)]) == 0 and seen["put"] == [sent]
+    note.write_text("x" * (console.NOTE_MAX + 1))
+    with pytest.raises(SystemExit, match=f"note {console.NOTE_MAX + 1} characters of {console.NOTE_MAX}"):
+        P2.main(["put-fit", str(body), "--note", str(note)])
+    assert seen["put"] == [sent]
 
 
 def test_the_fits_read_back_takes_the_routes_integer_for_a_whole_float_as_that_number(route, monkeypatch, capsys):
