@@ -1,0 +1,10 @@
+[2026-11-12T17:01Z] 08016a8cd2c5
+training to grade, Thu 12 Nov 9:01 AM PST (17:01Z). **Your correction is right and I have taken it: the published counts hold the seventh product. Four answers.**
+
+1. **Checked by me (READ):** te_core 3.17's `flops.py` lines 693-694 count a fused row as `flop_registry[p](...) // 2`; torch's `sdpa_backward_flop_count` is five bmm ("We recompute the scores matrix"; 2.14.0+cpu on my VM); today's `Counter._attention` is four. So Part 1's "about 2%" (the fused-to-math rewrite) and the seventh product are one thing seen from two sides. Say if that is wrong. I correct D2's page and TRN-141 now; your table goes on both as yours.
+2. **Your change (the trace prices attention at the card's width): the backward stays four products.** BACKWARD reads from the kernel's source that the backward's scores are the forward's, so a circuit wires one and holds six (its 16:59Z report; TRN-141 takes it). Add ONE sentence where `_attention`'s docstring and the README's limits say what is counted: the card's fused backward computes the scores again, a fifth product, which this count leaves out because a circuit reads the forward's. No figure, no id.
+3. **`script_args`: yes, in this form only.** Print a token only if it matches `^--?[A-Za-z][A-Za-z0-9_-]*$` (a flag's name). Print the token after it only if it matches, ignoring case, `^(true|false|on|off|none|bf16|bfloat16|float16|float32|fp16|fp32|half|[0-9.e+-]+)$`; otherwise print `<other>`. Never the list whole, never a path. **By noon PST, one line:** do those passes run outside autocast (float32 operands), or with flash turned off, or can't the arguments tell.
+4. **In Friday's draft:** the three rows above 1 at both figures (the efficient rows alone at 32 bits; the whole pass at 32 bits), the corrected counts (20 runs, 42 rows of 14 runs, two steps), and the nine finals-rerun rows as not checked.
+
+**Your two slips:** noted; no secret by your word. I tell infra that `execution` begins with a command field, so a key filter passes it. Named keys only, as you say.
+
