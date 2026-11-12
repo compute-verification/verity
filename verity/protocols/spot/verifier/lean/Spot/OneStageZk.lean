@@ -1361,13 +1361,16 @@ theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
   | error why => simp [hp, bind, Except.bind] at h
   | ok q =>
     simp only [hp, bind, Except.bind] at h
-    split at h
-    · simp [throw, throwThe, MonadExceptOf.throw] at h
-    · rename_i hk
-      simp only [pure, Except.pure, Except.ok.injEq] at h
-      subst h
-      refine ⟨rfl, ?_⟩
-      cases hl : getD q.base.verifier.law "law" <;> simp_all
+    cases hl : getD q.base.verifier.law "law" with
+    | str s =>
+      simp only [hl] at h
+      by_cases hs : s = "subset"
+      · subst hs
+        simp [pure, Except.pure] at h
+        subst h
+        exact ⟨rfl, hl⟩
+      · simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+    | _ => simp [hl, throw, throwThe, MonadExceptOf.throw] at h
 
 /-- **What `paramsOfJson` returns, `paramsParsed` returned** (`paramsOfJson_ok`). -/
 theorem paramsOfJson_parsed {j : Json} {p : Params} (h : paramsOfJson j = .ok p) : paramsParsed j = .ok p :=
