@@ -187,7 +187,7 @@ class Writer:
         import torch
 
         self.bound = _up(bound)
-        self._pinned: Any = torch.empty(self.bound, dtype=torch.uint8, pin_memory=True) if torch.cuda.is_available() else None
+        self._pinned = torch.empty(self.bound, dtype=torch.uint8, pin_memory=True) if torch.cuda.is_available() else None
         self._ring = self._pinned.numpy() if self._pinned is not None else np.empty(self.bound, np.uint8)
         self._cv = threading.Condition()
         self._jobs: deque[_Job] = deque()

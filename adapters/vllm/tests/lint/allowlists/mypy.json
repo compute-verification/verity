@@ -1212,6 +1212,7 @@
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "union-attr", "symbol": "CommitSession._session", "detail": "", "count": 7},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "union-attr", "symbol": "CommitSession.end", "detail": "", "count": 4},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "var-annotated", "symbol": "KvDevice.encode", "detail": ""},
-    {"file": "verity_vllm/target_family.py", "kind": "return-value", "symbol": "device_cc", "detail": ""}
+    {"file": "verity_vllm/target_family.py", "kind": "return-value", "symbol": "device_cc", "detail": ""},
+    {"file": "verity_vllm/protocols/pouw/h1/prover.py", "kind": "index", "symbol": "Writer.keep", "detail": ""}
   ]
 }
