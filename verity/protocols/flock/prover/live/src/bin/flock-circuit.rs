@@ -13,7 +13,7 @@
 //!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
 //!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
 //!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
-//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--slots N]]   (the unit's level schedule cut at its
+//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--native] [--slots N]]   (the unit's level schedule cut at its
 //!                          SHA-512 compressions' chaining values, `unit_cut`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
@@ -5001,7 +5001,11 @@ fn level_widths(widths: &[usize]) -> serde_json::Map<String, Value> {
 /// outputs' rows. `--widths` adds a `WIDTHS` line, the rows of each level after the cut. With `--walk`, a `SEEDED`
 /// line: over the instance file's unit slots (`--slots N`: the first N), whether the walk on the cut schedule
 /// (`unit_ab_seeded`, the seeds' z the host evaluator's, `unit_rows_z`) packs `unit_ab_into`'s words, every word compared,
-/// and whether one seed off in one slot is refused.
+/// and whether one seed off in one slot is refused. With `--native` too, a `NATIVE` line: the same walk and compare on seeds
+/// computed in 64-bit words (`sha512_native::unit_seeds_native`), each compression's from its chaining value and block,
+/// which are still read off the host's evaluation at the compression's first rounds; the seed bits that differ from the
+/// host evaluator's; and one of those seeds off. Exits 1 unless every compare a line makes is `same` and every seed off is
+/// refused.
 fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     use flock_live::circuit::{unit_ab_into, unit_ab_seeded, unit_rows_z};
     use flock_live::ir_block::{UnitSched, schedule, schedule_seeded};
@@ -5096,9 +5100,55 @@ fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         z[seeds.len() / 2] ^= 1;
         z
     }, uw, &ins[..n0], &mut got[..4 * uw * n0]);
+    let same = host && walk == Some(true) && differing == 0;
     println!("SEEDED\t{}", json!({"net": ni, "slots": slots, "slots_with_inputs": ins.iter().filter(|w| w.iter().any(|x| *x != F128::ZERO)).count(),
         "seeds": seeds.len(), "cut_levels": cut.levels(), "words": want.len(), "host_ok": host, "walk_ok": walk, "words_differing": differing,
-        "same": host && walk == Some(true) && differing == 0, "off_seed_walk_ok": off, "host_s": host_s, "walk_s": walk_s}));
+        "same": same, "off_seed_walk_ok": off, "host_s": host_s, "walk_s": walk_s}));
+    let mut ok = same && off == Some(false);
+    if flag("--native") && slots > 0 {
+        // the seeds in 64-bit words, each compression's from its chaining value and block; those are still read off the
+        // host's evaluation, at the compression's first rounds' committed words
+        let groups = slots.div_ceil(32);
+        let lanes = |g: usize| (slots - 32 * g).min(32);
+        let read_rows = comps.iter().map(|x| x.read_rows().count()).sum::<usize>();
+        let t = Instant::now();
+        let native: Vec<Option<Vec<u32>>> = (0..groups).into_par_iter()
+            .map(|g| flock_live::sha512_native::unit_seeds_native(&comps, lanes(g), |rows| unit_rows_z(net, rows, &ins[32 * g..32 * g + lanes(g)]))).collect();
+        let native_s = t.elapsed().as_secs_f64();
+        let unread = native.iter().filter(|z| z.is_none()).count();
+        let seed_bits_differing: usize = native.par_iter().enumerate().map(|(g, z)| {
+            let used = u32::MAX >> (32 - lanes(g));
+            z.as_ref().map_or(0usize, |z| z.iter().zip(seed_z(g)).map(|(x, y)| ((x ^ y) & used).count_ones() as usize).sum::<usize>())
+        }).sum::<usize>();
+        let line = if unread == 0 {
+            got.fill(!0);
+            let t = Instant::now();
+            let walk = unit_ab_seeded(net, &cut, &seeds, |g| native[g].clone().unwrap(), uw, &ins, &mut got);
+            let walk_s = t.elapsed().as_secs_f64();
+            let differing = want.par_iter().zip(&got).filter(|(x, y)| x != y).count();
+            // one native seed off in the last slot
+            let (gl, n) = (groups - 1, 32 * (groups - 1));
+            let off = unit_ab_seeded(net, &cut, &seeds, |_| {
+                let mut z = native[gl].clone().unwrap();
+                z[seeds.len() / 3] ^= 1 << (lanes(gl) - 1);
+                z
+            }, uw, &ins[n..], &mut got[4 * uw * n..]);
+            ok = ok && host && walk == Some(true) && differing == 0 && seed_bits_differing == 0 && off == Some(false);
+            json!({"walk_ok": walk, "words_differing": differing, "same": host && walk == Some(true) && differing == 0, "off_seed_walk_ok": off, "walk_s": walk_s})
+        } else {
+            ok = false;
+            json!({"lane_groups_unread": unread})
+        };
+        let mut line = line;
+        line.as_object_mut().unwrap().extend(json!({"net": ni, "slots": slots, "compressions": comps.len(), "seeds": seeds.len(), "seed_bits": seeds.len() * slots,
+            "seed_bits_differing": seed_bits_differing, "seeds_from": "each compression's chaining value and block, in 64-bit words",
+            "inputs_from": "the host's evaluation, at each compression's first 20 found rounds' committed words", "rows_read": read_rows,
+            "native_s": native_s}).as_object().unwrap().clone());
+        println!("NATIVE\t{line}");
+    }
+    if !ok {
+        std::process::exit(1);
+    }
 }
 
 /// `walk-twin`: the device's level walk on the host (`circuit::unit_walk_words`: the device's arrays, `ir_block::WalkRows`,

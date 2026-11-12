@@ -276,14 +276,154 @@ pub struct UnitComp {
     pub state: [u32; 8],
     /// the feed-forward's rows `[start, end)`: its eight additions' carry rows and committed carries
     pub ff: (u32, u32),
+    /// the found rounds' committed `(e, a)`, each word's first row, in round order: the last is round 79's
+    pub words: Vec<(u32, u32)>,
+    /// the feed-forward's rows in row order: the state word its addition adds (0 to 7, `a` to `h`), the bit, and whether
+    /// the row is the carry committed after that bit (else the bit's carry row)
+    pub ff_rows: Vec<(u8, u8, bool)>,
+}
+
+fn big_s0(a: u64) -> u64 {
+    a.rotate_right(28) ^ a.rotate_right(34) ^ a.rotate_right(39)
+}
+
+fn big_s1(e: u64) -> u64 {
+    e.rotate_right(14) ^ e.rotate_right(18) ^ e.rotate_right(41)
+}
+
+fn ch(e: u64, f: u64, g: u64) -> u64 {
+    g ^ (e & (f ^ g))
+}
+
+fn maj(a: u64, b: u64, c: u64) -> u64 {
+    c ^ ((a ^ c) & (b ^ c))
+}
+
+/// Each round's new `(e, a)` of SHA-512's compression on the chaining value `cv` and the block `msg`.
+fn round_words(cv: &[u64; 8], msg: &[u64; 16]) -> [(u64, u64); 80] {
+    let mut w = [0u64; 80];
+    w[..16].copy_from_slice(msg);
+    for i in 16..80 {
+        let s0 = w[i - 15].rotate_right(1) ^ w[i - 15].rotate_right(8) ^ (w[i - 15] >> 7);
+        let s1 = w[i - 2].rotate_right(19) ^ w[i - 2].rotate_right(61) ^ (w[i - 2] >> 6);
+        w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
+    }
+    let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = *cv;
+    let mut out = [(0, 0); 80];
+    for (t, (&k, &wi)) in SHA512_K.iter().zip(&w).enumerate() {
+        let t1 = h.wrapping_add(big_s1(e)).wrapping_add(ch(e, f, g)).wrapping_add(k).wrapping_add(wi);
+        let t2 = big_s0(a).wrapping_add(maj(a, b, c));
+        (h, g, f, e, d, c, b, a) = (g, f, e, d.wrapping_add(t1), c, b, a, t1.wrapping_add(t2));
+        out[t] = (e, a);
+    }
+    out
+}
+
+/// SHA-512's state `a` to `h` after the 80 rounds on the chaining value `cv` and the block `msg`, before the feed-forward.
+pub fn working_state(cv: &[u64; 8], msg: &[u64; 16]) -> [u64; 8] {
+    let r = round_words(cv, msg);
+    [r[79].1, r[78].1, r[77].1, r[76].1, r[79].0, r[78].0, r[77].0, r[76].0]
 }
 
 impl UnitComp {
+    /// The found rounds whose committed words [`UnitComp::inputs`] reads: sixteen schedule words in a row need the four
+    /// rounds before the first of them.
+    pub const READ_ROUNDS: usize = 20;
+
     /// The rows every later row reads the next chaining value through (its bits are XORs of them and of the chaining value
     /// before): the committed state and the feed-forward's rows. Their z are bits of [`compression`]'s tape words.
     pub fn seeds(&self) -> impl Iterator<Item = u32> + '_ {
         self.state.iter().flat_map(|&w| w..w + 64).chain(self.ff.0..self.ff.1)
     }
+
+    /// The rows [`UnitComp::inputs`] reads, in its order: the first [`UnitComp::READ_ROUNDS`] found rounds' `e` then `a`,
+    /// 64 rows each. Empty where fewer rounds were found.
+    pub fn read_rows(&self) -> impl Iterator<Item = u32> + '_ {
+        let n = if self.words.len() < Self::READ_ROUNDS { 0 } else { Self::READ_ROUNDS };
+        self.words[..n].iter().flat_map(|&(e, a)| (e..e + 64).chain(a..a + 64))
+    }
+
+    /// The compression's chaining value and block from its first found rounds' committed words (`e[k]` and `a[k]`: found
+    /// round k's, [`UnitComp::READ_ROUNDS`] of each). With the four rounds before it read, a round's `e` gives its schedule
+    /// word (`W = e - d - h - S1(e) - Ch - K`); sixteen of those in a row give the block, by the schedule read backwards;
+    /// the rounds read backwards from the fourth found give the chaining value. None where fewer rounds were found, or the
+    /// words are not a compression's rounds (a round's `a` is not its `t1 + t2`).
+    pub fn inputs(&self, e: &[u64], a: &[u64]) -> Option<([u64; 8], [u64; 16])> {
+        const N: usize = UnitComp::READ_ROUNDS;
+        if self.words.len() < N || self.words.len() > 80 || e.len() != N || a.len() != N {
+            return None;
+        }
+        let t0 = 80 - self.words.len();
+        let mut w = vec![0u64; t0 + N];
+        for k in 4..N {
+            let t1 = e[k].wrapping_sub(a[k - 4]);
+            if a[k] != t1.wrapping_add(big_s0(a[k - 1])).wrapping_add(maj(a[k - 1], a[k - 2], a[k - 3])) {
+                return None;
+            }
+            w[t0 + k] = t1.wrapping_sub(e[k - 4]).wrapping_sub(big_s1(e[k - 1])).wrapping_sub(ch(e[k - 1], e[k - 2], e[k - 3])).wrapping_sub(SHA512_K[t0 + k]);
+        }
+        for t in (0..t0 + 4).rev() {
+            let s0 = w[t + 1].rotate_right(1) ^ w[t + 1].rotate_right(8) ^ (w[t + 1] >> 7);
+            let s1 = w[t + 14].rotate_right(19) ^ w[t + 14].rotate_right(61) ^ (w[t + 14] >> 6);
+            w[t] = w[t + 16].wrapping_sub(s1).wrapping_sub(w[t + 9]).wrapping_sub(s0);
+        }
+        // the state after found round 3, then each round before it undone
+        let mut st = [a[3], a[2], a[1], a[0], e[3], e[2], e[1], e[0]];
+        for t in (0..t0 + 4).rev() {
+            let [a1, a, b, c, e1, e, f, g] = st;
+            let t1 = a1.wrapping_sub(big_s0(a).wrapping_add(maj(a, b, c)));
+            let h = t1.wrapping_sub(big_s1(e)).wrapping_sub(ch(e, f, g)).wrapping_sub(SHA512_K[t]).wrapping_sub(w[t]);
+            st = [a, b, c, e1.wrapping_sub(t1), e, f, g, h];
+        }
+        Some((st, std::array::from_fn(|i| w[i])))
+    }
+
+    /// The seeds' z, in [`UnitComp::seeds`]' order, of the compression on `cv` and `msg`: the state after the last round
+    /// ([`working_state`]), bit by bit, then each feed-forward row's: bit i's carry row of `cv[j] + st[j]` is
+    /// `(x ^ c)_i & (y ^ c)_i` and a committed carry `c_{i+1}`, `c = (x + y) ^ x ^ y`.
+    pub fn seed_bits(&self, cv: &[u64; 8], msg: &[u64; 16], mut out: impl FnMut(bool)) {
+        let st = working_state(cv, msg);
+        for w in st {
+            (0..64).for_each(|i| out(w >> i & 1 == 1));
+        }
+        let c: [u64; 8] = std::array::from_fn(|j| cv[j].wrapping_add(st[j]) ^ cv[j] ^ st[j]);
+        for &(j, i, commit) in &self.ff_rows {
+            let j = j as usize;
+            out(if commit { c[j] >> (i + 1) & 1 == 1 } else { ((cv[j] ^ c[j]) & (st[j] ^ c[j])) >> i & 1 == 1 });
+        }
+    }
+}
+
+/// The z of `comps`' seeds in `lanes` slots (at most 32; bit l is slot l's), in the compressions' and [`UnitComp::seeds`]'
+/// order, each compression's computed in 64-bit words ([`UnitComp::seed_bits`]) from its chaining value and block. Those two
+/// are read off the unit's own rows ([`UnitComp::inputs`]): `read(rows)` is the z of `rows` in the slots, from whatever
+/// evaluates them. A walk that takes these seeds needs the rows `read` is asked for, and nothing past them, before each
+/// compression's seeds. None where a compression's inputs can't be read.
+pub fn unit_seeds_native(comps: &[UnitComp], lanes: usize, read: impl Fn(&[u32]) -> Vec<u32>) -> Option<Vec<u32>> {
+    assert!(lanes <= 32, "unit_seeds_native: at most 32 slots");
+    const N: usize = UnitComp::READ_ROUNDS;
+    let rows: Vec<u32> = comps.iter().flat_map(|c| c.read_rows()).collect();
+    if rows.len() != comps.len() * 2 * N * 64 {
+        return None;
+    }
+    let z = read(&rows);
+    assert_eq!(z.len(), rows.len(), "unit_seeds_native: a z per row read");
+    let mut out = vec![0u32; comps.iter().map(|c| 8 * 64 + c.ff_rows.len()).sum()];
+    let mut at = 0;
+    for (c, zc) in comps.iter().zip(z.chunks(2 * N * 64)) {
+        for l in 0..lanes {
+            let word = |k: usize| (0..64).fold(0u64, |x, i| x | (u64::from(zc[64 * k + i] >> l & 1) << i));
+            let (e, a): (Vec<u64>, Vec<u64>) = (0..N).map(|k| (word(2 * k), word(2 * k + 1))).unzip();
+            let (cv, msg) = c.inputs(&e, &a)?;
+            let mut s = at;
+            c.seed_bits(&cv, &msg, |bit| {
+                out[s] |= u32::from(bit) << l;
+                s += 1;
+            });
+        }
+        at += 8 * 64 + c.ff_rows.len();
+    }
+    Some(out)
 }
 
 /// The compressions among `net`'s rows, in row order, by shape alone. A committed word is 64 rows in a row whose B is the
@@ -322,13 +462,21 @@ pub fn unit_compressions(net: &IrUnitNet) -> Vec<UnitComp> {
             // each word's addition: bit i's carry row reads the state word's bit i (a bit folded with a constant chaining
             // value has no row), and a committed carry reads rows of the last four rounds and the feed-forward only
             let mut p = start;
-            for w in state {
+            let mut ff_rows = Vec::new();
+            for (j, w) in state.into_iter().enumerate() {
                 for i in 0..63 {
-                    p += usize::from(p < cp && !commit(p) && reads(p, w + i));
-                    p += usize::from(i % 5 == 4 && commit(p) && net.a.row(p).iter().all(|&c| c as usize >= state[7] || c as usize == cp));
+                    if p < cp && !commit(p) && reads(p, w + i) {
+                        ff_rows.push((j as u8, i as u8, false));
+                        p += 1;
+                    }
+                    if i % 5 == 4 && commit(p) && net.a.row(p).iter().all(|&c| c as usize >= state[7] || c as usize == cp) {
+                        ff_rows.push((j as u8, i as u8, true));
+                        p += 1;
+                    }
                 }
             }
-            out.push(UnitComp { rounds: k + 1 - s, state: state.map(|w| w as u32), ff: (start as u32, p as u32) });
+            let words = rounds[s..=k].iter().map(|&(e, a)| (e as u32, a as u32)).collect();
+            out.push(UnitComp { rounds: k + 1 - s, state: state.map(|w| w as u32), ff: (start as u32, p as u32), words, ff_rows });
         }
         k += 1;
     }
@@ -850,7 +998,52 @@ mod tests {
                 z
             };
             assert_eq!(unit_ab_seeded(&net, &cut, &seeds, off, plan.uw, &ins, &mut got), Some(false), "{}: a seed that is not its row's z", net.name);
+            // the same seeds from each compression's chaining value and block, read off its first rounds' words
+            for g in 0..ins.len().div_ceil(32) {
+                let read = |rows: &[u32]| -> Vec<u32> {
+                    rows.iter().map(|&r| native[32 * g..].iter().take(32).enumerate().fold(0u32, |x, (l, z)| x | (bit(z.as_slice(), r as usize) << l))).collect()
+                };
+                assert_eq!(unit_seeds_native(&comps, (ins.len() - 32 * g).min(32), read), Some(seed_z(g)), "{}: lane group {g}'s seeds in 64-bit words", net.name);
+            }
+            if plan.slot == Slot::Sha512x3 {
+                // and what is read is the slot's ports
+                let lanes_in = random_lanes(plan.slot, plan.in_words, 91);
+                for (l, inp) in lanes_in.iter().take(3).enumerate() {
+                    for (k, c) in comps.iter().enumerate() {
+                        let word = |r: u32| (0..64).fold(0u64, |x, i| x | (u64::from(bit(native[l].as_slice(), (r + i) as usize)) << i));
+                        let (e, a): (Vec<u64>, Vec<u64>) = c.words[..UnitComp::READ_ROUNDS].iter().map(|&(e, a)| (word(e), word(a))).unzip();
+                        assert_eq!(c.inputs(&e, &a), Some((port(inp, SHA_PORTS[2 * k].0), port(inp, SHA_PORTS[2 * k + 1].0))), "sha512x3: slot {l}, compression {k}'s inputs");
+                    }
+                }
+            }
         }
+    }
+
+    /// A compression's inputs are read off 20 rounds' words in a row, whichever rounds the builder left (`found` of the
+    /// 80, the last ones), and the state after the last round is the compression less its feed-forward.
+    #[test]
+    fn a_compressions_inputs_are_its_first_found_rounds() {
+        let mut s = 11u64;
+        for found in [80usize, 79, 73, 41, 20] {
+            let cv: [u64; 8] = std::array::from_fn(|_| xorshift(&mut s));
+            let msg: [u64; 16] = std::array::from_fn(|_| xorshift(&mut s));
+            let (e, a): (Vec<u64>, Vec<u64>) = round_words(&cv, &msg).iter().copied().unzip();
+            let c = UnitComp { rounds: found, state: [0; 8], ff: (0, 0), words: vec![(0, 0); found], ff_rows: Vec::new() };
+            let t0 = 80 - found;
+            assert_eq!(c.inputs(&e[t0..t0 + 20], &a[t0..t0 + 20]), Some((cv, msg)), "{found} rounds found");
+            let mut bad = a[t0..t0 + 20].to_vec();
+            bad[9] ^= 1 << 40;
+            assert_eq!(c.inputs(&e[t0..t0 + 20], &bad), None, "{found} rounds found: a word that is no round's");
+            assert_eq!(c.inputs(&e[t0..t0 + 19], &a[t0..t0 + 19]), None);
+            let block: Vec<u8> = msg.iter().flat_map(|w| w.to_be_bytes()).collect();
+            let mut want = cv;
+            compress(&mut want, &block);
+            let st = working_state(&cv, &msg);
+            let sum: [u64; 8] = std::array::from_fn(|j| cv[j].wrapping_add(st[j]));
+            assert_eq!(sum, want);
+        }
+        let few = UnitComp { rounds: 19, state: [0; 8], ff: (0, 0), words: vec![(0, 0); 19], ff_rows: Vec::new() };
+        assert_eq!((few.inputs(&[0; 20], &[0; 20]), few.read_rows().count()), (None, 0));
     }
 
     /// The same emitter on the denser slot of `docs/gemm-hash-cost-plan.md` row 2 (carries committed every 16 bits).
