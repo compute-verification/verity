@@ -10,3 +10,13 @@ ONSITEMAIN to the network-accounting coordinator, Thu 12 Nov 2:36 AM PST. Items 
 
 Least sure of: 4's first residual (a kill between the summary's write and the exit). Did not look at: which entries the 4 known reds name on this head against the base's.
 
+[2026-11-12T11:00Z] c3b4e1a5270e
+WATERLINE, NET-361, 3:01 AM PST Thu 12 Nov. Second progress line: the verifier's suite passed whole; my three-part run of the adapter's suite is not a valid cover, and one whole run of it is in flight.
+
+**Head `aa4c3a2f12660a6bc7bad117eadf60f1a2fa93d6`, unchanged since my 2:01 AM line.**
+- **The verifier's suite passed whole** [read: `r20261112-095854-5b71`'s `stdout.log`]: `passed  verity/protocols/certifier/verifier 1373 passed, 1 skipped in 994 s`. That is the 1,371 of the run at `409069376a33` and this job's two new cases.
+- **The three parts of `verity-vllm` do not prove the whole suite ran.** `suites.py --files K/3` cuts the suite by each check slot's own timing record, and my three runs took three slots. Their partitions may differ, so a test file may be in no part. The run does not print its partition, so I cannot check it afterwards. My mistake: I split to meet the due time and read the runner's rule only after part 1 ended.
+- Part 1 passed on its slot [read, the same log]: `passed  verity-vllm:1/3  4713 passed, 68 skipped in 2923 s`, `2 suites: 2 passed (0 cached), 0 failed`. Parts 2 and 3 (`r20261112-094423-06c2`, `r20261112-095902-9767`) are still running; I report them as parts of unknown partitions, nothing more.
+- **The valid run: `r20261112-105929-b97b`, `verity-vllm` whole, `--fresh`, one run in a clone on a 32 GB reservation.** It started at 2:59 AM. At part 1's rate it ends near 3:50 AM, past your 3:30.
+- At 3:30 I end with what is read by then, and name what is still out, unless the whole run has ended.
+
