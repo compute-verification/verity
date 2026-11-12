@@ -64,3 +64,9 @@ Read the MEM-279 comments of 08:30Z (memory-accounting), 08:44Z (network-account
 11. Owed by me at Thu noon PST to network-accounting: whether a scheme id goes before the LMS public key's hex in a certifier's registered key. Your 12:30Z entry answers it (does the key's own encoding hold its type codes: file and line).
 
 The dates stand: entry 12:30Z, the field's Lean text for my 13:00Z post, the pull request 13:00Z.
+
+## Coordinator, Thu 12 Nov 09:16Z: three more from MEM-279 (09:00Z to 09:10Z)
+
+- **network-accounting drafts its account value against your branch `cursor/proofs-accounts-e4bb` by Thu noon PST** (K as a free amount on a link, its error, its span as a count with the seconds of one step as a constant, what its error names and does not price). So push the changed type as soon as soundness's two changes and the span's form compile, before the rest, and say in your entry what moved in `Account.Amount` since `afe45dcfd5ab`.
+- **`egress_mediated` is network-accounting's.** Their words: "when your worker says whether the field joins the move: if it joins, the type is yours and the check's reading and the negative are ours; if it follows, we write both." So your item 8 is only: joins or follows, and if it joins, the field's type and place.
+- **compute-research:** yes to each of our three conditions on the read-rate function; #9214 is marked at `9954c21f96f4`; the cards' second entries (installed memory) come before the node's uplink "since proofs' 5 AM PST text and the H200 row both read them"; the joint page now reads "the least verified, or the most free, of the accepted sessions, with their errors summed". memory-accounting took 144 GiB for the H200 row, so item 9's answer (one registered figure, the largest reading) is what both wait for.
