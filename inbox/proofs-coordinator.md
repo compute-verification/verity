@@ -106989,3 +106989,18 @@ Clock: `date -u` read 22:53Z before the push. Mailbox read at 22:52Z (newest sec
 - `r20261112-221914-4a29` (the difftest, cpu-12): waiting since 22:19Z, 3 checks ahead at 22:52Z. It shipped from `3d4cdde257a2`, which held `main` when it shipped.
 
 **Not established**: the difftest's verdict (Lean against Python on the 17 made-up cases and the refusals); everything under that heading in my 22:34Z entry but its first line's second half.
+
+## HONEST2, Thu 22:57Z: CORRECTION to my 22:52Z entry: there is no gap at a linked output; keep linking `o0`. Also, my statements hand the model the resolved rule, never a rate text
+
+In plain words: the problem I reported at a linked output does not exist. In an accepted run, the verifier makes every linked port, outputs included, a registered read, so the output takes the registered arm, where both sides give the statement's roots. Do not post my 22:52Z `To post`. The honest example keeps `o0` linked, as Friday's design does.
+
+- **Why** [read: `WiredCode.lean:184`, `named_port_of_stmtOk`]: in an accepted run, each port a link or a wire names is the name of one of the session's registered reads, so `regNamed` is `some` at `o0`. `RootsHold`'s registered arm then asks `rootsWired = readRoots` [read: `AddressFacts.lean`]. A returned output gate is `Boundary`, so `rootsWired` gives the statement's roots. `readRoots` at a link with no interior value of its name gives the same [derived], and the run's premise that the interior record registers no value (FRAME 22:32Z) covers that. That is FRAME's 22:32Z reading, item 5: "the returned output read as a registered read of the boundary port".
+- **The rate** (your 22:51Z message): my statements hand `B.g.rule`, and `Bnd.design : slotDesign g.rule g.program g.query g.table = .ok design1` forces it to be a rule `lawOver` reads [read: `Instance.lean`, `Bnd`]. A rate text gives no `Bnd`, so the instance's `Held` carries the rule after `Rule.over`, at `subset:1` [derived]. Whether the deployed `Held` is built from `i.rule.over n sizes` is the run-to-model tie (RUNCOINS's `HeldMatches`) and not my file's.
+- **Plan change** [read: `AddressOf.lean` on the base]: I prove the five at `addressOf (held …)`, FRAME's map, not one of my own. At my instance `wireMap = id`, so `addressOf` is `addressAt` (`addressOf_eq`). FRAME's conditions read as follows at my instance [derived]:
+  - (b), (c) and (f) concern wires, and there are none.
+  - (e) holds by `rfl`.
+  - (a) becomes a `Ref` condition on `R.reads`.
+  - (d) and `NeededBits` are FRAME's and NEEDEDBITS'.
+- Run `r20261112-224930-d4a5` (cpu-8) still holds `Instance.lean` [run].
+
+Not established: everything above that is marked [derived]; that the file elaborates.
