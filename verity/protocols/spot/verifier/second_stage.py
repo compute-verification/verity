@@ -105,7 +105,9 @@ from verity.commitments.window import window_binding
 from .one_stage.verdict import Verdict, _Collect
 from .schedule import failure as schedule_failure
 
-FORM = False
+#: on in this tree with `SecondStage.FORM`, ahead of its proof: not `main`'s verifier, and an accept from it is evidence
+#: about what else stops a two-stage run, never a result
+FORM = True
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
             "soundness proof does not cover")
 CELLS_WHY = "the interior program's strata are not one range each, of a positive multiple of the replay sample's size"

@@ -162,8 +162,11 @@ open Lean (Json)
 /-- **The switch**: whether the verifier accepts a two-stage run whose every check of round 2 passes. Off, it refuses
 each one last (`two-stage-form`): the two-stage guarantee (`Flock.SecurityProofs.SampledKSTwo`) takes its sessions'
 openings (`SessionOpensTwo`) as a fact of the code, and SPOT[Flock] derives that fact only from its layout's `Embeds` and
-`FrameIs`, both open. -/
-def FORM : Bool := false
+`FrameIs`, both open.
+
+On in this tree, ahead of its proof: this is not `main`'s verifier, and an accept from it is evidence about what else
+stops a two-stage run, never a result. -/
+def FORM : Bool := true
 
 def FORM_WHY : String :=
   "refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the soundness " ++
