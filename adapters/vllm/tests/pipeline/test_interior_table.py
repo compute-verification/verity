@@ -503,8 +503,8 @@ def test_the_challengers_history_refuses_a_table_round_1_did_not_register(staged
         IR.history(rec, [NAMES[0]], 4, C, {}, {})
 
 
-@_opt_in("a round 1 and an interior over the table reads on a stream of the test's own, as `SHARED`'s tests build "
-         "once for the module")
+@_opt_in("VERITY_VLLM_INTERIOR_TABLE", "a round 1 and an interior over the table reads on a stream of the test's own, "
+         "as `SHARED`'s tests build once for the module")
 @pytest.mark.slow
 def test_an_interior_whose_history_names_a_table_round_1_did_not_serve_under_its_name_is_refused():
     """An interior built, and its `history` taken, against a copy of round 1's record whose port for a drawn span's
