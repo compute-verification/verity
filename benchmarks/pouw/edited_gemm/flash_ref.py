@@ -17,7 +17,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 BACKENDS = {"flash": SDPBackend.FLASH_ATTENTION, "cudnn": SDPBackend.CUDNN_ATTENTION, "efficient": SDPBackend.EFFICIENT_ATTENTION}
 
 
-def runner(name: str, q, k, v):
+def runner(name: str, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> tuple:
     """A call of backend `name`, or None if it refuses the shape: GQA native first, then K and V expanded."""
     rep = q.shape[1] // k.shape[1]
     ke, ve = k.repeat_interleave(rep, 1), v.repeat_interleave(rep, 1)

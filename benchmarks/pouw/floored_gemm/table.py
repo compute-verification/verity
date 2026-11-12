@@ -7,6 +7,7 @@ rep), and each arm's time over (a)'s minus 1. (a) cuBLASLt int8; (b) noised, no 
 stride 32; (d) duo at 64; c2 / d2 duo2. `plain` is this kernel's mainloop on the un-noised operands, `form` the forming
 passes alone, `g0` (b)'s GEMM and peel alone.
 """
+from __future__ import annotations
 
 import csv
 import json
@@ -14,6 +15,9 @@ import re
 import sys
 from functools import partial
 from pathlib import Path
+
+#: what tb_table.py imports
+__all__ = ["LINEAR", "ncu_tensor"]
 
 ARMS = [("lt", "(a) cuBLASLt"), ("plain", "mine, plain"), ("b", "(b) noised"), ("c", "(c) duo /32"), ("d", "(d) duo /64"),
         ("c2", "duo2 /32"), ("d2", "duo2 /64"), ("c3", "probe: duo, IMAD -> IADD3 /32"), ("c4", "probe: duo, rotate-add -> IMAD /32")]
@@ -33,11 +37,12 @@ def over(t: dict[str, float], x: str, y: str = "lt") -> str:
     return f"{100 * (t[x] / t[y] - 1):+.1f}%"
 
 
-def ncu_tensor(path: Path):
+def ncu_tensor(path: Path) -> dict[str, float] | None:
     """Duration-weighted tensor-pipe active % (of elapsed) over the kernels ncu profiled, and the kernels' total ns."""
     if not path.exists():
         return None
-    rows = [r for r in csv.reader(l for l in path.open() if l.startswith('"'))]
+    with path.open() as f:
+        rows = list(csv.reader(line for line in f if line.startswith('"')))
     if not rows:
         return None
     head, body = rows[0], rows[1:]
@@ -65,7 +70,7 @@ def ncu_tensor(path: Path):
 LINEAR = {(6144, 4096): "q/k/v", (4096, 4096): "o", (28672, 4096): "gate/up", (4096, 14336): "down"}
 
 
-def best(bench):
+def best(bench: list[dict]) -> list[dict]:
     """One row per (m, n, k): each arm at its fastest tile config (its ms, eta and config)."""
     by = {}
     for s in bench:
@@ -78,7 +83,8 @@ def best(bench):
     return list(by.values())
 
 
-def print_best(bench):
+def print_best(bench: list[dict]) -> None:
+    """`best`'s rows as a Markdown table: each arm's η, then its time over (a)'s."""
     rows = best(bench)
     arms = [a for a in ("lt", "b", "c", "d", "c2", "d2", "c3", "c4", "bA", "cA", "c2A") if all(a in r["arms"] for r in rows)]
     print("Each arm at its fastest tile config: η, and time over (a)'s")
@@ -93,7 +99,8 @@ def print_best(bench):
 
 
 def main() -> int:
-    bench = [json.loads(l) for l in open(sys.argv[1]) if l.strip().startswith("{")]
+    with open(sys.argv[1]) as f:
+        bench = [json.loads(line) for line in f if line.strip().startswith("{")]
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else None
     print_best(bench)
     print("| shape | m n k | " + " | ".join(f"{t} η" for _, t in ARMS) + " | (b) vs (a) | (c) vs (a) | (d) vs (a) | duo2/32 vs (a) "

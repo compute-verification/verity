@@ -74,13 +74,19 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "harness"))
+import arms as A
+import scoring as S
+
+#: what the arms' runners read
+__all__ = [
+    "A", "LIBS", "NVCC", "NVFLAGS", "REPO", "S", "arm_doc", "build", "control", "fmt", "record", "report", "rows", "sh",
+    "show", "smi",
+]
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "harness"))
-import arms as A  # noqa: E402
-import scoring as S  # noqa: E402
-
 NVCC = os.environ.get("NVCC", "/usr/local/cuda-13.0/bin/nvcc")
 os.environ["PATH"] = f"{Path(NVCC).parent}:{os.environ.get('PATH', '')}"  # cuobjdump and ncu beside nvcc, as dfill.sh
 NVFLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-Xptxas", "-v"]

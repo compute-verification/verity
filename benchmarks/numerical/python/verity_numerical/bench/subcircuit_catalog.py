@@ -41,6 +41,8 @@ from typing import Any, Callable, Iterable
 
 from . import census
 
+__all__ = ["KIND", "LOWERING_FIELDS", "RECORDS_KIND", "build", "census_ids", "export", "main", "put", "put_report"]
+
 KIND = "verity/subcircuit-catalog/v1"
 RECORDS_KIND = "circuit-check-report/v1"
 #: an entry with more variants than this holds its program digests in the payload
