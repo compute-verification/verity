@@ -47,7 +47,7 @@ from verity_vllm.observe.fold.resolver import (
     Unsupported,
     resolve_step,
 )
-from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.observe.fold.tree import build_trees, step_events
 
 C = PROF.C
 H, NH, KVH, D, INTER, V, QKV, GU = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["V"], C["QKV"], C["GU"]
@@ -866,6 +866,95 @@ def test_a_stochastic_sampler_on_widened_logits_is_held_to_the_vocabulary_and_th
     off = TokenSelectGumbelTopP(vocab=V + 1, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, ctx)
     assert isinstance(off, Unsupported) and off.reason == "logits width is not the vocabulary"
     assert (off.detail["V"], off.detail["vocab"]) == (V, V + 1)
+
+
+SAMPLE_PINS = {"_temperature_kernel": {"BLOCK_SIZE": 8192},
+               "_topp_sb_stats_kernel": {"BLOCK": 8192},
+               "_topp_sb_step_kernel": {"BLOCK": 2048, "F": 8, "NUM_ROUNDS": 5},
+               "_topp_sb_mask_kernel": {"BLOCK": 8192, "F": 8, "NUM_ROUNDS": 5, "MASK_VALUE": float("-inf")}}
+
+
+def _stochastic_step():
+    """A decode step's sample phase under a stochastic header, folded once so its float32 widening of the logits is on record: the
+    pattern, the context, the widened logits, the select's kernel and the gathered top_p state the split kernels read."""
+    events, start = decode_step(sampler="gumbel", f32_logits=True)
+    se = step_events(events)
+    ctx = context(start, se.sample, sampling={"greedy": False, "temperature": 0.7, "top_p": 0.9})
+    resolve_step(se, ctx)
+    kernel = next(n for n in se.roots if n.op.endswith("_gumbel_sample_kernel"))
+    return (TokenSelectGumbelTopP(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE), ctx, kernel.triton.args["logits_ptr"], kernel,
+            ViewDesc(321, 0, (1,), (1,), "float32", CUDA))
+
+
+def _sample_launch(event_id, kernel, args, consts=None):
+    """A sample-phase launch of one of the sampler's kernels at its pinned constexprs, `consts` replacing some."""
+    consts = {**SAMPLE_PINS[kernel], **(consts or {})}
+    launch = TritonLaunch(event_id, None, 0, "sample", f"vllm.v1.worker.gpu.sample.{kernel}", "sha", {**args, **consts}, consts, [1], 4, 3, 7)
+    return build_trees([launch])[0][0]
+
+
+def _refused(resolution, reason, **detail):
+    assert isinstance(resolution, Unsupported) and resolution.reason == reason, resolution
+    assert {k: resolution.detail[k] for k in detail} == detail
+
+
+def test_a_temperature_kernel_is_held_to_the_widened_logits_its_pinned_block_and_the_head_of_the_chain():
+    pat, ctx, l32, _kernel, _p = _stochastic_step()
+
+    def temperature(logits=l32, vocab_size=V, **consts):
+        return pat.match(_sample_launch(2001, "_temperature_kernel", {"logits_ptr": logits, "vocab_size": vocab_size}, consts), ctx)
+
+    narrow = ViewDesc(310, 0, (1, V), (V, 1), "bfloat16", CUDA)
+    _refused(temperature(logits=narrow), "sampler logits are not a row-contiguous float32 [R,V] view", logits=repr(narrow))
+    unseen = ViewDesc(399, 0, (1, V), (V, 1), "float32", CUDA)
+    assert temperature(logits=unseen).reason.startswith("the float32 logits are not the exact widening of a bf16 [R,V] view seen this step")
+    part = ViewDesc(l32.alloc, 0, (1, V - 1), (V, 1), "float32", CUDA)
+    _refused(temperature(logits=part), "a sampler kernel on a different view of the logits allocation", logits=repr(part), chain=repr(l32))
+    _refused(temperature(BLOCK_SIZE=1024), "_temperature_kernel BLOCK_SIZE differs from the pinned block", BLOCK_SIZE=1024, pinned=8192)
+    _refused(temperature(vocab_size=V + 1), "vocab_size argument differs from the logits width", vocab_size=V + 1, V=V)
+    scaled = temperature()
+    assert isinstance(scaled, Transparent) and (scaled.effect, scaled.consumed, scaled.kernels) == ("noop", (2001,), ("_temperature_kernel",))
+    assert scaled.pattern == "sample.gumbel_topp_select" and "TemperatureScale_v1" in scaled.hint
+    _refused(temperature(), "_temperature_kernel after another sampler kernel on the same logits (chain order)", chain=["_temperature_kernel"])
+
+
+def test_the_split_kernels_are_held_to_their_pins_the_top_p_gather_and_stats_then_five_steps_then_the_mask():
+    """The three split kernels on the widened logits: each is refused off its pins, with a top-k buffer, on another `P` than the step's
+    gather of the per-request top_p state, or out of the order stats, five steps by round, mask; in that order each is a no-op, and the
+    select's kernel after them is refused for the temperature kernel this chain lacks, no longer for a missing pipeline."""
+    pat, ctx, l32, kernel, p = _stochastic_step()
+
+    def split(event_id, k, consts=None, **args):
+        return pat.match(_sample_launch(event_id, k, {"LOGITS": l32, "K": l32, "P": p, **args}, {"HAS_K": False, "VOCAB_SIZE": V, "S": 4, **(consts or {})}), ctx)
+
+    stats, step, mask = "_topp_sb_stats_kernel", "_topp_sb_step_kernel", "_topp_sb_mask_kernel"
+    _refused(split(2003, stats), f"{stats} P is not the step's float32 [R] gather of the per-request top_p state", p=repr(p), R=1)
+    gather = build_trees([
+        DispatchEnter(2002, None, 0, "sample", "aten.index.Tensor", "aten::index.Tensor(Tensor self, Tensor?[] indices) -> Tensor",
+                      [ViewDesc(320, 0, (8,), (1,), "float32", CUDA), [i64(322, (1,), "int32")]], {}, 7, None),
+        DispatchExit(2002, p)])[0][0]
+    state = pat.match(gather, ctx)
+    assert isinstance(state, Transparent) and (state.effect, state.consumed) == ("noop", (2002,))
+    _refused(split(2003, stats, {"HAS_K": True}), f"{stats} with HAS_K: the top-k + top-p split path has no registered Definition")
+    _refused(split(2003, stats, {"VOCAB_SIZE": V + 1}), "VOCAB_SIZE constexpr differs from the logits width", VOCAB_SIZE=V + 1, V=V)
+    _refused(split(2003, stats, {"S": 6}), "S (splits) is not a power of two <= 32", S=6)
+    _refused(split(2003, stats, {"BLOCK": 1024}), f"{stats} BLOCK differs from the pinned split pipeline", BLOCK=1024, pinned=8192)
+    top_k = i64(330, (1,), "int32")
+    _refused(split(2003, stats, K=top_k), f"{stats} with a top-k buffer bound (HAS_K path)", k=repr(top_k))
+    _refused(split(2003, step, ROUND=0), f"{step} outside stats -> steps -> mask", chain=[])
+    _refused(split(2003, mask), f"{mask} without exactly one stats + 5 step launches before it", chain=[])
+    first_split = split(2003, stats)
+    assert isinstance(first_split, Transparent) and (first_split.effect, first_split.consumed, first_split.kernels) == ("noop", (2003,), (stats,))
+    assert first_split.hint.endswith(f"top-p split pipeline S=4: {stats} (TopPMask_v1{{V}}, splits operand)")
+    _refused(split(2004, stats), f"{stats} after another split kernel", chain=[stats])
+    _refused(split(2004, step, {"S": 8}, ROUND=0), "S differs between the split kernels of one step", S=8, chain_S=4)
+    _refused(split(2004, step, ROUND=1), f"{step} round out of order", ROUND=1, expected=0)
+    for round_i in range(5):
+        assert isinstance(split(2004 + round_i, step, ROUND=round_i), Transparent)
+    _refused(split(2009, mask, {"MASK_VALUE": 0.0}), f"{mask} MASK_VALUE is not -inf", MASK_VALUE=0.0)
+    assert isinstance(split(2009, mask), Transparent)
+    assert pat._state(ctx)["rows"][l32.alloc]["kernels"] == [stats, *[step] * 5, mask] and pat._state(ctx)["rows"][l32.alloc]["S"] == 4
+    _refused(pat.match(kernel, ctx), "header temperature != 1 but no _temperature_kernel launch on the logits", request="r0", temperature=0.7)
 
 
 def _as_index_select(events, dim=0):
