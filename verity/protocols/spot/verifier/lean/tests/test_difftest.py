@@ -1667,6 +1667,8 @@ def _interior_of(it) -> dict:
         raise D.Reject("an interior names no rows: the verifier derives them from the replay block's Definition")
     if "returns" in it:
         raise D.Reject("an interior names no returns: the verifier derives them from the replay block's Definition")
+    if "certified" in params:
+        raise D.Reject("an interior's params name no certified entries: its registered values are its program's own")
     return {**it, "decoded": decoded, "replay_program": PROGRAMS[sha], "values": values, "proved_units": proved,
             "instances": instances, "served": it.get("served"), "session_roots": it.get("session_roots"),
             "record": it.get("record"), "coins": it.get("coins"), "statements": it.get("statements"),
@@ -6096,7 +6098,9 @@ def test_r7_takes_the_verifiers_certified_entries(pieces, server):
     and `R7-certified`), an entry at another root is `R7-certified`, and one of other leaves, words, domain or width
     R7's code for that key. A certified value the verifier expects a parameter registered under, or an entry in
     another form, refuses its inputs. The sampled audit refuses parameters that name certified entries, on an audit
-    its own checks would accept."""
+    its own checks would accept. A run of record whose parameters name the entry accepts the record that registers the
+    certified value and refuses it at its register step without (`R7-values`), and a two-stage run whose interior's
+    parameters name certified entries, even none, is no run's."""
     def codes(a, change, x=0):
         b = copy.deepcopy(a)
         change(b, x)
@@ -6139,6 +6143,25 @@ def test_r7_takes_the_verifiers_certified_entries(pieces, server):
     assert check(*parsed)[0] == "accept"
     assert D.replay(ONE_STAGE, case, server)[0] == "reject"
     assert D.replay(ONE_STAGE, _json(_case(own)), server)[0] == "accept"
+
+    ran = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
+    alike(ran, 0)
+    ran["evidence"]["verdicts"] = {"lean": {"accepted": True, "of_record": True, "registered": reads(ran["record"])},
+                                   "upstream": {"accepted": True, "of_record": False}}
+    _, case = _from_challenger(_run_case(ran, "", 2, ["credited"]), random.Random("run/certified"))
+    case = {**case, "values": [*case["values"], {"name": CERTIFIED_VALUE, "registered": True}],
+            "public": [*case["public"], *(f"{k}:{CERTIFIED_VALUE}" for k in ("leaves", "domain", "words", "word_bits"))]}
+    bare = {**case, "params": {k: v for k, v in case["params"].items() if k != "certified"}}
+    for c, want in ((case, ("accept", None, None)), (bare, (None, "register", ["R7-values"]))):
+        out = run(copy.deepcopy(c))
+        assert (out.get("symbol"), out.get("step"), out.get("codes")) == want, out
+        assert D.replay(RUN, c, pieces) == ("output", D.canonical(out)), out
+    two = _two_stage_case()
+    for held in ({}, {CERTIFIED_VALUE: CERTIFIED_ENTRY}):
+        named = _inner_params(certified=held)(two, 0)
+        assert D.replay(RUN, named, pieces)[0] == "reject"
+        with pytest.raises(D.Reject):
+            run(copy.deepcopy(named))
 
 
 def test_every_produced_code_is_reached(pieces):
