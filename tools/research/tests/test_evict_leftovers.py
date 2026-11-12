@@ -1,5 +1,5 @@
 """`research data evict`'s passes over what nothing else removes (`store/leftovers.py`): a uv cache's idle editable shards and
-build directories, the store's lock files, and request directories whose run dir is gone.
+build directories, the store's lock files, request directories whose run dir is gone, and the clones of runs that are over.
 Each group shows the removal and everything that must stay: in use by a live process, too young, a lock held, a run that has not
 ended, a name or layout the pass does not know.  Every path is under `tmp_path`, /proc is a directory there, and time is the
 `now` and `clock` each pass is given."""
@@ -12,13 +12,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from research import remote
+from research import clone, remote
 from research.store import evict as EV
 from research.store import fetchset
 from research.store import leftovers as L
 
 NOW = 2_000_000_000.0
 H = 3600.0
+RID = "r20330518-033320-0a1b"
 RIDS = [f"r20330518-0333{n:02d}-0a1b" for n in range(20)]
 
 
@@ -528,3 +529,108 @@ def test_a_request_pass_fails_closed(root, proc, tmp_path):
     t = [0.0]
     rep = requests(root, proc, clock=lambda: t[0], budget_s=240, log=after_first("requests: deleted ", t, 241.0))
     assert rep["deleted_first"] == [str(d)] and rep["kept_by"] == {"budget": 1} and more.is_dir()
+
+
+# ---- the clones of runs that are over --------------------------------------------------------------------------------------------------
+
+def a_clone(root: Path, rid: str, *, runner: int | None = 50, status: dict | None = None, refused: bool = False) -> Path:
+    """A run's clone under scratch/ (4 inodes) and, with a runner, its run dir: launch.json and status.json or refused.json."""
+    c = root / "scratch" / rid
+    (c / "tree" / "pkg").mkdir(parents=True)
+    (c / "tree" / "pkg" / "m.py").write_text("x = 1\n")
+    if runner is not None:
+        rd = root / "runs" / rid
+        rd.mkdir(parents=True)
+        (rd / "launch.json").write_text(json.dumps({"runner_pid": runner}))
+        if refused:
+            (rd / "refused.json").write_text(json.dumps({"fault": "CloneRefused"}))
+        if status is not None:
+            (rd / "status.json").write_text(json.dumps(status))
+    return c
+
+
+def clones(root: Path, proc: Path, **kw):
+    return L.evict_clones(root / "scratch", proc=proc, clock=kw.pop("clock", lambda: 0.0), **kw)
+
+
+RUNNING = {"state": "running", "pgid": 60, "pid": 70, "starttime_ticks": 777}
+OVER = {
+    "its status is final and nothing is left of it": dict(status={"state": "done", "pgid": 60}),
+    "it refused": dict(refused=True),
+    "its runner is a zombie": dict(status={"state": "failed", "pgid": 60}, live=[dict(pid=50, state="Z")]),
+    "its runner died with it: the process its status records has no /proc entry": dict(status=RUNNING),
+    "its runner died with it: the pid its status records is another process now": dict(status=RUNNING, live=[dict(pid=70, start=999)]),
+    "the last transition's process is gone": dict(
+        status={"state": "running", "pgid": 60, "transitions": [{"state": "running", "pid": 70, "starttime_ticks": 777}]}),
+}
+NOT_OVER = {
+    "2: its runner (pid 50) runs": dict(status={"state": "done", "pgid": 60}, live=[dict(pid=50)]),
+    "2: 1 process(es) of its workload's group 60 run": dict(status={"state": "done", "pgid": 60}, live=[dict(pid=61, pgid=60)]),
+    "2: its status is running and the process it records (pid 70) is not known to have exited": dict(
+        status=RUNNING, live=[dict(pid=70, start=777)]),
+    "2: its status is launched and the process it records (pid 70) is not known to have exited": dict(
+        status={"state": "launched", "pgid": 60, "pid": 70}, live=[dict(pid=70, start=999)]),
+    "2: its status is running and it records no process": dict(status={"state": "running", "pgid": 60}),
+    "unknown: no launch.json names its runner": dict(runner=None),
+    "unknown: no status.json names its workload's process group": dict(),
+    "2: process 80 (p80) names its run": dict(status={"state": "done", "pgid": 60}, live=[dict(pid=80, environ=f"RESEARCH_RUN_ID={RID}\0")]),
+}
+
+
+@pytest.mark.parametrize("why", OVER)
+def test_the_clone_of_a_run_that_is_over_goes(root, proc, why):
+    """Over: the runner has exited and nothing of the workload is left, by a final status, a refusal, or a recorded process that is
+    gone by its pid and its start time (a runner killed with its workload writes no final status)."""
+    case = dict(OVER[why])
+    for p in case.pop("live", []):
+        process(proc, **p)
+    c = a_clone(root, RID, **case)
+    assert clone.not_over(root / "runs" / RID, proc) is None
+    rep = clones(root, proc)
+    assert rep["error"] is None and rep["deleted_first"] == [str(c)] and rep["deleted_inodes"] == 4 and not c.exists()
+    assert (root / "runs" / RID / "launch.json").exists(), "the run's record is not the clone's"
+
+
+@pytest.mark.parametrize("why", NOT_OVER)
+def test_the_clone_of_a_run_that_may_not_be_over_stays_and_is_named(root, proc, why):
+    """A live runner, a live member of the workload's group, a recorded process that still runs or that only a pid speaks for,
+    a missing record, a live process that names the run: each keeps the clone."""
+    case = dict(NOT_OVER[why])
+    for p in case.pop("live", []):
+        process(proc, **p)
+    c = a_clone(root, RID, **case)
+    before = snapshot(root)
+    rep = clones(root, proc)
+    assert rep["deleted"] == 0 and snapshot(root) == before
+    assert rep["kept_first"] == [{"path": str(c), "why": why}] and rep["kept_by"] == {why.split(":")[0]: 1}
+    if not why.startswith("2: process"):
+        assert clone.not_over(root / "runs" / RID, proc) == why
+
+
+def test_only_a_directory_named_like_a_run_id_is_a_clone(root, proc, tmp_path):
+    victim = tmp_path / "victim"
+    (victim / "keep").mkdir(parents=True)
+    (root / "scratch" / "ca-rowseg").mkdir(parents=True)
+    (root / "scratch" / RIDS[1]).symlink_to(victim)
+    (root / "runs" / RIDS[1]).mkdir()
+    (root / "runs" / RIDS[1] / "launch.json").write_text('{"runner_pid": 50}')
+    (root / "runs" / RIDS[1] / "refused.json").write_text("{}")
+    rep = clones(root, proc)
+    assert rep["found"] == 1 and rep["deleted"] == 0 and (victim / "keep").is_dir() and (root / "scratch" / RIDS[1]).is_symlink()
+    assert rep["kept_first"] == [{"path": str(root / "scratch" / "ca-rowseg"), "why": "unknown: it is not named like a run id"}]
+
+
+def test_a_clone_dry_run_a_failed_removal_and_the_time_limit(root, proc, monkeypatch):
+    a, b = (a_clone(root, r, status={"state": "done", "pgid": 60}) for r in RIDS[:2])
+    before, lines = snapshot(root), []
+    rep = clones(root, proc, dry_run=True, log=lines.append)
+    assert snapshot(root) == before and rep["deleted"] == 2 and f"clones: would delete {a} (4 inodes, 0.0 MB)" in lines
+    t = [0.0]
+    rep = clones(root, proc, clock=lambda: t[0], budget_s=240, log=after_first("clones: deleted ", t, 241.0))
+    assert rep["deleted_first"] == [str(a)] and rep["kept_by"] == {"budget": 1} and b.is_dir()
+    monkeypatch.setattr(clone, "remove", lambda path: "OSError: [Errno 39] Directory not empty after 3 attempts")
+    rep = clones(root, proc)
+    assert rep["deleted"] == 0 and rep["kept_first"] == [
+        {"path": str(b), "why": "error: OSError: [Errno 39] Directory not empty after 3 attempts"}]
+    assert clones(root, root / "no-proc")["error"].startswith("2: cannot list"), "a /proc it cannot read removes nothing"
+    assert b.is_dir()

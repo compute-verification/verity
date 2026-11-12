@@ -36,8 +36,11 @@ root, exe, open files, maps, command line, environment: `evict.live_texts`) is r
   under that lock, request.json first (a delivery that arrives later finds no request and claims nothing), once nothing in it
   was written for `REQUEST_KEEP_S`, or for as long as its launch may still deliver it (`remote.launch_limit`) when that is
   longer, with no run dir under the runs roots or the `runs_root` it names, and no live process naming its run.
+* **the clones of runs that are over** (`evict_clones`): `<root>/scratch/<run id>`, which its runner removes and
+  `clone.sweep` removes when the next clone is made there.  This pass removes the same clones (`clone.not_over`) on a node
+  where none is, and keeps one whose run a live process still names.
 
-A request is a directory named like a run id (`ids.is_run_id`); any other entry stays, and is said.
+A request or clone is a directory named like a run id (`ids.is_run_id`); any other entry stays, and is said.
 """
 from __future__ import annotations
 
@@ -411,6 +414,39 @@ def evict_requests(requests_dir: Path, *, runs_dirs: list[Path] | None = None, d
         finally:
             if lock is not None:
                 os.close(lock)
+
+    error = p.each(paths, one)
+    p.rep["found"] += len(others)
+    for o in others:
+        p.stay(o, "unknown: it is not named like a run id")
+    return p.end(error)
+
+
+# ---- the clones of runs that are over --------------------------------------------------------------------------------------------------
+
+def evict_clones(scratch: Path, *, runs_root: Path | None = None, dry_run: bool = False, budget_s: float = BUDGET_S,
+                 clock: Callable[[], float] = time.monotonic, proc: Path = Path("/proc"),
+                 log: Callable[[str], None] | None = None, nginx_conf: Path = EV.NGINX_CONF) -> dict[str, Any]:
+    """Remove each `<scratch>/<run id>` whose run, under `runs_root` (`runs/` beside `scratch`), is over (`clone.not_over`) and
+    which no live process names, with `clone.remove`."""
+    from .. import clone as CL
+
+    scratch = Path(scratch)
+    runs_root = scratch.parent / "runs" if runs_root is None else Path(runs_root)
+    p = _Pass("clones", scratch, dry_run, budget_s, 0.0, clock, log)
+    named = _Named(_RUN_NAMED, "its run", scratch, proc, nginx_conf, clock)
+    try:
+        paths, others = _run_entries(scratch)
+    except Unestablished as e:
+        return p.end(str(e))
+
+    def one(path: Path) -> None:
+        if why := CL.not_over(runs_root / path.name, proc) or named(path.name):
+            return p.stay(path, why)
+        size = _walk(path)[1:]
+        if not dry_run and (why := CL.remove(path)):
+            return p.stay(path, f"error: {why}")
+        p.gone(path, *size)
 
     error = p.each(paths, one)
     p.rep["found"] += len(others)
