@@ -53,5 +53,5 @@ def test_the_bounded_warm_up_file_holds_only_the_ranks_that_staged_bounded(tmp_p
     assert b == {"rank": 1, **STAGED, "pinned_pool_bytes": 1 << 20, "plans_cached": 5, "host_mem_kb": {"rss": 1, "hwm": 2}, "errors": []}
     assert caplog.messages == [
         "[tp2commit] warm-up instrumented: 1.000s; ranks [(0, 3, 0, []), (1, 3, 0, [])]",
-        "[tp2commit] rank 1: bounded staging warm-up (native_collect_v2b): learned-only steps [0] (1 MiB discarded), transient peak 0 MiB "
-        "(budget 4 MiB), plan mismatches 0, plans cached 5, pinned pool 1 MiB"]
+        ("[tp2commit] rank 1: bounded staging warm-up (native_collect_v2b): learned-only steps [0] (1 MiB discarded), transient peak 0 MiB "
+         "(budget 4 MiB), plan mismatches 0, plans cached 5, pinned pool 1 MiB")]
