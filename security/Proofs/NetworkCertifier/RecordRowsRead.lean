@@ -79,18 +79,19 @@ must tell from the padding frames before the lane. -/
 def edgeArr {n : ℕ} : Fin n → Arrivals (Bool × String) :=
   fun _ => { stream := [(false, "0a"), (false, "0b"), (true, "0c")], ready := fun _ => 0 }
 
+-- The queue fixture's schedule and arrivals, over its 12 buckets.
 #guard paddedAgrees fxQueueSched fxQueueArr 12
 
-/-- No cell a bucket (`r = 0`): no padding frame, and every cell of a lane in its first bucket. -/
+-- No cell a bucket (`r = 0`): no padding frame, and every cell of a lane in its first bucket.
 #guard paddedAgrees (n := 2) { r := 0, D := 2, adm := ![1, 1], cells := ![3, 0] } edgeArr 4
 
-/-- No latency (`D = 0`), two lanes admitted in one bucket. -/
+-- No latency (`D = 0`), two lanes admitted in one bucket.
 #guard paddedAgrees (n := 2) { r := 2, D := 0, adm := ![0, 0], cells := ![5, 1] } edgeArr 3
 
-/-- A lane of no cells whose padding the period's end cuts, beside a lane whose cells past its data are padding. -/
+-- A lane of no cells whose padding the period's end cuts, beside a lane whose cells past its data are padding.
 #guard paddedAgrees (n := 2) { r := 2, D := 3, adm := ![4, 0], cells := ![0, 4] } edgeArr 5
 
-/-- One lane of one cell, admitted at each bucket from 0 to 30 of 32: each admission reads back at the one pair. -/
+-- One lane of one cell, admitted at each bucket from 0 to 30 of 32: each admission reads back at the one pair.
 #guard (List.range 31).all fun a => paddedAgrees (n := 1) { r := 1, D := 1, adm := ![a], cells := ![1] } edgeArr 32
 
 end Fixtures
