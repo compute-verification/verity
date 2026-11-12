@@ -1,5 +1,5 @@
 """`PouwWindow.KnownRows`, a sampled H1 leaf's known rows (lane l's ``pub`` and ``admit``, every statement's ``o0``), held
-to the Python that writes them on the shared harness (`verity_difftest`): `benchmarks/pouw/h1_lanes/run.py`'s
+to the Python that writes them on the shared harness (`verity_difftest`): `benchmarks/pouw/h1_lanes/leaf.py`'s
 `known_rows` (`pub_words`, `bits_words` and `h1unit.OK`), the served path's stand-in, until the served path's producer
 of known content is on the tree.
 
@@ -29,7 +29,7 @@ EXE = "pouw-window-difftest"
 
 
 def _h1_lanes():
-    spec = importlib.util.spec_from_file_location("h1_lanes_run", ROOT / "benchmarks/pouw/h1_lanes/run.py")
+    spec = importlib.util.spec_from_file_location("h1_lanes_run", ROOT / "benchmarks/pouw/h1_lanes/leaf.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)

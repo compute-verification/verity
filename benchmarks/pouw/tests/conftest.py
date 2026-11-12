@@ -26,8 +26,8 @@ POUW = Path(__file__).resolve().parents[1]
 #: and ``edited_gemm``, a suite of its own whose files this suite's inputs do not hold
 NOT_SCRIPTS = frozenset({"tests", "machine_model", "exact_kit", "edited_gemm"})
 #: the directories whose own scripts import by name a module whose name another directory holds too (``harness``:
-#: derive and report; ``h1_lanes``: run)
-AHEAD = ("harness", "h1_lanes")
+#: derive and report)
+AHEAD = ("harness",)
 
 
 def scripts() -> list[Path]:
