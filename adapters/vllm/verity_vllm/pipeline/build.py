@@ -525,12 +525,10 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
         if not rep.ok:
-            if rep.unsupported is None:
-                raise RuntimeError("the derive made no Program and named nothing it does not support")
             res["unsupported"] = rep.unsupported.to_json()
             res["rules_applied_before_refusal"] = rep.provenance.get("rules_applied_before_refusal")
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
-            _write_json(out, "derive-report.json", rep.provenance, default=str)
+            json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
         else:
             # the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
             # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
@@ -539,10 +537,10 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             write = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
             pre = copy.deepcopy(res) if emit is not None else None      # rank r's `res` before its writer: the template's, at rank r
             write(out, res, rep, rank=rank)
-            if emit is not None and pre is not None:
+            if emit is not None:
                 from verity_vllm.pipeline.tp import emit_ranks
                 from verity_vllm.program.frontend.export_ops import rank_embedding_shards
-                del rep                                                    # the template's descriptor and correspondence: freed
+                rep = None                                                 # the template's descriptor and correspondence: freed
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
                                 post=derived if target.ir == "boolean" else None, write=write)
