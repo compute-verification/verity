@@ -1,7 +1,8 @@
 # An RTX PRO 6000 node: eight rtx-pro-6000-server cards in the VM of a two-socket Xeon 6776P server. This file holds
 # what the node's registration states that no card does (verity/hardware/README.md): the cards it names, how many GPUs
-# it carries, and the host's own memory, one table a leaf. Each number is { value, unit, mark, source }, as in a card.
-# A GPU's memory is its card's store.dram_installed, whole, and every rate, clock and peak is a card's: none is here.
+# it carries, the host's own memory, one table a leaf, and the interfaces that carry traffic off the node, one table
+# each. Each number is { value, unit, mark, source }, as in a card. A GPU's memory is its card's store.dram_installed,
+# whole, and every rate, clock and peak of a card is its card's: none is here.
 
 node = "rtx-pro-6000-server-x8"
 name = "An RTX PRO 6000 node: eight cards in the VM of a two-socket Xeon 6776P server"
@@ -31,3 +32,8 @@ bytes = { value = 1048576, unit = "B", mark = "measurement", source = "lsblk -b 
 [memory.vdc]
 tier = "disk"
 bytes = { value = 5991479377920, unit = "B", mark = "measurement", source = "lsblk -b on the node's VM: vdc, the data disk, 5,580 GiB (art:ad5919199280); the same VM's was 5,392,331,440,128 B when its disks' read was measured (art:53c2656f4c56), and the larger stands" }
+
+# The node's own way out: the interfaces a route of the node sends packets out of, each at its line rate, each way.
+# None of the auditor's hardware sits on one, so each registers as a boundary link that no certifier splits.
+[interface.eth0]
+rate = { value = 400000000000, unit = "bit/s", mark = "measurement", source = "/sys/class/net/eth0/speed on the node's VM reads 400000 Mb/s, and ethtool the same at full duplex with the link detected (art:8e47f2512256). eth0, a device of the mlx5_core driver, is the one interface a route of the node's main tables names, the default route among them; the others are the loopback and a bridge with no device behind it, which is down. No latency of it is on record and nothing reads one, so its link registers at latency 0" }

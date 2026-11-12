@@ -48,9 +48,11 @@ the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it cou
 **The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
 today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
 B200, `clock.memory` on all three GPU cards and `sm.count` on the B200, and with them what a card computes from one
-(`clock.tensor` on those two cards, `memory.bandwidth` on all three). Each bounds a card only while it is the declared
-board and vBIOS, which the named assumptions `accounting-declared-device` and `accounting-sheet-clock` state
-(`verity.claims`) and no mark does. A host card's `store.l2`, `l1d` and `l1i` are likewise its guest's CPUID.
+(`clock.tensor` on those two cards, `memory.bandwidth` on all three). `store.dram` on the H200 and the B200 is of that
+kind too: what the shipped firmware gives a program, under the board's `store.dram_installed`. Each bounds a card only
+while it is the declared board and vBIOS, which the named assumptions `accounting-declared-device` and
+`accounting-sheet-clock` state (`verity.claims`) and no mark does. A host card's `store.l2`, `l1d` and `l1i` are
+likewise its guest's CPUID.
 
 ~~~python
 from verity.hardware.cards import load, skus
@@ -103,26 +105,46 @@ states that no card does. A node is a host and the GPUs it carries. Its kind is 
 number is an entry under the cards' rules above. A node file names no machine, no address and no provider: it is the
 kind's, read on one node of it, and its sources cite what read it by `art:` id.
 
-| Node | file | GPU card | host card | the host's own leaves |
-|---|---|---|---|---|
-| An RTX PRO 6000 node, eight cards | `nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` |
-| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` |
+| Node | file | GPU card | host card | the host's own leaves | its interfaces |
+|---|---|---|---|---|---|
+| An RTX PRO 6000 node, eight cards | `nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0` |
+| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | none on record |
 
 A file has `device` (`sku`, the GPU card, and `count`, how many of it the node carries), `host` (`sku`, the host card)
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`) and its
 `bytes`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves out what the
 kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read on record has
-no table. A GPU's own memory is not stated: it is its card's `store.dram_installed`, whole. A node file holds no rate,
-clock or peak, which are the cards', and no link, network certifier or memory challenger: each is a table of its own
-once it has a figure for the node.
+no table. A GPU's own memory is not stated: it is its card's `store.dram_installed`, whole.
+
+`interface.NAME`, one table an interface, is the node's own way out: an interface that carries traffic off the node,
+with its `rate`, the line rate each way in `bit/s`, as the node reports it (`/sys/class/net/NAME/speed`, `ethtool`).
+An interface is one when it is a device's and a route of the node's main tables names it; the loopback, a bridge and
+a tunnel are the node's own software (`benchmarks/bandwidth/node.py` reads both and says which). An interface that
+reports no speed has no table. No latency is stated: nothing reads one, and a link registers at 0.
+
+A node file holds no clock or peak and no card's rate, which are the cards', and no network certifier or memory
+challenger: those are the auditor's devices, whose ids and keys are a run's, not a kind of node's.
 
 `nodes.load(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
 card of its kind. `nodes.kinds()` lists the files. `Registration.node_entry(node, card, host)`, in the Site
 (`site/__init__.py`), gives the entry a node file's table and its GPU card's table register, under the host id its
 caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the sheet's device
-memory, and the host's leaves `host/NAME`. The sheet is built from the card file when the entry is, so no digest is
-kept in the tree. It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check
-and state a host with less memory than the node has. Its message gives the commands that read both on the node.
+memory, the host's leaves `host/NAME`, and for each interface a link `host/NAME` from the host to the outside. The
+sheet is built from the card file when the entry is, so no digest is kept in the tree. It refuses a file with no
+`dram` leaf or no `disk` leaf: an entry of it would pass the Site's check and state a host with less memory than the
+node has. Its message gives the commands that read both on the node.
+
+An interface's link is a boundary link that no certifier splits, at the bits its rate moves in a tick, rounded up.
+That is what is so of a node whose interface none of the auditor's hardware sits on, so `onsite` refuses the node by
+`uncertified`. Where a network certifier stands in front of such a node without splitting its interface (a process on
+another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key))` registers it too:
+the certifier under the site and a certified way out, host to certifier and certifier to outside, each at the
+interfaces' rates summed. The interfaces' own links stay beside them, so `onsite` still refuses the node, and no
+registration says that every bit leaves through a certifier that does not hold the wire.
+
+A file with no `interface` table gives an entry with no link. That entry leaves the node's way out unsaid: `onsite`
+finds no boundary link of the node's to refuse, and nothing that reads the site sees how the node reaches the
+outside. Read the interfaces on a node of the kind and state them before a registration of it is relied on.
 
 ~~~python
 from verity.hardware import cards, nodes
@@ -133,5 +155,6 @@ log = Registration("remote")
 site = check(log.append(log.node_entry(node, gpu, host="node0")), Auditor.of_files([gpu]))
 ~~~
 
-`remote` accepts each node's log against the auditor the GPU card files give. `onsite` refuses each by
+`remote` accepts each node's log against the auditor the GPU card files give, with a stand-in certifier or without
+one. `onsite` refuses the eight-card node by `uncertified`, and the H200 node, whose interfaces no run has read, by
 `challenger-reach` until a memory challenger is registered with a link to the host (`tests/test_nodes.py`).
