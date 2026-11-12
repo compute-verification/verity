@@ -21,4 +21,4 @@ What the integration's other packages and the benchmarks import, module by modul
 `split_steps` and `header_of`. From `capture_log`: `read_steps` and `request_params`. From `kernel_trace`:
 `kernels_of_trace_events`, `load_trace` and `summarize_kernels`. From `capture`: `Capture`, `ObserverConfig` and
 `make_header`. From `runtime_tree`: `RuntimeTree`, `RUNNER_PATH` and `runtime_tree_of`, which it hands on from
-`verity_vllm.records.runtime_tree`. Each of these modules but `capture` lists its names in `__all__`.
+`verity_vllm.records.runtime_tree`. Each of these modules lists its names in `__all__`.

@@ -86,6 +86,8 @@ from verity_vllm.observe.pinned import (
 from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.records.schema_ids import CAPTURE_SNAPSHOTS_SCHEMA
 
+__all__ = ["Capture", "ObserverConfig", "make_header"]
+
 
 class Capture:
     """Install with `install()`, run the workload, `close()`.  One instance per run."""
