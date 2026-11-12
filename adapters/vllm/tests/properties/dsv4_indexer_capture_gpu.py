@@ -414,7 +414,7 @@ def phase_compress(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dic
     saved = runs[0]["saved"]
     flat_rows = saved.reshape(NBS * STATE_BLOCK, 2 * STATE_W)
     ks = _u32(o["kv_score"])
-    touched = np.zeros(NBS * STATE_BLOCK, dtype=bool)
+    touched: np.ndarray = np.zeros(NBS * STATE_BLOCK, dtype=bool)
     touched[sslot[written]] = True
     rec_score = {"phase": "score", "case": "served", "tokens": int(T), "rows_written": int(written.size),
                  "checks": {"deterministic": bool(np.array_equal(saved, runs[1]["saved"])),
@@ -430,11 +430,11 @@ def phase_compress(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dic
     entries = np.flatnonzero((sslot >= 0) & (kslot >= 0) & ((pos + 1) % RATIO == 0))
     k = runs[0]["k"]
     untouched = k.reshape(-1)[~X.slot_mask(NBK, kslot[entries])]
-    rec_comp = {"phase": "compress", "case": "served", "entries": int((req[entries] == 0).sum()),
-                "checks": {"deterministic": bool(np.array_equal(k, runs[1]["k"])),
-                           "state_unchanged": all(np.array_equal(r["saved"], r["after"]) for r in runs),
-                           "unwritten_untouched": bool((untouched == SENTINEL_K).all()),
-                           "entries": int(entries.size) == (SEQ + EDGE_SEQ) // RATIO}}
+    rec_comp: dict[str, Any] = {"phase": "compress", "case": "served", "entries": int((req[entries] == 0).sum()),
+                                "checks": {"deterministic": bool(np.array_equal(k, runs[1]["k"])),
+                                           "state_unchanged": all(np.array_equal(r["saved"], r["after"]) for r in runs),
+                                           "unwritten_untouched": bool((untouched == SENTINEL_K).all()),
+                                           "entries": int(entries.size) == (SEQ + EDGE_SEQ) // RATIO}}
     rec_edge = {"phase": "compress", "case": "edge", "entries": int((req[entries] == 1).sum()),
                 "checks": {"entries": int((req[entries] == 1).sum()) == EDGE_SEQ // RATIO,
                            "deterministic": rec_comp["checks"]["deterministic"]}}
@@ -677,7 +677,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any] | None) -> dict[str, Any]:
     vals, lens, names = topk_rows(11)
     rows = len(lens)
     start = 5
-    wide = np.full((rows, MAX_MODEL_LEN + start + 8), np.inf, dtype=np.float32)
+    wide: np.ndarray = np.full((rows, MAX_MODEL_LEN + start + 8), np.inf, dtype=np.float32)
     wide[:, start:start + MAX_MODEL_LEN] = vals
     wide[:, :start] = 1e30
     pl = torch.from_numpy(wide).to("cuda")
@@ -880,7 +880,7 @@ def bind_check() -> dict[str, Any]:
                f"DsaMqaLogit_v3{{H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogitV3, H=H, D=D),
                f"DsaMqaLogits_v3{{N=64,H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogitsV3, N=64, H=H, D=D),
                f"DsaTopKShortRow_v1{{TOPK={TOPK}}}": lambda: bind(dsa.DsaTopKShortRow, TOPK=TOPK)}
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

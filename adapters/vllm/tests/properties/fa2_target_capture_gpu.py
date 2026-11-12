@@ -153,7 +153,7 @@ def mufu(work: Path, sm: str) -> dict[str, Any]:
             continue
         out = work / f"tables_{tag}.bin"
         t = _run([str(exe), "table", str(out)])
-        words = np.fromfile(out, dtype="<u4")
+        words: np.ndarray = np.fromfile(out, dtype="<u4")
         n = 1 << 23
         ex2, rcp = words[:n], words[n:2 * n]
         v = _run([str(exe), "verify", str(ref)])
