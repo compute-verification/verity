@@ -40,11 +40,11 @@ def manifest_names_it(manifest: Mapping[str, Any] | None) -> bool:
 class LinearQuantSource:
     short_name = "linear_quant"
 
-    def __init__(self, committer: Any, model: Any, names: list[str] | None = None) -> None:
+    def __init__(self, committer: Any, model: Any) -> None:
         import torch
 
         self.torch, self.c, self.model = torch, committer, model
-        self.sites = list(sites(model) if names is None else names)
+        self.sites = sites(model)
         if not self.sites:
             raise ValueError("linear quant: the model has no block-FP8 linear module")
         self._hooks = hooks.Hooks()

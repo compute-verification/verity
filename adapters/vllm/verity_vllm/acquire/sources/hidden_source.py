@@ -30,7 +30,6 @@ from verity_vllm.log import init_logger
 
 logger = init_logger(__name__)
 
-KBLOCK_N = 128          # hd 64 (legacy constant; use fa2_kblock_n)
 KBLOCK_M = 64           # every split-KV kernel (flash_fwd_launch_template.h: kBlockM = 64 fixed for all head dims)
 CHUNK_WORDS = 64
 LEGACY_TILE = (128, 64)   # (kBlockN, head_dim) of the v7 hd-64 tap: v8 keeps its stream layout, names and roots
@@ -158,7 +157,6 @@ class HiddenM1Source:
                       "row3": tap_row3(self.ns), "ms": tap_ms(self.src)}
         self.ms = self.stats["ms"]
         self.active = False
-        self.time_launch = None
 
     def require_row3(self, guarded_max: bool) -> None:
         """Refuse a build whose ROW word 3 or MS class is not the manifest's: a manifest built under the guarded-max policy
@@ -357,7 +355,6 @@ class HiddenM1SourceFA3(HiddenM1Source):
                       "backend": "fa3", "tiles": {}, "row3": tap_row3(self.ns), "ms": tap_ms(self.src)}
         self.ms = self.stats["ms"]
         self.active = False
-        self.time_launch = None
 
     def arm(self, buf, HB: int, M: int, NB: int, BN: int, D: int, tag: int) -> None:
         self.ns.verity_set_tap_v9(3, buf, HB, M, NB, BN, D, tag)
