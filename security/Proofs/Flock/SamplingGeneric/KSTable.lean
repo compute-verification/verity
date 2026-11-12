@@ -6,18 +6,18 @@ public import Definitions.Claims.SamplingTable
 /-!
 # The sampled compiler at Flock's extractor at one table of a session
 
-`Arg.ofFlockAt` is Flock at one table of a session: its statement names a table and a Flock statement, its verifier is
-Flock's at the named statement and its extractor `Flock.EAt` at the named table and the deployed decoder.
+`Arg.ofFlockTable` is Flock at one table of a session: its statement names a table and a Flock statement, its verifier
+is Flock's at the named statement and its extractor `Flock.ETable` at the named table and the deployed decoder.
 
 * **A verifier read at named statements** runs as itself against the prover that sends, at every statement, the
   messages it sends at the naming statement (`Prover.atStmt`, `stepWith_atStmt`, `run_atStmt`): a run reads the
   prover's statement only through its next message.
-* **Its knowledge soundness is `Flock.KSAt`'s** at the named table and statement and the deployed decoder
-  (`flockArgKSAt`): `Flock.KSAt` at that prover, with the runs rewritten.
-* **The compiler at it** (`flockKSAt`, `flockKSRegAt`): `CompilerKS` and `CompilerKSReg` at `Arg.ofFlockAt`, as
+* **Its knowledge soundness is `Flock.KSTable`'s** at the named table and statement and the deployed decoder
+  (`flockArgKSTable`): `Flock.KSTable` at that prover, with the runs rewritten.
+* **The compiler at it** (`flockKSTable`, `flockKSRegTable`): `CompilerKS` and `CompilerKSReg` at `Arg.ofFlockTable`, as
   `flockKS` and `flockKSReg` are at `Arg.ofFlock`.
-* **Its waits** (`flockRerunsAt`): at every statement's shape its waits are the session's and each stops at the named
-  table's `k_j`, by unfolding. What `Compiled.es` over it is then: `OneVerifierAt.lean`.
+* **Its waits** (`flockRerunsTable`): at every statement's shape its waits are the session's and each stops at the named
+  table's `k_j`, by unfolding. What `Compiled.es` over it is then: `OneVerifierTables.lean`.
 -/
 
 @[expose] public section
@@ -65,30 +65,31 @@ namespace Claims.SamplingGeneric
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **`Arg.ofFlockAt` is knowledge sound from `Flock.KSAt`**: at a statement naming table `j` of the Flock statement
-`x`, `Flock.KSAt` at `j`, `x` and the deployed decoder, read at the prover that sends this statement's messages. -/
-theorem flockArgKSAt : FlockArgKSAt (Coin := Coin) (Col := Col) (T := T) := by
+/-- **`Arg.ofFlockTable` is knowledge sound from `Flock.KSTable`**: at a statement naming table `j` of the Flock
+statement `x`, `Flock.KSTable` at `j`, `x` and the deployed decoder, read at the prover that sends this statement's
+messages. -/
+theorem flockArgKSTable : FlockArgKSTable (Coin := Coin) (Col := Col) (T := T) := by
   intro H D _ N ε names hKS hdec y Ω _ _ P
-  have hrun : run H (P.atStmt y) D.V (names y).2 = run H P (Arg.ofFlockAt D N ε names).V y :=
+  have hrun : run H (P.atStmt y) D.V (names y).2 = run H P (Arg.ofFlockTable D N ε names).V y :=
     funext fun ω => run_atStmt H P D.V (fun y => (names y).2) y ω
   have h := hKS D.decode hdec (names y).1 (names y).2 Ω (P.atStmt y)
   unfold PrBad PrB B Extractor.eval at h
   rw [hrun] at h
   exact h
 
-/-- **Flock at one table of a session is an instance**: the compiler at `Arg.ofFlockAt`, from `Flock.KSAt` and its
+/-- **Flock at one table of a session is an instance**: the compiler at `Arg.ofFlockTable`, from `Flock.KSTable` and its
 decoder's list bound. -/
-theorem flockKSAt : FlockKSAt (Coin := Coin) (Col := Col) (T := T) := by
+theorem flockKSTable : FlockKSTable (Coin := Coin) (Col := Col) (T := T) := by
   intro H D _ N ε names L hKS hdec hB hS
-  exact compilerKS Coin (Arg.ofFlockAt D N ε names) L H (flockArgKSAt H D N ε names hKS hdec) hB hS
+  exact compilerKS Coin (Arg.ofFlockTable D N ε names) L H (flockArgKSTable H D N ε names hKS hdec) hB hS
 
-/-- **Its committed form**: the compiler's at `Arg.ofFlockAt`. -/
-theorem flockKSRegAt : FlockKSRegAt (Coin := Coin) (Col := Col) (T := T) := by
+/-- **Its committed form**: the compiler's at `Arg.ofFlockTable`. -/
+theorem flockKSRegTable : FlockKSRegTable (Coin := Coin) (Col := Col) (T := T) := by
   intro H D _ N ε names L hKS hdec hB hS
-  exact compilerKSReg Coin (Arg.ofFlockAt D N ε names) L H (flockArgKSAt H D N ε names hKS hdec) hB hS
+  exact compilerKSReg Coin (Arg.ofFlockTable D N ε names) L H (flockArgKSTable H D N ε names hKS hdec) hB hS
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 /-- **Its waits**: the session's waits, each stopping at the named table's `k_j`. -/
-theorem flockRerunsAt : FlockRerunsAt (Coin := Coin) (Col := Col) (T := T) := fun _ _ _ _ _ => ⟨rfl, rfl⟩
+theorem flockRerunsTable : FlockRerunsTable (Coin := Coin) (Col := Col) (T := T) := fun _ _ _ _ _ => ⟨rfl, rfl⟩
 
 end Claims.SamplingGeneric

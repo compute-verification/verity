@@ -54,8 +54,9 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # Flock's KS at one table of a session, from every table's bound
 
-`Flock.KSAt`: the extractor at one table of a session (`Flock.EAt`) is knowledge sound at that table's own relation
-(`Flock.RAt`), with each wait stopping at `k_j = ⌈4·N_j/e⌉` accepted reruns, `N_j` the table's word's length alone.
+`Flock.KSTable`: the extractor at one table of a session (`Flock.ETable`) is knowledge sound at that table's own
+relation
+(`Flock.RTable`), with each wait stopping at `k_j = ⌈4·N_j/e⌉` accepted reruns, `N_j` the table's word's length alone.
 Every table's bound counted per round (`TableBoundJR`) is already a bound at each table: at a table `j` and a table at
 its word's positions that does not extract, the session accepts with probability at most `ε_table + escapes(ω)` beyond
 that of accepting and opening a position of table `j`'s word off the table. So the product form (`joint_acc_le`) runs
@@ -64,16 +65,16 @@ over table `j`'s positions alone:
 * **One wait at any count and event** (`oneWait_le_of_jointAt`): `oneWait_le_of_joint` with its count, its positions'
   bound, its error and its extraction event as parameters; `oneWait_le_of_joint` is its instance at `D.k`, `D.N₀`,
   `D.εtable` and `Extracts`.
-* **One wait at table `j`** (`oneWait_le_at`): at table `j`'s positions (`opAt`), where a list of accepted reruns that
-  does not extract table `j` fills a table that is not `GoodTableAt` there. The conflict fork at round `0` is at table
-  `j`'s positions (`opAt_tied`), at weight `k_j`.
+* **One wait at table `j`** (`oneWait_le_table`): at table `j`'s positions (`opTable`), where a list of accepted reruns
+  that does not extract table `j` fills a table that is not `GoodTableAt` there. The conflict fork at round `0` is at
+  table `j`'s positions (`opTable_tied`), at weight `k_j`.
 * **The escapes** fit the session's weight: `TableBoundJR`'s fit with one more fork event of weight `D.k`, so with one
   of weight `k_j ≤ D.k` (`Escapes.FitsForkR.mono`), where table `j`'s word is no longer than `N₀`.
-* **Extraction** (`assemblesAt_of_extractsAt`): on `ExtractsAt` the decoder lists table `j`'s trace, `assembleAt`
-  returns a witness and `checkAt` accepts it. No splitting of the relation by table is read.
-* **Assembly** (`ks_at_of_oneWait`, `KSAt_of_tableBoundAtR`, `KSAt_of_tableBoundJR`): `ERep_trunc` at
-  `rate = N_j/(e·k_j) ≤ 1/4` (`rateAt_le`) and `Escapes.le`, as `KS_of_oneWait`, at an error for each table
-  (`TableBoundAtR`; `TableBoundJR` is its instance at the tables' errors summed). At a table with an empty word
+* **Extraction** (`assemblesTable_of_extractsAt`): on `ExtractsAt` the decoder lists table `j`'s trace, `assembleTable`
+  returns a witness and `checkTable` accepts it. No splitting of the relation by table is read.
+* **Assembly** (`ksTable_of_oneWait`, `KSTable_of_tableBoundEachR`, `KSTable_of_tableBoundJR`): `ERep_trunc` at
+  `rate = N_j/(e·k_j) ≤ 1/4` (`rateTable_le`) and `Escapes.le`, as `KS_of_oneWait`, at an error for each table
+  (`TableBoundEachR`; `TableBoundJR` is its instance at the tables' errors summed). At a table with an empty word
   (`k_j = 0`, every table past the statement's) the error is at least `1`.
 -/
 
@@ -102,56 +103,56 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Re
 
 /-! ## Extraction at one table -/
 
-theorem checkAt_sound (table : Msg → ℕ → Option Stmt) (j : ℕ) :
-    ∀ x w, checkAt table j x w = true → RAt table j x w := by
+theorem checkTable_sound (table : Msg → ℕ → Option Stmt) (j : ℕ) :
+    ∀ x w, checkTable table j x w = true → RTable table j x w := by
   intro x w h
-  unfold checkAt at h
+  unfold checkTable at h
   split at h
   · rename_i t ht
     exact ⟨t, ht, of_decide_eq_true h⟩
   · simp at h
 
 /-- `E^rep`'s relative rate at table `j`, `N_j/(e·k_j)`, is at most `1/4`, as `k_j = ⌈4·N_j/e⌉`. -/
-theorem rateAt_le (N : Msg → ℕ → ℕ) (j : ℕ) (x : Msg) (hk : 0 < kAt N j x) :
-    (N x j : ℝ) / (Real.exp 1 * kAt N j x) ≤ 1 / 4 := by
-  have hk' : (0 : ℝ) < kAt N j x := by exact_mod_cast hk
+theorem rateTable_le (N : Msg → ℕ → ℕ) (j : ℕ) (x : Msg) (hk : 0 < kTable N j x) :
+    (N x j : ℝ) / (Real.exp 1 * kTable N j x) ≤ 1 / 4 := by
+  have hk' : (0 : ℝ) < kTable N j x := by exact_mod_cast hk
   have he := Real.exp_pos 1
   rw [div_le_iff₀ (mul_pos he hk')]
-  have hc : 4 * (N x j : ℝ) / Real.exp 1 ≤ kAt N j x := Nat.le_ceil _
+  have hc : 4 * (N x j : ℝ) / Real.exp 1 ≤ kTable N j x := Nat.le_ceil _
   rw [div_le_iff₀ he] at hc
   linarith
 
-theorem κAt_pos {Coin Col T : Type} (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ) (j : ℕ) (x : Msg)
-    (hε : 0 ≤ ε x j) : 0 < κAt D N ε j x := by
-  unfold κAt
+theorem κTable_pos {Coin Col T : Type} (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ) (j : ℕ) (x : Msg)
+    (hε : 0 ≤ ε x j) : 0 < κTable D N ε j x := by
+  unfold κTable
   have h1 : (0 : ℝ) < 2 ^ (-(D.waits x : ℝ)) := by positivity
-  have h2 : (0 : ℝ) ≤ 2 * kAt N j x / D.cap x := by positivity
-  have h3 : 0 < Real.exp (-(kAt N j x : ℝ) / 8) := Real.exp_pos _
+  have h2 : (0 : ℝ) ≤ 2 * kTable N j x / D.cap x := by positivity
+  have h3 : 0 < Real.exp (-(kTable N j x : ℝ) / 8) := Real.exp_pos _
   linarith
 
 /-- At a table with an empty word (`k_j = 0`) the error at the table is at least `1`: its last term is `e^0`. -/
-theorem one_le_κAt {Coin Col T : Type} (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ) (j : ℕ) (x : Msg)
-    (hε : 0 ≤ ε x j) (hk : kAt N j x = 0) : 1 ≤ κAt D N ε j x := by
-  unfold κAt
+theorem one_le_κTable {Coin Col T : Type} (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ) (j : ℕ) (x : Msg)
+    (hε : 0 ≤ ε x j) (hk : kTable N j x = 0) : 1 ≤ κTable D N ε j x := by
+  unfold κTable
   have h1 : (0 : ℝ) < 2 ^ (-(D.waits x : ℝ)) := by positivity
-  have h2 : (2 : ℝ) * (kAt N j x : ℝ) / D.cap x = 0 := by
+  have h2 : (2 : ℝ) * (kTable N j x : ℝ) / D.cap x = 0 := by
     rw [hk]
     simp
-  have h3 : Real.exp (-(kAt N j x : ℝ) / 8) = 1 := by
+  have h3 : Real.exp (-(kTable N j x : ℝ) / 8) = 1 := by
     rw [hk]
     simp
   linarith
 
-section TableAt
+section Table
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **Extraction succeeds at table `j`** on its event: the decoder lists the table's trace, `assembleAt` returns a
-witness and `checkAt` accepts it. -/
-theorem assemblesAt_of_extractsAt (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
+/-- **Extraction succeeds at table `j`** on its event: the decoder lists the table's trace, `assembleTable` returns a
+witness and `checkTable` accepts it. -/
+theorem assemblesTable_of_extractsAt (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (hlw : ListWithin D.len D.enc D.θ decode) (x : Msg) (j : ℕ) (vs : List Seen) (h : ExtractsAt D x vs j) :
-    Assembles (fun v => [D.cols v]) (assembleAt D.table decode D.read j x) (checkAt D.table j x) vs := by
+    Assembles (fun v => [D.cols v]) (assembleTable D.table decode D.read j x) (checkTable D.table j x) vs := by
   obtain ⟨M, t, ht, hR, hag⟩ := h
   have hM : M ∈ decode (vs.flatMap fun v => D.cols v j) := hlw _ M hag
   have hsome : ((decode (vs.flatMap fun v => D.cols v j)).find? fun M => decide (RelS t (D.read [M]))).isSome := by
@@ -161,9 +162,9 @@ theorem assemblesAt_of_extractsAt (D : Deploy Coin Col T) (decode : List (ℕ ×
   have hq := List.find?_some hM'
   simp only [decide_eq_true_eq] at hq
   refine ⟨D.read [M'], ?_, ?_⟩
-  · unfold assembleAt
+  · unfold assembleTable
     rw [ht, Option.bind_some, flatMap_singleton_flatMap, hM', Option.map_some]
-  · unfold checkAt
+  · unfold checkTable
     rw [ht]
     exact decide_eq_true hq
 
@@ -237,34 +238,34 @@ theorem oneWait_le_of_jointAt (H : Msg → Msg) (D : Deploy Coin Col T) {Ω : Ty
 open Classical in
 /-- **An accepted run's openings at table `j`'s word's positions**, its first column of table `j` at each; none on a
 rejected run. -/
-noncomputable def opAt (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) {Ω : Type} (P : Prover Ω)
+noncomputable def opTable (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) {Ω : Type} (P : Prover Ω)
     (x : Msg) (j : ℕ) (ω : Ω) (r : Fin (D.V.k x) → Coin) (p : Fin (N x j)) : Option Col :=
   if (run H P D.V x ω r).out = .acc then lookCol (D.cols (run H P D.V x ω r).seen j) p.val else none
 
 omit [DecidableEq Col] [Fintype Coin] [Nonempty Coin] in
 /-- **On accepted reruns the extractor's table at table `j` is its zero-filled word.** -/
-theorem firstTable_opAt (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) {Ω : Type} (P : Prover Ω)
+theorem firstTable_opTable (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) {Ω : Type} (P : Prover Ω)
     (x : Msg) (j : ℕ) (ω : Ω) (bs : List (Fin (D.V.k x) → Coin)) (hacc : ∀ b ∈ bs, Acc H D.V P x ω b)
     (p : Fin (N x j)) :
-    firstTable (opAt H D N P x j ω) (fun _ => 0) bs p =
+    firstTable (opTable H D N P x j ω) (fun _ => 0) bs p =
       (lookCol ((seenOf H D.V P x ω bs).flatMap fun v => D.cols v j) p.val).getD 0 := by
   unfold firstTable
   rw [seenOf, List.flatMap_map,
     findSome?_lookCol _ (fun r => D.cols (run H P D.V x ω r).seen j) p.val bs fun b hb => by
-      unfold opAt
+      unfold opTable
       simp only [show (run H P D.V x ω b).out = .acc from hacc b hb, ↓reduceIte]]
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
 /-- **Two runs at one tape that open a position of table `j`'s word to two columns collide**, with the second run
-forked at round `0`: `ConflictTiedJ` at the runs' openings of table `j` (`opAt`). -/
-theorem opAt_tied (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (hconf : ConflictTiedJ H D N) {Ω : Type}
+forked at round `0`: `ConflictTiedJ` at the runs' openings of table `j` (`opTable`). -/
+theorem opTable_tied (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (hconf : ConflictTiedJ H D N) {Ω : Type}
     (P : Prover Ω) (x : Msg) (j : ℕ) (hj : j < nTab D x) (j₀ : Fin (D.V.k x)) (hj₀ : j₀.val = 0) (ω : Ω)
-    (r r' : Fin (D.V.k x) → Coin) (h : ∃ p, ConflictAt (opAt H D N P x j ω) (r, r') p) :
+    (r r' : Fin (D.V.k x) → Coin) (h : ∃ p, ConflictAt (opTable H D N P x j ω) (r, r') p) :
     TiedColl H ((run H P D.V x ω r).vLog ++ (run H P D.V x ω (forkCoins j₀ r r')).vLog) := by
   classical
   obtain ⟨p, h1, h2, h3⟩ := h
   rw [Claims.Bridge.forkCoins_zero j₀ hj₀]
-  simp only [opAt] at h1 h2 h3
+  simp only [opTable] at h1 h2 h3
   split_ifs at h1 h2 h3 with ha ha'
   · obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
     obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 h2
@@ -274,33 +275,33 @@ theorem opAt_tied (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ →
 
 /-- **One wait's bound at a tape, at table `j`, from the table's bound there**: `oneWait_le_of_jointAt` over table
 `j`'s word's positions, at `k_j` accepted reruns and the event that table `j` extracts; the escapes are `e₀` with the
-conflict at round `0` at table `j`'s positions (`opAt_tied`), at weight `k_j`. -/
-theorem oneWait_le_at (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
+conflict at round `0` at table `j`'s positions (`opTable_tied`), at weight `k_j`. -/
+theorem oneWait_le_table (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
     (hz : ∀ x j, Ok x j 0) (hok : ColsOkJ H D N Ok) (hconf : ConflictTiedJ H D N) (x : Msg) (j : ℕ)
-    (hj : j < nTab D x) (hVk : 0 < D.V.k x) (εt : ℝ) (hεt : 0 ≤ εt) (hk1 : 1 ≤ kAt N j x)
+    (hj : j < nTab D x) (hVk : 0 < D.V.k x) (εt : ℝ) (hεt : 0 ≤ εt) (hk1 : 1 ≤ kTable N j x)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (e₀ : Escapes H D.V P x)
     (hb : ∀ (ω : Ω) (C : Fin (N x j) → Col), (∀ p, Ok x j (C p)) → ¬ GoodTableAt D N x j C →
       accPr H D.V P x ω ≤ εt + e₀.term ω +
         Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
           ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen j) p.val = some u ∧ u ≠ C p)
     (ω : Ω) (hε : 0 < accPr H D.V P x ω) :
-    accPr H D.V P x ω * (accFail H D.V P x ω (kAt N j x) (fun vs => ExtractsAt D x vs j) /
-        accPr H D.V P x ω ^ kAt N j x) ≤
-      εt + (e₀.addFork (kAt N j x) (Nat.cast_nonneg _) ⟨0, hVk⟩
-        (fun ω r r' => ∃ p, ConflictAt (opAt H D N P x j ω) (r, r') p)
-        (opAt_tied H D N hconf P x j hj ⟨0, hVk⟩ rfl)).term ω +
-        (N x j : ℝ) / (Real.exp 1 * kAt N j x) * accPr H D.V P x ω := by
+    accPr H D.V P x ω * (accFail H D.V P x ω (kTable N j x) (fun vs => ExtractsAt D x vs j) /
+        accPr H D.V P x ω ^ kTable N j x) ≤
+      εt + (e₀.addFork (kTable N j x) (Nat.cast_nonneg _) ⟨0, hVk⟩
+        (fun ω r r' => ∃ p, ConflictAt (opTable H D N P x j ω) (r, r') p)
+        (opTable_tied H D N hconf P x j hj ⟨0, hVk⟩ rfl)).term ω +
+        (N x j : ℝ) / (Real.exp 1 * kTable N j x) * accPr H D.V P x ω := by
   classical
-  refine oneWait_le_of_jointAt H D P x (opAt H D N P x j) (fun vs => ExtractsAt D x vs j) (kAt N j x) (N x j) εt
-    ?_ hεt e₀ ⟨0, hVk⟩ (opAt_tied H D N hconf P x j hj ⟨0, hVk⟩ rfl) ω hk1 hε fun bs hall hnot => ?_
+  refine oneWait_le_of_jointAt H D P x (opTable H D N P x j) (fun vs => ExtractsAt D x vs j) (kTable N j x) (N x j) εt
+    ?_ hεt e₀ ⟨0, hVk⟩ (opTable_tied H D N hconf P x j hj ⟨0, hVk⟩ rfl) ω hk1 hε fun bs hall hnot => ?_
   · exact le_of_eq (by rw [Fintype.card_fin])
-  have hCe : ∀ p : Fin (N x j), firstTable (opAt H D N P x j ω) (fun _ => 0) bs p =
+  have hCe : ∀ p : Fin (N x j), firstTable (opTable H D N P x j ω) (fun _ => 0) bs p =
       (lookCol ((seenOf H D.V P x ω bs).flatMap fun v => D.cols v j) p.val).getD 0 :=
-    fun p => firstTable_opAt H D N P x j ω bs hall p
-  have hgood : ¬ GoodTableAt D N x j (firstTable (opAt H D N P x j ω) (fun _ => 0) bs) := fun hg => by
+    fun p => firstTable_opTable H D N P x j ω bs hall p
+  have hgood : ¬ GoodTableAt D N x j (firstTable (opTable H D N P x j ω) (fun _ => 0) bs) := fun hg => by
     rw [funext hCe] at hg
     exact hnot (extractsAt_of_goodAt D N x j (seenOf H D.V P x ω bs) hg)
-  have hOk : ∀ p, Ok x j (firstTable (opAt H D N P x j ω) (fun _ => 0) bs p) := by
+  have hOk : ∀ p, Ok x j (firstTable (opTable H D N P x j ω) (fun _ => 0) bs p) := by
     intro p
     rw [hCe p]
     cases hl : lookCol ((seenOf H D.V P x ω bs).flatMap fun v => D.cols v j) p.val with
@@ -309,14 +310,14 @@ theorem oneWait_le_at (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ
       rw [seenOf, List.flatMap_map] at hl
       obtain ⟨b, hb', hu⟩ := lookCol_flatMap_some (fun r => D.cols (run H P D.V x ω r).seen j) p.val u bs hl
       exact hok x Ω P ω b j p.val u (hall b hb') hj p.isLt hu
-  refine (hb ω (firstTable (opAt H D N P x j ω) (fun _ => 0) bs) hOk hgood).trans
+  refine (hb ω (firstTable (opTable H D N P x j ω) (fun _ => 0) bs) hOk hgood).trans
     (add_le_add le_rfl (Pr_mono fun r ⟨ha, p, u, hu, hne⟩ => ?_))
-  have e : opAt H D N P x j ω r p = some u := by
-    unfold opAt
+  have e : opTable H D N P x j ω r p = some u := by
+    unfold opTable
     rw [ite_eq_left ha]
     exact hu
   refine ⟨ha, p, ?_⟩
-  show (opAt H D N P x j ω r p).isSome ∧ opAt H D N P x j ω r p ≠ some _
+  show (opTable H D N P x j ω r p).isSome ∧ opTable H D N P x j ω r p ≠ some _
   rw [e]
   exact ⟨rfl, fun h => hne (Option.some_injective _ h)⟩
 
@@ -324,98 +325,98 @@ theorem oneWait_le_at (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ
 
 /-- **Flock's KS at table `j`, at one statement and prover, from one wait's bound there**: when `K > 0`, `k_j ≥ 8`
 and the error `εt` is nonnegative, and escapes that fit the session's weight bound one wait of `k_j` accepted runs on
-the event that table `j` extracts, the bound is `Flock.κAt`'s at `εt`. -/
-theorem ks_at_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
+the event that table `j` extracts, the bound is `Flock.κTable`'s at `εt`. -/
+theorem ksTable_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (decode : List (ℕ × Col) → List T) (hlw : ListWithin D.len D.enc D.θ decode) (j : ℕ) (x : Msg)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (hK : 0 < D.cap x) (hk8 : 8 ≤ kAt N j x)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (hK : 0 < D.cap x) (hk8 : 8 ≤ kTable N j x)
     (εt : ℝ) (hεt : 0 ≤ εt) (e : Escapes H D.V P x) (hfit : e.Fits (D.weight x))
     (hw : ∀ ω, 0 < accPr H D.V P x ω →
-      accPr H D.V P x ω * (accFail H D.V P x ω (kAt N j x) (fun vs => ExtractsAt D x vs j) /
-          accPr H D.V P x ω ^ kAt N j x) ≤
-        εt + e.term ω + (N x j : ℝ) / (Real.exp 1 * kAt N j x) * accPr H D.V P x ω) :
-    PrBad H D.V (RAt D.table j) (EAt D N decode j) x P ≤
-      4 * εt + 2 ^ (-(D.waits x : ℝ)) + 2 * kAt N j x / D.cap x + Real.exp (-(kAt N j x : ℝ) / 8) +
+      accPr H D.V P x ω * (accFail H D.V P x ω (kTable N j x) (fun vs => ExtractsAt D x vs j) /
+          accPr H D.V P x ω ^ kTable N j x) ≤
+        εt + e.term ω + (N x j : ℝ) / (Real.exp 1 * kTable N j x) * accPr H D.V P x ω) :
+    PrBad H D.V (RTable D.table j) (ETable D N decode j) x P ≤
+      4 * εt + 2 ^ (-(D.waits x : ℝ)) + 2 * kTable N j x / D.cap x + Real.exp (-(kTable N j x : ℝ) / 8) +
         Real.sqrt (γ D x * PrB H D.V P x) := by
   have hwait : ∀ ω, 0 < accPr H D.V P x ω →
-      accPr H D.V P x ω * (accFail H D.V P x ω (kAt N j x)
-        (Assembles (fun v => [D.cols v]) (assembleAt D.table decode D.read j x) (checkAt D.table j x)) /
-          accPr H D.V P x ω ^ kAt N j x) ≤
-        (εt + e.term ω) + (N x j : ℝ) / (Real.exp 1 * kAt N j x) * accPr H D.V P x ω := by
+      accPr H D.V P x ω * (accFail H D.V P x ω (kTable N j x)
+        (Assembles (fun v => [D.cols v]) (assembleTable D.table decode D.read j x) (checkTable D.table j x)) /
+          accPr H D.V P x ω ^ kTable N j x) ≤
+        (εt + e.term ω) + (N x j : ℝ) / (Real.exp 1 * kTable N j x) * accPr H D.V P x ω := by
     intro ω hε
     refine le_trans ?_ ((hw ω hε).trans (le_of_eq (by ring)))
     refine mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right ?_ (pow_nonneg hε.le _)) hε.le
     unfold accFail
-    exact Pr_mono fun σ ⟨hacc, hno⟩ => ⟨hacc, fun hex => hno (assemblesAt_of_extractsAt D decode hlw x j _ hex)⟩
-  have hb := ERep_trunc H D.V (RAt D.table j) D.waits (kAt N j) D.cap (fun v => [D.cols v])
-    (assembleAt D.table decode D.read j) (checkAt D.table j) (checkAt_sound D.table j) x P hK hk8
-    (fun ω => εt + e.term ω) (fun ω => add_nonneg hεt (e.term_nonneg ω)) (rateAt_le N j x (by omega)) hwait
+    exact Pr_mono fun σ ⟨hacc, hno⟩ => ⟨hacc, fun hex => hno (assemblesTable_of_extractsAt D decode hlw x j _ hex)⟩
+  have hb := ERep_trunc H D.V (RTable D.table j) D.waits (kTable N j) D.cap (fun v => [D.cols v])
+    (assembleTable D.table decode D.read j) (checkTable D.table j) (checkTable_sound D.table j) x P hK hk8
+    (fun ω => εt + e.term ω) (fun ω => add_nonneg hεt (e.term_nonneg ω)) (rateTable_le N j x (by omega)) hwait
   have hEx : 4 * Ex (fun ω => εt + e.term ω) ≤ 4 * εt + Real.sqrt (γ D x * PrB H D.V P x) := by
     rw [Ex_add, Ex_const]
     have := e.le (D.weight x) hfit
     unfold γ
     linarith
-  show PrBad H D.V (RAt D.table j)
-      (ERep D.V D.waits (kAt N j) D.cap (fun v => [D.cols v]) (assembleAt D.table decode D.read j)
-        (checkAt D.table j)) x P ≤
-    4 * εt + 2 ^ (-(D.waits x : ℝ)) + 2 * kAt N j x / D.cap x + Real.exp (-(kAt N j x : ℝ) / 8) +
+  show PrBad H D.V (RTable D.table j)
+      (ERep D.V D.waits (kTable N j) D.cap (fun v => [D.cols v]) (assembleTable D.table decode D.read j)
+        (checkTable D.table j)) x P ≤
+    4 * εt + 2 ^ (-(D.waits x : ℝ)) + 2 * kTable N j x / D.cap x + Real.exp (-(kTable N j x : ℝ) / 8) +
       Real.sqrt (γ D x * PrB H D.V P x)
   linarith
 
 /-- **Flock: KS at each table of a session, at an error for each table, from each table's bound at its error**
-(`TableBoundAtR`): when each of the statement's tables' words is no longer than `N₀`, the errors are nonnegative, the
+(`TableBoundEachR`): when each of the statement's tables' words is no longer than `N₀`, the errors are nonnegative, the
 verifier takes a round, `K > 0`, at each table of the statement `k_j ≥ 8` or the verifier accepts no run, a table past
 the statement's has an empty word, and `Ok` admits `0` and every column an accepted run opens. -/
-theorem KSAt_of_tableBoundAtR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
+theorem KSTable_of_tableBoundEachR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (hN : ∀ x j, j < nTab D x → (N x j : ℝ) ≤ D.N₀ x) (hεt : ∀ x j, 0 ≤ ε x j) (hVk : ∀ x, 0 < D.V.k x)
     (hK : ∀ x, 0 < D.cap x)
-    (hk : ∀ x j, (j < nTab D x ∧ 8 ≤ kAt N j x) ∨ kAt N j x = 0 ∨ NoAcc H D.V x)
+    (hk : ∀ x j, (j < nTab D x ∧ 8 ≤ kTable N j x) ∨ kTable N j x = 0 ∨ NoAcc H D.V x)
     (Ok : Msg → ℕ → Col → Prop) (hz : ∀ x j, Ok x j 0) (hok : ColsOkJ H D N Ok) (hconf : ConflictTiedJ H D N)
-    (htab : TableBoundAtR H D N Ok ε) :
-    KSAt H D N ε := by
+    (htab : TableBoundEachR H D N Ok ε) :
+    KSTable H D N ε := by
   intro decode hlw j x Ω _ _ P
-  show PrBad H D.V (RAt D.table j) (EAt D N decode j) x P ≤
-    κAt D N ε j x + Real.sqrt (γ D x * PrB H D.V P x)
+  show PrBad H D.V (RTable D.table j) (ETable D N decode j) x P ≤
+    κTable D N ε j x + Real.sqrt (γ D x * PrB H D.V P x)
   rcases hk x j with ⟨hj, hk8⟩ | hk0 | hno
   · obtain ⟨e₀, hfit, hb⟩ := htab x Ω P
-    have hkle : kAt N j x ≤ D.k x :=
+    have hkle : kTable N j x ≤ D.k x :=
       Nat.ceil_mono (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left (hN x j hj) (by norm_num))
         (Real.exp_pos 1).le)
-    have hfit' : e₀.FitsForkR (D.weight x) (kAt N j x) := hfit.mono (Nat.cast_le.2 hkle)
-    unfold κAt
-    refine ks_at_of_oneWait H D N decode hlw j x P (hK x) hk8 (ε x j) (hεt x j)
-      (e₀.addFork (kAt N j x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
-        (fun ω r r' => ∃ p, ConflictAt (opAt H D N P x j ω) (r, r') p)
-        (opAt_tied H D N hconf P x j hj ⟨0, hVk x⟩ rfl)).mergeR
-      (e₀.fitsR_addFork (D.weight x) (kAt N j x) (Nat.cast_nonneg _) ⟨0, hVk x⟩ rfl
-        (fun ω r r' => ∃ p, ConflictAt (opAt H D N P x j ω) (r, r') p)
-        (opAt_tied H D N hconf P x j hj ⟨0, hVk x⟩ rfl) hfit').fits_mergeR fun ω hε => ?_
-    have hm := (e₀.addFork (kAt N j x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
-      (fun ω r r' => ∃ p, ConflictAt (opAt H D N P x j ω) (r, r') p)
-      (opAt_tied H D N hconf P x j hj ⟨0, hVk x⟩ rfl)).term_le_mergeR ω
-    have := oneWait_le_at H D N Ok hz hok hconf x j hj (hVk x) (ε x j) (hεt x j) (by omega) P e₀
+    have hfit' : e₀.FitsForkR (D.weight x) (kTable N j x) := hfit.mono (Nat.cast_le.2 hkle)
+    unfold κTable
+    refine ksTable_of_oneWait H D N decode hlw j x P (hK x) hk8 (ε x j) (hεt x j)
+      (e₀.addFork (kTable N j x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+        (fun ω r r' => ∃ p, ConflictAt (opTable H D N P x j ω) (r, r') p)
+        (opTable_tied H D N hconf P x j hj ⟨0, hVk x⟩ rfl)).mergeR
+      (e₀.fitsR_addFork (D.weight x) (kTable N j x) (Nat.cast_nonneg _) ⟨0, hVk x⟩ rfl
+        (fun ω r r' => ∃ p, ConflictAt (opTable H D N P x j ω) (r, r') p)
+        (opTable_tied H D N hconf P x j hj ⟨0, hVk x⟩ rfl) hfit').fits_mergeR fun ω hε => ?_
+    have hm := (e₀.addFork (kTable N j x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+      (fun ω r r' => ∃ p, ConflictAt (opTable H D N P x j ω) (r, r') p)
+      (opTable_tied H D N hconf P x j hj ⟨0, hVk x⟩ rfl)).term_le_mergeR ω
+    have := oneWait_le_table H D N Ok hz hok hconf x j hj (hVk x) (ε x j) (hεt x j) (by omega) P e₀
       (fun ω C hC hg => hb ω j hj C hC hg) ω hε
     linarith
-  · have h1 : PrBad H D.V (RAt D.table j) (EAt D N decode j) x P ≤ 1 := by
+  · have h1 : PrBad H D.V (RTable D.table j) (ETable D N decode j) x P ≤ 1 := by
       unfold PrBad
       exact Pr_le_one _
-    exact h1.trans ((one_le_κAt D N ε j x (hεt x j) hk0).trans (le_add_of_nonneg_right (Real.sqrt_nonneg _)))
-  · have h0 : PrBad H D.V (RAt D.table j) (EAt D N decode j) x P = 0 := by
+    exact h1.trans ((one_le_κTable D N ε j x (hεt x j) hk0).trans (le_add_of_nonneg_right (Real.sqrt_nonneg _)))
+  · have h0 : PrBad H D.V (RTable D.table j) (ETable D N decode j) x P = 0 := by
       unfold PrBad
       rw [Pr_congr (q := fun _ => False) fun s => ⟨fun hs => hno Ω P s.1 s.2.1 hs.1, False.elim⟩, Pr_false]
     rw [h0]
-    exact add_nonneg (κAt_pos D N ε j x (hεt x j)).le (Real.sqrt_nonneg _)
+    exact add_nonneg (κTable_pos D N ε j x (hεt x j)).le (Real.sqrt_nonneg _)
 
 /-- **Flock: KS at each table of a session, from every table's bound counted per round**, at the tables' errors
-summed (`D.εtable`): `KSAt_of_tableBoundAtR` at `TableBoundJR`, which is `TableBoundAtR` at that error. -/
-theorem KSAt_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
+summed (`D.εtable`): `KSTable_of_tableBoundEachR` at `TableBoundJR`, which is `TableBoundEachR` at that error. -/
+theorem KSTable_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (hN : ∀ x j, j < nTab D x → (N x j : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
     (hK : ∀ x, 0 < D.cap x)
-    (hk : ∀ x j, (j < nTab D x ∧ 8 ≤ kAt N j x) ∨ kAt N j x = 0 ∨ NoAcc H D.V x)
+    (hk : ∀ x j, (j < nTab D x ∧ 8 ≤ kTable N j x) ∨ kTable N j x = 0 ∨ NoAcc H D.V x)
     (Ok : Msg → ℕ → Col → Prop) (hz : ∀ x j, Ok x j 0) (hok : ColsOkJ H D N Ok) (hconf : ConflictTiedJ H D N)
     (htab : TableBoundJR H D N Ok) :
-    KSAt H D N (fun x _ => D.εtable x) :=
-  KSAt_of_tableBoundAtR H D N (fun x _ => D.εtable x) hN (fun x _ => hεt x) hVk hK hk Ok hz hok hconf htab
+    KSTable H D N (fun x _ => D.εtable x) :=
+  KSTable_of_tableBoundEachR H D N (fun x _ => D.εtable x) hN (fun x _ => hεt x) hVk hK hk Ok hz hok hconf htab
 
-end TableAt
+end Table
 
 end Claims.Flock
