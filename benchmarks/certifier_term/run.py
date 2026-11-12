@@ -4,8 +4,8 @@ file). It runs the calculator of K, `benchmarks/network_traces/leak_bounds.py`, 
 
 With `--out DIR` it also writes `DIR/result.json`, through the harness kit's writer (`verity_bench.kit`) and through
 nothing else: the fields every resource's benchmark reports (`measurements`), for the row the term of record is read
-from, the scan at two release schedules, at each scope and monitoring period the calculator's document holds. Every figure is the model's
-and its name says so (`MODELED`); none is computed from a run's K.
+from, the scan at two release schedules, at each scope and monitoring period the calculator's document holds. Every
+figure is the model's and its name says so (`MODELED`); none is computed from a run's K.
 
 - `metric`: the term of record as the document gives it, in GB, beside the document's target.
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
@@ -108,10 +108,10 @@ def measurements(lb: Any, doc: dict, up: Uplink | None = None) -> list[dict]:
     """The calculator ``lb``'s document ``doc`` in the fields every resource's benchmark reports, as the kit writer's
     measurements, each named under `MODELED`: the term of record (`metric`), and for each scope and monitoring period
     the document holds, that row's `free`, `capacity`, `verified` and error (`ERROR`), the row being the scan's at
-    the release schedules of record (`ROW`). `metric` and `free` stand against the document's target, in their own units. Capacity is the scope's machines times a machine's uplink
-    ``up`` one way over the period, rounded up; with no uplink, capacity and verified have no value and their inputs
-    say why. Every measurement's inputs name the class the term is at (`at_class`), `metric`'s and `free`'s among the
-    document's inputs."""
+    the release schedules of record (`ROW`). `metric` and `free` stand against the document's target, in their own
+    units. Capacity is the scope's machines times a machine's uplink ``up`` one way over the period, rounded up; with
+    no uplink, capacity and verified have no value and their inputs say why. Every measurement's inputs name the class
+    the term is at (`at_class`), `metric`'s and `free`'s among the document's inputs."""
     at, target, klass = str(lb.OF_RECORD), doc["target"]["value"], at_class(doc)
     said = [stated(k, i) for k, i in doc["inputs"].items()]
 
