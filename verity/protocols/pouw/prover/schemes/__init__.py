@@ -1,5 +1,5 @@
 """The named PoUW schemes.  `get(name)` returns a configured `verity.protocols.pouw.verifier.protocol.PoUWScheme`; each name's module
-docstring states its steps, and its pinned vectors are under ``tests/vectors``."""
+docstring states its steps, and its pinned vectors are under ``verifier/tests/vectors``."""
 
 from __future__ import annotations
 
