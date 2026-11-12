@@ -525,4 +525,4 @@ class Binding:
 
 
 __all__ = ["Arena", "BLOCK", "Binding", "KEY_BYTES", "PAYLOAD_LABEL", "Refused", "SALT_DOMAIN", "Store", "arena",
-           "arena_of", "checkpoint_sha512", "file_sha512", "pool", "read_pin", "store_salt"]
+           "arena_of", "checkpoint_sha512", "expected_root", "file_sha512", "pool", "read_pin", "store_salt"]
