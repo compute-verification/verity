@@ -107552,3 +107552,23 @@ Nothing.
 
 ### Not established
 Everything: no file written, no run launched.
+
+## ACCOUNTS, Thu 12 Nov 23:01Z: turn ended on your word. In line: `r20261112-223929-6685` (try of `Spot/SiteDifftest.lean`: I say yes or no), `r20261112-223929-49fc` and `r20261112-223929-53ec` (tries of the interface's root and the certifier's file: I say if each builds), `r20261112-224804-ae12` (records: I list what moves, then open the one unmarked pull request), `r20261112-224804-2b10` (16 suites: verdicts), `r20261112-213155-e409` (the two lists' suites: the ready line). Done, exit 0, its lock diff unread: `r20261112-213155-38e4`
+
+Turn ended on your word of 22:56Z. Nothing is running on my VM; every run below is on a node and does not need my session.
+
+| Run | What | Where | State at 22:59Z [run: `research status`] | When it ends I |
+|---|---|---|---|---|
+| `r20261112-223929-6685` | try of `Spot/SiteDifftest.lean` at `a88978bf950f` | vy-nebius-cpu-12 | in line since 22:39Z | write one entry whose first line is yes or no, for your word to compute-research |
+| `r20261112-223929-49fc` | try of the interface's root at `a88978bf950f` | vy-nebius-cpu-12 | in line since 22:39Z | say whether `SiteV2Guards.lean` builds under the root; if not, mend the folded line and try again |
+| `r20261112-223929-53ec` | try of `NetworkCheck/Registered.lean` at `a88978bf950f` | vy-nebius-cpu-12 | in line since 22:39Z | say whether network's file builds on the joined head |
+| `r20261112-224804-ae12` | the records run at `a88978bf950f` | vy-nebius-cpu-12 | in line since 22:48Z | read `out/lock.diff`, list the records of the three `security` locks that move, and put the list in the pull request's body |
+| `r20261112-224804-2b10` | 16 suites, `--quick`, at `a88978bf950f` | vy-nebius-cpu-8 | in line since 22:48Z | read each suite's verdict; mend a failure of mine with a commit, report another lane's |
+| `r20261112-213155-38e4` | the two lists' records run at `57fb7f037f6b` | vy-nebius-cpu-8 | **done, exit 0** | read its lock diff and say which records the two lists move |
+| `r20261112-213155-e409` | the two lists' suites at `57fb7f037f6b` | vy-nebius-cpu-10 | in line since 21:31Z | read the verdicts, then the ready line for the two lists |
+
+- **`38e4` ended while I wrote this**, exit 0. Its lock diff is not read: `research fetch` brought no `out/` yet, and I stopped there on your word. So which records the two lists move is still not established.
+- **The pull request for Site v2 is not open.** Its body is drafted with the notice first, and every sentence in it about a link is now true of the code as it is. I open it, one and unmarked, when the records run `ae12` is read, after one merge of `main`. [run: `git merge-tree`] that merge is clean today: `main` is 24 commits ahead at `417526501974` and changes none of the branch's 25 files. #9375 is still open [run: `gh pr view`]; say if the pull request should wait for it.
+- **The first one I need is `6685`**, then `ae12`. ETA: each try about 2 minutes once it has a slot; the records run about 50 minutes of slot; lines are yours to read.
+- Heads, unchanged since the 22:51Z entry: `cursor/proofs-site-v2-1dc6` at `a88978bf950f`; `cursor/proofs-composites-f4cc` at `57fb7f037f6b`; #9312 at `b034e9d200b5` and #9313 at `19474e53e4f7`, both unmarked.
+- The checkpoint note of 22:52Z is on the notes remote, with the commands to launch each run again and the body's draft.
