@@ -35,3 +35,13 @@ def test_a_census_becomes_a_card_the_schema_takes(tmp_path):
                         "GLM-5.3", "--params", "10", "--weights-bytes", "80", "--out", str(out)])
     assert json.loads(out.read_text()) == c
 
+
+def test_the_tree_s_card_is_a_census_s_and_nothing_else():
+    """GLM-5.3's card in the tree is as the generator writes one: its source the generator's sentence over a census's
+    art id, its strata in the generator's order and its boundary bytes their sum, with no stratum edited after."""
+    c = cards.load("workload", "GLM-5.3")
+    v = c["value"]
+    assert cards.ART.match(c["source"]) and "ANDs the estimator's upper bound; rows no cut fits" in c["source"]
+    key = [(-x["per_token"] * x["macs"], -x["per_token"], x["block"]) for x in v["strata"]]
+    assert key == sorted(key)
+    assert v["boundaries"]["every_block"] == sum(x["per_token"] * x["out_bits"] for x in v["strata"]) / 8
