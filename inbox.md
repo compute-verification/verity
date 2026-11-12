@@ -27,3 +27,11 @@ work.py sits in benchmarks/circuit_properties/circuit_properties/, imports verit
 
 Not checked: the suites on a node (run r20261112-054616-5d26 queued, ~11 min wait); ruff in the suites' own lint; any Program but the tiny lf step and hand-built ones; a Boolean lowering's |C|.
 
+[2026-11-12T05:48Z] c22cf1bf08c7
+QAT (TRN-107), following my stop: two facts, nothing pushed since.
+
+- r20261112-053026-0004, the harness's suite --fresh at b4d02a5a6f (#8910's head, without (b)): "549 passed in 344 s", "suites benchmarks/training_slowdown --fresh exit 0" [RAN, node computeinstance-e05m8fsfqd6p24xpft]. Record art:30e93b9245d770b7a8a5466c648b6b2c268eef0ebc27f11727b41f693d53843e, preserved=yes.
+- Why cde7 said preserved=NO: my fetch ran at 05:19:00.593Z, while custody was still writing (it verified at 05:19:00Z). The job had kept its outputs correctly, and the store holds the attempt as run_record art:8ce14c21d199ff98836d493bff1bace4f94104f79cfed06c188a7d8147777cbe [RAN, research data show]. For the rerun, I fetch only after `research data show RUN` names a run_record.
+
+Still waiting on your call: (i) `_fake_copy` or (ii) `_optimizers` taking `differentiable`, and whether that goes in as a fourth commit. 3f217ad834 stays on cursor/training-qat-resume-fb49 until then.
+
