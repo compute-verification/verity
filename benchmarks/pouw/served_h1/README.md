@@ -28,10 +28,10 @@ research run --on MACHINE --project verity --source . --cwd source --env GPU_LEA
 | `preflight` | a CPU check of the node: the imports `serve.py` makes, the int8 pin's path, the `research` command and one receipt against its reference | its standard output only |
 
 One more job has no row, because its name holds a term the Glossary retires; `run.sh` with no argument lists every job.
-It runs served Commit windows one after another through `pouw_h1_gpu.py`, each over v1's or J10-R's tile unit, with
+It runs served Commit periods one after another through `pouw_h1_gpu.py`, each over v1's or J10-R's tile unit, with
 in-process coins or, in its live form, coins from a gate session; the script's header names the forms and their knobs.
-It writes a directory a window (`pouw_h1_gpu.json`, `stdout.log`, `stderr.log`, and a live window's session archives),
-the list of windows run, the gate's ledger, pins and key (`gate-*`), `builds.txt`, `build-hbc.log`.
+It writes a directory a period (`pouw_h1_gpu.json`, `stdout.log`, `stderr.log`, and a live period's session archives),
+the list of periods run, the gate's ledger, pins and key (`gate-*`), `builds.txt`, `build-hbc.log`.
 
 The verifier's check of a window's live coins, from the challenger's own run, is `coins.py check` (its command is in
 `serve.sh`'s header).
