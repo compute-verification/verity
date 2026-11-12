@@ -297,8 +297,6 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
-    cert = _certified(certified, registered or {})
-    v2 = bool(registered) or bool(cert)
     log = list(log)
     pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
@@ -315,6 +313,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not registered:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
+    cert = _certified(certified, registered or {}, sup)
+    v2 = bool(registered) or bool(cert)
     pins = _pins(pinned, registered or {}, sup)
     outs = _outputs(outputs, registered or {}, sup, pins, log)
     formats = _schemas(schemas, registered or {})
@@ -609,13 +609,13 @@ CERTIFIED_KEYS = ("root", "leaves", "words", "domain")
 """A certified entry's keys, with `registered.WIDTH_KEY` for leaves that are not 16 bits (`_certified`)."""
 
 
-def _certified(certified: Mapping[str, Mapping[str, Any]] | None, registered: Mapping[str, int]
-               ) -> dict[str, dict[str, Any]]:
+def _certified(certified: Mapping[str, Mapping[str, Any]] | None, registered: Mapping[str, int],
+               supplied: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """The verifier's certified entries, `{value: {"root", "leaves", "words", "word_bits", "domain"}}` in the values'
-    sorted order: each of a value it expects no parameter registered under, an object of exactly `CERTIFIED_KEYS`
-    (`root` lowercase hex of 64 bytes, `leaves` and `words` naturals, `domain` a string) and, optionally, `word_bits`,
-    one of `registered.WIDTHS`, 16 when left out; ValueError otherwise, which the Lean verifier refuses too
-    (`OneStage.paramsOfJson`)."""
+    sorted order: each of a value it neither expects a parameter registered under (`registered`) nor fills itself
+    (`supplied`), an object of exactly `CERTIFIED_KEYS` (`root` lowercase hex of 64 bytes, `leaves` and `words`
+    naturals, `domain` a string) and, optionally, `word_bits`, one of `registered.WIDTHS`, 16 when left out; ValueError
+    otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
     if certified is None:
         return {}
     if not isinstance(certified, Mapping) or not all(isinstance(v, str) for v in certified):
@@ -623,12 +623,13 @@ def _certified(certified: Mapping[str, Mapping[str, Any]] | None, registered: Ma
     keys, out = set(CERTIFIED_KEYS), {}
     for v, e in sorted(certified.items()):
         width = e.get(G.WIDTH_KEY, G.WORD_BITS) if isinstance(e, Mapping) else None
-        if (v in registered or not isinstance(e, Mapping) or not keys <= set(e) <= keys | {G.WIDTH_KEY}
+        if (v in registered or v in supplied or not isinstance(e, Mapping) or not keys <= set(e) <= keys | {G.WIDTH_KEY}
                 or not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.fullmatch(e["root"]))
                 or not all(type(e[k]) is int and e[k] >= 0 for k in ("leaves", "words"))
                 or not isinstance(e["domain"], str) or type(width) is not int or width not in G.WIDTHS):
-            raise ValueError(f"certified value {v!r}: not a value it expects no parameter registered under, with a root of "
-                             f"64 bytes, its leaves, words and domain, and word_bits when not {G.WORD_BITS}: {e!r}")
+            raise ValueError(f"certified value {v!r}: one it expects a parameter registered under or fills, or an entry "
+                             f"that is not a root of 64 bytes, its leaves, words and domain, and word_bits when not "
+                             f"{G.WORD_BITS}: {e!r}")
         out[v] = {"root": e["root"], "leaves": e["leaves"], "words": e["words"], "word_bits": width,
                   "domain": e["domain"]}
     return out

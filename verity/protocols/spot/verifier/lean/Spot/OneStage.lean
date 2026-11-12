@@ -50,10 +50,11 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `{"history": "H/domain"}` then the bytes of the root or domain id it computed for table `H` (`HistoryTable.resolve`),
   refused in any other form;
   and it may add `certified`, `{value: {"domain", "leaves", "root", "words"}}`, with `word_bits` (16 or 32, 16 when
-  left out): the entries it built from registrations it read under the deployment's key, each of a value it expects
-  no parameter registered under, `root` lowercase hex of 64 bytes, `leaves` and `words` naturals and `domain` a
+  left out): the entries it built from registrations it read under the deployment's key, each of a value it neither
+  expects a parameter registered under nor fills, `root` lowercase hex of 64 bytes, `leaves` and `words` naturals and `domain` a
   string, which R7 holds the record's entries for those values to (`Registration.certifiedHeld`), with which it
-  expects a v2 record whatever it expects registered (`Registration.Verifier.v2`), refused in any other form;
+  expects a v2 record whatever it expects registered (`Registration.Verifier.v2`), refused in any other form, and
+  which only the registration check and the run of record read: `paramsOfJson` refuses the key;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -171,15 +172,16 @@ def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log
 bits. -/
 def CERTIFIED_KEYS : Array String := sortStrings #["root", "leaves", "words", "domain"]
 
-/-- The parameters' certified entries (`registration._certified`): an object of values none of `registered` names, each
-exactly `CERTIFIED_KEYS` and, optionally, `word_bits`, one of `Registered.WIDTHS`, 16 when left out; `root` lowercase
-hex of 64 bytes, `leaves` and `words` naturals and `domain` a string. -/
-private def certifiedOf (cj : Json) (registered : Array (String × Nat)) : V (Array (Registered.Entry × String)) := do
+/-- The parameters' certified entries (`registration._certified`): an object of values none of `registered` or
+`supplied` names, each exactly `CERTIFIED_KEYS` and, optionally, `word_bits`, one of `Registered.WIDTHS`, 16 when left
+out; `root` lowercase hex of 64 bytes, `leaves` and `words` naturals and `domain` a string. -/
+private def certifiedOf (cj : Json) (registered : Array (String × Nat)) (supplied : Array (String × Supplied.Rows)) :
+    V (Array (Registered.Entry × String)) := do
   let .obj kvs := cj | throw "certified entries are not an object"
   kvs.toArray.mapM fun (v, e) => do
-    let fail := s!"certified value {v}: not a value it expects no parameter registered under, with a root of 64 bytes, " ++
-      "its leaves, words and domain, and word_bits when not 16"
-    if registered.any (·.1 == v) then throw fail
+    let fail := s!"certified value {v}: one it expects a parameter registered under or fills, or an entry that is not " ++
+      "a root of 64 bytes, its leaves, words and domain, and word_bits when not 16"
+    if registered.any (·.1 == v) || supplied.any (·.1 == v) then throw fail
     if keys? e != some CERTIFIED_KEYS && keys? e != some (sortStrings (CERTIFIED_KEYS.push Registered.WIDTH_KEY)) then
       throw fail
     let wordBits ← match field? e Registered.WIDTH_KEY with
@@ -189,7 +191,9 @@ private def certifiedOf (cj : Json) (registered : Array (String × Nat)) : V (Ar
         | none => throw fail
     match getD e "root", nat? (getD e "leaves"), nat? (getD e "words"), getD e "domain" with
     | .str root, some leaves, some words, .str domain =>
-      if root.length == 128 && isHex root then pure ({ value := v, leaves, words, wordBits, domain }, root) else throw fail
+      if root.length == 128 && isHex root then
+        pure (({ value := v, leaves, words, wordBits, domain } : Registered.Entry), root)
+      else throw fail
     | _, _, _, _ => throw fail
 
 /-- A record of the log: an object whose `registered`, when truthy, lists objects with a string `value`, `root` and
@@ -414,7 +418,7 @@ def paramsParsed (j : Json) : V Params := do
     pure (some (day, ds))
   let certified ← match field? j "certified" with
     | none => pure #[]
-    | some cj => certifiedOf cj registered
+    | some cj => certifiedOf cj registered supplied
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
@@ -430,9 +434,17 @@ def paramsParsed (j : Json) : V Params := do
       "windows is named in held (or pinned)")
   pure p
 
+/-- Why the sampled audit refuses parameters that name certified entries. -/
+def CERTIFIED_REFUSED : String :=
+  "the parameters name certified entries, which the registration check and the run of record read: the sampled " ++
+  "audit takes none"
+
 /-- The parameters (`paramsParsed`), with every `bernoulli` sampling design refused, at any `p` (`Draw.bernoulli`): the
-sampled audit's soundness statement covers none. -/
+sampled audit's soundness statement covers none. Parameters that name `certified` are refused too
+(`CERTIFIED_REFUSED`): the registration check and the run of record read the entries (`Pieces`), and the audits that
+read their parameters here take none. -/
 def paramsOfJson (j : Json) : V Params := do
+  if (field? j "certified").isSome then throw CERTIFIED_REFUSED
   let p ← paramsParsed j
   if Draw.bernoulli p.verifier.law then throw Draw.BERNOULLI
   return p
