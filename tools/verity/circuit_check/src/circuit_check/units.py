@@ -51,8 +51,9 @@ A run can list the records its catalog rests on (`listing`, ``--records-manifest
 ``CIRCUIT_CHECK_RECORDS_MANIFEST`` names a file): each binding's record, taken or built, by its path in the cache, with the
 read records those entries need.  Every such path ends in the digest of its file's bytes, so a store that carries the files
 to another run's cache under those paths hands it the records, and that run takes each one only as it takes its own.  A
-record is looked for under its key, which holds the process's keyed variables (`cache.key`): a run that takes none of the
-records its cache holds of this version says so and names the variables its own keys hold, never their values (`untaken`).
+record is looked for under its key, which holds the process's keyed variables (`cache.key`): a run whose cache holds
+records of this version and none under its own keys says so and names the variables its keys hold, never their values
+(`untaken`).
 
 A ``--catalog-units`` run that forks its targets' processes (`cli.run` with ``--jobs``) builds its bindings so too: each
 binding whose record doesn't count, and every one when none does or there are none, is built in a process forked for it alone
@@ -1100,13 +1101,14 @@ def write_listing(path: Path, doc: dict) -> None:
 
 
 def untaken(cache: Path | None, entries: list[Entry]) -> dict:
-    """``{"keyed": names}`` when the run took the record of none of ``entries`` though ``cache`` holds a binding's record of
-    this checker's version, under any key; else ``{}``.  The names are those of the variables this process's keys hold
+    """``{"keyed": names}`` when ``cache`` holds a binding's record of this checker's version and none under the key of any
+    of ``entries``, so the run took none; else ``{}``.  The names are those of the variables this process's keys hold
     (`cache.key`'s environment), never their values.  A record is looked for under its key, so a process with one keyed
     variable more or fewer than the one that stored the records, or one set otherwise, finds none of them and builds every
-    binding, and its count of the reused alone says nothing of it.  Asked before the run stores what it built.  An entry
-    it cannot read is listed with the run's unread ones (`cache.unread`)."""
-    if cache is None or not entries or any(e.reused for e in entries):
+    binding, and its count of the reused alone says nothing of it.  Records under its keys that no longer count are not
+    this: the run counts those as skipped.  Asked before the run stores what it built.  An entry it cannot read is listed
+    with the run's unread ones (`cache.unread`)."""
+    if cache is None or not entries or any(e.reused or CC._dir(cache, e.key).is_dir() for e in entries):
         return {}
     k = key(REGISTERED, 0)
     top = Path(cache) / k["version"]
@@ -1124,12 +1126,13 @@ def untaken(cache: Path | None, entries: list[Entry]) -> dict:
 
 
 def untaken_note(stats: dict) -> str:
-    """What a run's line on its bindings says when no record was taken though there were some (`untaken`'s finding in
+    """What a run's line on its bindings says when the cache held records and none under its keys (`untaken`'s finding in
     ``stats``); else nothing."""
     if "keyed" not in stats:
         return ""
-    return ("no record was taken though the cache holds records of this version: one counts only under the same keyed "
-            f"variables, set alike, and this process's are {', '.join(stats['keyed']) or 'none'}")
+    return ("no record was taken though the cache holds records of this version, none under this process's keys: one counts "
+            "only for the same Python, platform and keyed variables, set alike, and this process's variables are "
+            f"{', '.join(stats['keyed']) or 'none'}")
 
 
 def made_entries() -> list[Entry]:

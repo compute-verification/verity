@@ -1337,11 +1337,12 @@ def test_a_run_that_takes_none_of_the_records_there_names_the_variables_its_keys
     """A process with one keyed variable more than the one that stored the records finds none of them under its keys and
     builds every binding: its report and its line then name the variables its keys hold, never what they are set to, and so
     do the session's line and a ``--catalog-units`` run's report, forked or not, which its line on the bindings ends with.
-    A run that takes a record names none, nor does one whose cache held no record."""
+    A run that takes a record names none, nor does one whose cache held no record, nor one that found records under its
+    keys of which none counts any more: those it counts as skipped."""
     root = _tree(tmp_path / "t")
     _bindings(root, *BINDINGS)
-    note = ("no record was taken though the cache holds records of this version: one counts only under the same keyed "
-            "variables, set alike, and this process's are ")
+    note = ("no record was taken though the cache holds records of this version, none under this process's keys: one counts "
+            "only for the same Python, platform and keyed variables, set alike, and this process's variables are ")
     first, line = _records_main(root, tmp_path / "out.json")
     assert len(first["rebuilt"]) == 5 and "keyed" not in first and note not in line
     again, line = _records_main(root, tmp_path / "out.json")
@@ -1381,6 +1382,15 @@ def test_a_run_that_takes_none_of_the_records_there_names_the_variables_its_keys
     assert [ln.partition("; " + note)[2] for ln in lines] == [", ".join(forked["keyed"]), ", ".join(here["keyed"])], lines
     assert not [text for text in (line, json.dumps(other), listed, how, json.dumps([forked, here]), *lines)
                 if "a-value-no-line-shows" in text]
+
+    # records under the process's own keys, each with a read that changed: skipped and built again, and no variable named
+    stale = _tree(tmp_path / "s")
+    _bindings(stale, '(("_set_roots",), setknob)', '(("_knobbed_roots",), knobbed)')
+    assert _records_main(stale, tmp_path / "out.json")[0]["stored"] == 5
+    _edit(stale, "syn/ksize.py", "K = 1", "K = 2")
+    gone, line = _records_main(stale, tmp_path / "out.json")
+    assert gone["reused"] == 0 and len(gone["rebuilt"]) == len(gone["skipped"]) == 5 and "keyed" not in gone, gone
+    assert "(5 of them held a record that did not count), 0 reused, 5 record(s) stored in " in line, line
 
 
 def test_no_key_holds_the_variables_that_say_where_records_are_or_how_a_suite_runs(monkeypatch):
