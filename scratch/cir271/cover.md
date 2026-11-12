@@ -42,7 +42,7 @@ No accepted statement (neither `yes` nor `boolean-version`): 327 templates, 872,
 | `RMSNormFusedCudaVector8_v3` | 1 | 39,681 | none | none | census | none |
 | `DsaLatentRow_v1` | 1 | 22,386 | none | none | census | none |
 | `DsaRMSNorm_v1` | 1 | 22,386 | none | cut | census | none |
-| `SparseMlaSplit_v1` | 287 | 22,386 | none | cut | census | `SparseMlaHeadBlock_v1`, `SparseMlaHeadEnd_v1` (2) |
+| `SparseMlaSplit_v1` | 287 | 22,386 | none | cut | census | `SparseMlaHeadBlock_v1`, `SparseMlaHeadEnd_v1`, `SparseMlaSplitEnd_v1` (3) |
 | `MoeSum_v1` | 1 | 21,525 | none | cut | moe-sum | `MoeSum_v1` (1) |
 | `ResidualAdd_v1` | 1 | 21,525 | other-binding | cut | census | none |
 | `CublasSplitKGemmF32Out_v1` | 1 | 19,200 | other-binding | cut | census | none |

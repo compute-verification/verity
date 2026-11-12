@@ -41,9 +41,12 @@ def verdict_of(word: str, def_id: str | None) -> tuple[str, str | None, str | No
         v = {"accepted": "yes" if a["definition"] == def_id else "boolean-version", "refused": "refused"}.get(a["verdict"], "no-verdict")
         if RANK[v] > RANK[best[0]]:
             best = (v, a["definition"] if v != "yes" else None, a["run"])
-    if word in audit_ids and RANK["yes"] > RANK[best[0]]:
-        best = ("yes", None, AUDIT_RUN)
-    return (*best, [f"{a['run']}/{a['tag']}: {a['verdict']} at {a['definition']}" for a in hits])
+    said = [f"{a['run']}/{a['tag']}: {a['verdict']} at {a['definition']}" for a in hits]
+    if word in audit_ids:
+        said.append(f"{AUDIT_RUN}: accepted at {word} (the audit of record's rank 0, its Lean verdicts)")
+        if RANK["yes"] > RANK[best[0]]:
+            best = ("yes", None, AUDIT_RUN)
+    return (*best, said)
 
 
 def staged_name(tid: str) -> str | None:
