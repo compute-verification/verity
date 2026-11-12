@@ -3,10 +3,11 @@
 # staged once (benchmarks/served_units/stage.py, two units), then its unit walked over WALK_SLOTS seeded slots at each
 # width (FC_UNIT_WIDE: lane groups of 64 slots a pass) and each distance it asks the cache for a row ahead of reading it
 # (FC_UNIT_AHEAD, column indices; 0: never) on each pool size, WALK_REPS rounds, first with every walk mapping its own row
-# vectors and then with them kept between walks (FC_UNIT_KEEP), on the device prover's small pages, one type at a time
-# after every stage has finished. The guard: every WALK line's `same`, each walk's packed words the first run's (rc 9 if
-# not). The CPU seconds a slot at width 1 and distance 0 with no vector kept are the baseline; a wider pass's, a walk's
-# that asks ahead and a walk's on kept vectors are what each buys (`sys_s`: the seconds of them spent in the kernel).
+# vectors, then with them kept between walks (FC_UNIT_KEEP) on the prover's small pages, then kept on huge pages, the
+# rest of the walk on the device prover's small pages, one type at a time after every stage has finished. The guard:
+# every WALK line's `same`, each walk's packed words the first run's (rc 9 if not). The CPU seconds a slot at width 1 and
+# distance 0 with no vector kept are the baseline; a wider pass's, a walk's that asks ahead and a walk's on kept vectors
+# are what each buys (`sys_s`: the seconds of them spent in the kernel).
 # Run from the verity tree (a job run from a clone of it):
 #   bash benchmarks/unit_walk/run.sh WALK_UNITS="gq:K=2048 fp8-coord:K=6144" WALK_SLOTS=2048 WALK_THREADS=16,4
 # env: WALK_UNITS="gq:K=2048" (stage.py's TYPE[:S=V,...], space-separated)  WALK_SLOTS=2048  WALK_WIDE=1,8,4,2

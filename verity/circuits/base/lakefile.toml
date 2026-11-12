@@ -1,0 +1,13 @@
+# Bytes, hashes and parsing as executable Lean, the code every other Lean package of the tree reads: the fields
+# (`Field`), byte encodings and a total reader (`Bytes`), SHA-256, SHA-512 and BLAKE3 (`Hash`), canonical JSON
+# (`Canon`), the total JSON parser (`JsonParse`) and what recursion over its values terminates by (`Sizes`), and a
+# tree's depth and padded width (`Pow2`). Lean core only. The declarations keep the namespace `Flock`.
+name = "core_base"
+defaultTargets = ["Base"]
+
+[leanOptions]
+autoImplicit = false
+backward.proofsInPublic = true
+
+[[lean_lib]]
+name = "Base"

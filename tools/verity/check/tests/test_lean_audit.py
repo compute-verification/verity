@@ -15,7 +15,9 @@ import signal
 import subprocess
 import sys
 import tarfile
+import threading
 import types
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -1044,6 +1046,23 @@ def test_a_module_a_build_compiled_and_the_cache_could_not_index_is_recorded_und
         "P.B's compile was stopped: the next run's repair has it compiled again, and nothing is recorded of it"
 
 
+def test_a_module_indexable_refuses_is_recorded_with_its_words_though_no_module_loads_it(tmp_path):
+    """A build `indexable` refuses is compiled again by every build that finds no record of it, and `P`, the top of its
+    build, is loaded by no module `put` indexes. It is recorded under its key with `indexable`'s words all the same, and
+    the log counts and names it; a refused module Lake didn't say it built (`"compiled"`) is not recorded."""
+    pkg = _package(tmp_path)
+    setup = pkg / ".lake/build/ir/P.setup.json"
+    setup.write_text(json.dumps(json.loads(setup.read_text()) | {"importArts": {}}))
+    store, said, keys = tmp_path / "store", [], _keys(pkg)
+    assert LA.LakeArtifacts(store).put({pkg: SANDBOXED | {"compiled": ["P.A", "P.B"]}}, log=said.append) == 2
+    assert not (store / LA.MK.UNSTORED).exists() and said == []
+    assert LA.LakeArtifacts(store).put({pkg: SANDBOXED}, log=said.append) == 0
+    why = "Lake imports [] and not ['P.A', 'P.B'] of the workspace"
+    assert json.loads((store / LA.MK.UNSTORED / Path(keys["P"]).name).read_text())["why"] == why
+    assert said == [f"lean-audit: {pkg}: 1 modules this run compiled can't be indexed (`indexable`), 1 recorded under "
+                    f"their keys: P: {why}"]
+
+
 def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
     """Where `unshare` is missing, check.py builds without the sandbox, and compile-time code runs as the user: it could
     leave in the build any outputs, traces and `setup.json` it chose, which `put` would index under a module's key for
@@ -1113,7 +1132,7 @@ def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
     arts = LA.LakeArtifacts(tmp / "node-a")
     arts.put({pkg: SANDBOXED})
     dest = tmp / "lean-artifacts.tar.gz"
-    assert arts.bundle(dest) == len(arts.added) > 0
+    assert arts.bundle(dest) == (len(arts.added), len(arts.added)) and arts.added
     return dest, hashlib.sha256(dest.read_bytes()).hexdigest()
 
 
@@ -1150,8 +1169,107 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     j = hashlib.sha256(junk.read_bytes()).hexdigest()
     seen = len(logged)
     assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0 and "could not be unpacked" in logged[seen]
-    assert b.take({LA.SHARED + j: junk.as_uri(), LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0
-    assert len(logged) == seen + 2                         # bytes that failed once are never fetched again
+    assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0
+    assert len(logged) == seen + 2                         # the bytes named, which can't be unpacked: never fetched again
+
+
+def test_a_bundle_whose_download_gave_other_bytes_than_those_named_is_fetched_again_by_a_later_run(tmp_path, monkeypatch):
+    """A response that ends before its length does so without an error, and what arrived has another sha256 than the one
+    named. Such a bundle was marked taken, so the node never fetched it again and built its modules for as long as the
+    launcher listed it. Nothing tells those bytes from a bundle that is wrong where it is kept, so neither is marked: only
+    bytes that are the ones named are. A chunked response that ends early raises an error that is no `OSError`, which
+    ended the take and the bundles after it."""
+    pkg = _package(tmp_path)
+    dest, h = _bundle_of(tmp_path, pkg)
+    data, asked = dest.read_bytes(), []
+
+    class Short(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            asked.append(self.path)
+            self.send_response(200)
+            if self.path == "/chunked":
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.write(f"{len(data):x}\r\n".encode() + data[:len(data) // 2])
+            else:
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data[:len(data) // 2] if asked.count(self.path) == 1 else data)
+
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    srv = HTTPServer(("127.0.0.1", 0), Short)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        at = f"http://127.0.0.1:{srv.server_address[1]}"
+        b, logged = LA.LakeArtifacts(tmp_path / "node-b"), []
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 0 and "is not the one named" in logged[0]
+        assert not list((tmp_path / "node-b").glob("taken-*/*")), "not marked taken: a later run fetches it again"
+        assert not list((tmp_path / "node-b").glob(".*.part"))
+        assert b.take({LA.SHARED + h: at + "/chunked"}, logged.append) == 0 and "could not be fetched (IncompleteRead)" in logged[2]
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 3, "the next run fetches it whole and takes it"
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 0 and asked == ["/bundle", "/chunked", "/bundle"]
+        other = LA.LakeArtifacts(tmp_path / "node-c")
+        for _ in range(2):
+            assert other.take({LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0 and "is not the one named" in logged[-2]
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_takes_and_another_node_takes_them_all(tmp_path):
+    """A bundle has a largest size, since a larger file of a run uploads without resume, and a cold build of a large
+    package adds more than that: what was past it was in no bundle, and every other node compiled it again. So a run
+    writes as many bundles as its additions take, none larger than that and each whole in itself (its entries, and every
+    artifact they name), the entries added first in the first; a node that takes them all restores every module. An
+    entry that is larger than a bundle alone is in none, and those after it still travel."""
+    pkg = _package(tmp_path)
+    entries = _keys(pkg)
+    a = tmp_path / "node-a"
+    arts = LA.LakeArtifacts(a)
+    arts.put({pkg: SANDBOXED})
+    assert [e for e, _ in arts.added] == [entries[m] for m in ("P.A", "P.B", "P")]
+    sizes = [(a / e).stat().st_size + sum((a / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
+    room = sizes[0] + sizes[1]
+    assert max(sizes) <= room < sum(sizes), "room for the first two, not for all three"
+    out = tmp_path / "out"
+    out.mkdir()
+    dests, n = arts.bundle_into(out, room)
+    assert [d.name for d in dests] == ["lean-artifacts.tar.gz", "lean-artifacts-2.tar.gz"] and n == 3
+    assert all(LA.BUNDLE_FILE.fullmatch(f"lean-audit/{d.name}") for d in dests), "the names the launcher lists"
+    held = []
+    for d in dests:
+        with tarfile.open(d) as t:
+            members = t.getmembers()
+            mine = [json.loads(t.extractfile(m).read()) for m in members if m.name.startswith("keys/")]
+        assert sum(m.size for m in members) <= room, "no bundle holds more"
+        assert [m.name.split("/")[0] for m in members] == ["keys"] * len(mine) + ["artifacts"] * (3 * len(mine))
+        assert {m.name for m in members if m.name.startswith("artifacts/")} == {f"artifacts/{o}" for e in mine for o in e["digests"]}
+        held.append([e["module"] for e in mine])
+    assert held == [["P.A", "P.B"], ["P"]]
+    urls = {LA.SHARED + hashlib.sha256(d.read_bytes()).hexdigest(): d.as_uri() for d in dests}
+    b, said = LA.LakeArtifacts(tmp_path / "node-b"), []
+    assert b.take(urls, said.append) == 3 and "taken from 2 of 2 artifact bundle(s)" in said[0]
+    hashes = {m: hashlib.sha256(m.replace(".", "/").encode()).hexdigest()[:16] for m in entries}
+    assert LA.MK.stage(tmp_path / "node-b", pkg, [], tmp_path / "cache-b")[0] == {("p", hashes[m]): m for m in entries}, \
+        "every module the run added is restored on another node's tree"
+    c = LA.LakeArtifacts(tmp_path / "node-c")
+    assert c.take(dict(list(urls.items())[:1]), lambda s: None) == 2
+    assert sorted(LA.MK.stage(tmp_path / "node-c", pkg, [], tmp_path / "cache-c")[0].values()) == ["P.A", "P.B"], \
+        "the first bundle alone restores what it holds"
+    again = LA.LakeArtifacts(a)
+    again.added = arts.added[2:]
+    dests, n = again.bundle_into(out, room)
+    assert [d.name for d in dests] == ["lean-artifacts-3.tar.gz"] and n == 1, "a later audit of the run: the next free name"
+    assert LA.bundled(dests, n, 1) == "1 of the 1 module version(s) it added bundled for other nodes (lean-artifacts-3.tar.gz)"
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    dests, n = arts.bundle_into(alone, sizes[2] - 1)
+    assert sizes[0] < sizes[1] < sizes[2] and (len(dests), n) == (2, 2), "P alone is more than such a bundle holds; P.A and P.B travel"
+    assert LA.bundled(dests, n, 3).endswith("; 1 in none: gone from the cache since, or more than a bundle holds")
+    assert arts.bundle_into(alone, 1) == ([], 0) and len(list(alone.iterdir())) == 2, "nothing fits: no file"
 
 
 def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
@@ -1248,6 +1366,11 @@ def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path, monkeyp
         listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
     assert LA.shared_bundles(store) == ["c" * 64, "a" * 64, "d" * 64]
     assert LA.shared_bundles(store, limit=1) == ["c" * 64]
+    assert LA.shared_bundles(store, limit=2) == ["c" * 64, "a" * 64, "d" * 64], "runs are counted: every bundle of the second"
+    runs["r0"] = [("lean-audit/lean-artifacts-10.tar.gz", "3" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "2" * 64, True),
+                  ("lean-audit/lean-artifacts.tar.gz", "1" * 64, True)]
+    assert LA.shared_bundles(store)[3:] == ["1" * 64, "2" * 64, "3" * 64], "a run's in the order it wrote them, however listed"
+    del runs["r0"]
     refreshed: list[dict] = []
     store.remote, store.refresh = object(), lambda **kw: refreshed.append(kw)
     monkeypatch.setattr(LA.COMMON, "recent", lambda now: f"r-since-{now > 1.7e9}")
@@ -1461,7 +1584,7 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
         return 1
 
     monkeypatch.setattr(LA.LakeArtifacts, "put", put)
-    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, cap=0: dest.write_bytes(b"") or 1)
+    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, *at: (dest.write_bytes(b"") or 1, 1))
     for n, bundle in enumerate((False, True)):
         shutil.rmtree(tmp_path / "cache", ignore_errors=True)
         assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",

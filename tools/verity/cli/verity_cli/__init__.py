@@ -14,8 +14,9 @@
                                     the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
     verity tasks run ID [--out FILE]
                                     run one task here as check runs it, and print its verdict, outputs, seconds and key
-    verity graph [--json] [--family F]
+    verity graph [--json [--packed]] [--family F]
                                     the fine-grained check's task graph of this checkout (`verity-graph/v2`, graph/README.md)
+    verity graph unpack [FILE]      the graph/v2 a packed listing (`--packed`) packs
     verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor

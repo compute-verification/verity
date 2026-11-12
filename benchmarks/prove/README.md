@@ -9,8 +9,10 @@ the store, with no GPU and no node.
 verity bench prove --system flock --workload glm53                  every block proved
 verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the workload's sampling plan of record
     [--provers N]                                                   the prover count each type is priced at (default 1)
+    [--cores N]                                                     the host's CPU cores a card each type is priced at (default 10)
     [--rows N]                                                      the N costliest block types, the rest in one row
     [--json]                                                        the table as JSON, every row whole
+    [--steady-rows FILE]                                            also write the steady-state rows the planner reads
     [--local-only]                                                  this machine's catalog alone, not the store's remote
 ```
 
@@ -26,6 +28,14 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
   measure it, so its figure doesn't depend on which counts were run or in what order. Among those rows it takes the
   fullest statement's, then the newest run's. A row at N provers that didn't stand is named on its type's row with
   its reason, and so are the other counts that measured the type.
+- **A type is priced at a stated count of host CPU cores a card**, `--cores N`: the cores a card's provers hold on
+  the host the table prices for, 10 by default, node A's share (the cores its provider gives a card). A type whose
+  proving is bound by the host costs more GPU-seconds a statement at fewer cores, so among the rows at the stated
+  prover count only those timed at N cores price a type, by the same order. A type those rows measured only at more
+  cores is priced from the ones at the fewest cores above N, and its row says so ("timed at 24 cores, above the
+  host's 10"). A row timed at fewer cores than N prices nothing, since the host's share is the least a prover holds:
+  it is named on its type's row, like a row at another prover count. The family's rule takes the rows chosen this
+  way.
 - **The totals:** the prover GPU-seconds per served token, the tokens a prover GPU covers per second, and the prover
   GPUs a serving GPU needs, each with its range, whose other end prices every type not measured at steady state at the
   steady-state types' median seconds a witness bit. A total is called measured only when every block type is measured
@@ -34,6 +44,9 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
   share of the proving time). Otherwise a total is modeled. The verifier's seconds and the proof's bytes are given
   where a record holds them, and "not measured" where none does. The served MACs the census holds in no proof block
   are in no figure, and the totals give their share.
+- **The share of the proving time that rests on rows timed above the host's cores:** the types priced from a row
+  timed at more than `--cores` cores, their own or their family's, with the cores those rows were timed at. On a
+  host of the stated cores those types' figures are not measured.
 - **Under a sampling plan that states its own prices, both totals.** A plan's sample is sized by its planner at the
   planner's price of each block, which the plan's record may state (`prove_s` a cell: its seconds for the blocks the
   cell takes). The table prices the same blocks from its own sources, so the two totals differ wherever those prices
@@ -42,11 +55,16 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
   difference. The plan's prices are its record's: they are no measurement the table reads, and they hold whatever its
   planner counts in a block's price. A plan that prices only some of its cells is refused.
 - **The share of the proving time each source covers.**
-- **The steady-state rows it didn't read,** under "Unread": a row of record whose staged Definition is no block type
+- **The steady-state rows it didn't read,** under "Unread": a labelled row whose staged Definition is no block type
   of the census under its cut, at any prover count. Each is named with what holds it, the type and Definition it
   staged, and its own ms per block where it is a steady-state measurement, else why it isn't one. It is on no row and
   in no figure, the range's other end included: a census that no longer holds a type leaves its measurements listed,
   not dropped.
+- **The steady-state rows as the break-even planner reads them,** in `--steady-rows FILE`: a row for each block type
+  its own steady-state row measures at the stated provers and cores, by its census name, with the statement's
+  GPU-seconds and blocks that row timed, its provers, their cores and the run or art that holds it (`prove.steady_rows`;
+  `benchmarks/spot_figures/breakeven`'s `--steady FILE`). A type priced from its family's row, a single session or the
+  k_log model gets no row: it is no measurement of that type.
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.
 
@@ -86,17 +104,41 @@ rows, one a staged type and prover count. The command reads, by the script's nam
 | `stage.definition`, `stage.k_log` | the staged Definition's id, matched to the census's block types, and log2 of a block's witness bits |
 | `stage.blocks`, `stage.full` | the blocks in the statement proved, and in the type's full statement |
 | `provers`, `gpus` | the provers that proved it, and the GPUs they held |
+| `cores` | the CPU cores its provers held for its card: a count, or a mapping whose `count` is one (optional: see below) |
 | `statements_per_s` | statements a second over the steady window |
-| `warm`, `sessions`, `accepted`, `refused_n` | the warm sessions a prover and the timed sessions, those accepted and those refused |
+| `warm`, `sessions`, `accepted`, `refused_n`, `unfiled` | the warm sessions a prover and the timed sessions, those accepted, those refused and those their verifier never filed |
 | `exits`, `void` | each process's exit code, and why the row has no rate (only on a row that has none) |
 | `flat` | whether the statement cache's hit rate was flat |
+| `throttled.nr_throttled` | the times its CPUs were throttled while it ran |
+| `warm_per_prover`, `idle_provers` | each prover's warm sessions, and the provers that filed no session in the window |
 | `verify_s` | the verifier's seconds a statement (optional: "not measured" without it) |
 
-A statement's GPU-seconds are `gpus / statements_per_s`, and a block's ms are that over `stage.blocks`, times 1000. A
-row is a steady-state measurement when every session it ran was accepted (`accepted` is `provers` times `warm` plus
-`sessions`), none was refused, it isn't void, every exit is 0 and `flat` is true. One that isn't, or that lacks a
-field, prices nothing and is named with its reason (the field, by name) on its block type's row. A row with no
-`stage.definition`, one that failed or was skipped, is listed under "Refused".
+A statement's GPU-seconds are `gpus / statements_per_s`, and a block's ms are that over `stage.blocks`, times 1000.
+
+A row is a steady-state measurement when it passes six checks of the proof server's steady-state rules, the
+harness's `verity_bench.steady`, which the command calls and never restates:
+
+- **`accepted`:** every session it ran was accepted (`accepted` is `provers` times `warm` plus `sessions`), none was
+  refused and each was filed by its verifier.
+- **`exits`:** every process exited 0.
+- **`not_void`:** it has a rate: no `void`, `error` or `skipped`, and a finite `statements_per_s` above 0.
+- **`flat`:** `flat` is true.
+- **`no_throttling`:** its CPUs were never throttled (`throttled.nr_throttled` is 0).
+- **`every_prover_warmed`:** each of its provers finished a warm session before the timed ones (`warm_per_prover`),
+  and none filed no session in the window (`idle_provers` is 0).
+
+Only a pass counts. A row that fails a check, or whose fields can't show it ("cannot tell": a field it lacks, a count
+that isn't one), prices nothing, as does one that lacks a field its price needs. It is named on its block type's row
+with each check it didn't pass, the check's answer and its reason, as `` `flat` (cannot tell): its row lacks `flat` ``.
+The rules' four other checks are no condition of a row's price here: three read the run's other files (the lease and
+the card, the card at its start and end, a level window), and `one_numa_node` reads `cores.numa_nodes`, which a row
+may lack. A row with no `stage.definition`, one that failed or was skipped, is listed under "Refused".
+
+A row's cores are the CPU cores its provers held for its card. A row states them as `cores`: the count, or a mapping
+that holds it as `count` beside what else it says of them (their list, their NUMA nodes). A run's row that states
+none takes its run's, the `cpus_used` of the run's `out/host.json`, where the run holds that file and it states a
+count. Any other row that states none, an art's or a run's without the file, is read as timed at 24 cores, and so is
+every staged type of a proof server report. A row whose `cores` is anything else is not a steady-state measurement.
 
 A run's rows completed or corrected after the run go in an art that holds them as `rate.json`, the same list of rows,
 with the run in its meta's `runs`. Labelled, the art gives those rows in place of the run's own: they are ordered as
