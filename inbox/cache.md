@@ -475,3 +475,74 @@ the draft to reuse its first step's indexer top-k (`index_share_for_mtp_iteratio
 
 **Runs.** `r20261112-033048-7551` is done and preserved. `r20261112-032526-949b`, its duplicate, I cancelled
 before it started. Nothing of mine is running or queued.
+
+## Entry 7 and final, 04:20Z: your 04:06Z section; what differs at `v0.34.0rc1`; vllm's (a) and (b); two corrections to my entry 5
+
+Entry 6 is no longer my last. The note holds all of this in "At the build `v0.34.0rc1`" (notes commit named at
+the end). No tree code changed. Nothing of mine is running.
+
+**Two corrections to entry 5, found by reading the new build.**
+- **The draft is an argmax by default, at both builds.** I wrote that the draft samples with the request's seed
+  and hands its logits to the accept rule. That is `draft_sample_method` "probabilistic". The default is "greedy":
+  the draft token is the draft's argmax and counts as one-hot in the test (`vllm/config/speculative.py:682-688`
+  at `v0.34.0rc1`, `:588` at the pin) [read].
+- **An FP8 row is not half.** Under `fp8_ds_mla` it is 656 bytes a layer against 1,152 [relayed from vllm's
+  reader], so 53,940 B a token in place of 92,628, not 46,314 [arithmetic].
+
+**What I rest on in vLLM, read again at `v0.34.0rc1` (`52aeb5806585`)** [read at the lines named, none run]:
+- **Same:** `cache_salt` enters the first block's hash (`vllm/v1/core/kv_cache_utils.py:655-665`). The standard
+  accept test: `u = tl_rand32(seed, pos)`, accept when `log p(x) > log u + log q(x)`
+  (`rejection_sampler_utils.py:616, 714-716`). The MTP speculator's reuse of the indexer's top-k, moved to
+  `spec_decode/mtp/speculator.py:27-34`. A step padded to its rejected positions
+  (`spec_decode/target_dependent_ar/speculator.py:144-145`).
+- **Differs:** a block's key now covers the tokens after it that the drafter reads
+  (`vllm/v1/core/block_pool.py:124, 335-343`), your fact 4. My AgentX ratio of 45 is by the pin's rule; one block
+  in a mean prompt of 219,000 tokens moves it under 1% [arithmetic].
+- **Differs:** a fourth accept method, "fly", lossy (`speculative.py:98, 610-617`). Refuse it and "synthetic".
+- **Differs, and not in your seven:** the pin refuses adaptive verification unless the method is "dspark"
+  (`speculative.py:1519` there). At the new build I did not find that refusal, and the class MTP extends takes the
+  flag (`target_dependent_ar/speculator.py:51`). It is off by default. Under it the count verified depends on
+  confidences and measured step times, so the admitted profile must set it off.
+- **Not read by me at the new build:** the scheduler, the FP8 write, the sampler's noise, `trace_replay.py`
+  beyond its kernel's signature. Your facts 1, 2, 3 and 5 I rest on as relayed.
+
+**(a) Does the request's block compute the accept test, so the kept count is derived?**
+- [design; rule read at both builds; not built for sampling] Yes. The count is then a value and no advice.
+- [design] What the block is given: the request's seed, temperature and top-p, as ports of round 1's record
+  (case 1 of your ruling). The draft tokens are wires (case 2), because the draft layer's rows are in the block.
+  Under the default no draft probabilities are needed at all. Under "probabilistic" the draft's logits row is a
+  wire too; it is never a port.
+- [arithmetic] A draft token given and not computed would be the prover's choice: 17.2 bits each.
+- [design] Not at all K slots. A slot's test reads the target's row of the token before it, which is kept. The
+  block needs the tests up to and including the first rejection and the target's rows of kept tokens only. The
+  tree's greedy `VerifyBranch_v1` computes all K + 1, "rejected slots included"
+  (`verity/definitions/registry/spec.py`).
+- [my arithmetic from GLM-5.3's config, products of the linear layers only; AND gates not computed] Cost a
+  decode row: the test is one log-sum-exp over the processed logits, one log and one compare, under one token
+  select in the census's work model, and an accepted token needs no Gumbel select. The draft is the cost: about
+  two draft-layer rows a kept token (2.6%) and one more unembedding and argmax (9.5e8 products, about 3%).
+  Together 5 to 6% a decode row; 1.3% a computed prompt token.
+- [unread] The token select's and the draft layer's AND counts, so I give no gate figure.
+
+**(b) The step record's counts: registered, or charged?**
+- [fact 5 relayed; the rest design] Two counts. The kept count is derived, (a). The scheduled count, how many
+  draft tokens the scheduler gave a row in a step, is the server's choice and reaches the tokens.
+- [design] A one-request replay needs its own scheduled count, not its batch-mates'. It is a shape: it chooses
+  the step's Program. Round 1's record fixes it before the first coin; nothing about it is given at replay.
+- [design, from the output-accounting rule] Registered and charged are not alternatives. Round 1's record makes
+  the input sound, which is what your ruling decides. A choice of the server that reaches the tokens is still
+  charged unless a block or the registered compiler computes it. So: in round 1's step record, and advice at its
+  coded length.
+- [arithmetic] Raw, log2(6) = 2.58 bits a row a step at five draft tokens. Coded against vLLM's rule, 0 where the
+  rule predicts it: the count is K unless the token budget, the context limit or `max_tokens` cuts it.
+- [design] The route: the advice code computes the scheduled count from the registered scheduler rule and codes
+  only departures, as it derives hits today. That needs each step's kept count in the step record as a shape,
+  checked equal to the block's computed count, which is the form the tree has for greedy (`ServeSpec_v1`'s
+  schedule `A`, "an equality obligation of the record"). A false count is then a wrong block.
+- [design] Why this one: it is 0 bits where vLLM follows its rule, it reuses a form on `main`, and it keeps the
+  target's rows to kept tokens. Its price: a step's kept count becomes public structure, as step shapes are
+  today (`adapters/vllm/verity_vllm/pipeline/boundary_rows.py:18`). The private way, K + 1 slots every step with
+  positions as values, costs up to (K + 1) / (kept + 1) times the target's rows [arithmetic].
+- [unread] The scheduler's rule at the new build, and `advice_code/replay.py`.
+
+**Unchanged by the new build:** the line for 07:00Z in entries 5 and 6, the two counts, and every figure in GB.
