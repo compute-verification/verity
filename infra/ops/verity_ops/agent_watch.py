@@ -48,9 +48,16 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   not counted and never relaunched, until it comes back; and once `RING_MIN` have been down `RING_DOWN_S`, an **outage**
   record (the relay posts it to the top coordinator and the registry's human) is written, again every `RING_EVERY_S` while it lasts. A sweep the API
   refuses with 429 waits its Retry-After (`rate_wait`) rather than asking again every minute.
-- **dropped** when an IDLE agent's `updatedAt` is `DROPPED_S` past the end of its latest run, which FINISHED, and no newer
-  run exists: a message reached it and never became a run. Cursor shows such an agent in ERROR while the API's latest run
-  reads FINISHED, so the restart above never sees it. Recorded once per `updatedAt`, rung to its owner.
+- **dropped** when an agent out of a turn (IDLE, or ERROR where the platform says so: the record's `status` is what it
+  reported at that sweep) changed (`updatedAt`) `DROPPED_S` past the end of its latest run, which FINISHED, with no newer
+  run, has sat unchanged `DROPPED_S` since, and its conversation ends on a message it wrote nothing after (`unanswered`):
+  a message reached it and became neither a run nor a turn. Its latest run reads FINISHED, so the restart above never
+  sees it. The times alone don't say so: a turn a Task resume runs is no run the API lists, and its end moves `updatedAt`
+  the same way, so the conversation tells the two apart, whoever resumed the agent and whether or not the watch saw the
+  call: a turn that ran left assistant text after its message. It is read once per such change and only then; one the
+  API won't read, or with no message in it, is read again every `DROPPED_RETRY_S` and recorded after `DROPPED_UNREAD_S`
+  all the same, with `unread_minutes` in place of the record's `unanswered`, the relay saying its answer is unchecked.
+  Recorded once per `updatedAt`, rung to its owner.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
 cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: runs sit in CREATING behind a
@@ -198,8 +205,8 @@ sweep that fails leaves the last one. With `$AGENT_WATCH_PG_URL` set, the same b
 overwriting, into Neon's `store_private.agent_watch_status` (`Publisher`, through `psql`; the newest `STATUS_ROWS` kept), for
 readers off the pod. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
 deploy): when it last cancelled or restarted each agent, and recorded it ready to wake, the restart counts, the continue runs still to start, the runs
-already recorded, the turn each coordinator is in and since when, each silent spell's rings, and the assistant text last
-read in a coordinator's conversation. `watch.lock` beside it keeps a second watch from running. The control pod holds no
+already recorded, the turn each coordinator is in and since when, each silent spell's rings, the assistant text last
+read in a coordinator's conversation, and since when a conversation `dropped` asked for has gone unread. `watch.lock` beside it keeps a second watch from running. The control pod holds no
 Slack credential, so infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
 `--once --dry-run` runs one sweep that follows no stream and sends no POST (each is printed).
 """
@@ -259,7 +266,11 @@ RING_EVERY_S = 3600         # ... again this often while it lasts
 RATE_WAIT_S = (120, 900)    # a sweep refused with 429 waits Retry-After, else from the first, doubling, to the second
 UNREADABLE_S = 3600         # a latest run the API won't read this long is recorded again, for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
-DROPPED_S = 5 * 60          # an IDLE agent changed this long after its latest run ended, with none newer, was dropped
+DROPPED_S = 5 * 60          # an agent out of a turn that changed this long after its latest run ended, with none newer, and
+                            # has sat unchanged as long since, is dropped if its conversation ends on a message it never answered
+DROPPED_STATUSES = ("IDLE", "ERROR")    # ... out of a turn, as the platform reports the agent
+DROPPED_RETRY_S = 10 * 60   # ... a conversation the API won't read is read again this often,
+DROPPED_UNREAD_S = 60 * 60  # and one unread this long is recorded all the same, its answer unchecked
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
 RUNS_PAGES = 10             # (an agent can have 52 runs cancelled on arrival in 50 min), or, before a CREATING run is
 #                             recorded as stuck, to one the watch can follow; at most this many pages
@@ -627,6 +638,17 @@ def reported(text: str) -> bool:
     (`REPORT_RE`)."""
     s = text.strip()
     return bool(s) and ("\n" in s or s.endswith("?") or bool(re.search(r"\bDONE\b", s) or REPORT_RE.search(s)))
+
+
+def unanswered(msgs: list[dict]) -> bool | None:
+    """Whether a conversation ends on a message its agent wrote nothing after: of its user messages and its assistant
+    texts, the last is a user's. None for a conversation with neither, which says nothing either way."""
+    for m in reversed(msgs):
+        if m.get("type") == "user_message":
+            return True
+        if m.get("type") == "assistant_message" and str(m.get("text") or "").strip():
+            return False
+    return None
 
 
 def mid_step(text: str) -> bool:
@@ -1046,6 +1068,8 @@ class Watch:
         self.left: set[str] = set(s.get("left", []))              # agents past MAX_RESTARTS, recorded once
         self.pending: dict[str, dict] = s.get("pending", {})      # agent -> a continue run the API refused, tried again
         self.done: dict[str, float] = s.get("done", {})           # runs judged once (ERROR, stuck, unreadable) -> when
+        # a change `dropped` is to judge (its `done` key) whose conversation went unread -> [since when, the last try]
+        self.conv_unread: dict[str, list[float]] = s.get("conv_unread", {})
         self.woken: dict[str, float] = s.get("woken", {})         # agent -> when the watch last recorded it ready to wake
         self.workers: dict[str, dict] = s.get("workers", {})      # worker -> lane, handle, parent, by, status, updated, ...
         # coordinator in a turn -> {"run": the turn's run, "since": when the watch first saw it RUNNING}
@@ -1072,6 +1096,7 @@ class Watch:
     def save(self) -> None:
         t = self.clock()
         self.done = {k: v for k, v in self.done.items() if v >= t - 2 * 86400}
+        self.conv_unread = {k: v for k, v in self.conv_unread.items() if v[1] >= t - 2 * 86400}
         self.woken = {k: v for k, v in self.woken.items() if v >= t - RECANCEL_S}
         self.relaunched = {k: v for k, v in self.relaunched.items() if v >= t - 2 * 86400}
         with self.kids_lock:
@@ -1080,6 +1105,7 @@ class Watch:
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"freed": self.freed, "errors": self.errors, "left": sorted(self.left),
                                    "pending": self.pending, "done": self.done, "woken": self.woken,
+                                   "conv_unread": self.conv_unread,
                                    "workers": self.workers, "active": self.active, "silent": self.silent,
                                    "texts": self.texts, "blind": self.blind,
                                    "awaiting": self.awaiting, "relaunched": self.relaunched, "owners": self.owners,
@@ -1550,13 +1576,35 @@ class Watch:
             self.save()
 
     def dropped(self, a: dict, last: dict | None, t: float, **detail) -> None:
-        """Record `a` **dropped**, once per `updatedAt`, when it is IDLE and moved `DROPPED_S` past the end of its latest run
-        ``last``, which FINISHED: a message reached it and never became a run."""
-        if (a.get("status") == "IDLE" and last and last.get("status") == "FINISHED"
+        """Record `a` **dropped**, once per `updatedAt`: out of a turn (`DROPPED_STATUSES`), changed `DROPPED_S` past the end
+        of its latest run ``last``, which FINISHED, unchanged `DROPPED_S` since, and its conversation ending on a message it
+        wrote nothing after (`unanswered`). The conversation is read once it is so, and never before: a turn a Task resume
+        ran is no run the API lists and moves `updatedAt` as a dropped message does, and only its text tells them apart. One
+        the API won't read, or that holds no message, is read again every `DROPPED_RETRY_S`, and after `DROPPED_UNREAD_S`
+        the agent is recorded all the same, with `unread_minutes` where the record otherwise says `unanswered`. Its
+        `status` is the platform's as this sweep read it."""
+        if not (a.get("status") in DROPPED_STATUSES and last and last.get("status") == "FINISHED"
                 and (moved := epoch(a.get("updatedAt"))) is not None and (ended := epoch(last.get("updatedAt"))) is not None
-                and moved - ended >= DROPPED_S and self.once(f"dropped:{a['id']}:{a.get('updatedAt')}", t)):
-            self.record("dropped", Run(a["id"], str(last.get("id") or ""), a.get("name") or ""), status="IDLE",
-                        since=iso(moved), ended=iso(ended), **detail, **self.owned(a["id"]))
+                and moved - ended >= DROPPED_S and t - moved >= DROPPED_S):
+            return
+        key = f"dropped:{a['id']}:{a.get('updatedAt')}"
+        since, tried = self.conv_unread.get(key) or (t, None)
+        if key in self.done or (tried is not None and t - tried < DROPPED_RETRY_S):
+            return
+        msgs = self.conversation(a["id"])
+        if (left := None if msgs is None else unanswered(msgs)) is None and t - since < DROPPED_UNREAD_S:
+            self.conv_unread[key] = [since, t]
+            self.save()
+            return
+        self.conv_unread.pop(key, None)
+        self.once(key, t)
+        if left is False:
+            print(f"{iso(t)} {a['id']} changed at {iso(moved)} with no run after the one that ended at {iso(ended)}: its "
+                  "conversation ends with its own text, so a turn the API lists no run for ran", file=sys.stderr, flush=True)
+            return
+        self.record("dropped", Run(a["id"], str(last.get("id") or ""), a.get("name") or ""), status=a["status"],
+                    since=iso(moved), ended=iso(ended), **detail, **self.owned(a["id"]),
+                    **({"unread_minutes": int((t - since) // 60)} if left is None else {"unanswered": True}))
 
     def read(self, a: dict, run: str) -> dict | None:
         """The run's record (a terminal one is read once); None, and recorded once, when the API won't read it."""
@@ -1716,9 +1764,9 @@ class Watch:
             elif status == "ARCHIVED":
                 w["gone"] = True
             # a Task worker's runs aren't the API's, so its `latestRunId` never moves (one kept a week-old id through ten runs):
-            # only a worker whose runs the API lists can drop a message, and an IDLE read right after an ACTIVE one is a run that
-            # ended
-            if (status == "IDLE" and not w.get("no_runs") and w.get("idle_at") != updated
+            # one seen working so is never asked, an IDLE read right after an ACTIVE one is a turn that ended, and any other
+            # change is a turn the watch didn't see or a dropped message, which its conversation tells apart (`dropped`)
+            if (status in DROPPED_STATUSES and not w.get("no_runs") and w.get("idle_at") != updated
                     and (latest := info.get("latestRunId"))):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
