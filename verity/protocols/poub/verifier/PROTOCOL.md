@@ -1326,9 +1326,17 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   keeps them, and the leaves' salts: 64 bytes a 4 KiB block and 192 a leaf of 16, about 1/60 of what it read in the
   window. Keeping each tree above its leaves and re-reading an opened leaf's 16 blocks instead costs a small fraction of
   the reads again (about 0.06–0.1%). The reference keeps every pass whole.
-- **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
-  each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
-  it. The openings are
+- **Lean.** A session's published `q_bytes` is its receipts less a bound on the wrong ones that covers
+  `Accounting.Guarantees.Remote.PooledSample`'s on its record (`RemoteAudit.Protocol.certify`,
+  `Properties.RemoteAudit.PooledCovers`). Its `eps` is that statement's δ and per-sample term; the statement's PRF
+  advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`. γ's other terms are the ledger's
+  arithmetic, which no Lean property covers. The statements γ is modelled on are the lock's `deployed` entries,
+  `RemoteSessionConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
+  `RemoteSessionConservationDeployed` (whole-block receipts). `RemoteSessionRunConservation` is the whole-block
+  statement at every parameter, read as a run of the remote audit. They take n windows of P passes, one sample of 2,773
+  a window and no clock; a paced session's groups, its samples a group and its timing term are not shown to be an
+  instance. The one deployed statement on a paced session's record is the memory line's,
+  `Properties.RemoteAudit.Line.LineHeld`. The openings are
   `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateSessionSample`,
   the horizon and every window at once, both from `PooledSampling`, the causal horizon bound. They take windows of
   one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ in \(U_t\), and its samples are
