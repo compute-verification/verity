@@ -34,6 +34,18 @@ and `PROTOCOL`. `timed_audit` is the timed audit's client and its record's verdi
 `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict` and `lean_verdict`, and the clocks, counters and
 parameters a harness reads beside them.
 
+Two files are named `timed_audit.py`, and they are two things. This directory's is the timed audit as the memory
+challenger runs it: the client of a responder's wire, the record it writes and `verdict`, the verdict on that record in
+Python, which is the reference. `verity/protocols/pous/verifier/check/timed_audit.py` is the Python beside PoUS's Lean
+check: its `lean_verdict` gives the same verdict by the Lean executable `pous-timed-audit`, and its two commands hold
+the Lean to the reference, `--generated` on records it builds and `--replay RUN_DIR` on a run's. This directory's
+`lean_verdict` calls that one and loads its file by path (`pous_check`), the one load of a file by path in the device's
+modules. An import by name cannot reach it: the Lean check is a tree with an import root of its own (`SEPARATE` in
+`tests/test_boundaries.py`) that reads `verity_difftest`, and `verity` imports no other distribution. The check's other
+Python is `verity/protocols/pous/verifier/check/interop.py --all`, which holds the Lean to the P2 wire's Python
+reference on every vector, and `verity/protocols/pous/verifier/check/scripts/difftest_vectors.py`, which writes the
+difftest's instances with the Python's answers on them and which the Lean check runs.
+
 The streamed-label wipe's Python (`streamed_wipe.py`, and the wipe's process `wipe_party.py`) is PoUS's verifier's, an
 entry point of `verity/protocols/pous/verifier/README.md`.
 
