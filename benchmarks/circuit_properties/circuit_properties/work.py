@@ -30,12 +30,12 @@ For `min_cut.bound`'s inputs it reads:
   reads the current inputs or has rows not shown distinct, and is not specific; "gathered"), whose operands are no
   one array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op
   until the rule below makes them specific; a carry makes them no gather's. Rows are shown distinct
-  (`Status.distinct`), for generic weights, where they are `θ`'s, whose rows differ, where a product reads them as one
-  row (no batch maps them and they are its contraction's words), or where one node computes them from an argument
-  whose rows are, read one to one (`distinct_status`): by a shift (`SHIFTS`) or a rounding (`ROUNDINGS`) whatever
-  else it reads, as an update W + u does wherever u sums a gradient over the positions, and by any other `INJECTIVE`
-  op only where each other argument is reached by no input (`θ`'s own, or stated and passing the constant test) or
-  is one word that every member of every enclosing batch reads (`Status.fixed`). A carry keeps that (`carried`).
+  (`Status.distinct`), for generic weights, where they are `θ`'s, whose rows differ, or where one node computes them
+  from an argument whose rows are, read one to one (`distinct_status`): by a shift (`SHIFTS`) or a rounding
+  (`ROUNDINGS`) whatever else it reads, as an update W + u does wherever u sums a gradient over the positions, and by
+  any other `INJECTIVE` op only where each other argument is reached by no input (`θ`'s own, or stated and passing the
+  constant test), is one word that every member of every enclosing batch reads (`Status.fixed`), or whose own rows
+  are shown distinct (a weight times a weight). A carry keeps that (`carried`).
   Nothing else shows it: not an input or a gather, a stated value (a carry's initial 0), a multiply by words an input
   reaches that are more than one word or that members of an enclosing batch read apart (W ⊙ z, z ⊙ g, a batch of a
   composite over W and z), a batch of a composite through an argument its members share, or an array that reads a
@@ -96,7 +96,9 @@ positions whose prefixes hold the same tokens in the same proportions. The updat
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
 reaches is nonzero; a carried word an input reaches is θ′; and rows one node computes one to one from distinct rows
 are distinct, even where the update can't change a weight or cancels it for a reason the constant test doesn't see
-(W plus z plus -1 times z is θ′; W times v plus -1 times v, v `θ`'s, keeps W's rows), where one word that every member
+(W plus z plus -1 times z is θ′), and a weight cancelled against itself still counts as a weight, its rows distinct
+(M plus -1 times M, so the looked-up rows plus such a sum are charged as weights though they repeat with the tokens;
+W times v plus -1 times v, v `θ`'s or carried, keeps W's rows), where one word that every member
 of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed from inputs,
 taken as nonzero), and where two nodes compute rows one to one from one array's words into two arrays (b added to
 each of two rows, carried apart, whose products by W are charged).
@@ -969,15 +971,16 @@ class Reader:
             """``st`` with `Status.distinct` where an op reads one to one (a batch maps it) an argument whose rows are
             distinct and not stated, so its outputs' rows differ where that argument's do: a rounding (`ROUNDINGS`), a
             shift (`SHIFTS`) whatever the others hold, and any other `INJECTIVE` op only where each other argument is
-            stated (and passes the constant test), reached by no input (`θ`'s own), or one word that every member of
-            every enclosing batch reads (`Status.fixed`; a learning rate, a decay), taken as nonzero."""
+            stated (and passes the constant test), reached by no input (`θ`'s own), one word that every member of every
+            enclosing batch reads (`Status.fixed`; a learning rate, a decay), taken as nonzero, or one whose own rows
+            are distinct (a weight times a weight)."""
             batch = nd.form == "batch"
 
             def mapped(i: int) -> bool:
                 return not batch or (nd.axes[i] is not None and one_to_one(nd.args[i]))
 
             def multiplier(j: int, o: Status) -> bool:
-                return not o.reach or (o.fixed and len(set(words(nd.args[j]))) == 1)
+                return not o.reach or o.distinct or (o.fixed and len(set(words(nd.args[j]))) == 1)
 
             if f.name in ROUNDINGS:
                 def keeps(i: int) -> bool:
@@ -1031,8 +1034,7 @@ class Reader:
                 dims = (1, members, K, cols) if xm and not wm else (1, 1, K, cols * members) if wm and not xm else \
                     (members, 1, K, cols)
                 (ra, bx), (rb, bw) = operand(nd.args[ix]), operand(nd.args[iw])
-                sx, sw = (s._replace(distinct=True) if not m and _unit(t) == K else s
-                          for s, m, t in ((arg_status(nd.args[ix]), xm, tx), (arg_status(nd.args[iw]), wm, tw)))
+                sx, sw = arg_status(nd.args[ix]), arg_status(nd.args[iw])
                 site = Site(p, k, members, max(_unit(tx), _unit(tw)), ret.leaves, _width(ret), K,
                             (_width(tx), _width(tw)), sx, sw,
                             (tuple(x[2:] for x in self.parts(nd.args[ix].refs)),

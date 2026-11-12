@@ -57,17 +57,19 @@ The rule rests on one premise, `SHARED_PREFIX`'s: past each row's first position
 equal words. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
 the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
 linear layers, is charged nothing, since two rows of values may be equal, as two tokens may, and a product of its rows
-by a shared weight would then read one pair of values twice. A carried word's rows are distinct only where they are
-θ's (a weight: θ's rows, which differ for generic weights), a product reads them as one row, or one node computes them
-one to one from distinct rows: by a shift or a rounding to a narrower float (`work.ROUNDINGS`) whatever else it reads,
-as a weight's update does, and by a multiply or a divide only where every other word it reads is one no input reaches
-or one word every member of every enclosing batch reads; any other carried rows may repeat, and a multiply by a stated
-0 reaches nothing. One more premise holds the reading below the work, its parts each held as a fact by a test: θ's
-rows differ at every width a rounding reads them, and a word no input reaches is nonzero; an update that can't change
-a weight or cancels it for a reason no constant shows (W plus z plus -1 times z, or a multiplier v plus -1 times v with
-v registered) still makes θ′ and keeps its rows distinct; so does one word every member of every batch reads as a
-multiplier (a learning rate, a decay, an input's or computed from inputs, taken as nonzero); and two nodes that compute
-rows from one array's words into two arrays give each distinct rows.
+by a shared weight would then read one pair of values twice. A carried word's rows are distinct only where they are θ's
+(a weight: θ's rows, which differ for generic weights) or one node computes them one to one from distinct rows: by a
+shift or a rounding to a narrower float (`work.ROUNDINGS`) whatever else it reads, as a weight's update does, and by a
+multiply or a divide only where every other argument is one no input reaches, one word every member of every enclosing
+batch reads, or one whose own rows are shown distinct (a weight times a weight); any other carried rows may repeat, and
+a multiply by a stated 0 reaches nothing. One more premise holds the reading below the work, its parts each held as a
+fact by a test: θ's rows differ at every width a rounding reads them, and a word no input reaches is nonzero; an update
+that can't change a weight or cancels it for a reason no constant shows (W plus z plus -1 times z) still makes θ′ and
+keeps its rows distinct, and a weight cancelled against itself still counts as a weight (M plus -1 times M, so the
+looked-up rows plus such a sum are charged as weights though they repeat with the tokens; a multiplier v plus -1 times
+v, v registered or carried); so does one word every member of every batch reads as a multiplier (a learning rate, a
+decay, an input's or computed from inputs, taken as nonzero); and two nodes that compute rows from one array's words
+into two arrays give each distinct rows.
 `work.bound(work, c)` is the most blocks over its
 sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
 has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a

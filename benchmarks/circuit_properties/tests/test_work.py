@@ -2,7 +2,8 @@
 registry's products whose work is known by hand: a training loop's scan, whose carried weights are charged from
 their second iteration, whose batch is free, and whose value input's rows are left out however the Program writes
 them; carried rows no one node shows distinct left out, one multiply by an input's words however it is written, a
-stated 0's update `θ`'s, a weight rounded to bf16 charged, the updates' premise held as facts; a lookup whose table is the registered one or the loop's own; a Program with
+stated 0's update `θ`'s, a weight rounded to bf16 charged, rows times an input however a product reads them,
+a weight cancelled against itself, the updates' premise held as facts; a lookup whose table is the registered one or the loop's own; a Program with
 no scan; one array times itself; two activations; the largest set of arrays a work multiplies pairwise; a weight
 decoded from a ternary code; a one-hot row; a rank-4 bottleneck between two carried weights; each operand's β at
 min(16, β(k)); and |C| in Boolean gates."""
@@ -94,8 +95,9 @@ def loop() -> Program:
 
 
 def carried_loop() -> Program:
-    """y = (u ⊙ g) W^T, u, g and W carried and each added the iteration's z: no operand reads an input, so the product
-    of two weights is charged from the second iteration."""
+    """y = (u ⊙ g) W^T, u, g and W carried and each added the iteration's z: no operand reads an input, and u ⊙ g is a
+    weight times a weight, whose rows are distinct, so the product of two weights is charged from the second
+    iteration."""
     return _loop("Carried", (("w", W_T), ("g", X_T), ("u", X_T)), (("z", X_T),), Y_T,
                  lambda B, c, z: (tuple(_add(B, a, z) for a in c), B.call(LIN, _mul(B, c[2], c[1]), c[0])))
 
@@ -110,6 +112,8 @@ def _boolean(fid_counts: Counter, by_id: dict) -> int:
 
 
 def test_a_scan_charges_its_carried_weights_from_their_second_iteration():
+    """`carried_loop`'s product is charged: W is a weight, and so is u ⊙ g, a multiply of two arrays whose rows are
+    distinct (`distinct_status`)."""
     p = carried_loop()
     w = WK.read(p, KB)
     prims = [f for f in flatten(p.root).prims if not is_input(f)]
@@ -520,9 +524,9 @@ def _scaled(kind: str) -> Program:
     ``computed-word``); its input z a word of
     W, as one batch, a call a word, or a batch of a composite of one call; each row by its own word of zn, a batch of
     a composite multiplying its row by one word (``composite-row``); or a stated 2, v, registered (``thetas``), or
-    v plus -1 times v (``thetas-cancel``), each plus z."""
+    v plus -1 times v, v registered or V carried (``thetas-cancel``, ``carried-cancel``), each plus z."""
     def step(B, c, s, z, zn, *v):
-        w, u = c
+        w, u = c[0], c[1]
         if kind == "one-word":
             new = _mul(B, w, s)
         elif kind == "computed-word":
@@ -540,12 +544,15 @@ def _scaled(kind: str) -> Program:
         elif kind == "thetas":
             new = _add(B, _mul(B, w, v[0]), z)
         else:
-            new = _add(B, _mul(B, w, _add(B, v[0], _mul(B, v[0], B.call(const(32, 0xBF800000))))), z)
-        return (new, _add(B, u, z)), B.call(LIN, u, w)
+            m = v[0] if kind == "thetas-cancel" else c[2]
+            new = _add(B, _mul(B, w, _add(B, m, _mul(B, m, B.call(const(32, 0xBF800000))))), z)
+        rest = (_add(B, c[2], z),) if kind == "carried-cancel" else ()
+        return (new, _add(B, u, z), *rest), B.call(LIN, u, w)
 
     v = (("v", X_T),) if kind.startswith("thetas") else ()
-    return _loop("Scaled" + kind.title().replace("-", ""), (("w", W_T), ("u", X_T)),
-                 (("s", F32), ("z", X_T), ("zn", Array(N, F32))), Y_T, step, shared=v, registered=("v",) if v else ())
+    carry = (("w", W_T), ("u", X_T), *((("V", W_T),) if kind == "carried-cancel" else ()))
+    return _loop("Scaled" + kind.title().replace("-", ""), carry, (("s", F32), ("z", X_T), ("zn", Array(N, F32))),
+                 Y_T, step, shared=v, registered=("v",) if v else ())
 
 
 @pytest.mark.parametrize("form", ("batch", "calls", "composite-word", "composite-row"))
@@ -586,12 +593,73 @@ def _rows_plus(kind: str) -> Program:
 def test_rows_plus_a_weight_times_a_multiplier_an_input_reaches_are_left_out(kind):
     """M ⊙ m + rows is the looked-up rows exactly where m is 0: z = 0 makes z ⊙ g so, and g + z with z = -g makes g
     so from the second iteration. Where an input reaches m it keeps no rows of M distinct, so prev W^T is left out as
-    gathered from the second iteration, and with m = g, which is `θ`'s in the first, from the third."""
+    gathered from the second iteration, and with m = g, which is `θ`'s in the first, from the third: g's one row
+    repeated over M's rows reads each word twice, so it is no weight's rows."""
     w = WK.read(_rows_plus(kind), KB)
     late = 2 if kind == "weight" else 1
     assert w.N == (late - 1) * PN * K * N
     assert w.left_out == {"theta": PN * K * N, "gathered": (T - late) * PN * K * N, "self": 0, "activations": 0}
 
+
+ROW_LIN = bind(_def("RowLin", ((("row", X_T), ("w", W_T)), Y_T), lambda B, S, row, w: B.call(LIN, row, w)))
+
+
+def _rows_times(form: str, mult: str) -> Program:
+    """prev′ = M ⊙ zr, M carried and zr an input's rows, or M times the one-word input s (``one-word``), and prev W^T
+    as one batch, a call a row, or a batch of a composite of one call."""
+    def step(B, c, zr, z, s):
+        w, prev, m = c
+        new = _mul(B, m, s if mult == "one-word" else zr)
+        if form == "batch":
+            y = B.batch(LIN, prev, w, axes=(0, None))
+        elif form == "calls":
+            y = Coll(Array(PN, Y_T), concat([B.call(LIN, prev[p], w).refs for p in range(PN)]))
+        else:
+            y = B.batch(ROW_LIN, prev, w, axes=(0, None))
+        return (_add(B, w, z), new, _add(B, m, zr)), y
+
+    return _loop("RowsTimes" + form.title() + mult.title().replace("-", ""),
+                 (("w", W_T), ("prev", ROWS_T), ("m", ROWS_T)), (("zr", ROWS_T), ("z", X_T), ("s", F32)),
+                 Array(PN, Y_T), step)
+
+
+@pytest.mark.parametrize("form", ("batch", "calls", "composite"))
+def test_rows_times_an_input_are_left_out_however_the_product_reads_them(form):
+    """M ⊙ zr, which an input 0 makes one row repeated, gives one answer however the product reads prev: one batch, a
+    call a row, or a batch of a composite of one call. A row alone at its call or member is still no weight's, so each
+    is left out as gathered from the second iteration; times the one-word s (the premise) each is charged."""
+    w = WK.read(_rows_times(form, "input"), KB)
+    assert w.groups == [] and w.left_out == {"theta": PN * K * N, "gathered": (T - 1) * PN * K * N, "self": 0,
+                                             "activations": 0}
+    assert WK.read(_rows_times(form, "one-word"), KB).N == (T - 1) * PN * K * N
+
+
+def _self_cancel(cancel: bool) -> Program:
+    """prev′ = the PN rows looked up by the iteration's tokens, plus (``cancel``) M plus -1 times M, M carried; and
+    prev W^T."""
+    def step(B, c, tok, z, zr):
+        table, w, prev, m = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        new = _add(B, _add(B, m, _mul(B, m, B.call(const(32, 0xBF800000)))), rows) if cancel else rows
+        return (_add(B, table, z), _add(B, w, z), new, _add(B, m, zr)), B.batch(LIN, prev, w, axes=(0, None))
+
+    return _loop("SelfCancel" if cancel else "RowsAlone", (("table", TABLE_T), ("w", W_T), ("prev", ROWS_T),
+                                                            ("m", ROWS_T)),
+                 (("tok", Array(PN, I32)), ("z", X_T), ("zr", ROWS_T)), Array(PN, Y_T), step)
+
+
+def test_a_weight_cancelled_against_itself_still_counts_as_a_weight():
+    """The updates' premise at its sharpest, held as facts. M plus -1 times M is 0, but the reading takes it as a
+    weight with distinct rows, so the looked-up rows plus it, carried and times W, are charged as two weights, though
+    they are the looked-up rows, which repeat with the tokens and are left out as gathered where the Program carries
+    them alone. W times v plus -1 times v, v registered or V carried, keeps W's rows too."""
+    alone = WK.read(_self_cancel(False), KB)
+    assert alone.groups == [] and alone.left_out["gathered"] == (T - 1) * PN * K * N
+    cancel = WK.read(_self_cancel(True), KB)
+    assert cancel.N == (T - 1) * PN * K * N and {g.weight for g in cancel.groups} == {(True, True)}
+    for kind in ("thetas-cancel", "carried-cancel"):
+        (g,) = WK.read(_scaled(kind), KB).groups
+        assert g.weight == (True, True) and g.macs == (T - 1) * K * N
 
 def _cast(B, a: Coll) -> Coll:
     flat = Array(a.type.leaves, F32)
@@ -615,13 +683,11 @@ def test_a_weight_rounded_to_bf16_before_its_product_is_charged():
 
 
 def test_what_the_carried_words_premise_leaves_held_as_facts():
-    """Three facts of what stays a premise. A weight times one unstated word that every member of every batch reads,
+    """Two facts of what stays a premise. A weight times one unstated word that every member of every batch reads,
     an input's or computed from inputs (a learning rate, a decay), is taken as distinct, as if that word weren't 0:
-    u W^T and the rows M ⊙ s plus the looked-up ones times W are charged; so is u W^T with W times v plus -1 times v,
-    v registered, which no input reaches and which cancels for a reason the constant test doesn't see; and b added to
-    each of two looked-up rows, carried in two arrays, gives two arrays each of distinct rows, whose two products by W
+    u W^T and the rows M ⊙ s plus the looked-up ones times W are charged; and b added to each of two looked-up rows, carried in two arrays, gives two arrays each of distinct rows, whose two products by W
     are charged though they read one pair where the two rows are equal."""
-    for kind in ("one-word", "computed-word", "thetas-cancel"):
+    for kind in ("one-word", "computed-word"):
         (g,) = WK.read(_scaled(kind), KB).groups
         assert g.weight == (True, True) and g.macs == (T - 1) * K * N
     assert WK.read(_rows_plus("one-word"), KB).N == (T - 1) * PN * K * N
