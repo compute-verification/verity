@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.check.replay.stoch_recompute import draw_accounting, record_lag_rows
+from verity_vllm.check.replay.stoch_recompute import expected_executed_slots as E
+from verity_vllm.program.lifting import continuation as CT
 from verity_vllm.records.workload import SCHEMA
 
 
@@ -146,7 +148,6 @@ def test_eos_at_the_cap_draw_schedules_no_lag_slot_and_a_declared_lag_disagreein
 
 
 def test_expected_executed_slots_is_the_spec_s7_rule_and_names_what_it_cannot_judge():
-    from verity_vllm.check.replay.stoch_recompute import expected_executed_slots as E
     assert E([7, 7, 7, 7], 4, 1, {99})[0] == [1, 2, 3, 4]                       # to the cap: no lag slot
     assert E([7, 99], 4, 1, {99})[0] == [1, 2, 3]                               # EOS at slot 2 -> lag slot 3
     assert E([7, 99], 4, 0, {99})[0] == [1, 2]                                  # sync: no lag slot
@@ -164,8 +165,6 @@ def test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records
     position whose logits are sampled; qwen B8 L=1024 -> first_pos 1023, device_facts_match on every row), slot t at prompt_len - 2 + t.
     An earlier `expected_draw_positions` mapped slot t to prompt_len + t - 1, one more than the record; the two maps now agree and
     the ledger's positions ARE `expected_draw_positions(...)["positions"]` (one mechanism, no map of its own)."""
-    from verity_vllm.check.replay.stoch_recompute import expected_executed_slots as E
-    from verity_vllm.program.lifting import continuation as CT
     exp, info = E([7, 7, 99], 8, 1, {99})
     assert exp == [1, 2, 3, 4] and info["t_eos"] == 3 and info["rule"].startswith("verity_vllm.program.lifting.continuation.recurrence")
     ours = [10 - 1 + (t - 1) for t in exp]                       # L = 10: 9, 10, 11, 12 (the lag slot 4 at pos 12)

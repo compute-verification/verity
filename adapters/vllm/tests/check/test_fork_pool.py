@@ -2,6 +2,7 @@
 daemonic parent forks them too."""
 from __future__ import annotations
 
+import ctypes
 import multiprocessing as mp
 import os
 import select
@@ -50,6 +51,7 @@ def _workers_after_parent_sigkill(kind: str) -> tuple[list[int], list[int]]:
     worker, is alive."""
     p = subprocess.Popen([sys.executable, "-c", PARENT, kind], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                          text=True)
+    assert p.stdin is not None and p.stdout is not None
     pids = [int(x) for x in p.stdout.readline().split()]
     assert len(pids) == 3
     fds = [os.pidfd_open(q) for q in pids]
@@ -89,7 +91,6 @@ def test_a_child_forked_after_its_parent_died_exits_at_once():
 
 
 def _pdeathsig(_=None) -> tuple[int, int]:
-    import ctypes
     sig = ctypes.c_int(0)
     assert ctypes.CDLL(None, use_errno=True).prctl(2, ctypes.byref(sig), 0, 0, 0) == 0   # PR_GET_PDEATHSIG
     return os.getpid(), sig.value
