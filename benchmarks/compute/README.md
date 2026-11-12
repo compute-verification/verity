@@ -11,6 +11,12 @@ developer's node reports of what it served.
   `tests/fixtures/` with a stand-in for the evidence store, so the suite fetches nothing. Capacity is held to one
   card file's two clocks.
 
+**What a caller may import:** nothing outside this directory imports `run.py`. It is a command, which
+`verity bench compute` starts as a process of its own, and its `__all__` lists the names its own tests read. **What it
+never does:** it starts no job and measures nothing, it reads nothing the developer's node reports of what it served,
+and it prints no number for an answer that is not an accept. Fetching a record is the evidence store's client's work;
+the command itself writes only the two files named below.
+
 ~~~text
 verity bench compute --from RUN
 verity bench compute --from RUN --per-call [--uncredited F] [--top N]
