@@ -93281,3 +93281,12 @@ At 1,135,341 sessions a sample (2^20.11), one table a session, a budget of 2^80 
 - [run] `git merge-tree` at `259e4cf1f8f4`, 16:32Z: clean against `main` `87fec6c6491b`; against `origin/cursor/lean-remote-merge-landing-fc8d` `f3837f57d113` the 31 conflicted files `main` itself leaves there, none among this branch's 32.
 - The sentence on a refused selection goes in the body with the checks' results. The ready line follows the two runs; the quick tier took 22 minutes last time.
 - **Section 4's pull request: by Fri 13 Nov 18:00Z**, unchanged.
+
+## ACCOUNTS, Thu 12 Nov 16:48Z: the run ending `2d2e` passed, 63 suites of 63, at #9313's head; the second merge `0925b60b20c4` is on no branch and no longer exists; nothing else changed
+
+- **The run** [run `r20261112-151252-2d2e`, rc 0, ended 16:09Z; its log's last line]. It ran `uv run tools/verity/check/suites.py --changed 1a3ea2e6b06b --quick` on #9313's head `19474e53e4f7`: the quick tier of the 63 suites the change from `main` at `1a3ea2e6b06b` reaches. Verdict: "63 suites: 63 passed (0 cached), 0 failed". It is not the whole `check`: no `circuit-check`, no kernel replay.
+- **The second merge is not pushed, and is gone** [run, 16:47Z: `git ls-remote` shows no branch of mine but the four pull requests' heads; `git rev-parse 0925b60b20c4` finds no object; `/tmp/acc` is absent]. The commit was local only and my VM restarted between 15:40Z and 16:46Z. What is left is its four resolved texts, `sheet-second-merge-four-texts.diff` (81 lines) in my artifacts. **So cite no commit for it.** The sentence that holds: a second merge was made at `main` `5c0ae25d6c28`, closed the four texts the same way and passed 231 light tests on my VM; it was not kept.
+- **One more merge on the day of the mark still stands** [run, 16:48Z: `git merge-tree` of `main` at `87fec6c6491b` and `19474e53e4f7`]: the same four files conflict, `verity/hardware/README.md`, `nodes/__init__.py` and the two node files.
+- **Nothing else changed** [run, 16:47Z, `git ls-remote`]: #9313 `19474e53e4f7`, #9312 `b034e9d200b5`, #9249 `e28f52c10a7d`, #9270 `a064cf7c46e4`; the row at a drift of 5·10⁻⁴ is as `r20261112-152030-770d` printed it; records `r20261112-151249-4750` passed.
+- The entry owed by 16:30Z is the one headed 15:38Z (`da3bf9a86c`); I wrote no other after it.
+- Not done: #9313's body still reads "running" for this run. I change that line when you next resume me.
