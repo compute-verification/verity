@@ -1,8 +1,8 @@
 /-
 # One outer session's stages, held to the record's rules
 
-Take the slot, then admit the session and the registrations its statement reads (`seat`, `Firewall.Record`); `prove`
-runs it up to the barrier where its proofs
+Take the slot and admit the session (`seat`, `Firewall.Record`), then, once the verifier has answered its `Register`,
+admit the registrations its statement reads (`seatReads`); `prove` runs it up to the barrier where its proofs
 would leave, `ready` is the send check's verdict on what it proved, then at its release time if it has one (a missed time
 is a stop) the proofs are sent (`Decision.after`), and the challenger's verdict decides release or stop (`settle`).
 `decide` is everything before the send: the ZK server's own decision, which `Firewall.Protocol` checks with the send check
@@ -56,18 +56,18 @@ def Decision.after (a : Admitted) (now : Nat) (prove ready : Run) : Decision :=
       | some t => if now > t then .stop s!"missed its release time ({now} ms, after {t} ms)" else .go a
       | none => .go a
 
-/-- The session's ops once it holds the slot: the slot's events, then its admission and, given `reads` (the registrations
-its statement reads, on the events), its registrations' (`admitReads`) on the same read of the record, and the record
-after them. -/
-def seat (r : Record) (s part : String) (reads : Option (Events → Except String (Array Nat)) := none) :
-    V (Except String Admitted × Record) := do
+/-- The session's ops once it holds the slot: the slot's events, then its admission, and the record after them. -/
+def seat (r : Record) (s part : String) : V (Except String Admitted × Record) := do
   let ((), r) ← r.op fun evs => ((), slot evs s part)
-  r.op fun evs => match admit evs s part, reads with
-    | (.ok a, evs), some f =>
-      match admitReads evs s part (f evs) with
-      | (.ok (), evs) => (.ok a, evs)
-      | (.error why, evs) => (.error why, evs)
-    | x, _ => x
+  r.op (admit · s part)
+
+/-- The seated session's registrations (rule 5), one op: `reads` gives, on the events, the registrations its statement
+reads and its trees that passed as known content, or why it is refused (`admitReads`), and the record after it. -/
+def seatReads (r : Record) (s part : String) (reads : Events → Except String (Array Nat × Array ByteArray)) :
+    V (Except String Unit × Record) :=
+  r.op fun evs => match reads evs with
+    | .ok (ns, known) => admitReads evs s part (.ok ns) known
+    | .error why => admitReads evs s part (.error why)
 
 /-- Everything before the send, at time `now` (ms): the decision and the record after it. A stop's event is not yet
 recorded (`stopAt` records it). -/

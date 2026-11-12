@@ -7,7 +7,7 @@ write them (`live/src/firewall_record_vectors.json`):
   `{"refused": why}`; `stop` whether it recorded the stop; `failures` the count; `finish`, `release` and `slot` null;
   `register` (the record after its number, hex: the op's record is `be64 n` and those bytes) the number it took;
   `registrations` (a session, a part and the numbers its statement reads, or why its commitments are none of the
-  server's) null or `{"refused": why}`.
+  server's; then, if any, its known trees' entries, each hex) null or `{"refused": why}`.
 * `outer`, `{"now_ms", "part", "prove", "ready", "record", "send", "session"}`: one outer session, the stages
   `Firewall.Loop` runs (`decide`, then `stopAt` or `settle`) in turn on the record with the clock at `now_ms`,
   `{"outcome", "record", "sent_at", "why"}`. `prove` and `ready` are `"ok"`, `{"err": why}` or `{"panic": msg}`; `send` is
@@ -43,6 +43,19 @@ private def optNat : Option Nat → Json
 
 private def answer (r : Record) (result : Json) (evs : Events) : Json :=
   Json.mkObj [("record", Json.str (r.extend evs).text), ("result", result)]
+
+/-- The op `registrations` on the record `text`: `op`'s session, part and reads, with the known trees `known`. -/
+private def registrationsOp (op : Array Json) (text : String) (known : Array ByteArray) : V Json := do
+  let s ← strAt op 1 "session"
+  let p ← strAt op 2 "part"
+  let reads ← match op[3]! with
+    | Json.str why => pure (Except.error why)
+    | Json.arr ks => Except.ok <$> ks.mapM (Flock.J.asNat · "op: a registration")
+    | _ => throw "op: reads is not a list of registrations or a why"
+  let r ← Record.read text
+  match admitReads r.events s p reads known with
+  | (.ok (), evs) => pure (answer r Json.null evs)
+  | (.error why, evs) => pure (answer r (obj1 "refused" (Json.str why)) evs)
 
 def opFn (input : Json) : V Json := do
   let text ← Flock.J.str input "record" "input"
@@ -99,16 +112,14 @@ def opFn (input : Json) : V Json := do
     let r ← read
     let ((n, _), evs) := register r.events fun n => (Flock.be64 n.toUInt64 ++ rest, none)
     pure (answer r (Json.num n) evs)
-  | "registrations", 4 =>
-    let (s, p) := (← arg 1 "session", ← arg 2 "part")
-    let reads ← match op[3]! with
-      | Json.str why => pure (Except.error why)
-      | Json.arr ks => Except.ok <$> ks.mapM (Flock.J.asNat · "op: a registration")
-      | _ => throw "op: reads is not a list of registrations or a why"
-    let r ← read
-    match admitReads r.events s p reads with
-    | (.ok (), evs) => pure (answer r Json.null evs)
-    | (.error why, evs) => pure (answer r (obj1 "refused" (Json.str why)) evs)
+  | "registrations", 4 => registrationsOp op text #[]
+  | "registrations", 5 =>
+    let Json.arr ts := op[4]! | throw "op: known is not a list of known trees' entries"
+    let known ← ts.mapM fun t => do
+      let b ← Flock.unhex (← Flock.J.asStr t "op: a known tree's entry")
+      if b.size != KNOWN_TREE_BYTES then throw s!"op: a known tree's entry of {b.size} bytes, not {KNOWN_TREE_BYTES}"
+      pure b
+    registrationsOp op text known
   | name, n => throw s!"op: {name} with {n - 1} arguments is not an op of the record"
 
 private def runOf (j : Json) (what : String) : V Run :=

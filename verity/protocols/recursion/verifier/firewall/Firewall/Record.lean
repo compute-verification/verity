@@ -25,7 +25,9 @@ sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall
    once skipped, or whose value commitments no registration holds (`Flock.Firewall.Salts.readsOf`), is the recursive
    session's stop; one that reads only registrations already admitted admits nothing. The number is public. An
    interior session's registration carries the session's own key and that key's tag (`key`, `key_tag`), which are
-   witness: they stay on the record, the ZK server's own.
+   witness: they stay on the record, the ZK server's own. A tree of the statement that the verifier lists as known
+   content reads no registration (`Salts.valueTrees`), and the record names each one that passed so (`known`): the event
+   opens no session, ends none, is no stop and no failure, and no rule above reads it.
 
 The functions here are pure: each takes the events read so far and returns its result and the events after it, which only
 ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the ZK server
@@ -480,12 +482,15 @@ def skippedAt (evs : Events) (n : Nat) : Bool :=
   evs.any fun | .skipped _ _ k => k == n | _ => false
 
 /-- **Rule 5 at an outer session of `s` at `part`** that `admit` served: `reads` the registrations its statement's value
-commitments read, by number, or why they are none of the server's (`Flock.Firewall.Salts.readsOf`). Every registration
-from the next not yet admitted or skipped up to the last it reads is admitted, if it reads it, else skipped, in order,
-each skip a failure of the stream; if they bring the stream to its budget, the session is refused. A statement that reads
-a registration not on the record or one skipped before, or whose commitments are none of the server's, is the recursive
-session's stop at `part`, and refused. A refusal is recorded (`refused`). -/
-def admitReads (evs : Events) (s part : String) (reads : Except String (Array Nat)) : Except String Unit × Events :=
+commitments read, by number, or why they are none of the server's (`Flock.Firewall.Salts.readsOf`), and `known` the
+entries of its trees that passed as known content on the verifier's word, which read none (`Salts.valueTrees`). Every
+registration from the next not yet admitted or skipped up to the last it reads is admitted, if it reads it, else skipped,
+in order, each skip a failure of the stream; if they bring the stream to its budget, the session is refused. A statement
+that reads a registration not on the record or one skipped before, or whose commitments are none of the server's, is
+the recursive session's stop at `part`, and refused. A refusal is recorded (`refused`). Each known tree of a statement
+not stopped here is recorded (`known`), before the registrations it admits. -/
+def admitReads (evs : Events) (s part : String) (reads : Except String (Array Nat)) (known : Array ByteArray := #[]) :
+    Except String Unit × Events :=
   match reads with
   | .error why => stopped why
   | .ok reads =>
@@ -494,6 +499,7 @@ def admitReads (evs : Events) (s part : String) (reads : Except String (Array Na
     | some k, _ => stopped s!"registration {k} is not on the ZK server's record"
     | none, some k => stopped s!"registration {k} was skipped: one passed over is never admitted"
     | none, none =>
+      let evs := known.foldl (fun e t => e.push (.known s part t)) evs
       let fresh := reads.filter (· ≥ u)
       if fresh.isEmpty then (.ok (), evs)
       else
