@@ -3,7 +3,8 @@ A field that holds another empty value (`OTHER_EMPTY`) in its block's place read
 
 Each reader below takes a document whose writer may leave a field out: a required manifest's `identities`
 (`verity_vllm.acquire.sources.int8_source`, `verity_vllm.acquire.sources.call_boundary_source`,
-`verity_vllm.acquire.sources.call_boundary_plan`, `verity_vllm.acquire.sources.taps`), its `requests`, `engine_steps` and `fixture`, a
+`verity_vllm.acquire.sources.call_boundary_plan`, `verity_vllm.acquire.sources.taps`), a narrowed row's `identity`
+(`verity_vllm.acquire.sources.narrowed_source`), the manifest's `requests`, `engine_steps` and `fixture`, a
 Build's `result.json`, a capture map's `pins`, what a rank recorded of the sources it attached, a step the declared composition or the
 recorded routes do not hold (`verity_vllm.acquire.sources.route_source`), a capture's stored tensors
 (`verity_vllm.acquire.sources.partial_source`), and a capture map's taps, whose `commit` block names the source that commits them
@@ -26,6 +27,7 @@ from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import dsv4_attention_source as D4
 from verity_vllm.acquire.sources import int8_source as I8
 from verity_vllm.acquire.sources import mhc_source as MH
+from verity_vllm.acquire.sources import narrowed_source as NR
 from verity_vllm.acquire.sources import partial_source as P
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.acquire.sources import taps as TAPS
@@ -41,6 +43,8 @@ QUANT = {"family": CP.FAMILY, "spec": f"{I8.QUANT_SPEC}{{w=8}}", "op_path": "mod
 KV = {"family": "instance_outputs", "spec": I8.KV_SPEC, "op_path": "model.layers.0.attn", "port": 1}
 ADD = {"family": CP.FAMILY, "spec": "Add16", "op_path": "model.norm/add", "engine_step": 0, "output_member": "0", "request_id": "r0"}
 STATED = {"identities": [QUANT, KV, ADD]}
+NARROWED = {"narrowed_of": "0", "op_path": "model.layers.1.attn.qkv", "output_member": "0@4", "columns": [2, 6], "width": 4, "dtype": "bf16"}
+NARROWED_SITES = {"model.layers.1.attn.qkv": {"0@4": {"columns": (2, 6), "bytes": 2}}}
 OPROJ = "model.layers.0.self_attn.o_proj"
 
 
@@ -75,6 +79,35 @@ def test_a_manifest_that_names_no_identities_attaches_no_source(manifest):
 
 def test_a_manifests_identities_name_the_sources_its_commit_attaches():
     assert TAPS.attached(STATED) == [CB.CallBoundarySource.short_name, I8.SHORT_NAME]
+
+
+@pytest.mark.parametrize("manifest", [*NO_IDENTITIES, *OTHER_EMPTY, *({"identities": v} for v in OTHER_EMPTY)])
+def test_a_manifest_that_names_no_identities_has_no_narrowed_row(manifest):
+    """`verity_vllm.acquire.sources.narrowed_source.manifest_sites` and `applies`."""
+    assert NR.manifest_sites(manifest) == {} and NR.applies(manifest) is False
+    assert NR.manifest_sites(STATED) == {} and NR.applies(STATED) is False
+
+
+@pytest.mark.parametrize("stated", [{}, {"identity": None}, {"identity": {}}, *({"identity": v} for v in OTHER_EMPTY)])
+def test_a_narrowed_row_that_states_no_identity_is_read_at_its_own_fields(stated):
+    manifest = {"identities": [ADD, {**NARROWED, **stated}]}
+    assert NR.manifest_sites(manifest) == NARROWED_SITES and NR.applies(manifest) is True
+
+
+def test_a_rows_identity_is_read_over_its_own_fields():
+    under = {"identities": [{"op_path": "model.norm", "narrowed_of": None, "identity": NARROWED}]}
+    assert NR.manifest_sites(under) == NARROWED_SITES and NR.applies(under) is True
+    over = {"identities": [{**NARROWED, "identity": {"narrowed_of": None}}]}
+    assert NR.manifest_sites(over) == {} and NR.applies(over) is False
+
+
+@pytest.mark.parametrize("identity", [1, "ab", [1], True])
+def test_a_rows_identity_that_is_no_mapping_is_refused_as_python_refuses_it(identity):
+    manifest = {"identities": [{**NARROWED, "identity": identity}]}
+    with pytest.raises(TypeError, match="is not a mapping"):
+        NR.manifest_sites(manifest)
+    with pytest.raises(TypeError, match="is not a mapping"):
+        NR.applies(manifest)
 
 
 @pytest.mark.parametrize("identities", [{}, {"identities": None}, {"identities": []}, None, *({"identities": v} for v in OTHER_EMPTY)])
