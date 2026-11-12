@@ -9,4 +9,5 @@ testpaths = ["tests"]
 inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/cuda_lib.py", "verity/__init__.py", "verity/errors.py",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/codec.py",
-          "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto"]
+          "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto",
+          "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py"]
