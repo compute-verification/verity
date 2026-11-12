@@ -2737,6 +2737,22 @@ PREFLIGHT_FILES = {
 #: `uv sync --locked` as the preflight runs it, refusing while LOCK_STALE.txt is in the tree
 FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Path('LOCK_STALE.txt').exists(); s and print("
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
+#: the ratchet gate (`PREFLIGHT_RATCHET`) as a stand-in, run as `ratchet_gate.py BASE TOP --json`: it writes where it ran and
+#: with what to $RATCHET_SEEN, fails TOP on an import cycle while TOP's tree holds RATCHET_NEW, and exits 2 (it can't judge)
+#: while it holds RATCHET_CANT; like the gate, it reads TOP from git, never the checkout it runs in
+RATCHET_GATE = (
+    "import json, os, subprocess, sys\nfrom pathlib import Path\n"
+    "holds = lambda name: subprocess.run(['git', 'cat-file', '-e', f'{sys.argv[2]}:{name}']).returncode == 0\n"
+    "head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()\n"
+    "Path(os.environ['RATCHET_SEEN']).write_text(json.dumps({'script': sys.argv[0], 'argv': sys.argv[1:], 'cwd': os.getcwd(), "
+    "'head': head, 'cache': os.environ.get('RATCHET_GATE_CACHE'), 'tmp': os.environ.get('TMPDIR')}))\n"
+    "if holds('RATCHET_CANT'):\n"
+    "    print('ratchet gate: the base has no lints to run', file=sys.stderr)\n"
+    "    sys.exit(2)\n"
+    "cycle = {'why': 'the base finds 1 violation its lists miss', 'fix': ['p09_layering: [package-cycle] commit <-> engine']}\n"
+    "fails = [cycle] if holds('RATCHET_NEW') else []\n"
+    "print(json.dumps({'failures': fails}))\n"
+    "sys.exit(1 if fails else 0)\n")
 
 
 def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, repo: Path | None = None, sync=FAKE_SYNC,
@@ -3216,6 +3232,72 @@ def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(
     _preflight_main(world)
     world.gh.put(2, h2 := world.change({"pkg/notes.txt": "x\n", "VLLM_LINT": ""}), ready=False)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
+def test_the_preflight_prints_what_the_ratchet_gate_fails_on_the_merge_as_a_warning_and_notes_one_that_cant_judge(
+        world, capsys, monkeypatch):
+    """The ratchet gate tells a new violation by its text, so it can read an honest change's (a moved line, a cycle through a
+    module the PR adds) as one: on a change that reaches what it judges, the preflight runs the base's copy on the merge as
+    check's step does, keeping no verdict and its scratch in the merged worktree's directory, and the mark prints what it fails
+    and goes through.  A gate that can't judge is named under "checks skipped"."""
+    from research.queue import PREFLIGHT_RATCHET, RATCHET_SAYS, MarkOnly, StoreLabels, ready
+
+    monkeypatch.setenv("RATCHET_SEEN", str(seen := world.tmp / "seen.json"))
+    _preflight_main(world, {PREFLIGHT_RATCHET[0]: RATCHET_GATE})
+    nxt = _git(world.origin, "rev-parse", "next")
+    own = "print('{\"failures\": []}')\n"                              # the head's copy, which passes: the base's judges
+    world.gh.put(2, h2 := world.change({"adapters/vllm/verity_vllm/commit.py": "", "RATCHET_NEW": "", PREFLIGHT_RATCHET[0]: own}),
+                 ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert [s for s in world.logs if "warning" in s] == [
+        f"research queue: preflight: warning: #2 at {h2[:12]}: the ratchet gate ({PREFLIGHT_RATCHET[0]} as `next` at "
+        f"{nxt[:12]} has it) fails the merge: the base finds 1 violation its lists miss\n"
+        f"    p09_layering: [package-cycle] commit <-> engine\n  {RATCHET_SAYS}"], world.logs
+    ran = json.loads(seen.read_text())
+    base, top, *rest = ran["argv"]
+    assert base == nxt and rest == ["--json"] and _git(world.dev, "log", "-1", "--format=%P", top) == f"{nxt} {h2}", ran
+    assert ran["cache"] == "" and ran["head"] == top, ran
+    assert Path(ran["script"]).resolve().parent == Path(ran["cwd"]).resolve().parent == Path(ran["tmp"]).resolve(), ran
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+    world.gh.put(3, h3 := world.change({"adapters/vllm/verity_vllm/engine.py": "", "RATCHET_CANT": ""}), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if f"preflight: #3 at {h3[:12]}" in s)
+    assert "checks skipped: ratchet-gate not checked: exited 2: ratchet gate: the base has no lints to run" in said, said
+    assert [s for s in world.logs if "warning" in s] == [s for s in world.logs if "warning" in s and "#2" in s]
+    assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is True and _no_worktree_left(world)
+
+
+def test_the_preflight_runs_the_ratchet_gate_after_the_run_at_next_that_a_refusal_needs(world, capsys, monkeypatch):
+    """The gate comes last, after the run at `next` that tells a failure the PR causes from one `next` has too, so the time it
+    takes never turns a refusal into a check that couldn't run on `next` to compare; it judges the merge by its commit, though
+    the worktree is at `next` by then."""
+    from research.queue import PREFLIGHT_RATCHET, MarkOnly, StoreLabels, ready
+
+    monkeypatch.setenv("RATCHET_SEEN", str(seen := world.tmp / "seen.json"))
+    _preflight_main(world, {PREFLIGHT_RATCHET[0]: RATCHET_GATE})
+    nxt = _git(world.origin, "rev-parse", "next")
+    world.gh.put(2, h2 := world.change({"adapters/vllm/verity_vllm/commit.py": "", "RATCHET_NEW": "", "BROKEN_DOC_PATH": ""}),
+                 ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    assert "FAILED tests/test_doc_paths.py::test_broken_doc_path_absent" in (err := capsys.readouterr().err), err
+    assert [s for s in world.logs if f"warning: #2 at {h2[:12]}: the ratchet gate" in s], world.logs
+    ran = json.loads(seen.read_text())
+    assert ran["head"] == nxt and _git(world.dev, "log", "-1", "--format=%P", ran["argv"][1]) == f"{nxt} {h2}", ran
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+
+def test_the_preflight_runs_the_ratchet_gate_only_on_a_change_that_reaches_what_it_judges(world, capsys, monkeypatch):
+    """The gate judges the vLLM integration, the repository's lints and lists and the root's ruff configs, so a change
+    elsewhere, a ruff.toml below the root included, doesn't run it, whatever its tree holds."""
+    from research.queue import PREFLIGHT_RATCHET, MarkOnly, StoreLabels, ready
+
+    monkeypatch.setenv("RATCHET_SEEN", str(seen := world.tmp / "seen.json"))
+    _preflight_main(world, {PREFLIGHT_RATCHET[0]: RATCHET_GATE})
+    world.gh.put(2, h2 := world.change({"pkg/notes.txt": "x\n", "pkg/ruff.toml": "", "RATCHET_NEW": ""}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert not seen.exists() and not [s for s in world.logs if "warning" in s], world.logs
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
