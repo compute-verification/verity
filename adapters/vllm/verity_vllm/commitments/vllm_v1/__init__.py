@@ -47,7 +47,7 @@ __all__ = [
     "TREE",
     "TREE_SHA512",
     "Tree",
-    "VllmV1",
+    "Scheme",
     "domain_digest",
     "id_leaf_layout",
     "pos_leaf_layout",
@@ -254,7 +254,7 @@ def verify_opening(
 
 
 class Tree:
-    """The tree rule alone, over leaf digests in tree order (no root binding): what :class:`VllmV1` folds with."""
+    """The tree rule alone, over leaf digests in tree order (no root binding): what :class:`Scheme` folds with."""
 
     def __init__(self, hash: str = "sha256") -> None:
         self.hash = hash
@@ -603,7 +603,7 @@ def domain_digest(domain: Domain) -> bytes:
     return bytes.fromhex(identity_digest(DOMAIN_DIGEST_TAG, doc))
 
 
-class VllmV1:
+class Scheme:
     """``vllm-v1`` over a statement's ports, each a verifier-held domain; ``root`` is the published (bound) root.
 
     Position-leaf ports need ``value_nbytes[port](position)``: the value length the layout (template or layout digest)

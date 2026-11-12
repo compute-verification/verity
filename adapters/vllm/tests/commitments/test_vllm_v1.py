@@ -34,7 +34,7 @@ def test_vectors_file_is_what_the_reference_generates() -> None:
 
 
 def test_scheme_implements_the_interface() -> None:
-    scheme = ref.VllmV1({})
+    scheme = ref.Scheme({})
     assert isinstance(scheme, CommitmentScheme)
     assert scheme.name == ref.NAME == VECTORS["scheme"] == "vllm-v1"
     assert scheme.hashes == ("sha256",)
@@ -58,7 +58,7 @@ def test_configured_scheme_proves_digests_and_verifies_bound_roots() -> None:
     values = [V.expand(f"cfg/{i}", 10 + i) for i in range(5)]
     domain = ref.StepDomain(*(V.digest_of(k) for k in "pcgl"), 5)
     stream = ref.StreamDomain(V.digest_of("sl"), 1, 3, 16, 3, 1, 4, 1)
-    scheme = ref.VllmV1({"host": domain, "m1": stream}, value_nbytes={"host": lambda i: 10 + i})
+    scheme = ref.Scheme({"host": domain, "m1": stream}, value_nbytes={"host": lambda i: 10 + i})
     digests = [scheme.leaf_layout("host", i).digest(v) for i, v in enumerate(values)]
     leaves = [scheme.tree_leaf("host", i, d) for i, d in enumerate(digests)]
     assert leaves == [ref.pos_leaf(v) for v in values]
@@ -73,7 +73,7 @@ def test_configured_scheme_proves_digests_and_verifies_bound_roots() -> None:
     with pytest.raises(InvalidArtifact):
         scheme.leaf_layout("host", 5)
     with pytest.raises(InvalidArtifact):
-        ref.VllmV1({"host": domain}).leaf_layout("host", 0)
+        ref.Scheme({"host": domain}).leaf_layout("host", 0)
 
 
 @pytest.mark.parametrize("case", VECTORS["trees"], ids=lambda c: f"n={c['leaf_count']}")
@@ -251,7 +251,7 @@ def test_sha512_openings_accept_exactly_the_honest_values() -> None:
 def test_sha512_configuration_names_its_hash_and_never_mixes() -> None:
     d = hashlib.sha256(b"cfg").digest()
     s512 = ref.StepDomain(d, d, d, d, 3, hash="sha512")
-    scheme = ref.VllmV1({"v": s512}, value_nbytes={"v": lambda _i: 8})
+    scheme = ref.Scheme({"v": s512}, value_nbytes={"v": lambda _i: 8})
     assert isinstance(scheme, CommitmentScheme)
     assert (scheme.name, scheme.hashes) == (ref.NAME_SHA512, ("sha512",)) == (VECTORS_SHA512["scheme"], ("sha512",))
     leaves = [scheme.tree_leaf("v", i, scheme.leaf_layout("v", i).digest(bytes(8))) for i in range(3)]
@@ -260,9 +260,9 @@ def test_sha512_configuration_names_its_hash_and_never_mixes() -> None:
     with pytest.raises(InvalidArtifact):
         scheme.tree_leaf("v", 0, bytes(32))
     with pytest.raises(InvalidArtifact):
-        ref.VllmV1({"a": s512, "b": ref.StepDomain(d, d, d, d, 3)})
+        ref.Scheme({"a": s512, "b": ref.StepDomain(d, d, d, d, 3)})
     assert ref.domain_digest(s512) != ref.domain_digest(ref.StepDomain(d, d, d, d, 3))
-    assert ref.VllmV1({}).name == ref.NAME
+    assert ref.Scheme({}).name == ref.NAME
 
 
 def test_sha512_domain_digests_are_sha512() -> None:
