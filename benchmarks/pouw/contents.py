@@ -10,6 +10,9 @@ import sys
 import tomllib
 from pathlib import Path
 
+#: what the tests read
+__all__ = ["TABLES", "entries", "main", "table"]
+
 HERE = Path(__file__).resolve().parent
 CONTENTS = HERE / "contents"
 TABLES = {"paths": ("What is here", {"path": "Path", "runs_on": "Runs on", "what": "What"}),

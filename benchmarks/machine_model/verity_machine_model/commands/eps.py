@@ -184,9 +184,6 @@ def record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, cred
     }
 
 
-_eps_record = record  # the name benchmarks/pouw/budget.py reads it under
-
-
 def _eps_table(args, pi: E.Machine) -> int:
     names = args.designs or E.designs(args.data)
     sweep = [float(x) for x in args.fold_sweep.split(",")] if args.fold_sweep else [None]

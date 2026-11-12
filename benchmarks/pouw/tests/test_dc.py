@@ -5,36 +5,35 @@ from __future__ import annotations
 
 import csv
 import hashlib
-import importlib.util
 import json
 import re
-import sys
 from pathlib import Path
 
+import a2u as a2
+import dgemm_ref as ref
+import emp
+import gen_wgmma as gen
+import ldtm as ld
 import numpy as np
+import pipe
+import uniform as un
+from conftest import load
 
 DC = Path(__file__).resolve().parents[1] / "dc"
 MODEL_DATA = Path(__file__).resolve().parents[2] / "machine_model" / "data"
 
-
-def _load(name: str):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, DC / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+#: the two modules that dc's own scripts load from their files, under the names `load` gives them; census.py loads
+#: analyze.py itself, so it comes first and both hold one module
+census = load("dc/census.py")
+an = load("dc/analyze.py")
 
 
 def test_wgmma_header_is_current():
-    gen = _load("gen_wgmma")
     assert (DC / "wgmma.cuh").read_text() == gen.render(), "run python benchmarks/pouw/dc/gen_wgmma.py"
 
 
 def _loop_receipts(X, W, seed, bn, L=32):
     """The receipt word by word, as dgemm.cu's header states it (pgemm.cu's: a boundary every L)."""
-    ref = _load("dgemm_ref")
     m, k = X.shape
     n = W.shape[0]
     tiles_n = n // bn
@@ -65,7 +64,6 @@ def _loop_receipts(X, W, seed, bn, L=32):
 
 
 def test_receipt_twin_matches_word_loop():
-    ref = _load("dgemm_ref")
     rng = np.random.default_rng(3)
     X = rng.integers(-127, 128, size=(3, 96), dtype=np.int8)
     W = rng.integers(-127, 128, size=(64, 96), dtype=np.int8)
@@ -91,7 +89,6 @@ def _pg_sass(kernels: dict[tuple[int, int, int, int], list[str]]) -> str:
 def test_pipe_fold_profile_and_qstar(tmp_path):
     """pgemm's honest loader at NB = 4, LW = 4 (4 loads a group): duo's LOP3 + IMAD + LEA.HI on every word of the first
     three loads' range is 3 instructions a word (ALU 2, IMAD 1, LDTM 1/32); q* at L = 32 m is m c_M / 1024 + c_X / 32."""
-    pipe = _load("pipe")
     fold = ["LOP3.LUT", "IMAD", "LEA.HI"] * 32
     ops = ["S2R", "SYNCS.PHASECHK.TRANS64.TRYWAIT"] + (["LDTM.x32"] + fold) * 4 + ["BRA"]
     ks = pipe.kernels(_pg_sass({(4, 4, 2, 0): ops, (4, 4, 0, 1): ["UTCIMMA", "EXIT"]}))
@@ -110,7 +107,6 @@ def test_pipe_fold_profile_and_qstar(tmp_path):
 
 def _code(seed: int, which: int, n: int) -> np.ndarray:
     """dgemm.cu's code(): the s8 inputs every mode makes."""
-    ref = _load("dgemm_ref")
     base = ref.mix32(np.uint32(seed ^ (which << 28)))
     with np.errstate(over="ignore"):
         x = ref.mix32(base + np.arange(n, dtype=np.uint32))
@@ -119,7 +115,6 @@ def _code(seed: int, which: int, n: int) -> np.ndarray:
 
 def test_receipt_twin_matches_host_reference():
     """`dgemm cpuref DIR 128 256 256 7 90` (dgemm.cu's host_ref, CUDA 13.0) wrote these R and C."""
-    ref = _load("dgemm_ref")
     m, n, k = 128, 256, 256
     X = _code(7, 1, m * k).reshape(m, k)
     W = _code(7, 2, n * k).reshape(n, k)
@@ -136,7 +131,6 @@ def _rows(d: Path, rows: dict[str, dict[str, float]]):
 
 
 def test_analyze_sm100_pass_line(tmp_path):
-    an = _load("analyze")
     t5 = {"0:UTCIMMA*": 1 / 128}   # 256 slots a SM a clock at 128 x 256
     base = {"tc_i8_m128_n256": t5, "ld_32x32b_x32": {"0:LDTM.x32": 0.25}, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 0.5},
             "s_duo": {"0:LOP3.LUT": 2.0}}
@@ -151,7 +145,6 @@ def test_analyze_sm100_pass_line(tmp_path):
 def test_analyze_sm100_tmem_model(tmp_path):
     """An exact (OP_UNTIL) point at tensor 0.5 loading 0.6 of ρ_T5, ld alone 0.8: honest at L = 32 is where the edge to
     the MMA alone crosses t = l (6/11), and the adversary adds mma.sync's share of the pipe the MMA leaves (5/11)."""
-    an = _load("analyze")
     assert an.upper([(0.5, 0.6)], 0.25) == 0.6 and an.upper([(0.5, 0.6)], 0.75) == 0.0
     t5 = {"0:UTCIMMA*": 1 / 128}
     _rows(tmp_path, {"tc_i8_m128_n256": t5, "ld_32x32b_x32": {"0:LDTM.x32": 0.8 / 4},
@@ -166,7 +159,6 @@ def test_analyze_sm100_tmem_model(tmp_path):
 def test_analyze_sm100_li_joint(tmp_path):
     """tcliU: the MMA at 0.98 beside lanes folding 1/16 x128 load a SM a clock (256 words) keeps up with L = 64's half of
     0.98 x 256 slots; tclaneU_li is a lane joint against the LOP3 + IMAD pair alone; neither enters the TMEM region."""
-    an = _load("analyze")
     t5 = {"0:UTCIMMA*": 1 / 128}
     _rows(tmp_path, {"tc_i8_m128_n256": t5, "ld_32x32b_x32": {"0:LDTM.x32": 0.25}, "s_duo": {"0:LOP3.LUT": 2.0},
                      "p_imad_lop3": {"0:IMAD": 2.0, "0:LOP3.LUT": 2.0},
@@ -240,7 +232,6 @@ def test_census_sm90_rows(tmp_path):
     """The issue facet through scalar issue (0, 1) and the mix point (1/128, 0.5078) a SMSP-cycle is IGMMA 63 + other 1
     (x 0.98); IMAD at half beside the tensor gives its pipe facet IGMMA 64 + IMAD 2 (x 0.98); mma.sync inside the
     shared line joins M, outside it gets MS."""
-    census = _load("census")
     run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
     dev = census.Device("sm90", [run])
     lines, rows = census.census(dev)
@@ -264,7 +255,6 @@ def test_census_sm90_rows(tmp_path):
 def test_census_tables_take_one_line_an_epoch():
     """A refit closes a line at one epoch and opens its successor at the next; two lines open in one epoch are
     refused."""
-    census = _load("census")
     rows = [{"row": "JI100_0"}]
 
     def line(u, since="", until=""):
@@ -290,7 +280,6 @@ def test_device_census_is_well_formed():
     cites the vendor document instead (directly, or as `@NAME` from machine_model's data/citations.toml), since no run
     measured them."""
     import tomllib
-    census = _load("census")
     note = re.compile(r"note:\d{8}T\d{4}Z-[a-z0-9-]+")
     named = tomllib.loads((MODEL_DATA / "citations.toml").read_text())
     devices = MODEL_DATA / "devices"
@@ -312,7 +301,6 @@ def test_device_census_is_well_formed():
 
 
 def test_analyze_sm90_pass_line(tmp_path):
-    an = _load("analyze")
     wg = {"0:IGMMA.64x256x32.S8.S8*": 128 / 4096}   # 128 slots a SM a clock
     _rows(tmp_path / "a", {"wg_s8_n256_a1": wg, "wg_e4m3_n256_a1": {"0:QGMMA.64x256x32.F32.E4M3.E4M3*": 128 / 4096},
                            "imma_s8_k16": {"0:IMMA.16816.S8.S8": 1.0},
@@ -328,7 +316,6 @@ def test_analyze_sm90_pass_line(tmp_path):
 def test_uniform_tables_pin_every_loop():
     """Each family's tables pin every probe's loop: the alone chains count a uniform opcode, every other uniform probe
     the MMA beside them, and each IMAD-form probe an opcode of its loop."""
-    un = _load("uniform")
     for fam in ("sm90", "sm100"):
         tab = un.tables(fam)
         assert len(tab) == 115, fam
@@ -343,7 +330,6 @@ def test_uniform_tables_pin_every_loop():
 def test_uniform_fit_and_check():
     """UP at its alone rate, an issue slot on the issue rows, 0 on a pipe row with its limit beside it; a point UP's line
     exceeds is reported."""
-    un = _load("uniform")
     coef = {"ALU": {"issue": 1.0, "A": 2.0, "JI9_0": 0.98}, "IMAD": {"issue": 1.0, "I": 2.0}}
     pts = [{"probe": "uz", "T": 200.0, "n": {"UNI": 100}},
            {"probe": "uh", "T": 300.0, "n": {"ALU": 64, "IMAD": 32, "UNI": 64, "other": 4}}]
@@ -363,7 +349,6 @@ def test_uniform_fit_and_check():
 def test_uniform_issue_price_reads_only_saturated_streams(tmp_path):
     """The issue price is the least slowdown a uniform instruction adds, counted in full from the SASS (a loop-control
     uniform instruction the tables drop is still subtracted), over the streams whose baseline issues ≥ 0.95, less 2%."""
-    un = _load("uniform")
     out = tmp_path / "out"
     (out / "probes").mkdir(parents=True)
     (out / "sass").mkdir()
@@ -395,7 +380,6 @@ def test_ldtm_price_drops_the_single_load_restructure():
     """The LDTM price is the least isolated load cost over the priced points of a read stream: at least two loads, the
     point still issue-saturated. The single-load point (the loop restructures) and the load-path-bound points above it
     (issue < 0.95) are dropped, and streams below 0.95 aren't read. Repeats are the price computed from each run."""
-    ld = _load("ldtm")
 
     def fake(out):
         return {
@@ -420,7 +404,6 @@ def test_ldtm_price_drops_the_single_load_restructure():
 
 def test_ldtm_loop_counts_takes_the_larger_loop(tmp_path):
     """An m probe times two loops (the lane stream and the MMA warp's); loop_counts counts the larger, the stream."""
-    ld = _load("ldtm")
     out = tmp_path / "out"
     (out / "sass").mkdir(parents=True)
     body = ["FFMA R1, R1, 1, R1", "LDTM.x128 R4, tmem[UR6]", "@P0 BRA 0x10",      # the stream loop, 0x10..0x30
@@ -438,7 +421,6 @@ def test_emp_prices_every_loop_on_ds90_facets(tmp_path):
     """emp.py charges every opcode between the gated loop's head and tail at the trip rate: a wgmma s8 n256 loop at
     1/32 a SM-clock fills the tensor facet exactly, a 2:4 sparse form at its dense equivalent, BGMMA only issue, and a
     loop 1% faster is reported above the sheet. The event clock is the longest block's cycles over the time a call."""
-    emp = _load("emp")
     run, sass = tmp_path / "run" / "sm90_emp", tmp_path / "sass"
     run.mkdir(parents=True)
     sass.mkdir()
@@ -482,7 +464,6 @@ def test_uniform_write_census_is_idempotent(tmp_path):
     DC-90-ri's refit of JI90_0 aren't uniform.py's and stay; JI90_0's new line keeps its `until`, so the refit still
     replaces it on DC-90-ri."""
     import shutil
-    un, census = _load("uniform"), _load("census")
     dev = tmp_path / "sm_90"
     shutil.copytree(MODEL_DATA / "devices" / "sm_90", dev)
     res = {"up": {"rate": 0.5, "by": "uz_64i", "cycles": 1.96}, "uniform_alone": {"uz_64i": 0.5}, "violations": [],
@@ -516,7 +497,6 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
     its own census/DS-90.csv), TMAB, and uniform.py's UNI and UP. A row whose old description extends the generated one
     keeps its note."""
     import shutil
-    census = _load("census")
     dev = tmp_path / "sm_90"
     shutil.copytree(MODEL_DATA / "devices" / "sm_90", dev)
     run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
@@ -561,7 +541,6 @@ def test_census_prices_a_memory_lane_and_moves_every_scalar_coefficient_class(tm
     scalar coefficient without a lane in this run (NOROW, and ATOMS32, STS32 and STG32 from earlier runs) the new hull's
     joint issue lines, and keeps their issue lines."""
     import shutil
-    census = _load("census")
     dev = tmp_path / "sm_90"
     shutil.copytree(MODEL_DATA / "devices" / "sm_90", dev)
 
@@ -620,7 +599,6 @@ def test_a2u_issue_bound_and_uniform_price(tmp_path):
     beside the lanes for free, the block issues 1 + 1/32 and A2u fails at price 0. One trip over 1 at the stop's boundary
     still holds. NOP is left out of `issue_low` and the instruction outside the loops out of every count; the until loop
     is told by its stop poll in either order."""
-    a2 = _load("a2u")
     tight = a2.analyze(_a2u_out(tmp_path / "tight", 31679))
     base, i64 = tight["probes"]["a2_tc_i0"], tight["probes"]["a2_tc_i64"]
     assert base["until"] == {"IADD3": 64, "FFMA": 63, "LDS": 1, "NOP": 1} and i64["fixed_uniform_a_trip"] == 66

@@ -164,6 +164,16 @@ def test_work_is_the_served_scheme_s_at_the_padded_rows(m, m16):
     assert w.weight_hashed_bytes == {"b_rows": 4 * n * k} and w.gamma is None
 
 
+def test_the_door_s_entry_says_the_call_commits_y_only_once_the_call_hashes_y_s_rows():
+    """The door notes every figure of a scheme whose entry says its timed call commits no y (`Scheme.commits_y`). The
+    arm's call hashes A's rows and the tile leaves and no row of y, and the entry says so."""
+    n, k = LINEARS["o"]
+    hashed = OA.PearlPlus().work(A.Shape("o", 16, k, n)).hashed_bytes
+    assert DOOR.SCHEMES[OA.SCHEME].commits_y is ("y_rows" in hashed), (
+        f"the arm's call hashes {sorted(hashed)}: the door's entry (verity_bench.overhead.SCHEMES) says commits_y only "
+        "in the change that makes the call hash y's rows (`y_rows` in work's hashed bytes), and then it must")
+
+
 @pytest.mark.parametrize("m", [1, 16, 64, 65, 8192])
 def test_the_tiles_are_the_served_pipeline_s(m):
     R, (n, k) = OA.kernels(), LINEARS["qkv"]

@@ -36,6 +36,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+#: what `jobs/pin_target.sh` and the tests read
+__all__ = [
+    "CASES", "FLOAT", "NORMAL", "PINNED", "PinFailed", "SG", "UNITS_CASES", "arch_of", "build_toolkit", "homes",
+    "judge_run", "nvcc_args",
+]
+
 HERE = Path(__file__).resolve().parent
 
 
