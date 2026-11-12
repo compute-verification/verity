@@ -159,13 +159,28 @@ up and verifying the session. The command runs it `--repeat` times and records e
 bytes, the block type and the host (node, cores, CPU model). A run the verifier refuses ends the command: the record
 says refused, with the verifier's reason, and nothing is run again.
 
-As a research run, from a clone on a CPU node (`lean_verify.sh` builds the verifier and fetches the proof's art):
+The program and the partition are held to the circuit before the verifier starts. The circuit's second line binds a
+program (`program_sha512`) and a partition (a rule and a digest). The command hashes the program file as the verifier
+does, over the descriptor's canonical JSON without `annotations`, and the partition file under the bound rule, and ends
+with the two digests when a file isn't the bound object or the circuit binds nothing for it, so a file made again that
+is another object is never the reason the verifier refuses. At `--zk` the verifier itself holds the program to the
+circuit only through a `verity/partition/v1` object, so under the provisional rule (`flock-circuit/unit-cover/v0`) this
+check is the one that does. Under that rule the verifier takes no partition object and refuses a session given one: a
+partition file that is the bound cover is checked and not handed to it, and the record says so (`statement.bound`). The
+circuit is held to `stage.json`'s `circuit_sha512` where it states one.
+
+As a research run, from a clone on a CPU node. `lean_verify.sh` fetches the proof's art (kind `flock-proof/v1`: the
+session directory and what of its statement the art holds) and, with `--with ART PATH`, each file the statement keeps
+in another art (a circuit too large for the proof's art, a program made after it) beside it in one tree, then builds
+the verifier:
 
 ```text
 research run --project verity --on NODE --mem-gb GB --timeout SECONDS --source . --cwd clone -- \
-    bash benchmarks/prove/lean_verify.sh ART [--repeat N] [--word TYPE] [--k-log K] [--blocks N]
+    bash benchmarks/prove/lean_verify.sh ART [--with ART PATH]... [--repeat N] [--word TYPE] [--k-log K] [--blocks N]
 research data label RUN run_of_record prove-glm53-lean-verify --by LANE --ref RUN
 ```
+
+The node's scratch holds the circuit twice, the fetched file and the verifier's archive of it.
 
 The table reads `out/lean-verify.json` from each labelled run. A block type's record is its newest run's. A run whose
 record the verifier refused, that wrote no record, or whose block type the census doesn't hold under its cut measures

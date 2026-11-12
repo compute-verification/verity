@@ -19,6 +19,7 @@ it prints from the store's records of record."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import runpy
 import shutil
@@ -1526,14 +1527,39 @@ class Verifier:
                 {"cpu_s": took * 2, "user_s": took, "maxrss_gib": 1.5})
 
 
+#: a made-up program descriptor, whose `annotations` are in no digest, and a made-up partition object
+PROGRAM = {"schema": "made-up", "definitions": {"Staged_v2{N=1}": [1, 2]}, "annotations": {"theta": [3]}}
+PARTITION = {"format": "made-up", "program": "p", "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
+#: the program's file, spelled as no canonical form is
+PROGRAM_FILE = json.dumps(PROGRAM, indent=1).encode()
+
+
+def _sha512(prefix: bytes, obj: object) -> str:
+    return hashlib.sha512(prefix + json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+#: what a circuit binds for them: the program's digest over the descriptor without `annotations`, the partition's
+#: over the object after its rule and a zero byte
+PROGRAM_SHA512 = _sha512(b"", {k: v for k, v in PROGRAM.items() if k != "annotations"})
+
+
+def circuit_text(rule: str = L.PARTITION_V1, size: int = 4000) -> bytes:
+    """A circuit file of `size` bytes whose second line binds `PROGRAM` and, under `rule`, `PARTITION`."""
+
+    meta = {"k_log": 27, "program_sha512": PROGRAM_SHA512,
+            "partition": {"rule": rule, "digest": _sha512(rule.encode() + b"\0", PARTITION)}}
+    head = b"flock-circuit unit/made-up\nMETA " + json.dumps(meta).encode() + b"\n"
+    return head + b"x" * (size - len(head))
+
+
 def kept_proof(tmp: Path, *, stage: dict | None = None) -> Path:
     """A kept proof's tree: a staged statement's files and one session's two proof files."""
 
     tree = tmp / "proof"
     (tree / "stage").mkdir(parents=True)
     (tree / "session").mkdir()
-    for name, size in (("circuit.txt", 4000), ("pub-256.bin", 64), ("program.json", 30)):
-        (tree / "stage" / name).write_bytes(b"x" * size)
+    for name, data in (("circuit.txt", circuit_text()), ("pub-256.bin", b"x" * 64), ("program.json", PROGRAM_FILE)):
+        (tree / "stage" / name).write_bytes(data)
     if stage is not None:
         (tree / "stage" / "stage.json").write_text(json.dumps(stage))
     (tree / "session" / "session.json").write_text("{}")
@@ -1569,8 +1595,11 @@ def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_pr
     assert doc["proof"] == {"files": [{"name": "circuit.rep0.bin", "bytes": 300}, {"name": "circuit.rep1.bin", "bytes": 200}],
                             "bytes": 500, "record_bytes": 2}
     assert doc["statement"]["files"] == [{"name": "circuit.txt", "bytes": 4000}, {"name": "pub-256.bin", "bytes": 64},
-                                         {"name": "program.json", "bytes": 30}]
+                                         {"name": "program.json", "bytes": len(PROGRAM_FILE)}]
     assert (doc["statement"]["zk"], doc["statement"]["circuit_sha512"]) == (True, "key-circuit.txt")
+    assert doc["statement"]["bound"] == {
+        "program_sha512": PROGRAM_SHA512, "held": ["program"], "withheld": [],
+        "partition": {"rule": L.PARTITION_V1, "digest": _sha512(L.PARTITION_V1.encode() + b"\0", PARTITION)}}
     v = doc["verifier"]
     assert (v["archive_put_s"], v["repeat"], [r["wall_s"] for r in v["runs"]]) == (0.25, 3, [12.5, 10.0, 11.0])
     assert v["command"][:2] == ["lean-verifier", "verify"]                 # the executable by its file's name, not its path
@@ -1630,7 +1659,7 @@ def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_f
     # a name two files carry is refused, and its flag says which; partition.json and registered.json go where present
     (tree / "other").mkdir()
     (tree / "other" / "circuit.txt").write_text("another")
-    (tree / "stage" / "partition.json").write_text("{}")
+    (tree / "stage" / "partition.json").write_text(json.dumps(PARTITION))
     with pytest.raises(ValueError, match=r"2 paths under .* are named `circuit.txt` .*: say which with --circuit"):
         measured("--definition", "D", "--k-log", "30", "--blocks", "16")
     doc = measured("--definition", "D", "--k-log", "30", "--blocks", "16", "--circuit", str(tree / "stage" / "circuit.txt"))
@@ -1645,6 +1674,79 @@ def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_f
         Verifier(monkeypatch, [], put_rc=1)
         (tree / "session" / "circuit.rep0.bin").write_bytes(b"p")
         measured("--definition", "D", "--k-log", "30", "--blocks", "16", "--circuit", str(tree / "stage" / "circuit.txt"))
+
+
+def test_the_lean_verifiers_runner_holds_the_program_and_the_partition_to_the_circuit_before_any_verifier(tmp_path, monkeypatch):
+    """The circuit's second line binds a program and a partition. A program or partition file that isn't the bound
+    object, or that the circuit binds nothing for, ends the command before any verifier process starts; the bound
+    ones pass however their files spell them. Under the provisional cover the verifier takes no partition object, so
+    the bound cover is checked and not handed to it. The circuit is held to `stage.json`'s `circuit_sha512`."""
+
+    def measured(*argv: str) -> dict:
+        parser = argparse.ArgumentParser()
+        L.add_arguments(parser)
+        return L.measure(parser.parse_args(["--lean", VERIFIER, "--proof", str(tree), "--repeat", "1", "--definition", "D",
+                                            "--k-log", "30", "--blocks", "16", *argv]), tmp_path / "out")
+
+    def refused(match: str) -> None:
+        calls = len(verifier.calls)
+        with pytest.raises(ValueError, match=match):
+            measured()
+        assert len(verifier.calls) == calls                                  # no verifier process, archive-put included
+
+    tree = kept_proof(tmp_path)
+    program, partition, circuit = (tree / "stage" / n for n in ("program.json", "partition.json", "circuit.txt"))
+    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 5)
+
+    # a program made again that isn't the bound one, and one that is no JSON
+    program.write_text(json.dumps(PROGRAM | {"schema": "another"}))
+    refused(rf"program\.json is not the program the circuit binds: its digest .* is {_sha512(b'', {'schema': 'another', 'definitions': PROGRAM['definitions']})}, "
+            rf"and .*circuit\.txt binds program_sha512 {PROGRAM_SHA512}: no verifier was started")
+    program.write_text("not a descriptor")
+    refused(r"program\.json \(--program\) is not JSON .*: no verifier was started")
+    program.write_text(json.dumps(PROGRAM | {"annotations": {"theta": [9, 9]}}, separators=(",", ":")))   # annotations are in no digest
+    assert measured()["statement"]["bound"]["held"] == ["program"]
+
+    # the bound partition object goes to the verifier; another is refused
+    partition.write_text(json.dumps(PARTITION, indent=2))
+    doc = measured()
+    assert doc["statement"]["bound"]["held"] == ["program", "partition"] and doc["statement"]["bound"]["withheld"] == []
+    assert verifier.calls[-1][verifier.calls[-1].index("--partition") + 1] == "key-partition.json"
+    partition.write_text(json.dumps(PARTITION | {"program": "q"}))
+    refused(rf"partition\.json is not the partition the circuit binds: its digest under {L.PARTITION_V1} is .*: no verifier was started")
+
+    # the provisional cover: the bound object is checked and withheld, since the verifier takes none under that rule
+    circuit.write_bytes(circuit_text(L.PARTITION_COVER))
+    refused(rf"partition\.json is not the partition the circuit binds: its digest under {L.PARTITION_COVER} is ")
+    partition.write_text(json.dumps(PARTITION))
+    doc = measured()
+    put, verify = verifier.calls[-2:]
+    assert [Path(x).name for x in put[3:]] == ["circuit.txt", "pub-256.bin", "program.json"] and "--partition" not in verify
+    assert [x["name"] for x in doc["statement"]["files"]] == ["circuit.txt", "pub-256.bin", "program.json"]
+    assert doc["statement"]["bound"] == {
+        "program_sha512": PROGRAM_SHA512, "held": ["program", "partition"], "withheld": ["partition"],
+        "partition": {"rule": L.PARTITION_COVER, "digest": _sha512(L.PARTITION_COVER.encode() + b"\0", PARTITION)}}
+
+    # the circuit is the one stage.json names
+    (tree / "stage" / "stage.json").write_text(json.dumps({"circuit_sha512": "key-circuit.txt"}))
+    assert measured()["accepted"] is True
+    (tree / "stage" / "stage.json").write_text(json.dumps({"circuit_sha512": "another"}))
+    calls = len(verifier.calls)
+    with pytest.raises(ValueError, match=r"circuit\.txt is not the circuit .*stage\.json names: its SHA-512 is key-circuit\.txt"):
+        measured()
+    assert [c[1] for c in verifier.calls[calls:]] == ["archive-put"]         # the verifier hashed it, and verified nothing
+
+    # a circuit that binds nothing holds no file to it
+    (tree / "stage" / "stage.json").unlink()
+    circuit.write_bytes(b"x" * 4000)
+    refused(r"circuit\.txt binds no program \(its second line states no `program_sha512`\), so nothing holds .*program\.json to it")
+    program.unlink()
+    refused(r"circuit\.txt binds no partition under a rule this command hashes \(its rule is None; ")
+    partition.unlink()
+    assert measured()["statement"]["bound"] == {"program_sha512": None, "partition": None, "held": [], "withheld": []}
+    circuit.write_bytes(b"flock-circuit unit/made-up\nMETA {not json\n")
+    refused(r"circuit\.txt: its second line is not `META` and a JSON object")
+    assert verifier.verdicts == []
 
 
 # ---- the command ---------------------------------------------------------------------------------------------------------------
