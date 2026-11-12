@@ -199,6 +199,24 @@ def test_an_arrival_after_an_empty_schedule_says_how_many():
         ("a", 0, None), ("b", 1, 2), ("c", 2, None), ("d", 2, 1)]
 
 
+def test_the_header_says_where_the_launch_left_the_context_limit_to_vllm():
+    """vLLM keeps the launch's -1 beside the limit it fitted to the KV pool (its model config's ``original_max_model_len``).
+    A replay's engine is then launched at -1 on the header's block count, so its model is built at the length the served one
+    was; a launch that stated a length, and a vLLM without the entry, write a header as before."""
+    sched = SimpleNamespace(scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=4),
+                            cache_config=SimpleNamespace(block_size=16, num_gpu_blocks=64, cache_dtype="auto"), max_model_len=1008,
+                            vllm_config=SimpleNamespace(speculative_config=None, model_config=SimpleNamespace(
+                                max_model_len=1008, original_max_model_len=-1)))
+    stated = {"scheduler": "SimpleNamespace", "max_num_batched_tokens": 2048, "max_num_seqs": 4, "block_size": 16,
+              "num_gpu_blocks": 64, "max_model_len": 1008}
+    assert ST.scheduler_config(sched) == {**stated, "max_model_len_auto": True}
+    for launch in (None, 1008, 1048576):
+        sched.vllm_config.model_config.original_max_model_len = launch
+        assert ST.scheduler_config(sched) == stated
+    del sched.vllm_config.model_config.original_max_model_len
+    assert ST.scheduler_config(sched) == stated
+
+
 def test_the_header_holds_the_cache_format_and_speculative_settings_an_engine_was_built_with():
     """A replay's engine takes them as its ``kv_cache_dtype`` and ``speculative_config``; an engine with vLLM's default cache
     format and no draft writes neither entry, so its header is what it was."""

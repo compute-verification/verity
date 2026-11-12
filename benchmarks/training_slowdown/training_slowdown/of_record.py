@@ -47,7 +47,7 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   of the differences. A named line that the record's step does not have over the config's as named is a difference.
 - **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
-  checkpoint's.
+  checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
 
 `--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted record (`DIR/ENTRY/run.json`).
 """
@@ -73,8 +73,13 @@ from .model import LM
 HELD = Path(__file__).with_name("of_record.toml")
 SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
-#: tensors whole, and their deltas in codes with a scale a group. A format may have several kinds
-E_KINDS = {"full": ("identity",), "quant": ("scaledquant",)}
+#: tensors whole, and their deltas in codes with a scale a group, the codes a rounding of the trained delta
+#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`). A format may have several kinds
+E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary")}
+#: a codec that packs the same encoding another way than the records' program did, so that its size is expected to
+#: differ from a record's by the packing alone: named in the entry's E line
+E_PACKING = {"sparseternary": "one xz stream a matrix at one setting, where the record's program kept the smallest "
+                              "of several settings' streams of all its matrices"}
 #: how many of a config's steps are counted; the last is the one compared
 STEPS = 2
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
@@ -502,9 +507,11 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
 
 def e_sizes(kinds: list[str], e_bytes: int, last: dict, steps: int) -> str:
     """An entry's E line: the plan's `kinds` and E's size after the counted steps beside the record's format and its
-    last checkpoint's size after its `steps`, which are not compared."""
+    last checkpoint's size after its `steps`, which are not compared, and each packing that differs (`E_PACKING`)."""
     return (f"{', '.join(kinds)}, {e_bytes:,} B after {STEPS} steps; the record's {last['format']}, "
-            f"{last['e_bytes']:,} B after {steps}")
+            f"{last['e_bytes']:,} B after {steps}"
+            + "".join(f"; expected to differ in size by the packing too: {k} is {E_PACKING[k]}"
+                      for k in kinds if k in E_PACKING))
 
 
 def e_kind(kinds: list[str], fmt: str) -> list[str]:
