@@ -15,8 +15,9 @@ its own:
   The requests of `plan` (greedy and sampled, each under its own seed, some sharing a cached prefix, one longer than the
   indexer's top-k, more than fit one batch) arrive between engine iterations. After each step's forward, `Rows` reads at
   every layer with a KV cache the rows the step wrote: the layer's cache at the step's slots. The phase writes the trace, each
-  request's tokens, a digest of each request's rows at each layer, and what the engine chose (`chosen`): the cache format its
-  config holds once built, each layer's attention backend, cache dtype and row bytes, and each backend's read path.
+  request's tokens, a digest of each request's rows at each layer, what the engine chose (`chosen`: the cache format its
+  config holds once built, each layer's attention backend, cache dtype and row bytes, and each backend's read path) and how
+  its first attention layer attended (`Routes`).
 - ``--phase replay``: an engine built from the trace's header, each request put back before the step the trace says it
   arrived before; the scheduler decides the rest. It writes the same. ``--cache named`` gives the engine the cache format
   the served engine's config held instead, for a tree whose header does not carry the format.
@@ -30,7 +31,8 @@ with its serve (steps, prefix-cache hits, tokens, rows), writes OUT/fp8_cache_re
 a prefix-cache hit, every arm but ``auto`` held byte rows, and every replay from the header equals its serve. Where the header
 holds no cache format and the arm's is not ``auto``, the replay from the header runs another engine than the served one; the
 run then replays once more with ``--cache named`` and reports both, and still fails. A phase that fails is recorded and the
-rest go on. The rows' bytes stay in a scratch directory, removed at the end; OUT holds digests.
+rest go on. The rows' bytes stay in a scratch directory, removed at the end; OUT holds digests, and under each run's ``ptx/``
+the PTX Triton compiled for vLLM's fused norm, RoPE and cache write (`keep_ptx`) when that run's serve was the first to need it.
 
 In the pod venv, on one idle card, from the tree's root:
 
@@ -43,6 +45,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -72,6 +75,9 @@ SERVE = {"max_model_len": 4096, "max_num_seqs": 8, "max_num_batched_tokens": 512
 REQUESTS = 12
 #: a prompt longer than GLM-5.3's ``index_topk`` (2048), so that its last steps attend a strict subset of its cached rows
 LONG = 2200
+#: vLLM's Triton kernel that norms a token's latent, rotates its RoPE part and writes its cache row, quantising it for an
+#: FP8 cache
+WRITE_KERNEL = "_fused_norm_rope_kernel"
 #: what of a step record the replay must repeat
 STEP_KEYS = ("T", "order", "rows", "new", "resumed", "cache_hit", "preempted", "emitted", "finished")
 
@@ -186,6 +192,47 @@ def chosen(eng: Any, runner: Any) -> dict[str, Any]:
                          "heads": getattr(b, "num_heads", None), "fp8_cache": getattr(b, "use_fp8_kv_cache", None),
                          "fp8_mixed_batch": getattr(b, "fp8_use_mixed_batch", None)})
     return {"cache_dtype": str(cc.cache_dtype), "block_size": int(cc.block_size), "layers": layers, "builders": builders}
+
+
+class Routes:
+    """How the first attention layer with vLLM's route decision (``_use_sparse_mha``) attended, by call of that decision
+    (a layer asks once a step, and again where the step has prefill tokens): ``top-k`` reads every key from the cache at the
+    indexer's selection; ``dense`` reads a prefill step's own keys as the step computed them, never from the cache;
+    ``dense, cached context`` reads, beside them, the rows of an earlier chunk or of a prefix-cache hit from the cache."""
+
+    def __init__(self, hooks: Any, model: Any) -> None:
+        self.count: dict[str, int] = {}
+        layer = next((m for m in kv_layers(model).values() if callable(getattr(m, "_use_sparse_mha", None))), None)
+        if layer is not None:
+            hooks.wrap(layer, "_use_sparse_mha", self.counting)
+
+    def counting(self, orig: Any) -> Any:
+        def wrapped(attn_metadata: Any, *args: Any, **kw: Any) -> Any:
+            dense = orig(attn_metadata, *args, **kw)
+            context = getattr(getattr(attn_metadata, "prefill", None), "chunked_context", None) is not None
+            route = "top-k" if not dense else "dense, cached context" if context else "dense"
+            self.count[route] = self.count.get(route, 0) + 1
+            return dense
+        return wrapped
+
+
+def keep_ptx(cache: Path, dest: Path, seen: set[str]) -> list[dict[str, Any]]:
+    """Copies to `dest` each PTX of `WRITE_KERNEL` in Triton's cache directory `cache` that no earlier call saw (one file a
+    specialization; the cache format is among its constants), and counts its f32 divisions by mnemonic: the FP8 write
+    divides a latent by its tile's scale, and the mnemonic says how that quotient rounds."""
+    out = []
+    for f in sorted(cache.rglob(f"{WRITE_KERNEL}*.ptx")):
+        if str(f) in seen:
+            continue
+        seen.add(str(f))
+        dest.mkdir(parents=True, exist_ok=True)
+        name = f"{f.parent.name[:12]}-{f.name}"
+        shutil.copy(f, dest / name)
+        div: dict[str, int] = {}
+        for m in re.findall(r"\bdiv\.[a-z.]*f32\b", f.read_text(errors="replace")):
+            div[m] = div.get(m, 0) + 1
+        out.append({"file": name, "bytes": f.stat().st_size, "div": div})
+    return out
 
 
 class Rows:
@@ -356,6 +403,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         return wrapped
 
     hooks = Hooks(tag="fp8-cache-replay")
+    routes = Routes(hooks, runner.model)
     hooks.wrap(trace.sched, "schedule", schedule)
     hooks.wrap(runner, "execute_model", execute_model)
     iteration = 0
@@ -386,7 +434,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
            "device": {"name": torch.cuda.get_device_name(0), "capability": list(torch.cuda.get_device_capability(0))},
            "vllm": __import__("vllm").__version__, "redrawn": redrawn, "steps": steps, "tokens": tokens, "rows": digests,
            "rows_skipped": rows.skipped, "sampling": {rid: r["sampling"] for rid, r in reqs.items()},
-           "empty_schedules": sum(empty.values())}
+           "empty_schedules": sum(empty.values()), "routes": routes.count}
     (out / f"{a.phase}{'-named' if a.cache == 'named' else ''}.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     return doc
 
@@ -398,7 +446,7 @@ def summary(doc: dict[str, Any]) -> dict[str, Any]:
         k = f"{x['module']}/{x['backend'] or x['impl']} {x['kv_cache_dtype']} {x['dtype']} {x['row_bytes']} B"
         kinds[k] = kinds.get(k, 0) + 1
     return {"cache_dtype": doc["chosen"]["cache_dtype"], "block_size": doc["chosen"]["block_size"], "layers": kinds,
-            "builders": doc["chosen"]["builders"],
+            "builders": doc["chosen"]["builders"], "routes": doc["routes"],
             "cache_hits": {rid: n for s in doc["steps"] for rid, n in s["cache_hit"].items()}, "steps": len(doc["steps"]),
             "tokens": sum(map(len, doc["tokens"].values())), "distinct_tokens": len({t for ids in doc["tokens"].values() for t in ids}),
             "rows": sum(x["positions"] for by in doc["rows"].values() for x in by.values()), "rows_skipped": doc["rows_skipped"]}
@@ -440,7 +488,8 @@ def compare(serve: dict[str, Any], replay: dict[str, Any], files: tuple[Path, Pa
     return {"equal": first is None and not toks and not rows["differing"] and same_engine, "same_engine": same_engine,
             "replay_cache_dtype": replay["chosen"]["cache_dtype"], "steps": len(s), "steps_replayed": len(r),
             "first_step_differing": first, "requests": len(serve["tokens"]), "tokens": sum(map(len, serve["tokens"].values())),
-            "tokens_differing": toks, "rows": rows, "empty_schedules": [serve["empty_schedules"], replay["empty_schedules"]]}
+            "tokens_differing": toks, "rows": rows, "empty_schedules": [serve["empty_schedules"], replay["empty_schedules"]],
+            "routes_replayed": replay["routes"]}
 
 
 def main() -> int:
@@ -461,7 +510,8 @@ def main() -> int:
         return 0
     out = Path(a.out)
     scratch = Path(tempfile.mkdtemp(prefix="fp8-cache-rows-"))
-    env = {**os.environ, "PYTHONHASHSEED": "0"}
+    env = {**os.environ, "PYTHONHASHSEED": "0", "TRITON_CACHE_DIR": str(scratch / "triton")}
+    ptx_seen: set[str] = set()
     report: dict[str, Any] = {"layers": LAYERS, "experts": EXPERTS, "compiled": a.compiled, "runs": {}}
     ok = True
     runs = [tuple(r.split(":")) for r in a.runs.split(",")]
@@ -488,6 +538,7 @@ def main() -> int:
             report["runs"][d.name] = entry
             rc, served_rows = phase(d, weights, arm, "serve", "header")
             entry["serve"] = {"rc": rc}
+            entry["write_ptx"] = keep_ptx(scratch / "triton", d / "ptx", ptx_seen)
             if rc:
                 entry["serve"]["log_tail"] = (d / "serve.log").read_text(errors="replace").splitlines()[-25:]
                 ok = False

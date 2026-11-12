@@ -1,8 +1,9 @@
 """The FP8 cache stand-in (`fp8_cache_replay_gpu`) on the CPU, with Model Runner V2 stood in for: `Rows` reads each request's
 cached rows by position, in a bf16 cache and in a 656-byte FP8 one, across chunked prefill, a prefix-cache hit and a recompute
 after a preemption; what of ours it records (the history tables' guard passes the bf16 cache and refuses the FP8 one by name,
-and the tables' hook reads `Rows`' bytes); and its comparison of a replay with its serve, which finds one differing byte of
-one row, a replay on another cache format, and a differing token."""
+and the tables' hook reads `Rows`' bytes); its comparison of a replay with its serve, which finds one differing byte of
+one row, a replay on another cache format, and a differing token; and its count of the attention's routes and the write
+kernel's PTX it keeps."""
 from __future__ import annotations
 
 import hashlib
@@ -139,7 +140,7 @@ def doc(tmp_path, tag: str, fmt: str, flip: tuple[str, int, int] | None = None, 
     eng = NS(vllm_config=NS(cache_config=NS(cache_dtype=fmt, block_size=BLOCK)))
     steps = [{k: i for k in X.STEP_KEYS} for i in range(rows.steps)]
     return ({"steps": steps, "tokens": tokens or {"a": [5, 6, 7], "b": [8]}, "rows": digests, "chosen": X.chosen(eng, runner),
-             "empty_schedules": 0}, tmp_path / f"{tag}.npz")
+             "empty_schedules": 0, "routes": {"top-k": rows.steps}}, tmp_path / f"{tag}.npz")
 
 
 def test_a_replay_equals_its_serve_only_with_every_step_token_and_row_byte_on_the_same_engine(tmp_path):
@@ -150,6 +151,7 @@ def test_a_replay_equals_its_serve_only_with_every_step_token_and_row_byte_on_th
     same, b = doc(tmp_path, "same", "fp8_ds_mla")
     got = X.compare(served, same, (a, b))
     assert got["equal"] and got["rows"] == {"sets": 9, "differing": 0, "first": []} and json.dumps(got)
+    assert got["routes_replayed"] == {"top-k": 4} and X.summary(served)["routes"] == {"top-k": 4}
 
     one, b = doc(tmp_path, "one", "fp8_ds_mla", flip=("a", 2, 513))
     got = X.compare(served, one, (a, b))
@@ -166,6 +168,40 @@ def test_a_replay_equals_its_serve_only_with_every_step_token_and_row_byte_on_th
     other, b = doc(tmp_path, "tokens", "fp8_ds_mla", tokens={"a": [5, 6, 9], "b": [8]})
     got = X.compare(served, other, (a, b))
     assert not got["equal"] and got["tokens_differing"] == [{"request": "a", "tokens": 3, "first_position": 2}]
+
+
+def test_routes_count_each_decision_by_what_it_reads_and_a_write_kernels_ptx_is_kept_once(tmp_path):
+    from verity_vllm.engine.hooks import Hooks
+
+    class Attn(Layer):
+        def _use_sparse_mha(self, attn_metadata):
+            return attn_metadata.prefill is not None and attn_metadata.prefill.dense
+
+    model = torch.nn.Module()
+    model.layers = torch.nn.ModuleList([Layer("indexer", torch.uint8, 132, None), Attn("attn", torch.uint8, 656, "fp8_ds_mla")])
+    hooks = Hooks(tag="test")
+    routes = X.Routes(hooks, model)
+    asked = [NS(prefill=None), NS(prefill=NS(dense=True, chunked_context=None)), NS(prefill=NS(dense=True, chunked_context=object())),
+             NS(prefill=NS(dense=False, chunked_context=object())), NS(prefill=None)]
+    assert [model.layers[1]._use_sparse_mha(m) for m in asked] == [False, True, True, False, False]
+    assert routes.count == {"top-k": 3, "dense": 1, "dense, cached context": 1}
+    hooks.uninstall()
+    assert model.layers[1]._use_sparse_mha(asked[1]) and sum(routes.count.values()) == 5
+    bare = torch.nn.Module()
+    bare.layers = torch.nn.ModuleList([Layer("attn", torch.uint8, 656, "fp8_ds_mla")])
+    assert X.Routes(Hooks(tag="test"), bare).count == {}
+
+    cache, seen = tmp_path / "triton", set()
+    for key, text in (("a" * 40, "div.full.f32 %f1, %f2, %f3;\ndiv.full.f32 %f4, %f5, %f6;\nrem.s32 %r1, %r2, %r3;"),
+                      ("b" * 40, "div.rn.f32 %f1, %f2, %f3;\ndiv.s64 %rd1, %rd2, %rd3;")):
+        (cache / key).mkdir(parents=True)
+        (cache / key / f"{X.WRITE_KERNEL}.ptx").write_text(text)
+        (cache / key / "_fused_q_kernel.ptx").write_text("div.rn.f32")
+        got = X.keep_ptx(cache, tmp_path / "ptx" / key[0], seen)
+        assert [(x["file"], x["div"]) for x in got] == [
+            (f"{key[:12]}-{X.WRITE_KERNEL}.ptx", {"div.full.f32": 2} if key[0] == "a" else {"div.rn.f32": 1})]
+        assert (tmp_path / "ptx" / key[0] / got[0]["file"]).read_text() == text
+    assert X.keep_ptx(cache, tmp_path / "ptx" / "c", seen) == [] and not (tmp_path / "ptx" / "c").exists()
 
 
 def test_the_plan_shares_a_prefix_holds_one_prompt_past_the_top_k_and_samples_half(tmp_path):
