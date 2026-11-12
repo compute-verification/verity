@@ -1762,7 +1762,8 @@ class World:
 
     def _move(self, p: PR, tip: str, main: str) -> tuple[str | None, Skip | None]:
         """Move PR ``p`` regenerated last in a build on ``tip``, landing tip ``main`` (`Queue._regenerate`, with ``main``'s
-        `tools/move/rename.py` and `move_check.py`, kept in the loop's cache): (its certified commit, None), its certificate in
+        `tools/move/rename.py` for a word map or `layout.py` for a path map, and its `move_check.py`, kept in the loop's cache):
+        (its certified commit, None), its certificate in
         `certified`; or (None, why it's left out) while members below it change `tools/move/`'s scripts, or when it came on its
         mark alone (`on_mark`) and its move isn't certified or drive.toml keeps what the regenerated commit changes off the
         mark (`_off_mark`, which `ready` judged on its head's files only); or (None, None) when it isn't certified and has a

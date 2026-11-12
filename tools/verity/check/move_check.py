@@ -1402,7 +1402,7 @@ def worded(text: str, path: str, maps: list, lock: bool = False) -> str:
     return text
 
 
-#: a move commit's line naming its word map (`research.queue`'s `MOVE_TRAILER_RE`)
+#: a move commit's line naming its word map (`research.queue`'s `MOVE_LINE_RE` reads it with `Layout-move:`, a path map's)
 MOVE_LINE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
 #: a name as Python or Lean spells it, one part of a dotted name
 NAME = {"python": re.compile(r"[^\W\d]\w*"), "lean": re.compile(r"[^\W\d][\w'!?]*")}
