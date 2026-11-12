@@ -23,7 +23,7 @@ is a seed whose stream word at position `FLOOR_POS` is one of the four `tl.rand`
 2^32 - 1), found by scanning seeds.  A vector's expected outputs are the reference's (`sampled_accept.sampled_accept`);
 `expect` names what its construction promises of them, which `vectors` asserts.
 
-`random_rows` draws requests instead: nuclei of 1 lane to the whole row at three spreads and one of exponents far below the
+`random_rows` makes random requests instead: nuclei of 1 lane to the whole row at three spreads and one of exponents far below the
 maximum's (where `ex2.approx.f32` halves its operand), each draft token its row's best lane, another lane of the nucleus or
 any lane of the row, so positions are accepted and refused in every mix.
 """
@@ -161,14 +161,14 @@ def vectors(K: int, V: int, tile: int = A.STATS_TILE) -> list[dict]:
     return out
 
 
-#: `random_rows`' nucleus sizes (0: the whole row) and the standard deviations of its logits around 4.0; a spread of 0 draws
+#: `random_rows`' nucleus sizes (0: the whole row) and the standard deviations of its logits around 4.0; a spread of 0 spreads
 #: the logits uniformly over 200 below 4.0 instead, most of their exponentials under `ex2.approx.f32`'s -126
 NUCLEI = (1, 2, 5, 40, 400, 5000, 0)
 SPREADS = (0.3, 2.5, 8.0, 0.0)
 
 
 def random_rows(K: int, V: int, count: int, seed: int, tile: int = A.STATS_TILE, first: int = 0) -> list[dict]:
-    """Requests ``first`` to ``first + count - 1`` of ``seed``'s, in `vectors`' form, each drawn from (seed, its number) alone:
+    """Requests ``first`` to ``first + count - 1`` of ``seed``'s, in `vectors`' form, each a function of (seed, its number) alone:
     each of the K + 1 rows a nucleus of one of `NUCLEI` sizes at one of `SPREADS`, -inf outside it; a draft token the row's
     best lane (6 in 10), another lane of the nucleus (3 in 10) or any lane of the row."""
     out = []
