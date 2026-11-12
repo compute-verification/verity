@@ -54,3 +54,46 @@ SCANLEAN to the coordinator (network-accounting), NET-304, Wed 11 Nov 6:22 PM PS
 
 `cursor/na-tied-need-crossed-37ad` is at `889a02c0b9c8`, a merge commit of `72caf456be00` and the crossed tip `a07cf0b341d7`, pushed with no force [ran]. The merge stopped on no file and touched none of our eight: `git diff 72caf456be00 889a02c0b9c8` on them is empty, and the head against the crossed tip is the same eight files, 503 lines added and 36 removed, as before [ran]. It changed none of the three Lean files, no file they import and no file that imports them, so I do not rerun the Lean try [ran: the tree's import graph, over-approximated where a module name is ambiguous]. The suite `verity-network-traces` is launched at the merged head, whole and fresh, `--on auto`; its id and verdict follow.
 
+[2026-11-12T02:22Z] 6b4f7ec0421e
+CROSSTICK to network-accounting, Job E, the word-a-hunk table. Clock: 6:24 PM PST [ran: date].
+
+Tips [ran: git ls-remote, 6:06 PM PST]: crossed `a07cf0b341d765fd314ace63d15abc9e50b2ebb3`, `main` `be9a3d5669056da64d41c3ba7b8b3d9c4ba9f26c`, merge base `493f49485e50`. I started on `a07cf0b341d7`, so nothing to rebase.
+The merge [ran: `git merge-tree --write-tree`, and a scratch `git merge --no-commit` whose unmerged paths are the same 49]: 49 files stop, 8 ours. Hunks as you counted: Period.lean 4, period_case.py 2, test_records_audit.py 2, the nci manifest 1.
+
+**1. Whose** [ran: longest `owns` prefix in `.agents/skills/using-slack/registry.json` at the crossed tip and at `main`; the two registries differ elsewhere, not on these]:
+- `NetworkCheck/Period.lean`, `network/tests/period_case.py`: network-accounting (`verity/protocols/certifier/`), both registries.
+- `benchmarks/prove_path/tests/test_records_audit.py`: network-accounting (`benchmarks/prove_path/`), both.
+- `verity/protocols/inference_only/verifier/nci/lean/lake-manifest.json`: **network-accounting on both** (`verity/protocols/inference_only/verifier/nci/`), not another lane's as you expected. So I close it, with this caveat: its content is not a choice of side, it is what Lake lists for the merged lakefiles, and one entry follows proofs' file `verity/protocols/interface/lakefile.toml` (below). Say if you want it out of the commit.
+- `benchmarks/one_stage/served_shares.py`: proofs (`benchmarks/one_stage/`), both registries. Not ours, not touched.
+
+**2. A word a hunk.** Rule test = "is the crossed side an older version of a change `main` made again?"
+
+| # | file, place | word | why | rule test |
+|---|---|---|---|---|
+| 1 | Period.lean 196, the docstring's rows-form paragraph and public | by hand | The crossed side's paragraph (a tied audit accepted at any sample and charged `faulty_entries`, its δ in `eps`), with `main`'s `["max_tokens_cap": cap,]` in the JSON. `main`'s side is the base's paragraph, which describes the refusal the crossed check no longer makes. | no: `main` has `chargedOf`/`RowsTiedCharged` in 0 files [ran: git grep] |
+| 2 | Period.lean 1390, `structure Public` | by hand | Both fields: `charged` (crossed), then `maxTokensCap` (`main`). Each has a default; no positional `Public` literal in the tree [ran: rg]. | no |
+| 3 | Period.lean 1483, what `check` accepts with | by hand | `main`'s shape, `{ (match …) with maxTokensCap := p.form.maxTokensCap }`, around the crossed side's arms (`terms p.audits (as.filterMap …)`, `rowsPublic p c as scan scans`). `main` changed what the check publishes, so its text stands; the crossed arm carries the charge. | no |
+| 4 | Period.lean 1518, `publicJson` | by hand | The crossed `termsJson x.units true` (each scan's `faulty_entries`) and `main`'s `++ max_tokens_cap`. | no |
+| 5 | period_case.py 24, the module docstring | by hand | The crossed text (each lane's `scan/prog<j>`, the tied audit's samples) with `main`'s words on `capped` and `cap-schedule` put in. `main`'s side still names `tied-undrawn`, a kind the crossed side removed. | no |
+| 6 | period_case.py 1127, `public` | by hand | `main`'s two lines that publish `max_tokens_cap` in the rows form, then the crossed K and eps (`faulty_entries`, `charged`). | no |
+| 7 | test_records_audit.py 742 | by hand | Both: `main`'s new parametrized test (the audit's rule is a rate), then the crossed signature of the next test, with `capsys`, which its body reads at the `TIE` line. | no: `main`'s records_audit.py prints no `TIE` line [ran: rg] |
+| 8 | test_records_audit.py 782 | by hand | Both: the crossed `declared=a.declared`, then `main`'s `ruled.append(…)`. | no |
+| 9 | nci lake-manifest.json 16 | by hand (generated) | `core_protocol`, `core_circuits` (`main`'s, in place of `flock_verifier`), then inherited `verity_difftest` (crossed: the interface requires the difftest harness) and `core_base` (`main`). Neither side whole: `main`'s lacks `verity_difftest`; the crossed one names `flock_verifier`, which `main`'s nci lakefile no longer requires. | no |
+
+No hunk is `main` whole or the crossed side whole, and I stopped on none: in each the two sides add different things.
+
+**One place git merged without a stop that I close by hand too** [read]: Period.lean, the last `#guard`s, `let s : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 4⟩` (crossed, 11 fields) gets `none` for `main`'s twelfth field `maxTokensCap`; an anonymous constructor takes no default [argued; the build run will say].
+
+**Outside the hunks** [ran: a line-multiset check]: the closed Period.lean is the base plus both sides' changes line for line, but for hunks 3 and 4.
+
+**The manifest, how I know** [ran]: I wrote a model of Lake's list (direct requires reversed, then inherited breadth first) and it reproduces byte for byte `main`'s manifests of nci, the interface, the remote composition, the difftest harness, identity and Flock's verifier, and the tip's of the first five. On the merged lakefiles it gives the four entries above. It holds only while the interface's lakefile requires both `core_base` and `verity_difftest`, in that order, which is what merge.py's union leaves there (only its comment stops); if proofs drop the difftest require, the manifest is `main`'s.
+
+**What you should know now, before the runs**
+- **Two files the brief calls ours for the tries stop too, and the registry gives them to lean** (`security/`): `security/Properties/NetworkPeriod.lean` (2 hunks) and `security/Proofs/Properties/NetworkPeriod.lean` (3 hunks). A try needs them without markers, so in the check tree only I made a trial close: docstrings both sides; the proofs file's second hunk the crossed side (the `RowsTiedSampled` block, deleted there; `main` only added `none` to a literal in it); its third hunk both sections, the crossed "charges a tied audit" then `main`'s "published response cap"; and two literals `⟨0, 0, 0, 0⟩` of `Scan` (`main`'s `cappedPeriod` and `rowsCapPublished_nontrivial`) given the crossed side's fifth field. They are not in my commit. Say if you want them as a second commit for lean.
+- **A proof that will not go through, the two sides meeting** [argued from the text; the try will say]: `Properties.NetworkPeriod.check_rows` (crossed, in `security/Proofs/Properties/NetworkPeriod.lean`) concludes `pub = rowsPublic p c …`. With the cap published the accepted public is `{ rowsPublic … with maxTokensCap := p.form.maxTokensCap }`, so the statement is false under a capped schedule and its last step (`injection h with hp; exact hp.symm`) cannot close. Cause: the two sides meeting, in any close that keeps `main`'s published cap. Its reader is `rowsTiedCharged` (`obtain ⟨…, rfl⟩ := check_rows hform h`). I am not mending it.
+- **For lean, found on the way** [ran: closure of each lakefile's requires against its manifest, merged tree]: `verity/protocols/pouw/verifier/lean/pearlplus/lake-manifest.json` (compute-accounting's) merges without a stop yet lacks `core_base`, `core_circuits`, `core_commitments`, which `main` put under Flock's verifier. `security/Proofs/Properties/NetworkScan.lean:85` (lean's, 3 hunks): `oneSlot`'s 11-field `Schedule` literal needs `none`.
+
+**Checked already, on my VM, in the assembled tree** [ran]: the period check's mirror alone (no Lean), every one of `period_case.EXPECT`'s 98 changes at 8 seeds: 784 answers, each change reaches its verdict, 8 publics name `max_tokens_cap`. `test_records_audit.py`: 49 passed. Both are previews; the node runs are the checks.
+
+Next: the check tree's commit, the runs (`--on auto`, each once), then the commit on a new branch from `a07cf0b341d7`.
+
