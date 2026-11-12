@@ -595,8 +595,10 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     the same rule. A job runs attention under a fused kernel, in its operands' bf16, and the trace under the math
     kernel, which casts them to float32, so the rows the counter writes for the kernel name bf16 where the circuit
     holds float32: the counted step is under the circuit by those rows' MACs at the two dtypes' prices and by nothing
-    else, and with those rows named float32 it is the circuit, to the last digit. An optimizer's products are in the
-    dtype it ran them in, whatever the forward's: Muon's in bf16, Shampoo's in f32, with its roots.
+    else, and with those rows named float32 it is the circuit, to the last digit: both are compared as they are,
+    with no tolerance, since at this shape every sum of gates is a whole number of eighths a float holds exactly. An
+    optimizer's products are in the dtype it ran them in, whatever the forward's: Muon's in bf16, Shampoo's in f32,
+    with its roots.
 
     As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
     attention by (`flops.Counter._attention`), the ones the trace holds.
@@ -615,10 +617,10 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     assert all(ops[gates.op_key([*key[:4], *n, key[4]])] == n for key, n in attention.items())
     as_traced = gates.of_log({"by": step["by"], "ops": {gates.op_key(r): r[4:6] for r in in_dtype(log, attention, MATH)}})
     assert counted["assumed"] == as_traced["assumed"] == {}
-    assert as_traced["gates"] == pytest.approx(tr["circuit"]["gates"], rel=1e-12) and counted["macs"] == as_traced["macs"]
+    assert as_traced["gates"] == tr["circuit"]["gates"] and counted["macs"] == as_traced["macs"]
     under = sum(n[1] * (gates.per_mac(gates.kind_of(*key[:3], MATH)[0]) - gates.per_mac(gates.kind_of(*key[:3], FUSED)[0]))
                 for key, n in attention.items())
-    assert under > 0 and tr["circuit"]["gates"] - counted["gates"] == pytest.approx(under, rel=1e-9)
+    assert under > 0 and tr["circuit"]["gates"] - counted["gates"] == under
     if job in OPTIMIZER_PRODUCTS:
         dtype, kind = OPTIMIZER_PRODUCTS[job]
         products = {k: v for k, v in ops.items() if k.startswith("other param mm ")}
