@@ -103,7 +103,10 @@ def gate(sass_path: Path, build_log: Path) -> dict:
         mma, _, n_mma, n_com, _ = SHAPE[arm]
         body = mainloop(ins, mma)
         c = Counter(op for _, op, _ in body)
-        fam = lambda p: sum(v for k, v in c.items() if k.startswith(p))
+
+        def fam(p: str) -> int:
+            return sum(v for k, v in c.items() if k.startswith(p))
+
         words = 4 * n_com
         v = {"function": name, "loop_insns": len(body), "loop_mma": fam(mma), "loop_lea_hi": fam("LEA.HI"),
              "loop_lop3": fam("LOP3"), "loop_imad": fam("IMAD"), "loop_ldsm4": fam("LDSM.16.M88.4"),
