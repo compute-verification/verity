@@ -5,14 +5,24 @@ form (B), the Build and the word check know the family.  The source: tests/acqui
 from __future__ import annotations
 
 import json
+import random
 import types
 
+import numpy as np
 import pytest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_call
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions import word as W_
 from verity.definitions.numerics import fp8_twins
 from verity.definitions.registry import fp8
 
 from tests.check.test_sampled_replay_fp8 import G, H, I, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
+from verity_vllm.acquire import plan
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.check.replay import coverage
+from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
 
@@ -37,13 +47,6 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
     """N = 320 = 2 * 128 + 64: the partial last weight block's K/G products are committed after the whole blocks', nb major, kb minor --
     word for word `fp8_twins.scale_products(x_s, w_s)` over the [cdiv(N, G), K/G] `weight_scale_inv`, the words the source acquires.
     GLM-5.3's `fused_qkv_a_proj` (K = 6144, N = 2624) is 21 x 48 of them per row."""
-    import random
-
-    import numpy as np
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate_call
-    from verity.circuits.evaluation.reference import standalone_call
-
     K, N, G = 256, 320, 128
     nb, kb = SP.blocks({"K": K, "N": N, "G": G})
     assert (nb, kb) == (3, 2) and SP.blocks({"K": 6144, "N": 2624, "G": G}) == (21, 48)
@@ -60,8 +63,6 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
 
 
 def test_a_ragged_n_site_is_named_with_its_partial_block():
-    from verity.definitions import word as W_
-
     g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 320, "G": 128},
          "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=320,G=128}}", "calls": 3, "where": DN}
     assert W_.check_calls([g], acquired=SP.TAP_WORDS)["acquired_interior_words"] == 3 * 3 * 2
@@ -108,13 +109,6 @@ def test_manifest_sites_refuses_two_geometries_at_one_site():
 
 
 def test_the_family_is_in_every_vocabulary():
-    from verity.definitions import word as W_
-
-    from verity_vllm.acquire import plan
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay import coverage
-    from verity_vllm.pipeline import manifest as M
-
     assert SP.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[SP.FAMILY] == "scale_tap" and SP.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     assert M.DEFAULT_TAPS == (SP.POLICY,)
     entry = {"identity": {"op_path": DN, "output_member": SP.MEMBER}, "name": f"{DN}/{SP.MEMBER}"}
