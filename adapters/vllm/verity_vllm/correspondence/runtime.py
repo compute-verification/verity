@@ -282,9 +282,6 @@ class RuntimeCorrespondence:
     def __len__(self) -> int:
         return len(self._calls)
 
-    def __iter__(self) -> Iterator[CallCorrespondence]:
-        return iter(self._calls[k] for k in sorted(self._calls))
-
     def record(self, call_id: int) -> CallCorrespondence:
         return self._calls[int(call_id)]
 
