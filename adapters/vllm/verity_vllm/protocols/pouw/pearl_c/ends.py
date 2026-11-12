@@ -137,12 +137,15 @@ class PassEnds:
         self.begin(retain, run, schedule, stepped=step)
         return out
 
-    def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None) -> None:
+    def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None,
+                  y_tree: Any = None) -> None:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
         and given its real rows of `y`, y's rows and its tree, `served_y.y_tree`, made on the call's device: all written
         behind the call, `write_behind`, joined by the pass's end).  On a device the call's buffers are copied as they are on
         its stream, and the rest runs behind it on the run's retain stream (`_retain_stream`): y's tree, the copies to the
-        host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`)."""
+        host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`).  With `y_tree`
+        (uint8, `commit_y`'s layout), y's tree is that one, as the caller's own launches wrote it, copied and never made
+        again here: a caller that wrote nothing into it retains what it holds."""
         import torch
         d = cur.retain / "calls"
         for name in ("calls",) if y is None else ("calls", "y"):
@@ -162,11 +165,12 @@ class PassEnds:
             cur.records.append(PW.UnitRecord(*unit, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]), ex))
             out = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True)]
             if y is not None:
-                out += [(paths[2], y, False), (paths[3], SY.y_tree(self, y, mm.index), True, y_root)]
+                out += [(paths[2], y, False), (paths[3], SY.y_tree(self, y, mm.index) if y_tree is None else y_tree, True, y_root)]
             got = write_behind(tuple(out), cur.writes)
         else:
             side = self._retain_stream(xa.device)
-            kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone()] + ([] if y is None else [y.clone()])
+            kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone()] + ([] if y is None else [y.clone()]) \
+                + ([] if y is None or y_tree is None else [y_tree.clone()])
             side.wait_stream(torch.cuda.current_stream(xa.device))
             cur.records.append(None)
             with torch.cuda.stream(side):
@@ -179,7 +183,8 @@ class PassEnds:
                     cur.records[rec] = PW.UnitRecord(*unit, excluded_host(flags.numpy().reshape(-1, 2), words), ex)
                 out = [(paths[0], rows.view(torch.uint8), False, record, held), (paths[1], a_tree, True)]
                 if ys:
-                    out += [(paths[2], ys[0], False), (paths[3], SY.y_tree(self, ys[0], mm.index), True, y_root)]
+                    out += [(paths[2], ys[0], False),
+                            (paths[3], ys[1] if y_tree is not None else SY.y_tree(self, ys[0], mm.index), True, y_root)]
                 got = write_behind(tuple(out), cur.writes, fresh=True, here=True)
         files.update(rows=got[0], tree=got[1])
         if y is not None:

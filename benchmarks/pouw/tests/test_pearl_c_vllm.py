@@ -370,6 +370,30 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
+def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(device_run, tmp_path, monkeypatch):
+    """A caller that commits y with its own launches (the overhead arm) hands `_retained` its tree (``y_tree``): the pass
+    retains those bytes, its y root their last node, and makes no tree of its own; so a tree its launches wrote nothing
+    into is retained as the poison it held, and the verifier sees what the launches left."""
+    make, _, weights, _, salt = device_run
+    run = make()
+    run.begin(retain=str(tmp_path))
+    retained, given = run._retained, {}
+
+    def with_tree(cur, mm, m, flags, xa, tree, y=None, y_tree=None):
+        honest = SY.commit_y(PPD._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, SALT_KEY)[1]
+        given[mm.index] = bytes([0xA5]) * len(honest) if given else honest
+        return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8))
+    monkeypatch.setattr(run, "_retained", with_tree)
+    monkeypatch.setattr(SY, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    run.gemm(1, torch.randn(32, 1024).to(torch.bfloat16), weights[1], None)
+    man = json.loads(Path(run.end()["manifest"]).read_text())
+    for u in man["matmuls"]:
+        tree = (tmp_path / u["y"]["tree"]["path"]).read_bytes()
+        assert tree == given[u["index"]] and u["y"]["root"] == tree[-64:].hex()
+    assert man["matmuls"][1]["y"]["root"] == "a5" * 64
+
+
 def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_them(device_run, tmp_path, monkeypatch,
                                                                                     request):
     """`host.write_behind`: when a retained call returns, its entries name its files and sizes and its bytes are a copy of
@@ -1250,6 +1274,26 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
     path.write_text(json.dumps(man))
     moved = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
     assert moved["answer"]["verdict"] == "reject" and "y opening" in moved["answer"]["reason"], moved["line"]
+
+
+@pytest.mark.slow
+def test_a_pass_whose_y_trees_hold_the_poison_is_rejected(tmp_path):
+    """The no-write control on y: a pass whose y trees are what launches that wrote nothing into them leave, the 0xA5
+    poison, each root its last node (as `_retained` retains a given ``y_tree``), its y rows and everything else honest, is
+    rejected at its drawn tiles' y openings, by the one-pass verifier the harness runs and by the passes' verifier."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    source = b"verifier" * 4
+    assert VR.verify(path, 3, 1, "test", source, coins=published(path))["accepted"]
+    man = json.loads(path.read_text())
+    for u in man["matmuls"]:
+        file = path.parent / u["y"]["tree"]["path"]
+        poison = bytes([0xA5]) * file.stat().st_size
+        u["y"] = {**u["y"], "root": poison[-64:].hex(), "tree": PPD._write(file, poison)}
+    path.write_text(json.dumps(man))
+    one = VR.verify(path, 3, 1, "test", source, coins=published(path))
+    assert not one["accepted"] and "y opening" in one["line"], one["line"]
+    passes = VR.verify_passes([path], 3, 1, "test", published(path), source, test_instance=True)
+    assert passes["answer"]["verdict"] == "reject" and "y opening" in passes["answer"]["reason"], passes["line"]
 
 
 def short_y(path: Path, pos: int, drop: int) -> None:
