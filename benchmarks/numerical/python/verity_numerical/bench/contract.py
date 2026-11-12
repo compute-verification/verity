@@ -79,8 +79,10 @@ workload's own names (``prove_seconds``, ``cycles.parse``) pass through untouche
 
 from __future__ import annotations
 
+import logging
 import os
 import re
+import shutil
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
@@ -156,6 +158,8 @@ __all__ = [
     "validate_measurements",
     "verifier_rates",
 ]
+
+log = logging.getLogger(__name__)
 
 RESULT_SCHEMA = "research/result/v0.1"
 
@@ -912,24 +916,26 @@ def compare_instances(baseline: Mapping[str, Any] | None, candidate: Mapping[str
 
 def probe_hardware(timeout: float = 10.0) -> dict[str, Any]:
     """``{"gpu": {...} | None, "cpu": {...} | None}`` from ``nvidia-smi`` and ``/proc/cpuinfo`` (or ``sysctl`` on
-    macOS) when present.  Whatever cannot be observed is ``None``; nothing is guessed."""
+    macOS) when present.  Whatever cannot be observed is ``None``; nothing is guessed.  A tool that is on the path and
+    cannot be run, or answers what cannot be read, is ``None`` too, with a warning on this module's logger."""
 
     gpu = None
-    try:
-        q = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"],
-                           capture_output=True, text=True, timeout=timeout)
-        rows = [r for r in q.stdout.splitlines() if r.strip()] if q.returncode == 0 else []
-        if rows:
-            name, driver, mem = (s.strip() for s in (rows[0].split(",") + ["", ""])[:3])
-            cuda = None
-            head = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=timeout)
-            m = re.search(r"CUDA Version:\s*([0-9][0-9.]*)", head.stdout) if head.returncode == 0 else None
-            if m:
-                cuda = m.group(1)
-            gpu = {"name": name, "driver": driver or None, "cuda": cuda, "count": len(rows),
-                   "memory_total_bytes": int(mem) << 20 if mem.isdigit() else None}
-    except (OSError, subprocess.TimeoutExpired, ValueError):
-        gpu = None
+    if shutil.which("nvidia-smi") is not None:
+        try:
+            q = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"],
+                               capture_output=True, text=True, timeout=timeout)
+            rows = [r for r in q.stdout.splitlines() if r.strip()] if q.returncode == 0 else []
+            if rows:
+                name, driver, mem = (s.strip() for s in (rows[0].split(",") + ["", ""])[:3])
+                cuda = None
+                head = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=timeout)
+                m = re.search(r"CUDA Version:\s*([0-9][0-9.]*)", head.stdout) if head.returncode == 0 else None
+                if m:
+                    cuda = m.group(1)
+                gpu = {"name": name, "driver": driver or None, "cuda": cuda, "count": len(rows),
+                       "memory_total_bytes": int(mem) << 20 if mem.isdigit() else None}
+        except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+            log.warning("nvidia-smi is on the path and gave no reading (%s: %s): the gpu is recorded as None", type(e).__name__, e)
     cpu = None
     try:
         text = Path("/proc/cpuinfo").read_text()
@@ -937,11 +943,12 @@ def probe_hardware(timeout: float = 10.0) -> dict[str, Any]:
         if models:
             cpu = {"model": models[0].strip(), "count": len(models)}
     except OSError:
-        try:
-            q = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string", "hw.logicalcpu"], capture_output=True, text=True, timeout=timeout)
-            lines = q.stdout.splitlines() if q.returncode == 0 else []
-            if lines and lines[0].strip():
-                cpu = {"model": lines[0].strip(), "count": int(lines[1]) if len(lines) > 1 and lines[1].strip().isdigit() else None}
-        except (OSError, subprocess.TimeoutExpired):
-            cpu = None
+        if shutil.which("sysctl") is not None:
+            try:
+                q = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string", "hw.logicalcpu"], capture_output=True, text=True, timeout=timeout)
+                lines = q.stdout.splitlines() if q.returncode == 0 else []
+                if lines and lines[0].strip():
+                    cpu = {"model": lines[0].strip(), "count": int(lines[1]) if len(lines) > 1 and lines[1].strip().isdigit() else None}
+            except (OSError, subprocess.TimeoutExpired) as e:
+                log.warning("sysctl is on the path and gave no reading (%s: %s): the cpu is recorded as None", type(e).__name__, e)
     return {"gpu": gpu, "cpu": cpu}
