@@ -48,7 +48,10 @@ when:
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover,
   beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
   change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
-  for a queue merge), whose own merge the source checks below fail.  In a temporary worktree of the change's top, each
+  for a queue merge), whose own merge the source checks below fail.  A site (``lint: file:line what``) is the tree
+  below's wherever in its file it stands: it is compared by its file and what it is, with a count, never by its line, so
+  an edit above a site moves it and adds none, a second site of the same kind in its file is the change's, and a file's
+  count that a mended site lowers is no new violation (`beyond`).  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
@@ -218,6 +221,10 @@ HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 CHEAPEST = 12
 #: a violation that names a file, and maybe its line, as `violations` writes it: ``lint: file:line what``, ``lint: file: ...``
 SITE = re.compile(r"^[^:]+: ([^\s:]+):(?:(\d+)\b)?")
+#: the lines a site's violation names after its file: one, or each line of one key (``12,40``, `_ratchet.new_violations`)
+LINES = re.compile(r"\d+(?:,\d+)*")
+#: the count a violation states against its allowance: ``2 found, 0 allowed``
+COUNT = re.compile(r"\b(\d+) found, \d+ allowed\b")
 #: a violation of the repository's ruff lint that names its (file, rule) pair: ``repo_ruff: file [RULE]: N found, M allowed``
 RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
 #: the tables that place a module, by lint file: each a dict literal of strings, which a change may edit for the modules it
@@ -1212,6 +1219,51 @@ def violations(failures: list[dict]) -> list[str]:
     return out
 
 
+def unplaced(v: str) -> tuple[str, int] | None:
+    """(a violation less where it is and how many it counts; how many sites it stands for), for one that names its lines
+    (`SITE` with a line, ``lint: file:line what``, or one key's lines, ``lint: file:12,40 what``: one site a line) or a count
+    (`COUNT`, ``lint: file: 2 found, 0 allowed``: that many).  None for a violation that names neither."""
+    m, n = SITE.match(v), COUNT.search(v)
+    lines = LINES.match(v, m.start(2)) if m and m[2] else None
+    cuts = [x for x in (lines and lines.span(), n and n.span(1)) if x]
+    if not cuts:
+        return None
+    sites = int(n[1]) if n else v[slice(*cuts[0])].count(",") + 1
+    for lo, hi in sorted(cuts, reverse=True):
+        v = v[:lo] + v[hi:]
+    return v, sites
+
+
+def beyond(found: list[str], had: list[str]) -> tuple[list[str], list[str]]:
+    """(the violations in ``found`` that the base's tree already holds, each as ``had``, the base's lint on its own tree,
+    names it; the others, which the change adds).  A site is compared by its file and what it is, with a count, and never
+    by its line: the change adds one only where a file holds more sites of one kind than its base does.  So a site that an
+    edit above it moves is the base's still, named at the base's line, where `added_by` finds the change that wrote it,
+    and a second site of the same kind is the change's.  Of a file's sites of one kind, those at a line the base names too
+    are the base's first, then the earliest.  A count is the base's while it is no more than the base's count of the same
+    thing against the same allowance, so a file's count that a mended site lowers is no new violation.  A violation that
+    names neither a line nor a count is the base's when the base has the same one."""
+    whole = set(had)
+    theirs: dict[str, list[tuple[int, str]]] = {}
+    for h in had:
+        if (k := unplaced(h)) is not None:
+            theirs.setdefault(k[0], []).append((k[1], h))
+    keys = [unplaced(v) for v in found]
+    old: dict[int, str] = {}
+    for i, (v, k) in enumerate(zip(found, keys)):
+        if k is None:
+            if v in whole:
+                old[i] = v
+        elif (k[1], v) in theirs.get(k[0], ()):
+            theirs[k[0]].remove((k[1], v))
+            old[i] = v
+    for i, k in enumerate(keys):
+        if i not in old and k is not None and (fit := next((t for t in theirs.get(k[0], ()) if t[0] >= k[1]), None)):
+            theirs[k[0]].remove(fit)
+            old[i] = fit[1]
+    return [old[i] for i in sorted(old)], [v for i, v in enumerate(found) if i not in old]
+
+
 def added_by(rev: str, items: list[str]) -> str:
     """Each violation in ``items`` with the change on ``rev``'s first-parent chain that added the line it names
     (``lint: file:line ...``), by `git blame --first-parent`: ``#N`` for a queue merge, else the commit.  One that names only
@@ -1266,11 +1318,12 @@ def judge(c: Change, base: str) -> None:
             c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
             if found:
-                had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
-                inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
+                at_base = violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1])
+                inherited, new = beyond(found, at_base)
+                had, found = set(at_base) | (set(found) - set(new)), new
                 like, rekeyed, rekey = base_form(before, after, {**was_at, **now_at})
                 if found and rekeyed:
-                    again = [v for v in violations(base_lints(c, selection, like)[1]) if v not in had]
+                    again = beyond(violations(base_lints(c, selection, like)[1]), at_base)[1]
                     if len(again) < len(found):
                         found, c.pooled = again, c.pooled + rekeyed
                 found, admitted, places = at_new_modules(c, selection, after, found, had)
