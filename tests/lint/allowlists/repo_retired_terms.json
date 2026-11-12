@@ -3413,7 +3413,7 @@
     {"file": "benchmarks/pouw/tests/test_ledger.py", "count": 49},
     {"file": "archive/benchmarks/pouw/tests/test_np_kernel.py", "count": 2},
     {"file": "benchmarks/pouw/tests/test_pearl_c4_f1_fast.py", "count": 10},
-    {"file": "benchmarks/pouw/tests/test_pearl_c4_real.py", "count": 34},
+    {"file": "benchmarks/pouw/tests/test_pearl_c4_real.py", "count": 20},
     {"file": "benchmarks/pouw/tests/test_pearl_c4_replay.py", "count": 9},
     {"file": "benchmarks/pouw/tests/test_pearl_c_sm90.py", "count": 5},
     {"file": "benchmarks/pouw/tests/test_pearl_c_sm90_glm53.py", "count": 2},
