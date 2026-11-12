@@ -42,6 +42,9 @@ session behind the ZK server or not.
   alone and of none (a Lean process's start), and ``verify`` on the member's session, a process of its own. A reader
   that fails is its error, never a figure. ``verify`` alone is also the guard of the audit's verdicts: it must print the
   verdict line the audit has for the member, byte for byte, whichever way the audit verified it, or ``measure`` exits 1.
+  A reader run alone starts in this process's environment as it is, as the audit's kept verifier does: under the
+  allocator's default unless the environment sets a value. A ``verify`` process of the audit's own runs under the
+  verifier's allocator setting (`proofs.verifier_env`), so its seconds and ``verify`` alone's are under two settings.
 
 It reads no value: the logs, the records' times, file sizes and the stamps. Seconds are rounded to a millisecond.
 """
