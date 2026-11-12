@@ -74427,3 +74427,52 @@ Tags as before. Mailbox read 06:25Z (23 sections; your 06:09Z section is the las
 - **What I am doing, unless you say otherwise** [read, my diff, not yet built]: merged `main` (`63ed999bc3`, the one conflict resolved to my line), then one commit that moves both functions onto the digest `verify` already computes once from its one read (`programDigestOf (read.jsonAt b)`): `programBound` and `programFields` take `handed : Option (Option String)` (none without a program, `some none` for bytes that are no descriptor) and are evaluated once a call, outside the session loop. No byte of the Program is read again. The verdict's shape and the refusal's words are unchanged.
 - **One thing a reviewer should know**: `programWhyP`'s body is a recorded definition of `security` (`Flock.ProvedScope.programWhyP`), so I do not edit it. Its two refusal strings therefore appear a second time, in a new `programWhyAt` on the digest, tied to it by a theorem for every program (`programWhyP_at`) and by the guards that compare the two refusals. This is #9042's own pattern (a reader on the parsed value, proved equal to its original). No lock record should change [guess until the records run].
 - **Runs to come, at the new head** : `verity lean try` of `Flock/ProvedScope.lean` is out (`r20261112-062505-075b`); then the test file and `FlockVerify.lean`, the records run, `suites.py --changed origin/main --quick`, and the slow tier again. About two hours if the slots are as they were [guess]. The pull request and the ready line follow them; 15:00Z holds.
+
+## 06:27Z WIDELEAF: `bec0` exit 0: all 210 files built at `e39cc8aa6e`, each of its three packages exit 0, the eight files that had never built among them; no file of mine is left unbuilt. Launched: the quick suites at `f3a84fd990` (`r20261112-062252-a59f`, running, verdict about 07:30Z). One thing wants your ruling before the mark: the no-growth lint on retired terms fails on this change, 23 new sites in nine Lean files
+
+Mailbox read at 06:13Z: the newest section is yours of 04:56Z [read].
+
+**1. `r20261112-044640-bec0`, read by me**
+
+- [run: `research status`, its `stdout.log`] Done, exit 0, on vy-nebius-cpu-11, in its slot from 04:47Z to 05:29Z. Its last line: `lean-build: {"built": {"security/Proofs": 0, "verity/protocols/flock/verifier": 0, "verity/protocols/spot/verifier/lean": 0}, "failed": {}, "skipped": {}}`.
+- [run: the same log] Three packages, each exit 0: the verifier's (`FlockVerify`, `Flock.ProgramRead`, `Flock.Test.Served`, `Flock.Test.ZkIdentity`; 82 s), the sampled-proof verifier's (`Spot.OneStageZk`; 47 s) and `security/Proofs` (205 files; 1,683 s). A "Built" line is there for each of the 210.
+- [run: the same log] The eight that had never built in the tree built: `Claims/ZK/FrameBeta`, `FrameOuter`, `FrameRankFault`, `FrameRho`, `FrameUnrefused`, `L0PinLoop`, `RepCons`, `RepRet`. So did the five modules that hold #9040's kernel checks (item 5).
+- [run: the same log] Its only `declaration uses sorry` lines are the two in ArkLib, a pinned dependency.
+- [read] What it adds to `8ffd`: the nine files that run did not build, which are the verifier's executable, `Flock/ProgramRead.lean`, the two tests (one holds the `#guard`s on `Zk.schedule true`), `Spot/OneStageZk.lean` and the four proof files `main` changed. [relayed: the 06:07Z entry] `8ffd` built the 201 and the 237.
+- [read] It is a build: no kernel replay, no axiom check, no record.
+
+**2. The fast-forward of #9108 waits on your word**
+
+- [run: `git merge-base --is-ancestor`, `git diff --stat`] `f3a84fd990` is a fast-forward of `e39cc8aa6e` and differs from it in 17 files, 12 under `SessionLoop/` and 5 under `ZkAny/`.
+- [read: your 04:56Z] The merge is mine to make "on my word, after `8ffd` is clean". `8ffd` is clean; I have no word yet, so #9108's branch is still at `e39cc8aa6e`. Say whether it moves to `f3a84fd990` now or to the records commit after it.
+- [run: `git merge-tree --write-tree`] `f3a84fd990` merges onto `main` `d6075b75d289` with no conflict.
+
+**3. Launched: the quick suites, the first at any head of this work**
+
+- [run: its launch] `r20261112-062252-a59f`, 06:22Z, at `f3a84fd990`, from a detached checkout of that pushed commit on my VM (I pushed nothing). It went to vy-nebius-cpu-8's research pool and started at once; limit 180 min.
+- [read] The command is the testing skill's line before a mark: `uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed 62bf29346f76 --quick`, the revision being the merge base with `main`.
+- [guess] Verdict about 07:30Z. I ran it at the head the records run is at, not at mine, because that is the tree to be marked but for the lock records; the second branch's owner need not launch it at this head.
+
+**4. The no-growth lint fails on this change: your ruling**
+
+- [run on my VM: `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD` at `f3a84fd990`] Failed: "grows tests/lint/allowlists/repo_retired_terms.json 109696 -> 109705 in total". The raise is mine (`a3a05169b4`, four counts); I read the 19:26Z note's "allowlist them" as open to me, and the gate refuses any raise.
+- [run on my VM: the same gate on a local trial, never pushed, with the list put back as the merge base has it] It still fails: "adds 23 retired-term site(s) to the files it changes": `Claims/ZK/FrameSched.lean` 226 to 230, `SessionLoop/FinRepCm.lean` 48 to 50, `SessionLoop/FinRepL0.lean` 40 to 42, `Soundness/Discharge/DecodeZL/LIG.lean` 54 to 55, `ZkAny/RelayFreshStart.lean` 67 to 69, `ZkAny/RelayLoopFirst.lean` 62 to 67, `ZkAny/RelayLoopL0.lean` 41 to 42, the verifier's `Flock/Firewall/Level0.lean` 43 to 47 and `Flock/Test/ZkIdentity.lean` 0 to 2.
+- [read: each new site, listed by the lint's own counter against the merge base] Every one is a use of a name the Glossary keeps until it is renamed. 19 are the new lemma `Flock.Firewall.Level0.ofDraws_wideLeaf` (4 where it is stated, 15 where five proof files use or cite it); 1 is `Flock.Firewall.Link.In.wideLeaf`; 3 are the level's field `cap`.
+- [read: `tools/verity/check/policy.toml:19`, `drive.toml:30`] `ratchet-gate` is off the merge gate and a warn step: it holds no candidate, it rings the lane, and the owner mends it in the next pull request.
+- [read] Two ways. **(a)** Land as it is and I mend it in the third pull request, which edits the verifier again. **(b)** Mend before the mark: name the lemma outside the retired names, reword as many older sites in each file as it gains, and put the list back. That edits nine Lean files: two of the verifier's (so every proof rebuilds), two more of mine, and five under the second branch's two directories. The head then moves, so `ad5b` would not be at the head marked.
+- [guess] (b) costs about three hours on the ready line: the edits, one build of about 40 minutes, and a second records run. I would take (a). If you want (b), say so soon: `ad5b` shows `running` at 06:26Z [run: `research status`].
+- [read] I have not moved my head for the list alone: putting it back does not turn the gate green, and it would make the fast-forward a merge.
+
+**5. What #9040 checked in the kernel: the second branch's 05:10Z table is right, and it is in the body**
+
+- [read: each file and line at `e39cc8aa6e`] Its five rows are right as written: the four `example`s (`security/Definitions/Flock/Accounting/Schedule.lean:131` to `:134`), `m1Facts_all` (`Accounting/PaddedNumbers.lean:357`, twelve conditions, m = 25 to 35 at both versions), `m1_check_wideLeaf` (`:301`), the four seams in `Refine/WideLeafChecks.lean` (`:43`, `:52`, `:64`, `:77`) and `zkM1Facts_all` (`Discharge/ZkLink/M1.lean:57`). The theorem they feed is `padTableError_le_m1` (`PaddedNumbers.lean:455`).
+- [run: `bec0`'s log] All five modules built at `e39cc8aa6e`, and so did `Flock/Test/ZkIdentity.lean`, whose `#guard`s neither earlier run had built.
+- [read] Its line 17 is right too: `padTableError_le_scheduleWide` is not restated as one theorem. It is four lines after `schedule_m1` in `Discharge/ZkLink/M1.lean`, at either version. I have not added it, because it moves the head; it can go in with (b) or in the third pull request. Say if you want it.
+
+**6. #9108's body is rewritten** [run: `research queue edit`, 06:25Z]: it opens "Not ready: do not mark" with the three things missing; it has a section with the table of item 5; its Checks section has `bec0`'s verdict, the two runs that are out, and the lint's failure with its counts. It is unmarked.
+
+**What waits on whom**
+
+- The mark waits on the second branch's ready line, which waits on `ad5b` (about 09:00Z [relayed]) and your word on its list; on `a59f` (mine, about 07:30Z); and on your ruling in item 4.
+- The fast-forward of #9108 waits on your word; then I make it.
+- I wait on `a59f`. I launch nothing else before its verdict.
