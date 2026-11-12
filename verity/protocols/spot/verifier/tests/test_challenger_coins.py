@@ -340,10 +340,14 @@ def test_a_registration_made_after_an_earlier_ones_sample_is_read_is_accepted_on
     handed the last registration alone: its record, its segment and the session's signed files, whose log lists every
     earlier digest's coins before its own. `coins_reason` passes that evidence and the outcome is accepted with the
     Lean run (`Run.run`) agreeing: the coins after the last digest are consecutive in the family and all read, and
-    neither verifier reads the family's other roots."""
+    neither verifier reads the family's other roots. One-stage v2's two reads of the same log pass as well, by their
+    Python twins: its sample's coins at the parameters' family (`draw_coins`, `OneStage.coinsOf`'s) are the bytes the
+    sample read, and the log is in the order v2 holds it to (`sample_link_first`), since the client opens a coin tree,
+    its link and a round, as the last registration's proof session would, only once it has stopped registering."""
     import test_remote
     from test_challenger import lms_verify
     from test_service import SESSION, _lean, _ports, _record, _stream
+    from verity.commitments import coin_tree as CT
 
     def record(i: int) -> dict:
         return _record(roots=[{"port": p, "root": hashlib.sha512(f"{i}/{p}".encode()).hexdigest(), **layout}
@@ -362,6 +366,9 @@ def test_a_registration_made_after_an_earlier_ones_sample_is_read_is_accepted_on
         tries.append((stream, reg, segment, stream.select(reg)))
         if i and tries[0][3].units[0] not in tries[-1][3].units:
             break
+    _, tree, _ = client.tree(test_remote.TREE_SPEC, test_remote.NONCE)
+    client.tree_open(tree, CT.SESSION, 0, 2, C.link_after(test_remote.ROOT_F, test_remote.ROOT_B))
+    client.tree_open(tree, "t/rep0", 0, 3, test_remote.root(30))
     client.close()
     assert host.ended() is None
     coins.settle()
@@ -376,6 +383,14 @@ def test_a_registration_made_after_an_earlier_ones_sample_is_read_is_accepted_on
                 "main": test_remote.MAIN, "pins": test_remote.HOST_PINS, "segment": segment.to_json(),
                 "session": R.session_files(host.directory)}
     assert T.coins_reason(evidence, window, bytes.fromhex(reg.digest), read, lms_verify) is None
+    mine = {k: v for k, v in evidence.items() if k != "key"}
+    for t in tries:
+        after = bytes.fromhex(t[1].digest)
+        got = T.draw_coins(test_remote.pinned_key(), window, "positions", after, {**mine, "segment": t[2].to_json()},
+                           lms_verify)
+        assert got[:len(t[0]._entries[t[1].order].read)] == t[0]._entries[t[1].order].read
+        assert C.sample_link_first("positions", after, evidence["session"]["log"][1:])
+    assert len(C.coin_trees_of(evidence["session"]["log"])) == 1
     assert stream.deliver(draw, [SESSION]) is None
     out = stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence)
     assert out.accepted and "run" not in stream.records[-1]["audit"]["checks"], stream.records[-1]["audit"]["checks"]
