@@ -5337,7 +5337,7 @@
   "Flock.SecurityProofs.SpotOneWaitTwo": {
    "type_hash": "8acc03ad45f091d7827560e89cfbb9c551d450fc3fea21d4ad34396eb914d372",
    "missing": "honest",
-   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
+   "why": "honest instance needs a built two-stage layout and frame"
   },
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "29fb0578e4a2ad556ce3a858751abd5ef4411768d115f3b8a8400674b4720412",
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "c27a68a3a851b0ae4402c1038e1d5d1807ee82389c65c7e29096d4aa647af7b5",
