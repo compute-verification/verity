@@ -106941,3 +106941,37 @@ Nothing.
 - `Binds` is unproved, and `PrintsTwo` is not written.
 - That the play's one log holds both sessions' releases, the first's then the interior's, is my reading of the model [derived]. COINMAP's `Reading.dev` has to agree.
 - Point 3.3 is read, not run.
+
+## HONEST2, Thu 22:52Z: my file is in run `r20261112-224930-d4a5` on cpu-8; read through FRAME's five facts, my instance meets ADDRWC's and ADDRROW's conditions, but linking its output `o0` breaks the roots half of `OneTreeFact`, so the honest example should link inputs only
+
+In plain words: my compile was never run. Two launches waited for slots and I cancelled both. The second named a command the node doesn't have, and the run is now relaunched correctly on a free node. Reading FRAME's five address facts against my registration, four look provable there by construction. The fifth fails if the template's output is linked to round 1's record, because the facts then ask that one value be read from two places. Linking only the inputs avoids that, and it is what I will build.
+
+- **Runs** [run]:
+  - `r20261112-215044-8e96` (cpu-12) was cancelled by me at 21:57Z, before it took a slot; its replacement was `r20261112-215716-7350` (cpu-10).
+  - `r20261112-215716-7350` was cancelled by me at 22:48Z after 51 minutes waiting for a slot. It ran `verity lean try`, which the node lacks.
+  - `r20261112-224930-d4a5` on cpu-8 now holds the file: `python3 tools/verity/lean/lean_changed.py --try security/Proofs/Flock/SpotFlock/Honest/Instance.lean`, at `32366c2bfc7a` on `cursor/proofs-honest2-7c4e`.
+  - ETA [guess]: a slot by about 23:05Z, then a cold import build; the verdict about 00:00Z.
+- **Base merge** [run: git]: the base is merged at `b8ca16854990`. It holds `AddressFacts.lean` and `Held`'s new `boundaryNames`/`interiorNames`. My `Bnd` now carries both, and `held₀` sets them.
+- **The five facts at my instance, by reading.** There is one template and no wires, so `ω = wireMap h = id` (`wireMap_held`), and `keep = returned h`. `addressesConnected_of_facts` (`AddressFactsGive.lean`) takes one `addr` with all five [read].
+  - **`WidthFact`** reduces to ADDRWC's `WidthRef`: each unit names a port of width `S.place.1` in its member [relayed: ADDRWC 22:19Z]. Both units are one circuit's, so an `addr` built from the member's port words meets it [derived]. ADDRWC's gap, a wired reader narrower than its writer, cannot arise here because there are no wires [derived]. Left: define `addr` from `Bits.rowBit`/`srcPos` and prove `WidthRef` from that definition.
+  - **`CopyFact`** reduces to ADDRWC's `CopyRef` plus `Counted` [relayed]. With `addr` taken from the member's own keys (`rowBit`), `CopyRef` is that definition read back [derived]. Left: that lemma, and `Counted`, which comes from `RowFact`.
+  - **`RowFact`** follows from ADDRROW's `RowGoal` premises [relayed: ADDRROW 22:22Z]:
+    - No block always checked: `always := fun _ => false`, so it holds [read: `Instance.lean`, `reg`].
+    - `ShapeFact`: by construction of `addr`'s slots [guess].
+    - `RefRows`: a condition on `R.reads` [guess].
+    - `CoverFact` (a port no registered read names is an output row, or the file has no tables) holds if every input port of the template has a registered read named like it. That is a condition I add to `Ref` [derived]. On ADDRROW's condition: my instance meets it under that `Ref` condition, and the token select's one input, `logits`, is linked [derived].
+  - **`EntryFact`**: the port is the first of its name; or, with no read, it is a port of the session; and the slot's key is the read's or the interior port's. It holds by construction of `addr`'s slots [guess].
+  - **`OneTreeFact`**: its first half is `rfl` at `ω = id` [derived]. Its roots half has two cases:
+    - At an input gate with a registered read, `rootsWired` gives the statement's roots, because an input gate is `Boundary` [read: `Prog.Boundary`]. `readRoots` gives the same where the interior registers no value of the link's name, which `namesOk` now checks [read: `Code.lean`] [derived].
+    - **CANDIDATE GAP** at a linked *output* port:
+      - `Prog.Needs` includes a block's own committed gates (`ProgReads.lean:237`), so the unit's output gates are needed [read].
+      - No registered read names an output port, so `RootsHold` asks the gate be *uncommitted* in the wired program [read: `AddressFacts.lean`, `RootsHold`].
+      - `returned h` commits every written bit at a linked output port, and `Prog.wired` keeps it among the outputs [read: `WireMap.lean:268`, `Rewire.lean:68`].
+      - So at `o0` linked, `OneTreeFact` is false at every accepted run [derived]. I have not built that run.
+    - With only the input ports linked, nothing is returned, and the output gates are uncommitted in the cut block [derived].
+    - So the honest example links `logits` only. Friday's design links the combine's `o0` (GATHER 21:54Z), so it meets this gap. FRAME's reading is needed on which arm a linked output is meant to take.
+- **TWOLEG's form** [derived, read from its 22:27Z entry]: my instance is not refused by it. Its population's replay blocks are all one Definition, one template. Its second stage takes `k = 1` (`ks := #[1]`) of two units, and every unit has work 1.
+
+**To post** (for FRAME, from the coordinator): at a link that names a template's *output* port, `OneTreeFact`'s roots half asks an uncommitted gate, while `returned` commits it; which side is meant?
+
+Not established: that `Instance.lean` elaborates; the gap (no concrete run is built); `RefRows`, `ShapeFact` and `EntryFact` at my `addr`, which is not yet defined. By 03:00Z I owe the five at my instance, each compiled or with what is left. The next file is `Honest/Addresses.lean`: `addr`, plus the input-only links variant of `Ref`.
