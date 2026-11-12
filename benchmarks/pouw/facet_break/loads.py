@@ -1,7 +1,7 @@
 """facet_break: a measured program's load on every facet of Π, the facets it beats, and the refit a beaten facet needs.
 
 The standing adversary for the sm_120 data sheet. A facet is a row of the
-machine model (`../machine_model/data/`): row r holds Σ_k c_kr·x_k SMSP-cycles for a program that issues x_k warp
+machine model (`../../machine_model/data/`): row r holds Σ_k c_kr·x_k SMSP-cycles for a program that issues x_k warp
 instructions of census class k a SMSP-cycle, and the facet is the ceiling a_r·x ≤ 1. A program's **load** on r is
 Σ_k c_kr·x_k (dimensionless): a measured program with load > 1 beats the facet, since the rows fitted from rates carry the
 2% margin in their coefficients (a point measured on its own facet sits at 0.98). Exact rows (`issue` 1 cycle, `M` 16) are
@@ -40,7 +40,7 @@ from itertools import combinations
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-MM = Path(__file__).resolve().parents[1] / "machine_model"
+MM = Path(__file__).resolve().parents[2] / "machine_model"
 sys.path.insert(0, str(MM))
 
 from verity_machine_model.model import census, entries, holds, model, vector, vectors  # noqa: E402
@@ -220,7 +220,7 @@ def unpriced(row: dict, c: dict | None = None) -> dict[str, float]:
     return out
 
 
-#: the table route's L2 facet (`../machine_model/data/table.toml`, what ε's `--lookups` prices a lookup's bytes against):
+#: the table route's L2 facet (`../../machine_model/data/table.toml`, what ε's `--lookups` prices a lookup's bytes against):
 #: L2 read bytes a second ≤ `l2`. Only loads that skip L1 (.NA, .STRONG.GPU) count, so their bytes are L2's, and each at
 #: its own width (a 16-byte load of a 32-byte sector counts 16), so the load is a lower bound.
 L2_ROW = "L2tbl"

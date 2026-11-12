@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "machine_model"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "machine_model"))
 
 #: form: (mix.cuh struct, SASS opcode, census kind)
 FORMS = {"i16832": ("I16832", "IMMA.16832.S8.S8", "IMMA16832"), "i16816": ("I16816", "IMMA.16816.S8.S8", "IMMA16816"),
