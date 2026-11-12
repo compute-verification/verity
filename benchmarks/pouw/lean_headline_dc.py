@@ -11,7 +11,7 @@ load this path, and is the writer the Lean files name. It reads this tree's mach
 import sys
 from pathlib import Path
 
-MODEL = Path(__file__).resolve().parent / "machine_model"
+MODEL = Path(__file__).resolve().parent.parent / "machine_model"
 
 # The readings are the machine model's data: an installed verity_machine_model from another checkout would give that
 # tree's numbers without a word, so this tree's goes first and any other refuses.

@@ -28,7 +28,7 @@ from verity_machine_model.model import model, vector
 __all__ = ["Const", "Figure", "Form", "Kind", "Peak", "ROOT", "Reading", "Sheet", "at_fmax", "differences", "figures",
            "lean", "lines", "literal", "moves", "omega", "reading", "relative_path", "row", "sheet", "uni"]
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 SHEET = "sheet.toml"
 ROWS = ("issue", "tensor", "pipe", "smem")   # Accounting.TS.SheetRow's order
 

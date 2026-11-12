@@ -560,7 +560,7 @@ def theorem_n(q: int, theta: float) -> float:
 # ---------------------------------------------------------------- H: the tensor–scalar model
 
 #: (row, MMA coefficient, coefficient of every other vector-pipe warp instruction) in SMSP-cycles:
-#: `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv on main.
+#: `M` (the tensor pipe) and JI3e_0..2, benchmarks/machine_model/data/rows.csv on main.
 TS_FACETS = [("M", 16.0, 0.0), ("JI3e_0", 8.115, 1.0), ("JI3e_1", 15.030, 0.317), ("JI3e_2", 15.539, 0.172)]
 #: Llama-3.1 linears as served by vLLM (q, k, v fused; gate, up fused): (name, k, n).
 TS_SHAPES = {"Llama-3.1-8B": [("qkv", 4096, 6144), ("o", 4096, 4096), ("gate_up", 4096, 28672), ("down", 14336, 4096)],

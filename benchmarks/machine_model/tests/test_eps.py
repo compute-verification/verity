@@ -18,7 +18,7 @@ from verity_machine_model.model import DATA, DEVICES, census, device, devices, m
 PIN = "VF3l-16"                    # the vector these hand-checked numbers were read on, whatever is current
 PI = E.machine(PIN)
 PIU = E.uniform_on_issue(PI, 1.0)   # a uniform instruction takes an issue slot, which VF3l-16 doesn't price
-SPECS = Path(__file__).resolve().parents[3] / "ppl" / "specs"   # the perplexity arms a design names
+SPECS = Path(__file__).resolve().parents[2] / "ppl" / "specs"   # the perplexity arms a design names
 H = E.honest("dither-duo-l32")
 M = E.honest("e-l7qs")
 JI = PI.c["MMA"]["JI3e_0"]          # a MMA's SMSP-cycles on the joint issue row that binds honest
