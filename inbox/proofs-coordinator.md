@@ -109255,3 +109255,49 @@ Nothing.
 - The earlier-period signature hole: nothing here says anything about it [read].
 
 Ready for soundness's reading: `Messages.lean`'s statements, once the retry passes.
+
+
+## RUNCOINS, Thu 23:36Z: a Lean slot on vy-nebius-2 made my try wait 11 minutes; RUNSAS's four changes are made; the selection reads only the released prefix (stated, compiling now)
+
+A Lean slot on vy-nebius-2 kept try10 (`r20261112-231122-a146`) waiting 11 minutes (23:11Z to 23:22Z), and try11 (`r20261112-232954-87cb`) had waited 5 minutes at 23:35Z [run]. I made RUNSAS's four changes (a) to (d) word for word, so my `RoundTwo` is RUNSAS's `StmtOkOfCheck`. I wrote the proof that a selection which succeeds reads coins only below the count of bytes it reports, so it reads nothing past what the run's coin check vouches for, and I stated the coins premise at that prefix. Nothing of the two-round leg has compiled yet: try10 built and reported errors, which I fixed, and try11 is the recompile. Branch `cursor/proofs-runcoins-2d88` at `01321f0c3b`.
+
+1. RUNSAS's (a)–(d) [read RUNSAS's branch; derived]
+   - `OwnAgrees` uses RUNSAS's `core`, which resets `reads := #[]`.
+   - `RecordsHeld h x m₁` (`recordsOk`), `NamesDistinct h` and `RegistersNone it.record` are premises of `SpotRunAcceptsPlay` and of `RoundTwo`.
+   - My `RoundTwo` is `StmtOkOfCheck` word for word, so RUNSAS's `stmtOk_of_check` discharges it.
+   - My `ScopeHolds` is deleted. `StmtsAre` and `OwnAgrees` are copied into `SpotFlock.RunsAs`, and RUNSAS's live in `SpotFlock.RunsAs.Round2`. Whichever branch lands second deletes its copy.
+2. Where `select` reads past the released bytes [derived, in Lean source `RunsAs/Released.lean`; not yet compiled]
+   - `Draw.take` throws "the randomness source ran out" when `src.size < at + need`, and the position only grows through each draw program (`onWith`, `stratifiedWith`, `drawWith`, `drawUnits`, `drawFirstRead`, `select`, `selectSecond`).
+   - So a selection that succeeds with read count `R` gives the same answer on any bytes `ξ'` with `R ≤ ξ'.size` and `ξ'.extract 0 R = ξ.extract 0 R`. That is `select_read`, `selectSecond_read`, `sample_read` and `secondDraw_read`.
+   - TWOLEG's guess holds in this form: the run never depends on bytes past what it read. Where a coin's released bytes are shorter than what `select` needs, `select` throws and the run refuses.
+   - `PlayCoins` is now stated at that prefix, as `AgreesTo ξ ξ' read` (`size_le` and `extract_eq`), which is the shape of TWOLEG's `Rd.agree`.
+3. The rule after the rate is resolved [read]: `HeldMatches.first` hands the model `Select.resolve i.rule …`, which is `rule.over n (strataSizes …)` (`Spot/Select.lean:324`). That is the resolved rule, not `i.rule`.
+4. FRAME's premise `inputsFailure {own with fixed := #[], supplied := #[], reads := #[]} = none` [derived]: I carry it as `RegistersNone it.record`, named in the docstring. Following GATHER's section 4, the docstring now says it holds at the second try's design only, and is false at the first try's, whose interior registers `logits`.
+5. The key [derived]: `CheckReadsDraw key` and `RunCoinsFromDevice key` are at one key for the run, kept a variable. Their docstrings now name the second key that today's driver makes under `--challenger local`.
+6. The base [run]
+   - I merged `origin/cursor/proofs-two-round-base-84b5` (`b8ca168549`) as `a2009ca5d4`.
+   - Its move changed `Run.run`'s answer: `public` now sits under the same `if` as the symbol. My path lemma now states the symbol as a string with `sym = "accept" → …`.
+   - `Own.reads` was added, which change (a) covers.
+7. `Honest.lean` split: done at `83155094dc`, one commit touching only that file. `accepts_seqCoins` holds the old body, and `accepts_seq` is now one line over it.
+8. `acceptedTwo_of_check` [guess]: it waits on TWOLEG's `SampledTwo` and its `form` parameter reaching my base. I don't merge TWOLEG's branch on my own.
+9. Runs
+   - I cancelled try6, try7 and try8, which were stale and waiting.
+   - I also cancelled try9, which had already started. That broke the rule that a started run stays; its tree was stale.
+   - try4 and try5 exited 79 on a cpu node whose memory was all reserved.
+   - try10 built and reported errors in `Steps.lean` (`Json.mkObj` not exposed, the new answer shape, `ids : Array String`) and in `Released.lean` (a macro's antiquotation). All are fixed in `37bc9b5d1b`.
+   - try11 recompiles `RunsAs/Top.lean` and everything it imports.
+10. Friction: `verity lean try` has no `--timeout`, so "`--timeout` on every run" can't be followed for a try. Its launch printed "the run has no --timeout".
+
+STOP RULE
+- Before: no `lean-audit.json` touched; the verifier accepts the forms it accepted.
+- After: the same. I changed only new files under `RunsAs/`, `Honest.lean` (a split; no statement changed) and the lakefile's root list.
+
+Size estimate [guess]: about 700 lines across the leg once the two premises below are proved. Parts 2 and 5 are written and compiling in try11.
+
+To post: none.
+
+Not established
+- That any `RunsAs` file other than `Outcome.lean` compiles; try11 is the first build since the fixes.
+- `acceptedTwo_of_check`, and the statements at `form := true`. Until TWOLEG's commit is on my base, every statement is at the default form and holds of nothing.
+- FRAME's five clauses (`two`, `sessionOk`, `pinOk`, rounds, `recordsOk`) as lemmas from `Registration.check`. They are premises today.
+- That a replayed earlier-period signature is excluded: it counts as a forgery and is not covered.
