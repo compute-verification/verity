@@ -260,7 +260,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
-    # the transport's other premises (security/Definitions/Core/Assumptions/Transport.lean), beside `witness-path-private`
+    # the transport's other premises, beside `witness-path-private`: `ImprintPathPrivate` and `ChannelAuthentic` in
+    # security/Definitions/Assumptions/Transport.lean, `ChannelHides` in
+    # security/Definitions/Core/Assumptions/Transport.lean
     Entry("imprint-path-private", "assumption",
           "Imprint path private: every node that can read the bytes of the channel's one imprint exchange, over the "
           "cable between an onsite auditor device and its server, is its auditor end, one of the prover's own machines, "
