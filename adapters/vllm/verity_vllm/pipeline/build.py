@@ -155,7 +155,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     if wl:
         try:
             w = json.loads(workload_file(wl).read_text())
-            reqs = list(w.get("requests") or [])
+            reqs = list(stated) if (stated := w.get("requests")) else []   # a workload that states none: a batch of one
         except Exception as e:  # noqa: BLE001
             return refuse(f"cannot read the workload manifest {wl!r} for the sampler batch: {e!r}", reason="sampler_geometry")
     B = max(1, len(reqs))
@@ -216,23 +216,23 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
     def _from_manifest(path: str) -> dict:
         with open(path) as f:
             w = json.load(f)
-        sw = w.get("sweep") or {}
-        if sw.get("sampling") is not None:
-            pol = _norm(dict(sw.get("sampling_params") or {}), sw["sampling"]) if sw["sampling"] != "greedy" else {"kind": "greedy"}
+        sw = w.get("sweep")   # a generated workload's block; a row file has none
+        if sw and sw.get("sampling") is not None:
+            pol = _norm(dict(params) if (params := sw.get("sampling_params")) else {}, sw["sampling"]) if sw["sampling"] != "greedy" else {"kind": "greedy"}
             if sw.get("sampling_seeds"):
                 pol["seeded"] = True
             return pol
-        variants = w.get("variants") or {}
-        top = (w.get("sampling") or {}).get("variant")
+        variants = w.get("variants")   # the legacy form's named policies; None: every request's is its own fields'
+        top = block.get("variant") if (block := w.get("sampling")) else None
         pols = []
         for r in w.get("requests", []):
             v = r.get("variant", top)
-            p = variants.get(v) if v is not None else None
+            p = variants.get(v) if variants and v is not None else None
             if p is None:
                 p = {"temperature": 0.0} if r.get("seed") is None and v in (None, "greedy") else {"temperature": 1.0}
             pols.append(_norm(dict(p), v))
         if not pols:
-            return _norm(dict(variants.get(top) or {"temperature": 0.0}), top) if top else {"kind": "greedy"}
+            return _norm(dict((variants.get(top) if variants else None) or {"temperature": 0.0}), top) if top else {"kind": "greedy"}
         kinds = {json.dumps(p, sort_keys=True) for p in pols}
         if len(kinds) > 1:
             return {"kind": "mixed", "policies": [json.loads(k) for k in sorted(kinds)]}
@@ -293,7 +293,8 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
     if launch:
         # a request Program built under a declared launch context is reusable only for a batch that co-schedules it the same
         # way (FA3's tile reads the launch's max_seqlen_q).  Key present ONLY when a context was declared: B1 / undeclared identities are unchanged.
-        cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted((launch.get("max_seqlen_q_by_step") or {}).items())},
+        by_step = launch.get("max_seqlen_q_by_step")
+        cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted(by_step.items())} if by_step else {},
                                   "conflict": bool(launch.get("conflict")), **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {}),
                                   **({"chunks": list(launch["chunks"])} if launch.get("chunks") else {})}
     return cond
@@ -561,7 +562,8 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     raw = json.dumps(desc, sort_keys=True).encode()
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(raw)
-    corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
+    annotations = desc.get("annotations")
+    corr_doc = annotations.get(CORR_NS) if annotations else None   # None: a Program derived with no runtime correspondence
     res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
                       "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
                       "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
@@ -580,7 +582,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     if tp > 1:
         res["tp"]["links"] = write_tp_links(out, res, program, rep, tp, rank, model_root=model_root)
     res["mutation_effects"] = rep.provenance["mutation_effects"]
-    res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
+    res["kv_rewrites"] = (len(kv) if (kv := rep.provenance.get("kv_rewrites")) else 0) if isinstance(rep.provenance, dict) else None
     if (pfx := KP.layout_of(rep.provenance)) is not None:   # the cached prefix's input and layer order, for Match
         _write_json(out, "prefix_cache.json", pfx)
         res["prefix"] = pfx
@@ -657,16 +659,18 @@ def _write_manifest(out: str, res: dict) -> None:
     tr = {}
     with contextlib.suppress(OSError, ValueError), open(os.path.join(out, "inputs.json")) as f:   # none written, or not JSON
         tr = json.load(f)
+    tp, declared = res.get("tp"), res.get("declared_derived")   # None: a single-GPU Build, and one refused before it declared
+    world, rank = (tp.get("world", 1), tp.get("rank", 0)) if tp else (1, 0)
     m = {"schema": "cb-a/construction_manifest/v3", "utc": res.get("utc"), "wrapper": res.get("wrapper"),
          # `sampling` is the row's declared policy (manifest / --sampling / default-by-omission), never a literal
          "structural_inputs": {"LP": res.get("LP"), "T": res.get("T"), "M": res.get("M"), "pos0": res.get("pos0"), "eos": res.get("eos"),
-                               "sampling": res.get("sampling"), "tp": (res.get("tp") or {}).get("world", 1), "rank": (res.get("tp") or {}).get("rank", 0),
+                               "sampling": res.get("sampling"), "tp": world, "rank": rank,
                                "launch_context": res.get("launch_context"), **({"C": res["C"]} if res.get("C") else {}),
                                **({"stop": res["stop"]} if res.get("stop") else {})},
          # world > 1: the rank's collectives (peer-input signature), embedding shard, engine args + env the admitted TP path requires,
          # the sharded parameter shapes and the cross-rank binding summary (full record: result.json `tp`, tp_links.json)
          "tp": ({k: v for k, v in res["tp"].items() if k != "collectives"} | {"collectives": {k: v for k, v in res["tp"].get("collectives", {}).items() if k != "record"}}
-                if (res.get("tp") or {}).get("world", 1) > 1 else None),
+                if world > 1 else None),
          "model": {"class": res.get("model_class"), "hf_config": res.get("hf_config"), "pin": res.get("model_pin"),
                    # `hf_config.tie_word_embeddings` above is what vLLM SET for loading (False when the checkpoint ships an
                    # lm_head); the loader's re-tie decision, reproduced from the checkpoint's bytes, is the served model's fact
@@ -675,7 +679,7 @@ def _write_manifest(out: str, res: dict) -> None:
          # read back from vLLM inside the applied shim; `target.host` = the construction host (informational, in no identity);
          # `target.consulted` = config facts + env split into consulted / ignored (dead in this pin) / non-vLLM
          "target": res.get("target"), "artifact": res.get("artifact"),
-         "declared": (res.get("declared_derived") or {}).get("declared"), "derived": (res.get("declared_derived") or {}).get("derived"),
+         "declared": declared.get("declared") if declared else None, "derived": declared.get("derived") if declared else None,
          "observed": {"attention_impls": res.get("attention_impls_observed"), "export_facts": res.get("export_facts")},
          "construction": {"mechanism": "torch.export(strict=False) of the vLLM model class on meta + verity_vllm.program.frontend.derive (profile mode)",
                           "export": res.get("export"), "derive_secs": res.get("derive_secs"), "wall_secs_total": res.get("wall_secs_total"),
@@ -783,8 +787,9 @@ def main(a: Options) -> int:
         print(tb[-3000:], file=sys.stderr)
         return 2
     summary = {k: res.get(k) for k in ("ok", "unsupported", "program", "rules_applied", "n_applications", "derive_secs")}
-    summary["target"] = {k: (res.get("target") or {}).get(k) for k in ("declared", "applied")}
-    summary["artifact_identity"] = (res.get("artifact") or {}).get("identity")
+    target, artifact = res.get("target"), res.get("artifact")   # a Build that crashed before its construction states neither
+    summary["target"] = {k: target.get(k) if target else None for k in ("declared", "applied")}
+    summary["artifact_identity"] = artifact.get("identity") if artifact else None
     print(json.dumps(summary, indent=1, default=str))
     if res.get("ok"):
         print(json.dumps(res["spec_histogram"], indent=1))
