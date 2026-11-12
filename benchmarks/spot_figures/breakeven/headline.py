@@ -13,10 +13,11 @@ reaches 10% of its compute, and a row's sampling plan, from one entry point at a
 
 from the repository's root. A row (`ROWS`) is the proof server's line at its last step
 (`sweep.served_line()["P5+poolwin600"]`) with its case's levers at their measured values, over the 128k workload with
-every sparse-MLA head's blocks as served (`PARTITION`: the `partition` card that cuts each head's key block into its
-scores unit and its values units, beside the line's own cut; `volume`: the cut `workload` card's sparse-MLA blocks
-counted over the serve plan's requests, `mla128`), its verification phase a datacenter's window. A row names its cut
-and the cut's label (`cut`); `--partition` names another card, or with '' none, the `workload` card's own cut. `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
+every sparse-MLA head's blocks (`volume`: the `workload` card's sparse-MLA blocks counted over the serve plan's
+requests, `mla128`), its verification phase a datacenter's window. The head is the card's whole key blocks and end
+block, the forms that verify; `--partition UNITS` cuts each head's key block into its scores unit and its values
+units instead (`UNITS`, a `partition` card beside the line's own cut, modeled), and a row so cut names the cut and its
+label (`cut`). `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
 as measured and the row's scale. `evaluate` charges it: the carried pool's pages recommitted at each edge
 (a copy stratum and the kv arm's hash tax), a request cut at the edge recomputed, its prefix hits reproved, B128's
 wait at paced egress, the pool's AND gates when only replays read it, and a replay block served at most trace128's
@@ -91,9 +92,11 @@ MEASURED = {"prover": PROVER_MEASURED, "tmpl": "measured", "dense_k": 2, "verify
             "replay": 5258.0, "live": False, "commit_write": False, "registration": "datacenter"}
 #: the served tokens' line, unfused
 TOKENS = {"line": "tokens", "fuse": False, "fused": ""}
-#: the sparse attention as served: each head's key block its scores unit and its values units of 64 columns, a
-#: `partition` card that cuts every row's line beside the line's own cut
-PARTITION = "head-scores-values"
+#: the `partition` card that cuts each head's key block into its scores unit and its values units of 64 columns,
+#: beside the line's own cut: modeled, and no unit has staged with a verdict, so a row takes it only when named
+#: (`--partition`); the rows price the head as the `workload` card's whole blocks, whose 64-key block and end block
+#: are at the k_log of the forms that verify
+UNITS = "head-scores-values"
 #: the types whose seconds a warm served block replaces in (iii): the sparse-MLA row's units under either cut (a head
 #: block whole, or its scores and values units; a head's end; a split's column ends; the combine; a whole row) and
 #: the families beside them
@@ -109,9 +112,9 @@ def warm(f: float) -> dict:
 
 
 #: each row's case fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
-ROWS = {"(i) honest": {"case": TOKENS | MEASURED | {"partition": PARTITION}, "scale": {}},
-        "(ii) honest": {"case": MEASURED | {"partition": PARTITION}, "scale": {}},
-        "(iii) honest": {"case": MEASURED | {"partition": PARTITION}, "scale": warm(0.25)}}
+ROWS = {"(i) honest": {"case": TOKENS | MEASURED, "scale": {}},
+        "(ii) honest": {"case": MEASURED, "scale": {}},
+        "(iii) honest": {"case": MEASURED, "scale": warm(0.25)}}
 
 RMS8 = "RMSNormFusedCudaVector8_v1{N=6144,"
 #: the Lean verifier as measured, core-seconds a one-block statement and a block: RMSNorm v8's measured statement times
@@ -231,10 +234,10 @@ def _volume(registered: int, n: int, partition: str) -> tuple:
     return tuple(mla128.volume(workload(partition), heads=n).items())
 
 
-def volume(n: int | None = None, partition: str = PARTITION) -> dict:
+def volume(n: int | None = None, partition: str = "") -> dict:
     """The 128k workload's sparse-MLA blocks a token over the `workload` card's, by block (`mla128.volume`), its rows
-    counted at `n` heads (GLM-5.3's when not given), on the card cut by the `partition` card of that name (the rows'
-    served cut when not given, the card's own when empty)."""
+    counted at `n` heads (GLM-5.3's when not given), on the card cut by the `partition` card of that name (the card's
+    own cut when empty)."""
     return dict(_volume(heads(), heads() if n is None else n, partition))
 
 
@@ -481,8 +484,8 @@ def installed(P: SimpleNamespace, spec: dict):
 
 def spec_of(row: str, scope: str, beta: float, n_heads: int | None = None, steady: dict | None = None,
             prices: dict | None = None, partition: str | None = None) -> dict:
-    """A job: `ROWS[row]` at `scope` and the pinned `beta`, over every sparse-MLA head, its line cut by its row's
-    `partition` card (`partition` another, or "" the `workload` card's own cut), its blocks priced at the steady-state
+    """A job: `ROWS[row]` at `scope` and the pinned `beta`, over every sparse-MLA head, its line cut by the `partition`
+    card `partition` where one is named (the `workload` card's own cut otherwise), its blocks priced at the steady-state
     rows of `steady` (`steady()`) where it holds one, or at `verity bench prove`'s table (`prices()`). A row of either
     for a block the cut leaves out (`replaced`) is listed unread: it measured the census's cut, not this line's."""
     if steady and prices:
@@ -841,8 +844,9 @@ def main(argv=None) -> int:
                               "store's table read now (kept as DIR/prices.json); a block of the line whose row is its "
                               "own or its family's steady-state row is priced at it")
         cmd.add_argument("--partition", metavar="NAME",
-                         help=f"the partition card that cuts every row's line (default the served cut, `{PARTITION}`; "
-                              "'' the workload card's own cut)")
+                         help=f"the partition card that cuts every row's line beside its own cut (`{UNITS}`: each "
+                              "head's key block as its scores and values units, modeled); default none, the workload "
+                              "card's whole head blocks")
     a = ap.parse_args(argv)
     if a.cmd != "read" and a.steady_map and not a.steady:
         ap.error("--steady-map maps the rows of --steady")
