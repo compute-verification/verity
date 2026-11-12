@@ -679,6 +679,11 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     assert [(x["lifetime"], x["reps"]) for x in c["lifetimes"]["each"]] == [(1, 1)] and round(100 * c["value"], 2) == 0.5
     assert (c["verdict"], P._verdict(c)) == ("not shown", "not shown, " + P.ONE_PAIR)
     assert P.ONE_PAIR.startswith("only one pair of the arms' lifetimes has a pass both arms counted")
+    # the same where ours was not served its second lifetime at all (its turn came after the stop time): stock has two
+    short = S.lifetimes([sessions_arm(name, x) | {"lifetime": k, "reps": 2, "left_out": 1} for name, rates in (
+        ("prod", [[2.0, 2.0], [2.0, 2.0]]), ("prod-record", [[1.99, 1.99]])) for k, x in enumerate(rates, 1)])
+    c = P.cost(tmp_path, {a["arm"]: a for a in short}, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert (c["lifetimes"]["served"], c["lifetimes"]["pairs"], P._verdict(c)) == (2, 1, "not shown, " + P.ONE_PAIR)
     # three lifetimes an arm whose costs agree: the interval over them is the benchmark's, and its upper end is under
     c, own = lifetimes_cost(tmp_path, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])
     assert own["verdict"] == "meets" and (c["verdict"], P._verdict(c)) == ("under", "yes")

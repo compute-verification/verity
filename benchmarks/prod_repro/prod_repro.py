@@ -129,8 +129,9 @@ UNDER, OVER, NOT_SHOWN = "under", "over", "not shown"
 VERDICTS = {"meets": UNDER, "misses": OVER, "cannot tell": NOT_SHOWN}
 #: why a job of one server lifetime an arm has no verdict
 ONE_LIFETIME = "each arm has one server lifetime, and the verdict reads the interval over lifetime pairs"
-#: why a job of more lifetimes an arm has none either, where all but one pair of them is without a pass both arms
-#: counted (an arm stopped before its lifetime's first counted pass: the benchmark's STOP_AT)
+#: why a job with an arm served in more lifetimes than one has none either, where all but one pair of them is without
+#: a pass both arms counted (an arm stopped before its lifetime's first counted pass, or not served a lifetime the
+#: other was: the benchmark's STOP_AT)
 ONE_PAIR = ("only one pair of the arms' lifetimes has a pass both arms counted, and the verdict reads the interval "
             "over lifetime pairs")
 #: why a cost with such an interval is not shown to be under its target
@@ -608,7 +609,7 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     cost is the mean over the server lifetimes an arm of each one's cost, its interval is over the lifetimes, and the
     verdict is the benchmark's, which reads that interval alone (`VERDICTS`). So a job of one lifetime an arm, which
     has no such interval, shows nothing, nor does one with one pair of lifetimes that has a pass both arms counted
-    (``lifetimes`` holds the pairs counted, ``pairs``, and the lifetimes both arms were served in, ``served``), nor
+    (``lifetimes`` holds the pairs counted, ``pairs``, and the most lifetimes an arm was served in, ``served``), nor
     one whose arms did not do the same work. Beside it and in no
     verdict: the cost over the passes taken as independent with its interval (``passes``), each lifetime's cost, the
     spread between lifetimes and between a lifetime's passes, the same cost under the benchmark's other readings of
@@ -630,8 +631,8 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     if any(unserved.values()):
         return not_measured("the arms did not serve the same tokens: " + ", ".join(
             f"{a} left {n} requests unserved" for a, n in unserved.items() if n))
-    served = len(set(ref.get("lifetimes") or [1]) & set(mine.get("lifetimes") or [1]))
-    lives = {"pairs": served, "served": served, "ci95": None}
+    served = max(len(a.get("lifetimes") or [1]) for a in (ref, mine))
+    lives = {"pairs": len(set(ref.get("lifetimes") or [1]) & set(mine.get("lifetimes") or [1])), "served": served, "ci95": None}
     verdict = NOT_SHOWN
     if load in S.bench_loads(ref):
         c = S.serving_cost(ref, mine, load)
