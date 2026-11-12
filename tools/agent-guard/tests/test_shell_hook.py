@@ -173,7 +173,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "compgen -e | rg NEBIUS",
     "[ -n \"${NEBIUS_SA_PRIVATE_KEY_B64:-}\" ] && echo set",
     "env FOO=1 python3 -c 'print(1)'",
-    "env -u PYTHONPATH uv run pytest tests",
+    "env -u PYTHONPATH uv sync",
     "/usr/bin/env bash -lc 'uv sync'",
     "printenv HOME",
     "printenv PATH | tr : '\\n'",

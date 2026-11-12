@@ -4,7 +4,7 @@
 Cursor runs every agent shell command through it, on any VM, so it holds where the redacting `env` (`install.sh`) was never
 installed. A multi-line secret defeats `env | cut -d= -f1`: its later lines print as if they were names, and so reach an
 agent's transcript. Refused, anywhere in the command (pipelines,
-`$(...)`, `bash -c`, `ssh HOST CMD`, `research pods ssh POD -- CMD`): `env` or `printenv` with nothing to run, `printenv` of a
+`$(...)`, what a carrier runs (`bash -c`, tmux; below), `ssh HOST CMD`, `research pods ssh POD -- CMD`): `env` or `printenv` with nothing to run, `printenv` of a
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
 `tmux show-environment` (`showenv`) with no name or a secret's (tmux's global environment through `cut -d= -f1` prints a
 multi-line key's lines too).
@@ -22,6 +22,15 @@ hook, which prints each command line with every token-like run cut out. A listin
 `research pods ssh POD -- CMD`) prints that machine's argv and is judged as it always was (`every_argv`): refused when it prints
 the full command lines of every process or of a selection beyond one pid, unless piped straight into a `grep`/`rg` that keeps
 only matching lines (an inverted one, `grep -v`, prints the rest); `/proc/*/cmdline` is refused there too.
+
+Every rule here (the environment, listings, secret files, builds, pushes and branch switches) reads, beside the command as
+typed, what it has another program run (`carried`, `flattened`): what tmux types into a pane or starts (`send-keys ... C-m`,
+`new-session`, `new-window`, `split-window`, `respawn-pane`, `run-shell`, `if-shell`, `pipe-pane`, `display-popup` and tmux's
+own `-c`, by name, alias or prefix, with any `-f CONFIG`, `-L`, `-S` and `-t TARGET`, and after `\\;`), `bash|sh|zsh|dash -c`
+in any bundle (`-lc`), `env [VAR=VALUE...] CMD`, `xargs CMD`, `eval` and `watch`, as it reads through `nohup`, `setsid`,
+`timeout`, `sudo`, `nice` and the like (`unwrap`). Not read: a script file's contents (`bash FILE`, `tmux source-file`), a
+heredoc fed to a shell, `find -exec`, `su -c`, `flock`, `script -c` and `parallel`. A pane's command blocks no tool call, so
+the block rule leaves tmux alone.
 
 Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a `preToolUse` event's for the Shell tool
 (`tool_input.command`), and prints its verdict as JSON on stdout; each event's key names go to $AGENT_GUARD_EVENT_LOG
@@ -328,6 +337,118 @@ def ssh_words(args: list[str]) -> list[str]:
     return args[i + 1:]
 
 
+#: tmux commands that run a shell command -> (the shortest prefix tmux takes for it, its options that take a value, the option
+#: naming the directory the command runs in)
+TMUX_CARRIERS = {"new-session": ("new-s", "cefFnstxy", "c"), "new-window": ("new-w", "ceFnt", "c"),
+                 "split-window": ("spl", "ceFlpt", "c"), "respawn-pane": ("respawn-p", "cet", "c"),
+                 "respawn-window": ("respawn-w", "cet", "c"), "run-shell": ("run-", "cdt", "c"), "if-shell": ("if-", "t", ""),
+                 "pipe-pane": ("pip", "t", ""), "display-popup": ("display-po", "bcdehsStTwxy", "d"),
+                 "send-keys": ("send-k", "cNTt", "")}
+TMUX_ALIASES = {"new": "new-session", "neww": "new-window", "splitw": "split-window", "respawnp": "respawn-pane",
+                "respawnw": "respawn-window", "run": "run-shell", "if": "if-shell", "pipep": "pipe-pane", "popup": "display-popup",
+                "send": "send-keys"}
+#: names that start a simple command of their own once the shell has split `tmux A \; B` at the `;`
+TMUX_BARE = {n for n in TMUX_CARRIERS if "-" in n} | {"neww", "splitw", "respawnp", "respawnw", "pipep"}
+#: send-keys: keys that end a typed line, and keys that type a blank
+TMUX_ENTER, TMUX_BLANK = {"Enter", "C-m", "C-j", "KPEnter", "^M", "^J"}, {"Space", "Tab"}
+TMUX_KEY = re.compile(r"([CMS]-)+\S+|\^.|Escape|BTab|BSpace|Up|Down|Left|Right|Home|End|IC|DC|PageUp|PgUp|PageDown|PgDn|NPage|"
+                      r"PPage|F\d+|KP\w+")
+XARGS_VALUED = set("adEeIiLlnPs")
+SHELL_CODE = re.compile(r"-[a-zA-Z]*c[a-zA-Z]*")
+
+
+def options_end(args: list[str], valued: str | set[str]) -> tuple[int, dict[str, str]]:
+    """Where `args`'s single-letter options end (past a `--`), and the value each valued one took."""
+    i, given = 0, {}
+    while i < len(args) and args[i].startswith("-") and len(args[i]) > 1:
+        a, i = args[i], i + 1
+        if a == "--":
+            break
+        for at, letter in enumerate(a[1:], 2):
+            if letter in valued:
+                given[letter] = a[at:] or (args[i] if i < len(args) else "")
+                i += not a[at:]
+                break
+            given.setdefault(letter, "")
+    return i, given
+
+
+def typed(key: str, literal: bool) -> str:
+    """What `tmux send-keys` types for `key`: itself, unless it names a key (`-l`: never); a blank for `Space` and `Tab`, and a
+    line's end for `Enter`, `C-m` and any other key, which may run or cut the line typed so far."""
+    if literal or not (key in TMUX_ENTER or key in TMUX_BLANK or TMUX_KEY.fullmatch(key)):
+        return key
+    return " " if key in TMUX_BLANK else "\n"
+
+
+def tmux_carried(args: list[str]) -> list[str]:
+    """The shell commands `tmux ARGS` has run (or types into a pane, `send-keys`), each as one text: global `-c CMD`, and each
+    command of TMUX_CARRIERS, by its name, alias or a prefix that names one; `run-shell -C` and `if-shell`'s branches are tmux
+    commands, read again. Several words after the options are one command's argv, joined; a start directory becomes a `cd`."""
+    i, given = options_end(args, "cfLST")
+    if "c" in given:
+        return [given["c"]]
+    if i >= len(args):
+        return []
+    name, rest = args[i], args[i + 1:]
+    canon = TMUX_ALIASES.get(name) or next((c for c, (least, _, _) in TMUX_CARRIERS.items()
+                                            if c.startswith(name) and name.startswith(least)), "")
+    if not canon:
+        return []
+    _, valued, dir_option = TMUX_CARRIERS[canon]
+    j, given = options_end(rest, valued)
+    rest = rest[j:]
+    if canon == "send-keys":
+        if "X" in given or "H" in given:
+            return []
+        text = "".join(typed(k, "l" in given) for k in rest)
+        return [text] if text.strip() else []
+    if canon == "run-shell" and "C" in given:
+        return [t for c in rest for t in tmux_carried(shlex.split(c))]
+    if canon == "if-shell":
+        tmux = [t for c in rest[1:] for t in tmux_carried(shlex.split(c))]
+        return tmux if "F" in given else rest[:1] + tmux
+    if not rest:
+        return []
+    text = rest[0] if len(rest) == 1 else shlex.join(rest)
+    where = given.get(dir_option, "") if dir_option else ""
+    return [f"cd {shlex.quote(where)} && {text}" if where else text]
+
+
+def carried(words: list[str]) -> list[str]:
+    """The shell commands the simple command `words` (unwrapped) has run, each as one text, beyond the wrappers `unwrap`
+    strips: `bash|sh|zsh|dash -c CODE` (any bundle with `c`, `-lc`), `env [VAR=VALUE...] CMD` (the assignments kept), `xargs
+    CMD`, `eval WORDS`, `watch CMD`, and what tmux runs (`tmux_carried`), also as a command of its own after `\\;`. A script
+    file's contents are not read."""
+    if not words:
+        return []
+    name, args = os.path.basename(words[0]), words[1:]
+    if name in SHELLS:
+        at = next((k for k, a in enumerate(args[:-1]) if SHELL_CODE.fullmatch(a)), None)
+        return [args[at + 1]] if at is not None else []
+    if name == "env":
+        run = env_command(args)
+        if len(run) == 1 and " " in run[0]:
+            return run
+        assignments = [a for a in args[:len(args) - len(run)] if "=" in a and not a.startswith("-")]
+        return [shlex.join(assignments + run)] if run else []
+    if name == "xargs":
+        i, _ = options_end([a for a in args if not a.startswith("--")], XARGS_VALUED)
+        rest = [a for a in args if not a.startswith("--")][i:]
+        return [shlex.join(rest)] if rest else []
+    if name == "eval":
+        return [" ".join(args)] if args else []
+    if name == "watch":
+        i, _ = options_end([a for a in args if not a.startswith("--")], "n")
+        rest = [a for a in args if not a.startswith("--")][i:]
+        return [" ".join(rest)] if rest else []
+    if name == "tmux":
+        return tmux_carried(args)
+    if name in TMUX_BARE:
+        return tmux_carried(words)
+    return []
+
+
 def prose(words: list[str]) -> bool:
     """Whether the simple command `words` (unwrapped) only carries text: `git`'s arguments (a commit message) and those of a
     `research` command that runs nothing (no `--`)."""
@@ -371,8 +492,8 @@ def refused(words: list[str], filtered: bool = False, remote: bool = False, text
         if not names:
             return ENVIRONMENT if not opts or any(set(o.lstrip("-+")) - set("fF") for o in opts) else ""
         return ENVIRONMENT if any("p" in o for o in opts) and any(secret(n) for n in names) else ""
-    if name in SHELLS and "-c" in args[:-1]:
-        return refused_text(args[args.index("-c") + 1], remote)
+    if texts := carried(words):
+        return next((kind for t in texts if (kind := refused_text(t, remote))), "")
     if name == "ssh":
         return refused_text(" ".join(ssh_words(args)), True)
     if name == "research" and "ssh" in args and "--" in args:
@@ -392,10 +513,6 @@ def refused(words: list[str], filtered: bool = False, remote: bool = False, text
                 elif not a.startswith("-"):
                     shown.append(a)
             return ENVIRONMENT if not shown or any(secret(n) for n in shown) else ""
-        return ""
-    if name == "xargs":
-        rest = [a for a in args if not a.startswith("-")]
-        return refused(rest, remote=remote, text=text) if rest else ""
     return ""
 
 
@@ -833,6 +950,8 @@ def weight_words(words: list[str]) -> int:
     if not words:
         return 0
     prog, args = os.path.basename(words[0]), words[1:]
+    if texts := carried(words):
+        return max(weight(text) for text in texts)
     if prog == "uv" and args[:1] == ["run"]:
         rest, i = args[1:], 0
         while i < len(rest) and rest[i].startswith("-"):
@@ -936,8 +1055,9 @@ def duration(args: list[str]) -> float | None:
 
 
 def blocks_words(words: list[str]) -> float:
-    """Seconds one simple command plainly blocks the shell for: a `sleep`, `research run --wait-max S`, or what `bash -c` or ssh
-    runs, each bounded by a `timeout` around it; 0 when it states no literal time."""
+    """Seconds one simple command plainly blocks the shell for: a `sleep`, `research run --wait-max S`, or what ssh or a
+    carrier other than tmux (`carried`: `bash -c`, `env`, `xargs`, ...) runs, each bounded by a `timeout` around it; 0 when it
+    states no literal time."""
     s = max((blocks_text(w.split("$(", 1)[1]) for w in words if "$(" in w), default=0.0)
     timeouts: list[str] = []
     words = unwrap(strip_redirections(words), timeouts)
@@ -945,8 +1065,8 @@ def blocks_words(words: list[str]) -> float:
     name, args = (os.path.basename(words[0]), words[1:]) if words else ("", [])
     if name == "sleep":
         s = max(s, duration(args) or 0.0)
-    elif name in SHELLS and "-c" in args[:-1]:
-        s = max(s, blocks_text(args[args.index("-c") + 1]))
+    elif name != "tmux" and name not in TMUX_BARE and (texts := carried(words)):    # a tmux pane's command blocks no call
+        s = max(s, *(blocks_text(text) for text in texts))
     elif name == "ssh":
         s = max(s, blocks_text(" ".join(ssh_words(args))))
     elif name == "research" and args[:1] == ["run"]:
@@ -976,6 +1096,17 @@ def block_reason(command: str) -> str | None:
             f"`research run --wait` stops after {BLOCK_CAP_S} s on its own and names the command to check back with.")
 
 
+def flattened(text: str) -> list[list[str]]:
+    """`text`'s simple commands without redirections, each followed by those it carries (`carried`), in the order they run."""
+    out = []
+    for words, _ in words_of(text):
+        words = strip_redirections(words)
+        out.append(words)
+        for inner in carried(unwrap(words)):
+            out.extend(flattened(inner))
+    return out
+
+
 def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     """One agent per checkout (worktree_guard.py): why this command's git may not run here, or None."""
     sys.dont_write_bytecode = True                      # no __pycache__ beside the hook: boot.sh copies its directory file by file
@@ -983,7 +1114,7 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     import worktree_guard
 
     try:
-        raw = [strip_redirections(words) for words, _ in words_of(command)]
+        raw = flattened(command)
     except ValueError:
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
