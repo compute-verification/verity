@@ -205,7 +205,7 @@ theorem messagesFixed_of_reached (V : Vocab d α) (A : Live₂) (x : Msg) (θ : 
   obtain ⟨hA, hG, i, hi, hne⟩ := hs
   refine ⟨hA, hG, ?_⟩
   by_contra hall
-  push_neg at hall
+  push Not at hall
   exact hne (hall i (lt_of_lt_of_le hi (hR s.1 s.2 hA hG hall)))
 
 /-! ## The first difference -/
@@ -215,7 +215,7 @@ def runHist (t : Claims.Transcript) (i : ℕ) : List (Msg × Msg) := Claims.hist
 
 /-- **The history before round `i` of a run whose messages are `ms`**, against `A.L.V` at the statement `x` and the
 coins `r`: each round's message, with the verifier's answer to the messages up to it. -/
-def playHist (A : Live₂) (x : Msg) (r : Coins A x) (ms : ℕ → Msg) (i : ℕ) : List (Msg × Msg) :=
+noncomputable def playHist (A : Live₂) (x : Msg) (r : Coins A x) (ms : ℕ → Msg) (i : ℕ) : List (Msg × Msg) :=
   (List.range i).map fun j => (ms j, msgOf ((A.L.V.next x ((List.range (j + 1)).map ms)
     ((List.range (j + 1)).map (coinSeq r))).eval FlockDeploy.sha512).1)
 
