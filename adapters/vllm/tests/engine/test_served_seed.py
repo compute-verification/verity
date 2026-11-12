@@ -1,6 +1,6 @@
 """`engine.served_seed`: a client's seed is kept, a greedy request without one carries the public default, and a stochastic
 one is sampled under the seed derived from its window's seed coin and its certified id, a hash of those two alone, or refused
-without an id; the caller's params are never changed, and a fresh coin is drawn only into an idle engine."""
+without an id; the caller's params are never changed, and a fresh coin is flipped only for an idle engine."""
 from __future__ import annotations
 
 import copy
@@ -74,13 +74,13 @@ def test_a_served_seed_is_a_function_of_the_coin_and_the_id_alone():
         assert served_seed.served(Params(**kw), rid + "x", COIN)[0].seed != a.seed
 
 
-def test_seed_coins_draw_a_fresh_coin_only_into_an_idle_engine_and_name_each():
-    """A request coming into an idle engine with no window open draws a fresh coin; one joining a busy engine or an open window
+def test_seed_coins_flip_a_fresh_coin_only_for_an_idle_engine_and_name_each():
+    """A request coming into an idle engine with no window open flips a fresh coin; one joining a busy engine or an open window
     keeps the current one, so each window holds the coin its requests were seeded under."""
-    draws = iter([(COIN, "test"), (OTHER, "test")])
-    coins = served_seed.SeedCoins(lambda: next(draws))
+    flips = iter([(COIN, "test"), (OTHER, "test")])
+    coins = served_seed.SeedCoins(lambda: next(flips))
     assert coins.record() is None
-    assert coins.admitting(idle=False) == COIN                          # the first draws, whatever it joins
+    assert coins.admitting(idle=False) == COIN                          # the first flips, whatever it joins
     assert coins.admitting(idle=False) == COIN and coins.record() == {"index": 0, "coin": COIN.hex(), "source": "test"}
     assert coins.admitting(idle=True) == OTHER and coins.record() == {"index": 1, "coin": OTHER.hex(), "source": "test"}
     got = served_seed.SeedCoins().admitting(idle=True)

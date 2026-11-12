@@ -2,23 +2,33 @@
 from it), and the key rules' stated equivalences and rates."""
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import random
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
+import receipt_conform as C
+import receipt_folds as F
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import receipt_conform as C  # noqa: E402
-import receipt_folds as F  # noqa: E402
 
 #: the sha256 of the r9 folds' reference twin, receipt_folds_r9.py
 P2FF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"
+
+
+def test_each_module_binds_what_it_lists_and_the_checks_read_only_listed_names():
+    """A caller takes the names a module's `__all__` lists (README.md), and the checks are the reference's first
+    caller."""
+    for module in (F, C):
+        unbound = [n for n in module.__all__ if not hasattr(module, n)]
+        assert not unbound, f"{module.__name__}.__all__ lists {unbound}, which it doesn't bind"
+    read = {n.attr for n in ast.walk(ast.parse(Path(C.__file__).read_text()))
+            if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "F"}
+    unlisted = sorted(n for n in read if not n.startswith("_") and n not in F.__all__)
+    assert not unlisted, f"receipt_conform reads {unlisted} of receipt_folds: list them in receipt_folds.__all__"
 
 
 def test_the_published_vectors_are_what_the_reference_makes():
