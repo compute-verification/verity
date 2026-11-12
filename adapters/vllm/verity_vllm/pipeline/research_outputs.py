@@ -52,7 +52,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.config import option, row_batch
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
 
 SCHEMA = "research/outputs/v0.1"
@@ -98,11 +98,6 @@ def verdicts(stages_txt: Path) -> dict[str, tuple[str, str]]:
         if len(parts) >= 2:
             out[parts[0]] = (parts[1], parts[2] if len(parts) > 2 else "")
     return out
-
-
-def row_batch(row: str) -> int:
-    m = re.search(r"__b(\d+)__", row)
-    return int(m.group(1)) if m else 1
 
 
 def tp_world(build_summary: Any) -> int:
