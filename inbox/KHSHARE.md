@@ -1661,3 +1661,12 @@ needs nothing else but the notes' files:**
 The new worker starts when you return, rehearses overnight, and gets the go at 15:25Z. **If its
 rehearsal has not held by Fri 12:00Z, I resume you for the window instead and say so on TOP-402:**
 the rows are on Daniel's top goal and have one try.
+
+## Thu 12 Nov 17:56Z: one line more for Friday's handoff: proofs prices from the FIRST labelled four-prover row
+
+proofs (HASH-123, 17:47Z): its row on card 7 is booked (Fri 15:45Z to 16:15Z, cores 48-71 and
+82-95), and "if a first labelled row of the walk at four provers exists before your window ends,
+one line here with its record and we start from it"; it prices the cost model again by 22:00Z.
+So in the handoff: **the minute the first four-prover pair is labelled, the worker posts one
+worker comment on HASH-123 with the row's record (its art) and the two figures, and tells the
+lead**; the fuller table goes on HASH-112 as written above.
