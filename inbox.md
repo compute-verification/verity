@@ -41,3 +41,44 @@ Not run: the whole check, `circuit-check`, any Lean check, a11.
 
 TIMER: none
 
+[2026-11-12T15:01Z] 66148102f411
+WATERLINE to the network-accounting coordinator, Thu 12 Nov 7:00 AM PST. **Pull request #9314's new head is `7bb211d1ca06`. All three are done in one push, and the suites run at that head passed: `r20261112-144601-fcba`, status `done`, exit 0. The merge of `main` was clean.** It is unmarked; I did not mark it. Marks: [ran] by me, [read] by me, [argued].
+
+**The run**
+- `r20261112-144601-fcba`, `--on auto`, launched once, from `7bb211d1ca06`: `status.json` says `done`, `rc` 0. 6 suites, 6 passed (0 cached), 0 failed, no read outside a suite's inputs. `verity-network-traces` 640, `benchmarks/one_stage` 571, `repository` 349, `verity-graph` 215, `verity-network-e2e` 70, `verity-network-sim` 21. [ran; read from `status.json`, `job.json`, `stdout.log`]
+- No second kept run.
+
+**1. `-s 130`**
+- The sentence is fixed in the README, the script's comment, the fixture's docstring and two test docstrings: `-s 130` keeps at most each packet's first 130 bytes, which is every header and, where the headers are shorter, the first bytes of its content. The number is unchanged. [ran: the tests]
+- The body has the line, with a count I took from the kept capture: 993 of its 2,057 packets keep some content, 31,343 bytes in all, and a packet of 130 bytes or fewer is kept whole. [ran]
+- My first report's note said "each packet cut to its headers" too. Corrected there.
+
+**2. The release order**
+- I did both. The reader now takes each connection's place from its `END` cell's place among the ingress records' `END` cells, and its release bucket from that cell. [ran: the tests]
+- The two orders are the same on any record the device publishes, three ways:
+  - The device keeps its connections in the order it admitted them, which is their ordinals', and cuts each bucket's cells in that order. [read: `warden.py`, `_tick` and `_admit`]
+  - Its audit flags a bucket in any other order. On the test's record `audit` says not accepted, "not r cells a connection in ordinal order". [ran]
+  - Its commitment to a record's rows refuses such a record. With the connections reordered and the usual publisher the run stopped with "cells aren't laid out as the schedule lays them". [ran]
+- The test: twelve releases, six in each of two buckets, each bucket's `END`s by falling ordinal. It sorts the device's live connections after admission and keeps the records without the rows commitment; the records are certified as usual. The reader's place of each connection equals the device's log, and its count equals the bytes that connection's server got. With the old sort, connections 2, 4, 10 and 12 are one byte off and only this test fails. [ran, then reverted]
+
+**3. `main`**
+- Merged, not rebased: `main` at `fcc1b239d0b9`, which holds `70395628ec67`. No conflict in any file. Nothing was unclean. [ran]
+- `main` has since moved to `06728b3b7c`. Nothing under `benchmarks/network_traces` changed, and `git merge-tree` against it is clean. I did not merge a second time. [ran]
+
+**The watermark's answer: I took the bound**
+- Where the watermark's connection pairs with no flow, the direction from the server now prints a bound. Its least difference drops by the bytes the capture counts from the server on the largest unpaired flow, and a line says so. One test, which fails without the change. [ran, then reverted]
+- It rests on pairing by counts: the watermark's flow is taken to be among the unpaired flows. Nothing checks which flow it is. [argued; the body says it]
+
+**Also changed, so you are not surprised**
+- The result has two new keys: each connection's `release`, and `watermark_answer_in_sum`.
+- The body's table is the head's reader on the kept run's files, fetched from the store: the same sums and pairing. The two negative controls give the same figures. [ran]
+- The meetings with lean's tip and the clock branch were not repeated at this head. The body says so.
+
+**Slips**
+1. My first try of the release-order test stalled for ten minutes on my VM before its timeout ended it. The device's task had stopped on the commitment's refusal and the test waited on it. That is how I found the refusal.
+2. `research status` printed the first characters of my own suites run's launcher line once. No other process's.
+
+Commits pushed, body replaced, notes synced. Nothing is left only on the VM.
+
+TIMER: none
+
