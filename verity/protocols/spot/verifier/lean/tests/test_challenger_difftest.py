@@ -1747,10 +1747,10 @@ class Drawn:
     default), their lines among the others in `order` (`_release_log`; the sample, then the link, then the other rounds,
     by default).  Its key is the key of `seed` at one of `params`."""
 
-    def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
+    def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None, *, later: bool = False,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
                  trees: int | None = None, tables: list[str] | None = None, keys: list[str] | None = None,
-                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest", later: bool = False) -> None:
+                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest") -> None:
         s = self.s = _ledger_session(rng, params=params, seed=seed)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())

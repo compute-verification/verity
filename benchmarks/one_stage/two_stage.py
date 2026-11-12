@@ -206,15 +206,17 @@ class Recorded(CC.ChallengerCoins):
 
 class Staged(CC.ChallengerCoins):
     """The first stage's bytes read again, in order, as coins of the family the first stage read them from
-    (``label``); then, once committed (`commit`, to the interior registration's digest), ``then``'s: the second stage's
-    live coins, of its own family."""
+    (``family``, set by `resume`); then, once committed (`commit`, to the interior registration's digest), ``then``'s:
+    the second stage's live coins, of its own family."""
 
-    def __init__(self, read: bytes, then: CC.ChallengerCoins | None = None, label: str | None = None) -> None:
-        self._read, self._at, self.then, self.live, self._label = bytes(read), 0, then, False, label
+    family: str | None = None
+
+    def __init__(self, read: bytes, then: CC.ChallengerCoins | None = None) -> None:
+        self._read, self._at, self.then, self.live = bytes(read), 0, then, False
 
     @property
     def label(self) -> str | None:
-        return self.then.label if self.live else self._label
+        return self.then.label if self.live else self.family
 
     def commit(self, after: bytes) -> Any:
         if self._at != len(self._read):
@@ -301,8 +303,9 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
         raise ValueError(f"not a {FORMAT} hand-off")
     pub, rule = stage1["commit"], Rule.from_json(stage1["rule"])
     layout = BR.layout_of(pub, check)
-    coins = Staged(bytes.fromhex(stage1["read"]), then, stage1.get("family"))
+    coins = Staged(bytes.fromhex(stage1["read"]), then)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
+    coins.family = stage1.get("family")
     if stream.spec.digest() != stage1["spec"]:
         raise ValueError("the class's Spec isn't the one its first stage ran under")
     reg = stream.register(stage1["record"], layout.ports(), **({} if window_root is None else {"window_root": window_root}))
