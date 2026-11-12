@@ -171,9 +171,10 @@ Against a served front, whose `HOST:PORT` is the value of an environment variabl
 
 And against a served front that listens on its own node's loopback, as a `research run` job on a node that holds a
 tunnel key to it (`deviations.sh`: one ssh forward, then the tries, then a guard that fails the job if anything it
-keeps holds an address):
+keeps holds an address; `research run --env` records none of the three values):
 
-    PEER=USER@HOST PORT=P KEY=FILE bash benchmarks/network_traces/deviations.sh [TRY-FLAG ...] [-- REHEARSE-FLAG ...]
+    PEER_AUTHORITY=USER@HOST[:SSH_PORT] FRONT_AUTHORITY=HOST:PORT TUNNEL_KEY=FILE \
+        bash benchmarks/network_traces/deviations.sh [TRY-FLAG ...] [-- REHEARSE-FLAG ...]
 
 Then the table again, once the server's record of the tries' sampled ids is there:
 

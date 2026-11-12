@@ -1,30 +1,35 @@
 #!/usr/bin/env bash
 # deviations.py's tries against a served id front that listens on its own node's loopback, from a node that reaches it
 # through one ssh local forward. A `research run` job from the tree's root (--cwd source):
-#   PEER=USER@HOST PORT=P KEY=FILE [SSH_PORT=22] [PY=PYTHON] bash benchmarks/network_traces/deviations.sh TRY-FLAG...
+#   PEER_AUTHORITY=USER@HOST[:SSH_PORT] FRONT_AUTHORITY=HOST:PORT TUNNEL_KEY=FILE [REACH_ONLY=1] [PY=PYTHON] \
+#     bash benchmarks/network_traces/deviations.sh TRY-FLAG...
 #   FAKE=1 [PY=PYTHON] bash benchmarks/network_traces/deviations.sh TRY-FLAG...
 # TRY-FLAG... are `deviations.py try`'s own: the classes, the traffic and, after `--`, the rehearsal's flags, the
 # schedule's among them. The job gives it the front, --out and --scratch.
-# 1. The forward: ssh -N with one -L from this node's loopback to the serving node's 127.0.0.1:PORT, and nothing else
-#    asked of that node. ssh's configuration, its log and its known-hosts file are in the job's temporary directory,
-#    which is deleted, so the serving node's address is on no command line and in nothing the job keeps. The front is
-#    reached when a connect through the forward stays open: ssh takes a local connect whatever is behind it, and
-#    closes it at once when nothing listens there. FAKE=1 is the dry run: no ssh, and `try --stand-in` starts the
-#    stand-in id endpoint as the front.
+# PEER_AUTHORITY is the serving node as ssh reaches it (HOST a name or an IPv4 address), FRONT_AUTHORITY the id front
+# as the serving node reaches it (its loopback and the front's port) and TUNNEL_KEY the key's file on this node. None
+# has a default. Their names are ones `research run --env` records without their values.
+# 1. The forward: ssh -N with one local forward from this node's loopback to FRONT_AUTHORITY, and nothing else asked
+#    of the serving node. ssh's configuration, its log and its known-hosts file are in the job's temporary directory,
+#    which is deleted, so the three values are on no command line and in nothing the job keeps. The front is reached
+#    when a connect through the forward stays open: ssh takes a local connect whatever is behind it, and closes it
+#    at once when nothing listens there. REACH_ONLY=1 ends the job there, with no try: exit 0 reached, 3 not. FAKE=1
+#    is the dry run: no ssh, and `try --stand-in` starts the stand-in id endpoint as the front.
 # 2. The tries: `deviations.py try`. What each try keeps and the table go to $OUT/tries; each try's run directory, with
 #    the relay's records and their salts, is in the temporary directory.
 # 3. The guard, on every exit: the job fails (exit 9), naming the file, if a file of $OUT holds an IPv4 address other
-#    than loopback's, an `@` before a name, or the serving node's host as PEER gave it. Everything the job prints is
-#    also $OUT/job.log.
+#    than loopback's, an `@` before a name, or the serving node's host as PEER_AUTHORITY gave it. Everything the job
+#    prints is also $OUT/job.log.
 # The exit is try's: 0 every class did what its check says; 1 one didn't, or honest was refused and the rest weren't
-# tried; 2 a row is shown neither way. Else 3, the front wasn't reached, or 9, the guard.
+# tried; 2 a row is shown neither way. Else 3, the front wasn't reached; 4, a variable or the python is wrong; or
+# 9, the guard.
 # PY is a python with numpy; by default uv makes one in the temporary directory, at the tree's lock.
 set -uo pipefail
 RUN=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$RUN/out; mkdir -p "$OUT"
 
 if [ -z "${DEVIATIONS_INNER:-}" ]; then
   # The job proper runs below, as a child whose every line, stdout and stderr, is also job.log; then the guard.
-  host=; [ -n "${PEER:-}" ] && host=${PEER#*@}
+  host=${PEER_AUTHORITY:-}; host=${host#*@}; host=${host%%:*}
   trap : TERM INT   # the child ends on the signal; this shell stays for the guard
   DEVIATIONS_INNER=1 bash "$0" "$@" 2>&1 | (trap '' TERM INT; exec tee "$OUT/job.log")
   rc=${PIPESTATUS[0]}
@@ -41,7 +46,9 @@ if [ -z "${DEVIATIONS_INNER:-}" ]; then
   exit "$rc"
 fi
 
-peer=${PEER:-}; unset PEER   # the serving node's address: ssh's configuration below holds it, and nothing else does
+# the serving node's address, the front's and the key's file: ssh's configuration below holds them, and nothing else
+peer=${PEER_AUTHORITY:-}; front=${FRONT_AUTHORITY:-}; key=${TUNNEL_KEY:-}
+unset PEER_AUTHORITY FRONT_AUTHORITY TUNNEL_KEY
 W=$(mktemp -d); TUN=
 cleanup() { [ -n "$TUN" ] && kill "$TUN" 2>/dev/null; rm -rf "$W"; }
 trap cleanup EXIT
@@ -49,34 +56,41 @@ trap 'exit 143' TERM INT
 log() { echo "$(date -u +%H:%M:%SZ) deviations: $*"; }
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 if [ -z "${PY:-}" ]; then
-  command -v uv > /dev/null || { log "no uv on this node: give PY, a python with numpy"; exit 2; }
+  command -v uv > /dev/null || { log "no uv on this node: give PY, a python with numpy"; exit 4; }
   UV_PROJECT_ENVIRONMENT=$W/venv uv sync -q --frozen --no-dev --no-install-project \
-    || { log "uv made no environment at the tree's lock: give PY"; exit 2; }
+    || { log "uv made no environment at the tree's lock: give PY"; exit 4; }
   PY=$W/venv/bin/python
 fi
-"$PY" -c 'import numpy' || { log "PY has no numpy"; exit 2; }
+"$PY" -c 'import numpy' || { log "PY has no numpy"; exit 4; }
 
 if [ -n "${FAKE:-}" ]; then
   FRONT=(--stand-in)
   log "the dry run: the stand-in id endpoint is the front, and there is no forward"
 else
-  [ -n "$peer" ] && [ "$peer" != "${peer#*@}" ] || { log "PEER: USER@HOST, the serving node"; exit 2; }
-  PORT=${PORT:?PORT: the port of the id front on the loopback of the serving node}
-  KEY=${KEY:?KEY: the file of the tunnel key on this node}
-  [ -r "$KEY" ] || { log "UNREACHED: the key file $(basename "$KEY") isn't readable on this node"; exit 3; }
+  user=${peer%%@*}; node=${peer#*@}; ssh_port=22
+  [ "$node" = "${node%:*}" ] || { ssh_port=${node##*:}; node=${node%:*}; }
+  [ -n "$user" ] && [ -n "$node" ] && [ "$peer" != "${peer#*@}" ] && [[ $ssh_port =~ ^[0-9]+$ ]] \
+    || { log "PEER_AUTHORITY: the serving node as ssh reaches it: a user, an at sign, a host, and :SSH_PORT if not 22"
+         exit 4; }
+  [[ $front =~ ^[^:]+:[0-9]+$ ]] \
+    || { log "FRONT_AUTHORITY: HOST:PORT, the id front as the serving node reaches it"; exit 4; }
+  [ -n "$key" ] || { log "TUNNEL_KEY: the tunnel key's file on this node"; exit 4; }
+  [ -r "$key" ] || { log "UNREACHED: the tunnel key's file isn't readable on this node"; exit 3; }
   LOCAL=$("$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-  # ssh's whole configuration, so that the address is on no command line, and a known-hosts file of the job's own.
+  # ssh's whole configuration, the forward too, so that no value is on a command line; a known-hosts file of the
+  # job's own.
   cat > "$W/ssh_config" <<EOF
 Host serving-node
-  HostName ${peer#*@}
-  User ${peer%%@*}
-  Port ${SSH_PORT:-22}
-  IdentityFile $KEY
+  HostName $node
+  User $user
+  Port $ssh_port
+  IdentityFile $key
   IdentitiesOnly yes
   BatchMode yes
   ConnectTimeout 10
   StrictHostKeyChecking accept-new
   UserKnownHostsFile $W/known_hosts
+  LocalForward 127.0.0.1:$LOCAL $front
   ExitOnForwardFailure yes
   ServerAliveInterval 15
   RequestTTY no
@@ -84,7 +98,7 @@ Host serving-node
   ForwardX11 no
   ControlPath none
 EOF
-  ssh -F "$W/ssh_config" -N -L "127.0.0.1:$LOCAL:127.0.0.1:$PORT" serving-node 2> "$W/tunnel.log" &
+  ssh -F "$W/ssh_config" -N serving-node 2> "$W/tunnel.log" &
   TUN=$!
   # ssh's log names the serving node, so no line of it is printed or kept.
   "$PY" - "$TUN" "$LOCAL" <<'EOF' || exit 3
@@ -125,6 +139,7 @@ except OSError:
     pass
 unreached("the forward is up, and nothing listens behind it: its connect was closed at once")
 EOF
+  [ -z "${REACH_ONLY:-}" ] || { log "REACH_ONLY: no try"; exit 0; }
   export DEVIATIONS_FRONT=127.0.0.1:$LOCAL
   FRONT=(--front-env DEVIATIONS_FRONT)
 fi
