@@ -4,9 +4,10 @@ and direction, a retransmitted segment on the wire twice and in the stream once,
 certifier's listed under names with no address printed or written, and the foreign flow refused, or counted and
 skipped when told. On captures built from the fixture's packets: a stream counted across the sequence numbers' wrap
 and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreement, the pairing's counts on each side,
-every capture format read to the same sums, and each thing the reader doesn't read refused by its name, a packet kept
-too short with the least length that reads it and with no length for every capture, a packet shorter than the
-headers it states by its own name. Then a run of the network certifier on a `VirtualClock`, published as `serve`
+every capture format read to the same sums, a Linux cooked capture's VLAN tags walked where a type names them, and
+each thing the reader doesn't read refused by its name, a packet kept too short with the least length that reads it
+and with no length for every capture, a packet shorter than the headers it states by its own name, a cooked frame's
+tag that no type names by its own. Then a run of the network certifier on a `VirtualClock`, published as `serve`
 publishes one, with a capture of exactly the bytes its server's side saw: the two counts agree in each direction, the
 watermark stream's among them and the server's answer on it in no sum; a run of two execution phases is counted
 across both phases' records; a run in the id egress form, at the id front's cell, agrees as one in the bytes form
@@ -422,6 +423,51 @@ def test_every_capture_format_is_read_to_the_same_sums(tmp_path):
     assert _between(tmp_path, packets, frame=bytes, link=fx.RAW) == _wider([FIRST, SECOND], -14)
 
 
+#: a frame under VLAN tags as a Linux cooked capture holds it: the cooked version, the tags a type names, the tags
+#: left before the IP packet that no type names, and how many bytes longer each packet is than in an Ethernet frame
+#: without a tag (None: the reader refuses the file)
+_TAGGED = [
+    ("v1, one tag", 1, (7,), (), 2 + 4),
+    ("v2, one tag, which the file doesn't hold", 2, (), (), 6),
+    ("v1, two tags, the second unnamed", 1, (7,), (9,), None),
+    ("v2, two tags, the second unnamed", 2, (), (9,), None),
+    ("v1, two tags, each named", 1, (7, 9), (), 2 + 8),
+    ("v2, two tags, the second named", 2, (9,), (), 6 + 4),
+]
+
+
+@pytest.mark.parametrize("version, vlans, left, wider", [case[1:] for case in _TAGGED],
+                         ids=[case[0] for case in _TAGGED])
+def test_a_linux_cooked_captures_vlan_tags_are_walked_where_a_type_names_them_and_refused_where_none_does(
+        tmp_path, version, vlans, left, wider):
+    """A frame under VLAN tags as a Linux cooked capture holds it. Of one tag, a v1 capture holds the tag after its
+    header, the tag's type in the header and the type of what is under it after the tag's two bytes, and a v2
+    capture holds nothing: either reads to the fixture's flows. Of two tags, the first is held as one is, and the
+    second's bytes can lie before the IP packet under a type that is IP's already: the reader reads no tag the type
+    before it doesn't name, tells by the first byte there, which is no IP header's, and refuses the file by that
+    name, for IPv6 as for IPv4. Where each tag's type is before it, as in an Ethernet frame, each is walked. Kept at
+    the reader's 130 bytes a packet, every one of these reads the same."""
+    link = fx.LINUX_SLL if version == 1 else fx.LINUX_SLL2
+    packets = fx.interleaved(fx.first(), fx.second())
+
+    def frame(packet: bytes) -> bytes:
+        return fx.cooked(packet, version, vlans, left)
+
+    for how in ({}, {"snapshot": cf.SNAPSHOT}):
+        if wider is not None:
+            assert _between(tmp_path, packets, frame=frame, link=link, **how) == _wider([FIRST, SECOND], wider)
+            continue
+        for ip, packet in (("IPv4", packets[0]), ("IPv6", _SYN6)):
+            with pytest.raises(cf.Refused) as refused:
+                _between(tmp_path, [packet], frame=frame, link=link, **how)
+            assert str(refused.value) == (
+                f"capture.pcap's packet 0 is a Linux cooked frame whose type says {ip} where no {ip} header starts. "
+                f"A cooked capture can hold a frame under two VLAN tags so: the second tag's bytes before the IP "
+                f"header, under the type of what is under that tag. This reads no tag the type before it doesn't "
+                f"name. Capture each interface by its name (`tcpdump -i IFACE`): its Ethernet frames keep every tag "
+                f"where this reads it")
+
+
 def test_ipv6_is_read_as_ipv4_is_through_its_extension_headers(tmp_path):
     packets = fx.exchange((fx.CERTIFIER6, 40001), fx.SERVER6, fx.data(300), fx.data(700), mss=250)
     given = _given(fx.SERVER6[0], fx.CERTIFIER6)
@@ -547,6 +593,11 @@ _WALKED = [
      50, "16 of its frame header, 20 of its IP header and TCP's first 14"),
     ("in a Linux cooked v2 frame", fx.LINUX_SLL2, fx.cooked(_packet(fx.TCP, _SYN), 2),
      ((20, "Linux cooked"), (40, "IPv4")), 54, "20 of its frame header, 20 of its IP header and TCP's first 14"),
+    ("in a Linux cooked frame under a VLAN tag", fx.LINUX_SLL, fx.cooked(_packet(fx.TCP, _SYN), 1, (7,)),
+     ((20, "Linux cooked"), (40, "IPv4")), 54, "20 of its frame header, 20 of its IP header and TCP's first 14"),
+    ("in a Linux cooked v2 frame under two VLAN tags, with 40 bytes of IP options", fx.LINUX_SLL2,
+     fx.cooked(_with_ip_options(_packet(fx.TCP, _SYN), 40), 2, (7, 9)), ((28, "Linux cooked"), (48, "IPv4")), 102,
+     "28 of its frame header, 60 of its IP header and TCP's first 14"),
     ("raw IP", fx.RAW, _packet(fx.TCP, _SYN), ((20, "IPv4"),), 34, "20 of its IP header and TCP's first 14"),
     ("IPv6", fx.ETHERNET, fx.ethernet(_SYN6), ((14, "Ethernet"), (54, "IPv6")), 68,
      "14 of its frame header, 40 of its IP header and TCP's first 14"),
@@ -565,7 +616,10 @@ def test_a_packet_kept_too_short_is_refused_with_the_least_length_that_reads_it(
     """Kept at each length under the one the reader reads of it, a packet is refused: with that length and the headers
     it is the sum of, once the bytes kept hold every header that says it; before that, with the first header they
     don't hold whole. Kept at that length it is read. Neither names a length for every capture. A raw IP packet with
-    no byte kept has no version to be read by, and is a frame that isn't IP."""
+    no byte kept has no version to be read by, and is a frame that isn't IP. The reader's 130 bytes a packet hold what
+    it reads of each of these, the longest among them a Linux cooked v2 frame's under two VLAN tags and the longest
+    IPv4 header."""
+    assert need <= cf.SNAPSHOT
     path = tmp_path / "capture.pcap"
     servers, certifiers = (SERVER[0], fx.SERVER6[0]), (CERTIFIER[0], fx.CERTIFIER6)
     given = [cf.endpoint(a) for a in servers], [cf.endpoint(a) for a in certifiers]

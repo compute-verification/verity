@@ -9,10 +9,12 @@ address it was given on one side with its bytes. It is a measurement: it says "a
 gives no protocol's verdict.
 
 **The capture** is a file as `tcpdump -w` writes one (pcap: either byte order, microseconds or nanoseconds), of link
-type Ethernet (VLAN tags skipped), Linux cooked (v1, v2) or raw IP, holding IPv4 or IPv6. Lengths are read from the
-IP and TCP headers, never from how much of a packet was kept, so a capture that keeps only each packet's first bytes
-(`-s`) sums the same. Several files are one capture: an optical splitter's two directions, or a rotated capture's
-parts in order. A flow is the two addresses, the two ports and the protocol, and each direction of it has
+type Ethernet, Linux cooked (v1, v2) or raw IP, holding IPv4 or IPv6. A VLAN tag is skipped where the type before it
+names it: each tag of an Ethernet frame, and the tag a Linux cooked v1 capture holds after its header (a v2 capture
+holds nothing of a frame's first tag). Lengths are read from the IP and TCP headers, never from how much of a packet
+was kept, so a capture that keeps only each packet's first bytes (`-s`) sums the same. Several files are one capture:
+an optical splitter's two directions, or a rotated capture's parts in order. A flow is the two addresses, the two
+ports and the protocol, and each direction of it has
 - `packets` and `wire_bytes`: every frame, as long as it was on the wire (headers, ACKs, retransmissions; no preamble
   or checksum trailer);
 - `payload_bytes`: the bytes above the transport header, a retransmitted segment's each time it was sent;
@@ -30,7 +32,9 @@ MACsec, provider bridging; IP in IP, GRE, ESP, AH, EtherIP, L2TP; VXLAN, Geneve 
 packet kept too short for its headers, with how many of its bytes this reads (its frame header, its IP header and
 the first 14 of TCP's or 4 of UDP's), or, where the bytes kept end before the header that says so is whole, with that
 header; a packet shorter than the headers it states, one that was fewer bytes on the wire than this reads of it, which
-no capture length changes; a file that ends inside a packet.
+no capture length changes; a Linux cooked frame whose type says IP where no IP header starts, as a cooked capture can
+hold a frame under two VLAN tags, the second left before the IP header with no type naming it; a file that ends
+inside a packet.
 
 **Which bytes are compared.** The certifier opens one connection to the server for each client connection it admits,
 and one more for the watermark stream. Of each, the record gives two counts, both of the byte stream (what a `read`
@@ -114,8 +118,9 @@ TUNNEL_PROTOCOLS = {4: "IP in IP", 41: "IPv6 in IP", 47: "GRE", 50: "ESP", 51: "
 TUNNEL_PORTS = {4789: "VXLAN", 8472: "VXLAN", 6081: "Geneve", 2152: "GTP-U"}
 #: the least a capture keeps of each packet for every header here to be whole: Ethernet with two VLAN tags, IPv6 with
 #: a fragment header, TCP with every option. A packet whose headers are shorter keeps the first bytes of its content
-#: in the rest. The README's command for a link captures at it, and nothing here reads it: a packet is refused by
-#: what this reads of it, never by this length
+#: in the rest. A Linux cooked header is 2 or 6 bytes longer than Ethernet's: under one this length still holds all
+#: this reads of a packet, which of TCP's header is its first 14 bytes. The README's command for a link captures at
+#: it, and nothing here reads it: a packet is refused by what this reads of it, never by this length
 SNAPSHOT = 14 + 8 + 40 + 8 + 60
 
 
@@ -158,6 +163,15 @@ def _needs(wire: int, kept: int, frame: int, at: int, transport: str, first: int
                    f"keeping at least that many of each packet; a packet with longer headers needs more. {LENGTHS}")
 
 
+def _unnamed(ip: str) -> _Unread:
+    """A Linux cooked frame whose type says `ip` where the first byte is no `ip` header's."""
+    return _Unread(f"a Linux cooked frame whose type says {ip} where no {ip} header starts. A cooked capture can hold "
+                   f"a frame under two VLAN tags so: the second tag's bytes before the IP header, under the type of "
+                   f"what is under that tag. This reads no tag the type before it doesn't name. Capture each "
+                   f"interface by its name (`tcpdump -i IFACE`): its Ethernet frames keep every tag where this reads "
+                   f"it")
+
+
 def packets(path: Path, facts: dict) -> Iterator[tuple[int, int, bytes]]:
     """Each packet of a capture file as (its link type, its length on the wire, the bytes kept of it); `facts` gets
     the file's link type and snapshot length."""
@@ -190,24 +204,31 @@ def read_packet(link: int, wire: int, data: bytes) -> tuple | None:
     """A packet as (source address, destination address, protocol, source port, destination port, payload bytes,
     sequence number, TCP flags, whether it is a fragment), the addresses packed; ports are None for a protocol
     without them and for a fragment, the sequence number None but for TCP. None for a frame that isn't IP; `_Unread`
-    for an encapsulation, a packet kept too short and a packet shorter than the headers it states."""
+    for an encapsulation, a packet kept too short, a packet shorter than the headers it states and a Linux cooked
+    frame whose type says IP where no IP header starts."""
+    cooked = link in (LINUX_SLL, LINUX_SLL2)
     if link == ETHERNET:
         if len(data) < 14:
             raise _cut(wire, len(data), 14, "Ethernet header")
-        at, kind = 14, int.from_bytes(data[12:14], "big")
-        while kind in VLAN:
-            if len(data) < at + 4:
-                raise _cut(wire, len(data), at + 4, "Ethernet header")
-            kind, at = int.from_bytes(data[at + 2:at + 4], "big"), at + 4
-    elif link in (LINUX_SLL, LINUX_SLL2):
-        at = 16 if link == LINUX_SLL else 20
+        at, kind, header = 14, int.from_bytes(data[12:14], "big"), "Ethernet header"
+    elif cooked:
+        at, header = 16 if link == LINUX_SLL else 20, "Linux cooked header"
         if len(data) < at:
-            raise _cut(wire, len(data), at, "Linux cooked header")
+            raise _cut(wire, len(data), at, header)
         kind = int.from_bytes(data[14:16] if link == LINUX_SLL else data[0:2], "big")
     else:
-        at, kind = 0, {4: IPV4, 6: IPV6}.get(data[0] >> 4 if data else 0)
+        at, kind, header = 0, {4: IPV4, 6: IPV6}.get(data[0] >> 4 if data else 0), ""
+    while kind in VLAN:  # a tag the type before it names: its two bytes, then the type of what is under it
+        if len(data) < at + 4:
+            raise _cut(wire, len(data), at + 4, header)
+        kind, at = int.from_bytes(data[at + 2:at + 4], "big"), at + 4
     if kind in TUNNEL_FRAMES:
         raise _Unread(f"{TUNNEL_FRAMES[kind]}, an encapsulation this doesn't read")
+    # an IPv4 header's first byte is its version and a length of five words or more, an IPv6 header's first four
+    # bits its version
+    if cooked and len(data) > at and (kind == IPV4 and not 0x45 <= data[at] <= 0x4F
+                                      or kind == IPV6 and data[at] >> 4 != 6):
+        raise _unnamed("IPv4" if kind == IPV4 else "IPv6")
     frame, fragment = at, 0
     if kind == IPV4:
         if len(data) < at + 20:
