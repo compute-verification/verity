@@ -2183,6 +2183,12 @@
         "Security/": "security/",
         "tools/verity/lean/tests/fixtures/unread/Security/": "tools/verity/lean/tests/fixtures/unread/security/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/inference_only/nci/slowdown.py": "verity/protocols/inference_only/nci/bracket.py",
+        "verity/protocols/inference_only/nci/tests/test_slowdown.py": "verity/protocols/inference_only/nci/tests/test_bracket.py"
+      }
     }
   ]
 }
