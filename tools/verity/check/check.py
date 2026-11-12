@@ -333,6 +333,8 @@ JOBS = DECLARATION.load()
 
 #: the verdict packs (`verdicts.py`)
 VERDICTS = _load("verdicts")
+#: circuit-check's binding records, named in the packs and carried through the store (`records.py`)
+RECORDS = _load("records")
 #: the helpers `lean_audit.py` shares (`common.py`), kept out of this file so that its audit key doesn't cover this file
 COMMON = _load("common")
 #: trace/v1 spans over the run (`spans.py`): `spans.jsonl` beside `steps.jsonl`, the frozen shape the watcher reads
@@ -1576,9 +1578,11 @@ def _only(only: str | tuple[str, ...] | None) -> str:
     return f" (only {', '.join((only,) if isinstance(only, str) else only)})" if only else ""
 
 
-def verdicts_in(pack: Path, run_dir: Path | None, only: str | tuple[str, ...] | None = None) -> dict:
+def verdicts_in(pack: Path, run_dir: Path | None, only: str | tuple[str, ...] | None = None,
+                named: dict[str, int] | None = None) -> dict:
     """Import a verdict pack before the steps run (`verdicts.py`): the path given, else its name in a recorded run's `inputs/`;
-    with ``only``, just its entries under that pack path (or those)."""
+    with ``only``, just its entries under that pack path (or those).  ``named`` takes the circuit records it names
+    (`records.named_in`)."""
     try:
         here = pack.exists()
     except PermissionError:                  # the launcher's path, under a directory this machine can't read (its /root)
@@ -1586,6 +1590,8 @@ def verdicts_in(pack: Path, run_dir: Path | None, only: str | tuple[str, ...] | 
     if not here and run_dir is not None and (run_dir / "inputs" / pack.name).exists():
         pack = run_dir / "inputs" / pack.name
     added, kept = VERDICTS.import_(pack, only)
+    if named is not None:
+        named.update(RECORDS.named_in(pack))
     print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}{_only(only)}", flush=True)
     return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept, **({"only": only} if only else {})}
 
@@ -1612,11 +1618,13 @@ def fetch_signed(p: dict, dest: Path) -> str | None:
     return None
 
 
-def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = None) -> list[dict]:
+def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = None,
+                     named: dict[str, int] | None = None) -> list[dict]:
     """Fetch each pack ``listed`` (`take_verdict_urls`, newest first) and import it before the steps run (`verdicts.import_`, which
     never replaces an entry here, so where two packs hold one entry the newer's is kept); with ``only``, just its entries under
     that pack path (or those).  A pack that can't be fetched, isn't the one listed or that import refuses is passed over by
-    name, so its verdicts are recomputed.  Each pack's record for the result's `verdicts`."""
+    name, so its verdicts are recomputed.  ``named`` takes the circuit records each pack imported names (`records.named_in`).
+    Each pack's record for the result's `verdicts`."""
     got, t0 = [], time.monotonic()
     with tempfile.TemporaryDirectory(prefix="check-verdicts-") as d:
         pack = Path(d) / "verdicts.tar.gz"
@@ -1627,6 +1635,8 @@ def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = No
                 except VERDICTS.UNREADABLE as e:
                     why = f"import refuses it ({type(e).__name__}: {e})"
                 else:
+                    if named is not None:
+                        named.update(RECORDS.named_in(pack))
                     got.append({"run": p["run"], "sha256": p["sha256"], "added": added, "already": kept,
                                 **({"only": only} if only else {})})
                     continue
@@ -1635,6 +1645,44 @@ def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = No
     taken = [g for g in got if "skipped" not in g]
     print(f"check: verdicts: {sum(g['added'] for g in taken)} imported, {sum(g['already'] for g in taken)} already here, from "
           f"{len(taken)} of {len(listed)} recorded checks' packs{_only(only)} in {time.monotonic() - t0:.0f} s", flush=True)
+    return got
+
+
+#: the suite whose session builds circuit-check's binding records apart, as its step does (`records.py`)
+CIRCUIT_SUITE = "tools/verity/circuit_check"
+
+
+def builds_records(only: list[str] | None) -> bool:
+    """Whether a check of the parts ``only`` (all of it when None) runs circuit-check's step or `CIRCUIT_SUITE` (its part, or the
+    whole of `pytest`), the two that read and write its binding records."""
+    if only is None:
+        return True
+    names = {"", *(s.name for s in SUITES.discover() if s.path == CIRCUIT_SUITE)}
+    return any(p.partition(":")[0] == "circuit-check" or (p.partition(":")[0] == "pytest" and SHARDS.suite_part(p)[1] in names)
+               for p in only)
+
+
+def store_remote():
+    """The store's remote through the run's custody key (`custody_dir`), else None, with the reason printed."""
+    if (custody := custody_dir()) is None:
+        print("check: circuit records: no custody key here, so none is fetched or published", flush=True)
+        return None
+    try:
+        return LIVE.custody_remote(custody)
+    except Exception as e:  # noqa: BLE001  (no remote: circuit-check builds what the packs held no record of)
+        print(f"check: circuit records: no store remote ({type(e).__name__}); none is fetched or published", flush=True)
+        return None
+
+
+def records_fetched(named: dict[str, int], remote) -> dict:
+    """Fetch the circuit records ``named`` that circuit-check's cache lacks from ``remote`` (`records.fetch`), before the steps:
+    the counts for the result's `verdicts`, printed.  Nothing here fails the check: what isn't fetched is built."""
+    try:
+        got = RECORDS.fetch(named, cache_dir() / "circuit-check", RECORDS.getter(remote), base=cache_dir())
+    except Exception as e:  # noqa: BLE001  (a fetch that breaks costs the builds, never a verdict)
+        print(f"check: circuit records: fetching failed ({type(e).__name__}: {e}); circuit-check builds them", flush=True)
+        return {"named": len(named), "error": type(e).__name__}
+    print(RECORDS.fetch_line(got), flush=True)
     return got
 
 
@@ -2799,12 +2847,12 @@ class Packs:
     SIGTERM (`_terminated`), each time in place of the last (`os.replace`), so a check stopped at any moment leaves the passes it
     had stored by then.  Custody uploads it whatever way the run ends: `record` declares it an output."""
 
-    def __init__(self, out: Path, before: dict[str, str]):
-        self.out, self.before = out, before
+    def __init__(self, out: Path, before: dict[str, str], records=None):
+        self.out, self.before, self.records = out, before, records
         self.lock = threading.Lock()
         self.want = threading.Event()
         self.closed = False
-        self.written: dict[str, str] | None = None
+        self.written: tuple | None = None
         self.entries = 0
         self.thread = threading.Thread(target=self._loop, daemon=True, name="verdict-packs")
         self.thread.start()
@@ -2821,13 +2869,23 @@ class Packs:
                 self.write()
 
     def write(self) -> int:
-        """Write the pack unless it holds what is new already; the number of entries it holds."""
+        """Write the pack unless it holds what is new already; the number of entries it holds.  With ``records`` (a
+        `records.Publisher`), the circuit records it names are put on the store first, except once a SIGTERM came (its SIGKILL
+        follows in seconds), and those the store holds are named in the pack in place of their bytes."""
         with self.lock:
             try:
                 new = VERDICTS.changed(self.before)
-                if {k: d for k, (d, _) in new.items()} != self.written:
-                    self.entries = VERDICTS.export(self.out, self.before, new)
-                    self.written = {k: d for k, (d, _) in new.items()}
+                drop, manifest = set(), None
+                if self.records is not None:
+                    try:
+                        drop, manifest = self.records.pack(publish=not TERMINATED)
+                    except Exception as e:  # noqa: BLE001  (the records then go in the pack as they are)
+                        print(f"check: circuit records: naming them failed ({type(e).__name__}: {e}); the pack holds them",
+                              flush=True)
+                state = ({k: d for k, (d, _) in new.items()}, manifest)
+                if state != self.written:
+                    self.entries = VERDICTS.export(self.out, self.before, new, drop, (manifest,) if manifest else ())
+                    self.written = state
             except OSError as e:
                 print(f"check: verdicts: writing {self.out.name} failed ({type(e).__name__}: {e}); the last one written stands",
                       flush=True)
@@ -3405,10 +3463,14 @@ def main(argv: list[str], script: bool = False) -> int:
             return 2
         print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
-    listed, verdicts = take_verdict_urls(out), {}
+    listed, verdicts, named = take_verdict_urls(out), {}, {}
     if pack or listed:
         part = None if cache else ((CIRCUIT_ENTRIES, COMPARED) if circuit_cache else COMPARED)
-        verdicts["in"] = [*([verdicts_in(pack, run_dir, part)] if pack else []), *(verdicts_fetched(listed, part) if listed else [])]
+        verdicts["in"] = [*([verdicts_in(pack, run_dir, part, named)] if pack else []),
+                          *(verdicts_fetched(listed, part, named) if listed else [])]
+    cc_remote = store_remote() if run_dir is not None and circuit_cache and builds_records(only) else None
+    if cc_remote is not None and named:
+        verdicts["records"] = records_fetched(named, cc_remote)
     if records is not None and (only is None or any(p.partition(":")[0] == "circuit-check" for p in only)):
         why = (cc_records_in(records, cache_dir() / "circuit-check") if circuit_cache
                else "circuit-check reuses no cache here (--no-cache without --circuit-cache)")
@@ -3420,7 +3482,9 @@ def main(argv: list[str], script: bool = False) -> int:
     TERMINATED.clear()
     main_thread = threading.current_thread() is threading.main_thread()
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
-    packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
+    publisher = (RECORDS.Publisher(cache_dir() / "circuit-check", CIRCUIT_ENTRIES, time.time_ns(), RECORDS.putter(cc_remote),
+                                   cache_dir()) if cc_remote is not None and before is not None else None)
+    packs = Packs(run_dir / "verdicts.tar.gz", before, publisher) if before is not None else None
     reused = Reused(run_dir, before, None if cache else CIRCUIT_ENTRIES) if before is not None else None
     live = live_record(out, run_dir, sharded, picked)
     live.start()
@@ -3443,6 +3507,8 @@ def main(argv: list[str], script: bool = False) -> int:
     if run_dir is not None:
         if packs is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": packs.close()}
+            if publisher is not None:
+                verdicts["out"]["records"] = publisher.stats
             if (got := reused.close()) is not None:
                 verdicts["reused"] = {"file": REUSED_PACK, "entries": got}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
