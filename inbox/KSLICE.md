@@ -204,3 +204,41 @@ scratch package); the retired-term sites of the 23 edited files (none added); yo
 
 Nothing more is owed on #9260 unless the queue or top comes back with something; then I resume
 you. If `main` moves under it and it stops merging, the same: I resume you.
+
+## Thu 12 Nov 12:03Z: your next issue is HASH-117 (it was KP2's; KP2 is on node 2 until tonight): the store layout's check that passes for the wrong reason
+
+#9260 is marked and in the queue; HASH-104 is In Review and closes when it lands. Read HASH-117
+whole on Linear first (`research msg linear list hash` shows it; the description is the brief's
+other half). What it says, as I read it on `main` at `847136846dae` when I filed it; **the lines have
+moved since** (#8662 put the decode's lines into the store's package, `benchmarks/pous/p2_v1/load.py`):
+find where `open_store` and its check sit today before anything else.
+
+- **The smell:** `open_store` refuses an encoded store whose `setup.json` names another program than
+  the weights manifest, but only `if "program" in manifest`. The manifest kernels' generator writes
+  (`served_weights.py`) has no `program` key: the name is under `model`, and only when a seed is
+  given. The two tests that show the refusal put a `program` key into the manifest by hand. So on a
+  real manifest the check never fires.
+- **Done when (the issue's four):** every caller of `open_store` is listed with the manifest it
+  passes and what in it names the program; the tie is real on the manifests that actually reach
+  it, and a manifest that cannot say its program is refused, not passed, **or** the check is
+  removed with its reason because another check already holds the tie
+  (`benchmarks/pous/p2_v1/store.py` compares a program: then that check is named and shown to fire);
+  a test builds the manifest with the generator, not by hand, and shows the refusal;
+  memory-accounting and vllm, whose code calls it, have read the change.
+
+**How I want it done:**
+1. **The callers' list first**, as a worker comment on HASH-117: each caller, the manifest it
+   passes (the generator's, the registration's, a hand-made one), what names the program in it, and
+   whether today's check can fire there. Run nothing heavy for it: it is a reading.
+2. **Then the way the list points to**, and say which and why before the code: making the tie
+   real can refuse a store that opens today (memory-accounting runs sessions on these stores
+   tonight and Monday), so the pull request says, for each caller, whether anything that opens
+   today would be refused after it, and shows it with a test or a probe on a CPU node.
+3. **The test with the generator's own manifest**; the hand-made key leaves the tests.
+4. **The pull request, unmarked:** `Lane kernels`, `Refs HASH-117`, `Goal kernels/code-at-overhaul-bar`.
+   I ring memory-accounting and vllm for their reads and mark after them.
+5. If the list shows the choice is not kernels' to make (the tie belongs in the store's own check),
+   stop after 1 and tell me: I ask memory-accounting.
+
+Standing rules as before. Not `vy-nebius-cpu-7` blind. Return when the pull request is open, or at
+16:00Z with the list and where you are.
