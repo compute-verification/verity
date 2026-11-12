@@ -294,6 +294,15 @@ def test_the_replays_attention_paths_are_the_ones_the_programs_result_observed(t
     assert p.attn_paths == paths == index["attention_paths"]
 
 
+@pytest.mark.parametrize("observed, kind", [(["model.layers.0.self_attn.attn"], "list"), ("model.layers.0.self_attn.attn", "str")])
+def test_observed_attention_paths_that_are_no_table_stop_the_load(tmp_path, monkeypatch, observed, kind):
+    """`attention_impls_observed` is a table from each path to what the Build saw there.  A list or a string of paths in its place is
+    not read as the paths: the load raises, and a replay whose load raised is not evaluated."""
+    d = _program_dir(tmp_path, {"program": {"digest": D}, "tp": RANK_1_OF_2, "attention_impls_observed": observed})
+    with pytest.raises(AttributeError, match=f"^'{kind}' object has no attribute 'keys'$"):
+        _load(monkeypatch, d)
+
+
 @pytest.mark.parametrize("config, targets, k", [
     ({}, [], None), ({"targets": None, "k_per_rank": None}, [], None), ({"targets": [], "k_per_rank": {}}, [], None),
     ({"targets": ["model.layers.0.mlp@3"], "k_per_rank": {"0": 5}}, ["model.layers.0.mlp@3"], None),          # a K for another rank is none for this one
