@@ -37,8 +37,8 @@ from collections.abc import Callable, Collection, Iterable
 from pathlib import Path
 from typing import IO, Any
 
-from verity_vllm.engine import handle
-from verity_vllm.engine.hooks import Hooks
+from verity_vllm.engine import handle, scheduler_step
+from verity_vllm.engine.runner_step import Rank
 
 __all__ = ["SCHEMA", "SERVED", "StepTrace", "load", "scheduler_config", "step_geometry", "steps"]
 
@@ -142,7 +142,7 @@ class StepTrace:
         self.request_id = request_id or (lambda rid: rid)
         self.clock = clock                      # when given, each arrive and step record carries its reading `t`
         self.records: list[dict[str, Any]] = []
-        self.hooks = Hooks(tag="step-trace")
+        self._removals: list[scheduler_step.Removal] = []   # one for each install
         self.scheduled = 0                      # steps scheduled with tokens so far: the index the next such step gets
         self.empty = 0                          # schedules that scheduled nothing since the last such step
         self.executed = 0
@@ -215,59 +215,7 @@ class StepTrace:
                 self._thread.start()
                 atexit.register(self.drain)             # a server that exits without `uninstall`: its file still whole
         self._emit({"kind": "header", "schema": SCHEMA, "config": scheduler_config(sched)})
-        me = self
-
-        def add_request(orig):
-            def wrapped(request, *a, **kw):
-                fresh = request.request_id not in sched.requests
-                after = {"after_empty": me.empty} if me.empty else {}
-                out = orig(request, *a, **kw)
-                if fresh:
-                    sp = getattr(request, "sampling_params", None)
-                    me._emit({"kind": "arrive", "request": me.request_id(request.request_id), "before_step": me.scheduled, **after,
-                              "prompt_len": int(getattr(request, "num_prompt_tokens", 0) or len(request.prompt_token_ids or ())),
-                              "eos_token_id": _plain(getattr(request, "eos_token_id", None)),
-                              "sampling": {n: _plain(getattr(sp, n)) for n in SAMPLING if sp is not None and hasattr(sp, n)}})
-                return out
-            return wrapped
-
-        def schedule(orig):
-            def wrapped(*a, **kw):
-                so = orig(*a, **kw)
-                if int(getattr(so, "total_num_scheduled_tokens", 0) or 0) > 0:
-                    me._pending[id(so)] = me.scheduled
-                    me.scheduled += 1
-                    me.empty = 0
-                else:
-                    me.empty += 1
-                return so
-            return wrapped
-
-        def update_from_output(orig):
-            def wrapped(so, mro, *a, **kw):
-                outs = orig(so, mro, *a, **kw)
-                step = me._pending.pop(id(so), None)
-                if step is not None:
-                    me._record_step(step, so, mro, outs)
-                return outs
-            return wrapped
-
-        def finish_requests(orig):
-            def wrapped(request_ids, finished_status, *a, **kw):
-                done = orig(request_ids, finished_status, *a, **kw)
-                for r in done or ():
-                    me._preempted.discard(r.request_id)
-                    reason = getattr(r, "get_finished_reason", lambda: None)()
-                    me._emit({"kind": "finish", "request": me.request_id(r.request_id), "after_step": me.scheduled - 1,
-                              "reason": FINISH.get(int(reason), str(reason)) if reason is not None else str(finished_status),
-                              "stop_reason": _plain(getattr(r, "stop_reason", None)), "outside": True})
-                return done
-            return wrapped
-
-        self.hooks.wrap(sched, "add_request", add_request)
-        self.hooks.wrap(sched, "schedule", schedule)
-        self.hooks.wrap(sched, "update_from_output", update_from_output)
-        self.hooks.wrap(sched, "finish_requests", finish_requests)
+        self._removals.append(scheduler_step.add(sched, _Observes(self, sched)))
         return self
 
     def _record_step(self, step: int, so: Any, mro: Any, outs: Any) -> None:
@@ -296,7 +244,8 @@ class StepTrace:
         self.executed += 1
 
     def uninstall(self) -> None:
-        self.hooks.uninstall()
+        scheduler_step.remove(*self._removals)  # refused with the trace still on, wherever it is on
+        self._removals.clear()
         if self._lines is not None:
             self._lines.put(None)
             thread = self._thread
@@ -307,6 +256,60 @@ class StepTrace:
         if self._fh is not None:
             self._fh.close()
             self._fh = None
+
+
+class _Observes(scheduler_step.Part):
+    """A step trace's part on one scheduler (`scheduler_step`): each of the scheduler's four calls is recorded once vLLM's method
+    has returned, inside an engine class's admission and every part that plans or commits."""
+
+    rank = Rank.OBSERVE
+
+    def __init__(self, trace: StepTrace, sched: Any) -> None:
+        self.trace, self.sched = trace, sched
+
+    def around_add_request(self, call: Callable[..., Any], request: Any, *a: Any, **kw: Any) -> Any:
+        me = self.trace
+        fresh = request.request_id not in self.sched.requests
+        after = {"after_empty": me.empty} if me.empty else {}
+        out = call(request, *a, **kw)
+        if fresh:
+            sp = getattr(request, "sampling_params", None)
+            me._emit({"kind": "arrive", "request": me.request_id(request.request_id), "before_step": me.scheduled, **after,
+                      "prompt_len": int(getattr(request, "num_prompt_tokens", 0) or len(request.prompt_token_ids or ())),
+                      "eos_token_id": _plain(getattr(request, "eos_token_id", None)),
+                      "sampling": {n: _plain(getattr(sp, n)) for n in SAMPLING if sp is not None and hasattr(sp, n)}})
+        return out
+
+    def around_schedule(self, call: Callable[..., Any], *a: Any, **kw: Any) -> Any:
+        me = self.trace
+        so = call(*a, **kw)
+        if int(getattr(so, "total_num_scheduled_tokens", 0) or 0) > 0:
+            me._pending[id(so)] = me.scheduled
+            me.scheduled += 1
+            me.empty = 0
+        else:
+            me.empty += 1
+        return so
+
+    def around_update_from_output(self, call: Callable[..., Any], scheduler_output: Any, model_runner_output: Any,
+                                  *a: Any, **kw: Any) -> Any:
+        me = self.trace
+        outs = call(scheduler_output, model_runner_output, *a, **kw)
+        step = me._pending.pop(id(scheduler_output), None)
+        if step is not None:
+            me._record_step(step, scheduler_output, model_runner_output, outs)
+        return outs
+
+    def around_finish_requests(self, call: Callable[..., Any], request_ids: Any, finished_status: Any, *a: Any, **kw: Any) -> Any:
+        me = self.trace
+        done = call(request_ids, finished_status, *a, **kw)
+        for r in done or ():
+            me._preempted.discard(r.request_id)
+            reason = getattr(r, "get_finished_reason", lambda: None)()
+            me._emit({"kind": "finish", "request": me.request_id(r.request_id), "after_step": me.scheduled - 1,
+                      "reason": FINISH.get(int(reason), str(reason)) if reason is not None else str(finished_status),
+                      "stop_reason": _plain(getattr(r, "stop_reason", None)), "outside": True})
+        return done
 
 
 def load(path: str | Path) -> list[dict[str, Any]]:
