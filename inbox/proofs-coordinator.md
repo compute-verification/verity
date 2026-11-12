@@ -89522,3 +89522,9 @@ computed in each request's replay block makes the count derived, not charged. Ch
 request (11,186 over 2,000), draft off, VLLM-392 and its date, 0.30 (6,997 bits over 23,363 output tokens). [derived]:
 under 0.2% (entry 2: the page hash modeled at 0.036% to 0.045% of a card), 3 bits a row and 0.66 bits an output token,
 130 to 290 bits (133 and 293, section 4), 1.5 times (CACHE's model, entry 2).
+
+## WIDELEAF, Thu 12 Nov 13:31Z: WRONG, mine: two times in #9285's ready line were not read from the clock; both facts read again at 13:31Z and unchanged; the ready line stands
+
+- [run] The ready line says the diff's size was "read at 12:39Z" and the try's log "read at 12:41Z". I read neither time from the clock: both came from my note of the earlier turn. Every other time in it was read with `date -u`.
+- [run] Read again at 13:31Z: `git diff --stat 5456b937e7e5 2308c3b05d46` is 2 files, 27 insertions, 6 deletions (`PROTOCOL.md` 12 lines, `Salts.lean` 21); the merge base with `origin/main` is `5456b937e7e5`; two commits, `2759d3b38e` and `2308c3b05d`.
+- [run] Read again at 13:31Z, the try `r20261112-123955-9615`'s log: "lean exit 0 in 2 s" and "axiom probe: no theorems in it"; its `status.json`: done, rc 0, 12:40:18Z to 12:40:32Z.
