@@ -1678,7 +1678,10 @@ Where the view tie is held and every unit of the scan is proved, the term charge
 gate of the scan the prover chooses. It takes no minimum of the two charges, so it can exceed `tied + faulty` where
 the tied audits count fewer free inputs than the entries' bits.
 
-A scan sampled in part is charged `tied` and `faulty`, beside its view rows where the view tie is not held. -/
+A scan sampled in part is charged `tied` and `faulty`, beside its view rows where the view tie is not held. There a
+term at `b` wrong units counts up to `min b T` of the scan's `T` view rows twice, in `view` and again in `faultyBits`,
+where the egress instance, whose bits hold its `state`, one view row, is the wider: the charge bounds the count from
+above, so the double count stays. -/
 def Scan.terms (s : Scan) (f : Facts) (tied faulty jitter : Nat) (viewTie : Bool := viewTieHeld) : AuditTerms :=
   { facts := f, free := s.free + (if f.whole then 0 else tied), faultySets := clog2 (atMost f.units f.wrong),
     faultyBits := f.wrong * max s.ingress s.egress, jitter := clog2 (jitter ^ s.steps),

@@ -668,8 +668,10 @@ def test_a_scan_sampled_in_part_is_charged_its_view_rows_beside_its_tied_audits(
     (`PC._tied_free`), some of them nonzero, its `faulty_bits` its bound times the more of an ingress and an egress
     instance's bits, and K is the schedules, the cells and each term's six charges. A tied audit's charge counts its
     own Program's input gates, none of them a view row's. A faulty unit's bits count an egress instance's parameters,
-    which are its `state` (`Scan.egress` is a view row's bits and its return's), so a term whose bound is `b` ≥ 1
-    faulty units counts at most `b` of its T view rows a second time, in `faulty_bits`."""
+    which are its `state` (`Scan.egress` is a view row's bits and its return's), so a term whose bound is `b` faulty
+    units counts up to min(b, T) of its T view rows a second time, in `view` and again in `faulty_bits`, where the
+    egress instance is the wider. The charge bounds the count from above, so the double count stays and K is not made
+    exact: the test holds `faulty_bits` to `b` times the wider instance's bits as they are."""
     terms = ("free", "view", "faulty_sets", "faulty_bits", "faulty_entries", "jitter")
     seen = Counter()
     for m in ("rows-honest", *SAMPLED_IN_PART):
