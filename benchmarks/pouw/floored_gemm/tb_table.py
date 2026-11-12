@@ -35,7 +35,8 @@ def best(bench: list[dict]) -> list[dict]:
 
 
 def main() -> int:
-    bench = [json.loads(l) for l in open(sys.argv[1]) if l.strip().startswith("{")]
+    with open(sys.argv[1]) as f:
+        bench = [json.loads(line) for line in f if line.strip().startswith("{")]
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else None
     call = [a for a in ORDER if all(a in s["arms"] for s in bench)]
     gemm = [a + "g" for a in call if a.startswith("t") and all(a + "g" in s["arms"] for s in bench)]

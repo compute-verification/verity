@@ -20,6 +20,7 @@ import argparse
 import itertools
 import json
 import sys
+from pathlib import Path
 
 import numpy as np
 
@@ -265,7 +266,7 @@ def main() -> int:
     if args.only == "pair-search":
         txt = json.dumps({"seed": args.seed, "persistent_pair_search": persistent_pair_search(rng)}, indent=1)
         if args.json:
-            open(args.json, "w").write(txt)
+            Path(args.json).write_text(txt)
         print(txt)
         return 0
     N = args.trials
@@ -408,7 +409,7 @@ def main() -> int:
         out["tile_sim"][vname] = res
     txt = json.dumps(out, indent=1)
     if args.json:
-        open(args.json, "w").write(txt)
+        Path(args.json).write_text(txt)
     print(txt)
     return 0
 

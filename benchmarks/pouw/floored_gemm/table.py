@@ -38,7 +38,8 @@ def ncu_tensor(path: Path) -> dict[str, float] | None:
     """Duration-weighted tensor-pipe active % (of elapsed) over the kernels ncu profiled, and the kernels' total ns."""
     if not path.exists():
         return None
-    rows = [r for r in csv.reader(l for l in path.open() if l.startswith('"'))]
+    with path.open() as f:
+        rows = list(csv.reader(line for line in f if line.startswith('"')))
     if not rows:
         return None
     head, body = rows[0], rows[1:]
@@ -95,7 +96,8 @@ def print_best(bench: list[dict]) -> None:
 
 
 def main() -> int:
-    bench = [json.loads(l) for l in open(sys.argv[1]) if l.strip().startswith("{")]
+    with open(sys.argv[1]) as f:
+        bench = [json.loads(line) for line in f if line.strip().startswith("{")]
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else None
     print_best(bench)
     print("| shape | m n k | " + " | ".join(f"{t} η" for _, t in ARMS) + " | (b) vs (a) | (c) vs (a) | (d) vs (a) | duo2/32 vs (a) "
