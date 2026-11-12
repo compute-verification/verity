@@ -30,6 +30,7 @@ same rows of the whole prompt of its s tokens, not of the whole prompt the reque
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -156,7 +157,8 @@ def step_refusal(qsl: list[int], lens: list[int]) -> str | None:
 def token_rows(qsl: list[int], lens: list[int], device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
     """(request, position) of each of a step's query rows, int64 [T] on `device`: request r's rows qsl[r] .. qsl[r+1] - 1 are
     positions s - m .. s - 1 of its s-token window."""
-    req, pos = [], []
+    req: list[int] = []
+    pos: list[int] = []
     for r in range(len(qsl) - 1):
         m, s = qsl[r + 1] - qsl[r], lens[r]
         req += [r] * m
@@ -247,7 +249,8 @@ def batch_rows(query: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torc
     return (((y.float() * r[..., None]) + (z[..., None] * v0r)) * svr).to(torch.bfloat16)
 
 
-def reference_requests(query: torch.Tensor, qsl: list[int], lens: list[int], window, k_scales: torch.Tensor, scale: float,
+def reference_requests(query: torch.Tensor, qsl: list[int], lens: list[int],
+                       window: Callable[[int, int], tuple[torch.Tensor, torch.Tensor]], k_scales: torch.Tensor, scale: float,
                        output: torch.Tensor) -> None:
     """The per-request form the batched ops are held to: request r's rows `window_rows` over `kv_quant` of `window(r, s)`, its k
     and v [s, G, d], one request and one KV head at a time."""
