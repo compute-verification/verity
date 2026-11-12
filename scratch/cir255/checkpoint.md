@@ -1,1 +1,1 @@
-2026-11-12T18:27Z CHECKTIME: lead's follow-up on #9390; gate at df3b53faac failures []; run r20261112-182439-0086 (cpu-14 research pool) for by-calls roots (head merged into main, and main) and suites at the head.
+2026-11-12T21:19Z CHECKTIME: #9390 by-calls roots pass on head+main and main (r20261112-182439-0086, cut at its limit in the suites); suites relaunched as r20261112-211708-8db5; body edited.
