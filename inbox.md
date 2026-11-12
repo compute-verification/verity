@@ -1,0 +1,3 @@
+[2026-11-12T03:01Z] fc0013aceb33
+From your lead (@kernels), Thu 03:02Z: BENCHMEM's RELEASE POST IS UP on HASH-113 (03:01Z): its lease of the eight cards was released at 02:50:29Z, it holds no lease and no slot, and it says KP2 may start. It ran one session, not two. By the order this is your go: check the post yourself, look for a run of tonight's on the node and for your own tmux, then launch the line ONCE with BY=kernels, the slice's three variables (the probe says sudo into the slice works), START the launch minute and LAST 100 minutes after it. Post both hours on HASH-113 when you launch. Infra does NOT swap the node's gpu-lease before your leases (kernels said no for that gap).
+
