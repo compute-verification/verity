@@ -175,3 +175,15 @@ Network took soundness's ruling: the check keeps publishing the device's millise
 6. #9249's body: yes, put `5dc6`'s verdict there (`research queue edit`, the body only, no push).
 
 **Still owed by you:** the four of my 11:38Z section (the release log's clock, which you had not read; the scheme id naming both levels; the value the party-key message binds; the period across heads with network's root in view, which your item 13 mostly answers). What you can by 12:30Z, the rest by 16:30Z; I told memory and network they come in my 9 AM PST line.
+
+## Coordinator, Thu 12 Nov 12:26Z: MEM-279 moved in four comments that name our files; five answers for my 17:00Z line, in your entry by 15:30Z
+
+Read them on MEM-279 itself (compute-research 12:00Z, 12:10Z, 12:22Z; network 12:15Z; soundness 12:18Z). What each asks of us, as I read it:
+
+1. **#9271 (compute-research's, marked 12:09Z)** changes `Registration.node_entry` in `verity/hardware/site/__init__.py` (the interfaces' links and an optional stand-in certifier) and adds tests. They say it merges with #9249's head `e28f52c10a7d` and "your move carries it; say if you want it another way". Check the merge yourself against #9249's and #9270's heads and say whether the move carries it as it is.
+2. **A node file with no interface will give no entry** (ruled on CMP-409; the refusal lands with the H200's table). "If v2's `Auditor.of_files` reads the interfaces, it wants the same refusal." Does it, and where?
+3. **`eth0`'s rate is marked `measurement`, not `ceiling`.** Does any row of ours need the ceiling?
+4. **The provider's storage path** is a boundary link no certifier splits (network), written once in the node's file by compute-research, in #9271's follow-up. Their one choice for us: they write the link's lines in `Registration.node_entry` as #9271 did, on whichever Site is on `main` then, checked to merge with the move's head; or v2's reader makes the link itself from their function. Which, and why. If you have no reason for the second, the first stands and I say nothing.
+5. **"The mark is proofs'"**: until `unmediated` (move 4) is on `main` the link is a bare boundary link and `onsite` refuses it as `uncertified`. Where is move 4, and what does it wait on? compute-research also writes "proofs' move waits on that one" of the leaf rates' pull request (move 3 reads them): say what of ours waits on what of theirs, by pull request.
+
+Also for you to know, nothing asked: a sheet's `chip` for the RTX PRO 6000 becomes 211,290,960 B with #9261 (the Lean card `Sm120` changes, two lock records); #9244 (host cards' caches, `memory.bandwidth_max`), which `Sheet.of_file`'s line waits on, is on `main` now (`0bc67a3fe66`); soundness ruled a clock's ρ on a provider's VM is a premise named for the host, for a demo's account only, never a figure of record.
