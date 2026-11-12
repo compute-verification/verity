@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import time
 from dataclasses import dataclass
@@ -65,12 +64,14 @@ def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
 
 
 def _engine_main(args) -> None:
-    from verity_vllm.engine import engine_profile as prof, env as engine_env
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import env as engine_env
 
     prof.apply_env()
     from vllm import LLM
 
-    from verity_vllm.engine import served, vllm_adapter as va
+    from verity_vllm.engine import served
+    from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
@@ -97,7 +98,7 @@ def _engine_main(args) -> None:
     topo = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout) if instrumented else None
     (out / "topology.json").write_text(json.dumps({"arm": args.arm, "tp": args.tp, "build_s": round(build_s, 1),
                                                     "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
-                                                    "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
+                                                    "env": settings.redact({k: v for k, v in settings.environ().items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
                                                     "ranks": topo}, indent=1, default=str) + "\n")
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)

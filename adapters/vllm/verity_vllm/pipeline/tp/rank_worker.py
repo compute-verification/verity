@@ -39,8 +39,9 @@ from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASS
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm import settings
-from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
+from verity_vllm.records.schema_ids import CENSUS_RANK_SCHEMA, ENGINE_PROFILE_SCHEMA, LATE_READ_CHECK_SCHEMA
 
 __all__ = ["EXTENSION"]
 
@@ -130,7 +131,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
     import torch
     from vllm.distributed import parallel_state as ps
 
-    out: dict[str, Any] = {"pid": os.getpid(), "ppid": os.getppid(), "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+    out: dict[str, Any] = {"pid": os.getpid(), "ppid": os.getppid(), "cuda_visible_devices": settings.raw("CUDA_VISIBLE_DEVICES"),
                            "worker_class": type(worker).__mro__[1].__module__ + "." + type(worker).__mro__[1].__name__,
                            "worker_mro": [f"{c.__module__}.{c.__name__}" for c in type(worker).__mro__[:4]],
                            "runner_class": f"{type(worker.model_runner).__module__}.{type(worker.model_runner).__name__}"}
@@ -152,7 +153,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
+    out["nccl_env"] = settings.redact({k: v for k, v in settings.environ().items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",
@@ -450,7 +451,10 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above, so structure would count fewer collectives per step than the Build's links and FAIL.  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
-        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
+        from verity_vllm.engine.collectives.collective_sites import (
+            mid_module_site_census,
+            patch_targets,
+        )
         census = mid_module_site_census(model, world)
         st["mid_sites"] = {s["name"]: s for s in census["sites"]}
         sites += patch_targets(census["sites"] + census["ruled_out"])
@@ -483,7 +487,7 @@ class TP2CaptureWorkerExtension:
             st["cur"] = st["cur_stack"].pop() if st["cur_stack"] else None
 
         cand = [(n, type(m).__name__, m) for n, m in model.named_modules()
-                if type(m).__name__ in ("RowParallelLinear", "VocabParallelEmbedding", "LogitsProcessor", "ParallelLMHead") + MOE_COLLECTIVE_CLASSES
+                if type(m).__name__ in (LC.ROW_LINEAR, LC.EMBEDDING, LC.LOGITS, LC.LM_HEAD) + MOE_COLLECTIVE_CLASSES
                 or getattr(m, "reduce_results", False) is True
                 or n in st["mid_sites"]]                                          # mid-module sites: hooked for the module name
         moe_paths = [n for n, c, _m in cand if c in MOE_COLLECTIVE_CLASSES]
@@ -1087,10 +1091,10 @@ class TP2CaptureWorkerExtension:
         """THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
         each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
         import torch
+        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
         p = torch.cuda.get_device_properties(torch.cuda.current_device())
@@ -1226,8 +1230,10 @@ class TP2CaptureWorkerExtension:
             res["t6_4"] = self._t6_4_check(com, rc)
             # the bind-time-clone count for the SAME /out members: committed /out != TPPartialSource's _bytes(y) at bind
             # (compare()'s by_member['out']: tensors - tap_equal); any nonzero = late read whatever the next-norm/0 comparison says
-            tpp = res.get("tp_partials") or {}
-            bm = (tpp.get("by_member") or {}).get("out") or {}
+            tpp = res.get("tp_partials")
+            by_member = tpp.get("by_member") if tpp else None    # a compare that did not run, raised or failed early counts no member
+            out = by_member.get("out") if by_member else None
+            bm = out if out else {}                              # no `/out` compared
             res["t6_4"]["out_tensors_vs_clone"] = int(bm.get("tensors") or 0)
             res["t6_4"]["clone_mismatches"] = int(bm.get("tensors") or 0) - int(bm.get("tap_equal") or 0) if bm else None
             res["t6_4"]["clone_rule"] = "committed <L>.mlp.experts/out == TPPartialSource bind-time clone _bytes(y) (tp_partials.by_member.out); None = no /out compared"
@@ -1236,7 +1242,7 @@ class TP2CaptureWorkerExtension:
             elif res["t6_4"].get("result") is None and (res["t6_4"]["clone_mismatches"] or 0) > 0:
                 res["t6_4"]["result"] = False           # not-applicable by the pair rule, but a committed /out differs from its bind-time clone
         except Exception as e:  # noqa: BLE001
-            res["t6_4"] = {"schema": "verity/commit-integ/t6_4-check/v1", "result": False, "error": repr(e)[:300]}
+            res["t6_4"] = {"schema": LATE_READ_CHECK_SCHEMA, "result": False, "error": repr(e)[:300]}
         if vc is not None:
             vc.uninstall()
         if tps is not None:
@@ -1302,7 +1308,7 @@ class TP2CaptureWorkerExtension:
             with open(tr, "rb") as fi, gzip.open(str(tr) + ".gz", "wb") as fo:
                 shutil.copyfileobj(fi, fo)
         tr.unlink()
-        doc = {"schema": "verity-capture/census-rank/v0", "rank": rank, "pid": os.getpid(), "n_kernels": len(ks),
+        doc = {"schema": CENSUS_RANK_SCHEMA, "rank": rank, "pid": os.getpid(), "n_kernels": len(ks),
                "device_us": round(sum(float(e.get("dur", 0.0) or 0.0) for e in ks), 1), "kernels": summary,
                "cpu_ops": dict(sorted(cpu_ops.items(), key=lambda kv: -kv[1])[:200]),
                "method": "one torch.profiler.profile(activities=[CPU, CUDA]) session in this rank's process over the whole observed-free "

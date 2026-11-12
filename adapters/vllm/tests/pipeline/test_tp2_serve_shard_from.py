@@ -10,10 +10,16 @@ import hashlib
 import numpy as np
 import pytest
 
+from tests.check.test_weights_of_record import (  # noqa: F401  (fixture)
+    PREFIX,
+    _program,
+    _served,
+    checkpoint,
+    live_digests,
+)
+from verity_vllm.check import weights_of_record as WR
 from verity_vllm.errors import Refused
 from verity_vllm.pipeline.tp.negatives import parse_serve_shard_from
-from verity_vllm.check import weights_of_record as WR
-from tests.check.test_weights_of_record import PREFIX, _program, _served, checkpoint, live_digests  # noqa: F401  (fixture)
 
 
 def _sha(a: np.ndarray) -> str:
