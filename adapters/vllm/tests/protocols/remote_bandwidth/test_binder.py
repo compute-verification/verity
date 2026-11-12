@@ -23,6 +23,7 @@ from verity_vllm.protocols.remote_bandwidth.binder import (
     Inbox,
     PagedBacking,
     TorchBacking,
+    model_weights,
     page_layout,
     storage_bytes,
 )
@@ -129,6 +130,36 @@ def test_registration_from_a_runner(shared, interleaved):
     assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [4, 5, 6, 7]
 
 
+def test_the_models_weights_are_each_storage_once_none_empty_and_found_through_its_wrappers():
+    """`model_weights`: a parameter that shares its storage with an earlier one is listed once, under the first name;
+    one of no elements is not listed; and a model held inside wrappers that have no parameters of their own (each with
+    a ``runnable``) is the one listed, which a ``runnable`` of its own does not change."""
+
+    class Model(torch.nn.Module):
+        runnable = None
+
+    w = torch.zeros(4, 8)
+    model = Model()
+    model.first, model.tied = torch.nn.Parameter(w), torch.nn.Parameter(w)
+    model.empty, model.last = torch.nn.Parameter(torch.zeros(0)), torch.nn.Parameter(torch.ones(3))
+    assert [n for n, _ in model.named_parameters()] == ["first", "tied", "empty", "last"]
+    for held in (model, SimpleNamespace(runnable=SimpleNamespace(runnable=model))):
+        got = model_weights(SimpleNamespace(model=held))
+        assert [(x.name, x.source, x.encode) for x in got] == [("first", "param:first", False), ("last", "param:last", False)]
+        assert got[0].tensor.data_ptr() == w.data_ptr() and got[1].tensor.tolist() == [1.0, 1.0, 1.0]
+
+
+def test_a_weight_that_ends_inside_a_block_is_registered_to_its_last_whole_block_and_its_tail_is_counted():
+    """A tensor of 8 blocks and 256 bytes: the region is the 8 blocks, the 256 bytes are counted unregistered under the
+    tensor's name, and under a budget of blocks the tensor takes 8 of it."""
+    for budget, registered in ((None, 8 * 1024), (8, 8 * 1024), (7, 0)):
+        s = NodeMemory()
+        b = Binder(s, block_bytes=1024, weight_blocks=budget)
+        b.on_load(SimpleNamespace(model=torch.nn.Sequential(torch.nn.Linear(64, 33, bias=False))))
+        assert b.unregistered == ({"0.weight[tail]": 256} if registered else {"0.weight": 8 * 1024 + 256}), budget
+        assert [(x.name, x.blocks) for x in s.layout().regions] == ([("0.weight", 8)] if registered else [])
+
+
 @pytest.mark.parametrize("name", KERNEL_BLOCK_SIZES)
 def test_a_kernel_block_size_other_than_the_managers_is_refused(name):
     """Under either runner's name for them.  vLLM gives a cache group whose backend doesn't take the manager's block size
@@ -155,6 +186,56 @@ def test_a_runner_that_names_no_kernel_block_sizes_is_refused(named):
     with pytest.raises(RuntimeError, match=r"names no kernel block sizes \(kernel_block_sizes or _kernel_block_sizes\)"):
         b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     assert "kv" not in b.stats()["bytes_by_kind"]
+
+
+@pytest.mark.parametrize("bound", [[], None, "absent"])
+def test_a_runner_that_bound_no_kv_caches_is_refused(bound):
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    if bound == "absent":
+        del r.kv_caches
+    else:
+        r.kv_caches = bound
+    with pytest.raises(RuntimeError, match="the model runner bound no KV caches"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"]
+
+
+def test_kv_layers_of_different_page_shapes_are_refused():
+    """One layer's slot is 128 bytes and the next one's 256: the pool is one layout, so the second layer is refused and
+    no layer is registered."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, d, dtype=torch.bfloat16) for d in (DIM, 2 * DIM)]
+    with pytest.raises(NotImplementedError, match="KV layers of different page shapes"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"]
+
+
+@pytest.mark.parametrize("planes_apart, overlap", [(0, True), (0.5, True), (1, True), (2, False)])
+def test_two_kv_layers_whose_planes_overlap_in_one_storage_are_refused(planes_apart, overlap):
+    """Two layers in one storage, the second's pages starting ``planes_apart`` planes after the first's. On the same
+    planes, half a plane on and one plane on (its K plane the first's V plane) they overlap and are refused, with
+    nothing registered; two planes on, the next layer of the storage, they register."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    whole = torch.zeros(PAGES, 3, 2, SLOTS, HEADS, DIM, dtype=torch.bfloat16)
+    first, plane = whole[:, 0], SLOTS * HEADS * DIM
+    second = torch.as_strided(whole, first.shape, first.stride(), int(planes_apart * plane))
+    r.kv_caches = [first, second]
+    if overlap:
+        with pytest.raises(ValueError, match="two KV layers' pages overlap in one storage"):
+            b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+        assert "kv" not in b.stats()["bytes_by_kind"]
+    else:
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+        assert b.stats()["bytes_by_kind"]["kv"] == 2 * 2 * PAGES * 2048 and b.unregistered == {"kv[unpaged]": 2 * PAGES * 2048}
+
+
+def test_the_bytes_of_a_kv_storage_that_no_layers_page_holds_are_counted_unregistered():
+    """A cache that is the first ``PAGES`` pages of a storage of one page more: the pool is the ``PAGES`` pages, and
+    the last page's two planes are counted, under ``kv[unpaged]``."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    r.kv_caches = [torch.zeros(PAGES + 1, 2, SLOTS, HEADS, DIM, dtype=torch.bfloat16)[:PAGES]]
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert b.stats()["bytes_by_kind"] == {"kv": 2 * PAGES * 2048} and b.unregistered == {"kv[unpaged]": 2 * 2048}
 
 
 @pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])
@@ -213,6 +294,25 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
 
 def memory_map_lines(m) -> list:
     return list(memory_map.parse(m.text().splitlines(keepends=True))[1])
+
+
+def test_a_filler_of_less_than_one_block_is_refused_and_a_longer_one_is_its_whole_blocks():
+    s = NodeMemory()
+    b = Binder(s, passes=False, kv=False)
+    with pytest.raises(ValueError, match="filler of 4095 bytes holds no 4096-byte block"):
+        b.register_filler(4095, "cpu")
+    assert s.layout().regions == ()
+    b.register_filler(4096 + 4095, "cpu")
+    assert b.filler.numel() == 4096 and [(x.name, x.kind, x.blocks) for x in s.layout().regions] == [("filler", "filler", 1)]
+
+
+def test_a_fixed_schedule_of_no_passes_a_window_is_refused_and_one_with_no_last_window_never_closes():
+    with pytest.raises(ValueError, match="a window is at least one pass"):
+        Every(0, lambda t: bytes([t]) * 32)
+    every = Every(1, lambda t: bytes([t]) * 32)
+    assert [every() for _ in range(3)] == [[bytes([t]) * 32] for t in range(3)]
+    two = Every(2, lambda t: bytes([t]) * 32)
+    assert [two() for _ in range(5)] == [[bytes(32)], [], [b"\x01" * 32], [], [b"\x02" * 32]]
 
 
 def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
@@ -364,3 +464,4 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     o = s.open([(1, 1)], window=0)[0]
     assert verify_opening(info, pc, s.plan(1, window=0), o, b.receipt, lambda w, i: w, None, tiles.output(pc.seed, 1))
     assert not verify_opening(info, pc, s.plan(1, window=0), o, b.receipt, lambda w, i: w, None, bytes(64))
+
