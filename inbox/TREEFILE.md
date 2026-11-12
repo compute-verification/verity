@@ -14,3 +14,16 @@ Three things in your brief change from open or recommended to ruled:
 
 Also: he wants it on `main` soon. Keep the PR small enough to read in one sitting, and open it as early as you can
 today rather than at 6 PM; the metric commit can follow in a second PR if it slows you.
+
+## Thu 12 Nov 3:16 PM PST
+
+Three more, from reading the tree against your brief:
+
+1. The root also holds `artifacts.json` once `fixtures/` is gone (the not-yet line `fixtures/artifacts.json` -> the
+   root). List it among the entries the tree has that `main` does not yet (top; Sun 15 Nov).
+2. `tests/` and `pyproject.toml` are plain entries a package may have at every level the test checks, so
+   `verity/protocols/tests` is in the tree, and so is `verity/tests/` (the tests of the flat files, a suite of its
+   own, once they exist).
+3. The dates moved: top's target is Monday 16 Nov 9 AM PST for the root and the top level of `verity/`, with every
+   path-only piece run on Sunday 15 Nov evening (TOP-398, 3:05 PM PST). For top's own not-yet lines write
+   Sun 15 Nov instead of the days in your brief; leave the other owners' days as the brief has them.
