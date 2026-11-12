@@ -5005,8 +5005,9 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     (a seal's or a batch's mapped search path) and ``digest`` (`Sealed.digest` or `Pipeline.digest`) make the replay read
     private copies rather than the live `.lake`, so no dependent's build can change what the kernel replays or what its
     key is keyed on. ``prefix`` goes before the command and ``held`` says the caller holds `_HEAVY_REPLAY` already
-    (`Pipeline`'s batches). ``threads`` is the `LEAN_NUM_THREADS` of this replay in place of the one it would run at (a
-    listed module's own step, `replay_in_steps`). ``store`` is false for an unsealed audit (a control, a lean-changed scan, a stubbed test),
+    (`Pipeline`'s batches). ``threads`` is how many declarations this replay checks at once (a listed module's own step,
+    `replay_in_steps`): `lean`'s `-j`, the one count the pool of its tasks is sized from, which is the machine's without
+    it whatever `LEAN_NUM_THREADS` says. ``store`` is false for an unsealed audit (a control, a lean-changed scan, a stubbed test),
     whose keys are hashed from the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict
     can never poison a sealed run."""
     found = work / "replay.json"
@@ -5019,6 +5020,8 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     n = n if threads is None else threads
     _peak.bytes = 0
     lean = ["lake", "env", "lean"] if search is None else ["env", f"LEAN_PATH={os.pathsep.join(search)}", "lean"]
+    if threads is not None:
+        lean += ["-j", str(threads)]
     # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
     with _HEAVY_REPLAY if alone else contextlib.nullcontext():
         reused = [m for m in facts["modules"] if passed(m)]
@@ -5073,8 +5076,9 @@ def replay_first(pkg: Path, path: Path | None = None) -> list[dict]:
     its replay checks in a step of its own, the `threads` that step runs at, and `why`, the rule that lists it.
 
     `Replay.lean` sends each declaration to the kernel as a task of its own, so the declarations of one module that each
-    hold much memory in the kernel are held side by side, as many as the replay has threads, whatever order their file
-    checks them in when it is built. Such a module is listed here with the threads at which its declarations fit.
+    hold much memory in the kernel are held side by side, as many as `lean` runs tasks at once (the machine's count
+    unless its `-j` states one), whatever order their file checks them in when it is built. Such a module is listed here
+    with the threads at which its declarations fit, which its step states to `lean` (`replay_step`).
 
     The file is `{"schema": REPLAY_FIRST_SCHEMA, "packages": {a package's path from the repository's root: [entry, ...]}}`.
     It is one of the auditor's files, so a change to it changes every package's audit key (`lean_audit.tool_files`) and no
