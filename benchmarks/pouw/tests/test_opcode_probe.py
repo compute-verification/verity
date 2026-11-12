@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_machine_model import model
 
 POUW = Path(__file__).resolve().parents[1]
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
@@ -94,11 +95,6 @@ def test_schema_is_machine_models():
             r = csv.DictReader(f)
             assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS, p.name
             lines += r
-    sys.path.insert(0, str(MACHINE_MODEL))
-    try:
-        from verity_machine_model import model
-    finally:
-        sys.path.remove(str(MACHINE_MODEL))
     for d in lines:
         assert rows.u_of(300.08, d["rate"], d["noise"], d["cycles"], d["u"]) == model.u_of(
             300.08, d["rate"], d["noise"], d["cycles"], d["u"])
@@ -215,8 +211,9 @@ sm89 = _load("opcode_probe_sm89_census", POUW / "opcode_probe" / "sm89" / "censu
 
 def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
     """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
-    loop = lambda pat, n: {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1,
-                                                                    "BRA": 1}}]}
+    def loop(pat: str, n: int) -> dict:
+        return {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+
     assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
     assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
     assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
@@ -338,6 +335,26 @@ def test_ceiling_reads_each_knob_and_names_the_highest_host_clock(tmp_path, caps
     assert re.search(r"^lgc-max +0 +2422 +2430 +2430 p_light +2429\.9 +2430\.1 +2429\.6 +2422 +150 +0x0 +GPU clocks", got, re.M)
     assert re.search(r"^gpc-offset\+105 +0 .* p_light +2101\.0", got, re.M)
     assert "highest host-timed clock: 2429.9 MHz (p_light at lgc-max), -0.004% against NVML's max 2430" in got
+
+
+clocks = _load("opcode_probe_clocks", POUW / "opcode_probe" / "clocks.py")
+
+
+def test_lock_passes_megahertz_or_nvmls_id_for_tdp_and_unlimited():
+    """`clocks.py lock`: MIN and MAX reach nvmlDeviceSetGpuLockedClocks as MHz, or as NVML's limit id for `tdp` and
+    `unlimited`; the row says what was asked and the call's rc."""
+    nvml, calls = object.__new__(clocks.Nvml), []
+
+    def call(name: str, *args) -> tuple[int, str]:
+        calls.append((name, [a.value for a in args]))
+        return 3, "Not Supported"
+
+    nvml.call = call
+    assert nvml.lock("1830", "tdp") == {"op": "nvmlDeviceSetGpuLockedClocks", "min": "1830", "max": "tdp", "rc": 3,
+                                        "error": "Not Supported"}
+    nvml.lock("unlimited", "2430")
+    assert calls == [("nvmlDeviceSetGpuLockedClocks", [1830, 0xFFFFFF01]),
+                     ("nvmlDeviceSetGpuLockedClocks", [0xFFFFFF02, 2430])]
 
 
 def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
@@ -499,6 +516,22 @@ def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, cap
 # ---- the probes themselves -------------------------------------------------------------------------------------------
 
 
+def test_nvcc_is_the_one_nvcc_names_then_cuda_homes(tmp_path, monkeypatch):
+    """The build's nvcc: the executable NVCC names, else CUDA_HOME's bin/nvcc; a name that is no executable is passed over."""
+    named, home = tmp_path / "named", tmp_path / "home" / "bin" / "nvcc"
+    home.parent.mkdir(parents=True)
+    for exe in (named, home):
+        exe.write_text("#!/bin/sh\n")
+        exe.chmod(0o755)
+    monkeypatch.setenv("NVCC", str(named))
+    monkeypatch.setenv("CUDA_HOME", str(home.parents[1]))
+    assert probe.nvcc() == str(named)
+    monkeypatch.setenv("NVCC", str(tmp_path / "absent"))
+    assert probe.nvcc() == str(home)
+    monkeypatch.delenv("NVCC")
+    assert probe.nvcc() == str(home)
+
+
 def _cuda_tools() -> bool:
     try:
         probe.nvcc()
@@ -532,6 +565,27 @@ def test_sm89_ji_pins_only_the_schedule_its_name_says():
     assert ji89.exact("j16_iadd3_q64_a2u1_w2", {"IMAD.IADD": 32, "IADD3": 33, "IMMA.16816.S8.S8": 8, "ISETP.GE.AND": 1})
     names = [p[0] for p in ji89.grid(32)]
     assert "j32_fmuli_q112_a2u1_w2" in names and len(names) == len(set(names))
+
+
+@pytest.mark.parametrize("k, source", [(16, "ji16.cu"), (32, "ji32.cu")])
+def test_sm89_ji_grids_are_what_emit_writes_from_their_own_pins(tmp_path, k, source):
+    """`ji16.cu` and `ji32.cu` are generated files: `emit --pins`, given a gate whose loops are the counts the file
+    itself pins, writes the file back byte for byte. The grid points it leaves out are the unroll-4 programs at Q 64 and
+    112, whose loops are not the schedule their names say; unpinned, it writes every grid point."""
+    text = (POUW / "opcode_probe" / "sm89" / source).read_text()
+    pinned = re.findall(r'\.name = "(\w+)", .*?\.expect = "([^"]+)"', text)
+    tops = {name: {op: int(n) for op, n in (c.split("=") for c in expect.split(","))} for name, expect in pinned}
+    grid = [p[0] for p in ji89.grid(k)]
+    left_out = sorted(set(grid) - set(tops))
+    assert left_out == sorted(f"j{k}_fmuli_q{q}_a{na}u4_w2" for q in (64, 112) for na in (2, 3, 8))
+    split = {"FMUL": 256, f"IMMA.168{k}.S8.S8": 32, "CALL.REL.NOINC": 1, "BRA": 1}
+    verdicts = [{"probe": name, "verdict": {"loops": [{"top": top}]}} for name, top in tops.items()]
+    verdicts += [{"probe": name, "verdict": {"loops": [{"top": split}]}} for name in left_out[:4]]
+    verdicts += [{"probe": left_out[4], "verdict": None}, {"probe": left_out[5], "verdict": {"loops": []}}]
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    assert ji89.emit(k, tmp_path / "gate.json") == text
+    unpinned = ji89.emit(k, None)
+    assert unpinned.count("\nJM(") == unpinned.count(".expect = ") == len(grid) == len(tops) + 6
 
 
 def test_sm89_ji_refit_is_the_upper_hull_at_the_margin(tmp_path):

@@ -1,5 +1,5 @@
-"""The coverage table (data/cover/): the evidence for the envelope's coverage premise, that every instruction a
-card executes is dominated by an envelope op (envelope.toml: `Accel.Op`, its pipes and formats, and the entries it
+"""The opcode table (data/cover/): the evidence for the card assumption, that every instruction a
+card executes is dominated by an ACCEL op (envelope.toml: `Accel.Op`, its pipes and formats, and the entries it
 proposes; each card's numbers are its card file's, `verity/hardware/cards/`) at no fewer units of the same resource,
 one row per opcode (rows.toml) on the H200 (sm_90) and the RTX PRO 6000 (sm_120).
 
@@ -19,6 +19,7 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from verity_machine_model import theta as T
 from verity_machine_model.model import DATA, card, device, kind_lists
@@ -49,7 +50,7 @@ class Row:
     envelope: str
     raw: dict = field(compare=False, repr=False)
 
-    def get(self, k: str, dev: str | None = None):
+    def get(self, k: str, dev: str | None = None) -> Any:
         v = self.raw.get(k)
         return v.get(dev) if isinstance(v, dict) and dev is not None else v
 
@@ -84,7 +85,7 @@ def _base(op: str) -> str:
     return op if op in ("UIADD3.64", "UMOV.64") else op.split(".")[0]
 
 
-def as_list(v) -> list:
+def as_list(v: Any) -> list:
     return [] if v is None else list(v) if isinstance(v, list) else [v]
 
 
@@ -301,7 +302,7 @@ def problems(c: Cover) -> list[str]:
         if r.mark not in MARKS:
             out.append(f"{where}: mark {r.mark!r} isn't one of {', '.join(MARKS)}")
         if r.envelope not in ops:
-            out.append(f"{where}: envelope op {r.envelope!r} isn't in envelope.toml")
+            out.append(f"{where}: ACCEL op {r.envelope!r} isn't in envelope.toml")
             continue
         if r.mark == "hole" and "severity" not in r.raw:
             out.append(f"{where}: a hole says its severity")
@@ -337,7 +338,7 @@ def problems(c: Cover) -> list[str]:
                                f"SM-clock, over ρ {x.resource} = {x.rho:g}")
     for u in c.units:
         if u["envelope"] not in ops:
-            out.append(f"rows.toml unit {u['key']}: envelope op {u['envelope']!r} isn't in envelope.toml")
+            out.append(f"rows.toml unit {u['key']}: ACCEL op {u['envelope']!r} isn't in envelope.toml")
     for dev in DEVICES:
         for op in sorted(c.opcodes[dev]):
             if not plain(c, dev, op):

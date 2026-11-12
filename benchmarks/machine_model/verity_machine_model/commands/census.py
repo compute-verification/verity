@@ -1,16 +1,18 @@
 """machine-model census [EPOCH] [--kind K]   each instruction class's u on each row at EPOCH (default: the last)"""
 from __future__ import annotations
 
+import argparse
+
 from verity_machine_model.model import census, model
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     c = sub.add_parser("census")
     c.add_argument("epoch", nargs="?")
     c.add_argument("--kind")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     m = model(args.data)
     epoch = args.epoch or m.epochs[-1]
     if epoch not in m.epochs:
