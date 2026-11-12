@@ -183,6 +183,9 @@ PATH: WHY`` line each; exit 1 when there is one. A compose hand-off lists none, 
 
 ``rebase``: a hand-off's copy at SERVE_DIR of the served node's serve dir SERVED_DIR (`rebase`): each case among the
 paths of stdin (relative to SERVE_DIR) that names ``blobs`` gets them under SERVE_DIR, a blob outside SERVED_DIR refused.
+``onsite-cases``: each of onsite's own subprotocols with the verdict of the answer its piece wrote beside its case in the
+serve dir's private/ or the run's pieces (`onsite_cases`), ``none`` where no piece wrote one, on one line, which
+`served_verdicts.sh` prints before it defers an onsite run's audit.
 ``composed``: the compose gate's answer ANSWER (`host.py`'s ``compose``) written out under DIR (`composed`), one
 ``GATE-COMPOSE`` line saying what it composed; exit 0 only when it composed and accepted.
 """
@@ -1986,6 +1989,36 @@ def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str]) -> list[str]:
     return done
 
 
+#: under a serve dir's private/, the runner's own directories, whose cases are a composite's, a hand-off's or a
+#: deferral's copies and no piece's
+NOT_A_PIECES = ("composite", "compose", "deferred")
+
+
+def onsite_cases(serve_dir: Path, pieces: Path) -> dict[str, list[str]]:
+    """Each of onsite's own subprotocols, the ones its composite holds and remote's doesn't (`composite.COMPONENTS`), with
+    the verdict of every answer of its that lies beside a case under ``serve_dir``'s private/ (outside `NOT_A_PIECES`) or
+    under ``pieces``, the run's public pieces: the case as its piece wrote it, with its own answer on it; none where no
+    piece wrote one. It reads the answers alone, never a case, and holds no case to its answer."""
+    import composite as C
+
+    found: dict[str, list[str]] = {p: [] for p in sorted(set(C.COMPONENTS["onsite"]) - set(C.COMPONENTS["remote"]))}
+    private = serve_dir / "private"
+    skips = [private / x for x in NOT_A_PIECES]
+    for root in (private, pieces):
+        for f in sorted(root.rglob("case.json")) if root.is_dir() else []:
+            d = f.parent
+            if any(d == s or s in d.parents for s in skips):
+                continue
+            try:
+                answer = json.loads((d / "answer.json").read_text())
+                protocol, verdict = answer["protocol"], answer.get("verdict")
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                continue
+            if isinstance(protocol, str) and protocol in found:
+                found[protocol].append(str(verdict))
+    return found
+
+
 def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | None = None) -> tuple[int, str]:
     """The compose gate's answer (one JSON line) written out under ``out``: its $OUT's files at their paths, and
     ``gate.json`` (the pin and the exit, without the files). Its exit (0 composed and accepted) and its one line, which
@@ -2228,6 +2261,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     rb = sub.add_parser("rebase")
     rb.add_argument("serve_dir", type=Path)
     rb.add_argument("served_dir")
+    oc = sub.add_parser("onsite-cases")
+    oc.add_argument("--serve-run", type=Path, required=True)
+    oc.add_argument("--pieces", type=Path, required=True)
     cd = sub.add_parser("composed")
     cd.add_argument("answer", type=Path)
     cd.add_argument("out", type=Path)
@@ -2254,6 +2290,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"REBASE refused: {type(e).__name__}: {e}", flush=True)
             return 1
         print(f"REBASED {len(done)} case(s)' blobs from {a.served_dir} to {a.serve_dir}", flush=True)
+        return 0
+    if a.cmd == "onsite-cases":
+        print("; ".join(f"{p} {', '.join(v) if v else 'none'}" for p, v in onsite_cases(a.serve_run, a.pieces).items()),
+              flush=True)
         return 0
     if a.cmd == "composed":
         a.out.mkdir(parents=True, exist_ok=True)

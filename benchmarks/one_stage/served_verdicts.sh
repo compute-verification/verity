@@ -91,6 +91,10 @@
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
+#     Under PEARLPLUS_TIE PoUW's verdict is Pearl+'s, and no composite holds onsite's pieces beside it (onsite's work
+#     subprotocol is PoUW's period case, which that run doesn't write; remote's composite of record, whose is Pearl+'s
+#     run, holds no onsite piece): the preflight refuses PRODUCT=onsite there unless COMPOSITE is set empty, and the run
+#     then composes the record alone.
 #     Beside them, the inference-only verdict (`inference_only.py`), at IO_CLASS (default the first class of CLASSES but
 #     `record`): its policy, (c, k, n) and every input to them, is written before the lease from the run's settings alone
 #     (the class, REPO at REV, LEASE_MIN; under PEARLPLUS_TIE in serve(), under the lease before serve-openai starts, from
@@ -151,8 +155,10 @@
 # host's own run of its Lean verifier on the case's proofs, each other row's answer as the served node wrote it, and each
 # row naming which in its answer_from) and the composite (`served_composite.sh`,
 # SERVED_NODE the served node, COMPOSE_HANDOFF set); its $OUT is published as every run's is. PRODUCT=onsite's composite
-# reads PoUS's and the wipe's cases, which only the served node's card writes, so under COMPOSE_OFF_NODE=1 the preflight
-# refuses it unless COMPOSITE is set empty. `served_verdicts.sh handoff [HOST]`, in TREE with D, writes the hand-off
+# reads its own pieces' cases (PoUS's, the wipe's), which their pieces write in the served node's serve dir and which
+# stay on the prover's side (`served_case.py`), so no hand-off carries them: under COMPOSE_OFF_NODE=1 the preflight
+# refuses it unless COMPOSITE is set empty, and the final record alone is composed there.
+# `served_verdicts.sh handoff [HOST]`, in TREE with D, writes the hand-off
 # alone: on a deferral's serve dir from its pieces and inference-only verdict at its settings (deferred.env), HOST the
 # follow-on's, where V3c's audit ran, which a serve dir holding that audit must name; else, with K and OUT, from OUT's
 # pieces and its record's inference-only verdict.
@@ -241,8 +247,11 @@
 # alone, once the sums hold and the copy holds the declaration declaration.json names by digest (DAY-HELD).
 # Under H1_TIE on a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default
 # 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit (and, under COMPOSE_OFF_NODE=0, the
-# composite; `defer`), for PRODUCT=remote alone (onsite's composite reads PoUS's case, which needs this node's card: the
-# preflight refuses it).
+# composite; `defer`), under either product. Onsite's own pieces have each written its case in the serve dir by then (the
+# wipe's in step 1, the others' in step 4), and before an onsite run's deferral an ONSITE-CASES line gives, for each of
+# onsite's own subprotocols, the verdict of the answer its piece wrote beside its case (`served_verdicts.py onsite-cases`).
+# The deferral's list holds none of the cases onsite's composite reads of them (PoUS's, the wipe's), so the preflight
+# refuses a deferral of onsite's composite: PRODUCT=onsite defers with COMPOSITE set empty.
 # Step 5's record says what was deferred and why (its `deferred`), a DEFERRED line says so, and the serve dir's
 # private/deferred gets the pieces the record read, the inference-only verdict (which the follow-on's record carries as
 # the served node wrote it), the settings the follow-on runs at (deferred.env: the window, the
@@ -1146,6 +1155,10 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
+  [ "$PRODUCT" != onsite ] \
+    || say "ONSITE-CASES: before the deferral, each of onsite's own subprotocols with the verdict of the answer its piece" \
+        "wrote beside its case on this node (none: no piece wrote one):" \
+        "$("$SAY_PY" "$SV" onsite-cases --serve-run "$D" --pieces "$OUT/pieces" 2>&1 | tail -1 | cut -c1-600)"
   if [ "$COMPOSE_OFF_NODE" = 1 ]; then
     say "DEFERRED $DEFERRED_WHAT: $1. A follow-on on a node with the memory runs it there and writes the compose hand-off," \
         "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \
@@ -1482,8 +1495,12 @@ else
     [ "$itotal" = 0 ] || [ "$ifree" -ge "$PEARLPLUS_INODES" ] \
       || { say "PREFLIGHT: the serve dir's filesystem $fs has $ifree inodes free, $((PEARLPLUS_INODES - ifree)) short of PEARLPLUS_INODES ($PEARLPLUS_INODES), two commits of the tied window at three files a member: delete earlier runs' Pearl+ windows with \`research retention rm\`, or set SERVE_ROOT on another filesystem"; exit 3; }
   fi
-  [ "$COMPOSE_OFF_NODE" = 0 ] || [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
-    || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
+  if [ "$PRODUCT" = onsite ] && [ -n "${COMPOSITE-1}" ]; then  # onsite's composite, which reads its own pieces' cases
+    [ -z "$PEARLPLUS_TIE" ] \
+      || { say "PREFLIGHT: under PEARLPLUS_TIE PoUW's verdict is Pearl+'s, and no composite holds onsite's pieces beside it (onsite's work subprotocol is PoUW's period case, which this run doesn't write, and remote's composite of record, whose is Pearl+'s run, holds no onsite piece): COMPOSITE set empty, for the record alone, or PRODUCT=remote"; exit 3; }
+    [ "$COMPOSE_OFF_NODE" = 0 ] \
+      || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite on COMPOSE_NODE ($COMPOSE_NODE), an auditor host, from the compose hand-off, and onsite's reads its own pieces' cases (PoUS's, the wipe's), which stay on the prover's side and which no hand-off carries: COMPOSITE set empty, for the final record alone there, PRODUCT=remote, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
+  fi
 fi
 front_ok || exit 3
 SPLIT= DEFER=
@@ -1556,9 +1573,7 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
       || { say "PREFLIGHT: PEARLPLUS_TIE needs window-commit's --pearl-passes, its circuit cut at Pearl+'s linears, which this tree's prove_path.py doesn't take"; exit 3; }
     [ -z "$PEARLC_CHALLENGER_GATE" ] || [ -n "${MAIN_FILE:-}" ] \
       || { say "PREFLIGHT: under PEARLPLUS_TIE the gate's pin is held to main's first-parent line, which MAIN_SHA's (default this tree's HEAD) need not hold: set MAIN_FILE to \`git rev-list --first-parent origin/main\` of a fresh fetch, sent with the run"; exit 3; }
-    DEFER=$(short_of_memory) || DEFER=
-    [ -z "$DEFER" ] || [ "$PRODUCT" = remote ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"; exit 3; }
+    DEFER=$(short_of_memory) || DEFER=  # step 6's audit goes to a follow-on, under either product
   fi
 fi
 if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # V3c's audit tied to H1's or Pearl+'s W, in the serve's run and in `served_verdicts.sh v3c` alike
@@ -1578,7 +1593,8 @@ if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ] && [ -z "$COMPOSE" ]; then  # V3c
     || { say "PREFLIGHT: under H1_TIE the window's sample coin waits for window-commit, and its session's reserve lasts the gate's 120 minutes from the serve's start: V3C_TIMEOUT is at most 90m, not $V3C_TIMEOUT"; exit 3; }
   LEASE_MIN=${LEASE_MIN:-150} LEASE_MEM_GB=${LEASE_MEM_GB:-160}
   if DEFER=$(short_of_memory); then  # step 6's audit and the composite go to a follow-on
-    [ "$PRODUCT" = remote ] || { say "PREFLIGHT: under H1_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"; exit 3; }
+    [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
+      || { say "PREFLIGHT: under H1_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, which composes from the deferral's list, and that list holds none of the cases onsite's composite reads of its own pieces (PoUS's, the wipe's): COMPOSITE set empty, PRODUCT=remote, or a node with the memory"; exit 3; }
   fi
 fi
 if [ -n "${DAY:-}" ] && [ -z "$FOLLOW$COMPOSE" ]; then  # the day's one circuit declared before the first window, R2 holding V3c's to it

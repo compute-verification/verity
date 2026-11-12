@@ -3500,6 +3500,12 @@ def test_the_preflight_refuses_a_pearlplus_tie_where_the_serve_dirs_filesystem_h
 
 
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
+#: an onsite run's development composite, composed on the served node
+HERE_COMPOSITE = {"COMPOSITE": None, "COMPOSE_OFF_NODE": "0"}
+#: why an onsite run with a composite can't defer, as the preflight's refusal ends
+NOT_LISTED = ("its audit and the composite are deferred to a follow-on, which composes from the deferral's list, and that "
+              "list holds none of the cases onsite's composite reads of its own pieces (PoUS's, the wipe's): COMPOSITE "
+              "set empty, PRODUCT=remote, or a node with the memory")
 
 
 @pytest.mark.parametrize("extra, prove_path, line", [
@@ -3515,20 +3521,19 @@ TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
     ({**TIES, "V3C_TIMEOUT": "1h"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE the window's sample coin waits for "
      "window-commit, and its session's reserve lasts the gate's 120 minutes from the serve's start: V3C_TIMEOUT is at most "
      "90m, not 1h"),
-    ({**TIES, "NODE_MEM_GB": "196"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 196 GB, under the "
-     "290 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"),
-    ({**TIES, "V3C_AUDIT_MEM_GB": "600"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 512 GB, under "
-     "the 600 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"),
+    ({**TIES, **HERE_COMPOSITE, "NODE_MEM_GB": "196"}, FAKE_V3C_PROVE_PATH,
+     f"PREFLIGHT: under H1_TIE, where this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM_GB), {NOT_LISTED}"),
+    ({**TIES, **HERE_COMPOSITE, "V3C_AUDIT_MEM_GB": "600"}, FAKE_V3C_PROVE_PATH,
+     f"PREFLIGHT: under H1_TIE, where this node has 512 GB, under the 600 GB V3c's audit needs (V3C_AUDIT_MEM_GB), {NOT_LISTED}"),
 ])
 def test_the_preflight_refuses_h1_tie_without_h1s_prover_or_v3c_or_window_commits_tie_or_past_the_sessions_time(
         tmp_path, extra, prove_path, line):
     """H1_TIE reads H1's prover state and commits at V3C_CLASS with window-commit's --window-registration, the flag that
     chains its registration after H1's W (a tree without it is refused, not run with an untied commit), and its commit runs
     while the window's sample session's reserve, the gate's 120 minutes, runs out; on a node with less memory than V3c's
-    audit needs (V3C_AUDIT_MEM_GB) the audit and the composite go to a follow-on, which onsite's PoUS case can't: each
-    refused before anything runs."""
+    audit needs (V3C_AUDIT_MEM_GB) the audit and the composite go to a follow-on, which composes from the deferral's
+    list, and that list holds none of the cases onsite's composite reads of its own pieces, so an onsite run with a
+    composite can't defer: each refused before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), prove_path=prove_path, **extra)
     assert (rc, lines, order) == (3, [line], [])
 
@@ -3670,6 +3675,85 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert not _window_data(out, 7) and oct(dd.stat().st_mode & 0o777) == "0o700"
 
 
+#: onsite's own pieces' cases in `_deferred`'s toy run, each where its piece leaves it beside its own answer: PoUS's, the
+#: bandwidth audit's and the wipe's in the serve dir's private/, the certifier's in the run's pieces
+ONSITE_WROTE = {"serve/private/pous/w7": ("verity/pous/p2/v4/run", "accept"),
+                "serve/private/bandwidth": ("verity/remote-bandwidth/p2/v0", "accept"),
+                "serve/private/wipe": ("verity/wipe/v0", "accept"),
+                "served-out/pieces/certifier": ("verity/certifier/v0", "reject")}
+ONSITE_CASES = ("ONSITE-CASES: before the deferral, each of onsite's own subprotocols with the verdict of the answer its "
+                "piece wrote beside its case on this node (none: no piece wrote one): ")
+
+
+def _onsite_wrote(tmp_path: Path, but: str | None = None) -> None:
+    """`ONSITE_WROTE`'s cases and answers in ``tmp_path``'s toy run, but for the piece at ``but``."""
+    for at, (protocol, verdict) in ONSITE_WROTE.items():
+        if at != but:
+            (tmp_path / at).mkdir(parents=True)
+            (tmp_path / at / "case.json").write_text(json.dumps({"evidence": "beef"}))
+            (tmp_path / at / "answer.json").write_text(json.dumps({"protocol": protocol, "verdict": verdict}))
+
+
+@pytest.mark.parametrize("off", ["1", "0"])
+def test_an_onsite_run_defers_its_audit_once_its_own_pieces_wrote_their_cases_which_stay_on_the_node(tmp_path, off):
+    """An onsite run with no composite defers as remote's does, under PRODUCT=onsite in the settings its follow-on runs
+    at. Before the deferral's line, one line gives each of onsite's own subprotocols with the verdict of the answer its
+    piece wrote beside its case on the node, and names no window: the deferral's own copy of the run's pieces is counted
+    once. The deferral lists the run's pieces, the certifier's public case among them, and none of the cases in the serve
+    dir's private/ (PoUS's, the bandwidth audit's, the wipe's), which stay where their pieces wrote them."""
+    _onsite_wrote(tmp_path)
+    run = _deferred(tmp_path, PRODUCT=None, COMPOSITE="", COMPOSE_OFF_NODE=off)
+    assert run.returncode == 0, run.stderr
+    settings = _deferral_settings(tmp_path)
+    assert (settings["PRODUCT"], settings["COMPOSITE"], settings["COMPOSE_OFF_NODE"]) == ("onsite", "", off)
+    lines = (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines()
+    assert lines[0] == ONSITE_CASES + ("verity/certifier/v0 reject; verity/pous/p2/v4/run accept; "
+                                       "verity/remote-bandwidth/p2/v0 accept; verity/wipe/v0 accept")
+    assert len(lines) == 2 and lines[1].startswith(f"DEFERRED V3c's audit: {SHORT}. A follow-on")
+    listed = (tmp_path / "serve" / "private" / "deferred" / "inputs.txt").read_text().splitlines()
+    assert [f for f in listed if "certifier" in f] == [f"private/deferred/pieces/certifier/{f}.json" for f in ("answer", "case")]
+    assert not [f for f in listed if f.startswith(("private/pous", "private/bandwidth", "private/wipe"))]
+
+
+def test_an_onsite_deferrals_line_names_each_subprotocol_whose_piece_wrote_no_case(tmp_path):
+    """A piece that wrote no case (PoUS's, killed, say) reads ``none`` in the line before the deferral, which goes on:
+    the line reports, and the record's row of that piece is what says it is missing."""
+    _onsite_wrote(tmp_path, but="serve/private/pous/w7")
+    (tmp_path / "serve" / "private" / "pous" / "w7").mkdir(parents=True)
+    (tmp_path / "serve" / "private" / "pous" / "w7" / "answer.json").write_text(
+        json.dumps({"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}))
+    run = _deferred(tmp_path, PRODUCT=None, COMPOSITE="")
+    assert run.returncode == 0, run.stderr
+    assert (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines()[0] == ONSITE_CASES + (
+        "verity/certifier/v0 reject; verity/pous/p2/v4/run none; verity/remote-bandwidth/p2/v0 accept; verity/wipe/v0 accept")
+
+
+def test_onsite_cases_reads_each_own_subprotocols_answers_beside_a_case_and_none_of_the_runners_copies(tmp_path):
+    """`onsite_cases` names onsite's own subprotocols, the ones its composite holds and remote's doesn't, and gives each
+    the verdict of every answer of its beside a case: under the serve dir's private/ or the run's pieces, never under the
+    composite's, a hand-off's or a deferral's directory, never an answer of another protocol (PoUW's period case) or one
+    that doesn't parse, and with no serve dir or pieces, none."""
+    assert S.onsite_cases(tmp_path / "serve", tmp_path / "served-out" / "pieces") == {
+        "verity/certifier/v0": [], "verity/pous/p2/v4/run": [], "verity/remote-bandwidth/p2/v0": [], "verity/wipe/v0": []}
+    _onsite_wrote(tmp_path)
+    private = tmp_path / "serve" / "private"
+    for at, answer in (("composite/onsite/private", {"protocol": "verity/wipe/v0", "verdict": "reject"}),
+                       ("compose/pieces/wipe", {"protocol": "verity/wipe/v0", "verdict": "reject"}),
+                       ("deferred/pieces/certifier", {"protocol": "verity/certifier/v0", "verdict": "accept"}),
+                       ("pouw/period", {"protocol": "verity/pouw/period/v1", "verdict": "accept"}),
+                       ("pous/w6", {"protocol": "verity/pous/p2/v4/run", "verdict": "undecided"}),
+                       ("pous/w5", ["verity/pous/p2/v4/run"])):
+        (private / at).mkdir(parents=True)
+        (private / at / "case.json").write_text("{}")
+        (private / at / "answer.json").write_text(json.dumps(answer))
+    (private / "pous" / "w4").mkdir()
+    (private / "pous" / "w4" / "case.json").write_text("{}")
+    assert S.onsite_cases(tmp_path / "serve", tmp_path / "served-out" / "pieces") == {
+        "verity/certifier/v0": ["reject"], "verity/pous/p2/v4/run": ["undecided", "accept"],
+        "verity/remote-bandwidth/p2/v0": ["accept"], "verity/wipe/v0": ["accept"]}
+    assert S.main(["onsite-cases", "--serve-run", str(tmp_path / "serve"), "--pieces", str(tmp_path / "none")]) == 0
+
+
 def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """The follow-on of `_deferred`'s deferral: `served_verdicts.sh v3c` with D alone (no K, class or certifier) on
     cpu-6, a node with V3c's audit's memory, at the served node's tree, in `_v3c`'s toy tree with a record and a
@@ -3718,6 +3802,23 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert (argv[-4], len(argv[-3]), argv[-2:]) == ("--key-sha512", 128, ["--lane", "vllm"])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
+
+
+def test_the_follow_on_of_an_onsite_deferral_audits_and_composes_onsites_record_and_no_composite(tmp_path):
+    """An onsite run defers with no composite, so its follow-on, at the settings the deferral recorded, runs V3c's audit
+    and composes the final record of onsite's subprotocols about the served node from the pieces the deferral copied,
+    and composes no composite: it reads none of onsite's own pieces' cases, which stayed on the served node."""
+    _onsite_wrote(tmp_path)
+    assert _deferred(tmp_path, PRODUCT=None, COMPOSITE="", COMPOSE_OFF_NODE="0").returncode == 0
+    for at in ("pous", "bandwidth", "wipe"):
+        shutil.rmtree(tmp_path / "serve" / "private" / at)
+    rc, lines, order, _limits = _follow(tmp_path)
+    assert rc == 0 and order == ["audit", "period", "record"], (lines, order)
+    assert lines[1].startswith("FOLLOW-ON on cpu-6, 755 GB: V3c's audit, which the served node vy-dc-h200 deferred,")
+    assert lines[1].endswith("PASS") and lines[-1].startswith("RECORD ") and not (tmp_path / "order.composite").exists()
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[argv.index("--product") + 1] == "onsite" and argv[argv.index("--node") + 1] == "vy-dc-h200"
+    assert argv[argv.index("--pieces") + 1] == str(tmp_path / "serve" / "private" / "deferred" / "pieces")
 
 
 FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit, which the served node vy-dc-h200 deferred, "
@@ -3901,13 +4002,21 @@ SHORT_REMOTE = {**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CH
      "follow-on"),
     ({"COMPOSITE": None, "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
      f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF.replace('record', 'record and the composite')}"),
+    ({**TIES, "NODE_MEM_GB": "196"}, f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}; {OFF}"),
+    ({**TIES, "NODE_MEM_GB": "196", "COMPOSE_OFF_NODE": "0"},
+     f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
+    ({**PEARL_TIED, "NODE_MEM_GB": "196"}, f"196 GB: the serve's lease 60 min, capped at 128 GB; {SHORT}, {DEFERS}; {OFF}"),
+    ({**PEARL_TIED, "NODE_MEM_GB": "196", "COMPOSE_OFF_NODE": "0"},
+     f"196 GB: the serve's lease 60 min, capped at 128 GB; {SHORT}, {DEFERS}"),
 ])
 def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_kept_built_or_served(
         tmp_path, extra, said):
     """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
     minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node), on a node short of V3c's
-    audit's memory its deferral, and under COMPOSE_OFF_NODE=1, the default, what is composed off the node. Nothing runs,
-    and neither the serve root nor C-Flock's work dir is made."""
+    audit's memory its deferral, and under COMPOSE_OFF_NODE=1, the default, what is composed off the node. An onsite run
+    with no composite (the last four, under H1_TIE and under PEARLPLUS_TIE) defers as remote's does: each of its own
+    pieces has written its case on the node by then. Nothing runs, and neither the serve root nor C-Flock's work dir is
+    made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
@@ -4112,18 +4221,32 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
     assert capsys.readouterr().out == "WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds\n"
 
 
+#: the preflight's refusal of onsite's composite beside Pearl+'s verdict
+NO_COMPOSITE_BESIDE = (
+    "PREFLIGHT: under PEARLPLUS_TIE PoUW's verdict is Pearl+'s, and no composite holds onsite's pieces beside it (onsite's "
+    "work subprotocol is PoUW's period case, which this run doesn't write, and remote's composite of record, whose is "
+    "Pearl+'s run, holds no onsite piece): COMPOSITE set empty, for the record alone, or PRODUCT=remote")
+
+
 @pytest.mark.parametrize("extra, line", [
-    ({"COMPOSITE": None}, "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and "
-     "onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, "
+    ({"COMPOSITE": None}, "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite on COMPOSE_NODE (vy-auditor-2), an auditor "
+     "host, from the compose hand-off, and onsite's reads its own pieces' cases (PoUS's, the wipe's), which stay on the "
+     "prover's side and which no hand-off carries: COMPOSITE set empty, for the final record alone there, PRODUCT=remote, "
      "or COMPOSE_OFF_NODE=0 for a development composite here"),
-    ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "0"}, None),
+    (HERE_COMPOSITE, None),
     ({}, None),
     ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not yes"),
+    ({**PEARL_TIED, "COMPOSITE": None}, NO_COMPOSITE_BESIDE),
+    ({**PEARL_TIED, **HERE_COMPOSITE}, NO_COMPOSITE_BESIDE),
+    (PEARL_TIED, None),
+    ({**PEARL_TIED, "COMPOSITE": None, "PRODUCT": "remote"}, None),
 ])
-def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only_its_card_writes(tmp_path, extra, line):
-    """Onsite's composite reads PoUS's and the wipe's cases, which `served_case.sh` writes under the served card's lease,
-    so they can't be composed off the node: under COMPOSE_OFF_NODE=1 the preflight refuses onsite with a composite, before
-    anything runs, and passes it with none or under COMPOSE_OFF_NODE=0."""
+def test_the_preflight_refuses_an_onsite_composite_off_the_node_or_beside_pearl_plus(tmp_path, extra, line):
+    """Onsite's composite reads its own pieces' cases (PoUS's, the wipe's), which stay on the prover's side and which no
+    compose hand-off carries, so it can't be composed on COMPOSE_NODE: under COMPOSE_OFF_NODE=1 the preflight refuses onsite with
+    a composite, before anything runs, and passes it with none (the final record alone is composed there) or under
+    COMPOSE_OFF_NODE=0. Under PEARLPLUS_TIE no composite holds onsite's pieces beside Pearl+'s verdict, so onsite with a
+    composite is refused wherever it would be composed, and passes with none; remote's composite passes."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, order) == ((3, []) if line else (0, [])) and (lines == [line] if line else len(lines) == 1), lines
