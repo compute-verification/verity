@@ -357,7 +357,7 @@
   },
   "Pouw.Dither.OnCard": {
    "owner": "@compute-research",
-   "digest": "4a40e06630394c3a6d7647d8bd2d25ad8c9e8bb32d9f5dfa21228a53969e1612",
+   "digest": "e20c87706269f72b71ea976ba7603ab9d00d2ef322d355e02f7b49e0c96f6aef",
    "why": "A scope: the headline on a card table is stated for an accelerator that is the period's devices at the table's rates. (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
   },
   "Pouw.NCP.Params.InstanceU": {
@@ -22509,7 +22509,7 @@
     "open": [],
     "reads": ["Verity.Assumptions.AccelProductForm"]
    },
-   "type_hash": "caf1d6cabcd644bf423fa924a8e09b5bae90ffbd2ed0a0a49d3601a2fed6ea8c"
+   "type_hash": "ce705307e11e47f73e831f86fa83e682aa179a9aeff8944752cdd44a6249e692"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_nontrivial": {
    "owner": "@compute-research",
@@ -22586,7 +22586,7 @@
     "open": [],
     "reads": ["Verity.Assumptions.AccelProductForm"]
    },
-   "type_hash": "808fce3c483e90ad1453061bfadc4f817b6efd2abe37bce540baed1273becd7a"
+   "type_hash": "b47021b0d7dd974f56eb2ff1bad89bd5e5c893434899c3870c5a13d6a6a6ba8a"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial": {
    "owner": "@compute-research",
@@ -22613,7 +22613,7 @@
     "open": ["Pouw.Dither.Prover.Passes"],
     "reads": ["Verity.Assumptions.AccelProductForm"]
    },
-   "type_hash": "409d389ae0e89c84f998d1de559df6c9cb2a9884765fc469c51753eda8402fe6"
+   "type_hash": "592e04fbc3cf893956c1f8541ca23269314b09c3fba4917c890d4f8e6041a84e"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": {
    "owner": "@compute-research",
@@ -22731,7 +22731,7 @@
     "open": [],
     "reads": ["Verity.Assumptions.AccelProductForm"]
    },
-   "type_hash": "ea9ffb2e0ef4e8034aad3c96da4fda70676f701824f478d66a7e3366b6826e09"
+   "type_hash": "c2671e11615e00ac2ddfdd5bb62ae5cefffdbac31dc96e856fc7e0b842d9c5f0"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial": {
    "owner": "@compute-research",
@@ -22758,7 +22758,7 @@
     "open": ["Pouw.Dither.Prover.Passes"],
     "reads": ["Verity.Assumptions.AccelProductForm"]
    },
-   "type_hash": "ff44180d514551c52f2d9f9c15180b2fab51683783b89ebf0b5c63f54d4dbb7a"
+   "type_hash": "d92a76b3c1f7f6bd3a666c2efdcce92dab1d7348105fbd94bf6bb6a7be0baeca"
   },
   "Pouw.SecurityProofs.EndToEnd": {
    "owner": "@compute-accounting",
