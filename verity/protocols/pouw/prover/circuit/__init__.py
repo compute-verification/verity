@@ -1,4 +1,4 @@
-"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.circuits` Program, verified by sampled proofs.
+"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.circuits` Program, verified by SPOT.
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
@@ -13,7 +13,7 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
   each unit's public input regions), and the execution phase's refusal of a repeated call index.
-* `plan`: closure samples behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
+* `plan`: closure samples behind a sampling-design seam (`CountLaw`, and `WorkLaw`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
 * `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
   their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
@@ -41,7 +41,7 @@
 * `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name
   requests of the gate-signed request table, none more often than it can take in round s (its prompt at its prefill, one
   row a decode), for the public m that dense credit counts.
-* `lead`: the lead's sampled unit (`verity/pouw/v2`, `PouwLeadTile`): one 16 × 8 MMA tile of a call over a block of at
+* `lead`: the lead's sampled proof block (`verity/pouw/v2`, `PouwLeadTile`): one 16 × 8 MMA tile of a call over a block of at
   most 32 k32 steps, its committed words against the call's data and the certifier's coin feed at the layout of
   `security/Definitions/Pouw/Lead/Layout.lean`, and on the call's last block the served fold, which reads A_i · B_j back
   exactly within 2^22 and serves verity_int8's epilogue on it. Its window: the registration record, the instance
@@ -53,8 +53,8 @@
   the pass's public one and the calls' pass tiles in order.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
-is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
-and the sample layout; None for any other scheme, which stays refused beside sampled proofs.  The verifier builds these
+is here, the Programs SPOT traces for one PoUW linear and its weight, their partition queries, the served outputs
+and the sample layout; None for any other scheme, which stays refused beside SPOT.  The verifier builds these
 Programs itself, from (scheme, m, k, n) and its own anchors, and never takes a prover's descriptor: `Traced.check_descriptor`
 compares an offered one's digest with its own.
 """
@@ -183,14 +183,14 @@ class Traced:
             raise DomainError(f"{self.scheme}: the layout is not the verifier's for {self.shape}")
 
     def layout(self):
-        """The closure-draw layout (`plan.layout`), from the shape alone."""
+        """The closure samples' layout (`plan.layout`), from the shape alone."""
         from . import plan
 
         return plan.layout(self.shape, self.kind)
 
 
 def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
-    """The circuit sampled proofs traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
+    """The circuit SPOT traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
     no circuit here. Raises `protocol.DomainError` for a shape outside the circuit (16 | m, 16 | n, 64 | k). P is the
     scheme's, never the caller's."""
     if scheme not in SCHEMES:

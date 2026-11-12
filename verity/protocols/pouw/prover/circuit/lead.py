@@ -1,4 +1,4 @@
-"""The lead's sampled unit (`verity/pouw/v2`): one 16 × 8 MMA tile of one call over one block of at most 32 k32 steps, its
+"""The lead's sampled proof block (`verity/pouw/v2`): one 16 × 8 MMA tile of one call over one block of at most 32 k32 steps, its
 committed words checked against the call's data and the certifier's coins, and on the call's last block the served fold,
 at the layout of `security/Definitions/Pouw/Lead/Layout.lean` (`Pouw.Lead`); and its window, what the verifier reads
 around the units.
@@ -67,7 +67,7 @@ and a unit's are `unit_ands`.
 block past the call's steps. `Call` is the reference: a call's data and coins, its words, its served bf16s, and a unit's
 inputs and verdict.
 
-**The window.** A window registers, before the certifier draws salt_w (its existing 512-bit window salt), one 64-byte
+**The window.** A window registers, before the certifier samples salt_w (its existing 512-bit window salt), one 64-byte
 record in the certifier's `commit_weights` slot, signed by the prover, in `pouw_record`'s place: `lead_record`,
 SHA-512(``verity/pouw-lead-record/v1`` ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖ u64be(calls)), with `pouw_record`'s
 stream and prover, keyLeaf the hm96-sha512 leaf of the window's key ks_w, every part 64 bytes, and calls the calls a
@@ -848,7 +848,7 @@ class Call:
 
     @classmethod
     def draw(cls, rng: random.Random, rows: int, cols: int, K: int) -> "Call":
-        """A call of random int8 data, -128 included, and its coins drawn as the certifier draws them."""
+        """A call of random int8 data, -128 included, and its coins flipped as the certifier flips them."""
         m, n, S = pad_rows(rows), pad_cols(cols), steps_for(K)
         tiles = -(-m // COIN_TILE)
         return cls([[rng.randrange(-128, 128) for _ in range(K)] for _ in range(rows)],
@@ -975,7 +975,7 @@ DIGEST = 64
 
 def lead_record(weights_root: bytes, stream: bytes, prover: bytes, key_leaf: bytes, calls: int) -> bytes:
     """The window's registration record, the 64 bytes the prover signs into the certifier's `commit_weights` slot before
-    salt_w is drawn, in `pouw_record`'s place: SHA-512(RECORD_TAG ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖
+    salt_w is sampled, in `pouw_record`'s place: SHA-512(RECORD_TAG ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖
     u64be(calls)), 290 bytes hashed. The verifier's calls are 1 .. 2^63 - 1, the positions' range."""
     parts = (weights_root, stream, prover, key_leaf)
     if not _digests(*parts) or type(calls) is not int or not 1 <= calls < WORDS_POSITION:
@@ -1132,7 +1132,7 @@ def window_refusal(record: bytes, weights_root: bytes, stream: bytes, prover: by
                    events: list[dict]) -> str | None:
     """Why the verifier refuses the lead's window from the certifier's record, else None. ``record`` is the window's
     signed `commit_weights` record, which must be `lead_record` of its weights' root, stream, prover, keyLeaf and call
-    count; ``events`` is the certifier's record in its order, each ``{"kind": "salt"}`` (salt_w drawn, once),
+    count; ``events`` is the certifier's record in its order, each ``{"kind": "salt"}`` (salt_w sampled, once),
     ``{"kind": "a_root", "forward", "call", "rows", "cols", "K", "bn"}`` (a call's A root and shape, which opens its
     forward) or ``{"kind": "words_root", "forward", "verdict"}`` (the forward's words root, which closes it, and the
     certifier's verdict on its egress). Refused: a record that doesn't open; an event of none of these kinds, or with a
