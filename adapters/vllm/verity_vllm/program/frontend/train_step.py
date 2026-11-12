@@ -8,14 +8,16 @@ The step is one function of everything a step reads,
     (params, exp_avg, exp_avg_sq, decay, neg_step_size, bc2_sqrt, buffers, batch) -> (loss, params', exp_avg', exp_avg_sq')
 
 built with `torch.func.functional_call` and `grad_and_value`, the optimizer a function (`AdamW.update`), and traced as one joint ATen
-graph on fake tensors (`make_fx` of the functionalized step, SDPA's math backend), which `derive_graph` derives. No value is read:
+graph on fake tensors (`make_fx` of the functionalized step, SDPA's math path), which `derive_graph` derives. No value is read:
 the parameters, the optimizer state, the step's three host scalars (`AdamW.scalars`), the module's buffers and the batch are the
 Program's inputs, in that order, each tensor one parameter named after it (`param_<fqn>`, `exp_avg_<fqn>`, ...). The parameters
 are the Program's theta (`Program.theta`: the start's weights); the optimizer state, the scalars and the batch are not.
 
 At a compute capability (`cc`) the step is traced as that GPU runs it (`export_step(..., gpu=True)`): a `Tensor.is_cuda` the step's
-own code reads is True, so it takes its CUDA branches (`x.bfloat16() if x.is_cuda else x.float()` is bf16), and the TF32 setting
-its calls run under (cuda.matmul.allow_tf32), which the traced graph doesn't show, is the rules' `tf32`.
+own code reads is True, so it takes its CUDA branches (`x.bfloat16() if x.is_cuda else x.float()` is bf16); an attention call
+the card gives its flash kernel is that kernel's op, which autograd pairs with the kernel's backward (`_CardSdpa`); and the two
+settings its calls run under that the traced graph doesn't show are the rules': TF32 (cuda.matmul.allow_tf32, `tf32`) and
+deterministic algorithms (`deterministic`), which the flash backward reads.
 
 A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
 takes each refused one's output as a field of the `run` input (a hole, `rules.training_survey`), and returns a `StepSurvey`: every
@@ -30,6 +32,7 @@ from __future__ import annotations
 
 import contextlib
 import keyword
+import math
 import os
 import re
 import sys
@@ -39,6 +42,7 @@ from dataclasses import dataclass
 from typing import cast
 
 import torch
+import torch.nn.functional as F
 from torch.func import functional_call, grad_and_value
 from torch.overrides import TorchFunctionMode
 from verity.circuits import parts
@@ -116,7 +120,8 @@ class _Loss(torch.nn.Module):
 @dataclass
 class StepLayout:
     """Which Program input and output is which: the parameters' and buffers' fqns in order, the host scalars, the batch; and how
-    the step was traced: as a GPU runs it (`gpu`), and then with cuda.matmul.allow_tf32 on (`tf32`)."""
+    the step was traced: as a GPU runs it (`gpu`), and then with cuda.matmul.allow_tf32 on (`tf32`) and under deterministic
+    algorithms (`deterministic`)."""
     params: list[str]
     buffers: list[str]
     scalars: tuple[str, ...]
@@ -124,6 +129,7 @@ class StepLayout:
     outputs: list[str]
     gpu: bool = False
     tf32: bool = False
+    deterministic: bool = False
 
     def to_json(self) -> dict:
         return {"params": self.params, "buffers": self.buffers, "scalars": list(self.scalars), "inputs": self.inputs,
@@ -150,6 +156,42 @@ class _TF32Seen(TorchFunctionMode):
         return func(*args, **(kwargs or {}))
 
 
+def _deterministic() -> bool:
+    """Whether torch's kernels run their deterministic algorithms now: the setting on, and not warn-only."""
+    return torch.are_deterministic_algorithms_enabled() and not torch.is_deterministic_algorithms_warn_only_enabled()
+
+
+class _CardSdpa(TorchFunctionMode):
+    """`F.scaled_dot_product_attention` as torch's composite dispatches it on a CUDA device whose order of backends has flash
+    attention first: a call with no mask whose q, k and v are 4-D f16 or bf16 tensors is the flash kernel's op,
+    `aten._scaled_dot_product_flash_attention`, at the head dim padded to a multiple of 8 and the scale written out (1 / sqrt(D)
+    by default), its output cut back to D; autograd pairs it with `aten._scaled_dot_product_flash_attention_backward`. Every other
+    call is left to the trace, which decomposes it to the math path. Collects whether each call it sends to the kernel ran under
+    deterministic algorithms, which the kernel's backward reads."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.deterministic: set[bool] = set()
+
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        kwargs = kwargs or {}
+        if func is not F.scaled_dot_product_attention:
+            return func(*args, **kwargs)
+        call = {**dict(zip(("query", "key", "value", "attn_mask", "dropout_p", "is_causal"), args)), **kwargs}
+        q, k, v = call["query"], call["key"], call["value"]
+        if call.get("attn_mask") is not None or any(t.dim() != 4 or t.dtype not in (torch.float16, torch.bfloat16) for t in (q, k, v)):
+            return func(*args, **kwargs)
+        self.deterministic.add(_deterministic())
+        D = q.shape[-1]
+        pad = -D % 8
+        if pad:
+            q, k, v = (F.pad(t, (0, pad)) for t in (q, k, v))
+        scale = call.get("scale")
+        out = torch.ops.aten._scaled_dot_product_flash_attention(q, k, v, call.get("dropout_p", 0.0), call.get("is_causal", False), False,
+                                                                 scale=1.0 / math.sqrt(D) if scale is None else scale)[0]
+        return out[..., :D] if pad else out
+
+
 @contextlib.contextmanager
 def _patched(owner, name: str, value):
     """``owner.name = value`` for the block. Afterwards ``owner`` holds under ``name`` what it held itself before: that attribute
@@ -169,22 +211,25 @@ def _patched(owner, name: str, value):
 @contextlib.contextmanager
 def _gpu_branches():
     """The step as a GPU runs it, on meta tensors: a `Tensor.is_cuda` read from outside torch is True (torch's own reads keep the
-    meta tensor's answer, so its dispatch is unchanged); yields the set of TF32 settings the step's calls ran under."""
+    meta tensor's answer, so its dispatch is unchanged) and attention is dispatched as the card dispatches it (`_CardSdpa`); yields
+    the set of TF32 settings the step's calls ran under and the set of deterministic-algorithms settings its flash attention calls
+    ran under."""
     # read from the class this is the descriptor, where torch's stubs give the bool an instance answers with
     base = cast(types.GetSetDescriptorType, torch._C.TensorBase.is_cuda)
 
     def is_cuda(t: torch.Tensor) -> bool:
         return True if not sys._getframe(1).f_code.co_filename.startswith(_TORCH_DIR) else base.__get__(t)
 
-    with _patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
-        yield mode.seen
+    with _patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as tf32, _CardSdpa() as sdpa:
+        yield tf32.seen, sdpa.deterministic
 
 
 def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
                 gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
     """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`. `gpu`: traced
-    as a GPU runs it (`_gpu_branches`): its CUDA branches, and the layout's `tf32` the cuda.matmul.allow_tf32 its calls ran
-    under, which must be one setting for the whole step (a step that changes it between products is refused)."""
+    as a GPU runs it (`_gpu_branches`): its CUDA branches, its attention the card's flash kernel where the card takes it, and the
+    layout's `tf32` and `deterministic` the cuda.matmul.allow_tf32 its calls and the deterministic algorithms its flash attention
+    ran under, each of which must be one setting for the whole step (a step that changes one between calls is refused)."""
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
@@ -223,14 +268,17 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
     inputs = ([_ident(f"param_{n}") for n in short] + [_ident(f"exp_avg_{n}") for n in short] + [_ident(f"exp_avg_sq_{n}") for n in short]
               + list(scalars) + [_ident(f"buf_{n}") for n in bshort] + ["batch"])
     outputs = ["loss"] + [f"param:{n}" for n in short] + [f"exp_avg:{n}" for n in short] + [f"exp_avg_sq:{n}" for n in short]
-    branches: contextlib.AbstractContextManager[set[bool]] = _gpu_branches() if gpu else contextlib.nullcontext(set())
-    with sdpa_kernel(SDPBackend.MATH), branches as tf32:
+    branches: contextlib.AbstractContextManager[tuple[set[bool], set[bool]]] = (
+        _gpu_branches() if gpu else contextlib.nullcontext((set(), set())))
+    with sdpa_kernel(SDPBackend.MATH), branches as (tf32, deterministic):
         gm = make_fx(torch.func.functionalize(step, remove="mutations"), tracing_mode="fake")(*metas)
-    if len(tf32) > 1:
-        raise ValueError("export_step: the step changes cuda.matmul.allow_tf32 between its calls, and the rules take one setting "
-                         "for the whole step: set it once, outside the step")
+    for seen, setting in ((tf32, "cuda.matmul.allow_tf32"), (deterministic, "torch.use_deterministic_algorithms")):
+        if len(seen) > 1:
+            raise ValueError(f"export_step: the step changes {setting} between its calls, and the rules take one setting for the "
+                             "whole step: set it once, outside the step")
     return gm, metas, StepLayout(short, bshort, scalars, inputs, outputs, gpu=gpu,
-                                 tf32=gpu and (tf32.pop() if tf32 else bool(torch.backends.cuda.matmul.allow_tf32)))
+                                 tf32=gpu and (tf32.pop() if tf32 else bool(torch.backends.cuda.matmul.allow_tf32)),
+                                 deterministic=gpu and (deterministic.pop() if deterministic else _deterministic()))
 
 
 @dataclass(frozen=True)
@@ -250,8 +298,8 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
                 mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, cc: tuple[int, int] | None = None, name: str = "TrainStep",
                 exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
-    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc, tf32=...)`, with
-    the step's TF32 setting at a `cc`). `exported`: `export_step`'s result, at a `cc` traced as the GPU runs it (`gpu=True`).
+    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc, tf32=...,
+    deterministic=...)`, with the step's two settings at a `cc`). `exported`: `export_step`'s result, at a `cc` traced as the GPU runs it (`gpu=True`).
     `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole (`rules.training_survey.survey`)."""
     from verity_vllm.program.frontend.rules.training import training_rules
     from verity_vllm.program.frontend.rules.training_survey import (
@@ -263,9 +311,9 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
     gpu = cc is not None
     gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch, gpu=gpu)
     if gpu and not layout.gpu:
-        raise ValueError("step_report: at a cc the step is the GPU's, its CUDA branches and its TF32 setting: export it with "
-                         "export_step(..., gpu=True)")
-    ruleset = rules if rules is not None else training_rules(cc=cc, tf32=layout.tf32)
+        raise ValueError("step_report: at a cc the step is the GPU's, its CUDA branches, its attention kernel and its settings: "
+                         "export it with export_step(..., gpu=True)")
+    ruleset = rules if rules is not None else training_rules(cc=cc, tf32=layout.tf32, deterministic=layout.deterministic)
     theta = layout.inputs[:len(layout.params)]
     rep = derive_graph(gm, metas, mode=mode, rules=ruleset, name=name, input_names=layout.inputs, theta=theta)
     rep.provenance["train_step"] = layout.to_json()
