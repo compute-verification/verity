@@ -52,10 +52,9 @@ _lowering: list = []
 _composed: list = []
 
 
-def _update(h, text: str, start: int = 0, stop: int | None = None):
-    stop = len(text) if stop is None else stop
-    for i in range(start, stop, CHUNK):
-        h.update(text[i:min(i + CHUNK, stop)].encode())
+def _update(h, text: str, start: int = 0):
+    for i in range(start, len(text), CHUNK):
+        h.update(text[i:i + CHUNK].encode())
     return h
 
 
