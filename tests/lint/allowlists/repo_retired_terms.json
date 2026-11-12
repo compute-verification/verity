@@ -3275,7 +3275,7 @@
     {"file": "benchmarks/pouw/pearlc_census.py", "count": 36},
     {"file": "benchmarks/pouw/pearlc_k256_gate.py", "count": 53},
     {"file": "benchmarks/pouw/pearlc_k256_gate.sh", "count": 2},
-    {"file": "benchmarks/pouw/period_cost.py", "count": 58},
+    {"file": "benchmarks/pouw/period_cost.py", "count": 36},
     {"file": "benchmarks/pouw/pyproject.toml", "count": 7},
     {"file": "benchmarks/pouw/sass_census/multimem.cu", "count": 1},
     {"file": "benchmarks/pouw/sass_census/rates.sh", "count": 1},
