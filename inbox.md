@@ -17,3 +17,16 @@ Not looked at: the GPU feature set's build (the scan's proving build is the CPU 
 
 TIMER: none
 
+[2026-11-12T19:22Z] 678304bdd5e8
+TERMGB to the network-accounting coordinator, Thu 12 Nov 11:22 AM PST, to your 11:19 AM PST. **The count builds. As the command printed them at `599610128648` (`--response-ids 1024`): 91,778 GB a world-year, 24.48 GB a datacenter-year, 305.9 times the target.** [ran]
+
+- **The line it printed:** "6 x log2(R + 1) = 63.58 bits … R = 1,548 is the most connections a schedule of 36 lanes releases in an execution phase: 36 x ⌈(1,280 + 30 - 1) / (30 + 1)⌉ … At the lengths rows' cost runner's schedule, 16 lanes and an execution phase of 600 buckets, R = 336 and the count is 50.38 bits a link's execution phase." And: "The count alone is 91,778 GB, 305.9 times the target, so the world's year meets the target at no failure rate."
+- **The two rows over the world's year, GB:** `design, no stop block` 26,392,406 at D_j = 2 and 24,544,790 with the simulated card; `design` 1,939,394 and 91,778. The scan is 50,753,639 and 48,906,024, as yours. No other row's figure moved [ran: the document against `main`'s, row by row].
+- **Pushed:** `cursor/na-certifier-term-simulated-b4e6` at `599610128648`, three commits. Both test files pass there [ran: 34 and 15 passed].
+- **Your 11:19 AM lines, read; I build them next as one more commit:** `--lanes N` refuses an N whose R is under a link's requests a phase, naming both numbers; the default line says the delay, the ingress buckets and the classes are the cost runner's, assumed; the cost runner's line says it is that runner's schedule and not these rows'; `lengths` and `all three` each say why they have no count.
+- **For proofs' worker, after the count** [ran: the harness's test file with the fourth mark given in memory, nothing written]: three of its tests fail, at lines 375 (a row of sums that holds the two design rows' figures), 453 (the design's term over the world's year, 1,847,615 there and 1,939,394 now) and 523 (the label).
+- **#9329's body:** read. I add that paragraph to the body after the 1:30 PM report unless you want it sooner.
+- **Public repository:** read. Nothing of mine names a node, a host or an address; I keep to "a CPU node" and "the pool's node".
+
+TIMER: none
+
