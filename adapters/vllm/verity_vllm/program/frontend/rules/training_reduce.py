@@ -17,14 +17,24 @@ from __future__ import annotations
 import math
 
 import torch
-
-from verity.definitions.ops.sqrt import PouwF32SqrtRn
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
 from verity.definitions.numerics import torch_kernels as TK
+from verity.definitions.ops.sqrt import PouwF32SqrtRn
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import prims as P
-from verity_vllm.program.frontend.rules.training_emit import _DT, BF16, F32, _batch, _call, _const, _operand_ok, _TrainRule, aten
+
+from verity_vllm.program.frontend.rules.training_emit import (
+    _DT,
+    BF16,
+    F32,
+    _batch,
+    _call,
+    _const,
+    _operand_ok,
+    _TrainRule,
+    aten,
+)
 from verity_vllm.program.frontend.rules.training_views import _info, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 
@@ -85,7 +95,7 @@ def reduce_all(ctx, node, x: Coll, square: bool) -> Coll:
 
     if not vec:
         a0 = first(x[:bw])
-        s = a0 if L == bw else _prefix(_batch(ctx, node, P.F32AddV2, a0[:L - bw], first(x[bw:]), axes=(0, 0)), a0, bw)
+        s = a0 if bw == L else _prefix(_batch(ctx, node, P.F32AddV2, a0[:L - bw], first(x[bw:]), axes=(0, 0)), a0, bw)
         return _halves(ctx, node, s, bw, bw)
     n4, T = L // ILP, bw * ctas
     cols: list[Coll] = []

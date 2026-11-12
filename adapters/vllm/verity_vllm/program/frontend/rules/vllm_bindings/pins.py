@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
@@ -62,7 +63,6 @@ def active_gemm_target():
 
 def _target_kinds():
     """(uses accepted kinds?, DOT) of the active target — the ONE selection the GEMM and attention emits consult (`frontend.targets`)."""
-    from verity_vllm.program.frontend import targets as T
     tp = active_target_profile()
     return T.uses_accepted_kinds(tp), T.tensor_core_dot(tp)
 
@@ -70,7 +70,6 @@ def _target_kinds():
 def gemm_bias_role() -> tuple[str, dict] | None:
     """(vocabulary role, its extra statics) of a biased linear's one-Call Definition on the active target
     (`frontend.targets.gemm_bias_spec`), or None: the target keeps the launch and its bias add as two Calls."""
-    from verity_vllm.program.frontend import targets as T
     tp = active_target_profile()
     if T.uses_accepted_kinds(tp):
         return "gemm_bias", {}
@@ -90,7 +89,6 @@ def moe_expert_role(routed: bool) -> tuple[str, dict]:
 def moe_expert_refusal(padded: bool = False) -> str | None:
     """None when the active target binds the fused-MoE block's expert GEMMs under the construction, else the refusal: a target without
     a registered step, or the padded construction on a target whose expert GEMMs take the `_v2{DOT}` Definitions."""
-    from verity_vllm.program.frontend import targets as T
     try:
         dot = T.moe_expert_dot(active_target_profile())
     except T.UnregisteredTarget as e:

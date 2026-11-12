@@ -999,6 +999,63 @@ def decode (bytes : ByteArray) : V Prog := do
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
 
+/-- A descriptor's bytes read as JSON: none for bytes that are not UTF-8, else `JsonParse.parse`'s verdict on their text. Every
+reader of a descriptor starts with it (`decode_eq_of`). -/
+def readJson (bytes : ByteArray) : Option (Except String Json) := (String.fromUTF8? bytes).map JsonParse.parse
+
+/-- `decode` from the descriptor's bytes as `readJson` read them (`decode_eq_of`). -/
+def decodeOf (read : Option (Except String Json)) : V Prog := do
+  let some parsed := read | throw "program: not UTF-8"
+  let j ← match parsed with
+    | .ok j => pure j
+    | .error e => throw s!"program: not JSON: {e}"
+  let .obj top := j | throw "program: not an object"
+  match (j.getObjValAs? String "schema").toOption with
+  | some s => if s != SCHEMA then throw s!"unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
+  | none => throw s!"unexpected descriptor schema (this verifier reads {SCHEMA})"
+  let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
+  for (fid, d) in dkv.toArray do
+    let .obj _ := d | throw s!"definition '{fid}': not an object"
+  -- the free-form parts (`codec._free_form`): every top-level field but definitions and annotations, and each definition's key,
+  -- id, bindings, params, ret, and its body's params and ret_type
+  let freeDefs := dkv.toArray.map fun (fid, d) => (fid, match d with
+    | .obj kvs => Json.mkObj ((kvs.toArray.filter (·.1 != "body")).toList ++
+        ((d.getObjVal? "body").toOption.map (fun b => ["params", "ret_type"].filterMap fun k =>
+          (b.getObjVal? k).toOption.map (k, ·))).getD [])
+    | x => x)
+  let free := Json.mkObj ((top.toArray.filter (fun (k, _) => k != "definitions" && k != "annotations")).toList ++
+    [("definitions", Json.mkObj freeDefs.toList)])
+  if let some e := domainError free then throw s!"descriptor outside the canonical JSON domain (PROTOCOL.md §1): {e}"
+  let .ok (.arr callees) := j.getObjVal? "callees" | throw "program: callees"
+  let .ok (.arr tys) := j.getObjVal? "types" | throw "program: types"
+  let types ← tys.mapM Ty.ofJson
+  let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
+  let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
+  let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
+  let go : D Nat := do
+    let r ← getDef Steps.FUEL desc rootId
+    for f in recordFunctionIds programFn do
+      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
+    return r
+  let (root, st) ← go.run {}
+  let rd := st.defs[root]!
+  if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
+  -- an input node (`Input<w>_v1` or `RegisteredInput<w>_v1`) appears only in the root's body (PROTOCOL.md §5.2)
+  for d in st.defs do
+    if d.prim || d.key == rootId then continue
+    for k in [0:d.body.nodes.size] do
+      let c := st.defs[d.body.nodes[k]!.fn]!
+      if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
+        throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
+
+set_option maxRecDepth 20000 in
+theorem decode_eq_of (bytes : ByteArray) : decode bytes = decodeOf (readJson bytes) := by
+  unfold decode decodeOf readJson
+  generalize String.fromUTF8? bytes = o
+  cases o <;> rfl
+
 /-- `decode` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup`). It is here because `decode`'s
 decoder state is this module's own. -/
 def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)

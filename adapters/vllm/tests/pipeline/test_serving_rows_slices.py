@@ -12,21 +12,21 @@ import math
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops.prims import HopperBF16WgmmaDot16
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity_flock.class_statement import UnitStager
-from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.pipeline import slice_rows as SL
 from verity.definitions.registry import b1_tp2 as T2
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import dsa as DSA
 from verity.definitions.registry import ll_bf16 as LL
+from verity_flock.class_statement import UnitStager
+
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.pipeline import slice_rows as SL
 
 H = HopperBF16WgmmaDot16
 #: each family at small statics; the token of the embedding shard inside it (2 <= 4 < 2 + 5)
@@ -127,7 +127,7 @@ def test_the_slices_cover_the_row_s_output_read_their_own_elements_and_compute_t
     params = defn(family).signature()[0]
     for u, ix in enumerate(np.ndindex(*ext)):
         for g, ((_nm, ty), c, o) in enumerate(zip(params, carry, ops, strict=True)):
-            want = gather(o, SL.dims(ty), c, ix).reshape(-1).view(f"<u{o.itemsize}").astype(np.uint64)
+            want: np.ndarray = gather(o, SL.dims(ty), c, ix).reshape(-1).view(f"<u{o.itemsize}").astype(np.uint64)
             assert leaves(data["rows"][f"in{g}"][u], bits[g]).tolist() == want.tolist()
     ref = evaluate_batch(defn(family, unit=True), *(leaves(data["rows"][f"in{g}"], b) for g, b in enumerate(bits[:-1])))
     assert np.asarray(ref).reshape(n, -1).tolist() == out.tolist()
