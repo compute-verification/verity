@@ -283,7 +283,8 @@ def test_lean_two_sends_the_planners_design_in_each_form(monkeypatch):
     for served, union, form in ((None, False, "sets"), (80.0, False, "capped"), (80.0, True, "patterns")):
         seen.clear()
         assert f.lean_two(cells, 4, row, .01, served, union) == want
-        assert seen == [f.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, served, union, 2.0)]
+        assert seen == [f.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, served, union, 2.0,
+                                        fanout=f.FANOUT)]
         assert seen[0]["form"] == form
     monkeypatch.setattr(f.plancheck, "check", lambda ds: [(None, Fraction(0))])
     with pytest.raises(f.plancheck.LeanError, match="refuses the planner's two-stage point"):
@@ -301,7 +302,7 @@ def test_a_design_of_a_stratum_a_width_is_read_in_the_planners_strata(monkeypatc
     monkeypatch.setattr(f.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
     f.lean_two(cells, 4, row, .01, 80.0, True)
     assert seen == [f.plancheck.two([Cell(3, 16), Cell(2, 48, stratum=1), Cell(1, 64, stratum=2)], row["k"], 4, .5, .01,
-                                    80.0, True, 2.0)]
+                                    80.0, True, 2.0, fanout=f.FANOUT)]
     assert f._plan(row)["k"] == {"w0": 2, "w1": 1, "w2": 1}
     assert f._plan({"merged": 16, "k": {0: 3, 64: 1}})["k"] == {"<=16": 3, "64": 1}
     assert f._plan({"merged": 64, "k": {0: 3}})["k"] == {"all": 3}
@@ -344,7 +345,7 @@ def test_a_two_stage_point_is_what_lean_certifies_and_a_tampered_design_is_refus
         assert (got["lean"], got["planner"], got["theta"]) == (True, row["bound"], float(LEAN_THETA)), design
         assert seen == [f.plancheck.two(f.split_cells(m.cells, row["merged"]), row["k"], m.replay.replay_blocks,
                                         row["q"], m.delta, None if form is None else m.served, form == "patterns",
-                                        row["theta"])]
+                                        row["theta"], fanout=f.FANOUT)]
         assert (seen[0]["form"], seen[0]["S"]) == forms[form], design
     seen.clear()
     assert f.lean_point(m, "two-stage", p | {"capped": True}) == p | {"capped": True, "lean": None,
