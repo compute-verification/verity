@@ -64,9 +64,10 @@ def _plain(v: Any) -> Any:
 
 def scheduler_config(sched: Any) -> dict[str, Any]:
     """What of the scheduler's configuration decides its schedules (``max_model_len`` the scheduler's own where its
-    scheduler config no longer holds it, as in vLLM 0.11 on), and under speculative decoding its ``speculative``
-    settings (`SPECULATIVE`, those that are set): an engine built with them as its ``speculative_config`` drafts and
-    accepts as this one does."""
+    scheduler config no longer holds it, as in vLLM 0.11 on), and what an engine at vLLM's defaults does not have: the
+    KV cache's format where it is not ``auto`` (``kv_cache_dtype``, as the engine's arguments name it), and under
+    speculative decoding its ``speculative`` settings (`SPECULATIVE`, those that are set): an engine built with them
+    as its ``kv_cache_dtype`` and ``speculative_config`` stores, drafts and accepts as this one does."""
     sc = getattr(sched, "scheduler_config", None)
     cc = getattr(sched, "cache_config", None)
     pick = lambda o, names: {n: _plain(getattr(o, n)) for n in names if o is not None and hasattr(o, n)}   # noqa: E731
@@ -79,6 +80,8 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
         n = getattr(sched, "max_model_len", None) or getattr(mc, "max_model_len", None)
         if n is not None:
             out["max_model_len"] = int(n)
+    if getattr(cc, "cache_dtype", "auto") != "auto":
+        out["kv_cache_dtype"] = _plain(cc.cache_dtype)
     spec = getattr(getattr(sched, "vllm_config", None), "speculative_config", None)
     if spec is not None:
         out["speculative"] = {n: v for n, v in pick(spec, SPECULATIVE).items() if v is not None}
