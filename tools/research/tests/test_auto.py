@@ -665,6 +665,100 @@ def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_
         auto.choose({N2: n2, CPU1: "no answer in 30 s"}, 4, 16)
 
 
+@pytest.fixture
+def idle(tmp_path, monkeypatch):
+    """`read`: every machine's documents as the probe gives them where each machine is this one, idle: node 2's share whole
+    and unheld, and a free slot in each pool, so nothing but what the probe finds of the machine keeps a job off it."""
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
+    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    src = tmp_path / "src"
+    (src / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text(f"def status_doc(now):\n    return {pool(slot('r0'))['research']!r}\n")
+    return lambda **kw: auto.read(src, 4, reach=lambda name: [sys.executable, "-"], **kw)
+
+
+def test_a_machine_whose_read_says_its_null_device_cant_be_written_is_shut_out_with_the_reason(tmp_path, monkeypatch, capsys, idle):
+    """A machine whose null device its user can't open to read and write starts no runner and no git, so its slots stay idle
+    and every launch reads them as places. Its read says so in place of its pool, and it takes no job."""
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    whole = idle()
+    assert whole[CPU1] == pool(slot("r0")) and whole[N2]["share"]["free"] == 48, "the machine's own null device and git: it is read"
+    assert auto.choose({N2: share(waiters=5), CPU1: whole[CPU1], CPU5: full}, 4, 16)[0] == (CPU1, "research")
+    null = tmp_path / "null"
+    monkeypatch.setattr(auto, "NULL_DEVICE", str(null))
+    cant = f"{null} can't be opened to read and write"
+    stands = [(lambda: None, f"{cant} (FileNotFoundError: No such file or directory)"),
+              (null.mkdir, f"{cant} (IsADirectoryError: Is a directory)"),
+              (lambda: (null.rmdir(), null.write_text("")), f"{null} is not a character device")]    # a file put in its place
+    if os.geteuid():                                                # root opens a file whatever its mode
+        stands.append((lambda: null.chmod(0), f"{cant} (PermissionError: Permission denied)"))
+    for put, why in stands:
+        put()
+        docs = idle()
+        assert docs[CPU1] == {"research": {"error": f"{auto.NO_START}: {why}"}}, "in place of the slots that looked free"
+        target, said = auto.choose({N2: share(waiters=5), CPU1: docs[CPU1], CPU5: full}, 4, 16)
+        assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said
+        assert auto.expect(docs, (CPU1, "research"), 4, 16) == auto.Wait(None, f"{auto.NO_START}: {why}", False)
+        assert auto.smaller({CPU1: docs[CPU1]}, 8, 64) is None, "no smaller request starts there either"
+    launched = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=5), CPU1: docs[CPU1], CPU5: full})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing([]))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--", "pytest", "-q"]) == 3
+    assert [kw["machine_name"] for kw in launched] == [CPU5], "the launch goes where a runner starts, though it waits there"
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in capsys.readouterr().err
+
+
+def test_a_machine_whose_git_gives_no_answer_is_shut_out_with_the_reason(tmp_path, monkeypatch, idle):
+    """A launch ships its tree as a checkout with the machine's git, and a suite is keyed from git's view of it: a machine
+    whose git doesn't run, or runs and fails, refuses those launches one by one."""
+    git = tmp_path / "git"
+    monkeypatch.setattr(auto, "GIT", str(git))
+    gone = idle()[CPU1]["research"]["error"]
+    assert gone.startswith(f"{auto.NO_START}: `{git} --version` gave no answer (FileNotFoundError: ")
+    git.write_text("#!/bin/sh\necho 'git: a warning' >&2\necho \"fatal: could not open '$0' for reading\" >&2\nexit 128\n")
+    git.chmod(0o755)
+    docs = idle()
+    why = f"`{git} --version` exited 128 (fatal: could not open '{git}' for reading)"
+    assert docs[CPU1] == {"research": {"error": f"{auto.NO_START}: {why}"}}
+    target, said = auto.choose({N2: share(free=8), CPU1: docs[CPU1]}, 4, 16)
+    assert target is None and f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}" in said
+    git.write_text("#!/bin/sh\necho git version 0\n")
+    assert idle()[CPU1] == pool(slot("r0")), "a git that answers: the machine is read as it is"
+
+
+def test_a_node_2_that_can_start_no_run_is_closed_to_every_job_a_gpu_one_included(tmp_path, monkeypatch, capsys, idle):
+    """Node 2's queue starts a run as a pool does, so a node 2 whose read says no run starts there takes no job: a job a pool
+    fits goes to the pool, and a GPU or quiet job, which no other node runs, is refused with the reason."""
+    null = tmp_path / "null"
+    null.write_text("")
+    monkeypatch.setattr(auto, "NULL_DEVICE", str(null))
+    why = f"{null} is not a character device"
+    n2 = idle(node_only=True)[N2]
+    assert n2 == {"share": {"no_start": why}}
+    said = f"{N2} takes no job: {auto.NO_START}: {why}"
+    assert auto.closed(n2) == auto.off(n2) == said
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    target, told = auto.choose({N2: n2, CPU1: full}, 4, 16)
+    assert target == (CPU1, "research") and told.startswith(said + "; "), "an idle share is no place while nothing starts on its node"
+    assert auto.expect({N2: n2}, None, 4, 16) == auto.Wait(None, said, False)
+    with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} takes no job") as refused:
+        auto.choose({N2: n2, CPU1: pool(slot("r0"))}, 64, 300)
+    assert str(refused.value).startswith(said + "; ")
+    placed = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: {N2: n2})
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--gpus", "1", "--", "nvidia-smi"]) == 2
+    assert placed == [] and f"research run --on auto: refused: {said}, and a GPU or quiet job runs on no other node" in capsys.readouterr().err
+
+
 def _auto_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -818,6 +912,21 @@ def _suites_repo(tmp_path: Path) -> Path:
     (repo / auto.SLOT_PY).parent.mkdir(parents=True)
     (repo / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text())
     return repo
+
+
+def test_a_named_suites_run_lasts_the_bound_its_workers_stretch(tmp_path):
+    """A suite measured on 5 workers (`timeout_workers`) run on 3 has suites.py's bound stretched to 5/3 of its timeout_s; the run
+    sized for it lasts that, not the 14,400 s that would kill it first."""
+    from research import suite_size
+
+    repo = _auto_repo(tmp_path)
+    (repo / "a").mkdir()
+    (repo / "a" / "pyproject.toml").write_text('[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\n'
+                                               "parallel = true\ntimeout_s = 14400\ntimeout_workers = 5\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    run = [suite_size.SUITES_PY, "a", "--jobs"]
+    assert suite_size.size(repo, [*run, "3"], None)["max_s"] == 24000 + suite_size.SYNC_S
+    assert suite_size.size(repo, [*run, "8"], None)["max_s"] == 14400 + suite_size.SYNC_S
 
 
 def test_a_run_of_many_suites_is_placed_and_counted_in_a_line_by_what_it_reserves(tmp_path, monkeypatch, capsys):
@@ -1242,3 +1351,159 @@ def test_on_auto_counts_a_runs_limit_from_its_start_and_its_custody_key_outlasts
     for waited in (40 * 60, 0):
         slot_py.limit_run(limit, "r0", str(run), mono=lambda: 1000.0 + waited)
         assert json.loads((run / slot_py.RUN_TIMEOUT).read_text())["timeout_s"] == waited + limit, "its limit, from the slot taken"
+
+
+#: a runner's process that the machine could not start, in the machine's words
+NOT_STARTED = "the runner could not be started: PermissionError: [Errno 13] Permission denied: '/dev/null'"
+#: marks a refusal the launcher itself raises (`_answering`)
+RAISED = "raised"
+RUN = ["run", "--on", "auto", "--", "pytest", "-q"]
+
+
+def _answering(answers: dict, seen: list):
+    """A `remote.launch` that records each launch and answers it by its machine: None is a launch that starts; (fault, reason)
+    is the machine's refusal, as its answer comes back in the launch's record; (fault, reason, RAISED) is the launcher's own
+    refusal, raised as `remote`'s exception of that name."""
+    def launch(**kw):
+        seen.append(kw)
+        if (got := answers[kw["machine_name"]]) is None:
+            return {"phase": "launched", "pod_id": None, "remote_run_dir": f"/workspace/research/runs/{kw['run_id']}",
+                    "launch": {"claimed": True, "started": True, "runner_pid": 7}}
+        if got[2:] == (RAISED,):
+            raise getattr(remote, got[0])(got[1])
+        return {"phase": "refused", "launch": {"claimed": True, "started": False, "fault": got[0], "refused": got[1]}}
+    return launch
+
+
+def _on_auto(monkeypatch, tmp_path: Path, docs: dict, answers: dict) -> tuple[list, list]:
+    """`research run --on auto` from a checkout in ``tmp_path`` where the machines read as ``docs`` and answer a launch as
+    ``answers`` (`_answering`), with a queue that places every job on node 2: (the launches, the reads), as they come."""
+    launched, asked = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: asked.append(kw) or docs)
+    monkeypatch.setattr(remote, "launch", _answering(answers, launched))
+    monkeypatch.setattr(remote, "queue_placement", lambda source, run_id, spec: {
+        "machine": N2, "why": "its share has the cores", "kind": spec["kind"], "max_s": 3600,
+        "job": {"cpus": spec["cpus"] or 4, "gpus": spec["gpus"] or 0}})
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    return launched, asked
+
+
+@pytest.mark.parametrize("refusal", [
+    ("CannotStart", NOT_STARTED),
+    ("RunnerFailed", NOT_STARTED),
+    ("CannotStart", "could not prepare the launch (OSError: [Errno 30] Read-only file system: 'launcher.log'); not starting r1"),
+    ("CannotStart", "/workspace/research/src/abc has no .git, as git couldn't reach the machine (the line above says why), and "
+                    "tools/verity/check/suites.py needs a git checkout", RAISED)],
+    ids=["its-runner-not-started", "as-an-older-shipped-package-says-it", "its-launch-not-prepared", "no-git-for-a-checkout"])
+def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on_the_second_and_says_so(
+        refusal, tmp_path, monkeypatch, capsys):
+    """A machine whose places look free because nothing starts there is chosen by every launch, and no launcher sees
+    another's refusal. A launch it refuses as a machine that can start no run goes on to the machine it would have chosen
+    next, from the read it already has, and says which machine it passed over and why."""
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
+    launched, asked = _on_auto(monkeypatch, tmp_path, docs, {CPU1: refusal, CPU5: None})
+    assert main(RUN) == 0
+    assert [kw["machine_name"] for kw in launched] == [CPU1, CPU5] and len(asked) == 1, "no machine is asked a second time"
+    assert launched[0]["run_id"] != launched[1]["run_id"] and launched[0]["command"] == launched[1]["command"]
+    why = refusal[1]
+    said = [line for line in capsys.readouterr().err.splitlines() if "--on auto: " in line or " launched on " in line]
+    assert [line.split(", from ")[0].split(" (")[0] for line in said] == [
+        f"research run --on auto: spilled to {CPU1}'s research pool", f"research run --on auto: it starts now on {CPU1}'s research pool",
+        f"research run --on auto: passed over {CPU1}, which can start no run",
+        f"research run --on auto: spilled to {CPU5}'s research pool", f"research run --on auto: it starts now on {CPU5}'s research pool",
+        f"research: run {launched[1]['run_id']} launched on {CPU5}"]
+    assert said[2] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[3], "the second placement says why the first is out"
+    assert docs[CPU1] == pool(slot("r0"), slot("r1")), "what was read is not rewritten"
+
+
+@pytest.mark.parametrize("refusal", [
+    ("Refused", "/src has uncommitted changes; commit them (an unpushed commit is fine) or the snapshot would be mislabeled as HEAD", RAISED),
+    ("Refused", "/workspace/research/src/abc has no .git, as git couldn't reach the machine (RESEARCH_SHIP=stream), and "
+                "tools/verity/check/suites.py needs a git checkout", RAISED),
+    ("SourceNotReady", "source tree manifest mismatch after extraction: 1 missing, 0 extra (e.g. ['a.py']); nothing is READY", RAISED),
+    ("Refused", "3 deliveries of the staged request failed; it may or may not have started: Connection reset by peer", RAISED),
+    ("RunnerFailed", "the runner exited 2 before writing job.json: research run: error: unrecognized arguments: --no-such-flag"),
+    ("RunnerFailed", "the runner could not be started: OSError: [Errno 7] Argument list too long: '/usr/bin/python3'"),
+    ("PreflightFailed", "the machine failed the preflight tools/pre.py (exit 1): no model"),
+    ("Refused", "--custody-r2: no staged key under /workspace/research/requests/r1/custody; the run could not publish its custody"),
+    ("Refused", "machine is exclusively held by run r0 (still live); not starting r1"),
+    ("MemoryNotAvailable", "--mem-gb 64: 12 GB free on the machine"),
+    ("ResearchVersionMismatch", "the research package running on this machine is not the one the launcher shipped")],
+    ids=["a-dirty-checkout", "a-stream-the-launcher-chose", "a-source-not-ready", "a-launch-that-may-have-started",
+         "an-argument-the-runner-rejects", "a-command-too-long-to-start", "a-preflight", "a-missing-key", "an-exclusive-run",
+         "memory", "another-research-package"])
+def test_a_refusal_that_is_the_jobs_own_is_tried_on_no_other_machine(refusal, tmp_path, monkeypatch, capsys):
+    """Only a refusal raised where the machine failed to start a run, whatever the job, moves a launch on. One that reads
+    the job (its checkout, its command, its keys), the machine's rules and admission, or a launch that may have started,
+    would be refused wherever it went, or must not run twice: it stays one refusal, where the same launch refused as the
+    machine's goes on to the next."""
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
+    answers = {CPU1: refusal, CPU5: None}
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, answers)
+    assert main(RUN) == 3
+    assert [kw["machine_name"] for kw in launched] == [CPU1]
+    err = capsys.readouterr().err
+    assert "passed over" not in err and refusal[1] in err
+    answers[CPU1] = ("CannotStart", NOT_STARTED)
+    assert main(RUN) == 0 and [kw["machine_name"] for kw in launched[1:]] == [CPU1, CPU5], "the machine's own moves the same launch on"
+
+
+def test_on_auto_gives_up_with_each_reason_once_three_machines_in_turn_can_start_no_run(tmp_path, monkeypatch, capsys):
+    """A fault that is the launcher's own, read as each machine's, would send one job round every machine there is. The
+    machines that may refuse one launch so are counted (auto.TRIES): then it is refused, with each machine and its reason."""
+    nodes = [f"vy-nebius-cpu-{i}" for i in range(1, 6)]
+    docs = {N2: share(free=48), **{m: pool(*(slot(f"r{j}") for j in range(6 - i))) for i, m in enumerate(nodes)}}
+    whys = {m: f"the runner could not be started: OSError: [Errno {70 + i}] fault {i}" for i, m in enumerate(nodes)}
+    launched, asked = _on_auto(monkeypatch, tmp_path, docs, {**{m: ("CannotStart", w) for m, w in whys.items()}, N2: None})
+    assert main(RUN) == 3
+    assert [kw["machine_name"] for kw in launched] == nodes[:3] and len(asked) == 1, "the fourth and fifth, and node 2, are not tried"
+    assert len({kw["run_id"] for kw in launched}) == 3 == auto.TRIES, "each try is a run of its own"
+    err = capsys.readouterr().err
+    assert err.count("research run --on auto: passed over ") == 2 and " launched on " not in err
+    assert (f"research run --on auto: refused: each machine it tried can start no run, and it tries at most 3: "
+            f"{'; '.join(f'{m} ({whys[m]})' for m in nodes[:3])}. Give it a machine that starts runs yourself: "
+            f"`research run --on MACHINE`") in err.splitlines()
+    monkeypatch.setattr(auto, "TRIES", 1)
+    assert main(RUN) == 3 and len(launched) == 4 and "passed over" not in (err := capsys.readouterr().err)
+    assert f"refused: each machine it tried can start no run, and it tries at most 1: {nodes[0]} ({whys[nodes[0]]}). " in err
+
+
+def test_on_auto_with_no_machine_left_to_try_is_refused_with_why_each_was_passed_over(tmp_path, monkeypatch, capsys):
+    """Fewer machines than the count: once each that fits has refused the launch, placement itself refuses it, and its
+    reason names every machine passed over."""
+    docs = {N2: DOWN, CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
+    why = "the runner could not be started: FileNotFoundError: [Errno 2] No such file or directory: '/usr/bin/python3'"
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, {CPU1: ("CannotStart", NOT_STARTED), CPU5: ("CannotStart", why)})
+    assert main(RUN) == 3 and [kw["machine_name"] for kw in launched] == [CPU1, CPU5]
+    last = capsys.readouterr().err.splitlines()[-1]
+    assert last.startswith(f"research run --on auto: refused: {N2} is down: ") and f"no pool fits and {N2} takes no job" in last
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {NOT_STARTED}; " in last
+    assert f"{CPU5}'s research pool skipped: {auto.NO_START}: {why}: " in last
+
+
+def test_a_node_2_whose_queue_starts_no_run_is_passed_over_for_a_pool_and_refuses_a_gpu_job(tmp_path, monkeypatch, capsys):
+    """Node 2's queue starts a run as a pool does. A job a pool fits goes on to the pool's line; a GPU or quiet job, which no
+    other node runs, is refused once with the reason, and is launched nowhere else."""
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    launched, asked = _on_auto(monkeypatch, tmp_path, {N2: share(free=48), CPU1: full}, {N2: ("CannotStart", NOT_STARTED), CPU1: None})
+    assert main(RUN) == 0
+    assert [(kw["machine_name"], bool(kw["queue"])) for kw in launched] == [(N2, True), (CPU1, False)] and asked == [{}]
+    err = capsys.readouterr().err
+    said = f"{N2} takes no job: {auto.NO_START}: {NOT_STARTED}"
+    assert f"research run --on auto: passed over {N2}, which can start no run ({NOT_STARTED}); placing the job again without it" in err
+    assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and f" ({said}; " in err
+    assert main([*RUN[:3], "--gpus", "1", "--", "nvidia-smi"]) == 3
+    assert [kw["machine_name"] for kw in launched[2:]] == [N2] and asked[1:] == [{"node_only": True}]
+    assert f"research run --on auto: refused: {said}, and a GPU or quiet job runs on no other node" in capsys.readouterr().err
+
+
+def test_a_launch_that_names_its_run_is_refused_once_and_says_what_places_it_again(tmp_path, monkeypatch, capsys):
+    """A second launch needs a run id of its own, and --id gave the one there is to the machine that refused it."""
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, {CPU1: ("CannotStart", NOT_STARTED), CPU5: None})
+    rid = "r20300101-000000-abcd"
+    assert main([*RUN[:3], "--id", rid, "--", "pytest", "-q"]) == 3 and [kw["run_id"] for kw in launched] == [rid]
+    assert (f"research run --on auto: {CPU1} can start no run, and --id {rid} names the run it refused: without --id the job is "
+            f"placed on another machine") in capsys.readouterr().err

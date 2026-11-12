@@ -19,9 +19,9 @@ each suite in its own process from its own directory, and `check` runs the same 
 
 Suites run remotely through `research run --on auto` (AGENTS.md "Tests"). Its launch says where the job went, why, and
 when it should start (`research inspect RUN` says it again on the VM that launched it), and warns when that is over 10
-minutes away (`research/auto.py`). Give it `--cwd source`, so the job runs in the shipped tree rather than its run
-directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. `research status RUN`
-checks back on it.
+minutes away (`research/auto.py`). A machine that can start no run takes no job: the launch passes over it for the next,
+saying which and why. Give it `--cwd source`, so the job runs in the shipped tree rather than its run directory, and
+`uv sync` that tree first: `suites.py` refuses another checkout's environment. `research status RUN` checks back on it.
 
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"

@@ -17,7 +17,7 @@ def clock : ℚ≥0 := 2430 * 10 ^ 6
 /-- The table of the card file `rtx-pro-6000-server.toml`. -/
 def card : Card where
   size
-    | .reg => 188 * (65536 + 3371)
+    | .reg => 188 * (65536 + 4187)
     | .smem => 188 * 32768
     | .l2 => 128 * 2 ^ 20 / 4
     | .dram => 96 * 2 ^ 30 / 4

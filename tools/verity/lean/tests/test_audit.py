@@ -5006,8 +5006,8 @@ NCI_CONSTANTS = {"Nci.admissible": ("def", "admissible"), "Nci.values": ("def", 
 
 def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_says_it_names():
     """A dotted name that ends in a field on a variable (`D.D.Trace`, `Verity.Circuit.Trace D.D` by field notation) is
-    renamed where `--moved` moved the constant the build says that field stands for (`fields`): Nci's two premises over a
-    trace, as the lock keyed them before `Verity.Circuit.Transcript` moved, take their entries' places with no hand edit,
+    renamed where `--moved` moved the constant the build says that field stands for (`fields`): two premises over a
+    trace, as a lock keyed them before `Verity.Circuit.Transcript` moved, take their entries' places with no hand edit,
     and `--update` keys them as printed. Without the move, or with no constant the build reports for the field, each
     fails and `--update` drops it."""
     for d in "Dd":

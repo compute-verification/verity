@@ -42,11 +42,19 @@ about so many minutes behind the line it joins, or that nothing read gives an es
 START_WITHIN_MIN is late. Its launch says so in one line; under REFUSE it is refused at once instead, with the ways on:
 `research run --accept-wait` queues it anyway, and `smaller` names the smaller request that starts now.
 
+A machine that can start no run takes no job: its idle slots are idle because nothing starts there, so every launch would
+be sent to it. The probe tries what a launch needs whatever the job (`no_start`): NULL_DEVICE is a character device its user
+opens to read and write, as the runner's start does, and GIT answers. A machine that fails is shut out with the reason
+(NO_START), as one under a disk floor is, and node 2 is then `closed`. What the probe can't see, the launch finds: a
+machine that refuses a launch as one that can start no run (remote.CannotStart) is passed over, and the job is placed again
+from the same documents with that machine shut out (`passed_over`), until TRIES machines have refused it so; then the
+launch is refused with each one's reason. Any other refusal is the launch's answer, and it is tried nowhere else.
+
 Node 2 takes no `--on auto` job while it is held: until the time in its HOLD_FILE, which infra writes with the reason when one
 lane has the whole node. `choose` then treats it as a node 2 that is down, and the launcher is told until when and why (`off`).
 A stopped node 2 costs a launch NODE_CONNECT_S: its probe's ssh gives up connecting after that long, beside the pools' probes,
 and the placement says once that node 2 is down. A GPU or quiet job, which the queue alone books and no pool runs, asks node 2
-alone and is refused while it is held or down (`closed`).
+alone and is refused while it is held, down or starts no run (`closed`).
 """
 from __future__ import annotations
 
@@ -83,6 +91,13 @@ HOLD_FILE = "/etc/vy/auto-hold"
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
 #: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
 DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
+#: what a launch needs of a machine whatever the job, which the probe tries (its `no_start`): the null device, which the
+#: runner's start opens to read and write and git opens before it does anything, and git, which ships a tree as a checkout
+NULL_DEVICE, GIT = "/dev/null", "git"
+#: how a machine that can start no run is worded where it is shut out, by its probe or after it refused a launch (`passed_over`)
+NO_START = "no run starts there"
+#: the machines that may refuse one `--on auto` launch as machines that can start no run before the launch gives up
+TRIES = 3
 #: a pool where a waiter the job would stand behind (`_behind`) has waited this long beside a free slot is stalled on memory and
 #: takes no job (`_pool`), nor does one whose every fitting slot is idle and blocked with slot.py's memory reason, which contains
 #: MEMORY_BLOCK
@@ -128,7 +143,7 @@ class Unplaceable(Exception):
     isn't up (a stopped node 2 refuses an `--on auto` job too big for a pool slot with a stale admission window)."""
 
 PROBE = '''
-import json, os, sys, types
+import json, os, stat, subprocess, sys, types
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -226,14 +241,35 @@ def disk_short():
     return None
 
 
+def no_start():
+    try:
+        fd = os.open(NULL, os.O_RDWR)
+    except OSError as e:
+        return f"{NULL} can't be opened to read and write ({type(e).__name__}: {e.strerror})"
+    try:
+        if not stat.S_ISCHR(os.fstat(fd).st_mode):
+            return f"{NULL} is not a character device"
+        r = subprocess.run([GIT, "--version"], stdin=fd, capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"`{GIT} --version` gave no answer ({type(e).__name__}: {e})"
+    finally:
+        os.close(fd)
+    if r.returncode:
+        said = (r.stderr or r.stdout).decode(errors="replace").strip().splitlines()
+        return f"`{GIT} --version` exited {r.returncode} ({said[-1] if said else 'no output'})"
+    return None
+
+
 out = {}
+dead = no_start()
 if SHARE is not None:
-    out["share"] = doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
+    out["share"] = {"no_start": dead} if dead else doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
 short = disk_short()
+shut = f"{NO_START}: {dead}" if dead else f"disk: {short}" if short else None
 if LEAN_SRC:
     out["lean"] = doc(lean_slots)
 for pool, slots in POOLS.items():
-    out[pool] = {"error": f"disk: {short}"} if short else doc(lambda: pool_doc(pool, slots))
+    out[pool] = {"error": shut} if shut else doc(lambda: pool_doc(pool, slots))
 print(json.dumps(out))
 '''
 
@@ -291,7 +327,7 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: f
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
             "HOLD": HOLD_FILE, "NOW": now,
             "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
-            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS}
+            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS, "NULL": NULL_DEVICE, "GIT": GIT, "NO_START": NO_START}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -314,11 +350,13 @@ def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
 
 
 def closed(n2: Any) -> str | None:
-    """Why node 2 is closed to every `--on auto` job, a GPU or quiet one included, from its answer to `read`: it is down, or
-    HOLD_FILE holds it. None otherwise."""
+    """Why node 2 is closed to every `--on auto` job, a GPU or quiet one included, from its answer to `read`: it is down, it
+    can start no run (NO_START), or HOLD_FILE holds it. None otherwise."""
     if isinstance(n2, str) and n2.startswith(NO_SSH):
         return f"{AUTO_NODE} is down: {n2}"
     share = n2.get("share") if isinstance(n2, dict) else None
+    if isinstance(share, dict) and share.get("no_start"):
+        return f"{AUTO_NODE} takes no job: {NO_START}: {share['no_start']}"
     if isinstance(share, dict) and isinstance(hold := share.get("hold"), dict):
         until = f"until {hold['until']}" if hold.get("until") else f"while it carries {HOLD_FILE}"
         return f"{AUTO_NODE} takes no `--on auto` job {until}" + (f": {hold['why']}" if hold.get("why") else "")
@@ -337,11 +375,20 @@ def off(n2: Any) -> str | None:
     return None
 
 
+def passed_over(machine: str, why: str) -> dict:
+    """The documents of a ``machine`` that refused a launch as one that can start no run (``why``), as its probe gives them
+    when it finds that itself (`read`): `choose`, `expect`, `smaller` and `closed` then shut it out with the reason, and the
+    job is placed again from the documents already read, with no second probe."""
+    return {"share": {"no_start": why}} if machine == AUTO_NODE else {SPILL_POOL: {"error": f"{NO_START}: {why}"}}
+
+
 def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None,
          now: float | None = None, node_only: bool = False, lean: bool = False) -> dict[str, dict | str]:
     """Each machine's documents (node 2's under "share", a pool's under its name), read at once, or why they couldn't be. Node
-    2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`). With `node_only`, node 2 alone is asked;
-    with `lean`, each machine's Lean slots too, under "lean" (lean_slot.py's status document)."""
+    2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`). A machine that can start no run (the
+    probe's `no_start`) says why in place of each: node 2's share is `{"no_start": why}`, a pool's document an error in
+    NO_START's words. With `node_only`, node 2 alone is asked; with `lean`, each machine's Lean slots too, under "lean"
+    (lean_slot.py's status document)."""
     reach, run = reach or _reach, run or _ssh
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
