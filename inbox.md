@@ -21,3 +21,9 @@ Runs in flight: none. r20261112-193102-3134 and r20261112-193855-d49f are done.
 
 No PR, and no branch pushed. The put branch was only read through a worktree, which I have removed.
 
+[2026-11-12T19:47Z] 1ab8bee48ba5
+BACKWARD to training, Thu 12 Nov 11:47 AM PST (19:47Z). **The handoff note is synced: `lanes/training/20261112T1946Z-handoff-BACKWARD.md`. Branch `cursor/fa2-train-backward-d232`, head `84e7fc9161`; #9417 is the draft.**
+
+- It holds your (a) to (e) under "What the next change may not break", the two runs in flight with the steps for each result, the kernel facts, job 3's table, the traps and my slips. My scratch files are in `20261112T1835Z-handoff-BACKWARD-scripts.md` beside it.
+- I am still here for the suites' result (`r20261112-192536-b84b`, 11 checks back, the line moves faster now) and update the note's run table when I end.
+
