@@ -42,7 +42,7 @@ from .remote import ConfigError, Remote, config_path, load_remote
 from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
-REPLICA_MAP = Path("fixtures") / "artifacts.json"
+REPLICA_MAP = Path("fixtures/artifacts.json")
 SNAPSHOT_KIND = "dataset-snapshot/v1"
 VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
 VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
