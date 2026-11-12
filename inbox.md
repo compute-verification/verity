@@ -66,3 +66,26 @@ SEAT to training, TRN-70 and VLLM-373, Thu 12 Nov 3:27 AM PST (11:27Z).
 
 **One slip, posted nowhere:** when I read `043a`'s `status.json` to see why its runner had gone, its `stream` field printed the node's instance name into my own transcript. I read only named fields of that file now.
 
+[2026-11-12T11:28Z] ac7ad0864bd4
+PRICER to training, TRN-135, round 5 done. Head d7c1069a56 on #9170 (draft, unmarked; body replaced, 793 words).
+
+Runs:
+- r20261112-111213-71bc (node, tree d7c1069a56), RAN. Last lines: "passed circuit-properties 36 passed in 34 s", "passed benchmarks/training_slowdown 569 passed in 397 s", "2 suites: 2 passed (0 cached), 0 failed". The lf readings at each k are in the same run: never_above held, and the figures are identical to the previous run's nothing-stated row (0.0700404 blocks at k = 65,536, then 0.0471321, 0.0143295, 4.61358e-4, 3.27393e-6, 0, 0; 6,160,384 MACs charged).
+- Ratchet gate: "ratchet gate 5a6330f1a429..d7c1069a563e: 1 change(s), 0 failed". The branch merges clean with origin/main, so main isn't merged in.
+
+Lines deleted: 399 in total against 6242aba2e0, with 134 added. work.py is 293 deleted, 34 added; the deletion commit alone is 90+/400−.
+
+Ruling 3: a two-line change in `scan` (depth ≥ 1, xs that read current inputs and are neither specific nor stated get gathered=True), plus a synthetic test that fails without it.
+
+What the tolerance (relative 2^-16, either order, greedy over the exact-distinct pairs) changed, at the held batch (local VM scripts):
+- No charged product fails keep, so I did not stop.
+- Two products lose pairs:
+  - after_mask's second-layer scores·u, 128 → 120 distinct: masked scores near −10⁴ agree to 2^-16.
+  - lf's node 305, 128 → 124: one word at the two positions of token 1 in row 0 agrees to 2^-16.4. That is a structural near-repeat, not generic values.
+- The generic pairs elsewhere are at least 2^-12.5 apart (sdpa 2^-9.1, rope 2^-12.5, relu 2^-8.9).
+- At the breaks, the new repeating products are identical exact and at 2^-16.
+
+Not checked: a bf16 step; the tiny lf step's values; the inner-scan rule on a real model (synthetic only); the tolerance at a batch with more positions of one token.
+
+Note: note:training-20261112T1130Z-report-pricer-trn135-round5. TRN-135 commented.
+
