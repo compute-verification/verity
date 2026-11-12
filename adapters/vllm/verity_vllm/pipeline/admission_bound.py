@@ -44,6 +44,8 @@ from verity_vllm.acquire.sources.hidden_source import (
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.pipeline.telemetry import admission as plan
 
+__all__ = ["admission", "committer_resident"]
+
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes
 
