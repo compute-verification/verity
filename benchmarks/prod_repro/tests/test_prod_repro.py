@@ -899,7 +899,8 @@ class Loader:
             raise ValueError(self.refuse)
         return {"requests": 32, "steps": 2040, "tick": self.tick, "arrivals": {"plain": 230},
                 "kept_count": {"K": 5, "rows": 5143, "counts": [665, 553, 442, 257, 150, 3076], "entropy": 1.8400717745206507,
-                               "max": 2.584962500721156, "charged": 9463.489136359707, "derived": 0}}
+                               "max": 2.584962500721156, "alone": 9463.489136359707, "charged": 6997,
+                               "ideal": 6995.721295001329, "derived": 0}}
 
 
 def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays_loader_charges_it(
@@ -917,17 +918,18 @@ def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays
     a, b = rid(f"{LOAD}1", 0), rid(f"{LOAD}1", 1)
     assert loader.span_ids == [a, b] and loader.tokens == {a: [0, 1, 7, 0], b: [1, 2, 7, 1]}
     # the charged figure first; the kept count's own figures as the loader gives them
-    assert ("advice: 302.9 bits a request charged (32 requests): the arrivals 7.2 (0 under the certified tick, which this "
-            "serve is not under), the kept count 295.7\n"
+    assert ("advice: 225.8 bits a request charged (32 requests): the arrivals 7.2 (0 under the certified tick, which this "
+            "serve is not under), the kept count 218.7 (5,143 rows at 1.360 bits, its code decoded back; each count alone "
+            "295.7, not sent)\n"
             "  the kept count over the pass, as the scheduler replay's loader gives it: K 5, rows 5,143, counts [665, 553, "
-            "442, 257, 150, 3076], entropy 1.840, max 2.585, charged 9,463.489, derived 0\n"
+            "442, 257, 150, 3076], entropy 1.840, max 2.585, alone 9,463.489, charged 6,997, ideal 6,995.721, derived 0\n"
             "  the kept count is 0 where the audited block derives it, and no Definition holds the accept test yet\n"
             "  no request was sampled, so no seed is read\n"
             "  the pass: record's burst rep 1, the one the replay re-ran; 2,040 steps, each reproduced by the scheduler "
             "replay\n") in txt
     assert txt.endswith("prod_repro: 3 of 3 lines measured\n")
     v = r["advice"]
-    assert v["bits"] == 230 + 9463.489136359707 and v["kept_count"]["counts"][5] == 3076 and v["arrivals_sent"] == 230
+    assert v["bits"] == 230 + 6997 and v["kept_count"]["counts"][5] == 3076 and v["arrivals_sent"] == 230
     assert v["window"] == {"arm": "record", "lifetime": None, "load": LOAD, "rep": 1, "run": "r-1", "replayed": True}
     assert v["seeds"] == {"sampled": 0, "unseeded": 0, "by_client": False}
     # the seeds are the pass's own arrivals': the client's, in an arrival, or in no record
@@ -942,8 +944,8 @@ def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays
         "its kept count is not derived and its tokens cannot be replayed")
     # a serve under the certified tick sends no arrivals: the kept count alone is charged
     monkeypatch.setattr(P, "encodings", lambda: Loader(tick=True))
-    assert ("advice: 295.7 bits a request charged (32 requests): the arrivals 0.0 (under the certified tick, which sends "
-            "none), the kept count 295.7\n") in run(out)[1]
+    assert ("advice: 218.7 bits a request charged (32 requests): the arrivals 0.0 (under the certified tick, which sends "
+            "none), the kept count 218.7 (5,143 rows at ") in run(out)[1]
     # a pass the scheduler replay does not reproduce, or a serve with no draft, is the loader's refusal
     monkeypatch.setattr(P, "encodings", lambda: Loader(refuse="the replay diverges from the trace at step 41 (41/2040 steps match)"))
     _, txt, r = run(out)
@@ -978,8 +980,7 @@ def test_under_research_run_the_runs_result_names_what_the_report_rests_on(tmp_p
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-1")
     run(out)
     doc = json.loads((tmp_path / "result.json").read_text())
-    files = ["out/prod_repro.json", "out/prod_repro.txt", "out/record/server/step_trace.9.jsonl.gz",
-             "out/replay-compiled/replay.json", "out/replay-compiled/replay_steps.jsonl", "out/replay-compiled/replay_tokens.jsonl.gz"]
+    files = ["out/prod_repro.json", "out/prod_repro.txt", "out/replay-compiled/replay.json"]
     assert doc["artifacts"] == files and (doc["schema"], doc["run_id"]) == ("research/result/v0.1", "r-1")
     assert doc["validation"] == {
         "status": "passed", "checker": "verity bench prod_repro", "evidence": ["out/prod_repro.json"],

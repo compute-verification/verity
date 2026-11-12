@@ -38,8 +38,9 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   (`serve_tax.tax`), which is a cost only where stock did not keep up with the arrivals; that has no verdict;
 - ``advice``: what the schedule of the pass the replay re-ran costs as advice, in bits a request, by the scheduler
   replay's loader (`ENCODINGS`: its ``draft_table`` of that pass's records): the arrivals, which a serve under the
-  certified tick does not send, and the count of drafts each row kept, charged at its measured entropy, with the
-  figure where the audited block derives the count beside it; and how the pass's sampled requests were seeded.
+  certified tick does not send, and the count of drafts each row kept, charged at the bits of its code, which the
+  loader builds and decodes back, with the figure where the audited block derives the count beside it; and how the
+  pass's sampled requests were seeded.
 
 A line is measured from the job's files, or it says ``not measured`` and why; a line whose files can't be read says
 so and the rest of the report stands. Nothing here measures: the metrics, the cost and its interval, the comparison
@@ -49,7 +50,7 @@ was served, naming each differing request and its first position, and where a re
 failure, and the last line counts the lines that are measured.
 
 Under research run, where OUT is the run's own out/, the run's result.json names what the report rests on among its
-artifacts (`declare`: the report, the replay's record, the replayed pass's served ids and step trace).
+artifacts (`declare`: the report's two files and the replay's record).
 
 ``arms`` prints the three arms a job serves by default (`default_arms`): the arms at vLLM's published serving settings
 (`PROD`) for a model whose recipe the benchmark holds, else stock compiled vLLM, stock again and the step record
@@ -691,9 +692,9 @@ def advice(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path) -
     tokens line compares (`replayed_dir`), costs as advice, in bits over the pass, as the scheduler replay's loader
     gives it (`ENCODINGS`: ``draft_table``): ``arrivals``, the residual advice of when each request arrived, which a
     serve under the certified tick does not send, and ``kept_count``, the drafts each row kept, as the loader's dict
-    has it (``charged`` at its measured entropy over the rows that verified drafts, ``derived`` where the audited
-    block computes it). ``bits`` is what is charged: the arrivals, unless the serve is under the tick, and the kept
-    count's ``charged``. Not measured where ours holds no such pass or it can't be read back, or where the loader
+    has it (``charged``, the bits of the code it builds and decodes back; ``alone``, the counts' entropy over the rows
+    that verified drafts, which is not sent; ``derived`` where the audited block computes it). ``bits`` is what is
+    charged: the arrivals, unless the serve is under the tick, and the kept count's ``charged``. Not measured where ours holds no such pass or it can't be read back, or where the loader
     refuses it: a schedule its replay does not reproduce, which it names the step of, or a serve with no draft."""
     arm_dir = replayed_dir(dirs, replay_dir)
     if arm_dir is None or not (arm_dir / load / f"rep-{rep}" / "meta.json").is_file():
@@ -785,21 +786,19 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
 RESULT = "research/result/v0.1"
 
 
-def outputs(out: Path, ours: str, replay_dir: Path) -> list[str]:
-    """What a job's report rests on, as paths from the run's directory (``out``'s parent): the report, the replay's
-    record with the tokens and steps it kept, and the served ids and step trace of ours's directory the replayed
-    pass is in (`replayed_dir`). Only the files that are there."""
-    arm = replayed_dir(arm_dirs(out, ours), replay_dir) if replay_dir.is_dir() else None
-    files = [out / "prod_repro.txt", out / "prod_repro.json", *sorted(f for f in replay_dir.glob("replay*") if f.is_file()),
-             *(sorted(f for kind in ("ids", "step_trace") for f in (arm / "server").glob(f"{kind}.*.jsonl*")) if arm else [])]
+def outputs(out: Path, replay_dir: Path) -> list[str]:
+    """What a reader of a job looks for first, as paths from the run's directory (``out``'s parent): the report's two
+    files and the replay's record, where they are there. The rest of out/ (the replayed pass's ids and step trace
+    among it) is in the run's record whole, and is not named."""
+    files = [out / "prod_repro.txt", out / "prod_repro.json", replay_dir / "replay.json"]
     return [str(f.relative_to(out.parent)) for f in files if f.is_file()]
 
 
 def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
     """Under research run, where ``out`` is the run's own out/: the run's result.json names `outputs` among its
-    artifacts, so the store keeps them as the run's files. A result the benchmark's cost wrote stays as it is with
-    them added; a job that has none, one that served ours alone, gets one whose validation is the tokens line's.
-    None for an out/ that is not the run's, which is another job's read again."""
+    artifacts, so a reader finds them as the run's files without listing its record. A result the benchmark's cost
+    wrote stays as it is with them added; a job that has none, one that served ours alone, gets one whose validation
+    is the tokens line's. None for an out/ that is not the run's, which is another job's read again."""
     run_dir = SHARED.RESEARCH_RUN_DIR
     if not run_dir or out.resolve() != (Path(run_dir) / "out").resolve():
         return None
@@ -811,7 +810,7 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
                        "checker": "verity bench prod_repro", "evidence": ["out/prod_repro.json"],
                        "detail": next(x for x in text(r).splitlines() if x.startswith("tokens:"))},
         "measurements": [], "measurement_files": [], "artifacts": []}
-    doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, r["arms"]["ours"], replay_dir)})
+    doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, replay_dir)})
     tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, f)
@@ -971,8 +970,9 @@ def _number(x: object) -> str:
 
 
 def _advice(v: dict) -> list[str]:
-    """The advice line: the charged bits a request first, then its two classes; under it the loader's own figures of
-    the kept count as it gives them, what the count costs where it is derived, and the seeds."""
+    """The advice line: the charged bits a request first, then its two classes, the kept count with its bits a row
+    and, where the loader gives it, what the counts would come to taken each alone; under it the loader's own figures
+    of the kept count as it gives them, what the count costs where it is derived, and the seeds."""
     n, k, s = v["requests"], v["kept_count"], v["seeds"]
     tick = ("under the certified tick, which sends none" if v["tick"] else
             "0 under the certified tick, which this serve is not under")
@@ -986,8 +986,10 @@ def _advice(v: dict) -> list[str]:
                   + ("seed the client's" if s["by_client"] else "with a seed in its arrival"))
     life = f"lifetime {v['window']['lifetime']} of " if v["window"].get("lifetime") else ""
     which = "the one the replay re-ran" if v["window"]["replayed"] else "the one a replay re-runs, and none ran"
+    rows = f"{k['rows']:,} rows at {k['charged'] / k['rows']:.3f} bits" if k.get("rows") else "no row verified a draft"
+    alone = f", its code decoded back; each count alone {k['alone'] / n:.1f}, not sent" if "alone" in k else ""
     return [f"advice: {v['bits_a_request']:.1f} bits a request charged ({n:,} requests): the arrivals "
-            f"{v['arrivals_sent'] / n:.1f} ({tick}), the kept count {k['charged'] / n:.1f}",
+            f"{v['arrivals_sent'] / n:.1f} ({tick}), the kept count {k['charged'] / n:.1f} ({rows}{alone})",
             "  the kept count over the pass, as the scheduler replay's loader gives it: "
             + ", ".join(f"{name} {_number(x)}" for name, x in k.items()),
             f"  {DERIVED}",

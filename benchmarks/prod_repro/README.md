@@ -67,9 +67,9 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
   records out of ours's step trace with each request's prompt ids and served ids.
 
 The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. Under `research run` the run's
-`result.json` names, among its artifacts, the report, the replay's record with the tokens and steps it kept, and the
-served ids and step trace of ours's directory the replayed pass is in, so the store keeps them as the run's files; a
-job with no result of the benchmark's cost (one that served ours alone) gets one whose validation is the tokens line.
+`result.json` names the report's two files and the replay's record among its artifacts, so a reader finds them as the
+run's files; the rest of `out/` is in the run's record whole. A job with no result of the benchmark's cost (one that
+served ours alone) gets one whose validation is the tokens line.
 
 The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
 where a replayed token or step differs from the served one. One kind of served step is no difference, and the report
@@ -146,9 +146,11 @@ replay that differs, the first token that does and the first step.
   the same way.
 - **advice**: the bits a request that the replayed pass's schedule costs as advice, charged: the arrivals (the
   residual advice of when each request arrived, decoded back to the pass's steps; a serve under the certified tick
-  sends none, and no arm here is under it) and the kept count, the drafts each row kept, at its measured entropy over
-  the rows that verified drafts. Under it: the kept count's own figures as the loader gives them (`K`, the rows, the
-  rows that kept each count, the entropy and its most, the bits charged, the bits where it is derived); that the kept
+  sends none, and no arm here is under it) and the kept count, the drafts each row kept, at the bits of a code
+  the loader builds and decodes back to the pass's counts, with its bits a row and, not sent, what the counts' entropy
+  taken each alone would come to. Under it: the kept count's own figures as the loader gives them (`K`, the rows, the
+  rows that kept each count, their entropy and its most, the code's bits and an ideal coder's, the bits where it is
+  derived); that the kept
   count costs 0 where the audited block derives it, which rests on a Definition of the accept test that does not exist
   yet; how the pass's sampled requests were seeded, from each one's own arrival (what a sampled request with no seed
   there was sampled with is in no record: its tokens cannot be replayed); and the pass. The loader's own
@@ -162,7 +164,7 @@ the measured ones and names the arms that were not served whole.
 
 - **The advice line's serve is not under the network certifier.** No arm of this command is served under the
   certifier's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
-  kept count is charged at its entropy: no Definition holds the accept test, so nothing derives it yet. A serve with
+  kept count is charged at its code's bits: no Definition holds the accept test, so nothing derives it yet. A serve with
   no draft (every model but GLM-5.3 here) has no line: the loader's table of a draft's advice is the one read.
 - **The recipe's settings are GLM-5.3's alone.** For every other model the arms are the benchmark's own: speculative
   decoding off and a context limit of 4,096 tokens unless `--max-model-len` is given.
