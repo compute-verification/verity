@@ -383,8 +383,12 @@ def _ref_every(quick: bool) -> int:
 def phase_compress(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dict], list[dict], dict[str, Any]]:
     """`save_partial_states` then `compress_norm_rope_store_triton`, twice on fresh caches: the score and compress records and jobs."""
     import torch
-    from vllm.models.deepseek_v4.common.ops.fused_compress_quant_cache import compress_norm_rope_store_triton
-    from vllm.models.deepseek_v4.common.ops.save_partial_states import save_partial_states
+    from vllm.models.deepseek_v4.common.ops.fused_compress_quant_cache import (
+        compress_norm_rope_store_triton,
+    )
+    from vllm.models.deepseek_v4.common.ops.save_partial_states import (
+        save_partial_states,
+    )
 
     dev = "cuda"
     T = o["pos"].size
@@ -503,7 +507,9 @@ def head_operands(seed: int, dev: str = "cuda") -> tuple[Any, np.ndarray]:
 def phase_inv_rope(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dict], list[dict], dict[str, Any]]:
     """`fused_inv_rope_fp8_quant` (twice) on the first NH heads of a PADDED_HEADS-head buffer."""
     import torch
-    from vllm.models.deepseek_v4.common.ops.fused_inv_rope_fp8_quant import fused_inv_rope_fp8_quant
+    from vllm.models.deepseek_v4.common.ops.fused_inv_rope_fp8_quant import (
+        fused_inv_rope_fp8_quant,
+    )
 
     T = INV_TOKENS
     xb, pos = head_operands(77)
@@ -552,7 +558,11 @@ def phase_logits(work: Path, o: dict[str, Any], cst: dict[str, Any], quick: bool
     """The prefill gather, `fp8_fp4_mqa_logits` and `fp8_fp4_paged_mqa_logits` on request 0's compressed cache."""
     import torch
     from vllm import _custom_ops as ops
-    from vllm.utils.deep_gemm import fp8_fp4_mqa_logits, fp8_fp4_paged_mqa_logits, get_paged_mqa_logits_metadata
+    from vllm.utils.deep_gemm import (
+        fp8_fp4_mqa_logits,
+        fp8_fp4_paged_mqa_logits,
+        get_paged_mqa_logits_metadata,
+    )
     from vllm.utils.platform_utils import num_compute_units
 
     cache = cst["kcache"]

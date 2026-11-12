@@ -216,7 +216,10 @@ def _raw_scales(ws) -> np.ndarray:
 def _kernel(K: int, N: int):
     import torch
     from vllm.model_executor.kernels.linear import init_fp8_linear_kernel
-    from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key
+    from vllm.model_executor.layers.quantization.utils.quant_utils import (
+        GroupShape,
+        create_fp8_quant_key,
+    )
 
     return init_fp8_linear_kernel(activation_quant_key=create_fp8_quant_key(static=False, group_shape=GroupShape(1, GROUP)),
                                   weight_quant_key=create_fp8_quant_key(static=True, group_shape=GroupShape(GROUP, GROUP)),
