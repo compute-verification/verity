@@ -322,12 +322,13 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
 
 def summed(windows: list[dict], *, hbm_bytes: int, block_bytes: int, delta: float, labels: bool, kv_credited: bool,
            chip_bytes: int) -> dict:
-    """`memory`'s session line from its windows: the worst window's in each form, against `hbm_bytes`."""
+    """`memory`'s session line from its windows: the worst window's in each form, against `hbm_bytes`.  Its `delta`
+    (and the `error` a ledger adds, `memory_error`) reads `ledger.DELTA_FORM`: `named` is the term it leaves out."""
     worst = min(windows, key=lambda x: x["credited"]["hbm"])
     credited = worst["credited"]["hbm"]
     average = average_line([x["average"] for x in windows])
     return {"form": WORST_PASS, "hbm_bytes": hbm_bytes, "block_bytes": block_bytes, "delta": delta,
-            "labels": labels, "kv_credited": kv_credited, "chip_bytes": chip_bytes,
+            "named": ledger.NAMED_TERMS, "labels": labels, "kv_credited": kv_credited, "chip_bytes": chip_bytes,
             "credited_bytes": credited, "share": credited / hbm_bytes, "residual": 1 - credited / hbm_bytes,
             "epsilon": worst["epsilon"], "window": worst["window"],
             "weights_bytes": min(x["credited"]["weights"] for x in windows),
@@ -377,8 +378,9 @@ def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
     horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
     commitment's hiding terms, the receipts' binding term and the sample's rejection (`ledger.hiding`, `ledger.binding`,
-    `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  None when no
-    reading has a ledger."""
+    `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  It leaves
+    out the windows' PRF advantages, which the record names beside it (`ledger.NAMED_TERMS`, `ledger.DELTA_FORM`).
+    None when no reading has a ledger."""
     for name in ("spec", "measured"):
         if "error" in ledgers.get(name, {}):
             d = ledgers.get("delta", {})
@@ -402,7 +404,7 @@ def sketch_at(session: dict, registration: dict, outside: int | None = None) -> 
     d = timing.sketch_failure(c, inputs["passes"], inputs["rows"], blocks=registration["blocks"], outside=f)
     horizon = next((lg[n]["error"]["horizon"] for n in ("spec", "measured") if "error" in lg.get(n, {})), None)
     return {"outside": f, "compressions": c, "queries": f * c, "log2": timing.log2(d),
-            "error": None if horizon is None else horizon + float(d)}
+            "error": None if horizon is None else horizon + float(d), "named": ledger.NAMED_TERMS}
 
 
 def node_line(mem: dict, *, host_bytes: int) -> dict:
@@ -1438,6 +1440,8 @@ class Verifier:
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
+        No δ or error here holds the windows' PRF advantages: each reads `ledger.DELTA_FORM`, and `named`
+        (`ledger.NAMED_TERMS`) is that term, beside `delta` and in each object that carries a δ or an error.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
         there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
@@ -1485,11 +1489,13 @@ class Verifier:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
             whole = r * record.span_ns / 1e9
-            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "certified_bytes": (1 - g.gamma) * whole,
+            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
+                         "certified_bytes": (1 - g.gamma) * whole,
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
                 out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
         out["delta"] = ledger.delta_parts(record, stated)
+        out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
