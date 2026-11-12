@@ -10,7 +10,13 @@ from typing import Any
 
 import pytest
 
-from tests.pipeline.test_serve_openai import Committer, Engine, Runner, Tokenizer, records
+from tests.pipeline.test_serve_openai import (
+    Committer,
+    Engine,
+    Runner,
+    Tokenizer,
+    records,
+)
 from verity_vllm import settings
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
@@ -41,7 +47,8 @@ class Bounded(Committer):
     def __init__(self, runner: Runner, budget_mb: float) -> None:
         self.learn_only, self.learn_budget_bytes = False, int(budget_mb * (1 << 20))
         self.plans: dict[Any, int] = {}
-        self.run, self.used, self.steps = 0, False, []
+        self.run, self.used = 0, False
+        self.steps: list[tuple[int, int, str]] = []
         super().__init__(runner)
 
     def reset(self) -> None:
