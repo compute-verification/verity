@@ -66851,3 +66851,60 @@ When `9e35` ends I give you the SUITES line in its final form: "on the head abov
 - MAINMERGE's commit itself, and its own tries.
 
 **For the table:** LEAN-249, ours: commit `e00ebe7b085f735860d764200bf5c7e14a528987` on `cursor/proofs-crossed-tests-fba7` (parent `3ff11d118f93`), one file; run `r20261112-013251-8c03`, 890 passed, 0 failed; cause of the two: #8839 removed the measurement step and the branch's own H1_TIE test still expected it. Rename: 12 lines, all binder types in headers, no listed guarantee reads them; commit not named yet; try `r20261112-014551-a26e` running since 01:46Z.
+
+## FLOCKPKG, Thu 12 Nov 01:52Z: all six records runs passed and #9042's body says so; #9042 at `00963f010905` merges onto `main` `be9a3d566905`, the merged tree builds, and ci's candidate `62bf29346f76` (01:33Z) holds it with #8949. #9057 was ejected by ci at 01:15Z (my miss), is mended on its branch at `ad9b7db26798` by a push that is not mine, and its quick tier at that head is out: six runs in line, verdict about 03:15Z
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed], [guess]. Times from `date -u`.
+
+**1. The six records runs: all six passed** [run: `research status` and each run's `result.json`, 01:25Z]. Each is at `00963f010905e7c1f321d18efcb65b4f5df32056`, done, rc 0, its package `pass` on this head's Lean inputs, nothing regenerated (no file under `lean-audit/record/`).
+
+- `r20261111-211911-7181`: `verity/protocols/recursion/verifier/firewall`, ended 21:55Z Wed
+- `r20261111-211955-690d`: `verity/definitions/evaluate`, 21:53Z
+- `r20261111-212014-5f39`: `verity/protocols/inference_only/verifier/nci/lean`, 21:53Z
+- `r20261111-212033-7bf7`: `verity/difftest/lean`, 22:33Z
+- `r20261111-212104-f37e`: `verity/commitments/identity`, 22:36Z
+- `r20261111-212120-3173`: `verity/definitions/requirement`, 22:37Z
+
+So every one of the seventeen packages whose lock the branch changed against `main` at the mark has a pass on this head's Lean inputs. The line is in #9042's body [run: `research queue edit 9042`, 01:44Z; read back: 12,039 bytes, head unchanged]. The mark stands [run: `research data labels`: `ready=true` by proofs 21:15Z Wed, `reviewed=land` by review-25 21:24Z Wed]. I pushed nothing to the branch and launched nothing twice.
+
+**2. #9042 onto `main` `be9a3d566905`** [run]
+
+- `git merge-tree` of the two: no conflict, tree `f906dc8ae84f`. It differs from `main` in four files: #8949's three (`Flock.lean`, `Flock/ProgramRead.lean`, `FlockVerify.lean`), two of which #9042 also changes, and `Circuits/Program.lean`. No lock and no file under `security/` differs.
+- **The merged tree builds.** `verity lean try FlockVerify.lean --siblings` at a scratch merge of the two (`828444964c23`, not pushed), `r20261112-013258-c530`: done, rc 0, 184 jobs, `Flock.TemplateQuery` and `Flock.ProgramRead` built, no name declared twice (three modules unchecked: `Flock.Sizes`, `Flock.Test.RecCap`, `Flock.Test.RecLinkPart`), and none of its 8 theorems uses an axiom beyond the three. I tried it because #8999, on `main` since, adds `Desc.isInputNode` to `Flock/TemplateQuery.lean`, which `Flock/ProgramRead.lean` imports; `Desc.parseWith`, the reader #9042 copies, is as it was.
+- No records run on the merged tree: one records run a head, and the marked head's are section 1. The candidate's own check covers the merge.
+- With the other ready heads: no conflict with any of the 53 others marked ready at 01:29Z; only #8949 touches its three files.
+
+**3. What is left of the other parent** [run]
+
+- #8789 (`6a3d3ea5da06`) is on `main`.
+- #8949 (`c14e4bd284b1`) is not on `main` yet. It is marked, has review-22's land verdict, has no eject label, and merges onto `main` without conflict (tree `d96419a33e5a`).
+- **Both are in a candidate now.** `queue/62bf29346f76`, made 01:33:13Z on `main` `be9a3d566905`, holds eight: #8977, #9019, #8949, #8934, #9040, #8914, #8773, #9042 [run: `git log --first-parent` of that ref]. In it #9042's three files are byte for byte its head's; `Flock.lean` has one more line, #9040's. I have not read its check's state.
+- #8949's body names no Linear issue (`research queue status` reads `issue: None`). It was admitted so; I change nothing on a marked PR.
+
+**4. #9057: ejected, mended, not marked, tier out**
+
+- **ci's label, 01:15:50Z** [run: `research data labels` at `ae1470567661`]: "red in a077b876b68f … `tests/test_shell_verifier_env.py::test_every_shell_call_of_the_verifier_takes_its_allocator_setting`, the test this PR adds, fails on the tree it lands on (main be9a3d566905 with that batch's other members): a shell call of the verifier there doesn't take the allocator setting."
+- **The cause, and it is my miss** [run: the test on the head merged with `main`]: `benchmarks/verifier_cost/flock_sessions.sh`, lines 78 and 124. It is the script of my own #8902, which landed at 22:26Z Wed. At 20:21Z I ran the new test on the head merged with `main` and with #8789, and not with every ready head that adds a shell command starting the verifier; #8902 was one of the 123 ready heads then.
+- **The mend is on the branch and is not mine** [run: `git log`, my reflog]. Two commits by another agent, pushed 01:31:40Z: `8132b570e2` merges `main` `be9a3d566905`, and `ad9b7db26798a1efd8eb257336cc537471118f66` puts `$(verifier_env)` before the verifier in both commands (the script sources `hidden_zk/job.sh`, which sources the file). I found them at 01:40Z, after making the same two commits here; mine are dropped, never pushed. No entry in this file and no mailbox names who pushed [run: `git grep 9057` on both branches]. **If a second worker holds #9057, say so and I stop.**
+- **On `ad9b7db26798`** [run, 01:44Z]: the new test and the setting's own test, 21 passed; the rule over the whole tree: 419 shell scripts, 16 commands that start the verifier, none without the setting, none in a script that does not source the file, the allowed list not stale; `bash -n` on the script.
+- **Against every open head, which is what I skipped at 20:21Z** [run, 01:37Z, on my local commit; its scripts differ from `ad9b7db26798`'s by two comment lines]: of 181 open pull requests 35 change a shell script. Merged with the mended head, the rule holds for every one that merges, the nine marked ready among them (#8761, #8795, #8969, #8977, #9028, #9042, #9045, #9055, #9068). The 15 that do not merge conflict with `main` alone; none is marked and none adds a command that starts the verifier. The scan is kept as `shell_rule_scan.py` beside my other scripts.
+- **Quick tier at `ad9b7db26798`** [run]: `suites.py --changed be9a3d566905 --quick`, 63 suites, six runs launched 01:47Z after I found no run at that head on any node (01:45Z): `r20261112-014710-10db` (verity-vllm), `-014710-e890`, `-014722-adf4`, `-014734-7bce` (all cpu-12, places 6 to 10 of a line of 11 at 01:52Z), `-014746-3f35` (cpu-10, 2 of 2), `-014758-81d0` (cpu-9, first of 3). Verdict about 03:15Z [guess: the last tier took an hour, and the lines are longer].
+- Then: its body rewritten for the new head (it still describes `ae1470567661` and says it holds #9005, which landed at 23:22Z Wed), and a ready line. I do not mark it.
+
+**5. The two locks, read after each landing (no run)** [run: a scan of `origin/main`'s files]: at `be9a3d566905`, `security/lean-audit.json` reads 98 modules of Flock and `security/Properties/lean-audit.json` 72, and each has its file in Flock's verifier or the release side. No entry names a module that moved.
+
+**6. The allocator rerun: not launched** [run: each node's pool, 01:52Z]. #8789's candidate audit has ended. Every node with 260 GB free has all its slots held and a line behind them (cpu-2 4 of 4, line 2; cpu-5 4 of 4, line 1; cpu-6 4 of 4, line 7; cpu-9 12 of 12, line 3; cpu-11 11 of 11, line 4), so a rerun now would be a second figure from a loaded node. I look at each hourly checkpoint and launch on the first such node with no line. Its inputs survived the restart of my machine. Until it runs, the head figure keeps "one run, loaded node".
+
+**7. What is left, with the hours the stop moved**
+
+- #9057: tier verdict about 03:15Z, then its body and the ready line.
+- #9042: nothing of mine; it lands with or after #8949 in ci's candidate.
+- #8814 and the next branch on Flock's packages: once #8949 is on `main`, as ordered. #8814's merge with `main` conflicted earlier only in `verity/protocols/pous/lean/TRUSTED.sha256`.
+- The allocator rerun: as section 6.
+- My machine restarted inside the stop: its scratch worktrees and fetched runs were lost and are rebuilt; the scripts and entries under my artifacts survived.
+
+**What I need from you:** who pushed `ad9b7db26798` to `cursor/proofs-verifyenv-3b6e`, if it was a worker of yours; nothing else.
+
+For the table:
+- #9042 `00963f010905`, marked: records `pass` for all seventeen packages whose lock it changed (the six small runs all `pass`, nothing regenerated); merges onto `main` `be9a3d566905` and the merged tree builds (`r20261112-013258-c530`); in ci's candidate `62bf29346f76` with #8949 since 01:33Z.
+- #9057: ejected 01:15Z (its own test failed on the tree it landed on: `flock_sessions.sh` started the verifier without the setting); mended at `ad9b7db26798`, not marked; quick tier of 63 suites out, verdict about 03:15Z.
