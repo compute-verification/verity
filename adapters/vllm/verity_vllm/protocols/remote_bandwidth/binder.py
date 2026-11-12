@@ -55,6 +55,8 @@ from verity_vllm.protocols.remote_bandwidth.registry import (
 if TYPE_CHECKING:
     from verity.protocols.poub.verifier.audit import Tiles
 
+__all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
+
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 #: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
 #: V2's name (`vllm.v1.worker.gpu.model_runner`), then the first runner's (`vllm.v1.worker.gpu_model_runner`).
