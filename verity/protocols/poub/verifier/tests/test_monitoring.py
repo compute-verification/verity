@@ -14,7 +14,7 @@ from fractions import Fraction
 import pytest
 
 from verity.protocols import reporting
-from verity.protocols.poub.verifier import audit, codec, coins, ledger, monitoring, period, pooled, receipts, timing
+from verity.protocols.poub.verifier import audit, codec, coins, ledger, monitoring, period, pooled, timing
 
 D0 = Fraction(1, 2 ** 40)
 EPS = Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64)
