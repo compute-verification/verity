@@ -356,7 +356,6 @@
     {"file": "tests/program/test_derive_negative.py", "kind": "var-annotated", "symbol": "<module>", "detail": ""},
     {"file": "tests/program/test_derive_realhf.py", "kind": "assignment", "symbol": "<module>", "detail": "", "count": 2},
     {"file": "tests/program/test_derive_realhf.py", "kind": "attr-defined", "symbol": "_probe_patches", "detail": ""},
-    {"file": "tests/program/test_fp8.py", "kind": "var-annotated", "symbol": "test_fp8_block_promotion_is_ffma_ascending", "detail": "", "count": 2},
     {"file": "tests/program/test_frontend_rulings.py", "kind": "name-defined", "symbol": "test_r1_conflicting_definitions_are_rejected_not_first_wins.NotGemm", "detail": "", "count": 2},
     {"file": "tests/program/test_frontend_rulings.py", "kind": "name-defined", "symbol": "test_r1_two_bodies_in_one_program_are_rejected.LeafA", "detail": ""},
     {"file": "tests/program/test_frontend_rulings.py", "kind": "name-defined", "symbol": "test_r1_two_bodies_in_one_program_are_rejected.LeafB", "detail": ""},
