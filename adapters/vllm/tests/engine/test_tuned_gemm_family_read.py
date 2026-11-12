@@ -32,9 +32,9 @@ def vllm(monkeypatch: pytest.MonkeyPatch) -> fake_vllm.FakeVllm:
 def test_the_family_is_vllms_answer_for_the_capability_as_two_ints(vllm: fake_vllm.FakeVllm) -> None:
     asked: list[tuple[Any, Any]] = []
 
-    def rule(cap: _Capability) -> str | None:
-        asked.append((cap.major, cap.minor))
-        return {(8, 9): "ada", (9, 0): "hopper"}.get((cap.major, cap.minor))
+    def rule(device: _Capability) -> str | None:
+        asked.append((device.major, device.minor))
+        return {(8, 9): "ada", (9, 0): "hopper"}.get((device.major, device.minor))
 
     vllm.set(RULE, rule)
     assert EP._tuned_gemm_arch_family(8, 9) == "ada"
@@ -48,14 +48,14 @@ def test_the_family_is_vllms_answer_for_the_capability_as_two_ints(vllm: fake_vl
 
 def test_a_vllm_that_cannot_say_leaves_the_field_unavailable_and_says_why_at_debug(
         vllm: fake_vllm.FakeVllm, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
-    def fails(cap: _Capability) -> str:
+    def fails(device: _Capability) -> str:
         raise KeyError("no such device")
 
     no_number: Any = "eight"
     with caplog.at_level(logging.DEBUG, logger="verity_vllm"):
         vllm.set(RULE, fails)
         assert EP._tuned_gemm_arch_family(8, 9) == "<unavailable>"
-        vllm.set(RULE, lambda cap: "ada")
+        vllm.set(RULE, lambda device: "ada")
         assert EP._tuned_gemm_arch_family(no_number, 9) == "<unavailable>", "a capability that is no number"
         monkeypatch.setitem(sys.modules, "vllm.model_executor.determinism.batch_invariant_configs", None)
         assert EP._tuned_gemm_arch_family(8, 9) == "<unavailable>", "another vLLM layout: no such module"
@@ -69,7 +69,7 @@ def test_a_vllm_that_cannot_say_leaves_the_field_unavailable_and_says_why_at_deb
 
 def test_a_gpu_record_carries_the_family_of_its_first_device(vllm: fake_vllm.FakeVllm, monkeypatch: pytest.MonkeyPatch) -> None:
     torch = pytest.importorskip("torch")
-    vllm.set(RULE, lambda cap: f"family-of-{cap.major}.{cap.minor}")
+    vllm.set(RULE, lambda device: f"family-of-{device.major}.{device.minor}")
     asked: list[int] = []
 
     def properties(index: int) -> NS:
