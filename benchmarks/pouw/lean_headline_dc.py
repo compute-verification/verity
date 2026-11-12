@@ -63,7 +63,6 @@ or split is not the sheet's.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import math
 import re
@@ -72,7 +71,6 @@ from dataclasses import asdict, dataclass
 from fractions import Fraction
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
 MODEL = Path(__file__).resolve().parent.parent / "machine_model"
 
 # The readings are the machine model's data: an installed verity_machine_model from another checkout would give that
@@ -84,22 +82,12 @@ if Path(verity_machine_model.__file__).resolve().parents[1] != MODEL:
     raise ImportError(f"lean_headline_dc reads {MODEL}'s verity_machine_model, but {verity_machine_model.__file__} "
                       "was imported first: run it in a fresh interpreter, or put that directory first on sys.path")
 
+from verity_machine_model import lean_headline, sheet  # noqa: E402
+from verity_machine_model.model import device  # noqa: E402
 
-def _lean_headline():
-    spec = importlib.util.spec_from_file_location("pouw_lean_headline", HERE / "lean_headline.py")
-    if spec.name not in sys.modules:
-        m = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = m
-        spec.loader.exec_module(m)
-    return sys.modules[spec.name]
-
-
-LH = _lean_headline()
+LH, S = lean_headline, sheet
 E = LH.E
 exact, branches, Q = LH.exact, LH.branches, LH.Q
-
-from verity_machine_model import sheet as S  # noqa: E402
-from verity_machine_model.model import device  # noqa: E402
 
 #: What other files read of it: its own test and `tests/test_census_cover.py`.
 __all__ = ["CATCH_ALL", "CATCH_ALLS", "E", "EPS_DEN", "FAMILIES", "JOINT_ISSUE", "LH", "MODEL", "Q", "SCALAR_REF", "SM90",
