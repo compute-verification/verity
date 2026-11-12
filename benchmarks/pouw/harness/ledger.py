@@ -41,6 +41,14 @@ from verity_config.settings import of
 
 from verity.protocols.pouw.verifier import serving
 
+#: what `verify.py`, the filler's `arms.py` and `score.py`, and the tests read
+__all__ = [
+    "CONFIG_PATH", "GATES", "KERNEL_OUTCOME", "KERNEL_REASON", "KIND", "LedgerError", "OUTCOMES", "P", "TIERS",
+    "attempts", "eps", "main", "measured_refusal", "now", "one_line", "open_store", "outcome", "panel_rows", "publish",
+    "read", "records", "serving", "source_sha256", "store_module", "typed_gamma", "variant_record", "write",
+    "write_outputs",
+]
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 settings = of(__file__)
