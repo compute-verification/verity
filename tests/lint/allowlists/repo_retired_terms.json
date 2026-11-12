@@ -3126,7 +3126,7 @@
     {"file": "benchmarks/pouw/h1_prove/layer.py", "count": 2},
     {"file": "benchmarks/pouw/h1_prove/live.py", "count": 18},
     {"file": "benchmarks/pouw/h1_prove/live.sh", "count": 21},
-    {"file": "benchmarks/pouw/h1_prove/recorded.py", "count": 46},
+    {"file": "benchmarks/pouw/h1_prove/recorded.py", "count": 45},
     {"file": "benchmarks/pouw/h1_prove/served.py", "count": 18},
     {"file": "benchmarks/pouw/h1_prove/served.sh", "count": 7},
     {"file": "benchmarks/pouw/harness/native.py", "count": 1},
