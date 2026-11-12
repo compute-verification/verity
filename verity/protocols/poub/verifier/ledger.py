@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from verity.protocols.spot.verifier.profile import IntegrityProfile
@@ -58,6 +58,27 @@ def _rate(x: object, what: str) -> float:
 
 
 @dataclass(frozen=True, slots=True)
+class Tier:
+    """One memory tier of a node, under the registered hardware's name for it (`hbm`, a GPU's memory; `dram`, the
+    host's): the devices that read it, and for one of them its read rate from the tier at spec and measured (bytes a
+    second) and its on-chip storage (bytes)."""
+
+    devices: int
+    spec_bytes_per_s: float
+    read_bytes_per_s: float
+    chip_bytes: int
+
+    def __post_init__(self) -> None:
+        if type(self.devices) is not int or self.devices < 1:
+            raise ValueError("devices is a positive integer")
+        for name in ("spec_bytes_per_s", "read_bytes_per_s"):
+            if not 0 < _rate(getattr(self, name), name):
+                raise ValueError(f"{name} is positive")
+        if type(self.chip_bytes) is not int or self.chip_bytes < 0:
+            raise ValueError("chip_bytes is a nonnegative integer")
+
+
+@dataclass(frozen=True, slots=True)
 class Node:
     """The verifier's capacities for the node a session audits, each protocol structure, never the prover's report: its
     read bandwidth R at spec, the headline, and measured (every GPU's HBM and the host's DRAM, bytes a second), its
@@ -70,7 +91,8 @@ class Node:
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
     the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes `timing`'s, which a reported read rate
-    can only raise."""
+    can only raise.  `tiers` are the memory tiers R and S_chip are summed over (`Tier`), for what states the node or
+    splits its R by tier; the ledger's terms read the sums."""
 
     spec_bytes_per_s: float
     read_bytes_per_s: float
@@ -85,6 +107,7 @@ class Node:
     gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
     host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
     sketch_outside: int = timing.SKETCH_OUTSIDE
+    tiers: Mapping[str, Tier] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in ("spec_bytes_per_s", "read_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s"):
@@ -101,6 +124,10 @@ class Node:
         for width, rate in squarings.items():
             _rate(rate, f"the squaring ceiling at {width}")
         object.__setattr__(self, "squarings_per_s", MappingProxyType(squarings))
+        tiers = dict(self.tiers)
+        if not all(type(t) is Tier for t in tiers.values()):
+            raise ValueError("tiers maps each memory tier's name to its `Tier`")
+        object.__setattr__(self, "tiers", MappingProxyType(tiers))
 
     @classmethod
     def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
@@ -110,13 +137,16 @@ class Node:
         at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
         a term.  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
         second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
-        links are charged."""
+        links are charged.  Its tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
         measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
         link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        tiers = {"hbm": Tier(timing.GPUS, timing.GPU_SPEC_BYTES_PER_S, timing.GPU_READ_BYTES_PER_S,
+                             timing.GPU_CHIP_BYTES),
+                 "dram": Tier(1, timing.HOST_SPEC_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S, timing.HOST_CHIP_BYTES)}
         return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
                    timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
-                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside)
+                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside, tiers)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""

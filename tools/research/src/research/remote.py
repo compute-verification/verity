@@ -89,6 +89,10 @@
     auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
                     that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
                     vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
+    tool rules      a shipped research package without a fix the machine requires (pods/nebius/tool_rules.py: one that predates #7656
+                    prints each process's command line in its stall dumps) is refused before anything starts: by launch-request, the
+                    machine's deployed tool_rules.py judging the package that answers, and by the launcher before it ships a --source
+                    tree's package.  A package that predates the consult and comes from a launcher that does too is not caught.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -178,10 +182,13 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 #: the machine's own slot_only.py (deploy.toml installs it beside the marker, and vy-slot-only.timer runs it): when present it, not
 #: the shipped tree's package, says which commands pass, so a lane's branch older than a rule change is judged by the deployed rule
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
+#: the machine's own tool_rules.py (deploy.toml): what a shipped research package must do before it runs here, judged as above
+NODE_TOOL_RULES_FILE = "/usr/local/lib/vy-monitoring/tool_rules.py"
 AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
+_TOLD_KEPT: set[str] = set()     # the pods this process has said it reaches at a kept address because RunPod can't be asked
 PREFLIGHT_TIMEOUT_S = 180
 PREFLIGHT_TAIL = 40              # lines of the preflight's stdout and stderr kept in its report
 
@@ -303,21 +310,39 @@ def ssh_host_target(machine: dict[str, Any]) -> dict[str, Any]:
 
 
 def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
-    """host/port/user/rate for a runpod machine (read-only API call; not RUNNING -> refused) or an ssh one (`ssh_host_target`)."""
+    """host/port/user/rate for a runpod machine or an ssh one (`ssh_host_target`).  A runpod machine's is the one last read from
+    RunPod (`runpod.kept_address`, with the rate and the time it was read, marked `kept`) while that read is under
+    `runpod.ADDRESS_TTL_S` old and the host there proves the host key recorded for the address (`runpod.kept_stands`: ssh to it is
+    then strict about that key); else RunPod is asked (read-only; not RUNNING -> refused) and its answer returned unmarked, to be
+    dialled as RunPod's word always was, and kept if the host there proves a key (`runpod.keep_address`).  When RunPod can't be
+    asked, the kept address stands on the same proof, said in one line, and without it the machine is refused."""
     if machine.get("provider") == "ssh":
         return ssh_host_target(machine)
     if machine.get("provider") != "runpod":
         raise Refused(f"provider {machine.get('provider')!r} not supported (runpod or ssh)")
     from .pods import runpod
 
-    who = f"pod {machine['pod_id']} (machine {machine.get('name') or '?'})"
+    pod_id = machine["pod_id"]
+    who = f"pod {pod_id} (machine {machine.get('name') or '?'})"
+    kept, age_s = runpod.kept_address(pod_id) or (None, 0.0)
+    asked = kept is not None and age_s < runpod.ADDRESS_TTL_S           # whether the host at the kept address was asked for its key
+    if asked and runpod.kept_stands(pod_id, kept):
+        return kept
     try:
-        pod = runpod.get(machine["pod_id"])
+        pod = runpod.get(pod_id)
     except runpod.PodError as e:                # a dead / terminated pod, no API config, no network: a refusal with the pod's name, not a SystemExit
         if e.code == 404:
+            runpod.forget_address(pod_id)
             raise Refused(f"{who} no longer exists on runpod (HTTP 404: terminated?); no implicit provisioning") from None
+        if kept and not asked and runpod.kept_stands(pod_id, kept):
+            if pod_id not in _TOLD_KEPT:
+                _TOLD_KEPT.add(pod_id)
+                print(f"research: {who}: runpod API unavailable ({str(e)[:200]}); using its address as read "
+                      f"{kept.get('rate_observed_utc') or '?'}, where the host holds the key recorded for it", file=sys.stderr)
+            return kept
         raise Refused(f"{who}: runpod API unavailable: {e}") from None
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
+        runpod.forget_address(pod_id)
         raise Refused(f"{who} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
     tgt = runpod.ssh_target(pod)
     # The REST API intermittently answers a RUNNING pod's GET with publicIp="" / portMappings=None (alternating answers within
@@ -331,8 +356,10 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
         tgt = runpod.ssh_target(pod)
     if tgt is None:
         raise Refused(f"{who} has no ssh port mapped yet")
-    return {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
-            "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
+    target = {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
+              "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
+    runpod.keep_address(pod_id, target)
+    return target
 
 
 def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int = 15) -> list[str]:
@@ -500,21 +527,38 @@ def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
 
-def node_slot_only() -> Any:
-    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
-    package's `pods.nebius.slot_only`."""
-    p = Path(os.environ.get("NODE_SLOT_ONLY_FILE") or NODE_SLOT_ONLY_FILE)
+def _node_module(var: str, default: str, name: str) -> Any | None:
+    """The machine's deployed copy of a rule (stdlib, one file) at $VAR, else `default`; None when it has none."""
+    p = Path(os.environ.get(var) or default)
     if p.is_file():
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location("vy_node_slot_only", p)
+        spec = importlib.util.spec_from_file_location(name, p)
         if spec is not None and spec.loader is not None:
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod
+    return None
+
+
+def node_slot_only() -> Any:
+    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
+    package's `pods.nebius.slot_only`."""
+    if (mod := _node_module("NODE_SLOT_ONLY_FILE", NODE_SLOT_ONLY_FILE, "vy_node_slot_only")) is not None:
+        return mod
     from .pods.nebius import slot_only
 
     return slot_only
+
+
+def node_tool_rules() -> Any:
+    """What this machine requires of a shipped research package: its deployed NODE_TOOL_RULES_FILE when it has one, else this
+    package's `pods.nebius.tool_rules`."""
+    if (mod := _node_module("NODE_TOOL_RULES_FILE", NODE_TOOL_RULES_FILE, "vy_node_tool_rules")) is not None:
+        return mod
+    from .pods.nebius import tool_rules
+
+    return tool_rules
 
 
 def source_tool_package(source: Path | None) -> Path | None:
@@ -1591,6 +1635,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
                 from .pods.nebius import slot_only as rule
             if not rule.auditor_allows(req["command"], marker):
                 raise Refused(rule.auditor_refusal(marker))
+        if why := node_tool_rules().refusal(Path(__file__).resolve().parent):
+            raise Refused(why)
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))
@@ -2093,6 +2139,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
                           f"for a directory named clone in the shared tree.  Commit a tree that has it, or pass --cwd source")
+        from .pods.nebius import tool_rules
+
+        if tool_pkg is not None and (why := tool_rules.refusal(tool_pkg)):
+            raise Refused(why)
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)

@@ -21,7 +21,7 @@ What code outside this directory may use. Everything else here is internal.
 | `python verity/protocols/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. It exits 0 when every audit accepted and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
-From Python, outside code imports four modules by their paths, and from each only the names its `__all__` lists.
+From Python there are four modules, each imported by its path.
 `memory_challenger` is the timed rounds' device and its records: the device and its coin tree (`MemoryChallenger`,
 `CoinTree`, `CoinOpening`, `verify_coin`), what it publishes and signs (`SessionCommitment`, `SignedSession`, `Round`,
 `records_root`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
@@ -29,10 +29,10 @@ signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREF
 (`block_digest`), with the formats' names and constants. `challenger_session` is a run of timed rounds between a node and
 the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`,
 `side_of`), the node's calls (`salt`, `session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
-`challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`
-and `PROTOCOL`. `timed_audit` is the timed audit's client and its record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`,
-`OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict` and `lean_verdict`, and the clocks, counters and
-parameters a harness reads beside them.
+`challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`,
+`PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
+record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict`
+and `lean_verdict`, and the clocks, counters and parameters a harness reads beside them.
 
 Two files are named `timed_audit.py`, and they are two things. This directory's is the timed audit as the memory
 challenger runs it: the client of a responder's wire, the record it writes and `verdict`, the verdict on that record in

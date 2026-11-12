@@ -15,7 +15,7 @@ from torch import nn
 
 from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
 from training_slowdown.capture import products
-from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
+from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
 from training_slowdown.data import Stream
 from training_slowdown.evaluate import Evaluator
@@ -216,6 +216,60 @@ def test_each_checkpoint_carries_its_e_and_its_output_is_what_e_rebuilds(tmp_pat
     rec = counted(tmp_path / "none", theta, one_step(Plan([("emb", Identity())])))
     assert rec["checkpoints"][0]["e_bytes"] is None
     assert any("has no E of its output" in p for p in rec["invalid"])
+
+
+def test_a_weight_handed_over_as_its_trained_parts_is_what_the_plans_codec_rebuilds_from_them(tmp_path, theta):
+    """An output may give a weight of θ's as the parts the run trained of it. E is the plan's codec's packing of
+    those parts, and the output model's weight is what that codec decodes from E on θ: here codes the run's own
+    weight was never made from, so the model scored is E's, not the one the run holds. The checkpoint says how many
+    weights came as parts, and its `trained_sha256` is the digest of the model the run trains, which took no step
+    here and is θ. Parts with no E leave no model to score, and the run is invalid: parts of a weight θ lacks, parts
+    that are not of the weight's size, and parts with no plan."""
+    codes = SparseTernary.round(torch.randn(D, D, generator=torch.Generator().manual_seed(3)), 0.25)
+    scored, ternary = [], Plan([("w1.*", SparseTernary(0.25))])
+
+    def handing(parts, plan=ternary):
+        def train(te):
+            m = te.load(Small())
+            if plan:
+                te.encode_with(plan)
+            te.output(lambda: m.state_dict() | parts)
+            te.plan(1)
+            with te.step():
+                loss_of(m, batch(0)).backward()
+        return train
+
+    def run_one(name, *a):
+        te = run.Harness(theta, tmp_path / name, clock=lambda: 0.0, keep_weights=True,
+                         evaluator=lambda state, sha: scored.append((sha, dict(state))) or {"bpb": 1.0})
+        with te.counter:
+            handing(*a)(te)
+        return te.finish({})
+
+    rec = run_one("parts", {"w1.weight": codes})
+    (cp,) = rec["checkpoints"]
+    assert rec["invalid"] == [] and cp["trained_sha256"] == run.theta_sha256(theta) != cp["output_sha256"]
+    assert (cp["format"], cp["changed"], cp["parts"], cp["rebuild_macs"]) == ("codecs", 1, 1, 2 * D * D)
+    (sha, output), = scored
+    want = SparseTernary.apply(theta["w1.weight"], *codes)
+    assert torch.equal(output["w1.weight"], want) and not torch.equal(want, theta["w1.weight"])
+    assert torch.equal(output["emb"], theta["emb"]) and set(output) == set(theta)
+    assert sha == cp["output_sha256"] == run.theta_sha256(theta | {"w1.weight": want})
+    enc = (tmp_path / "parts" / cp["e_path"]).read_bytes()
+    assert len(enc) == cp["e_bytes"] and hashlib.sha256(enc).hexdigest() == cp["e_sha256"]
+    assert torch.equal(ternary.decode(enc, theta)["w1.weight"], want)
+    assert run.theta_sha256(torch.load(tmp_path / "parts" / cp["path"], weights_only=True)) == sha
+
+    small = SparseTernary.round(torch.ones(D), 0.25)
+    for name, a, why in (("lacks", ({"w2.weight": codes},), "which θ lacks"),
+                         ("size", ({"w1.weight": small},), f"for a weight of {D * D}"),
+                         ("whole", ({"w1.weight": codes}, Plan([("w1.*", Identity())])), "packs no trained parts"),
+                         ("planless", ({"w1.weight": codes}, None), "no plan to pack them")):
+        rec = run_one(name, *a)
+        (cp,) = rec["checkpoints"]
+        assert any(why in p for p in rec["invalid"]), (name, rec["invalid"])
+        assert cp["output_sha256"] is None and cp["bpb"] is None and "path" not in cp and "e_path" not in cp
+    assert len(scored) == 1
 
 
 def test_a_route_reaching_past_the_codecs_and_the_model_is_refused(tmp_path, monkeypatch):

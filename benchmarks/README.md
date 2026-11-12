@@ -31,6 +31,7 @@ says. These are the directories that have one:
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network certifier's calibration |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
+| `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
 | `verity bench property_redteam` | a stacking-property check graded against the red team's cases |
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
@@ -50,8 +51,8 @@ says. These are the directories that have one:
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
-README. `verity-bench` is the harness's own command. `judge.py` and `latency_compare.py`, beside the directories,
-compare recorded runs' results.
+README. `verity-bench` is the harness's own command. `judge.py`, beside the directories, compares recorded runs'
+results.
 
 ## The harness
 
@@ -126,6 +127,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `moe_align/` | the Marlin MoE path's `moe_align_block_size` at the integration's vLLM pin made a function of its inputs by the integration's `verity_vllm.engine.moe_align` (also its vLLM plugin), each expert's pairs in pair-index order: outputs run to run, each expert's pairs against the pin's op, and its cost against it | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
+| `prod_repro/` | one command over the serving cost benchmark's serve, load and replay: what the serve turned on (prefix caching, speculative decoding, the context limit), whether the replayed window's tokens are the served ones, what our changes cost over stock with its interval, and the advice a request, each measured or said not to be | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
 | `training_slowdown/` | the grader (`grader/`): a training step's matrix products, their multiply-adds and output wires, and the circuit's size, read off the Boolean circuit a lane hands over, beside training's slowdown code's trace of the same step; `verity bench training-slowdown CONFIG`, an attack config's jobs, each found by its label and run where it is missing | maintained |

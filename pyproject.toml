@@ -102,6 +102,7 @@ untraced = [
     "tests/test_lean_packages.py",
     "tests/test_lean_vocabulary.py",
     "tests/test_literal_addresses.py",
+    "tests/test_merge_drivers.py",
     "tests/test_module_strings.py",
     "tests/test_no_wall_clock.py",
     "tests/test_pins.py",
