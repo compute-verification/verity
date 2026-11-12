@@ -46,9 +46,27 @@ It prints the number as text, then one line of JSON whose first keys are `value`
 line or a run that can't be read exits 2.
 
 Beside the number it prints two references, each read from its run in the store with the run's date and card: the
-share of a card's memory a PoUS session certified held (its record's certified bits over the card's memory), and the
-share a wipe left foreign at most (the bound its run's label states). A reference that can't be read prints its
+state bound of a PoUS session over its card's memory (its record's `s_bits`, S₀ = ⌊ρ·|C|⌋: a lower bound on the
+device's memory, its on-chip state and a round of side-channel traffic together, not the device memory credited), and
+the share a wipe left foreign at most (the bound its run's label states). A reference that can't be read prints its
 reason in place of a number, and the session's number still prints.
+
+Under `research run`, an accepted session of a node run or of `--from` also writes `$RESEARCH_RUN_DIR/out/result.json`
+through the harness kit's writer (`benchmarks/harness/verity_bench/kit.py`), in the five fields every resource's
+benchmark reports. Each is read from the verifier's record alone, and its `inputs` name the recorded run and the
+record's keys it came from: `metric` (the printed number in its unit); `verified` (the bytes the verifier certified
+read over the session's span, its `certified_bytes`); `capacity at spec` and `capacity at measured` (for each reading
+the ledger holds, the data sheet's read bandwidth and the measured read rate, that rate times the span); `free at spec`
+and `free at measured` (γ of that capacity, so free over capacity is the reading's γ, the printed number at the first,
+and verified and free are the capacity but for the float's last place); and `error` (the probability the verified
+amount doesn't hold, read window by window as the share is: the record's declared error, which adds the sketch's term
+and the sample's rejection and binding terms to the ledger's own and holds no PRF advantage; no rate is in it, so it
+is one number for both readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the
+registered hardware's, and its unit says so. At a share of 1 or more, verified is 0 and free the whole capacity. An
+amount whose keys the record doesn't hold as numbers is left out of the result. The two references are other runs'
+numbers and are not in it; a loopback writes none, since it certifies nothing, and a session that wasn't accepted
+writes none, as it prints no number. A result holds one measurement a name, so a run that prints a second session
+keeps its first one's result and says so on stderr.
 
 - `run.py`: the command.
 - `references.json`: the two references' runs.
@@ -57,7 +75,8 @@ reason in place of a number, and the session's number still prints.
   benchmarks/memory`).
 
 **Reads and writes:** reads a run's `out/verifier.json` (a gate run's, under `out/host/`) and the references' runs
-from the evidence store; under `research run` writes the printed document to `$RESEARCH_RUN_DIR/out/memory.json`, and
-`--loopback` leaves `run.sh`'s records beside it. A run that ran `--loopback` keeps a loopback's document there
-whatever it prints afterwards: it is how `--from` knows that run's session for a loopback. **Backs:** no Lean
-guarantee or claim; the number is the ledger's γ of one session, which the remote audit's own analysis bounds.
+from the evidence store; under `research run` writes the printed document to `$RESEARCH_RUN_DIR/out/memory.json` and
+an accepted session's amounts to `result.json` beside it, and `--loopback` leaves `run.sh`'s records there too. A run
+that ran `--loopback` keeps a loopback's document there whatever it prints afterwards: it is how `--from` knows that
+run's session for a loopback. **Backs:** no Lean guarantee or claim; the number is the ledger's γ of one session, which
+the remote audit's own analysis bounds.
