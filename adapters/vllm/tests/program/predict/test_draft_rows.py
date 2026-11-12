@@ -179,6 +179,24 @@ def test_a_schedule_the_model_did_not_keep_makes_a_check_zero():
         assert 0 in out[n:] and (claim[0] < K or tuple(out[:1 + K + 1]) == truth[:1 + K + 1])
 
 
+def test_a_last_pass_keeps_what_the_requests_length_leaves_of_the_accepted_drafts():
+    """A request's last pass keeps the drafts its length leaves room for, fewer than its accept kept, and its check is 1;
+    the same count in a pass that isn't the last is a 0 check."""
+    K, (rid, prompt, _) = 5, SERVED[0]
+    layer, truth = _layer(K), _truth()[rid]
+    assert layer.propose(truth[0]) == truth[1:1 + K]
+
+    def run(T: int, passes: tuple) -> list[int]:
+        fn = build_program(Phi.from_json({**_phi(K).to_json(), "sampling": {"kind": "greedy"}}), "request", LP=len(prompt), T=T, C=0,
+                           dead_free=True, with_desc=False, drafts=passes, draft_layer=layer).program.fn
+        return _walk(fn, [np.array(prompt), _weights(fn)])
+
+    out = run(2, ((K, 1),))
+    assert tuple(out[:3]) == truth[:3] and out[3:] == [1]
+    out = run(3, ((K, 1), (K, 0)))
+    assert tuple(out[:3]) == truth[:3] and out[4] == 0
+
+
 def test_a_launch_without_drafts_compiles_as_it_did():
     """A launch that registers no draft holds no schedule: its units' keys, its summary and its Programs' SRC configs say
     nothing of drafts."""
