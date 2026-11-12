@@ -1081,8 +1081,9 @@ def move_scripts(repo: Path, at: str) -> dict[str, str]:
     return scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS))
 
 
-#: `move_scripts`' paths as `vqueue.meets` reads a change's files: a change that meets one changes what judges a move
-MOVE_SCRIPTS = (f"{MOVE_DIR}*.py", MOVE_CHECK, MOVE_PINS)
+#: the scripts of `tools/move/` as `vqueue.meets` reads a change's files: a member below a move that changes one holds it back
+#: (`Queue._scripts_below`)
+MOVE_SCRIPTS = (f"{MOVE_DIR}*.py",)
 
 
 def path_rows(text: str) -> list[tuple[str, str]]:

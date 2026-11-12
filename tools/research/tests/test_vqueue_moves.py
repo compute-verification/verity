@@ -191,7 +191,7 @@ def test_path_rows_are_the_map_rows_whose_old_and_new_words_are_paths_words_in_i
             '"x/" = "y"\n\n[[words_in]]\nglob = "**/*.md"\n[words_in.words]\n"docs/a.md" = "docs/b.md"\n'
             '"verity/old/" = "verity/new/"\n')
     assert path_rows(text) == [("verity/old/", "verity/new/"), ("a/b.py", "c/b.py"), ("docs/a.md", "docs/b.md")]
-    assert path_rows("[words]\nx = 1\n") == [] and path_rows("[rewrite]\nexclude = []\n") == []
+    assert path_rows('[words]\nx = 1\n"a/b" = 1\n') == [] and path_rows("[rewrite]\nexclude = []\n") == []
     assert path_rows("[words\n") == []
     assert path_rows('words_in = ["x"]\n[words]\n"p/q" = "r/s"\n') == [("p/q", "r/s")]
 
@@ -220,17 +220,22 @@ for f in sorted(p for p in root.rglob("*") if p.is_file() and ".git" not in p.pa
     (root / new).write_text(text)
 '''
 
-#: `move_check.py --json`: each call's arguments appended to LOG, and a refusal while REFUSE exists
-CHECK = '''import json, pathlib, sys
+#: `move_check.py --json`: each call's arguments appended to LOG; while REFUSE exists, a refusal, or as it says, no report
+#: (`garbage`) or a report certifying the move with a refusal's exit (`exit`)
+CHECK = """import json, pathlib, sys
 log, refuse = pathlib.Path(LOG), pathlib.Path(REFUSE)
 with log.open("a") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
-no = refuse.exists()
+mode = refuse.read_text().strip() if refuse.exists() else None
+if mode == "garbage":
+    print("Traceback: boom")
+    sys.exit(2)
+no = mode is not None and mode != "exit"
 print(json.dumps({"certified": not no, "base": sys.argv[1], "head": sys.argv[2], "renames": [], "edits": [], "words": {},
                   "rules": {}, "refusals": [{"path": "new/a.txt", "reason": "an edit no row explains"}] if no else []}))
 print("move-check: refused" if no else "move-check: certified", file=sys.stderr)
-sys.exit(1 if no else 0)
-'''
+sys.exit(0 if mode is None else 1)
+"""
 
 
 class Moved:
@@ -346,6 +351,7 @@ def test_a_move_refused_on_its_tip_is_left_out_when_it_came_on_its_mark_alone_an
     (built,) = _builds(recs)
     assert (skip["number"], skip["heads"], built["members"], built["heads"]) == (1, [head], [2], [two]), recs
     assert "it came on its mark alone, and its move regenerated on " in skip["why"] and "new/a.txt: an edit no row" in skip["why"]
+    assert "with 1 --map rows exit 1): move-check: refused: new/a.txt" in skip["why"], skip["why"]
     assert skip["text"].endswith("It lands with a land verdict, or on its mark once a candidate on a later `main` certifies "
                                  "its move.") and "merge `main`" not in skip["text"], skip
     assert "moves" not in built
@@ -421,3 +427,83 @@ def test_a_move_s_conflicting_head_doesnt_hold_it_once_its_move_is_regenerated(e
     assert not [r for r in recs if r["action"] == "conflict"], recs
     ready = loop.world.ready(env.main())
     assert [(r.number, r.head, r.move, r.conflict) for r in ready] == [(1, head, True, False)]
+
+
+@pytest.mark.parametrize("unmark", [False, True])
+def test_nothing_is_built_above_a_move_in_flight_marked_or_not(env, unmark):
+    """`decide` reads a move in flight from the ready PRs (`World.ready`) or, once its mark is gone, from the PRs in flight
+    (`Snapshot.flying`, its PR's `Move:` line): nothing is built above it either way."""
+    m = Moved(env)
+    head = m.move(1, verdict=True)
+    loop = env.loop(decide)
+    assert [b["members"] for b in _builds(loop.tick())] == [[1]]
+    if unmark:
+        env.o.gh.ready.discard((1, head))
+    env.put(2, {"b.txt": "2\n"})
+    assert not _builds(loop.tick())
+
+
+@pytest.mark.parametrize("unmark", [False, True])
+def test_a_move_isnt_built_above_a_pr_in_flight_that_changes_the_move_scripts_marked_or_not(env, unmark):
+    """A PR in flight changing `tools/move/`'s scripts, read from the ready PRs or from the PRs in flight, holds back a move:
+    another PR is built above it and the move isn't."""
+    m = Moved(env)
+    two = env.put(2, {Q.RENAME: RENAME + "# changed\n"})
+    loop = env.loop(decide)
+    assert [b["members"] for b in _builds(loop.tick())] == [[2]]
+    if unmark:
+        env.o.gh.ready.discard((2, two))
+    m.move(1, verdict=True)
+    env.put(3, {"b.txt": "3\n"})
+    assert [b["members"] for b in _builds(loop.tick())] == [[3]]
+
+
+@pytest.mark.parametrize("mode", ["garbage", "exit"])
+def test_a_move_check_that_gives_no_report_or_exits_as_refusing_doesnt_certify(env, mode):
+    """`move_check.py` certifies only with its report saying so and its exit 0: no report, or a report it exits 1 on, is a
+    refusal, and the move on its mark alone is left out."""
+    m = Moved(env)
+    m.refuse.write_text(mode)
+    m.move(1, verdict=False)
+    recs = env.loop(policy).tick()
+    (skip,) = [r for r in recs if r["action"] == "skip"]
+    assert not _builds(recs) and ("couldn't judge" if mode == "garbage" else "isn't certified") in skip["why"], skip
+    assert ("Traceback: boom" if mode == "garbage" else "exit 1)") in skip["why"], skip
+
+
+def test_a_move_runs_main_s_move_check_whatever_a_member_below_it_does_to_that(env):
+    """A member below the move that changes `move_check.py` (one that refuses every move) doesn't hold it back: the move is
+    certified by `main`'s."""
+    m = Moved(env)
+    m.move(1, verdict=False)
+    env.put(2, {Q.MOVE_CHECK: "import sys\nsys.exit(1)\n"})
+    (built,) = _builds(env.loop(policy).tick())
+    assert built["members"] == [2, 1] and built["moves"][0]["certificate"]["certified"] is True, built
+
+
+def test_a_move_refused_on_its_mark_that_then_gets_a_land_verdict_is_merged_by_its_head(env):
+    m = Moved(env)
+    m.refuse.touch()
+    head = m.move(1, verdict=False)
+    loop = env.loop(policy)
+    assert [r["number"] for r in loop.tick() if r["action"] == "skip"] == [1]
+    del env.labels.verdicts[1, head]
+    (built,) = _builds(loop.tick())
+    assert (built["members"], built["heads"], "moves" in built) == ([1], [head], False), built
+
+
+def test_a_build_carries_no_certificate_of_an_earlier_build(env):
+    """A move certified in one build and merged by its head in a later one, on a newer `main` where its move is refused,
+    carries no certificate there."""
+    m = Moved(env)
+    head = m.move(1, verdict=True)
+    w = env.loop(policy).world
+    w.ready(m.main)
+    w.build([env.o.gh.prs[1]], m.main, m.main)
+    assert set(w.certified) == {1}
+    later = _main_to(env, {"later.txt": "later\n"})
+    m.refuse.touch()
+    assert w.fetch() == later
+    w.ready(later)
+    _, merged, _ = w.build([env.o.gh.prs[1]], later, later)
+    assert [(x.pr, x.head) for x in merged] == [(1, head)] and w.certified == {}

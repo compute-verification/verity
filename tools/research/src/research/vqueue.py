@@ -83,7 +83,7 @@ class Ready:
     conflict: bool = False         # it doesn't merge onto `main`: the queue skips it until its head changes
     move: bool = False             # a move PR, whose move the loop regenerates on what its batch merged below it: a batch
                                    # holds at most one, last, and nothing is built on a candidate holding one (`_moves_last`)
-    scripts: bool = False          # it changes what judges a move (`queue.MOVE_SCRIPTS`): no move is built on it or beside it
+    scripts: bool = False          # it changes `tools/move/`'s scripts (`queue.MOVE_SCRIPTS`): no move is built on or beside it
 
 
 @dataclass(frozen=True)
@@ -293,7 +293,7 @@ def decide(s: Snapshot) -> list[Action]:
     pinned one (`Snapshot.pinned`): a pinned Lean PR it may take opens a batch of pinned Lean PRs only, on `main` or on a top
     candidate holding no Lean change, and while one waits for such a top with nothing else to take, nothing is built and
     `Wait` says why (`_next`).  A batch holds at most one move PR (`Ready.move`), last, and none beside or on a member that
-    changes what judges a move (`Ready.scripts`, `_moves_last`); nothing is built on a candidate holding a move, nor in the
+    changes `tools/move/`'s scripts (`Ready.scripts`, `_moves_last`); nothing is built on a candidate holding a move, nor in the
     tick that advances to one, since the ready PRs were read on the `main` before it and may lack its move.
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
@@ -711,9 +711,9 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
 
 def _moves_last(members: tuple[int, ...], ready: dict[int, Ready]) -> tuple[int, ...]:
     """``members`` with their first move PR (`Ready.move`) last, the loop regenerating its move on what the rest merged, and
-    any other move left for a later batch; with no move at all beside a member that changes what judges one (`Ready.scripts`),
-    since a move runs `main`'s scripts.  A candidate holding a move has none built on it (`decide`), so no PR lacking the
-    move merges above it."""
+    any other move left for a later batch; with no move at all beside a member that changes `tools/move/`'s scripts
+    (`Ready.scripts`), since a move and the restacks across it run `main`'s.  A candidate holding a move has none built on it
+    (`decide`), so no PR lacking the move merges above it."""
     moves = [m for m in members if ready[m].move]
     rest = tuple(m for m in members if not ready[m].move)
     return rest if not moves or any(ready[m].scripts for m in rest) else (*rest, moves[0])

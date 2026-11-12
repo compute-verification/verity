@@ -891,7 +891,6 @@ class World:
         for n in order:
             place(n)
         self.prs, self.left, self.pulled = {n: entries[n].pr for n in chosen}, left, pulled
-        self.on_mark &= set(chosen)
         # a move regenerated on its batch's tip doesn't merge its head, so whether that merges is moot
         return [Ready(n, (p := entries[n].pr).head, *chosen[n][:2], rank=i, conflict=chosen[n][2] and uncertified.get(n) != "",
                       move=bool(p.move), scripts=vqueue.meets(chosen[n][0], MOVE_SCRIPTS)) for i, n in enumerate(placed)]
@@ -1493,12 +1492,12 @@ class World:
     def _move(self, p: PR, tip: str, main: str) -> tuple[str | None, Skip | None]:
         """Move PR ``p`` regenerated last in a build on ``tip``, landing tip ``main`` (`Queue._regenerate`, with ``main``'s
         `tools/move/rename.py` and `move_check.py`, kept in the loop's cache): (its certified commit, None), its certificate in
-        `certified`; or (None, why it's left out) while members below it change what judges a move, or when its move isn't
+        `certified`; or (None, why it's left out) while members below it change `tools/move/`'s scripts, or when its move isn't
         certified and it came on its mark alone (`on_mark`); or (None, None) when it isn't certified and has a land verdict,
         which covers its head: merged as any PR."""
         if below := self.q._scripts_below(tip, main):
-            return None, Skip(p, f"the members below it change {', '.join(below)}, which judge its move: it waits until they "
-                                 "land", waits=True)
+            return None, Skip(p, f"the members below it change {', '.join(below)}, which its move and the restacks across "
+                                 "it run: it waits until they land", waits=True)
         commit, why = self.q._regenerate(tip, p, main)
         if commit is not None:
             self.certified[p.number] = {"map": p.move, "tip": tip, "commit": commit, "on_mark": p.number in self.on_mark,
