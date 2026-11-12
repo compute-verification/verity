@@ -5,8 +5,8 @@ card is a GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and
 so the same GPU in another host needs no second card) or a server's (`kind = "server"`: what a server model's own
 documents state of it apart from those, its network ports). Each number is an entry `{ value, unit, mark, source }`:
 
-- `mark` is `ceiling` (no program on that SKU and firmware exceeds it: what the model's premises need), `measurement`
-  (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
+- `mark` is `ceiling` (no program on that SKU exceeds it, whatever firmware it runs: what the model's premises need),
+  `measurement` (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
 - `source` names a data sheet, a document or an `art:` id (a run's evidence: its record, `research data show RUN`'s
   `outputs.run_record`), and a node by its kind, never its host name.
 
@@ -23,7 +23,9 @@ Every card of a kind has the same sections, a host card's `disk` apart. A GPU ca
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
 device memory's),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
-kernel can make shared memory, a part of `smem` that no store's size adds),
+kernel can make shared memory, a part of `smem` that no store's size adds; `dram` is the device memory a program gets
+and `dram_installed` the memory on the board, a second reading at or above it; and, only where a run found them, the
+caches an SM serves code and constants from, `l15`, `l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
 units a MAC of each format uses), `price` (what an operation costs in tensor units in a timed loop: `fp32_loop`, an FP32
@@ -31,7 +33,9 @@ add in a loop of 64 adds and 3 loop instructions, at or above the add's price at
 32 lanes of `rate.issue`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
 server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM gives: a measurement of our nodes, not a
 number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
-`memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling) and `store` (its caches and allowances,
+`memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling, and `speed_max`, `bandwidth_max` and
+`write_max`, a second reading of the speed, the bandwidth and the write ceiling: the channels at the fastest memory
+the processor takes, whatever DIMMs the server has) and `store` (its caches and allowances,
 and `chip`, the host's on-chip bytes in S_chip); and, only where a run read its node's disks, `disk` (`read`, the bytes
 a second the disks of the node's VM read back: like `vm_cores` a measurement of our node, so the RTX node's host card
 has it and the H200 nodes' has no entry rather than an invented one). A server card's is `link`: the line rates of the
@@ -39,6 +43,13 @@ server's network ports by its guide's classes (`cluster`, `storage`, `management
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
 machine the inference-only policy's `h200-hgx` location is, and `tests/test_policy.py` holds the policy's `links` to
 the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it counts.
+
+**The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
+today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
+B200, `clock.memory` on all three GPU cards and `sm.count` on the B200, and with them what a card computes from one
+(`clock.tensor` on those two cards, `memory.bandwidth` on all three). Each bounds a card only while it is the declared
+board and vBIOS, which the named assumptions `accounting-declared-device` and `accounting-sheet-clock` state
+(`verity.claims`) and no mark does. A host card's `store.l2`, `l1d` and `l1i` are likewise its guest's CPUID.
 
 ~~~python
 from verity.hardware.cards import load, skus
@@ -87,19 +98,20 @@ table.
 ## The node files (`verity.hardware.nodes`)
 
 One TOML file per kind of node in `nodes/`, beside their loader (`nodes/__init__.py`): what a node's registration
-states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, never a
-host's name, and each number is an entry under the cards' rules above.
+states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, and each
+number is an entry under the cards' rules above. A node file names no machine, no address and no provider: it is the
+kind's, read on one node of it, and its sources cite what read it by `art:` id.
 
 | Node | file | GPU card | host card | the host's own leaves |
 |---|---|---|---|---|
 | An RTX PRO 6000 node, eight cards | `nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` |
-| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | none yet: no run has read them |
+| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` |
 
 A file has `device` (`sku`, the GPU card, and `count`, how many of it the node carries), `host` (`sku`, the host card)
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`) and its
 `bytes`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves out what the
-kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf no run has read has no
-table. A GPU's own memory is not stated: it is its card's `store.dram`, whole. A node file holds no rate, clock or
+kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read on record has
+no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole. A node file holds no rate, clock or
 peak, which are the cards', and no link, network certifier or memory challenger: each is a table of its own once it
 has a figure for the node.
 
@@ -120,6 +132,5 @@ log = Registration("remote")
 site = check(log.append(log.node_entry(node, gpu, host="node0")), Auditor.of_files([gpu]))
 ~~~
 
-`remote` accepts the eight-card node's log against the auditor the GPU card files give. `onsite` refuses it by
-`challenger-reach` until a memory challenger is registered with a link to the host. The H200 node gives no entry until
-its file states its host's DRAM and disks (`tests/test_nodes.py`).
+`remote` accepts each node's log against the auditor the GPU card files give. `onsite` refuses each by
+`challenger-reach` until a memory challenger is registered with a link to the host (`tests/test_nodes.py`).
