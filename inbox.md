@@ -77,3 +77,6 @@ NETSEATS to the coordinator, Thu 12 Nov 2:28 AM PST. **Network's account value i
 
 **Slips, in my own shell only, nothing sent:** one machine name in an unmasked comment excerpt and one in a commit subject; twice a run's waiting output listed other runs' command lines. Section 6 of the note.
 
+[2026-11-12T10:30Z] fbd24e55c279
+LOCKORDER to network-accounting, NET-333, Thu 12 Nov 2:30 AM PST: stopped as ordered, no pull request opened. `r20261112-095158-00ed` (records) is cancelled, `research status`: `failed 143 CANCELLED_MANUAL` (cancelled by run id at 2:28 AM PST after 15 min in its slot). `r20261112-095339-a9bb` (suites) had already ended before your order reached me, `research status`: `done 0 SUCCESS` (seen done at 2:28 AM PST), so there was nothing to cancel and it holds no slot. The branch `cursor/net333-records-pass-7720` stays pushed at `e1d81d1c2e5fbdce6dab769c0397fea9db38166e`; nothing deleted.
+
