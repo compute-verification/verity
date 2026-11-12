@@ -627,7 +627,6 @@
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "var-annotated", "symbol": "NativeCollectCommitter._record_step_rows", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "var-annotated", "symbol": "NativeCollectCommitter.reset", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "var-annotated", "symbol": "NativeCollectCommitter.step_targets", "detail": ""},
-    {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "arg-type", "symbol": "NativeHiddenM1Source._split_wrapper.varlen_fwd", "detail": "", "count": 3},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "assignment", "symbol": "NativeHiddenM1Source._tel_line", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "attr-defined", "symbol": "NativeHiddenM1Source._split_wrapper.varlen_fwd", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "attr-defined", "symbol": "NativeHiddenM1Source._tel_line", "detail": ""},

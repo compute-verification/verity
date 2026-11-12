@@ -38,7 +38,7 @@ from verity_vllm.commit.native_ranges import NativeRangeOpenings
 from verity_vllm.commit.opened import meta_by_name
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
 
-__all__ = ["Touched", "dump", "dump_files", "held_of", "load", "nbytes", "not_retained", "not_retained_of", "touch",
+__all__ = ["Touched", "as_bytes", "dump", "dump_files", "held_of", "load", "nbytes", "not_retained", "not_retained_of", "touch",
            "touched", "write_doc"]
 
 SCHEMA = "verity-vllm/committed-store/v1"
@@ -152,20 +152,24 @@ def _slim_ranges(blk: Any, want: list[tuple[int, int]]) -> list[tuple[int, int, 
         for lo, hi in want:
             a, b = max(lo, rlo), min(hi, rhi)
             if a < b:
-                out.append((a, b, _as_bytes(hv)[a - rlo:b - rlo]))
+                out.append((a, b, as_bytes(hv)[a - rlo:b - rlo]))
     return sorted(out, key=lambda x: x[0])
 
 
 def _nodes(lvs: list[Any], nodes: list[tuple[int, int]]) -> Iterator[memoryview]:
     for d, i in nodes:
-        yield _as_bytes(lvs[d][i].contiguous() if hasattr(lvs[d][i], "contiguous") else lvs[d][i])
+        yield as_bytes(lvs[d][i].contiguous() if hasattr(lvs[d][i], "contiguous") else lvs[d][i])
 
 
-def _as_bytes(t: Any) -> memoryview:
+def as_bytes(t: Any) -> memoryview:
+    """A tensor's or an array's bytes, from the host: a device tensor is copied there first."""
     if getattr(t, "is_cuda", False):
         t = t.cpu()
     a = t.numpy() if hasattr(t, "numpy") else t
     return memoryview(a.reshape(-1) if hasattr(a, "reshape") else a).cast("B")
+
+
+_as_bytes = as_bytes  # the name `pipeline.replay_bundle` still reads
 
 
 def _refusal(com: Any) -> str | None:
@@ -210,8 +214,8 @@ def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str,
     rs = _ranges(blk) if t is None else _slim_ranges(blk, t.merged(s))
     lvs = list(com._gpu_levels[s])
     nodes = None if t is None else sorted(t.nodes.get(s, ()))
-    lv_bytes = (_as_bytes(lv.contiguous()) for lv in lvs) if nodes is None else _nodes(lvs, nodes)
-    digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (_as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
+    lv_bytes = (as_bytes(lv.contiguous()) for lv in lvs) if nodes is None else _nodes(lvs, nodes)
+    digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
                f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", lv_bytes)}
     salted = None
     if t is not None:
