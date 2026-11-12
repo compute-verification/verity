@@ -541,9 +541,8 @@ def oracle_compare_component(rows: list[dict], versions: dict, man_doc: dict | N
     # component says so and its result is not True (a commit == a failed Match's bytes is not a PASS ingredient)
     mv = versions["match_record"].get("tp2_match_verdict")
     oracle_failed_match = (mv is False)
-    result = (att_ok and (mo_ok if mo_ran else True)) if (att_ok is not None) else None
-    if oracle_failed_match and result:
-        result = None
+    compared_equal = att_ok and (mo_ok if mo_ran else True)
+    result = None if oracle_failed_match and compared_equal else compared_equal
     return {"result": result,
             "complete": False,
             "oracle_match_verdict": mv,

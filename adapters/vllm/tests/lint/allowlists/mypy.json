@@ -2333,7 +2333,6 @@
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "index", "symbol": "check", "detail": ""},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "operator", "symbol": "check", "detail": "", "count": 6},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "union-attr", "symbol": "main", "detail": "", "count": 7},
-    {"file": "verity_vllm/pipeline/tp/c2.py", "kind": "assignment", "symbol": "oracle_compare_component", "detail": ""},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "arg-type", "symbol": "main", "detail": "", "count": 5},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "assignment", "symbol": "main", "detail": "", "count": 13},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "attr-defined", "symbol": "main", "detail": "", "count": 9},

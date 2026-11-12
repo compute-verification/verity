@@ -328,3 +328,7 @@ def test_a_commit_equal_to_a_failed_match_runs_capture_is_compared_and_is_no_pas
     comp = C2.oracle_compare_component(_both(cblock, cblock), {"match_record": {"path": "/match", "tp2_match_verdict": False}}, MANIFEST)
     assert comp["result"] is None and comp["oracle_is_failed_match_run"] is True and comp["oracle_match_verdict"] is False
     assert comp["oracle_note"] == "oracle is a FAILED Match run (tp2_match.json pass False): compared, not a PASS ingredient"
+    differs = dict(ORACLE, verdict="FAIL", why="a partial differs", mismatch_n=4)
+    comp = C2.oracle_compare_component(_both(cblock, {"attribution": ATTRIBUTION, "match_oracle": differs}),
+                                       {"match_record": {"path": "/match", "tp2_match_verdict": False}}, MANIFEST)
+    assert comp["result"] is False and comp["oracle_is_failed_match_run"] is True
