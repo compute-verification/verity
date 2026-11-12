@@ -133,6 +133,11 @@ PUBLIC = {
     "verity_vllm.pipeline.advice_code.by_class": "I1: advice v1's charge by class: each window's bits split by the field "
                                                  "that put them there, and the fields a registration holds at 0 with "
                                                  "the rules that do, which benchmarks/network_e2e reports",
+    "verity_vllm.pipeline.advice_code.schedule_code": "I1: advice v1 to and from the replay's schedule, its entry for a "
+                                                      "serve with a draft, which no I1 v0 says and "
+                                                      "benchmarks/network_e2e holds to vLLM's traces",
+    "verity_vllm.pipeline.advice_code.kept": "I1: advice v1's kept counts, the drafts each emitting row kept: their code "
+                                             "in a window's second segment, and each step's emissions read off the replay",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
