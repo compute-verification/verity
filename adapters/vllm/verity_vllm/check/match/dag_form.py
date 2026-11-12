@@ -12,12 +12,6 @@ from verity_vllm.program.compact import expand_mixed, n_producers
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
 
 
-def _producer(P: C.RootView, t) -> int | None:
-    if t[0] != "N":
-        return None
-    return P.steps[t[1]][t[2]]
-
-
 def _producers(P: C.RootView, t) -> list[int]:
     """Every producer instance of a canonical N source, record form or progression."""
     return n_producers(P.steps, t)
