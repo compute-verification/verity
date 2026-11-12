@@ -109534,3 +109534,39 @@ mailbox, 23:43Z]
 
 - Anything of `Tree.lean`, `Opened.lean` or the fixed `Files.lean` against the tree; whether the undrawn refusal's
   try passes.
+
+## STOPS, Thu 12 Nov 23:44Z: I wait only on three runs and end my turn; the line on vy-nebius-2 has kept one try waiting 23 minutes (11 runs ahead of it at 23:43Z)
+
+In plain words: since the plan went in, two things are written and neither is checked yet. The first is the set of proofs about the new rule: twelve statements saying what an accepted second round guarantees when a session's statement holds only the sampled blocks. The second is the first step of the plan itself: a mode of the rehearsal in which the verifier's side does no work in proportion to a request's size before the sample is drawn. Both wait in a line of jobs for a machine. Nothing changes for Friday's proof.
+
+**The runs I wait on, all on vy-nebius-2, pool proofs**
+
+| Run | What | Tree | State at 23:43Z [run: its `slot.json`] | Verdict expected [guess] |
+|---|---|---|---|---|
+| `r20261112-232041-425c` | try of `Spot/SecondStage.lean` with twelve theorems after `checkAny`, 12 GB, cap 60 min | `d66eab79a7`, local, not pushed | waiting since 23:21Z, 11 ahead (29 at 23:23Z) | 00:00Z |
+| `r20261112-234010-dddd` | the sampled-only rehearsal with `SMALL_ROOTS=1`, then `test_two_stage_second.py`; 24 GB, cap 100 min; verdict in `out/verdict.txt` | `dee50ddb3f`, local, not pushed | waiting since 23:40Z, 34 ahead | 00:40Z |
+| `r20261112-234110-5c97` | suites `benchmarks/one_stage`, `benchmarks/two_stage`, `verity/commitments/windows`, `verity-vllm`, `--quick`; 32 GB, cap 120 min | `dee50ddb3f` | waiting since 23:41Z, 35 ahead | 01:10Z |
+
+- [run] The line moved 18 places in the 20 minutes from 23:23Z to 23:43Z; the three times above are that rate plus each job's own length, the rehearsal's from its last run (about ten minutes with its builds).
+- [read] A correction to my 23:30Z header: what the slot record reports is the pool's line ("N check(s) ahead in line"). I cannot tell from it whether the wait is for one of the eight places or for one of the four Lean trees.
+
+**What each verdict leads to when you resume me**
+
+- `425c` passes with the standard axioms only: I push `d66eab79a7` to `cursor/proofs-stops-drawn-7b3e`. It fails: I fix the errors it prints and try again, 12 GB.
+- `dddd` and `5c97` pass: I put `dee50ddb3f` on the same branch and push; a development run, no pull request. Either fails: the fix, then one more run.
+
+**New since the 23:30Z entry, written and not run**
+
+- [derived] `checkAny_ok`: `check_ok`'s statement with each statement held to the checks of its own shape; `checkAny_ok_refs`, `_wired` and `_values` carry `check`'s three corollaries to both shapes; `checkAny_ok_sampled` says of a statement of only its sampled blocks that its `units.indices` are its part's sampled slots in the draw's order, at least one, its `instances` their count, its session's sample every unit, and its header the reference's placed at those slots. They are about the code's own function; no lock is touched.
+- [derived] Item 1 of the plan's section 3, as `two_stage.py second --roots-only` (with `--sampled-only`): the interior's record names no leaf layer, the stream and the registration check hold none, and the audit makes no member's public file before the sample. The checks before the sample are then the circuit's own (partition, program, template program); a sampled member is staged after the sample and its header is held by round 2 at its sampled slots.
+- [read] It adds an optional `layer` to `registration` and `write` in `verity/commitments/windows/rows.py`, default as today. That file is the commitments' own and on the soundness path: on my branch it is a development mode; it needs the commitments' reviewer before it goes anywhere else. A registration with no leaf layer is a form the registration check takes today (`Spot/Registration.lean:569`), so no verifier gains a form.
+- [run] On my VM the test file's fixture stops at the stream's first register, with and without my change (no compiled step is built here), so the new test has not run anywhere yet.
+
+**Kept across the turn**: both commits are under local refs of the VM's repository (`refs/stops/theorems`, `refs/stops/roots`) and as patches in `~/stops-draft/`.
+
+**Not established**
+
+- That any of the twelve theorems compiles.
+- That the rehearsal holds with no leaf layer: no run of it has started.
+- That the four suites pass on the tree with the `rows.py` change.
+- Circuits' list and date: not with me; the plan's two fields stay open until you relay them.
