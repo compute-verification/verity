@@ -190,7 +190,10 @@ def check(d: Path) -> dict:
     z = np.zeros((T, 32), np.int64)
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"
-        rd = lambda name, dt: np.fromfile(d / (name + sfx), dt)  # noqa: E731
+
+        def rd(name: str, dt, sfx=sfx) -> np.ndarray:
+            return np.fromfile(d / (name + sfx), dt)
+
         x = (rd("x", np.uint16).astype(np.uint32) << 16).view(np.float32).reshape(T, k)
         f = x * inv_s
         X = np.clip(np.floor(f), -127, 126).astype(np.int64) + dither_rows(key, tm * T, T, k)
