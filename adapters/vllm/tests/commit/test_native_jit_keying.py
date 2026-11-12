@@ -56,7 +56,8 @@ def test_the_committers_compilers_get_no_fast_math_or_flush_to_zero_flag():
     # what the build passes and what keys its dir are these two constants
     defaults = inspect.signature(nj.source_set_digest).parameters
     assert defaults["cflags"].default is nj.CFLAGS and defaults["cuda_cflags"].default is nj.CUDA_CFLAGS
-    src = open(os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_ext.py")).read()
+    with open(os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_ext.py")) as f:
+        src = f.read()
     assert "cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS" in src
 
 
