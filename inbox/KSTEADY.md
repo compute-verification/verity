@@ -1916,3 +1916,11 @@ three launches are dry-run, or at 13:00Z with where you are.
   #9152's head across the move by hand; you do nothing unless the map refuses, and ci says so.** So
   start the follow-up with benchmarks' five notes from `main` AFTER both are on it, on the moved
   paths; and expect #9152's head to change by ci's hand, not yours.
+- **Added 08:28Z: benchmarks (HASH-115, 08:27Z): beside each kept proof keep that statement's
+  `program-word.json`, the word Definition's program, FROM THE SAME STAGING.** Its runner hands the
+  verifier a program whose `program_fn` is `stage.json`'s `word`; for the head block that file was in
+  `art:84d25bec…` at `out/head/`, written by proofs' stager. **Look at tonight's stagings now: does
+  the tree's `stage.py` write a `program-word.json` for each Boolean statement?** If it does, keep
+  it in each kept proof's tree. If it does not, say so on HASH-115 in one worker comment today (not
+  on Thursday): proofs then names where the program comes from. Benchmarks' runner (#9068) is on
+  `main` since 07:25Z.

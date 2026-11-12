@@ -1269,3 +1269,8 @@ records the other two on every step.
 
 This joins the work of my 06:24Z and 06:27Z sections; the 13:00Z rule for the three-lines commit is
 unchanged. Return as said there, with the three launch lines and item 1's runs.
+- **Added 08:28Z: benchmarks' Lean runner (#9068) is on `main` since 07:25Z** (benchmarks, HASH-115), so
+  `launch-lean.sh` runs it from `main` and needs neither its branch nor a scratch merge. Benchmarks
+  also asks that a kept proof carries its statement's `program-word.json` from the same staging;
+  yours is proofs' staged head block, whose program is `art:84d25bec…/out/head/program-word.json`,
+  as you have it.
