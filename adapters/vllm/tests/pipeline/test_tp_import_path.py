@@ -4,20 +4,22 @@ ranks' call failing, leaves the record an error: never a path with a rank's file
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
 from verity_vllm.pipeline.tp import rank_worker as W
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 
-DRIVER = {"files": ["adapters/vllm/verity_vllm/pipeline/tp/commit.py", "verity/circuits/program.py"], "n": 2, "method": "sys.modules of the running process"}
-RANK_0 = {"files": ["adapters/vllm/verity_vllm/pipeline/tp/rank_worker.py", "verity/circuits/program.py"], "n": 2, "method": DRIVER["method"], "rank": 0}
-RANK_1 = {"files": ["adapters/vllm/verity_vllm/pipeline/tp/rank_replay.py"], "n": 1, "method": DRIVER["method"], "rank": 1}
+DRIVER: dict[str, Any] = {"files": ["adapters/vllm/verity_vllm/pipeline/tp/commit.py", "verity/circuits/program.py"], "n": 2, "method": "sys.modules of the running process"}
+RANK_0: dict[str, Any] = {"files": ["adapters/vllm/verity_vllm/pipeline/tp/rank_worker.py", "verity/circuits/program.py"], "n": 2, "method": DRIVER["method"], "rank": 0}
+RANK_1: dict[str, Any] = {"files": ["adapters/vllm/verity_vllm/pipeline/tp/rank_replay.py"], "n": 1, "method": DRIVER["method"], "rank": 1}
 
 
 class _LLM:
     def __init__(self, replies) -> None:
-        self.replies, self.rpcs = replies, []
+        self.replies = replies
+        self.rpcs: list[tuple] = []
 
     def collective_rpc(self, method, timeout=None):
         self.rpcs.append((method, timeout))

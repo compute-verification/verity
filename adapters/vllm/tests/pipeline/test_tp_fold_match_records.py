@@ -14,8 +14,8 @@ from verity_vllm.check.match import rank_match as RM
 from verity_vllm.pipeline.tp import fold_match as FM
 
 LINKS = {"schema": "cb-a/tp_links/v2", "world": 2, "rank": 1, "links": [{"k": 0, "module": "m", "peers": []}]}
-SUMMARY = {"errors": 0, "unresolved": 0, "n_instances": 9, "n_steps": 3, "error_examples": [{"e": 0}, {"e": 1}, {"e": 2}, {"e": 3}],
-           "fold": {"tp": {"rank": 1, "world": 2}, "collectives": [{"step": 0, "k": 0}, {"step": 0, "k": 1}], "collectives_by_kind": {"all_reduce": 2}}}
+SUMMARY: dict[str, Any] = {"errors": 0, "unresolved": 0, "n_instances": 9, "n_steps": 3, "error_examples": [{"e": 0}, {"e": 1}, {"e": 2}, {"e": 3}],
+                           "fold": {"tp": {"rank": 1, "world": 2}, "collectives": [{"step": 0, "k": 0}, {"step": 0, "k": 1}], "collectives_by_kind": {"all_reduce": 2}}}
 
 
 def _exits(monkeypatch, rc: int) -> None:
@@ -225,7 +225,7 @@ def test_a_fold_match_whose_every_stage_passes_passes_and_counts_the_peer_bindin
     rc, doc, rank_match, given = _main(tmp_path, monkeypatch)
     assert rc == 0 and doc["pass"] is True and doc["problems"] == []
     assert _by_stage(doc) == {"fold_per_rank": {"0": True, "1": True}, "compare_per_rank": {"0": "PASS", "1": "PASS"},
-                           "global_match_per_rank": {"0": "PASS", "1": "PASS"}, "cross_rank": "PASS"}
+                              "global_match_per_rank": {"0": "PASS", "1": "PASS"}, "cross_rank": "PASS"}
     assert doc["cross_rank"]["peer_binding_n"] == 2 and "peer_binding" not in doc["cross_rank"] and rank_match["peer_binding"] == {"a": 1, "b": 2}
     assert given == [({0: SUMMARY["fold"]["collectives"], 1: SUMMARY["fold"]["collectives"]}, ["links", "provenance", "recorder", "recorder_sha256"])]
 
@@ -239,7 +239,7 @@ def test_a_rank_with_no_observer_log_fails_the_match_and_ran_no_compare_and_no_g
     rc, doc, rank_match, given = _main(tmp_path, monkeypatch, logs=(0,))
     assert rc == 1 and doc["pass"] is False and doc["problems"] == ["rank 1: partner rank missing (no log.rank1.jsonl.gz)"]
     assert _by_stage(doc) == {"fold_per_rank": {"0": True, "1": False}, "compare_per_rank": {"0": "PASS", "1": None},
-                           "global_match_per_rank": {"0": "PASS", "1": None}, "cross_rank": "FAIL"}
+                              "global_match_per_rank": {"0": "PASS", "1": None}, "cross_rank": "FAIL"}
     assert doc["cross_rank"]["failed"] == ["partner_rank"] and doc["cross_rank"]["peer_binding_n"] == 0
     assert rank_match == {} and given == []
 

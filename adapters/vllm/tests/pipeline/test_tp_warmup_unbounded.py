@@ -18,7 +18,8 @@ class _LLM:
     """An engine whose ranks answer the warm-up's calls from ``finalize``, one entry per rank."""
 
     def __init__(self, finalize: list[dict]) -> None:
-        self.finalize, self.rpcs = finalize, []
+        self.finalize = finalize
+        self.rpcs: list[tuple] = []
 
     def collective_rpc(self, method, args=(), timeout=None):
         name = method if isinstance(method, str) else method.__name__
