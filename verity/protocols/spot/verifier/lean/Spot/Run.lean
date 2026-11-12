@@ -25,17 +25,20 @@ check the stream ran on it, in the stream's order.
   sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
   (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
   `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
-  public-items rule on the interior values, the population (else `interior-population`), R1–R8 against its copies under
-  `subset:Q·n` (all of them committed), `population-order`, and its receipt; and `second`: the second stage on its own
+  public-items rule on the interior values, the population (else `interior-population`), its window (else
+  `interior-window`: the boundary registration's, or the one the verifier computes from the boundary registration's
+  digest and the sample, `interiorWindowOk`), R1–R8 against its copies under `subset:Q·n` (all of them committed),
+  `population-order`, and its receipt; and `second`: the second stage on its own
   coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
   registration's digest and carrying their evidence as the first stage's do (`coins`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
   over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
-  interior registration, the second stage's cells and the design's links and wires and the rows their units read, which
-  the verifier derives from the replay block's Definition in the challenger's program (`SecondStage.replayLinks`,
-  `SecondStage.replayWires`, `SecondStage.replayRows`), as its `statements` check
+  interior registration, the second stage's cells and the design's links and wires, the rows their units read and the
+  names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
+  program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
+  `SecondStage.replayReturns`), as its `statements` check
   (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
@@ -72,9 +75,10 @@ the interior values, the record and its place in the log, the second stage's coi
 record's proved units, instances, served units and session roots, the second-stage sessions' statements
 (`SecondStage.Stmt`), and the circuit file each template's sessions verify against, by SHA-512, with the reference
 header and registered reads round 2 holds their statements to (`SecondStage.headerOk`, `SecondStage.valuesOk`), as the
-auditor's params name them (`templateCircuits`). The design's links and wires and their rows are the verifier's own,
-from the replay block's Definition in the boundary program (`SecondStage.replayLinks`, `SecondStage.replayWires`,
-`SecondStage.replayRows`), and never part of it. -/
+auditor's params name them (`templateCircuits`). The design's links and wires, their rows and the names of what the
+block returns are the verifier's own, from the replay block's Definition in the boundary program
+(`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`, `SecondStage.replayReturns`), and
+never part of it. -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -180,6 +184,14 @@ private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
   | .twoStage grain _ _ => jeq query grain
   | _ => true
 
+/-- **The interior registration's window** is the boundary registration's, or the one the verifier computes from the
+boundary registration's digest `digest` (lowercase hex) and the replay sample (`SecondStage.interiorRoot`); `boundary`
+and `interior` are the two registrations' window roots as the verifier holds them. So one session samples both stages,
+or the second stage's is the session on the one root the boundary registration and its sample name: the second stage
+is sampled on no other window. -/
+def interiorWindowOk (boundary interior : Option String) (digest : String) (sample : Array Nat) : Bool :=
+  interior == boundary || (interior.isSome && interior == SecondStage.interiorRoot digest sample)
+
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
 in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
 and codes. -/
@@ -192,6 +204,9 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
   let ks ← k.over (← Select.templateIds v.query) ns
   let m := sample.size * ns.toList.sum
   if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
+  let boundary ← Registration.digestHex i.record
+  if !interiorWindowOk i.params.verifier.windowRoot v.windowRoot boundary sample then
+    return .error ("interiors", #["interior-window"])
   let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Registration.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
@@ -228,7 +243,8 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         reported := Record.sessionRegistered i.verdicts, verified := SecondStage.verifiedOf i.verdicts,
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
-        rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn }
+        rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+        returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),

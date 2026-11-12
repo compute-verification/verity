@@ -558,7 +558,10 @@ class WindowCommitmentRecord:
     is the fan-out F its registration verdict published on the challenger's program (R8, `Verdict.fanout`): a two-stage
     registration's is its replay grain's, the N at which `plancheck.two` prices it in the capped form.
     `rests_on_period_check` is the tied values its verdict let through (`Verdict.rests_on_period_check`): its acceptance
-    rests on the network period check."""
+    rests on the network period check. `returned` is the bits one replay block of a two-stage registration returns,
+    counted on the challenger's own program (`second_stage.replay_returned`): no served cap S below it prices the
+    registration (`plancheck.two`'s `returned`). None for a one-stage registration, an interior one, and a replay
+    block whose links can't be derived."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
@@ -568,6 +571,7 @@ class WindowCommitmentRecord:
     received_at: float | None = None
     fanout: int | None = field(default=None, compare=False)
     rests_on_period_check: tuple[str, ...] = field(default=(), compare=False)
+    returned: int | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1950,7 +1954,7 @@ class Stream:
                 return list(v.codes)
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
-                                                     v.fanout, v.rests_on_period_check)
+                                                     v.fanout, v.rests_on_period_check, self._returned(got["program"]))
             op["registration"] = _registration_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
@@ -2002,9 +2006,15 @@ class Stream:
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
                       received_at: float | None = None, fanout: int | None = None,
-                      rests_on_period_check: tuple[str, ...] = ()) -> WindowCommitmentRecord:
+                      rests_on_period_check: tuple[str, ...] = (), returned: int | None = None) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check)
+                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
+                                      returned)
+
+    def _returned(self, program: Program) -> int | None:
+        """The bits one replay block of a two-stage stream's registration returns (`second_stage.replay_returned`, on
+        the challenger's own `program`, its replay blocks' population); None for a one-stage stream's."""
+        return None if self.replay is None else SS.replay_returned(program, descriptor_id(self.replay))
 
     def _append(self, reg: WindowCommitmentRecord) -> None:
         self._logged(dict(reg.record), reg.digest)
@@ -2053,12 +2063,16 @@ class Stream:
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
         of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
-        query, its population (`interior-population`: Q·n_rho), then one-stage's R1-R8 against the challenger's own copies
+        query, its population (`interior-population`: Q·n_rho), its window (`interior-window`: `window_root` is the
+        boundary registration's, or the root the verifier computes from the boundary registration's digest and the
+        replay sample, `second_stage.interior_root`, so the second stage is sampled on one session with the first or
+        on the session on that one root), then one-stage's R1-R8 against the challenger's own copies
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
-        It names no links, wires or rows: the verifier derives them from the replay block's Definition
-        (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`).
+        It names no links, wires or rows, nor what the block returns: the verifier derives them from the replay
+        block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`,
+        `second_stage.replay_returns`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
@@ -2072,6 +2086,10 @@ class Stream:
             if v.ok and not (type(n := record.get("population")) is int and n == m):
                 v = _refuse("interior-population", {"population": n, "replay_sample": len(first.units),
                                                     "n_rho": self.n_rho}).verdict
+            boundary = self._entries[first.registration.order].copies[8]
+            if v.ok and window_root != boundary and (window_root is None or window_root != SS.interior_root(
+                    first.registration.digest, D.proved(first.draw))):
+                v = _refuse("interior-window", {"window_root": window_root, "boundary": boundary}).verdict
             if v.ok:
                 program, query = self.interior_program(len(first.units)), self.spec.check.query
                 earlier = self._earlier(record, supplied, outputs)
@@ -2426,7 +2444,8 @@ class Stream:
                      A.session_registered(verdicts), SS.verified_of(verdicts),
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
                      wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
-                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)))
+                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)),
+                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)

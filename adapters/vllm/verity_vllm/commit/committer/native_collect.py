@@ -320,8 +320,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         for src in self.sources:
             src.install()
         if getattr(self, "external_acquisition", False):
-            # compiled execution: the module boundaries are acquired by record ops inside the compiled graphs (compiled_source.CompiledGraphSource,
-            # installed before vLLM compiled the model); wrapping the forwards here would never be traced and never run under graph replay
+            # compiled execution: the attached source acquires the values itself (`ServedCompiledSource`); forwards wrapped here would
+            # never be traced and never run under graph replay
             pass
         elif self.wrap:
             for name, m in self._modules:
