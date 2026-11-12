@@ -83,9 +83,10 @@ def anchors(records: Sequence[PC.CallRecord], salt: bytes, first: int = 0) -> li
     out = []
     for rec, an in zip(records, derived(records, salt, first)):
         c, side = rec.call, rec.side
-        want = {"salt": salt, "forward": an.forward, "site": an.site, "weight": an.weight, "rowids": np.array(an.rows),
-                "colids": np.array(an.cols)}
-        have = {"salt": c.salt, "forward": c.forward, "site": c.site, "weight": c.weight, "rowids": c.rowids, "colids": c.colids}
+        want: dict[str, Any] = {"salt": salt, "forward": an.forward, "site": an.site, "weight": an.weight,
+                                "rowids": np.array(an.rows), "colids": np.array(an.cols)}
+        have: dict[str, Any] = {"salt": c.salt, "forward": c.forward, "site": c.site, "weight": c.weight, "rowids": c.rowids,
+                                "colids": c.colids}
         out += [f"call {rec.index}: anchored {k} is not the verifier's" for k in want if not np.array_equal(have[k], want[k])]
         if (side.scheme, side.weight, side.salt) != (rec.scheme, an.weight, salt) or not np.array_equal(side.colids, want["colids"]):
             out.append(f"call {rec.index}: its weight side is not weight {an.weight}'s under the run's salt and columns")
@@ -130,16 +131,20 @@ def check_call(rec: PC.CallRecord) -> list[str]:
     return why
 
 
-def tamper_tiles(records: Sequence[PC.CallRecord], leaf: int = 7) -> tuple[list[PC.CallRecord], dict[str, Any]]:
-    """A negative control: the calls as a prover commits and opens them with word ``leaf`` of every tile of the first call
+#: the word of each tile that `tamper_tiles` flips
+TAMPER_LEAF = 7
+
+
+def tamper_tiles(records: Sequence[PC.CallRecord]) -> tuple[list[PC.CallRecord], dict[str, Any]]:
+    """A negative control: the calls as a prover commits and opens them with word `TAMPER_LEAF` of every tile of the first call
     flipped in its low bit. Each call's tile stratum samples at least one tile (`plan.WorkLaw`'s floor), so whatever the
     window's fresh sample, a wrong tile is proved. Returns the calls and where the tamper is."""
     rec = records[0]
     nat = PN.Native(rec.call, rec.scheme)
     tiles = [nat.index("tile", rs, cs) for rs in range(nat.ms) for cs in range(nat.ns)]
-    bad = PN.commit_call(rec.index, rec.scheme, rec.call, tamper={(u, leaf): int(rec.opening(u)[leaf]) ^ 1 for u in tiles},
+    bad = PN.commit_call(rec.index, rec.scheme, rec.call, tamper={(u, TAMPER_LEAF): int(rec.opening(u)[TAMPER_LEAF]) ^ 1 for u in tiles},
                          side=rec.side)
-    return [bad, *records[1:]], {"what": "tile", "call": rec.index, "units": tiles, "leaf": leaf}
+    return [bad, *records[1:]], {"what": "tile", "call": rec.index, "units": tiles, "leaf": TAMPER_LEAF}
 
 
 def unit_holds(rec: PC.CallRecord, nat: PN.Native, u: int, opened) -> str | None:
@@ -228,7 +233,10 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
         except (DomainError, ValueError) as e:
             why.append(f"the window's draw is refused: {e}")
             plans = []
-    wrong, roles, sizes, done = [], Counter(), Counter(), {}
+    wrong: list[list[Any]] = []
+    roles: Counter[str] = Counter()
+    sizes: Counter[str] = Counter()
+    done: dict[tuple[Any, Any], Any] = {}
     openers = {s.weight: (PN.NativeWeight.of(s), lru_cache(maxsize=None)(s.opening)) for s in sides}
     for rec, t, plan in zip(records, traced if plans else (), plans):
         nat, opened = PN.Native(rec.call, rec.scheme), lru_cache(maxsize=None)(rec.opening)
@@ -271,7 +279,7 @@ def int7_linear(x: np.ndarray, w: np.ndarray, n: int) -> tuple[np.ndarray, np.nd
     return a[0], s, b, t, (b.astype(np.int64) @ a[0].astype(np.int64)) & M32
 
 
-def dequant(z: np.ndarray, s: np.ndarray, t: np.ndarray, bias: Sequence[int]) -> list[int]:
+def dequant(z: np.ndarray, s: np.ndarray, t: np.ndarray, bias: Sequence[int] | np.ndarray) -> list[int]:
     """The circuit's dequantization of a row (`pouw_native.dequant`): y_j = bf16(fp32(s)·fp32(t_j)·Z_j) + bias_j."""
     y = PN.dequant(np.asarray(z, np.int64).astype(np.uint32), s.view(np.uint32)[0], t.view(np.uint32), np.asarray(bias, np.uint32))
     return [int(v) for v in y]
