@@ -259,6 +259,12 @@ def test_a_sheet_from_its_card_file() -> None:
     assert refusal(log, over, auditor) == "capacity"
 
 
+def test_a_sheet_reads_the_memory_a_program_gets() -> None:
+    """A card file's second reading of device memory is not the sheet's: its `mem` is `store.dram`."""
+    more = {"dram_installed": _entry(24 << 30)}
+    assert Sheet.of_file({**CARD_FILE, "store": {**CARD_FILE["store"], **more}}) == Sheet.of_file(CARD_FILE)
+
+
 def test_the_encoding_round_trips_and_is_pinned() -> None:
     """A rational is the string `n` or `n/d` in lowest terms, so a sheet has one encoding and one digest."""
     log = grown()
