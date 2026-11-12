@@ -51,8 +51,9 @@ class _HeldPath:
 
 
 def _served(path, **kw) -> tuple[FakeScheduler, ST.StepTrace]:
-    trace = ST.StepTrace(path.path if isinstance(path, _HeldPath) else path, **kw)
-    if isinstance(path, _HeldPath):
+    held = isinstance(path, _HeldPath)
+    trace = ST.StepTrace(path.path if held else path, **kw)
+    if held:
         trace.path = path
     sched = FakeScheduler(budget=8, max_seqs=4)
     return sched, trace.install(sched)
