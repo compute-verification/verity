@@ -42,7 +42,8 @@ and the other, which follows.
 * An amount at a moment (memory) has one row for each accepted answer, a session, and one for the period, which states
   the least verified (or the most free) of its sessions at their errors summed and counts them (`Row.sessions`).
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
-* What no accepted answer covers is `Status.notAudited`: charged at capacity.
+* What no accepted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
+  that none of its leaves holds.
 
 The comparison of the rows with what an auditor states it accepts is not here.
 -/
@@ -182,9 +183,9 @@ inductive Side where
   | free
   deriving DecidableEq, Repr
 
-/-- How an answer names the steps its span covers, on a count of steps its protocol's answers share, so that two
-answers' spans can be shown disjoint: by the index of its one step (an epoch); by the indices of its first and last
-steps, both included; or by the index of its first step and the count of its steps (a list counts its entries). -/
+/-- How an answer names the steps its span covers, so that two answers' spans can be shown disjoint: by the index of its
+one step (an epoch); by the indices of its first and last steps, both included; or by the index of its first step and
+the count of its steps (a list counts its entries). The indices are those of one series of steps (`Amount.series`). -/
 inductive Steps where
   | index (key : Key)
   | range (first last : Key)
@@ -220,7 +221,9 @@ inductive Uncertified where
 
 /-- **The form of one amount a protocol publishes**, and the part of the registered hardware it is about. `metric` names
 the amount among its protocol's; `place` is the key under which an answer names the location or the link it ran on, none
-when it is about the whole site. -/
+when it is about the whole site. `series` is the key under which an answer names the series its steps are numbered in
+(a session whose steps are counted from its own start), none when every answer's steps are numbered in one series: two
+answers that name different series cannot be shown disjoint. -/
 structure Amount where
   metric : String
   part : Part
@@ -229,6 +232,7 @@ structure Amount where
   unit : Measure
   side : Side
   time : Time
+  series : Option Key := none
   share : Option Key := none
   error : Key
   pool : Pool := .sum
@@ -268,7 +272,8 @@ instance instDecidableFormed (c : Account) : Decidable c.Formed := by unfold For
 
 /-- What one accepted answer certifies of one amount, in its part's unit: the place it names, whether it certifies
 anything, the amount with its share taken off, its error, the ticks its span covers, the steps it names its span by
-(the first, and the one after the last; none where it names none), and the capacity it carries. -/
+(the first, and the one after the last; none where it names none) with the series they are numbered in, and the
+capacity it carries. -/
 structure Reading where
   place : Option String
   certified : Bool
@@ -276,6 +281,7 @@ structure Reading where
   error : Ratio
   ticks : Nat
   steps : Option (Nat × Nat) := none
+  series : String := ""
   capacity : Option Nat
   deriving DecidableEq, Repr
 
@@ -325,7 +331,8 @@ def Steps.read (name : Steps) (a : Answer) : Option (Nat × Nat) :=
       if 0 < n then some (i, i + n) else none
 
 /-- **An answer read by an amount's form**: none when the answer does not hold what the form names. An answer that does
-not name the steps its form asks for is read as one that names no span: it covers no tick. -/
+not name the steps its form asks for, or the series they are numbered in, is read as one that names no span: it covers
+no tick. -/
 def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let place : Option String ← match m.place with
     | none => some none
@@ -339,9 +346,12 @@ def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let certified : Bool ← match m.uncertified with
     | .flagged k => (k.read a).bind fun j => j.getBool?.toOption
     | _ => some true
-  let steps : Option (Nat × Nat) := match m.time with
-    | .steps name _ => name.read a
-    | _ => none
+  let series : Option String := match m.series with
+    | none => some ""
+    | some k => (k.read a).map fun j => j.compress
+  let steps : Option (Nat × Nat) := match m.time, series with
+    | .steps name _, some _ => name.read a
+    | _, _ => none
   let ticks : Nat ← match m.time with
     | .moment => some 0
     | .unstated => some 0
@@ -350,7 +360,7 @@ def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let capacity : Option Nat ← match m.capacity with
     | none => some none
     | some k => (k.read a).bind fun j => (natOf j).map fun n => some (n * m.unit.base)
-  pure { place, certified, error, ticks, steps, capacity,
+  pure { place, certified, error, ticks, steps, capacity, series := series.getD "",
          amount := m.unit.base * ((ns.zip es).map fun x => kept x.1 x.2).sum }
 
 /-- A row's standing: an amount certified, an error of 1 or more ("no bound at this period"), or a resource no accepted
@@ -425,14 +435,14 @@ private def certifiedRow (m : Amount) (place reading : String) (total : Option N
 leaves it is about. None when the site holds no such leaf.
 
 A flow's amounts add only over spans shown disjoint. Its verified amount is the largest total over certified answers
-whose named spans are pairwise disjoint, or the largest amount of one that names no span, whichever is more: two
-answers of one span, or of overlapping spans, count the larger once, and an answer that names no span adds to none. Its
-free amount is the certified answers' amounts summed, plus the capacity of the ticks they do not cover, a tick's cover
-counted once: the steps of the named spans, or the longest span that names none, whichever is more. Where the
-registration holds no capacity for those ticks it prints no amount.
+whose named spans are of one series and pairwise disjoint, or the largest amount of one that names no span, whichever
+is more: two answers of one span, or of overlapping spans, count the larger once, and an answer that names no span, or
+a span of another series, adds to none. Its free amount is the certified answers' amounts summed, plus the capacity of
+the ticks they do not cover, a tick's cover counted once: the steps of one series' named spans, or the longest span
+that names none, whichever is more. Where the registration holds no capacity for those ticks it prints no amount.
 
 An amount at a moment has a row for each session and one for the period: the least verified, or the most free, of its
-sessions, at their errors summed. -/
+sessions. The period's error is its answers' as the amount's `pool` says, for a flow and for a moment alike. -/
 def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (ticks : Nat) (place : Option String) (rs : List Reading) : List Row :=
   let xs := m.part.leavesAt S place
@@ -441,23 +451,25 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
     | [] => [("", none)]
     | cs => cs.map fun c => (c.1, some c.2)
   let at_ : String := place.getD ""
+  let error : Ratio := match m.pool, rs with
+    | .once, [r] => r.error
+    | .once, _ => whole
+    | .sum, _ => rs.foldl (fun e r => plus e r.error) ⟨0, 1⟩
   if xs.isEmpty then [] else totals.flatMap fun (reading, total) =>
     if m.part.flow then
       let good := rs.filter fun r => r.certified
-      let error : Ratio := match m.pool, rs with
-        | .once, [r] => r.error
-        | .once, _ => whole
-        | .sum, _ => rs.foldl (fun e r => plus e r.error) ⟨0, 1⟩
-      let named : List (Nat × Nat × Nat) := good.filterMap fun r => r.steps.map fun s => (s.1, s.2, r.amount)
+      let named : List (List (Nat × Nat × Nat)) := (good.map fun r => r.series).eraseDups.map fun s =>
+        good.filterMap fun r => if r.series = s then r.steps.map fun x => (x.1, x.2, r.amount) else none
       let unnamed : List Reading := good.filter fun r => r.steps.isNone
       let seconds : Ratio := match m.time with
         | .steps _ s => s
         | _ => ⟨0, 1⟩
-      let cover : Nat := max (ticksOf (stepsCovered (named.map fun x => (x.1, x.2.1))) seconds tick)
+      let cover : Nat := max
+        ((named.map fun g => ticksOf (stepsCovered (g.map fun x => (x.1, x.2.1))) seconds tick).foldl max 0)
         ((unnamed.map fun r => r.ticks).foldl max 0)
       let uncovered : Nat := ticks - cover
       let n : Nat := match m.side with
-        | .verified => max (disjointMost named) ((unnamed.map fun r => r.amount).foldl max 0)
+        | .verified => max ((named.map disjointMost).foldl max 0) ((unnamed.map fun r => r.amount).foldl max 0)
         | .free => (good.map fun r => r.amount).sum + total.getD 0 * uncovered
       let row : Row := certifiedRow m at_ reading (total.map fun c => c * ticks) n error rs.length none
       if m.side = .free ∧ total = none ∧ 0 < uncovered then
@@ -477,7 +489,6 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
       let worst : Nat := match m.side with
         | .verified => each.foldl (fun n x => min n x.1) ((each.head?.map fun x => x.1).getD 0)
         | .free => each.foldl (fun n x => max n x.1) 0
-      let error : Ratio := each.foldl (fun e x => plus e x.2) ⟨0, 1⟩
       (each.zipIdx.map fun (x, i) => certifiedRow m at_ reading total x.1 x.2 1 (some i)) ++
         [certifiedRow m at_ reading total worst error rs.length none]
 
@@ -507,17 +518,27 @@ def unaudited (S : Site) (digest : Sheet → String) (A : Site.Registration.Audi
       { metric := "not audited", part := p, place := ", ".intercalate rest, reading, status := .notAudited,
         capacity := total, verified := some 0, free := total }
 
+/-- The rows of the device memory no leaf holds: a device's sheet states its memory, its memory leaves hold at most
+that (`Site.Entry.Capacity`), and an answer names leaves, so the bytes of the sheet beyond the leaves' are charged at
+capacity. -/
+def unregistered (S : Site) (digest : Sheet → String) : List Row :=
+  S.units.filterMap fun d => (S.sheetOf digest d).bind fun k =>
+    let rest : Nat := 8 * (k.mem - S.held d)
+    if rest = 0 then none
+    else some { metric := "not audited", part := .memory [.hbm], place := d, reading := "registered",
+                status := .notAudited, capacity := some rest, verified := some 0, free := some rest }
+
 /-- **The accounting rows** of the site `S` registered at `head`, over a period of `ticks` ticks of `tick` seconds, from
 the protocols' `answers` read by their `accounts`: the rows of each amount at each place its answers name, then the rows
-of what none covers. `digest` and `A` are the registration's: the sheets' digest and the auditor, whose estimate
-compute's `bound` reading reads. -/
+of what none covers and of the device memory no leaf holds. `digest` and `A` are the registration's: the sheets' digest
+and the auditor, whose estimate compute's `bound` reading reads. -/
 def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (head : String) (tick : Figure)
     (ticks : Nat) (accounts : List Account) (answers : List Answer) : List Row :=
   let cs := readings head tick accounts answers
   let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.place)).eraseDups
   (groups.flatMap fun g =>
       g.1.rows S digest A tick ticks g.2 ((cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2)) ++
-    unaudited S digest A tick ticks cs
+    unaudited S digest A tick ticks cs ++ unregistered S digest
 
 /-- A row as JSON, under the shared column names: `metric`, `verified`, `capacity`, `free` and `error`, with the part,
 its unit, the place, the reading, the session, the count of answers, the standing and the terms not priced. An amount
@@ -600,7 +621,7 @@ private def ranged : Account :=
   { protocol := "toy/ranged", head := some (.profile "registration")
     amounts := [{ metric := "audited", part := .compute, key := .published "work", unit := macs, side := .verified,
                   time := .steps (.range (.published "first") (.published "last")) ⟨1, 1000000⟩,
-                  error := .published "delta", uncertified := .safe }] }
+                  series := some (.profile "session"), error := .published "delta", uncertified := .safe }] }
 
 /-- A read rate bounded from above over two tiers, one of them a host's, whose rate no sheet states. -/
 private def spare : Account :=
@@ -624,10 +645,12 @@ private def check (k ns : Nat) (eps : String) (head : String := "h") (start : Op
   accept "toy/sent" ([("K", Lean.toJson k), ("eps", .str eps), ("span_ns", Lean.toJson ns)] ++
     (start.map fun s => ("start_ns", Lean.toJson s)).toList) (at_ head [("link", .str "up0")])
 
-/-- An audit of `work` MACs over the steps `span` names, first and last; over no named span where it is none. -/
-private def audit (work : Nat) (span : Option (Nat × Nat)) : Answer :=
+/-- An audit of `work` MACs over the steps `span` names, first and last, numbered in `session`; over no named span
+where it is none. -/
+private def audit (work : Nat) (span : Option (Nat × Nat)) (session : String := "s0") : Answer :=
   accept "toy/ranged" ([("delta", .str "1/1000"), ("work", Lean.toJson work)] ++
-    (span.map fun s => [("first", Lean.toJson s.1), ("last", Lean.toJson s.2)]).getD []) (at_ "h")
+    (span.map fun s => [("first", Lean.toJson s.1), ("last", Lean.toJson s.2)]).getD [])
+    (at_ "h" [("session", .str session)])
 
 private def firstVerified (rs : List Row) : List (Option Nat × String) :=
   (rs.take 1).map fun r => (r.verified, r.error.toString)
@@ -652,7 +675,8 @@ private def cells (rs : List Row) :
 /-- The example's site with a DRAM leaf under its host. -/
 private def hosted : Site :=
   ⟨[sheet],
-    locs ++ [{ id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes := 1 <<< 31 }], links⟩
+    locs ++ [{ id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes := 1 <<< 31 }],
+    links⟩
 
 private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacity S digest auditor tick (p.leaves S)
 
@@ -675,13 +699,18 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
 -- the example protocol's own answer reads by its account: two units at its profile's error
 #guard (account.amounts.map fun m => (m.read tick passed).map fun r => (r.amount, r.error.toString)) ==
   [some (2, "1/1000000")]
--- it names no registration, so it is held to none: nothing is certified, and every part of the site is charged
+-- it names no registration, so it is held to none: nothing is certified, and every part of the site is charged, the
+-- 63 GiB of the device's sheet that its one leaf does not hold among them
 #guard cells (table [account] [passed]) ==
   [("not audited", "gpu0", "stated", some 4000000000, some 0, some 4000000000, "0"),
    ("not audited", "gpu0", "bound", some 4000000000, some 0, some 4000000000, "0"),
    ("not audited", "hbm0", "registered", some 8589934592, some 0, some 8589934592, "0"),
    ("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
-   ("not audited", "up0", "registered", some 100000, some 0, some 100000, "0")]
+   ("not audited", "up0", "registered", some 100000, some 0, some 100000, "0"),
+   ("not audited", "gpu0", "registered", some (8 * 63 * 2 ^ 30), some 0, some (8 * 63 * 2 ^ 30), "0")]
+-- a device whose leaves hold all of its sheet's memory has no such row
+#guard unregistered ⟨[{ sheet with mem := 1 <<< 30 }], locs.map (fun x =>
+    if x.id = "gpu0" then { x with sheet := digest { sheet with mem := 1 <<< 30 } } else x), links⟩ digest == []
 #guard (table [account] [passed]).all fun r => r.status = .notAudited
 -- compute's capacity at each reading: the sheet's own figures, and the larger of those and the auditor's estimate
 #guard ((table [] [] { auditor with sheet := fun _ => some (rated .zero 4200000000000000) }).take 2).map
@@ -693,6 +722,10 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
    ("held", "gpu0", "registered", some 8589934592, some 5000000000, some 3589934592, "3/100")]
 #guard ((table [held] [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3).map
     (fun r => (r.session, r.sessions)) == [(some 0, 1), (some 1, 1), (none, 2)]
+-- sessions whose protocol says one answer pools the period's error state no error for the period, each still its own
+#guard ((table [{ held with amounts := held.amounts.map fun m => { m with pool := .once } }]
+    [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3).map (fun r => r.status) ==
+  [.certified, .certified, .noBound]
 -- a session that certifies nothing verifies nothing, whatever amount it states
 #guard cells ((table [held] [session 6000000000 "0" false]).take 1) ==
   [("held", "gpu0", "registered", some 8589934592, some 0, some 8589934592, "0")]
@@ -728,6 +761,8 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
 #guard firstVerified (table [ranged] [audit 700 (some (0, 9)), audit 500 none]) == [(some 700, "1/500")]
 #guard firstVerified (table [ranged] [audit 300 (some (0, 9)), audit 500 none]) == [(some 500, "1/500")]
 #guard firstVerified (table [ranged] [audit 300 none, audit 500 none]) == [(some 500, "1/500")]
+-- steps numbered in two sessions cannot be shown disjoint: the larger counts once
+#guard firstVerified (table [ranged] [audit 700 (some (0, 9)), audit 500 (some (10, 19)) "s1"]) == [(some 700, "1/500")]
 -- a span named by one step, an epoch; by its first and last steps; and one whose last step is before its first
 #guard (Steps.index (.published "first")).read (audit 1 (some (7, 9))) == some (7, 8)
 #guard (Steps.range (.published "first") (.published "last")).read (audit 1 (some (7, 9))) == some (7, 10)
@@ -745,7 +780,8 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
 #guard ((table [worked] [credit, credit]).take 1).map (fun r => r.status) == [.noBound]
 -- what the answers cover is not charged again
 #guard cells ((table [held, sent, worked] [session 6000000000 "1/100", check 3000 1000 "1/1000", credit]).drop 5) ==
-  [("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0")]
+  [("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
+   ("not audited", "gpu0", "registered", some (8 * 63 * 2 ^ 30), some 0, some (8 * 63 * 2 ^ 30), "0")]
 #guard ((table [sent] [check 3000 400 "1/1000"]).take 1).map (fun r => (r.toJson.compress)) ==
   ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"link\"," ++
    "\"place\":\"up0\",\"reading\":\"registered\",\"session\":null,\"sessions\":1,\"status\":\"certified\"," ++

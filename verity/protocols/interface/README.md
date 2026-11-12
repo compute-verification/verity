@@ -145,10 +145,12 @@ held to no registration.
 (`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). A row's capacity is a function of
 the Site (`Account.Part.capacity`), at each reading the registration can be read at, and is never copied from an answer.
 A flow has one row for the period. Its answers' amounts add only over spans shown disjoint: an answer names the steps
-of its span (`Account.Steps`), a verified amount is the largest total over answers whose named spans share no step, or
-the largest amount of an answer that names none, and a tick's cover counts once. An amount at a moment has one row for
-each accepted answer and one for the period, at its sessions' errors summed. An error of 1 or more prints "no bound at
-this period", and what no accepted answer covers is "not audited: charged at capacity".
+of its span (`Account.Steps`) and, where its steps are numbered within a session, the series they are numbered in; a
+verified amount is the largest total over answers of one series whose named spans share no step, or the largest amount
+of an answer that names none, and a tick's cover counts once. An amount at a moment has one row for each accepted
+answer and one for the period, at its sessions' errors summed. An error of 1 or more prints "no bound at this period",
+and what no accepted answer covers is "not audited: charged at capacity", as is the memory of a device's sheet that
+none of its leaves holds.
 `Account.Example.account` is the example protocol's value; every other protocol's is written with that
 protocol. A caller that holds the Site as JSON, as the registration's view does under `site`, decodes it with
 `Core.Site.ofJson`, which reads exactly what `Site.toJson` writes.
