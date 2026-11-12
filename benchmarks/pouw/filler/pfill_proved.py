@@ -43,8 +43,7 @@ import json
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scoring as S
 from pfill_arm import fold_share, fold_status, products_per_slot, theorem_k_setting
 

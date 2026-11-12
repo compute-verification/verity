@@ -257,7 +257,10 @@ def main():
             print(json.dumps(r))
         print(json.dumps({"gates": g}))
         return
-    f = lambda v, p=4: "-" if v is None else (f"{v:.{p}f}" if isinstance(v, float) else str(v))
+
+    def f(v, p=4) -> str:
+        return "-" if v is None else (f"{v:.{p}f}" if isinstance(v, float) else str(v))
+
     print("| set | TP | B | L | base ms | comm exposed | served | idle | off-comm idle | phase ms | slowdown | fill | "
           f"fill K (x{K_FRACTION}) | fill (whole tiles) | coverage base → phase | comm+filler/comm | receipts bad/checked |")
     print("|" + "---|" * 17)

@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from mref import decode, duo_receipts, words  # noqa: E402
+from mref import decode, duo_receipts, words
 
 FMTS = ["i8", "e4"]
 ALS = {"pm1": 1, "u17": 2, "u17w": 3, "u17p": 2, "u17wp": 3}   # u17p, u17wp: the noise of u17, u17w, five lanes a patch
