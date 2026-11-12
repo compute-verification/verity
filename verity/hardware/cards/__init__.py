@@ -1,12 +1,13 @@
 """The hardware cards: one TOML file per SKU (``<sku>.toml``, beside this file), the one source of each card's numbers.
 
-A card is a GPU's (``kind = "gpu"``) or a host's (``kind = "host"``: a server's CPUs and DRAM, apart from the GPUs it
-carries). Every number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program
-on that SKU and firmware exceeds it: what the model's premises need), ``measurement`` (a measured value, so only a lower
-bound on the ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document or an ``art:`` id
-(a run's record), and a node by its kind, never its host name. The Lean card tables (``security/Definitions/Core/Accel``)
-are held to the GPU cards that name one (``lean``), number by number (``verity/hardware/tests/test_lean.py``). Stdlib
-only, and it imports no other unit.
+A card is a GPU's (``kind = "gpu"``), a host's (``kind = "host"``: a server's CPUs and DRAM, apart from the GPUs it
+carries) or a server's (``kind = "server"``: a server model's network ports, apart from its CPUs, DRAM and GPUs). Every
+number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program on that SKU
+exceeds it, whatever firmware it runs: what the model's premises need), ``measurement`` (a measured value, so only a
+lower bound on the ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document or an
+``art:`` id (a run's record), and a node by its kind, never its host name. The Lean card tables
+(``security/Definitions/Core/Accel``) are held to the GPU cards that name one (``lean``), number by number
+(``verity/hardware/tests/test_lean.py``). Stdlib only, and it imports no other unit.
 
 ``rate`` is the one calculator of a GPU's peak rates, Lean's ``card.ρ``: a reader that needs the tensor peak at some
 clock calls it rather than multiplying the card's numbers itself.
@@ -17,6 +18,7 @@ skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 card = load("h200-sxm-141gb")
 card["clock"]["sm"]["value"]       # 1980 (MHz)
 card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
+load("dgx-h200")["link"]["rate"]   # {'value': 5011000000000.0, 'unit': 'bit/s', 'mark': 'ceiling', 'source': ...}
 rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
 rate(card, mhz=1980)               # Fraction(1070530560000000): the same at clock.sm's 1980 MHz, the second reading
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
@@ -32,7 +34,7 @@ from pathlib import Path
 from verity.errors import InvalidArtifact
 
 CARDS = Path(__file__).parent
-KINDS = ("gpu", "host")
+KINDS = ("gpu", "host", "server")
 MARKS = ("ceiling", "measurement", "placeholder")
 ENTRY = frozenset({"value", "unit", "mark", "source"})
 WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate

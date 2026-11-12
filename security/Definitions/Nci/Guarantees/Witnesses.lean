@@ -13,8 +13,6 @@ public import Definitions.Nci.Assumptions.Threads
 public import Definitions.Nci.Assumptions.Baseline
 public import Definitions.Nci.Assumptions.Layered
 public import Definitions.Nci.Assumptions.Dampener
-public import Definitions.Nci.Assumptions.Training
-public import Definitions.Nci.Support
 public import Definitions.Nci.Guarantees.CoverTraining
 public import Definitions.Nci.Guarantees.Remote
 public import Definitions.Nci.Cut.Toy
@@ -211,81 +209,6 @@ def DampenerThreadedSlots_nontrivial : Prop :=
         unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
-
-/-- **`IncompressibleContainedTraining`'s premises hold together** at the toy, with `c = 2`, `k = 1`,
-`b_w = b_a = 1/2`, `κ = 1`, the chain `ch1` and the threading `T1`. -/
-def IncompressibleContainedTraining_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2) ∧ Assumptions.Coverage 1 D (2 * ch1.G)
-
-/-- **`IncompressibleContainedTraining` without coverage**: at the chain `ch0` of no multiplication and the threading
-`T0`, charging `b_w = 1` and `b_a = 2`, `κ = 1` is no coverage, and `κ F size(r) ≤ size(d)` fails, `F ≥ 3/2`. -/
-def IncompressibleContainedTraining_nontrivial : Prop :=
-  (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ (∀ ℓ, 1 ≤ (ch0 C).d ℓ) ∧ CompliesRate 2 (1 / 2) D ∧
-    Assumptions.ThetaRegistered D D M1 ∧ Assumptions.TrainingIncompressible D (ch0 C) (T0 D) 2 1 1 2 ∧
-    ¬ Assumptions.Coverage 1 D (2 * (ch0 C).G) ∧
-    ¬ (1 * F (1 / 2) 1 1 2 1 * D.D.size D.D.computed ≤ D.D.size D.D.computed)
-
-/-- **`IncompressibleContainedMatMulOn`'s premises hold together** at the toy, with `c = 2`, `k = K = 1`,
-`b_w = b_a = 1/2`, `μ = 1`, the chain `ch1` at `dd = emax = 1`, no dark gate, and `TrainingIncompressible` at the
-threading `T1`. -/
-def IncompressibleContainedMatMulOn_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧ Assumptions.DarkReads M1 1 ∧
-    Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2)
-
-/-- **`IncompressibleContainedMatMulOn` without `ThetaRegistered`**: `Dθ` complies at `k = 0`, and the bound fails, its
-right side `0` and the product at gate `2`, which `Dθ` computes, charged `μ b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
-def IncompressibleContainedMatMulOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ 1 ≤ 2 ∧ (0 : ℝ) * 2 ≤ 1 ∧
-    (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧ (∀ ℓ, 1 ≤ ch1.d ℓ) ∧ (∀ ℓ, ch1.e ℓ ≤ 1) ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧ Assumptions.DarkReads Mθ 1 ∧
-    Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2) ∧
-    ¬ (max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
-          (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
-        (univ.filter fun p : (ℓ : Fin ch1.L) × Fin ch1.N × Fin (ch1.e ℓ) × Fin (ch1.d ℓ) =>
-          ch1.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
-      0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ))
-
-/-- **`IncompressibleContainedTrainingOn`'s premises hold together**: `IncompressibleContainedMatMulOn_honest`'s
-instance at coverage `κ = 1`. -/
-def IncompressibleContainedTrainingOn_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧ Assumptions.DarkReads M1 1 ∧
-    Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2) ∧ Assumptions.Coverage 1 D (2 * ch1.G)
-
-/-- **`IncompressibleContainedTrainingOn` without `ThetaRegistered`**: `IncompressibleContainedMatMulOn_nontrivial`'s
-instance at coverage `κ = 1`; the bound's left side is `1/2 · κ size(r) = 1` and its right side `0`. -/
-def IncompressibleContainedTrainingOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ 1 ≤ 2 ∧ (0 : ℝ) * 2 ≤ 1 ∧
-    (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧ (∀ ℓ, 1 ≤ ch1.d ℓ) ∧ (∀ ℓ, ch1.e ℓ ≤ 1) ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧ Assumptions.DarkReads Mθ 1 ∧
-    Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2) ∧
-    Assumptions.Coverage 1 D (2 * ch1.G) ∧
-    ¬ (max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
-          (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
-        (1 * D.D.size D.D.computed - 2 * Mθ.dark.card) ≤
-      2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
-
-/-- **`IncompressibleThreadedThrottled`'s and `IncompressibleThreadedThrottledOn`'s premises hold together**:
-`ThreadedThrottled_honest`'s instance under `TrainingIncompressible` at the chain `ch1`. -/
-def IncompressibleThreadedThrottled_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    T1.Threaded 2 1 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2)
-
-/-- **`IncompressibleThreadedThrottled` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance under
-`TrainingIncompressible` at the chain `ch1`. -/
-def IncompressibleThreadedThrottled_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
-    T1.Threaded 2 0 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 0 (1 / 2) (1 / 2) ∧
-    ¬ ((1 / 2 : ℝ) * T1.M.card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
-
-/-- **`IncompressibleThreadedThrottledOn` without `ThetaRegistered`**: `ThreadedThrottledOn_nontrivial`'s instance
-under `TrainingIncompressible` at the chain `ch1`. -/
-def IncompressibleThreadedThrottledOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
-    T1.Threaded 2 0 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 0 (1 / 2) (1 / 2) ∧
-    ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
 
 /-- **`DampenerRemote`'s premises hold together** over the outcomes `Bool` sampled uniformly: one PoUW window of capacity
 `C = 2`, its certificate never wrong (`p = 0`), all of it certified (`W = 2`), no incorrect proof block, so that every
