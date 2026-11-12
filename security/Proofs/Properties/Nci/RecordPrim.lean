@@ -7,13 +7,12 @@ public import Proofs.Properties.Nci.ResolveRows
 # A unit of a primitive
 
 A unit is a member of a root node that is no input node (`unit_place`, `unit_member`), and its Definition may be a
-primitive: then the node is a
-batch of that primitive (`prim_unit`), the unit is one gate, and its Definition has the body the decoder leaves a
-primitive, `default`. Resolution reads that body as it reads any other. A reference of a default body names its
-node 0, which is no node: the default node, whose form is a primitive's, at offset 0. So resolution ends at once,
-at the activation's own gate (`resolve_default`), and every leaf such a unit returns is that gate (`ret_default`,
-`returnsOwn_prim`). The gate is located at the root, at the unit's node, and its operands are the node's member's
-(`gate_member_prim`, `prim_unit_gate`).
+primitive: then the node is a batch of that primitive (`prim_unit`), the unit is one gate, and its Definition has the
+body the decoder leaves a primitive, `default`. Resolution reads that body as it reads any other. A reference of a
+default body names its node 0, which is no node: the default node, whose form is a primitive's, at offset 0. So
+resolution ends at once, at the activation's own gate (`resolve_default`), and every leaf such a unit returns is that
+gate (`ret_default`, `returnsOwn_prim`). The gate is located at the root, at the unit's node, and its operands are
+the node's member's (`gate_member_prim`, `prim_unit_gate`).
 
 `run_one` and `run_two_ok` give a walk its result from its first step, or its first two, at any fuel that covers
 them: where `run_two` reads a result off a walk that ended, these say that the walk ends.
