@@ -103152,3 +103152,209 @@ For the serving team, from the proofs lane, Thu 12 Nov:
 - That `wireMap h = id` and `returned` keeps every output at a one-template, all-linked code: derived, not proved.
 - Whether a copy16 statement with hidden outputs, `v2` rows and a registered read sets up in the kernel at a cost a records run can afford.
 - Friday's driver: not read; the small rehearsal's files only.
+
+## PROVED, Thu 12 Nov 21:40Z: THE WHOLE LIST: 55 open items between today's accepts and a fully proved one, 39 for the one-stage form and 16 for the two-round form; 20 have no holder; no form is fully proved, and nothing shows the Lean check of a whole audit answering "accept"
+
+**In plain words, for Daniel.** This is the list you asked for: everything between an audit that prints "accept" today and one whose accept is fully proved, one row an item, with who holds it. It has two parts. The first column of the table is written to be read on its own.
+
+Part A is the one-stage form: one sample of blocks from one request. It is the only form a theorem in our list of guarantees covers, and only in its simplest case, one kind of block. What it lacks: the Lean program that checks a whole audit has never been seen to answer "accept"; the theorem this goal cites is not written yet, and the one it will be cut from still takes three facts as given; that theorem is only shown to hold of a model in which the auditor's device does nothing, so it says nothing of a real run yet; and the proofs that two holes are closed, where a cheating server could get a second try at the sample or commit the same work twice, are not finished. The case with several kinds of block in one sample is refused by the Lean check, and its theorem is on a branch, in no list.
+
+Part B is the two-round form: sample requests, then sample blocks inside each sampled request. A whole request needs it. Its accept is withheld by one refusal, on purpose. The guarantee behind it takes a premise that is false for the way the server commits today; no theorem ties the verifier that runs to the verifier that was proved; and the theorem a fully proved audit must cite has no two-round part at all, which is the one large piece with no one building it.
+
+Of the 55 items, 20 have no holder. They are marked NOBODY and listed again under the table.
+
+Two answers you asked for are below the table. The earliest fully proved accept on real GLM-5.3 values would be the simplest case: one kind of block from one served request. It would say that at most a stated share of those blocks was computed wrong, and nothing about the rest of the request. The longest chain of steps that cannot run side by side is the two-round form's, about fourteen landings one after another.
+
+Clock: `date -u` read 21:40Z before the push. Mailbox read at `0b3dad8806`: three messages, the newest yours of 21:50Z, which this entry answers (the list by 22:30Z, your columns, your owners). It replaces the table I had drafted for 03:00Z. No file of the tree changed; no run of mine is out. `origin/main` is `5f0c008aa040`.
+
+### THE TABLE (to post unchanged)
+
+State is one of: not started, started, stated, compiled, on a pull request, on `main`. "Waits on" names rows of this table or a pull request.
+
+**Part A. The one-stage form, which the lock covers today in its one-statement case**
+
+| # | the item, in one sentence | Lean name or file | owner | state | waits on |
+|---|---|---|---|---|---|
+| | *The accept itself* | | | | |
+| A1 | Nothing shows the Lean program that checks a whole audit answering "accept": every test of it expects a refusal, and it refuses the real cases it has been given. | `Spot.OneStageZk.checkBlobs`; the driver `benchmarks/one_stage/a5.py` | FIRSTACCEPT | not started; the case naming its challenger is on a pull request (#9416) | #9416 |
+| A2 | A run's record does not say which commit the verifier was built from, or the verifier's digest, so an accept cannot be tied to the commit whose list of guarantees holds the theorem. | `benchmarks/one_stage/a5.py`, `composite.py`, `one_stage/verifier.py` | FIRSTACCEPT | not started | A1 |
+| A3 | The case written for the composite's check names no challenger, so the Lean answer on a kept window is a refusal. | `benchmarks/one_stage/v2_case.py` | NOBODY | not started | A1 |
+| A4 | The published record does not say whether every check ran. | `public.complete`, `Spot.OneStage.check` | STOPDRIVER | on a pull request (#9458) | — |
+| A5 | That the entries the verifier holds are the network certifier's is checked by the Python driver, not by Lean. | `certifiedHeld`; `Properties.Spot.acceptMeans` | RELAX | compiled, on a branch | its pull request, Fri |
+| A6 | The stream's records, the failure budget, "no retries" and the log's history are decided in Python. | `Spot/Stream.lean` decides each operation; the rest has no Lean | NOBODY | not started | — |
+| | *The theorem* | | | | |
+| A7 | The theorem this goal cites, soundness of sampled proofs on their own, is not written. | `Verity.Sampled.spot_soundness_deployedReady` | soundness | not started | #9375, then #9268 |
+| A8 | Premise 1 of 4: the record the check reads holds every round of coins the auditor's device opened. Proved. | `Instance.LogOpensRecorded`; `Sampled/OpensRecorded.lean` | soundness | on a pull request (#9475) | its landing |
+| A9 | Premise 2 of 4: every session passed the check of its ports and roots. The check runs; the model does not say so yet. | `Instance.SessionsReady`; one field of `Live` | soundness | started | A8 |
+| A10 | Premise 3 of 4: the files in the model are the ones the audit's parameters name. | `Instance.RegisteredFiles`; one field of `Instance`, then `registeredFiles_of` | soundness | not started | soundness's choice of the field |
+| A11 | Premise 4 of 4: the session in the model is the one the verifier runs on those files. It needs that session built in Lean from the files, which does not exist. | `Instance.SessionRegistered`; new `Sampled/SessionOf.lean`, `AcceptedChecks.lean` | SESSIONOF; soundness for the instance's shape | not started | A8's head |
+| A12 | One fact of a session has no lemma: that its tables' error rate is below 1. | `planZHJP_M1W`, the twin of `planZHJ_M1W` | SESSIONOF | not started | — |
+| A13 | Another has none: that the circuit names no public input port. | `Live.hpi` | NOBODY (nearest: SESSIONOF; its brief does not name it) | not started | A11 |
+| A14 | The theorem covers only a sample that is a plain random subset, and the verifier also takes samples by strata and by work. | `Live.hsub` | NOBODY | not started | a ruling: refuse those samples, or widen the theorem |
+| A15 | The theorem is only shown to hold of a model whose auditor's device has no coins and signs nothing. At that model no audit is ever accepted, so the theorem says nothing of a real run yet. | `Instance.Honest.deployment`, the only `Device.Deployment` | NOBODY | not started | A10, A11 |
+| A16 | Nothing says an accepted audit has a session in the model; where it has none, the model's bound is "no bound". | a lemma: an accepted play gives `(session θ).isSome` | NOBODY | not started | A11 |
+| A17 | Whether the theorem covers a statement whose inputs are read from registered values is not established. | `proofs.registered`, `Flock.checkRegistered` | NOBODY | not started | — |
+| A18 | The theorem's error reads one assumption that the approved list gives to the remote configuration only: that the device's signatures cannot be forged. | `Hash.Assumptions.LmsUnforgeable` in `Vocab.error` | NOBODY | on `main` | a ruling |
+| | *The two holes* | | | | |
+| A19 | A server can ask for a new sample until it likes one: one family of coins answers any number of registrations. The fix and its proof are written. | `FamilyOneCommitment`, `FamilyOneCommitmentRead` | REDRAW | on a pull request (#9237) | #9375 |
+| A20 | That proof has no honest example. | an honest withheld session (PRF-582) | NOBODY | not started | A19 |
+| A21 | The run's check takes the challenger's key from the prover's evidence; nothing holds it to the verifier's key. | `coinsReason` on `Run.run`'s path (PRF-583) | NOBODY | not started | A19 |
+| A22 | A server can commit one execution phase under several roots and be sampled on each; no check holds every root committed in a monitoring period to an accepting audit. | `Spot/Period.lean`, `sampled-proofs-period` | PERIODREAD | started: the ledger's half compiled, the window's half not built | #9416; its drivers, #9375 |
+| A23 | That the period check's accept means every committed root was audited exactly once is stated, not proved. | `Properties.Spot.Period.CommittedOnce` | PERIODREAD | stated | A22 |
+| A24 | Nothing says the ledger the period check reads is the device's own, whole up to the period's end. | a statement against the device model of `security/Properties/Challenger.lean` | NOBODY | not started | A23 |
+| | *The serve* | | | | |
+| A25 | No kept run is a real serve sampled on live coins under the deployed key: drivers use a development key the Lean check refuses, and the kept one-stage audit of GLM-5.3 values (17 Oct) used the adapter's own commit path, not stock vLLM's serve. | `KEY_PARAMS`; `--challenger local` | NOBODY | not started | A1 |
+| | *Several kinds of block in one sample* | | | | |
+| A26 | The Lean check refuses an audit whose sample spans several kinds of block; the Python audit accepts it. The period check needs this form too. | `MULTI_REFUSED`, `checkMembersAt` | MEMBERS | not started | A28, A30, A32 |
+| A27 | Its theorem is written on a branch, in no list of guarantees, with no example. | `remote_soundness_window` | soundness | compiled, on a branch | a pull request |
+| A28 | Two hypotheses of that theorem are not proved of what the check accepts. | `WindowAt`, `WindowReads`; new `Sampled/MemberForm/` | WINDOWAT | started: signatures written, none compiled | A29 |
+| A29 | Four changes those proofs need in soundness's files; one of them, done one way, changes listed guarantees. | `Vocab.Registered`, `WindowSessions.members`, the window's `read` and `extract` | soundness | not started: proposed, not answered | soundness's answer |
+| A30 | Fifteen proofs rest on "every accept is the one-statement form's", which becomes false; one listed guarantee must change. | `checkBlobsAt_accept`; `tablesRegistered` (PRF-591) | MEMBERS | not started | A26 |
+| A31 | Every member's files held to the registration, sampled or not; and the rule for names. | PRF-585; PRF-586, `Spot/MembersNamed.lean` | MEMBERS | on a pull request (#9441); the names rule not started | #9375 |
+| A32 | The closing round of coins outside Lean, and one run of its fixture on a tree that also holds soundness's changed rule. | `Challenger.membersOrder`, `spot/device/challenger.py` | CLOSEROUND | on `main`; its twin on a pull request (#9230) | soundness's branch merged |
+| A33 | Each member's openings at a window: the several-member twin of premise 2. | `ReadAt.opens`, `OpensUnder` | NOBODY | not started | A28 |
+| A34 | The window's model has no instance: "the verifier sets this window up" is a free field, so the theorem holds of nothing yet. | `WindowInstance.SetsUp` | NOBODY | not started | A11, A15, A28 |
+| A35 | That theorem is the remote configuration's; the one for sampled proofs alone is on no list. | — | NOBODY | not started | A7, A34 |
+| A36 | Whether anything refuses a statement whose kind of block draws no block. | `heldStep` | WINDOWAT | started: a question | — |
+| A37 | The Python twin of the several-member run, and an honest audit re-read after the refusal lifts. | `one_stage/proofs.py` | NOBODY | not started | A32 |
+| | *The stop record* | | | | |
+| A38 | The audit of the stop record has two entries that never run (the request's row, the stop rule) and one that reads a record held to nothing. | `benchmarks/one_stage/stop_audit.py` | NOBODY | not started | a stop block in the served program |
+| A39 | Its sessions' guarantee is not deployed and takes five open premises. | `Flock.SecurityProofs.EndToEndRegistered` | NOBODY | on `main`, premises open | — |
+
+**Part B. The two-round form**
+
+| # | the item, in one sentence | Lean name or file | owner | state | waits on |
+|---|---|---|---|---|---|
+| B1 | Every two-round accept is withheld by one refusal, on purpose, until its proof exists. Lifting it is the last step. | `Spot.SecondStage.FORM`, `second_stage.py` | FRAME | on `main` | B2 to B12 |
+| B2 | Five changes are in review, in series; one changes what two listed guarantees say. | #9176, #9212, #9229, #9080, #9357; `SpotKSTwo`, `SpotExfilTwo` | FRAME; #9357 another's | on pull requests | #9375 |
+| B3 | The proved model of the verifier does not make the checks the open premise needs. | `SpotFlock/Code.lean`, `Pin.lean`, `Facts.lean` | FRAME | started | B2 |
+| B4 | The guarantee's open premise: each value a sampled block reads is opened at one place, fixed before the coins. It is false for the way the server commits today. Of its five facts, the entry and "one tree a gate", and putting the five together. | `SpotFlock.Addresses`, `AddressesConnected`; `SpotFlock/AddressFacts.lean` | FRAME | started | B5, B6, B7 |
+| B5 | Two of the five facts: the width and the copy. | new `AddressFacts/Width.lean`, `Copy.lean` | ADDRWC | not started | — |
+| B6 | One of the five: the row. Whether today's checks decide it is not settled. | new `AddressFacts/Row.lean`; `second-population`, `second-read` | ADDRROW | not started | — |
+| B7 | The server commits only the token select, and gives a replay block's inputs after the first sample; the premise needs them committed before it. | `adapters/vllm/verity_vllm/pipeline/interior_links.py` | vllm; HONEST2 writes the exact design | not started | B2 |
+| B8 | The guarantee has no honest example: no registration at which every premise holds. | `unwitnessed` in the lock; #8363 | HONEST2 | not started; a registration is on a pull request | B7 |
+| B9 | No theorem says the verifier that runs is the verifier that was proved. First half: round 2's check. | `Spot.SecondStage.check`; new `SpotFlock/RunsAs/Round2.lean` | RUNSAS | not started | — |
+| B10 | Second half: the whole run, and that its coins are the challenger's in the order the guarantee assumes. | `Spot.Run.run`, `SpotFlock.V`; new `RunsAs/Run.lean` | RUNCOINS | not started | B9's statement |
+| B11 | No Lean check of a whole two-round audit exists: the composite's sampled part reads the one-stage form only, and round 2 and the outcome are joined by the Python driver. | `VStarRecursive/Sampled.lean`; `benchmarks/one_stage/two_stage.py` | TWOLEG | not started; a map tonight | the coordinator's go |
+| B12 | The theorem a fully proved audit cites has no two-round part: its leg is written for one session of one table. | `security/Proofs/Properties/Verity/Sampled/`; `Instance.session` | NOBODY (TWOLEG maps it) | not started | B4, B9, B10, and A9 to A16 |
+| B13 | A kind of block is staged whole before the sample, and most kinds are past the prover's size bound at one request. The fix is a statement of the sampled rows only, opened against the registered root. | the staged file, the prover's check, the Lean verifier's reading; one lemma | STOPS | started | the choice of statement form |
+| B14 | A whole request does not fit the proved verifier's size class. | `partitionsOk` | STOPS, through B13 | not started | B13 |
+| B15 | The served request's computation is not a registered Definition: the block replayed is a stand-in, one token select per output. Of the census card's 254 block types, 7 have a statement the Lean verifier accepted in a run circuits read; they hold 8.27 of the request's 11.28 billion blocks (73%). | circuits' class Definition; `cover.json` | circuits | started | circuits' date |
+| B16 | Two entries of the lock for the two-round guarantee came due today; both facts are proved at our code, so the entries are stale. | `SamplingDeploy.Code.ReplayCap`, `SamplingDeploy.RegMatchesTwo` | NOBODY | on `main` | — |
+
+**NOBODY, 20 rows:** A3, A6, A13, A14, A15, A16, A17, A18, A20, A21, A24, A25, A33, A34, A35, A37, A38, A39, B12, B16. Your five expected ones are A15 (a deployment that is not idle), A6, A3, A38 and A21. Three are rulings and not work: A14, A17, A18.
+
+**Rows whose closing changes what a listed guarantee says or its lock record** (each a notice for Daniel; I changed nothing): A4 and A5 (`acceptMeans`; his yes is given), A7 (a new guarantee), A8 to A11 (premises leave the theorem), A14 (either way), A15 (the witness's record), A19, A21, A23 (new properties), A27 and A35 (new guarantees), A29 (if `Vocab.Registered` changes), A30 (`tablesRegistered`), A31 (`Named`), B2 (`SpotKSTwo`, `SpotExfilTwo`), B1 (the `deployed` list), B11, B12.
+
+### Evidence, row by row
+
+Tags: [run] a command of mine this session; [read] file and line at `origin/main` `5f0c008aa040` unless a head is named; [derived]; [relayed] with whose entry or comment. Owners are from your 21:50Z message and the briefs under `briefs/two-round/` [read], or the worker's own entry. `S/` is `security/Proofs/Properties/Verity/Sampled/`; `Z` is `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean`.
+
+- A1 [read] every call of the compiled check in its difftest asserts `reject` (`verity/protocols/spot/verifier/lean/tests/test_difftest.py:2565-2567`, `:2611-2612`, `:2678-2680`, `:2741-2743`, `:7359-7377`); `benchmarks/one_stage/tests/test_composite.py:112` puts a stand-in in its place. [relayed: PERIODREAD 19:40Z] three real cases reach past "no challenger" with #9416 (`76aaa72e7799`, run `r20261112-185813-3849`), none accepted. [read] a one-member window's proof session is not on the window's challenger session (`a5.py:1398-1405`), and the one-statement check refuses a closing round (`Spot/ChallengerTrees.lean:254`).
+- A2 [run: `rg` over `a5.py`, `composite.py`, `v2_case.py`, `one_stage/verifier.py`, `one_stage/proofs.py`] no field names the commit or the executable's SHA-512; the executable is built from the working tree (`one_stage/verifier.py:74`).
+- A3 [relayed: #9416's body]. A4 [relayed: STOPDRIVER 19:50Z, 20:40Z: #9458 at `44cd4a62c7c9`, "one property's statement and every accept's bytes change"].
+- A5 [relayed: RELAX 20:40Z: `cursor/proofs-r7-certified-b6a0` at `8e92d28fe27b`, run `r20261112-202524-47e3`].
+- A6 [read] `verity/protocols/spot/verifier/README.md:501-525`, "Not yet in Lean".
+- A7 [relayed: soundness on NET-390, its comment of 1:00 PM PST, read by me] by Tue 17 Nov, after #9268 (`5d7e81e24b1b`). [read: #9410's body] `spotSound_deployedReady` for any composite exists there.
+- A8 [read: `origin/cursor/soundness-prf579-8fb2` at `0e12a1ba4366`] `S/OpensRecorded.lean`, 184 lines; the premise is gone from the theorem on that branch.
+- A9 [read] the check: `Z:564`, `:650`; proved of an accepted play: `Accepted.ports` (`S/Event.lean:204`). On #9475 the premise is one clause, written at the session alone (`S/OpensAt.lean:151-154` there).
+- A10 [read] `S/Instance.lean:529`, `registeredFiles_of` `:534`.
+- A11 [read] `S/SessionAt.lean:47`; [run: `rg`] no `Live` is built from parameters and files anywhere. My 21:18Z entry has each field with the lemma that gives it.
+- A12 [read] `planZHJ_M1W` (`security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHiddenM1.lean:485`), used at `security/Proofs/Flock/Bridge/Public.lean:163`; [run: `rg`] no `planZHJP_M1W`.
+- A13 [read] field `hpi` of `Live` (`security/Proofs/Properties/Verity/Sampled.lean:130-196`); [run: `rg` over `Event`, `Accepts`, `ScopeGate`, `V5/Accepted`] no lemma gives it from an accept.
+- A14 [read] `Sampled.lean:161-163` (`hsub`), used at `S/Target.lean:117`; the check does not refuse `stratified`, `work` or `all` at the parameters (`test_difftest.py:7372-7377`). [derived] at a registration whose design is not a subset the model has no session. Not established: I did not evaluate the design on a registration.
+- A15 [read] `S/Instance.lean:726-734` (the idle deployment), `:792-802` (the honest instance: no coin family); `SetsUp` asks for a coin family (`Sampled.lean:683-685`). [run: `rg`] the idle one is the only `Device.Deployment`. The theorem's two witnesses are at it (`S/OpensAt.lean:282-298`).
+- A16 [read] `S/Instance.lean:570-590`: where `session θ` is none the bound is `⊤`.
+- A17 [read] `Z:311-320`; `Live` has no field for registered reads. Not followed further.
+- A18 [read] `security/Properties/Verity/Game.lean:873-892`: `error a` is "no bound" unless `Unforgeable a` holds, and adds the forgery term, for every subprotocol `a`, the sampled one included; `S/Device.lean:1205-1214`. The lock has it as `trust.extra` of `Verity.remote_soundness_of_subprotocols` and as a `reads` of the deployed theorem's record [run].
+- A19 [relayed: #9237's body; its head `9d4aec0111fb`, 51 files]. A20, A21 [run: Linear] PRF-582 and PRF-583 are in Backlog, due 20 and 17 Nov.
+- A22, A23 [relayed: PERIODREAD 17:32Z, 20:38Z] ledger half at `44b84839217d`, difftest `r20261112-202226-a838`; three statements elaborate over opaque functions (`r20261112-172550-5a37`). [run: Linear] PRF-600 due 17 Nov.
+- A24 [relayed: PERIODREAD 17:32Z, "a fourth statement … which I have not written"].
+- A25 [read] `Z:132`; [relayed: PERIODREAD 18:13Z; STOPS 20:17Z, who read `r20261017-112209-8324`'s record].
+- A26 [read] `Z:772`, `:1256`. A27 [read: `origin/cursor/soundness-multileg-8fb2` at `3e26cac759`] `S/Window/Instance.lean:605`; 24 files, 9,723 lines, 357 theorems [run]; in no lock, no witness; [relayed: MEMBERS 19:19Z] it passes the Lean check on that branch (soundness's run, not rerun).
+- A28, A29, A33, A36 [relayed: WINDOWAT 21:16Z, sections 2 to 5 and its stop rule].
+- A30, A31, A32, A37 [relayed: MEMBERS 05:46Z, 19:19Z, 19:34Z; CLOSEROUND 21:13Z].
+- A34 [read: the branch] `S/Window/Instance.lean:127-135`: `SetsUp` is a field; [run: `rg`] no `WindowInstance` value is built.
+- A35 [derived] the branch's theorem takes `PouwSound` and `InferenceOnlySound`.
+- A38 [read] `benchmarks/one_stage/stop_audit.py:38-45`; [relayed: STOPDRIVER 19:17Z] the served program has no stop block today. A39 [run: the lock].
+- B1 [read] `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean:149`, `verity/protocols/spot/verifier/second_stage.py:90`.
+- B2 to B6, B8 to B10 [relayed: FRAME 21:10Z, sections a, b, d; read: the briefs]. [read: #9357's body] it restates `SpotKSTwo` and `SpotExfilTwo`. [relayed: FRAME] the premise is false at the served design by `not_addresses_of_input` (`SpotFlock/AddressesAt.lean:321`).
+- B7 [relayed: FRAME; proofs' lead on NET-390, 20:58Z, "the serve commits the select only"].
+- B11 [read] `verity/protocols/recursion/verifier/recursive/VStarRecursive/Sampled.lean:35-36`: the forms are `one-stage` and `recursive`.
+- B12 [read] `S/Instance.lean:173`, `session : ByteArray → Option Live`; the leg is 72 files, 31,192 lines, 1,392 theorems [run: `wc`, `rg -c`]. [relayed: FRAME, f] each of the four premises must be restated; "No date from me for L6".
+- B13, B14 [relayed: proofs' lead on NET-390, 20:58Z: 190 of 271 Definitions past the bound; STOPS 21:04Z; #9357's body for `partitionsOk`].
+- B15 [relayed: circuits on NET-390, 20:52Z, read by me; file `art:293ae61eb8f8e876917b1f741892dc126885875dd3dd771be67c716a47d1c007`]. The card is behind the Program in five places, and rank 0's Program calls 330 templates, of which 3 have an accepted statement of themselves [relayed, same]. [relayed: proofs' lead, 21:15Z] `r20261112-191841-86b4` is the first run with accepted statements of Friday's select blocks.
+- B16 [run: the lock's `open`] both due 2026-11-12; [relayed: FRAME] `replayCap` (`SpotFlock/Cap.lean:194`), `regMatchesTwo` (`SpotFlock/Facts.lean:377`).
+
+### The named assumptions the theorems rest on, from the locks, by name
+
+Listed, not judged. Lock: `security/lean-audit.json` unless said.
+
+| name | where | one sentence |
+|---|---|---|
+| `FlockSoundness.Assumptions.SHA512CRStrict`, `Claims.StrictBirthday` | `assumptions`, `trust.base` | a finder with a fixed budget of q SHA-512 evaluations outputs a collision with probability at most q²/2^513 |
+| `FlockSoundness.Assumptions.SHA512CRExpected`, `Claims.ExpectedCR` | `assumptions`, `trust.base` | a finder of expected cost T, which may stop when it likes, outputs a collision with probability at most T/2^256 |
+| `FlockSoundness.Assumptions.UniformRandomBytes` | `assumptions`, `trust.base` | the bytes the challenger reads from its operating system are exactly uniform; its docstring says this is "refutable at the deployed source" and names the next as the true bound (`security/Definitions/Assumptions/Flock.lean:96-109`). The one-stage theorem proves it inside its model (`S/Deployed.lean:127`) |
+| `FlockSoundness.Assumptions.UniformRandomBytesTest` | `assumptions`, `trust.base` | those bytes pass one test as uniform bytes do, up to the test's advantage |
+| `Verity.Assumptions.ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog` | `trust.base` | the challenger logs every coin it releases; it flips a coin only after what its log holds before that coin is recorded; the verifier reads coins only from that log (`security/Definitions/Core/Assumptions/Challenger.lean:33-44`). The two-round guarantee assumes this order and reads none of the three (row B10) |
+| `Verity.Assumptions.TrustedHost` | `trust.base`, "provisional: a default, not yet a ruling" | the auditor's device runs its stated code on a host the prover does not control, which never restores an earlier state (`security/Definitions/Core/Assumptions.lean:44-58`) |
+| `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw` | `trust.base`, "provisional"; also `open` (LEAN-186, 30 Nov) | the record `flock-verify --zk` reads is the one its challenger wrote, and its sample file the one printed for the verifier's own sample. The session's guarantee `SampledKSLiveV5` takes it; the one-stage theorem proves it inside its model (`Live.hCust`, `Sampled.lean:303`) |
+| `Hash.Assumptions.LmsUnforgeable` | `trust.extra` of `Verity.remote_soundness_of_subprotocols` (`security/Properties/lean-audit.json`) | no forger within its budget forges under the device's key on at most Q signed messages, except with the published probability (row A18) |
+| `FlockSoundness.Assumptions.HmRowComputes` | a `reads` of the one-stage theorem's record | the circuit's commitment slots compute the stated hash of a row and its salt; "not cryptographic"; proved at the deployed rows (`security/Proofs/Flock/Soundness/Discharge/HiddenExec/KeyHP.lean:493`) [read: the lemma, not its use in the theorem] |
+| `Claims.ZKServer.Loop.Src`, `FlockSoundness.Assumptions.KeyedStreamsUniform`, `…Zk.HashDerivedKeyHm96` | `trust.extra`, zero knowledge only | the firewall's randomness is uniform; the salts' keyed SHA-512 streams pass a test as uniform; the salt key is not among those the hiding bound excludes |
+
+[derived] Against your approved four: `LmsUnforgeable` at sampled proofs' own target (A18); `RecordCustodyZKJPLaw` wherever a guarantee is cited at the session and not at the model; and whether "its log (`trusted-host`)" covers the three log assumptions as well as `TrustedHost`. Yours to rule.
+
+### The lock's `frozen` and `excepted` entries that touch these theorems
+
+- [run: `shape.frozen`, 665 entries] `Verity.Sampled.remote_soundness_deployedReady`: "frozen (premise)", until each input premise is proved. `SpotKSTwo`, `SpotExfilTwo`: "frozen (obligation,no-function)", "open until the frame's slots prove it". `SampledKSTwo`: "frozen (obligation,no-function)", "seven facts of the code … open until Spot.Run.run's checks prove them". `SampledKSLiveV5`, `V3`, `V2`, `Pub`, `Stated`: "frozen (no-function)". `IntegrityPeriod`, `IntegrityHorizon`, `IntegrityPeriodLog`, `IntegrityBlocks` and their kin: "frozen (hash,world-unlisted,scope)"; these are the pooled statements A23 would add a sentence to.
+- [run: `trees.except`, 28 entries; 7 touch these] `Proofs.Properties.Verity.Sampled` (until PRF-557), `Proofs.Flock.SamplingGeneric`, `Proofs.Flock.SpotFlock`, `Proofs.Flock.Bytes`, `Proofs.Properties.Verity.Recursive`, and the two `Accounting.JointBridge` integrity modules.
+- [run: `deployed`, 14 entries] Neither the one-stage theorem nor any two-round guarantee is in `deployed`; the session's `SampledKSLiveV5` is.
+- [run: `witnesses`, `unwitnessed`] The one-stage theorem has `_honest` and `_nontrivial`, both at the idle model (A15). `SpotKSTwo` and `SpotExfilTwo` have no honest witness (B8).
+
+### Forms something accepts today with no theorem behind them
+
+The rule: the verifier gains no form ahead of its proof.
+1. [read] A second registration on one family of coins, and a phase committed again: the checks accept both and the theorem's game allows neither (A19, A22). Known and filed.
+2. [derived] One statement under a `stratified` or `work` law: not refused at the parameters, not covered (A14). On no list before today.
+3. [derived: the driver audits windows of two members or more, `a5.py:1398-1405`] A window of several members, at the Python audit and the Lean pieces: accepted there; the compiled check refuses it (A26).
+4. [read] The stop audit's statement with registered reads (A38, A39).
+5. [read] Two rounds: none. The accept is withheld (B1), which is the rule kept.
+
+### Not items of this goal: the remote configuration, and onsite
+
+- `Verity.Vocab.PouwSound`: compute-accounting with proofs, Wed 18 Nov for Pearl+ as served. `TTOutTilePearlCH100Rev1`: provisionally approved by its lane as a named assumption, restated on `W1Device.s8H100`; Daniel can reverse it, default Mon 16 Nov 6 PM PST; open until it lands with `PouwSound`. `ServedH100Rev1Gap` is not a `Prop` and leaves the list [relayed: compute-accounting on NET-390, 1:05 and 1:10 PM PST, read by me].
+- `Verity.Vocab.InferenceOnlySound`: lean for the statement, proofs for the wires check (LEAN-238); lean's dates by Fri noon PST [relayed: soundness].
+- Onsite: `onsite_soundness_deployedReady`, #9410 at `a90b665f6dc6`, open, ten open premises; `NetworkCertifierSound` not before Tue 1 Dec, the memory lane's three with no date [read: its body; relayed: soundness].
+
+### Answer 1: the earliest audit of real GLM-5.3 values that could meet clauses 1 to 4 and 6
+
+- **Which.** A one-stage audit of one template over a served request's committed values, the form of `r20261017-112209-8324`: each rank's window is one member, `SiluMul_v2{I=1536}`, 861 units, 512 drawn [relayed: STOPS 20:17Z]. It is the only form the lock's theorem covers. The stop record alone is later, not earlier (A17, A38).
+- **What it would cover.** In one request, on each rank: at most a stated share of the 861 blocks of that one template have committed inputs and outputs that are not that template's computation. **Not covered**: any other template (about 11.3 billion blocks a request); that those blocks' inputs came from the blocks before them; the prompt, the weights, the tokens sent.
+- **What it needs**: A1, A2, A7 to A12, A15, A16, A19 to A23, A25; a ruling on A18; and A13, A14 either proved or ruled (a subset sample with no public input port does not meet them if the registration is written so). A24 if "no premise left" reaches the ledger.
+- **The day** [guess]: proofs in by Fri 20 Nov, the run read Mon 23 Nov, if: (1) #9375 is on `main` by Mon 16 Nov; (2) soundness's Tue 17 Nov for A7 and Fri 20 Nov for A9 to A11 hold; (3) A11 and A12 compile by Wed 18 Nov; (4) A1 gives an accept by then; (5) someone takes A15, or soundness says it is not asked for; (6) A23's proof is in by Fri 20 Nov; (7) A20 and A21 get holders; (8) a serve on cards with the gate's challenger at the deployed key can be had on Mon 23 Nov. The weakest are (5), (6) and (7).
+
+### Answer 2: the longest chain that cannot run side by side, and what can start today
+
+- **The chain** [derived, from FRAME's chain and this table]: #9375 → the five of B2, one after another → B3's changes, one at a time → the statement form chosen (B13) → B6 → B4 → B1's switch → B11 → B12, which also stands on part A's A9 to A16 → the lock → a run. About fourteen landings in series; its last piece, B12, has no builder, and B7 and B15, in other lanes, must end before the run.
+- **Part A's own chain is short**: #9375 → #9268 → A7; beside it #9475 → A9, A10 → A11 joined → A15 → the lock. About seven landings; A19 to A24 run beside it.
+- **What can start today in new files, with no holder yet**: A15, once soundness says the instance's shape (its statement can be drafted against today's `Instance`); A20 and A21 together, on #9237's head; A24's statement, beside PERIODREAD's three. A3 is a few lines once A1's case exists.
+
+### Not established
+
+- No statement in this entry was elaborated by me; every "proved" is another's run or a lemma I read.
+- "NOBODY" is from your 21:50Z message, the briefs, this file's entries since 17:00Z, the issues I read (PRF-371, PRF-419, PRF-579, PRF-569, PRF-582, PRF-583, PRF-600) and NET-390's 40 newest comments; not from a search of the board.
+- Whether any composite accepted a real case in a kept run (my 21:04Z entry): A1 says "nothing shows", not "never".
+- A13, A14 and A17 are read from the statement and the tests, not from an accepted case; none exists.
+- Whether the properties of A19 and A23, once proved, are tied to the theorem's game by a statement or only by a reading. #9410's body calls them "code bridges"; I found no statement that joins them, and do not know that one is wanted.
+- The day in Answer 1 is not a date I hold. The date I would put on the goal comes by Fri 17:00Z.
+
+### To post
+
+- The table above, unchanged.
+- PRF-579: the line in my 21:18Z entry, section 4, with SESSIONOF named as the worker.
+- NET-390, to soundness, three questions the table turns on: A18 (is signature unforgeability a named assumption of sampled proofs' own theorem?), A15 (is a model with a device part of "cited with no open premise", and whose?), A14 (a refusal, or a wider theorem?).
+
+### Next
+
+The mailbox each hour; corrections as soundness and the new workers answer; A17 and A13 by reading, if you want them settled tonight; the goal's date by Fri 17:00Z.
