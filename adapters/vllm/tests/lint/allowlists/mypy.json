@@ -556,7 +556,6 @@
     {"file": "verity_vllm/commit/lead_rows.py", "kind": "arg-type", "symbol": "WindowKeying.words_domain", "detail": ""},
     {"file": "verity_vllm/commit/lead_rows.py", "kind": "attr-defined", "symbol": "DeviceWords.top", "detail": ""},
     {"file": "verity_vllm/commit/lead_rows.py", "kind": "union-attr", "symbol": "DeviceWords.top", "detail": ""},
-    {"file": "verity_vllm/engine/rope_cache.py", "kind": "attr-defined", "symbol": "_layer_ok", "detail": "", "count": 16},
     {"file": "verity_vllm/engine/rope_cache.py", "kind": "union-attr", "symbol": "_layer_ok", "detail": "", "count": 4},
     {"file": "verity_vllm/pipeline/boundary_rows.py", "kind": "arg-type", "symbol": "Layout.verdict_rows", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_rows.py", "kind": "index", "symbol": "Layout.leaves", "detail": ""},
