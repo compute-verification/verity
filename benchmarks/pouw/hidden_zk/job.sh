@@ -55,6 +55,7 @@ TH=$(nproc)
 export RAYON_NUM_THREADS=$TH
 log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/job.log"; }
 vlimit() { echo "ulimit -v $(( $1 * 1024 * 1024 ));"; }
+. "$SRC/verity/protocols/spot/verifier/one_stage/verifier_env.sh"
 
 # ---- 1. builds -----------------------------------------------------------------------------------------------------------
 tree_key() { (cd "$SRC" && find "$@" -type f -not -path '*/.lake/*' -not -path '*/__pycache__/*' -print0 | sort -z \
@@ -183,7 +184,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   local D=$1 O=$2 role=$3 each par cap c tag args s case pub own
   each=$(( $(stat -L -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: its peak is about 5x the circuit text at K=256
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
-  local base="verify --zk --circuit $D/circuit.txt"
+  local base="--zk --circuit $D/circuit.txt"
   [ -e "$D/partition.json" ] && base+=" --partition $D/partition.json"   # the verifier's own copy of the partition the circuit binds
   local cmds=()
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
@@ -225,7 +226,7 @@ open(sys.argv[3], 'wb').write(h + b'\n' + p[len(p) - len(b):])" "$D/public-input
     tag=${c%%|*} args=${c#*|}
     # counted from the running jobs: `wait -n` also returns for a job that ended earlier unreported (setup's builds)
     while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
-    $TIME "$O/lean-$tag.time" bash -c "$(vlimit $cap) exec $LEAN $args" > "$O/lean-$tag.out" 2> "$O/lean-$tag.err" &
+    $TIME "$O/lean-$tag.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify $args" > "$O/lean-$tag.out" 2> "$O/lean-$tag.err" &
   done
   wait
   for c in "${cmds[@]}"; do
