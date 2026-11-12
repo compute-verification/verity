@@ -58,6 +58,8 @@
                                "probe": "art:18051dc5513925b2acd93ec47d8b67dffbef971e3b543715dddb7cbf707fe0d5",
                                "probe_ftz": "art:a70db8e4224a49a4e95e210226fc6586db656768f0394a485347b146f7dbdccd",
                                "fit_ftz": "art:1d3772056fdf1bd15edeebe8a428f04eaae66edeaa1eb7f424c2223920004435"},
+  "cc12_fa2_backward_capture": {"capture": "art:6a0d7e798b0d04914013112c84cfde313b0e4ba84dc8fd0ac47491c75b5667d1",
+                                "run_record": "art:d0ff62a57a2a30e69d4aa459d15517ba597db41c5e657e400afa4b2eb0678548"},
   "hopper_fp8_block_capture": {"captured_utc": "2026-09-19"},
   "vllm_fp8_kernels_probe": {"captured_utc": "2026-09-08"},
   "cc12_scaled_mm_epilogue_probe": {"no_bias": "art:f1db07fc73a48aa66bcec5cd2ce414c44f945afe852688b1e37998d68deb20c4",
