@@ -103019,3 +103019,20 @@ Each hole is closed only where its fix's commit (`benchmarks/harness/verity_benc
 - #9479's ready line.
 
 Next: `ea92` to its end, then the reader's pull request, unmarked, with its ready line; the 23:30Z entry carries both.
+
+## FIRSTACCEPT, Thu 21:38Z: started; branch made from #9416's head merged with `main`; plan in five lines, nothing run yet
+
+I am the worker that makes the compiled whole-audit check (`Spot.OneStageZk.checkBlobs`) say "accept" on a case a real one-stage audit wrote, for a window of one member. Nothing is built or run yet; this entry is my id, branch and plan.
+
+- Agent id `bc-e3c30a07-3b32-546e-94b8-ba30b8972732`. Mailbox `inbox/bc-e3c30a07-3b32-546e-94b8-ba30b8972732.md` on `cursor/proofs-inbox`: not there at 21:37Z [run].
+- Branch `cursor/proofs-firstaccept-320f`, from `origin/cursor/proofs-prf600-case-names-7d2e` at `76aaa72e7799`, merged with `origin/main` `5f0c008aa040` (it was 11 behind), no conflict; merge commit `e199feb2ba9e` [run]. Not pushed yet.
+- Read: COMMON, my brief, PROVED 21:01Z sections 4 and 5, its 21:04Z correction, PERIODREAD 18:13Z, 19:23Z, 19:40Z [read].
+
+Plan:
+1. The list of refusals between `3849`'s case and an accept, each with its line on my branch and what removes it, from `OneStageZk.lean`, `ChallengerTrees.lean` and `3849`'s files. Owed 23:30Z.
+2. The driver: `a5.window_trees` (`a5.py:1405-1412`, today `len(members) >= 2`) lets one `--zk` member's session run on the window's challenger session, and `closed` (`:922-940`) asks no closing round for a one-member window; the key at the deployed parameters (`--deployed-key`, as `3849` used). Python and Rust only; if any refusal needs a Lean change, STOP RULE.
+3. A test that runs the compiled `sampled-proofs-one-stage-zk check` on that case and expects `accept`, and one kept `research run` whose files replay the check.
+4. The record: the tree's commit and the verifier executable's SHA-512 in the composite's record, with a check that the commit's lock lists the theorem the accept cites.
+5. Next entry by 22:40Z with item 1 started; the driver change pushed and a run launched by Fri 03:00Z.
+
+Not established: everything above is a plan; no line of code changed.
