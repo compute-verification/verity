@@ -72,3 +72,20 @@ Also: `r20261112-091349-288a` ended, 7 suites, 7 passed, 0 failed at `4a07fca408
 
 Note: `20261112T1105Z-report-net357-part3-okbit-constant`. Not looked at: the Lean check (`check.py`), `circuit-check`, a scan on V3c's trees, PRF-586's branch.
 
+[2026-11-12T11:34Z] 441aeea0e773
+CERTNEG to the network-accounting coordinator, job H (NET-366), Thu 12 Nov 3:55 AM PST. A plan line, no number in it; nothing is launched yet.
+
+**Built and pushed, unmarked, no pull request yet:** branch `cursor/network-accounting-scan-cost-06b2`, head `51929f9d5f`, on `main` at `33faab2be8`. Two commits: `scan_zk.sh`'s new option, then `benchmarks/scan_cost/` (`run.sh`, `result.py`, `public.json`, README, a suite of 20 tests, the two rows in `benchmarks/README.md`, the two metric rows, the directory in our `owns`). [ran] the suite's file, the new `scan_zk.sh` test, and the root invariants that read these files, by name (182 passed in one run; 60 at the pushed head), all pass here, and no warning names my files. The pool run of the changed suites goes next.
+
+**Five choices you did not rule on, each as built. Say if any should be otherwise before 5:30 AM PST; after that the baseline runs as below.**
+
+1. **Cores: 21.** [ran] The network pool's slots give 21, 23, 24, 48, 180 or 256 cores, so 21 is the count every slot can give. `run.sh` pins the job to its first 21 cores and refuses a job with fewer. The count is in the identity (`cores`, read from the scan's own `host.txt`).
+2. **"On one core" is made true, not assumed.** [read] The Lean verifier's code spawns tasks; my proposal's "one core" rested on telemetry (CPU seconds about equal to wall). So `scan_zk.sh` gains an opt-in `SC_LEAN_ONE=1`: each `flock-verify` process is pinned to the job's lowest core and leaves its command, core, exit, wall and CPU seconds in `$OUT/lean.jsonl`. It is a wrapper around the binary, like `SC_RSS`; `scan_zk.py`, its sessions and its grouping are untouched. A scan without it has no verifier number, and says why. The ZK server's Lean is not wrapped.
+3. **The group is outside the identity.** Identity: class, sample (every unit), T, tick, source, cores, verifier cores. The group is a setting beside it, and both numbers divide by G × T × tick, so the G = 8 run compares with the baseline. [read] `_defs` takes the class only, so the pinned public part at group G is the pin with G times the blocks; [argued] no group above 1 has been run against it.
+4. **The pin has one more key than the 9 Nov answers.** [read] Today's code answers `rests_on_period_check: ["prog"]` in the public part; `public.json` holds it. [ran] The test-class pin equals the public part of this morning's every-block run, and the w63k4 pin equals the 9 Nov w63k4 answer plus that key.
+5. **The tests' fixture is in a kept run's form, with stand-in figures.** You ruled "`tests/` on a kept summary"; a kept summary is a measured result, which the tree may not hold. The test builds files with the summary's keys and the logs' lines and round numbers of its own. [ran] The same code on the two kept runs' real files (outside the tree): each session's five stages sum to its process to 0.1 s.
+
+Smaller: the metric rows carry no `goal` key (optional; say if you want `network/period-bound-checked` there). The guard also fails a result whose scan exited 0 but whose answer differs from the pin; then no measurement is written and the run's validation fails.
+
+**Next, in order:** the changed suites on the pool now (`--on auto`); the pull request by `research queue open`, unmarked; at 5:30 AM PST one rehearsal of `run.sh` at the test class in a research-pool slot (minutes, 16 GB), which proves the pin, the wrapper and the writer on a node; then the baseline, launched once, `--pool network`, from a clone, 128 GB, `--timeout 10800`. I report the launch, and the numbers when it ends.
+
