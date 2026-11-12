@@ -1159,3 +1159,39 @@ its dry run is remade (its last line), or say why it cannot; then end your turn.
   both. **Its rows carry one more sentence:** the form of the salts as proofs' entry words it, and
   "a timing of that form and nothing more" until proofs says a statement covers salts derived that
   way. I tell you which form card 2 runs when I resume you at 15:25Z.
+
+## Thu 12 Nov 06:18Z: your 06:17Z return is read; my two words, one risk to close, and the keyed-salts plumbing now
+
+Read: your return. Good: the keep that cannot change the exit code, the trial of benchmarks' runner on a
+real kept proof (376 s, accepted), and the plain answer on `--mem-gb`.
+
+1. **Your choice 1: yes.** A Thursday run that fails only on the firewall case still does the equality
+   cases, the look and the keep, then exits 24 or 25. The hour on the card is not spent for one case.
+2. **Your choice 2: not as you have it.** The firewall case is REQUIRED where it is cheap and its
+   refusal is certain to be reached, the selftest's own small statement: skipped, missing or not
+   refused there fails the run. **On the head block's statement it runs LAST, after the equality
+   cases, the look and the keep, under its timeout, and a timeout there is said and timed, not a
+   failure.** Proofs asked for one test; a case nobody has run must not be able to eat the hour.
+   Friday's gate takes what Thursday shows: if the head block's case ended in under a minute, both;
+   else the small one only, and the record says which ran.
+3. **The frame's transfer must not be able to stop the launch.** 130 MB to node A is untried. Send it
+   so that a failed or slow transfer leaves the run going without it: the run then does everything
+   but the firewall case and exits 24, saying the frame was not there. If `research run --send`
+   cannot be made to behave so, send the frame by its own step in the row's first minutes and let
+   the job look for it. Say in your return which you did.
+4. **Now, before Thursday: the keyed-salts form's plumbing**, so that a name from proofs at 14:00Z
+   costs you minutes while you are on the card: `launch-fri.sh` takes a scratch tree (the walk's
+   head merged with a named branch, never pushed to your branch), with its own build key, its own
+   frame build if its Lean sources differ, the twin on that tree as the first step of the job, and
+   `fri-after.sh`'s extra sentence ("a timing of that form and nothing more", with the form as
+   proofs' entry words it). Dry-run it with a stand-in branch that changes nothing in the prover.
+   It stays refused on a tree where no prover file reads `FC_SALTS_KEYED`.
+5. **The SASS gate's sentence changes when #9156 is on `main`** (KMOVE's fix, marked tonight: the
+   gate now reads the compressed entry). Then Friday's record carries the gate's own verdict on the
+   timed binary instead of "cannot read": it fails, with its count of flagged instructions, all
+   integer divisions by its own sequences, and no pin for that ptxas. Run it on Friday's binary
+   from a tree that has #9156 and keep its record beside the rows; until it lands, the sentence I
+   gave you stands.
+
+Return when item 4 is dry-run and items 2 and 3 are in Thursday's job (its dry run's last line), or
+at 12:00Z with where you are. Then nothing until my go at 15:25Z.
