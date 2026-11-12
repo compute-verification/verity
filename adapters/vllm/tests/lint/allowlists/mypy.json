@@ -335,7 +335,6 @@
     {"file": "tests/pipeline/served_rope.py", "kind": "assignment", "symbol": "commit", "detail": ""},
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "var-annotated", "symbol": "test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes", "detail": ""},
     {"file": "tests/pipeline/test_cli.py", "kind": "attr-defined", "symbol": "probe", "detail": "", "count": 2},
-    {"file": "tests/pipeline/test_commit_arb.py", "kind": "operator", "symbol": "test_a_turn_is_its_last_turns_prompt_and_stream_then_its_suffix", "detail": ""},
     {"file": "tests/pipeline/test_commit_plan.py", "kind": "func-returns-value", "symbol": "<module>", "detail": ""},
     {"file": "tests/pipeline/test_commit_plan.py", "kind": "func-returns-value", "symbol": "test_the_plan_stage_plans_the_inputs_the_commit_stage_passes", "detail": ""},
     {"file": "tests/pipeline/test_declared_build_target.py", "kind": "union-attr", "symbol": "vllm_without_nvml", "detail": ""},

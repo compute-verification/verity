@@ -249,8 +249,6 @@
     {"file": "tests/pipeline/test_admission_commit.py", "kind": "E702", "symbol": "test_cli_is_torch_free_and_reports_the_observed_check", "detail": "Multiple statements on one line (semicolon)"},
     {"file": "tests/pipeline/test_boundary_plan.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/pipeline/test_commit_arb.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/pipeline/test_commit_arb.py", "kind": "I001", "symbol": "three_turn_checks", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_compiled_merge_identity.py", "kind": "SIM115", "symbol": "_arms", "detail": "Use a context manager for opening files", "count": 2},
     {"file": "tests/pipeline/test_declared_build_target.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_declared_build_target.py", "kind": "I001", "symbol": "test_the_selection_answers_an_imported_but_unresolved_vllm_keeps_a_cuda_platform_and_refuses_a_non_cuda_one", "detail": "Import block is un-sorted or un-formatted"},
