@@ -174,7 +174,7 @@ def chosen(eng: Any, runner: Any) -> dict[str, Any]:
     for name, m in kv_layers(runner.model).items():
         c, backend = m.kv_cache, getattr(m, "attn_backend", None)
         layers.append({"layer": name, "module": type(m).__name__, "mla": getattr(m, "kv_lora_rank", None) is not None,
-                       "kv_cache_dtype": getattr(m, "kv_cache_dtype", None),
+                       "kv_cache_dtype": getattr(m, "kv_cache_dtype", None), "fp8_query": getattr(m, "_fp8_query", None),
                        "backend": getattr(backend, "__name__", None) if backend is not None else None,
                        "impl": type(m.impl).__name__ if getattr(m, "impl", None) is not None else None,
                        "dtype": str(c.dtype).removeprefix("torch."), "shape": list(c.shape),
