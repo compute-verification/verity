@@ -399,12 +399,9 @@ def _ended(run_dir: Path) -> bool:
 
 def _final(run_dir: Path) -> frozenset[str]:
     """The files `FINAL` says a fetch begun after the run ended brought: none without it, or while status.json says it runs."""
-    if not _ended(run_dir):
+    if not _ended(run_dir) or not (marker := run_dir / FINAL).is_file():
         return frozenset()
-    try:
-        names = json.loads((run_dir / FINAL).read_text()).get("names")
-    except (OSError, ValueError, AttributeError):
-        return frozenset()
+    names = json.loads(marker.read_text()).get("names")
     return frozenset(n for n in names if isinstance(n, str)) if isinstance(names, list) else frozenset()
 
 
@@ -443,7 +440,8 @@ def read_run(rid: str, names: tuple[str, ...], root: Path | None = None) -> tupl
                 part.write_text(json.dumps({"names": sorted(final | set(names))}))
                 os.replace(part, d / FINAL)
         return d, R.summarize(d)
-    except Exception:  # noqa: BLE001  (`research status` exits without a row: the run reads as unknown, as it did)
+    except Exception as e:  # noqa: BLE001  (`research status` exits without a row: the run reads as unknown, as it did)
+        print(f"research status: {rid}: {type(e).__name__}: {e}", file=sys.stderr)
         return None
 
 

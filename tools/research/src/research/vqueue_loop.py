@@ -2475,7 +2475,8 @@ class Loop:
                for i in r.get("ids") or () if isinstance(i, str)]
         try:
             reading = getattr(self.world.slim_driver(), "reading", None) if ids else None
-        except QueueError:                                  # the judging that needs the driver raises it
+        except QueueError as e:                             # the judging that needs the driver raises it
+            self.world.log(f"research queue vqueue: the tick's runs aren't read at once, each judge reads its own: {e}")
             reading = None
         return reading(ids) if callable(reading) else contextlib.nullcontext()
 
