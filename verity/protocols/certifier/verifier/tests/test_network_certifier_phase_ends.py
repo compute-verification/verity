@@ -1,15 +1,18 @@
 """The lengths rows' form 2 (`warden`'s "The lengths rows", `connection_rows`' "The word that no head comes"), driven
 tick by tick on `test_network_certifier_warden`'s harness: every execution phase of a run ends once, in its hand or
 without releases, the run's last at its last close. The form is a value of its own digest, and a schedule at form 1
-leaves what it left. The network certifier admits no connection that may end past the run; it hands an execution
-phase only where it and the ones beside it were published complete, so no hand holds a byte of one that wasn't; a
-run that ends early ends the execution phases it has not; and the word that an execution phase has no head is
-signed for that execution phase, link, session and schedule, and verifies as nothing else."""
+leaves what it left. The network certifier admits no connection that may end past the run, and turns away an arrival
+in the run's last buckets, by its tick count and the schedule alone, with one constant cell on the next tick and no
+refusal; it hands an execution phase only where it and the ones beside it were published complete, so no hand holds
+a byte of one that wasn't; a run that ends early ends the execution phases it has not; and the word that an
+execution phase has no head is signed for that execution phase, link, session and schedule, and verifies as nothing
+else."""
 
 from __future__ import annotations
 
 import asyncio
 import dataclasses
+import hashlib
 import json
 
 import pytest
@@ -23,8 +26,9 @@ from verity.protocols.certifier.verifier.tests.test_network_certifier_content_ta
     CON, GONE, HELD, LEN_DIGEST, LINK, leaves, leaving, mixed, registered)
 from verity.protocols.certifier.verifier.tests.test_network_certifier_lengths import (
     B, LEN, PLAIN, D, R, T, answer, id_req, traffic)
-from verity.protocols.certifier.verifier.tests.test_network_certifier_warden import TAU, Server, records, run
-from verity.protocols.certifier.verifier.warden import LENGTHS_FORMS, Warden, WardenParams, cells
+from verity.protocols.certifier.verifier.tests.test_network_certifier_warden import (
+    TAU, Client, Server, SocketClient, records, run)
+from verity.protocols.certifier.verifier.warden import REFUSED, LENGTHS_FORMS, Warden, WardenParams, cell, cells
 
 #: the lengths tests' schedule at form 2, and the content tables tests' classes at it, each its two sizes
 TWO = dataclasses.replace(LEN, lengths=2)
@@ -45,6 +49,21 @@ CON_REGISTERED = ("c969de114e4808370eb22eb9082ff4d290c742459fe1b9cab183a258b1d62
                   "9691e51ccbfb79420456efeb5f76d5669a8e9c9bffb8c3662b71538faeb3797a")
 LEN_REGISTERED = ("97a5a38d9ed904b94947425638fb0fd7c092d128f8940ecae204a25bff540fdf"
                   "4d2ed4043989d3d0b0a5930a550ba7c6e925ea78855b0955705c8519b28d5fba")
+#: the one cell of a turn-away, a refusal's bytes
+AWAY = cell(REFUSED, 0, b"", B)
+#: a run of two execution phases at the lengths tests' schedule: under form 2, its first bucket that admits nothing
+RUN = 2
+FIRST = RUN * T - SPAN
+#: the buckets of five arrivals from that bucket on: three at once, more than the queue holds, and one in the run's
+#: last bucket
+LATE = (FIRST, FIRST + 1, FIRST + 1, FIRST + 1, RUN * T - 1)
+#: what the lanes and the queue hold when those buckets begin: the arrivals before them (`through`), on two lanes and
+#: a queue of two, and whether the admitted ones answer the longest response, so hold their lanes to the run's last
+#: bucket but one, or the shortest, so free them `D` buckets on with the queue as it was
+STARTS = ((0, True), (1, True), (2, True), (3, True), (4, True), (4, False), (5, True))
+#: pinned, as the runs above are: `left` of form 1's run at each of `STARTS`, in order, hashed together
+FORM_1_LATE = ("115ee1bd14ba2473588110c114c4c6d6d49c99e83a133171a2c4324d7afc88d1"
+               "4e903e44ce765310b28ae5ad0c0551d6a3637623ea446574b6ba0ac27a1b5df5")
 
 
 def ends(device: Warden) -> list[tuple[int, bool]]:
@@ -104,8 +123,8 @@ def test_form_2_is_a_value_of_its_own_digest_and_a_schedule_at_form_1_leaves_wha
 def test_a_connection_that_may_end_past_the_run_is_never_admitted():
     """Form 2 admits a connection only at a bucket whose `span` buckets on are inside the run. One that arrives for
     the last such bucket is admitted and, its response the longest the schedule carries, ends in the run's last
-    bucket. One that arrives a bucket later waits and is cut at the run's end, though its response would have ended
-    in time: no cell is cut of it, the server never sees it, and it has no place in the release order. Form 1 admits
+    bucket. One that arrives a bucket later is turned away, though its response would have ended in time: it takes
+    no ordinal, the server never sees it, it has no place in the release order, and it is no refusal. Form 1 admits
     it, and it ends."""
     W = 2
     last = W * T - 1 - SPAN
@@ -113,16 +132,16 @@ def test_a_connection_that_may_end_past_the_run_is_never_admitted():
     answers = [answer((1, 2)), answer(range(8)), answer(())]
     two, clients, server = run(answers, arrivals, params=TWO, windows=W)
     log = {e["ordinal"]: e for e in two.log}
-    assert [log[k]["admitted"] for k in (1, 2, 3)] == [3, last, None]
+    assert [log[k]["admitted"] for k in sorted(log)] == [3, last] and two.ordinals == 2
     assert (log[2]["ended"], log[2]["egress_cells"], log[2]["failed"], log[2]["cut"]) == (W * T - 1, 9, None, False)
-    assert (log[3]["release"], log[3]["ended"], log[3]["ingress_cells"], log[3]["cut"]) == (None, None, 0, True)
-    assert clients[2].writes == [] and len(server.conns) == 2 and two.requests_released == 2
+    assert clients[2].writes == [(last + 1, AWAY)] and clients[2].closed and two.turned_away == 1
+    assert len(server.conns) == 2 and two.requests_released == 2
     assert (two.refused, two.refused_windows) == (0, set())
     assert all(r.status.complete for link in records(two) for r in link)
     one, _, server = run(answers, arrivals, params=LEN, windows=W)
     log = {e["ordinal"]: e for e in one.log}
     assert (log[3]["admitted"], log[3]["ended"], log[3]["cut"]) == (last + 1, last + 1 + D, False)
-    assert len(server.conns) == 3 and one.requests_released == 3
+    assert len(server.conns) == 3 and one.requests_released == 3 and one.turned_away == 0
 
 
 def last_phase_most(params: WardenParams) -> tuple[int, int]:
@@ -138,7 +157,7 @@ def last_phase_most(params: WardenParams) -> tuple[int, int]:
 
 def test_a_runs_last_execution_phase_holds_at_most_what_its_first_buckets_admit():
     """`last_phase_most` on the device, at two schedules: each lane filled at every bucket it frees, the last
-    execution phase admits and releases exactly that many, and the connection that arrives next is never admitted.
+    execution phase admits and releases exactly that many, and the connection that arrives next is turned away.
     At the first schedule a lane's two admissions are the most it releases there. At the second, each lane releases
     a connection admitted in the bucket before the execution phase, and then admits one more. Both are handed whole
     at the run's last close."""
@@ -150,8 +169,8 @@ def test_a_runs_last_execution_phase_holds_at_most_what_its_first_buckets_admit(
                                 (busy, {T - 1: [two_cells, two_cells], T + 5: [one, one], T + 6: [more]}, 5)):
         device, _, _ = run([answer(())] * n, arrivals, params=params, windows=2)
         admitted = [e["admitted"] for e in sorted(device.log, key=lambda e: e["ordinal"])]
-        assert sum(a is not None and a >= T for a in admitted) == last_phase_most(params)[0]
-        assert admitted[-1] is None and max(a for a in admitted if a is not None) == 2 * T - 1 - params.span
+        assert sum(a >= T for a in admitted) == last_phase_most(params)[0]
+        assert (len(admitted), device.turned_away) == (n - 1, 1) and max(admitted) == 2 * T - 1 - params.span
         assert ends(device) == [(0, True), (1, True)]
         last = [r for stride in handed(device)[1] for r in stride]
         assert len(last) == last_phase_most(params)[1] == device.requests_released
@@ -159,6 +178,167 @@ def test_a_runs_last_execution_phase_holds_at_most_what_its_first_buckets_admit(
     # the measured schedule's shape: a connection's span most of an execution phase, and ingress as long as the delay
     assert last_phase_most(dataclasses.replace(TWO, window=64, delay=4, ingress_buckets=4, egress_cells=101,
                                                lanes=3)) == (3 * 2, 3 * 3)
+
+
+# --- the turn-away -------------------------------------------------------------------------------------------------
+
+
+class Stamped(Client):
+    """A client that keeps the device's clock at each write to it and at its close."""
+
+    def __init__(self, warden: Warden, data) -> None:
+        self.at, self.closed_at = [], None
+        super().__init__(warden, data)
+
+    def write(self, data: bytes) -> None:
+        self.at.append(self.warden.clock())
+        super().write(data)
+
+    def close(self) -> None:
+        if self.closed_at is None:
+            self.closed_at = self.warden.clock()
+        super().close()
+
+
+def through(params: WardenParams, before: int, long: bool, **kw):
+    """A run of `RUN` execution phases with `before` arrivals before `FIRST`, the first two, which take the lanes,
+    two buckets before it and the rest in the bucket before it, and `LATE`'s after them; the first two connections
+    admitted answer the longest response when `long`, every other the shortest. Returns the device, the clients of
+    the arrivals before, `LATE`'s, and the server."""
+    arrivals = {FIRST - 2: [cells(id_req(j + 1, 3), B) for j in range(before)][:2],
+                FIRST - 1: [cells(id_req(j + 1, 3), B) for j in range(before)][2:]}
+    for j, t in enumerate(LATE):
+        arrivals.setdefault(t, []).append(cells(id_req(10 + j, 3), B))
+    answers = [answer(range(8) if long else ())] * 2 + [answer(())] * (before + len(LATE))
+    device, clients, server = run(answers, arrivals, params=params, windows=RUN, **kw)
+    return device, clients[:before], clients[before:], server
+
+
+def left(device: Warden, clients: list) -> str:
+    """A digest of what a run left: each client's writes with their buckets and whether it was closed, the log, the
+    counts, each record published or withheld, and the hands."""
+    doc = ([(c.writes, c.closed) for c in clients], sorted(device.log, key=lambda e: e["ordinal"]),
+           (device.ordinals, device.refused, sorted(device.refused_windows), device.requests_released),
+           [(r.link, r.window, r.status.reason and r.status.reason.value, r.grid)
+            for r in (*device.records, *device.withheld)], device.lengths)
+    return hashlib.sha512(repr(doc).encode()).hexdigest()
+
+
+def test_an_arrival_in_the_runs_last_buckets_is_turned_away_whatever_the_queue_and_the_lanes_hold():
+    """Under form 2, at each of `STARTS`: every lane free, one or both taken, one queued, the queue full with the
+    lanes held to the run's end or freed inside those buckets, and one arrival more than the queue holds. `LATE`'s
+    five arrivals, and no other, are turned away in every one: the set reads the tick count and the schedule, and
+    nothing the queue or the lanes hold moves it. Each gets one cell, the same bytes every time, in its own bucket,
+    and the close; none takes an ordinal, is queued or is a refusal, so no record is withheld for them and both
+    execution phases are published complete and handed. A connection queued when those buckets begin waits, though a
+    lane frees, and is cut at the run's end with no cell. The last arrival before them with the queue full is
+    refused, as it was, and its execution phase's records are withheld."""
+    room = TWO.lanes + TWO.queue
+    seen = set()
+    for before, long in STARTS:
+        device, early, late, server = through(TWO, before, long)
+        assert [(c.writes, c.closed) for c in late] == [([(t, AWAY)], True) for t in LATE]
+        seen |= {data for c in late for _, data in c.writes}
+        taken, held = min(before, TWO.lanes), min(before, room)
+        assert (device.turned_away, device.ordinals, len(server.conns)) == (len(LATE), held, taken)
+        log = sorted(device.log, key=lambda e: e["ordinal"])
+        assert [(e["admitted"], e["ended"], e["cut"]) for e in log] == \
+            [(FIRST - 2, FIRST - 2 + (SPAN if long else D), False)] * taken + [(None, None, True)] * (held - taken)
+        assert all(c.writes == [] and c.closed for c in early[taken:held])
+        if before <= room:
+            assert (device.refused, device.refused_windows, device.withheld) == (0, set(), [])
+            assert all(r.status.complete for link in records(device) for r in link)
+            assert ends(device) == [(0, True), (1, True)]
+            assert handed(device) == CR.of_records(TWO, *records(device)[:2])
+        else:
+            assert (device.refused, device.refused_windows) == (1, {1}) and early[room].writes == [(FIRST - 1, AWAY)]
+            assert [r.window for r in device.withheld] == [1] * 3 and ends(device) == [(0, False), (1, False)]
+    assert seen == {AWAY} and len(AWAY) == B
+
+
+def test_a_turn_aways_cell_leaves_on_the_next_tick_through_the_pacer_and_never_at_its_arrival():
+    """An arrival is handled before its bucket's tick, while the clock still reads the tick before. A refusal is
+    written and closed then. A turn-away is neither until the clock reads its bucket's boundary: the tick writes its
+    cell and closes it. With the pacer the loop writes it nothing: each turn-away's cell is a part of its bucket,
+    which the pacer writes to its socket and closes, a bucket of its own where no connection is live, and the
+    clients read what the unpaced run wrote them; one queued and cut reads nothing."""
+    device, early, late, _ = through(TWO, 5, True, client=Stamped)
+    refused, earlier = early[TWO.lanes + TWO.queue], (FIRST - 2) * TAU
+    assert (refused.writes, refused.at, refused.closed_at) == ([(FIRST - 1, AWAY)], [earlier], earlier)
+    assert [(c.at, c.closed_at) for c in late] == [([t * TAU], t * TAU) for t in LATE]
+    for before in (0, 4):
+        _, plain_early, plain_late, _ = through(TWO, before, True)
+        paced, early, late, _ = through(TWO, before, True, paced=0.05, client=SocketClient)
+        assert all(c.writes == [] for c in (*early, *late)) and paced.turned_away == len(LATE)
+        assert [c.received() for c in late] == [AWAY] * len(LATE)
+        got = [c.received() for c in early]
+        assert got == [b"".join(data for _, data in c.writes) for c in plain_early]
+        assert got[TWO.lanes:] == [b""] * (before - TWO.lanes if before else 0)
+        assert [b"".join(data for _, data in c.writes) for c in plain_late] == [AWAY] * len(LATE)
+        assert set(LATE) <= {r.t for r in paced.releases} and all(r.written for r in paced.releases)
+        if not before:
+            assert [r.t for r in paced.releases] == sorted(set(LATE))
+
+
+def test_an_arrival_with_no_tick_left_is_closed_with_no_cell():
+    """A turn-away leaves only on a tick. An arrival turned away in a bucket whose tick never runs, the run cancelled
+    first, is held until then and closed with no cell, and so is one that arrives once the run is over; both are
+    counted."""
+    async def main():
+        clock = VirtualClock(-TAU / 2)
+        device = Warden(TWO, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(device.run())
+        for t in range(T - 1):
+            clock.advance(t * TAU)
+            await device.until(lambda w, t=t: w.ticks > t)
+        held = Client(device, cells(id_req(1, 3), B))
+        await held.task
+        assert (device.turned_away, held.writes, held.closed) == (1, [], False)
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+        after = Client(device, cells(id_req(2, 3), B))
+        await after.task
+        return device, held, after
+
+    device, held, after = asyncio.run(main())
+    assert (device.turned_away, device.ordinals, device.refused, device.ticks) == (2, 0, 0, T - 1)
+    assert [(c.writes, c.closed) for c in (held, after)] == [([], True)] * 2
+
+
+def test_a_load_that_never_stops_leaves_every_execution_phase_complete_and_ended_in_its_head():
+    """An arrival every third bucket from a run's first to its last, a rate two lanes carry with nothing queued, at
+    two schedules: each arrival before the first bucket that admits nothing is admitted in its bucket and ends, and
+    each one after it is turned away. Nothing is refused, queued at the run's end or cut; every execution phase's
+    three records are published complete, none withheld, and every one is handed, the last at the run's last close,
+    what the records say."""
+    busy = dataclasses.replace(TWO, ingress_buckets=2, egress_cells=11)
+    for params, windows in ((TWO, 3), (busy, 2)):
+        first = windows * T - params.span
+        every = list(range(0, windows * T, 3))
+        n = sum(t < first for t in every)
+        device, clients, _ = run([answer((t,)) for t in every[:n]], {t: [cells(id_req(t, 3), B)] for t in every},
+                                 params=params, windows=windows)
+        assert 0 < n < len(every) and every[-1] >= windows * T - 3
+        assert (device.ordinals, device.turned_away, device.refused) == (n, len(every) - n, 0)
+        assert [(e["admitted"], e["cut"], e["failed"]) for e in sorted(device.log, key=lambda e: e["ordinal"])] == \
+            [(t, False, None) for t in every[:n]]
+        assert [c.writes for c in clients[n:]] == [[(t, AWAY)] for t in every[n:]]
+        assert device.withheld == [] and all(r.status.complete for link in records(device) for r in link)
+        assert ends(device) == [(w, True) for w in range(windows)]
+        assert handed(device) == CR.of_records(params, *records(device)[:2])
+        assert sum(len(stride) for strides in handed(device).values() for stride in strides) == n
+
+
+def test_form_1_at_the_same_arrivals_leaves_what_it_left():
+    """Form 1 turns nothing away. At each of `STARTS` it admits, queues, refuses and cuts `LATE`'s arrivals as it
+    did, and the runs leave the cells, the log, the records and the hands they left, byte for byte."""
+    all_left = hashlib.sha512()
+    for before, long in STARTS:
+        device, early, late, _ = through(LEN, before, long)
+        assert device.turned_away == 0 and device.ordinals + device.refused == before + len(LATE)
+        all_left.update(bytes.fromhex(left(device, early + late)))
+    assert all_left.hexdigest() == FORM_1_LATE
 
 
 # --- the hand ------------------------------------------------------------------------------------------------------

@@ -208,7 +208,7 @@ async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: in
         for data in arrivals.get(t, ()):
             clients.append(client(warden, data))
             count = len(clients)
-            await warden.until(lambda w, n=count: w.ordinals + w.refused == n)
+            await warden.until(lambda w, n=count: w.ordinals + w.refused + w.turned_away == n)
         server.release(t)
         await warden.until(lambda w: settled(w, server))
         clock.advance(t * TAU + (late or {}).get(t, 0))
