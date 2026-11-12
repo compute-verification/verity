@@ -201,7 +201,7 @@ KEYS = (KEY0, KEY1, "00", "k0", "AB", "abc", "", "0g", "١٢")
 
 def seeded(rng: random.Random) -> dict:
     """A vector near the example's: its site with locations and links dropped, repeated, re-kinded, re-keyed and
-    re-ended, or a site drawn whole, and a link and a key that are likely ones of it: the key of a certifier at the
+    re-ended, or a site made whole at random, and a link and a key that are likely ones of it: the key of a certifier at the
     link's end, most often."""
     if rng.random() < 0.6:
         site = view_site()
@@ -228,8 +228,9 @@ def seeded(rng: random.Random) -> dict:
                 "locs": [loc(rng.choice(IDS), rng.choice(R.KINDS), key=rng.choice(KEYS)) for _ in range(rng.randrange(7))],
                 "links": [link(rng.choice(NAMES), rng.choice(IDS), rng.choice(IDS), rng.randrange(1 << 70))
                           for _ in range(rng.randrange(6))]}
-    draw = rng.random()
-    name = "up0" if draw < 0.5 else rng.choice([k["id"] for k in site["links"]] + ["up2"]) if draw < 0.85 else rng.choice(NAMES)
+    which = rng.random()
+    name = ("up0" if which < 0.5 else rng.choice([k["id"] for k in site["links"]] + ["up2"]) if which < 0.85
+            else rng.choice(NAMES))
     ends = next((k["ends"] for k in site["links"] if k["id"] == name), [])
     certifiers = [x for x in site["locs"] if x["id"] in ends and x["kind"] == "certifier"]
     if rng.random() < 0.25:
