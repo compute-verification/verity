@@ -12,11 +12,13 @@ from dataclasses import replace
 import pytest
 from verity.protocols.certifier.verifier import advice as I1
 
+from tests.program.predict import test_draft_rows as DT
 from tests.program.predict.test_steps import GREEDY, _prompt, _registered
 from verity_vllm.pipeline.advice_code import codec as V1
 from verity_vllm.pipeline.advice_code import lengths as LN
 from verity_vllm.pipeline.advice_code import schedule as SC
 from verity_vllm.pipeline.advice_code import window_code as CV
+from verity_vllm.pipeline.advice_code.replay import replay
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.steps import Registered, compile_steps, plan_steps
 
@@ -189,6 +191,19 @@ def test_a_length_is_never_charged_after_its_admission_window():
         LN.check_admitted(reqs, [0, 1], [0, 1], lambda s: 2 if s >= 2 else 0, 2, V1.AdviceCodeError)
     with pytest.raises(V1.AdviceCodeError, match="send_lengths is a bool"):
         V1.Registered(ENGINE, (EOS,), send_lengths=1)
+
+
+@pytest.mark.parametrize("K", [1, 3, 5])
+def test_the_draft_rows_the_step_compiler_is_tested_on_are_the_replays(K):
+    """The step traces the draft rows' test compiles (`test_draft_rows._trace`) hold the rows the scheduler's replay runs for
+    the same requests and kept counts under the sync scheduler: a decode row of 1 + K positions that starts at its request's
+    last kept token."""
+    recs, _, kept = DT._trace(K, DT._layer(K))
+    engine = SC.DraftEngine(max_num_seqs=8, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=64, num_speculative_tokens=K)
+    ran = replay(engine, [SC.RequestIO(len(prompt), n, n, False, kept=(0, *kept[rid])) for rid, prompt, n in DT.SERVED], admit=[0, 1])
+    assert [[(DT.SERVED[i][0], start, n) for i, start, n in st.rows] for st in ran.steps] == [
+        [tuple(row) for row in r["rows"]] for r in recs if r["kind"] == "step"]
+    assert any(kept["a"]) and not all(c == K for c in kept["a"])
 
 
 def _ingress(record: V1.Record) -> dict:

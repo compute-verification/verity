@@ -17,8 +17,6 @@ from verity.circuits.evaluation.reference import signature_of
 from verity.definitions.registry import spec
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.pipeline.advice_code.replay import replay
-from verity_vllm.pipeline.advice_code.schedule import DraftEngine, RequestIO
 from verity_vllm.program import inputs
 from verity_vllm.program.predict import draft_rows as DR
 from verity_vllm.program.predict import phi as PHI
@@ -135,13 +133,9 @@ def test_a_step_trace_with_draft_tokens_compiles_to_programs_that_give_its_kept_
     """A step trace whose decode rows carry K draft tokens becomes advice with no field for a kept count, the advice
     compiles to each request's Program in passes of 1 + K rows that take kept + 1 tokens, and evaluating a Program with the
     roles' stand-ins gives the ids the trace kept with every check 1: each pass's kept count against `Accept_v1`, and the
-    length rule. The trace's rows are the ones the scheduler's replay runs for those kept counts under the sync scheduler."""
+    length rule."""
     layer = _layer(K)
     recs, io, kept = _trace(K, layer)
-    engine = DraftEngine(max_num_seqs=8, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=64, num_speculative_tokens=K)
-    ran = replay(engine, [RequestIO(len(prompt), n, n, False, kept=(0, *kept[rid])) for rid, prompt, n in SERVED], admit=[0, 1])
-    assert [[(SERVED[i][0], start, n) for i, start, n in st.rows] for st in ran.steps] == [
-        [tuple(row) for row in r["rows"]] for r in recs if r["kind"] == "step"]
     advice = ADV.from_trace(recs, io).advice
     assert advice.version == WA.DRAFTS and WA.decode(WA.encode(advice)) == advice
     assert all(row.kind == "decode" and row.n == 1 + K for st in advice.steps for row in st.rows if row.start >= advice.requests[row.request].prompt_len)

@@ -76,7 +76,6 @@ from verity_vllm.engine import step_trace as ST
 
 from . import advice_windows as AW
 from . import window_advice as WA
-from .advice_code.schedule import speculative
 
 SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
@@ -255,7 +254,11 @@ def _dropped(reqs: dict[str, _Req], outside: dict[str, dict[str, Any]], io: dict
 def _drafting(recs: list[dict[str, Any]]) -> tuple[int, bool]:
     """The drafts a decode row carries under the trace's header (0: it states none), and whether its scheduler is async."""
     config = next((r["config"] for r in recs if r["kind"] == "header" and "config" in r), {})
-    return speculative(config), bool(config.get("async_scheduling"))
+    spec = config.get("speculative")
+    k = spec.get("num_speculative_tokens") if spec else 0
+    if type(k) is not int or k < 0:
+        raise ValueError(f"the trace's header states speculative num_speculative_tokens={k!r}: a positive integer")
+    return k, bool(config.get("async_scheduling"))
 
 
 def _draft_emitted(s: int, rid: str, start: int, n: int, emitted: int, drafting: tuple[int, bool]) -> int:
