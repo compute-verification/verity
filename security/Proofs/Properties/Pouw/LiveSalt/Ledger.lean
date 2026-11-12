@@ -20,7 +20,7 @@ holds of the whole ledger (`verifyLedger_inv`).
 `pinnedSession` take the window whose root the caller names, closed by its v2 `end` (`auditedOpen_ok`,
 `pinnedSession_ok`). So the ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end
 (`ledgerShows_of`). `sessionNamed` returns the commitment whose root's hex the ledger's `end` recorded
-(`sessionNamed_root`).
+(`challengePhaseNamed_root`).
 
 The challenger's functions are monadic. Each fact about one is a Hoare triple proved by `mvcgen`, and `of_triple` reads
 it back at an `.ok` result.
@@ -605,7 +605,7 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
     ⟨enK, enS, by rw [hop]; exact hlt, jsonTrue_eq' hclosed, jsonTrue_eq hcomp1, hcomp2, hrl,
       by rw [hop, ← hwl]; exact hl1, hl2⟩, huniq⟩
 
-theorem sessionOf_spec (key : ChallengerKey) (record log close : Json) :
+theorem challengePhaseOf_spec (key : ChallengerKey) (record log close : Json) :
     ⦃⌜True⌝⦄ sessionOf key record log close ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 theorem recordOfJson_spec (j : Json) : ⦃⌜True⌝⦄ ChallengerRecord.ofJson j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
@@ -620,11 +620,11 @@ theorem commitment_of {q l : Nat} {s t : String} (h : (q == l && s == t) = true)
 -- `mvcgen` splits `sessionNamed` into one goal per check it makes of the session's record
 set_option maxHeartbeats 1000000 in
 /-- `sessionNamed` returns the commitment whose root's hex the ledger's `end` recorded. -/
-theorem sessionNamed_root {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_root {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
     (h : sessionNamed a key session = .ok r) : Flock.hexOf r.1.root = a.commitment := by
   refine of_triple (Q := fun r => Flock.hexOf r.1.root = a.commitment) ?_ h
   clear h
-  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, sessionOf_spec, recordOfJson_spec, mapM_spec]
+  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_spec, recordOfJson_spec, mapM_spec]
   apply commitment_of <;> with_reducible assumption
 
 end Properties.Pouw.LiveSalt.Ledger

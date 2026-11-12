@@ -86,8 +86,8 @@ no higher miss probability than the uniform $k$-subset. The window's per-call sa
 `Law.stratified` over its (call, template) strata. So the live window sample (`keyedWindow`) misses $B$ with probability
 at most `Law.stratified`'s miss probability plus the $\eta$ of A4 (`Assumptions.KeyedStreamsUniform`), on a
 uniform window secret (A5). `keyedWindow_audit_of_record` and `keyedWindow_extraction_audit_of_record` put it through
-the window pins (`audit_window_split_of_record_of_le_slack`, and at the compiled layer
-`extraction_audit_window_split_of_record_of_le_slack`): the 0.1% event has probability at most
+the window pins (`audit_executionPhase_split_of_record_of_le_slack`, and at the compiled layer
+`extraction_audit_executionPhase_split_of_record_of_le_slack`): the 0.1% event has probability at most
 $2^{-40} + \eta + \varepsilon_{ks} + \delta_{link}$. The key's context is the receipt digest, so the real game's sample
 depends on the registration: `auditReg` (`Audit/RegDraw.lean`), and `prob_auditReg` moves each of its strategies to the
 game whose sampling design is fixed at its registration, which `keyedWindowReg_extraction_audit_of_record` reads.
@@ -177,19 +177,19 @@ $2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
 over its (call, template) strata, the calls sampled independently. `Covers σ k w K`: every stratum samples at least its
 share $K w_s n_s / W$, or all its units. `stratified_escape_le_of_covers`: then
 $\mathrm{escape}(B) \le ((W - W_B)/W)^K$, for any such sampling design. `covers_work`: the work sampling design covers
-its own work. `covers_window`: the per-call split, call $c$ at its share
+its own work. `covers_executionPhase`: the per-call split, call $c$ at its share
 $K_c = \min(N_c, \max(1, \lceil K W_c / W \rceil))$, covers the window's work when each call's work is in one stratum
 (`hone`); with two strata doing work in a call, a binding cap breaks the bound itself (the module docstring's example).
-`covers_of_floor`: y's floors $f_s$ with $K_y v_s n_s \le f_s N$ cover the y weights $v$ at $K_y$. `audit_window` and
-`extraction_audit_window`:
+`covers_of_floor`: y's floors $f_s$ with $K_y v_s n_s \le f_s N$ cover the y weights $v$ at $K_y$. `audit_executionPhase` and
+`extraction_audit_executionPhase`:
 $\Pr[\text{accept} \wedge (\mathrm{unsoundWork}_w \ge T \vee \mathrm{unsoundWork}_v \ge T_y)]$ is at most the larger of
 the two bounds plus the per-unit terms, not their sum, since both bound the one committed incorrect set.
-`audit_window_of_le`: the same for any sampling design whose miss probabilities are at most the product design's,
-such as an executable sample; `audit_window_of_le_slack` and, at the compiled layer,
-`extraction_audit_window_of_le_slack`: for a sampling design within $\eta$ of it, with $\eta$ added to the bound, as a
-keyed sample needs, and `audit_window_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit
-terms, with `extraction_audit_window_split_of_record_of_le_slack` at the compiled layer. `audit_window_of_record`:
-$2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_split_of_record`: the same for the per-call
+`audit_executionPhase_of_le`: the same for any sampling design whose miss probabilities are at most the product design's,
+such as an executable sample; `audit_executionPhase_of_le_slack` and, at the compiled layer,
+`extraction_audit_executionPhase_of_le_slack`: for a sampling design within $\eta$ of it, with $\eta$ added to the bound, as a
+keyed sample needs, and `audit_executionPhase_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit
+terms, with `extraction_audit_executionPhase_split_of_record_of_le_slack` at the compiled layer. `audit_executionPhase_of_record`:
+$2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_executionPhase_split_of_record`: the same for the per-call
 split with y's floors, the sampling design the PoUW window runs (`PlanDraw.lean`). The product design assumes each call's sample is under a distinct
 context.
 

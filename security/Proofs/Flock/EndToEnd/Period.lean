@@ -24,14 +24,14 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Proof of the integrity audit over a period, per sampling block and pooled
 
-* `Flock.SecurityProofs.IntegrityPeriod`: `period_union` over the sampling blocks, each sampling block's bound
+* `Flock.SecurityProofs.IntegrityPeriod`: `monitoringPeriod_union` over the sampling blocks, each sampling block's bound
   `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_wrong_le`), with its
   knowledge term at the worst registration.
 * `Flock.SecurityProofs.IntegrityHorizon`: a run in which every sampling block is accepted and the incorrect proof blocks total at
   least `M` either has a sampling block accepted with a sampled proof block wrong, at most `Σ_w (ε_ks,w + δ_link,w)` by
-  `period_union` over `Flock.SecurityProofs.EndToEndHiddenDrawn` (`SamplingBlock.accepted_drawnWrong_le`), or every
+  `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenDrawn` (`SamplingBlock.accepted_drawnWrong_le`), or every
   sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
-  `period_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
+  `monitoringPeriod_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
   `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.drawMiss_le`; `Law.execOS_subset_escape_le`,
   `Law.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
@@ -157,12 +157,12 @@ open scoped ENNReal
 theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
   intro W T hA3 s hT hL
   have hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
-    periodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
-  have h := period_union (fun t => (W t).game) (fun t => (W t).record t)
+    monitoringPeriodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
+  have h := monitoringPeriod_union (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (fun t τ => t < T ∧ (W t).CR τ)
     (fun t => (W t).miss + (W t).ks + (W t).link)
     (fun t τ hτ => (W t).accepted_wrong_le (hA3 t hτ.1) τ hτ.2) T 0 s
-    (periodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩) hs)
+    (monitoringPeriodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩) hs)
   simpa [Period.run] using h
 
 /-- **The integrity audit over a period, at `δ`.** -/
@@ -178,20 +178,20 @@ theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
   intro W T q δ hq hδ hqt hA3 s hT hL
   classical
   have hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
-    periodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
+    monitoringPeriodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   set M : ℕ := ⌈Real.log (1 / δ) / q⌉₊
   set x : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : x ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
   have hfac : ∀ t < T, ∀ m : ℕ, (1 - ((W t).kd : ℝ≥0∞) / (W t).n) ^ m ≤ x ^ m :=
     fun t ht m => pow_le_pow_left₀ zero_le ((W t).one_sub_le hq (hqt t ht)) m
-  have hgood := periodGood_mono _ T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < T ∧ (W j).CR τ)) hs
+  have hgood := monitoringPeriodGood_mono _ T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < T ∧ (W j).CR τ)) hs
   -- every sampling block accepted with a sampled proof block wrong
-  have hA := period_union (fun t => (W t).game) (fun t => (W t).record t)
+  have hA := monitoringPeriod_union (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.accepted ∧ r.drawnWrong) (fun t τ => t < T ∧ (W t).CR τ)
     (fun t => (W t).ks + (W t).link)
     (fun t τ hτ => (W t).accepted_drawnWrong_le τ hτ.2) T 0 s hgood
   -- every sample misses, with at least `M` incorrect proof blocks in all
-  have hB := period_horizon (fun t => (W t).game) (fun t => (W t).record t) (fun r => ¬ r.drawnWrong)
+  have hB := monitoringPeriod_horizon (fun t => (W t).game) (fun t => (W t).record t) (fun r => ¬ r.drawnWrong)
     WindowRec.wrong (fun t τ => t < T ∧ (W t).CR τ) x hx
     (fun t τ hτ => ⟨((W t).wrongSet τ).card, fun _ => rfl,
       ((W t).drawMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) T 0 s M hgood

@@ -26,7 +26,7 @@ the pool (`card_pool_mem`).
 * `Law.subsetOn_escape_le`: over independent uniform streams, one per swap, `Key.subset` misses `B` with at most the
   uniform `k`-subset's escape.
 
-The window (`PlanDraw.window`, `plan.draw` for each call under one key, admission refusing a repeated call index):
+The window (`PlanDraw.executionPhase`, `plan.draw` for each call under one key, admission refusing a repeated call index):
 
 * `drawAll_eq`, `drawK_eq_drawOn`: the calls' samples are one sample over the window's flat strata (`flat`), and on the key
   it is `drawOn` on the key's streams, stratum `p`'s swap `i` at index `("s", *context, i)`.
@@ -623,12 +623,12 @@ def windowTest (WS : List (List Part × PlanDraw.Stratum)) (k : Fin M → ℕ) (
     (streams : Fin (∑ p, k p) → ByteArray) : Prop :=
   ∃ D, KeyedDraw.drawOn (windowOf k streams) WS 0 = some D ∧ ∀ u ∈ B, u.val ∉ D
 
-/-- **The live PoUW window sample as a sampling design**: `PlanDraw.window` on the key derived from the window's secret `sec ω` of
+/-- **The live PoUW window sample as a sampling design**: `PlanDraw.executionPhase` on the key derived from the window's secret `sec ω` of
 `S` bytes, each swap's stream read to `L` bytes; a refused or short sample samples every unit. -/
 def keyedWindow {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (domain : String)
     (context : List (String × Part)) (calls : List PlanDraw.Call) (L : ℕ) : Law n where
   Ω := Ω
-  draw ω := match PlanDraw.window (derive ⟨Array.ofFn fun b => UInt8.ofFin (sec ω b)⟩ domain context) calls L with
+  draw ω := match PlanDraw.executionPhase (derive ⟨Array.ofFn fun b => UInt8.ofFin (sec ω b)⟩ domain context) calls L with
     | some D => univ.filter fun u => u.val ∈ D
     | none => univ
 
@@ -658,13 +658,13 @@ theorem keyedWindow_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : �
           (windowIdx WS k j) L := by
       intro ω hd
       set key := derive ⟨Array.ofFn fun b => UInt8.ofFin (sec ω b)⟩ domain context
-      change Disjoint (match PlanDraw.window key calls L with
+      change Disjoint (match PlanDraw.executionPhase key calls L with
         | some D => univ.filter fun u => u.val ∈ D
         | none => univ) B at hd
       split at hd
       · rename_i D hD
         refine ⟨D, ?_, fun u hu huD => Finset.disjoint_left.1 hd (Finset.mem_filter.2 ⟨Finset.mem_univ _, huD⟩) hu⟩
-        unfold PlanDraw.window at hD
+        unfold PlanDraw.executionPhase at hD
         split at hD
         · rw [KeyedDraw.drawAll_eq, KeyedDraw.drawK_eq_drawOn key L (windowOf k fun j => stream key (windowIdx WS k j) L)
             WS 0 ?_] at hD
@@ -986,10 +986,10 @@ theorem keyedWindow_escape_le_of_names (σ : Fin n → Fin M) (k : Fin M → ℕ
       exact (DrawExec.prCoin_le_one _).trans le_self_add
     · refine le_trans (le_of_eq_of_le (b := 0) ?_ zero_le) zero_le
       refine le_antisymm ((prCoin_mono (q := fun _ => False) fun ω hd => ?_).trans prCoin_false.le) zero_le
-      change Disjoint (match PlanDraw.window _ calls L with
+      change Disjoint (match PlanDraw.executionPhase _ calls L with
         | some D => univ.filter fun u => u.val ∈ D
         | none => univ) B at hd
-      unfold PlanDraw.window at hd
+      unfold PlanDraw.executionPhase at hd
       simp only [hadm, ↓reduceIte] at hd
       exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
 
@@ -1006,7 +1006,7 @@ variable {n M : ℕ} {cl : Fin n → Finset (Fin n)} {Reg : Type} {session : Fin
 
 /-- **The PoUW window audit on the live keyed sample, at the sizing of record** (step 4): the audit accepts while the unsound
 tiles do at least 0.1% of the work, or the unsound y cells are at least 0.1% of them, with probability at most
-`2^-40 + η + ε_ks + δ_link`. It is `audit_window_split_of_record_of_le_slack` at `L := keyedWindow sec domain context calls L`,
+`2^-40 + η + ε_ks + δ_link`. It is `audit_executionPhase_split_of_record_of_le_slack` at `L := keyedWindow sec domain context calls L`,
 whose escape `keyedWindow_escape_le_of_names` bounds by the product distribution's plus `η`: one `η` for every `B`, A4's for the
 sample's escape tests (`windowTest`), which cost the same for every `B`.
 
@@ -1015,14 +1015,14 @@ The key's context is the receipt digest, so the sample depends on the registrati
 receipt doesn't list is refused), and for every context, A4 and the `Analysis` taken uniformly over them. The window's
 secret is fresh and uniform (A5, C2). -/
 theorem keyedWindow_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
-    (calls : List PlanDraw.Call) (hWS : PlanStrata σ (windowK σ call w f 27713) (KeyedDraw.flat calls))
+    (calls : List PlanDraw.Call) (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedDraw.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
     (L : ℕ) (domain : String) (context : List (String × Part)) (η : ℝ≥0∞)
     (hnames : ∀ c ∈ calls, (c.strata.map (·.name)).Nodup)
-    (hsmall : ∀ j, (frames (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713) j)).size < 2 ^ 64)
+    (hsmall : ∀ j, (frames (windowIdx (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713) j)).size < 2 ^ 64)
     (hA4 : ∀ B : Finset (Fin n), Assumptions.KeyedStreamsUniform S domain context
-      (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713)) (fun _ => L)
-      (windowTest (KeyedDraw.flat calls) (windowK σ call w f 27713) B) η)
+      (windowIdx (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713)) (fun _ => L)
+      (windowTest (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713) B) η)
     (A : Analysis ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session) {εks δlink : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
@@ -1032,21 +1032,21 @@ theorem keyedWindow_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin
         totalWork σ v ≤ 1000 * unsoundWork σ v cl (A.wrong (A.committedOf σ'))))
         (audit ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + δlink :=
-  audit_window_split_of_record_of_le_slack
-    (fun B => keyedWindow_escape_le_of_names σ _ (windowK_le σ call w f 27713) calls hWS sec hsec L domain context η
+  audit_executionPhase_split_of_record_of_le_slack
+    (fun B => keyedWindow_escape_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record: the PoUW window audit on the live keyed sample at the compiled layer** (randomized extractor):
-`keyedWindow_audit_of_record`'s bound with `ε_ks(σ)` and `δ_link(σ)`, through `extraction_audit_window_split_of_record_of_le_slack`. -/
+`keyedWindow_audit_of_record`'s bound with `ε_ks(σ)` and `δ_link(σ)`, through `extraction_audit_executionPhase_split_of_record_of_le_slack`. -/
 theorem keyedWindow_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
-    (calls : List PlanDraw.Call) (hWS : PlanStrata σ (windowK σ call w f 27713) (KeyedDraw.flat calls))
+    (calls : List PlanDraw.Call) (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedDraw.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
     (L : ℕ) (domain : String) (context : List (String × Part)) (η : ℝ≥0∞)
     (hnames : ∀ c ∈ calls, (c.strata.map (·.name)).Nodup)
-    (hsmall : ∀ j, (frames (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713) j)).size < 2 ^ 64)
+    (hsmall : ∀ j, (frames (windowIdx (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713) j)).size < 2 ^ 64)
     (hA4 : ∀ B : Finset (Fin n), Assumptions.KeyedStreamsUniform S domain context
-      (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713)) (fun _ => L)
-      (windowTest (KeyedDraw.flat calls) (windowK σ call w f 27713) B) η)
+      (windowIdx (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713)) (fun _ => L)
+      (windowTest (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713) B) η)
     (A : ExtractionAnalysis ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session)
     {εks δlink : (R : Reg) → Cont ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session R → ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hW : 0 < totalWork σ w)
@@ -1057,8 +1057,8 @@ theorem keyedWindow_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
         totalWork σ v ≤ 1000 * unsoundWork σ v cl (A.wrong (A.committedOf σ'))))
         (audit ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') :=
-  extraction_audit_window_split_of_record_of_le_slack
-    (fun B => keyedWindow_escape_le_of_names σ _ (windowK_le σ call w f 27713) calls hWS sec hsec L domain context η
+  extraction_audit_executionPhase_split_of_record_of_le_slack
+    (fun B => keyedWindow_escape_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record on the real, receipt-keyed game**: the key's context `ctx R` is the digest of the
@@ -1067,14 +1067,14 @@ registration's receipt, so the sample is `auditReg`'s. Strategy by strategy (`pr
 for all of them. -/
 theorem keyedWindowReg_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C)
     (w v f : Fin M → ℕ) (calls : List PlanDraw.Call)
-    (hWS : PlanStrata σ (windowK σ call w f 27713) (KeyedDraw.flat calls))
+    (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedDraw.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
     (L : ℕ) (domain : String) (ctx : Reg → List (String × Part)) (η : ℝ≥0∞)
     (hnames : ∀ c ∈ calls, (c.strata.map (·.name)).Nodup)
-    (hsmall : ∀ j, (frames (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713) j)).size < 2 ^ 64)
+    (hsmall : ∀ j, (frames (windowIdx (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713) j)).size < 2 ^ 64)
     (hA4 : ∀ (R : Reg) (B : Finset (Fin n)), Assumptions.KeyedStreamsUniform S domain (ctx R)
-      (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713)) (fun _ => L)
-      (windowTest (KeyedDraw.flat calls) (windowK σ call w f 27713) B) η)
+      (windowIdx (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713)) (fun _ => L)
+      (windowTest (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713) B) η)
     (A : ∀ R, ExtractionAnalysis ((keyedWindow (n := n) sec domain (ctx R) calls L).closure cl) Reg session)
     {εks δlink : ∀ R, (R' : Reg) → Cont ((keyedWindow (n := n) sec domain (ctx R) calls L).closure cl) Reg session R' →
       ℝ≥0∞}
@@ -1095,14 +1095,14 @@ theorem keyedWindowReg_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin 
 /-- The oracle-layer form on the real, receipt-keyed game: at most `2^-40 + η + ε_ks + δ_link`, one `ε_ks` and one
 `δ_link` for every registration. -/
 theorem keyedWindowReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
-    (calls : List PlanDraw.Call) (hWS : PlanStrata σ (windowK σ call w f 27713) (KeyedDraw.flat calls))
+    (calls : List PlanDraw.Call) (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedDraw.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
     (L : ℕ) (domain : String) (ctx : Reg → List (String × Part)) (η : ℝ≥0∞)
     (hnames : ∀ c ∈ calls, (c.strata.map (·.name)).Nodup)
-    (hsmall : ∀ j, (frames (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713) j)).size < 2 ^ 64)
+    (hsmall : ∀ j, (frames (windowIdx (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713) j)).size < 2 ^ 64)
     (hA4 : ∀ (R : Reg) (B : Finset (Fin n)), Assumptions.KeyedStreamsUniform S domain (ctx R)
-      (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713)) (fun _ => L)
-      (windowTest (KeyedDraw.flat calls) (windowK σ call w f 27713) B) η)
+      (windowIdx (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713)) (fun _ => L)
+      (windowTest (KeyedDraw.flat calls) (executionPhaseK σ call w f 27713) B) η)
     (A : ∀ R, Analysis ((keyedWindow (n := n) sec domain (ctx R) calls L).closure cl) Reg session) {εks δlink : ℝ≥0∞}
     (hks : ∀ R, (A R).KnowledgeSound εks) (hlink : ∀ R, (A R).BindSound δlink) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)

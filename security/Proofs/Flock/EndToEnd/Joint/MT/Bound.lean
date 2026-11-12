@@ -33,8 +33,8 @@ The proofs of `JointStratified` and `JointStratifiedHorizon` (`Joint/Bound.lean`
   its sample misses `B`, at most `B`'s escape `< δ` under A3 (`StratifiedBlockMT.drawMiss_le`).
 * `Flock.SecurityProofs.JointStratifiedHorizonMT`: a run in which every sampling block is accepted and the incorrect proof blocks
   are not within the period's budget either has a sampling block accepted with a sampled proof block wrong, at most
-  `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every sample misses with the product of the escapes below `δ`, at most
-  `δ` by `period_prod`.
+  `Σ_t (ε_ks,t + ε_bind,t)` by `monitoringPeriod_union`, or every sample misses with the product of the escapes below `δ`, at most
+  `δ` by `monitoringPeriod_prod`.
 -/
 
 @[expose] public section
@@ -136,12 +136,12 @@ theorem JointStratifiedHorizonMT : Flock.Guarantees.JointStratifiedHorizonMT := 
       LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t'
   have hs : PeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
-    periodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
-      (periodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
-  have hA := period_union (fun t => (W t).game) (StratifiedBlockMT.record W)
+    monitoringPeriodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
+      (monitoringPeriodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
+  have hA := monitoringPeriod_union (fun t => (W t).game) (StratifiedBlockMT.record W)
     (fun r => r.accepted ∧ r.drawnWrong) (fun t τ => t < T ∧ cr t τ) (fun t => (W t).epsKs + (W t).link)
     (fun t τ hτ => (W t).accepted_drawnWrong_le τ hτ.2.1 hτ.2.2) T 0 s hs
-  have hB := period_prod (fun t => (W t).game) (StratifiedBlockMT.record W) (fun r => ¬ r.drawnWrong)
+  have hB := monitoringPeriod_prod (fun t => (W t).game) (StratifiedBlockMT.record W) (fun r => ¬ r.drawnWrong)
     BlockRecMT.escape (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨(W t).ideal.escape ((W t).wrongSet τ),
       ne_top_of_le_ne_top ENNReal.one_ne_top (Law.escape_le_one _ _), fun _ => rfl,

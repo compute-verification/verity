@@ -244,10 +244,10 @@ theorem two_undetected [Fintype O] (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
       ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) := by
   have hs : PeriodGood (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
       (fun t τ => t < T ∧ twoErr H (Lv t) δ τ ≤ ε t) 0 T s :=
-    periodGood_mono _ T 0 s (fun j τ _ hj h => ⟨by omega, h⟩)
-      (periodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+    monitoringPeriodGood_mono _ T 0 s (fun j τ _ hj h => ⟨by omega, h⟩)
+      (monitoringPeriodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
         (fun t τ => twoErr H (Lv t) δ τ ≤ ε t) T 0 s herr)
-  have h1 := period_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) (fun t _ => twoRec H (Lv t) δ)
+  have h1 := monitoringPeriod_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) (fun t _ => twoRec H (Lv t) δ)
     (fun w => w.accepted ∧ w.sampledIncorrect) (fun t τ => t < T ∧ twoErr H (Lv t) δ τ ≤ ε t)
     (fun t => ENNReal.ofReal (ε t))
     (fun t τ hτ => (twoRec_accepted_le H (Lv t) hδ (hks t hτ.1) (href t hτ.1) τ).trans

@@ -20,7 +20,7 @@ the receipt's digest (C1). Then each call's sampled proof blocks are proved in a
 session reading only its call's share of the sample and `R`. The window accepts when every call's session accepts.
 
 This is the vocabulary of that game, in the form of Flock's one-stage audit (`FlockSoundness.Audit`, which the window
-guarantee `audit_window_split_of_record` is stated over), on its own so that a guarantee can be stated over it:
+guarantee `audit_executionPhase_split_of_record` is stated over), on its own so that a guarantee can be stated over it:
 
 * `Game`, `Strategy`, `prob`, `avg` and `prCoin`, core's (`Verity.Game`): a public-coin interaction with live coins, a
   deterministic prover strategy, the exact probability of an outcome over the verifier's coins, and the uniform average

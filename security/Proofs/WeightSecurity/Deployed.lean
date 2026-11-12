@@ -127,8 +127,8 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
       (cont ((W t).memberSim (servedAudit (W t) τ) k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M
       ((W t).ms.get k).t'
   have hs : PeriodGood (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t τ => t < T ∧ cr t τ) 0 T (s θ r) :=
-    periodGood_mono _ T 0 (s θ r) (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
-      (periodGood_of_plays (fun t => servedGame (W t) (Release O V Tick Adv)) cr T 0 (s θ r)
+    monitoringPeriodGood_mono _ T 0 (s θ r) (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
+      (monitoringPeriodGood_of_plays (fun t => servedGame (W t) (Release O V Tick Adv)) cr T 0 (s θ r)
         fun t τ hp => ⟨hT θ r t τ hp, hL θ r t τ hp⟩)
   have h := period_undetected (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t => servedRec (W t))
     (fun t τ => t < T ∧ cr t τ) (fun t => (W t).eps) (ENNReal.ofReal x) (ENNReal.ofReal_le_one.2 hx1)

@@ -13,7 +13,7 @@ A deployment's monitoring period is a run of windows (`FlockSoundness.Game.perio
 * `period_lead`: if at every strategy satisfying `good` a window's records all carry one number `w` of incorrect proof
   blocks and its sample misses them all with probability at most `x ^ w`, then the windows before the first sampled
   incorrect proof block carry at least `M` (`Served.lead`) with probability at most `x ^ M`, for `x ≤ 1`. It is
-  `period_horizon` stopped at the first window whose sample holds one.
+  `monitoringPeriod_horizon` stopped at the first window whose sample holds one.
 * `period_undetected`: if each such window is also accepted with a sampled incorrect proof block with probability at
   most `ε i`, the run leaves `M` incorrect proof blocks undetected (`Served.Undetected`) with probability at most
   `Σ_t ε (i + t) + x ^ M`.
@@ -75,7 +75,7 @@ theorem period_undetected (G : (i : ℕ) → Verity.Game (β i)) (rec : (i : ℕ
     value (Served.Undetected M) (periodRun G rec i T s) ≤ ∑ t ∈ Finset.range T, ε (i + t) + x ^ M := by
   show value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledIncorrect) ∨ M ≤ Served.lead l) (periodRun G rec i T s) ≤ _
   exact (value_or_le _ _ _).trans (add_le_add
-    (period_union G rec (fun r => r.accepted ∧ r.sampledIncorrect) good ε hacc T i s hs)
+    (monitoringPeriod_union G rec (fun r => r.accepted ∧ r.sampledIncorrect) good ε hacc T i s hs)
     (period_lead G rec good x hx hstage T i s M hs))
 
 end WeightSecurity.SecurityProofs

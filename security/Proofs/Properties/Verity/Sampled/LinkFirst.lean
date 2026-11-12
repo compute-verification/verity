@@ -128,9 +128,9 @@ theorem sampleLinkFirst_logged {k : Verity.Registration.Composite} {x : Verity.E
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
   obtain ⟨cm, roots, htsn, -⟩ := drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := trustedSessionOf_ok htsn
-  obtain ⟨_, hso⟩ := sessionNamed_ok hsn
-  obtain ⟨ls, lines, hls0, hls, -⟩ := sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok htsn
+  obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hls0, hls, -⟩ := challengePhaseOf_ok hso
   have hL := linesOf_of hls0 hls
   have hcs := caseOf_of hS hcase hp hc hev
   rw [logRead_eq hcs hch hξ hL] at hlr

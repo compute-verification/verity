@@ -128,7 +128,7 @@ class Traced:
         the caller. The sample is refused for a ledger not opened from a receipt or whose sample was sent, and for a call the
         receipt doesn't list or the execution phase already holds, before anything is sampled. So every call's commitment precedes
         the key (C1), and each call of an execution phase samples under a context of its own: the product distribution the execution phase pin
-        (`audit_window_split_of_record`) takes as M1."""
+        (`audit_executionPhase_split_of_record`) takes as M1."""
         from . import plan
         from .anchors import Ledger
 

@@ -22,8 +22,8 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointHorizonV5` (`Joint/V5/S
   the most of any set of as many;
 * `Flock.SecurityProofs.JointHorizonV5`: a run in which every window is accepted and the incorrect proof blocks are not
   in the period's confidence set either has a window accepted with a sampled proof block incorrect, at most
-  `Σ_t Σ_m (ε_ks,t,m + ε_bind,t,m)` by `period_union`, or every sample misses with the product of the `P_a`s below
-  `δ`, at most `δ` by `period_prod`.
+  `Σ_t Σ_m (ε_ks,t,m + ε_bind,t,m)` by `monitoringPeriod_union`, or every sample misses with the product of the `P_a`s below
+  `δ`, at most `δ` by `monitoringPeriod_prod`.
 -/
 
 @[expose] public section
@@ -187,12 +187,12 @@ theorem JointHorizonV5 : Flock.Guarantees.JointHorizonV5 := by
       (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) ((W t).ms.get k).vb (reg ((W t).memberSim τ k))
       (cont ((W t).memberSim τ k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M ((W t).ms.get k).t'
   have hs : PeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
-    periodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
-      (periodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
-  have hA := period_union (fun t => (W t).game) (JointAuditV5.record W)
+    monitoringPeriodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
+      (monitoringPeriodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
+  have hA := monitoringPeriod_union (fun t => (W t).game) (JointAuditV5.record W)
     (fun r => r.accepted ∧ r.drawnWrong) (fun t τ => t < T ∧ cr t τ) (fun t => (W t).eps)
     (fun t τ hτ => (W t).accepted_drawnWrong_le τ hτ.2.1 hτ.2.2) T 0 s hs
-  have hB := period_prod (fun t => (W t).game) (JointAuditV5.record W) (fun r => ¬ r.drawnWrong)
+  have hB := monitoringPeriod_prod (fun t => (W t).game) (JointAuditV5.record W) (fun r => ¬ r.drawnWrong)
     AuditRecV5.pa (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨ENNReal.ofReal ((W t).pa ((W t).wrongSet τ)), ENNReal.ofReal_ne_top, fun _ => rfl,
       (W t).drawMiss_le (hA3 t hτ.1) ((W t).wrongSet τ) τ⟩) T 0 s (ENNReal.ofReal δ) hs

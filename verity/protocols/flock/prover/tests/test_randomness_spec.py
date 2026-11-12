@@ -44,7 +44,7 @@ def test_python_matches_every_lean_vector():
 
 
 def test_the_window_draw_is_plan_draw_per_call_under_one_key():
-    """`PlanDraw.window`: each call's `plan.draw` loop (each stratum's `Key.subset(k, len(units), context)` mapped through
+    """`PlanDraw.executionPhase`: each call's `plan.draw` loop (each stratum's `Key.subset(k, len(units), context)` mapped through
     its units), the calls in order under the one key, and a window with a repeated call index refused. Restated here from
     `plan.draw`; the test against `verity.protocols.pouw.prover.circuit.plan` itself lands with `plan.draw`'s admission fix."""
     for w in FIXTURE["window"]:

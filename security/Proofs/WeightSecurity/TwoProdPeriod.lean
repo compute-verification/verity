@@ -13,12 +13,12 @@ import Proofs.Flock.Soundness.Game
 /-!
 # A period of two-stage verification phases: one failure probability for the whole period, proved
 
-`PeriodTwoProd` is `period_union` and `period_prod` at `twoAtRec`. A run in which every verification phase is accepted
+`PeriodTwoProd` is `monitoringPeriod_union` and `monitoringPeriod_prod` at `twoAtRec`. A run in which every verification phase is accepted
 and the escapes multiply below `δ` either has a verification phase accepted with a sampled proof block incorrect at
-its boundary values, at most `Σ_t ε_t` by `period_union` and the hypothesis on the event, or every sample misses with
-the product of the escapes below `δ`, at most `δ` by `period_prod`.
+its boundary values, at most `Σ_t ε_t` by `monitoringPeriod_union` and the hypothesis on the event, or every sample misses with
+the product of the escapes below `δ`, at most `δ` by `monitoringPeriod_prod`.
 
-`period_prod` asks that the strategy that plays a verification phase fix its escape before the phase's coins and that
+`monitoringPeriod_prod` asks that the strategy that plays a verification phase fix its escape before the phase's coins and that
 the escape bound the phase's miss. Both hold at `escAt`: it reads the statement and the boundary values that strategy
 fixes, and the two stages, sampling by the design, miss with probability at most `P̄_a` at the boundary values'
 footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`), whatever interiors the prover commits after the first
@@ -33,7 +33,7 @@ stage's coins.
 * `period_leadEscape`: the escapes of the verification phases before the first whose sample holds an incorrect proof
   block multiply below `c` with probability at most `c`. It is `period_lead` with the escapes multiplied: a phase
   whose sample misses passes the rest of the run the budget `c / e`, `e` its escape.
-* `periodTwoLead_of`: `PeriodTwoLead` from each verifier's contract, by `period_union` and `period_leadEscape`. So
+* `periodTwoLead_of`: `PeriodTwoLead` from each verifier's contract, by `monitoringPeriod_union` and `period_leadEscape`. So
   **`CompilerPeriodTwoProd` is proved** (`compilerPeriodTwoProd`).
 * `periodTwoProd_regVal`, `periodTwoLead_regVal`: both at the committed boundary trace, where knowledge soundness of
   the argument and binding bound the event by `ε_reg,2` (`CompiledTwo.eventTwo_le`).
@@ -173,11 +173,11 @@ theorem periodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
     PeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
   intro T ε s hev δ
-  have hs := periodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  have hs := monitoringPeriodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => (Lv t).Scope τ.2.1.1 →
       acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) T 0 s hev
   -- some verification phase accepted with a sampled proof block incorrect at its boundary values
-  have hA := period_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  have hA := monitoringPeriod_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
       (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
     (fun r : ServedEsc O V Tick Adv => r.accepted ∧ r.sampledIncorrect)
@@ -188,7 +188,7 @@ theorem periodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     T 0 s hs
   simp only [Nat.zero_add] at hA
   -- every sample misses, with the product of the escapes below `δ`
-  have hB := period_prod (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  have hB := monitoringPeriod_prod (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
       (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
     (fun r : ServedEsc O V Tick Adv => ¬ r.sampledIncorrect) ServedEsc.escape
@@ -284,10 +284,10 @@ theorem periodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
     PeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
   intro T ε s hev δ
-  have hs := periodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  have hs := monitoringPeriodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => (Lv t).Scope τ.2.1.1 →
       acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) T 0 s hev
-  have hA := period_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  have hA := monitoringPeriod_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
       (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
     (fun r : ServedEsc O V Tick Adv => r.accepted ∧ r.sampledIncorrect)

@@ -95,7 +95,7 @@ class CountLaw:
 
 def check_work_strata(strata: Sequence[StratumSpec]) -> None:
     """Refuse a call whose work is in more than one stratum, or whose tiles are of more than one template. The execution phase pin's
-    `covers_window` takes each call's work in one stratum as its hypothesis `hone`: where the cap K_c ≤ N_c binds, a
+    `covers_executionPhase` takes each call's work in one stratum as its hypothesis `hone`: where the cap K_c ≤ N_c binds, a
     second work stratum is under-drawn (`tests/test_circuit_plan.py`'s execution phase: ten incorrect proof blocks escape with 0.156 against a
     claimed 2.4·10⁻⁴). A stratum does work when 0 < w_s·n_s, its `work`. The verifier's layouts give work to the tile
     template only; this
@@ -182,7 +182,7 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
     wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their sum.
     The other zero-work templates keep their floors (1 unless ``floors`` names them). Per call these are pinned
     (`audit_work_floor`); over the execution phase, the per-call split and y's floors are the execution phase pin
-    `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`), which takes each call's work
+    `audit_executionPhase_split_of_record` (`FlockSoundness/Audit/Window.lean`), which takes each call's work
     in one stratum (`check_work_strata`) and each call's sample under its own key context (`Traced.draw`'s `Ledger`).
     It also takes an execution phase that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): an execution phase with
     either empty is refused here, so none is ever sampled or accepted."""

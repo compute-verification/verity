@@ -118,10 +118,10 @@ private def isHexN (j : Json) (n : Nat) : Bool :=
 
 private def strOf (j : Json) : String := match j with | .str s => s | _ => ""
 
-/-- `_stream`: a stream's name, 1 to `MAX_SESSION_ID` ASCII letters, digits, '-', '.', '_' and '/'. -/
+/-- `_stream`: a stream's name, 1 to `MAX_CHALLENGE_PHASE_ID` ASCII letters, digits, '-', '.', '_' and '/'. -/
 private def isStream (j : Json) : Bool :=
   match j with
-  | .str s => 0 < s.length && s.length ≤ MAX_SESSION_ID &&
+  | .str s => 0 < s.length && s.length ≤ MAX_CHALLENGE_PHASE_ID &&
       s.all fun c => c.isAlphanum && c.toNat < 128 || c == '-' || c == '.' || c == '_' || c == '/'
   | _ => false
 

@@ -18,7 +18,7 @@ one open and its one root (`oneRoot_of`), and so for `PouwCheck.liveSaltCheck` (
 `PouwCheck.liveSaltCheck` accepts only what `Accepted` describes (`acceptMeans`): each check it makes is one conjunct,
 and the ledger's are `LedgerShows`, from the ledger's invariant (`Ledger.ledgerShows_of`). Two accepted passes of one
 epoch are pinned on one root, so they read one session of the ledger, and each one's commitment has the root whose hex
-the session's `end` recorded (`Ledger.sessionNamed_root`). So, given `LiveCoinBinding`, their salt coins are one coin
+the session's `end` recorded (`Ledger.challengePhaseNamed_root`). So, given `LiveCoinBinding`, their salt coins are one coin
 and their salts one salt, or the openings exhibit a collision (`onePair_of_binding`). `LiveSalt.Coin` proves
 `LiveCoinBinding` (`liveCoinBinding`), so `onePair` holds with no hypothesis.
 -/
@@ -34,7 +34,7 @@ open Std.Do
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj)
 open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots familiesJson liveReason
   pinnedSession sessionNamed)
-open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of sessionNamed_root)
+open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of challengePhaseNamed_root)
 
 /-- The epoch's root is the port's: `PouwCheck.epochOpenRoot`. -/
 theorem epochOpenRoot_eq (w : ByteArray) (k : Nat) : epochOpenRoot w k = PouwCheck.epochOpenRoot w k := rfl
@@ -303,7 +303,7 @@ theorem onePair_of_binding (hb : LiveCoinBinding) : OnePair PouwCheck.liveSaltCh
   obtain rfl : ck = ck' := Except.ok.inj (hck.symm.trans hck')
   obtain rfl : a = a' := Except.ok.inj (hpin.symm.trans hpin')
   have hroot : c.root = c'.root := Properties.NetworkRecords.Bytes.hexOf_inj
-    ((sessionNamed_root hnamed).trans (sessionNamed_root hnamed').symm)
+    ((challengePhaseNamed_root hnamed).trans (challengePhaseNamed_root hnamed').symm)
   refine ⟨a, c, c', o, o', ⟨ck, os, rcv, hck, hsch, hER, hpin, hnamed, hcounts, hshows, hnames, hcoins, hop, hlive, hsalt,
     hsaltj⟩, ⟨ck, os', rcv', hck', hsch', hER', hpin', hnamed', hcounts', hshows', hnames', hcoins', hop', hlive',
     hsalt', hsaltj'⟩, ?_⟩

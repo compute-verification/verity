@@ -45,7 +45,7 @@ def drawCoins (key : ChallengerKey) (window label : String) (after : ByteArray) 
 
 /-- The challenger's family of a window's seed salt, which no sample reads. -/
 def SEED_SALT_FAMILY : String := "seed-salt"
-def SEED_SALT_WINDOW : String := "a window's open root is lowercase hex of 64 bytes"
+def SEED_SALT_RUN : String := "a window's open root is lowercase hex of 64 bytes"
 def SEED_SALT_ONE : String :=
   "a window's seed salt is one coin, its family's first, released after the window's open root: the challenger " ++
   "released another"
@@ -55,7 +55,7 @@ coins that the session the auditor's ledger opens on `window` (its open root) un
 (`drawCoins`), which must be one coin, the family's first. So the salt is the one coin the challenger released for it,
 and a server that saw others could pick none of them. -/
 def seedSaltOf (key : ChallengerKey) (window : String) (coins : Json) : V ByteArray := do
-  unless window.length == 128 && isHex window do throw SEED_SALT_WINDOW
+  unless window.length == 128 && isHex window do throw SEED_SALT_RUN
   let salt ← drawCoins key window SEED_SALT_FAMILY (← Flock.unhex window) coins
   unless nat? (getD (getD coins "segment") "start") == some 0 && salt.size == COIN_BYTES do throw SEED_SALT_ONE
   return salt

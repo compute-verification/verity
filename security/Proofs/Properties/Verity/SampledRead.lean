@@ -19,7 +19,7 @@ release log in v2's evidence line by line as v2's check does (`readLog`), with t
 digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask (`DrawRead`) with no premise
 (`drawRead_logRead`, `drawRead_coinsRead`).
 
-* **v2's challenger** (`drawCoins_ok`, `trustedSessionOf_ok`, `sessionNamed_ok`, `sessionOf_ok`, `releasedRootsOf_ok`,
+* **v2's challenger** (`drawCoins_ok`, `trustedChallengePhaseOf_ok`, `challengePhaseNamed_ok`, `challengePhaseOf_ok`, `releasedRootsOf_ok`,
   `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the sample's family are
   those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
 * **What the read shows** (`fresh_readLog`, `countFresh_eq`, `chunks_flatten`): the read's coins of the sample's family
@@ -84,7 +84,7 @@ theorem logStr (j : Json) (s : String)
   cases j <;> first | (cases h; rfl) | cases h
 
 set_option maxHeartbeats 1000000 in
-theorem sessionOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCommitment × Roots × String}
+theorem challengePhaseOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCommitment × Roots × String}
     (h : sessionOf key record log close = .ok r) :
     ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧ releasedRootsOf r.1 lines = .ok r.2.1 := by
   refine of_triple (Q := fun r => ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧
@@ -94,24 +94,24 @@ theorem sessionOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCo
     mapM_ok_spec, releasedRootsOf_spec]
   exact ⟨_, _, rfl, mapM_str (fun j s h => logStr j s h) ‹_›, ‹_›⟩
 
-theorem sessionOf_spec (key : ChallengerKey) (record log close : Json) :
+theorem challengePhaseOf_spec (key : ChallengerKey) (record log close : Json) :
     ⦃⌜True⌝⦄ sessionOf key record log close ⦃⇓? r => ⌜sessionOf key record log close = .ok r⌝⦄ := ok_spec _
 
 theorem hellos_spec {α β : Type} (f : α → Flock.V β) (l : List α) : ⦃⌜True⌝⦄ l.mapM f ⦃⇓? _ => ⌜True⌝⦄ :=
   except_spec _
 
 set_option maxHeartbeats 1000000 in
-theorem sessionNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
     (h : sessionNamed a key session = .ok r) :
     ∃ sid, sessionOf key (Spot.getD session "record") (Spot.getD session "log")
       (Spot.getD session "close") = .ok (r.1, r.2, sid) := by
   refine of_triple (Q := fun r => ∃ sid, sessionOf key (Spot.getD session "record")
     (Spot.getD session "log") (Spot.getD session "close") = .ok (r.1, r.2, sid)) ?_ h
   clear h
-  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, sessionOf_spec, recordOfJson_spec, hellos_spec]
+  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_spec, recordOfJson_spec, hellos_spec]
   all_goals exact ⟨_, ‹_›⟩
 
-theorem trustedSessionOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
+theorem trustedChallengePhaseOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
     {r : LiveCommitment × Roots} (h : trustedSessionOf ledger window key pins main session = .ok r) :
     ∃ a, sessionNamed a key session = .ok r := by
   unfold trustedSessionOf at h
@@ -119,7 +119,7 @@ theorem trustedSessionOf_ok {ledger window : Json} {key : ChallengerKey} {pins m
   obtain ⟨a, -, h⟩ := h
   exact ⟨a, h⟩
 
-theorem trustedSessionOf_spec (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
+theorem trustedChallengePhaseOf_spec (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
     ⦃⌜True⌝⦄ trustedSessionOf ledger window key pins main session
       ⦃⇓? r => ⌜trustedSessionOf ledger window key pins main session = .ok r⌝⦄ := ok_spec _
 
@@ -142,7 +142,7 @@ theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray
       (Spot.getD coins "session") = .ok (cm, roots) ∧
     challengerStream cm (Spot.getD coins "segment") after (some (look roots label)) = .ok ξ) ?_ h
   clear h
-  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, trustedSessionOf_spec, challengerStream_spec]
+  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_spec, challengerStream_spec]
   all_goals exact fun h => ⟨_, _, ‹_›, h⟩
 
 theorem liveDomain_spec (s : String) (e : Nat) (fs : List (String × Nat)) :
@@ -1223,7 +1223,7 @@ theorem trustedTreesOf_ok {key : ChallengerKey} {w : String} {coins : Json} {ts 
   refine of_triple (Q := fun ts => ∃ ls lines, Spot.getD (Spot.getD coins "session") "log" = .arr ls ∧
     ls.toList = lines.map .str ∧ coinTreesOf lines = .ok ts) ?_ h
   clear h
-  mvcgen [trustedTreesOf, -Spec.throw_Except, throw_spec, trustedSessionOf_spec, mapM_ok_spec, coinTreesOf_spec]
+  mvcgen [trustedTreesOf, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_spec, mapM_ok_spec, coinTreesOf_spec]
   all_goals exact fun h => ⟨_, _, ‹_›, mapM_str (fun j s h => logStr j s h) ‹_›, h⟩
 
 theorem treesOf_ok {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
@@ -1335,9 +1335,9 @@ theorem logRead_isSome {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
   obtain ⟨cm, roots, htsn, -⟩ := drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := trustedSessionOf_ok htsn
-  obtain ⟨_, hso⟩ := sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok htsn
+  obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
   have hl := linesOf_of hlog hls
   obtain ⟨ts, htr, hth⟩ := trees_of_checkBlobsAt hck
   obtain ⟨key', w, htt⟩ := treesOf_ok htr
@@ -1446,9 +1446,9 @@ theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
   obtain ⟨cm, roots, hts, hstream⟩ := drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := trustedSessionOf_ok hts
-  obtain ⟨_, hso⟩ := sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok hts
+  obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
   rw [logRead_eq (caseOf_of hS hcase hp hc hev) hch hξ (linesOf_of hlog hls)] at h
   obtain ⟨rs, -, h⟩ := Option.bind_eq_some_iff.1 h
   rw [hafter] at hstream
