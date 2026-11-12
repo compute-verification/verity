@@ -100,9 +100,9 @@ def stub_case(monkeypatch, RP):
     return RP
 
 
-def write(out: Path, v2) -> None:
+def write(out: Path, v2, **more) -> None:
     a5.write_case(out, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
-                  session_roots={}, served=[], v2=v2)
+                  session_roots={}, served=[], v2=v2, **more)
 
 
 def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_spot_no_case(tmp_path, stub_case):
@@ -125,6 +125,56 @@ def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, s
     assert got["params"]["form"] == "one-stage" and got["params"]["proofs"] == zk["params"]["proofs"]
     assert json.loads(bytes.fromhex(got["evidence"])) == {"form": "one-stage", "proofs": {}}
     assert not (tmp_path / "case-v2-error.txt").exists()
+
+
+#: a sample's coin evidence in `a5_coins.evidence`'s form: the challenger's key and what its session published
+COINS = {"key": {"H": 20, "W": 1, "public": "ab" * 80}, "ledger": ["opened"], "main": ["c0"], "pins": ["pin"],
+         "segment": {"label": "draw", "openings": []}, "session": {"log": ["head"]}}
+WINDOW_ROOT = "ee" * 64
+
+
+@pytest.fixture
+def zk(monkeypatch, stub_case):
+    """`case_v2` answering one fixed case, whose params and evidence name no challenger."""
+    case = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
+            "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
+    monkeypatch.setattr(a5, "case_v2", lambda c, sessions, **k: case)
+    return case
+
+
+def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carries_its_coins(tmp_path, zk, stub_case):
+    """v2 reads a sample's coins under the challenger its parameters name, on the window's root, from the evidence's
+    coins: the case of an audit sampled on the challenger's coins holds all three, the key in the parameters alone, and
+    its sampled-proofs form is that case's. Its proofs, commitment and blobs are the unnamed case's."""
+    write(tmp_path, {}, challenger={"coins": COINS, "label": "draw", "window_root": WINDOW_ROOT})
+    got = json.loads((tmp_path / "case-v2.json").read_text())
+    assert got["params"] == {**zk["params"], "challenger": {"key": COINS["key"], "label": "draw"}, "window_root": WINDOW_ROOT}
+    evidence = {"coins": {k: v for k, v in COINS.items() if k != "key"}, "proofs": {}}
+    assert sorted(evidence["coins"]) == ["ledger", "main", "pins", "segment", "session"]
+    assert got["evidence"] == stub_case.DT.canonical(evidence).encode().hex()
+    assert (got["blobs"], got["commitment"]) == (zk["blobs"], zk["commitment"])
+    sampled = json.loads((tmp_path / "case-sampled.json").read_text())
+    assert sampled == a5.case_with_form(got) and sampled["params"]["challenger"] == got["params"]["challenger"]
+    assert not (tmp_path / "case-v2-error.txt").exists()
+
+
+@pytest.mark.parametrize("challenger,why", [
+    ({"coins": None, "label": "draw", "window_root": WINDOW_ROOT}, "no evidence of them or no window root"),
+    ({"coins": COINS, "label": "draw", "window_root": None}, "no evidence of them or no window root")])
+def test_an_audit_with_no_evidence_of_its_challengers_coins_has_no_v2_case(tmp_path, zk, challenger, why):
+    """A session that gave no evidence, or an audit with no window root, leaves nothing v2 could read the sample's coins
+    from: no case is written without them, the error file says why, and the v1 case stays."""
+    write(tmp_path, {}, challenger=challenger)
+    assert not (tmp_path / "case-v2.json").exists() and not (tmp_path / "case-sampled.json").exists()
+    assert why in (tmp_path / "case-v2-error.txt").read_text()
+    assert (tmp_path / "case.json").exists()
+
+
+@pytest.mark.parametrize("params,evidence", [({"challenger": {}}, {}), ({"window_root": None}, {}), ({}, {"coins": {}})])
+def test_a_case_that_names_a_challenger_already_is_not_named_again(stub_case, params, evidence):
+    case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical(evidence).encode().hex(), "params": params}
+    with pytest.raises(ValueError, match="already"):
+        a5.case_on_challenger(case, coins=COINS, label="draw", window_root=WINDOW_ROOT)
 
 
 def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):

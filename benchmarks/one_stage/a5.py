@@ -124,7 +124,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   stream's outcome on the honest sample's bytes: the evidence with a tampered opening, with the coin opened before the
   registration, with a segment that skips a released coin, with the pin off main, with no pins log, none, and for another
   window. Every rank of the step samples from the one session, so `--jobs` covers every rank. The verifier samples no coins of
-  its own: a stream's sample is the challenger's (`service.NO_OWN_COINS`).
+  its own: a stream's sample is the challenger's (`service.NO_OWN_COINS`). The audit's case for `Spot.OneStageZk`
+  (``case-v2.json``, `write_case`) names that challenger, the family and the window's root and carries the coins' evidence
+  (`case_on_challenger`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
+  case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
 * **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
   registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
@@ -1006,6 +1009,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
+                   challenger={"coins": AC.evidence(a.coins.evidence(), segment), "label": AC.FAMILY, "window_root": a.window_root},
                    served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
                    per_member=members_proof(members, done, not plain(a)))
     result["draw_counts"] = counts
@@ -1117,6 +1121,7 @@ def own_replay():
 
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
+               challenger: dict | None = None,
                session_roots: dict, served: list[int], v2: dict | str | None = None,
                partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None) -> None:
     """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
@@ -1126,7 +1131,11 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     (`v2_proof`), the case of the audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in
     ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
     evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
-    ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
+    ``out/case-v2-error.txt``. With ``challenger`` (an audit sampled on the auditor's challenger's coins: the coins'
+    evidence, their family and the window's open root, `case_on_challenger`'s), that case names the challenger and the
+    window's root and carries the coins, in both files: v2 reads a sample's coins from the challenger its parameters
+    name, and refuses a case that names none; an audit with no evidence of its coins has no v2 case, and the error file
+    says so. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
     proofs case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
     (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
     parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case."""
@@ -1147,6 +1156,8 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
             if isinstance(v2, str):
                 raise ValueError(v2)
             zk = case_v2(c.case(), sessions, **v2)
+            if challenger is not None:
+                zk = case_on_challenger(zk, **challenger)
             sampled = case_with_form(zk)
             (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
             (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
@@ -1183,6 +1194,25 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
             "params": {**case["params"], "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
+
+
+def case_on_challenger(case: dict, *, coins: dict | None, label: str, window_root: str | None) -> dict:
+    """``case`` (`case_v2`'s) of an audit sampled on the auditor's challenger's coins, as `Spot.OneStageZk` reads such a
+    sample: its params naming the challenger (the key of ``coins``, the sample's coin evidence, `a5_coins.evidence`'s,
+    and the sample's family ``label``) and the window's open root ``window_root``, and its evidence carrying ``coins``
+    without that key, which the verifier takes from its parameters, never from the evidence. An audit whose session
+    gave no evidence of its coins, or that has no window root, has no such case, and neither has one that names a
+    challenger, a window root or coins already."""
+    RP = own_replay()
+
+    evidence = json.loads(bytes.fromhex(case["evidence"]))
+    if coins is None or window_root is None:
+        raise ValueError("the sample is on the challenger's coins, and the audit has no evidence of them or no window root")
+    if "coins" in evidence or {"challenger", "window_root"} & set(case["params"]):
+        raise ValueError("the case names a challenger or a window root, or carries coins, already")
+    evidence["coins"] = {k: v for k, v in coins.items() if k != "key"}
+    return {**case, "evidence": RP.DT.canonical(evidence).encode().hex(),
+            "params": {**case["params"], "challenger": {"key": coins["key"], "label": label}, "window_root": window_root}}
 
 
 def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> dict:
