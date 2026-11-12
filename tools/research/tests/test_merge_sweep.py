@@ -305,6 +305,27 @@ def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_
     assert subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=repo, capture_output=True, text=True).stdout.count("worktree ") == 1
 
 
+def test_the_after_landing_tree_goes_under_train_trees_when_set_else_in_the_temporary_directory(tmp_path, monkeypatch):
+    """On the control pod TMPDIR is a network volume, where the tree's add took minutes; TRAIN_TREES, which the loop sets only
+    while its local disk has room, takes it there, as it takes train.sh's, and TMPDIR stays where it is."""
+    import tempfile
+
+    repo, tmp, trains = tmp_path / "repo", tmp_path / "tmpdir", tmp_path / "fast" / "trains"
+    repo.mkdir()
+    tmp.mkdir()
+    (repo / "f.txt").write_text("x\n")
+    for args in (("init", "-q", "-b", "main"), ("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a")):
+        subprocess.run(["git", *args], cwd=repo, check=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setenv("TRAIN_TREES", str(trains))
+    tree = M._own_tree(repo, head)
+    assert tree is not None and tree.parent == trains and (tree / "f.txt").read_text() == "x\n"
+    assert not list(tmp.iterdir()) and tempfile.gettempdir() == str(tmp)
+    monkeypatch.setenv("TRAIN_TREES", "")
+    assert (other := M._own_tree(repo, head)) is not None and other.parent == tmp
+
+
 def test_a_refused_push_sweeps_nothing_and_fails(tmp_path, monkeypatch, capsys):
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
