@@ -171,69 +171,6 @@ def test_served_ids_keeps_each_finished_requests_prompt_ids_and_served_ids(tmp_p
     assert not done[0].open
 
 
-class Params:
-    """vLLM's SamplingParams, as far as the served seed reads it: a seed, a temperature, ``clone`` and the sampler it
-    caches on itself."""
-
-    def __init__(self, seed, temperature):
-        self.seed, self.temperature = seed, temperature
-        self.__dict__["sampling_type"] = "cached with no seed"
-
-    def clone(self):
-        return Params(self.seed, self.temperature)
-
-
-class CompletionRequest:
-    """vLLM's request class, as far as the served seed reads it: the body's ``user`` and the method that makes its
-    sampling parameters."""
-
-    def __init__(self, temperature=1.0, user=None, seed=None):
-        self.temperature, self.user, self.seed, self.made = temperature, user, seed, []
-
-    def to_sampling_params(self, max_tokens, default_sampling_params=None):
-        self.made.append(Params(self.seed, self.temperature))
-        return self.made[-1]
-
-
-def test_served_seeds_gives_each_sampled_request_that_sends_none_the_seed_derived_from_its_user_and_the_servers_coin(
-        monkeypatch):
-    import pytest
-    from verity_vllm.engine import served_seed
-    from verity_vllm.engine.hooks import Hooks
-
-    # the completion request's module is imported, as in the process that serves; the chat request's is not, and
-    # nothing imports it: its class is wrapped when something does
-    (site, name), (later, _) = P.SEEDED.items()
-    assert name == "CompletionRequest" and all(m.startswith("vllm.entrypoints.openai.") for m in P.SEEDED)
-    monkeypatch.setitem(sys.modules, site, NS(CompletionRequest=CompletionRequest))
-    monkeypatch.delitem(sys.modules, later, raising=False)
-    stock = CompletionRequest.to_sampling_params
-    coin, sunk, taken = bytes(range(64)), [], []
-    with Hooks(tag="test") as hooks:
-        P.seed_requests(hooks, sunk.append, lambda: (taken.append(1), (coin, "a test's"))[1])
-        assert CompletionRequest.to_sampling_params is not stock and later not in sys.modules
-        assert sorted(type(e).__name__ for e in hooks.entries) == ["Armed", "Patch"]
-        assert not taken and not sunk                          # the coin is taken at the first request, not before
-        r = CompletionRequest(user="agentic@4-r1-u0")
-        got = r.to_sampling_params(16, {"temperature": 1.0})
-        assert got.seed == served_seed.derived(coin, "agentic@4-r1-u0") and 0 <= got.seed < 2 ** 63
-        # vLLM's own object is not the one changed, and the sampler it cached without a seed is read again
-        assert got is not r.made[0] and r.made[0].seed is None and "sampling_type" not in got.__dict__
-        assert sunk == [{"index": 0, "coin": coin.hex(), "source": "a test's"}]
-        # one coin a lifetime: a user's requests share a seed, two users' differ
-        again = CompletionRequest(user="agentic@4-r1-u0").to_sampling_params(16)
-        other = CompletionRequest(user="agentic@4-r1-u1").to_sampling_params(16)
-        assert again.seed == got.seed != other.seed and len(taken) == len(sunk) == 1
-        # a request's own seed stands, in vLLM's own object; a greedy request, whose sample reads none, has the default
-        own = CompletionRequest(user="u", seed=7)
-        assert own.to_sampling_params(16) is own.made[0] and own.made[0].seed == 7
-        assert CompletionRequest(temperature=0.0).to_sampling_params(16).seed == served_seed.DEFAULT_SEED
-        # a sampled request with neither a seed nor a user is refused: no seed of numpy's reaches a sample
-        with pytest.raises(ValueError, match="send a `user`, a `seed` or temperature 0"):
-            CompletionRequest().to_sampling_params(16)
-    assert CompletionRequest.to_sampling_params is stock
-
-
 def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():
     ticks, capturing = [], [False]
 

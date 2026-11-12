@@ -30,10 +30,9 @@
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
 # NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
 # rungs the load's own prompts can hold, and the same for every arm of a cost. SAMPLED=1 has every request sampled at
-# the recipe's temperature and top-p in place of greedy, each naming its user; an arm that keeps the record has a seed
-# for each request, under which its replay samples it again: its server's (prod-record, servetax_plugin.ServedSeeds)
-# or that user's sent by the client (serve_tax.seed_from), and a stock arm none, as a served request carries none.
-# After the table it prints the cost of
+# the recipe's temperature and top-p in place of greedy, each naming its user; an arm that keeps the record is sent
+# that user's seed too (serve_tax.user_seed, sends_seed), under which its replay samples the request again, and a
+# stock arm none, as a served request carries none. After the table it prints the cost of
 # ARMS's last arm over the stock arm it is made from, compiled or, for the arms at vLLM's recipe's settings, prod
 # (serve_tax.py cost, serve_tax.stock_of; --arms "prod prod-record prod-again" --loads agentic is that cost on an
 # agent's sessions, where a rung is the users and PASS_PROMPTS the turns each sends) and writes

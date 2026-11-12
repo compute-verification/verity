@@ -93,10 +93,9 @@ With ``--client vllm-bench`` the loads are sent by vLLM's own benchmark client i
 one pass a load and rung: a load (`LOADS`) is one of the client's datasets, and a rung the concurrency the client holds
 (``--request-rate inf --max-concurrency RUNG``, the shape of vLLM's standing serving tests), every request greedy and
 decoding to its length (``--ignore-eos``); under ``--sampled`` each is sampled instead, at the recipe's temperature
-and top-p (`SAMPLED`), naming its client as its ``user``. An arm that keeps the record has a seed for each request,
-under which its replay samples the request again (`seed_from`): its server's own where the arm has the served seed on
-(`servetax_plugin.ServedSeeds`, derived from that user and a coin of the server's lifetime), else that user's seed
-sent by the client (`user_seed`). A stock arm is sent none, as a served request carries none. Each pass's DIR/<load>@<rung>/rep-<r>/result.json is the result the client
+and top-p (`SAMPLED`), naming its client as its ``user``. An arm that keeps the record is sent that user's seed too
+(`user_seed`, `sends_seed`), under which its replay samples the request again; a stock arm is sent none, as a served
+request carries none. Each pass's DIR/<load>@<rung>/rep-<r>/result.json is the result the client
 saved, and `metrics` and `table` take its figures as the client computed them (`bench_metrics`). A load whose dataset
 is a file reads the node's one copy of it, pinned by revision and SHA-512 (`Dataset`): `passes --fetch` downloads it
 into the node's cache where it is missing, every run checks its SHA-512 and refuses a file that differs, and its
@@ -275,9 +274,8 @@ ARMS = {
     "prod": Arm("published", "that server, as the stock arm the arms made from it are costed over", published=True),
     "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by",
                       published=True),
-    "prod-record": Arm("prod", "+ the scheduler's step trace (StepTrace), each request's prompt ids and served ids, the "
-                       "seed the server gives a sampled request that sends none, and the canonical DSA top-k",
-                       plugin=("record", "ids", "seed"), env=TOPK_ENV, general=TOPK, published=True),
+    "prod-record": Arm("prod", "+ the scheduler's step trace (StepTrace), each request's prompt ids and served ids, and "
+                       "the canonical DSA top-k", plugin=("record", "ids"), env=TOPK_ENV, general=TOPK, published=True),
 }
 #: the stock arms, vLLM with no change of ours: an arm's cost is over the nearest of them above it (`stock_of`)
 STOCK = ("compiled", "published", "prod")
@@ -286,7 +284,6 @@ STOCK = ("compiled", "published", "prod")
 CHANGES: dict[str, Callable[[Arm], bool]] = {
     "the step record": lambda a: "record" in a.plugin,
     "the served ids": lambda a: "ids" in a.plugin,
-    "the served seed": lambda a: "seed" in a.plugin,
     "prefix caching off": lambda a: "--no-enable-prefix-caching" in a.args,
     "the two-stage boundary commitment": lambda a: "boundary_rows" in a.plugin,
     "the history tables": lambda a: bool(a.rows.get("tables")),
@@ -1272,10 +1269,6 @@ CLIENT_ENV = {"PYTHONHASHSEED": "0"}
 SAMPLED = {"temperature": 1.0, "top_p": 0.95}
 
 
-#: who gives a sampled pass's request its seed (`seed_from`)
-CLIENT, SERVER = "client", "server"
-
-
 def user_seed(user: str) -> int:
     """The seed a sampled pass's client sends in each of its requests to an arm that takes one (`sends_seed`), beside
     its name (the body's ``user``): the first 63 bits of SHA-512 over the name, which is the pass's tag and, on a
@@ -1284,21 +1277,12 @@ def user_seed(user: str) -> int:
     return int.from_bytes(hashlib.sha512(b"serve-tax/user-seed/v1/" + user.encode()).digest()[:8], "big") >> 1
 
 
-def seed_from(arm: Arm, front: str = PYTHON) -> str | None:
-    """Who gives a sampled pass's requests to ``arm`` their seed. An arm that keeps the record has one for each, since
-    its replay samples each request again under the request's own: its `SERVER`'s where the arm has the served seed
-    on (`servetax_plugin.ServedSeeds`) and its front end is vLLM's Python server, which makes the sampling
-    parameters that change sets it in, and else its `CLIENT`'s (`user_seed`). None for a stock arm, which is sent
-    none, as a served request carries none, so vLLM samples its requests as it samples any without a seed; what a
-    seed changes in vLLM's sampling is then on our side of a cost, as a change of ours."""
-    if "record" not in arm.plugin:
-        return None
-    return SERVER if "seed" in arm.plugin and front == PYTHON else CLIENT
-
-
-def sends_seed(arm: Arm, front: str = PYTHON) -> bool:
-    """Whether a sampled pass's client sends ``arm`` each user's seed (`user_seed`, `seed_from`)."""
-    return seed_from(arm, front) == CLIENT
+def sends_seed(arm: Arm) -> bool:
+    """Whether a sampled pass's client sends ``arm`` each user's seed (`user_seed`): where the arm keeps the record,
+    whose replay samples each request again under the request's own seed. A stock arm is sent none, as a served
+    request carries none, so vLLM samples its requests as it samples any without a seed; what a seed changes in
+    vLLM's sampling is then on our side of a cost, as a change of ours."""
+    return "record" in arm.plugin
 
 
 def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int, d: Path, tag: str,
@@ -1650,7 +1634,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "commit": source_commit(),
             "plan_sha256": file_digest(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampled": SAMPLED if a.sampled else None,
-            "seeded": bool(a.sampled and seed_from(arm, front)), "seed_from": seed_from(arm, front) if a.sampled else None,
+            "seeded": a.sampled and sends_seed(arm),
             "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
             "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
@@ -1673,7 +1657,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             n, c = passes[name]
             return drive_bench(port, model, checkpoint, LOADS[n], c, tag, d, sent.get(n), a.seed, busy,
                                pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None, sizes.get(n)),
-                               a.sampled, a.sampled and sends_seed(arm, front))
+                               a.sampled, a.sampled and sends_seed(arm))
 
         if a.warm_s > 0:
             w = send(next(iter(passes or rates)), "warm", out / "warm", None, warm=True)
@@ -1953,7 +1937,7 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
             "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads,
             "lifetime": meta.get("lifetime"), "left_out": meta.get("left_out") or 0, "reps": meta.get("reps"),
             # a sampled arm served before the arms differed in it was sent a seed
-            "seeded": meta.get("seeded", bool(meta.get("sampled"))), "seed_from": meta.get("seed_from"),
+            "seeded": meta.get("seeded", bool(meta.get("sampled"))),
             "edges": edge_summary(edges), "boundary_rows": meta.get("boundary_rows"),
             "boundary_commits": meta.get("boundary_commits"), "planned": meta.get("planned")}
 
@@ -2590,8 +2574,7 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
             "passes": {**_cost(c), "reps": c["reps"]},
             "spread": {"between": _pct(over.get("between")), "within": _pct(over.get("within"))},
             "by_lifetime": each if any("lifetime" in a[k] for k in reps) else None,
-            "seeded": {"reference": bool(ref.get("seeded")), "arm": bool(by[arm].get("seeded")),
-                       "by": by[arm].get("seed_from") or ref.get("seed_from") or CLIENT},
+            "seeded": {"reference": bool(ref.get("seeded")), "arm": bool(by[arm].get("seeded"))},
             "left_out": {"passes": by[arm].get("left_out") or 0, "warm": warm} if any(warm) else None,
             "planned": {**plan, "repeated_share": _pct(plan["repeated_tokens"] / plan["prompt_tokens"])},
             "noise_floor": {"arm": twin["arm"] if twin else reference, **_cost(noise), "reps": noise["reps"],
@@ -2765,10 +2748,9 @@ def _reps(n: int) -> str:
 
 
 def _seeds(r: dict) -> str:
-    """Which side of a sampled cost had a seed for each request, and whose (`seed_from`), in words."""
+    """Which side of a sampled cost was sent a seed (`sends_seed`), in words."""
     ref, arm = r["seeded"]["reference"], r["seeded"]["arm"]
-    sent = ("under a seed its server derives from the request's user and a coin of its own lifetime"
-            if r["seeded"].get("by") == SERVER else "under a seed its client sends, one a user")
+    sent = "under a seed its client sends, one a user"
     if ref == arm:
         return f" {sent}" if arm else " under no seed"
     a, b = (r["arm"], r["reference"]) if arm else (r["reference"], r["arm"])
@@ -3173,8 +3155,8 @@ def main(argv: list[str] | None = None) -> int:
                         "or Kx, K for each request its rung holds in flight (parse_pass_prompts)")
     r.add_argument("--sampled", action="store_true",
                    help="vLLM's client: each request sampled at the recipe's temperature and top-p (SAMPLED) in place "
-                        "of greedy, naming its user; an arm that keeps the record has a seed for each, its server's "
-                        "or that user's sent by the client (seed_from), and a stock arm none")
+                        "of greedy, naming its user; an arm that keeps the record is sent that user's seed too "
+                        "(user_seed, sends_seed), and a stock arm none")
     r.add_argument("--reps", type=int, default=3)
     r.add_argument("--lifetime", type=int, metavar="K",
                    help="this server lifetime's number among the arm's in the job, from 1 (run.sh's LIFETIMES): a cost "
