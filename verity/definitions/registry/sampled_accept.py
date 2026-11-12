@@ -18,7 +18,7 @@ The Call is past a Flock block at every layout it takes, so its body is units of
                                       a chunk of the K+1 rows: the resampled row's lanes, the Gumbel select's scan carried
     AcceptExpLane_v1                  (x, m: F32) -> F32        tl.exp(x - m)
     AcceptUniform_v1                  (key: U32) -> F32         tl_rand32(.., includes_zero=False) of its word
-    LogitAtStep_v1, AcceptResidualStep_v1                       one lane of the head's and of the residual's scan
+    LogitAtStep_v1                                              one lane of the head's scan
 
 A request that verifies K draft tokens hands the sampler K + 1 rows of target logits (row i follows the first i draft tokens;
 row K is the bonus row), already through temperature and top-p (-inf outside the nucleus).  With a one-hot draft
@@ -46,7 +46,7 @@ Each instruction and the gate that states it:
     tl.exp: mul.f32 by 0x3FB8AA3B, ex2.approx.f32  F32Mul_v1, then Ex2Approx_v1 (t < -126 ? MUFU.EX2(t / 2)^2 : MUFU.EX2(t))
     tl.log: libdevice __nv_logf inlined            NvLogf_v4 (fma.rn.ftz, the 2^23 scaling of an input below FLT_MIN a mul.f32)
     max.f32                                        SelectF32_v1 of F32GtStrict_v1: the same word but for a zero's sign
-    setp.gt.f32, selp, setp.eq                     F32GtStrict_v1, SelectF32_v1 / SelectI32_v1, I32Eq_v1
+    setp.gt.f32, selp, setp.eq                     F32GtStrict_v1, SelectF32_v1 / SelectI32_v1, I32Eq_v1 (a lane's index: I32Sub_v1)
     tl.rand: Philox4x32-10's word 0 of (pos, seed) GumbelStreamKey_v1: the same word the row's Gumbel noise is keyed by
        shr.s32 31, xor; cvt.rn.f32.s32             SelectI32_v1 of U32Xor_v1 by I32Le_v1; I32ToF32_v1
        mul.f32 by 0x2FFFFFFF; max.f32 0x2FFFFFFF   F32Mul_v1; SelectF32_v1 of F32GtStrict_v1 (`includes_zero=False`: the floor)
@@ -83,13 +83,14 @@ from functools import cache
 import numpy as np
 
 from verity.circuits.defs import SpecializedDefinition, bind, composite
-from verity.circuits.refs import Coll as _Coll, array_of, concat, tuple_of
+from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.ops.fp32 import F32Add, F32AddFtz, F32Fma, F32Mul
 from verity.definitions.ops.mufu import mufu_ex2_words, table
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import BitAnd, BitNot, F32, F32Eq, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.definitions.registry import dead_free as DF, sampling as SA
+from verity.definitions.registry.dsa import I32Sub
 from verity.definitions.registry.dsv4_moe import Ex2Approx
 from verity.definitions.registry.ref_prims import F32GtStrict, F32Sub
 from verity.definitions.registry.topp_word_gates import I32ToF32, LOG2E, U32Xor
@@ -269,14 +270,6 @@ def LogitAtStep(B, S, carry, x, d):
     return tuple_of(tuple_of(B.call(I32Add, carry[0], B.call(const(32, 1))), at), at)
 
 
-@composite("AcceptResidualStep", 1, [], lambda S: ((("i", I32), ("x", F32), ("d", I32)), Tuple(I32, F32)),
-           conformance="reference-defined: one lane of `AcceptResample_v1`'s residual")
-def AcceptResidualStep(B, S, i, x, d):
-    """One lane: -inf when its index is d, else its logit; the index plus one."""
-    y = B.call(SelectF32, B.call(I32Eq, i, d), B.call(const(32, NEG_INF)), x)
-    return tuple_of(B.call(I32Add, i, B.call(const(32, 1))), y)
-
-
 def _flag(b: dict, *names: str) -> str | None:
     for name in names:
         if not isinstance(b.get(name), bool):
@@ -428,7 +421,8 @@ def AcceptResample(B, S, *args):
     draft tokens, seed, positions and temperature.  Draft token p is accepted iff every earlier one was and its test is 1.
     The resampled row is the first refused one, or the bonus row when none is, with its position's stream key and its refused
     draft token's lane at -inf (`_resample_kernel`'s ``tl.where(block != rejected_draft_token, target_logits, -inf)``;
-    nothing masked on the bonus row or for a negative draft token).  Over the chunk's lanes of it, `GumbelSelectF32_v3`'s
+    nothing masked on the bonus row or for a negative draft token): the chunk's lane j is the token's iff the token less the
+    lanes so far is j.  Over the chunk's lanes of it, `GumbelSelectF32_v3`'s
     scan (`GumbelSelectStep_v1`: y = x + g(key)[i] when temp != 0 else x, taken iff y > best), carried chunk to chunk as
     c = (best, its index, the lanes so far), from lane 0 on the row's FIRST chunk.  The row's LAST chunk returns the
     Call's outputs (`SampledAccept_v1`)."""
@@ -446,12 +440,9 @@ def AcceptResample(B, S, *args):
         d = B.call(SelectI32, live[p], d, draft[p])
     key = B.call(SA.GumbelStreamKey, seed, at)
     noisy = B.call(BitNot, B.call(F32Eq, temp, zero))
-    i, head = zero if S.FIRST else args[-1][2], []
-    if N > 1:
-        res = B.scan(AcceptResidualStep, i, xs=(row[0:N - 1],), shared=(d,))
-        i, head = res[0], [res[1].refs]
-    tail = B.call(SelectF32, B.call(I32Eq, i, d), B.call(const(32, NEG_INF)), row[N - 1])
-    r = _Coll(Array(N, F32), concat(head + [tail.refs]))
+    rem = d if S.FIRST else B.call(I32Sub, d, args[-1][2])
+    masked = B.batch(I32Eq, rem, array_of([B.call(const(32, j)) for j in range(N)]), axes=(None, 0))
+    r = B.batch(SelectF32, masked, B.call(const(32, NEG_INF)), row, axes=(0, None, 0))
     if S.FIRST:
         c = tuple_of(B.call(SelectF32, noisy, B.call(F32AddFtz, r[0], B.call(SA.GumbelNoiseLane, key, zero)), r[0]), zero, one)
     else:
@@ -578,10 +569,10 @@ def SampledAccept(B, S, logits, draft, seed, pos, temp):
     return done[u.key]
 
 
-ALL_COMPOSITES = [AcceptExpLane, AcceptUniform, LogitAtStep, AcceptResidualStep, AcceptTileHead, AcceptTileSum, AcceptRowEnd,
+ALL_COMPOSITES = [AcceptExpLane, AcceptUniform, LogitAtStep, AcceptTileHead, AcceptTileSum, AcceptRowEnd,
                   AcceptResample, SampledAccept]
 
 __all__ = ["STATS_TILE", "PADDED_TILES", "PART", "RESAMPLE_N", "AcceptExpLane", "AcceptUniform", "LogitAtStep",
-           "AcceptResidualStep", "AcceptTileHead", "AcceptTileSum", "AcceptRowEnd", "AcceptResample", "SampledAccept",
+           "AcceptTileHead", "AcceptTileSum", "AcceptRowEnd", "AcceptResample", "SampledAccept",
            "ALL_COMPOSITES", "CUTS", "Unit", "part", "chunk", "plan", "cut", "thread_lanes", "tl_exp", "tile_stats", "row_lse",
            "accept_uniform", "sampled_accept"]
