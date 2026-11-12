@@ -259,13 +259,14 @@ def replay_state(replay_dir: Path, expected: bool) -> dict:
 def topk_counters(dirs: list[Path]) -> dict | None:
     """The canonical top-k's counters over the processes that kept theirs in ``dirs`` (`dsa_topk.log_to`: a file a
     process, written every few thousand calls and at its exit, so each figure is a lower bound): the processes, the
-    calls of the indexer's top-k and the rows of more than its keys that were rewritten. None where no process kept
-    any."""
+    calls of the indexer's top-k, the rows of more than its keys that were rewritten, and those of them with a tie
+    across the k-th key, the rows where vLLM's own kernels may select another set from run to run. None where no
+    process kept any."""
     recs = [json.loads(f.read_text()) for d in dirs if d.is_dir() for f in sorted(d.glob("dsa_topk.*.json"))]
     if not recs:
         return None
     return {"processes": len(recs), "calls": sum(sum(r["calls"].values()) for r in recs),
-            "rows_long": sum(dev.get("rows_long", 0) for r in recs for dev in r["rows"].values())}
+            **{k: sum(dev.get(k, 0) for r in recs for dev in r["rows"].values()) for k in ("rows_long", "rows_tied")}}
 
 
 def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
@@ -326,7 +327,8 @@ def topk_by_dir(out: Path, private: Path | None, dirs: list[Path]) -> dict | Non
 def passes(out: Path, dirs: dict[str, list[Path]], per: dict[str, list[dict]], load: str, private: Path | None) -> dict:
     """Every pass of ``load`` the job's arms served, in the order they were served where every pass's record says
     when it began (else the arms' order), each with the counters the benchmark read off its server before and after
-    it (the pass's own record: `serve_tax.SCHEDULE`): its engine steps and, where the engine drafted, its drafts,
+    it (the pass's own record: `serve_tax.SCHEDULE`, vLLM's own on the server's /metrics, so one reader for every
+    arm, with a step trace or without): its engine steps and, where the engine drafted, its drafts,
     the tokens they proposed and the tokens of them the model accepted; beside them its output tokens and its
     seconds as the cost counts them, and whether it is one its lifetime leaves out.
     With them, by arm, whether its requests were sampled and whether its client sent their seeds (its record), and by
@@ -1123,10 +1125,7 @@ def _engine(e: dict) -> list[str]:
         return [f"  the replay's engine: vLLM's own ({e['arm']} serves with no other vLLM plugin of ours than its record)"]
 
     def one(c: dict | None, none: str) -> str:
-        if c is None:
-            return none
-        return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
-                f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten")
+        return none if c is None else _topk(c)
 
     names = ", ".join(x.split("=")[0].strip() for x in under["plugins"])
     env = ", ".join(f"{k}={v}" for k, v in under["env"].items())
@@ -1143,6 +1142,13 @@ def _engine(e: dict) -> list[str]:
     return lines
 
 
+def _topk(c: dict) -> str:
+    """What the canonical top-k's processes counted (`topk_counters`); counters kept before the ties were hold none."""
+    return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
+            f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten"
+            + (f", {c['rows_tied']:,} of them with a tie across the k-th key" if "rows_tied" in c else ""))
+
+
 def _names(xs: Sequence[str]) -> str:
     return xs[0] if len(xs) == 1 else f"{', '.join(xs[:-1])} and {xs[-1]}"
 
@@ -1154,7 +1160,9 @@ def _passes(v: dict) -> list[str]:
         return [f"each pass: {v['why']}"]
     if not v["passes"]:
         return []
-    lines = ["each pass, by the engine's counters read before and after it (in no verdict):"]
+    lines = ["each pass, by the engine's counters read before and after it (in no verdict):",
+             f"  every arm's are the server's own on /metrics, one reader: the draft tokens accepted are "
+             f"{S.SCHEDULE['accepted_tokens']} over {S.SCHEDULE['draft_tokens']}, the tokens its drafts proposed"]
     for x in v["passes"]:
         if x["steps"] is None:
             counted = "its record holds no counters of the engine's"
@@ -1177,8 +1185,7 @@ def _passes(v: dict) -> list[str]:
                 "the job named no PRIVATE directory)" if t["kept"] is None else "its record names no place for them)")
         if (c := t["kept"][d]) is None:
             return f"{d} on, and NO process kept counters: nothing shows it ran there"
-        return (f"{d} {c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
-                f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten")
+        return f"{d} {_topk(c)}"
 
     lines.append("  the canonical top-k, by directory: " + "; ".join(
         [one(d) for d, on in t["on"].items() if on]
