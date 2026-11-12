@@ -99,9 +99,8 @@ class AttentionScope:
             # the softcap variant, :1329 `v_descale = !Is_FP8 || ptr == nullptr ? 1.0f : ...`); for the bf16 launch (checked below:
             # q/k/v/out bf16) they are dead arguments, whatever their values -- so they are not a reason to refuse a bf16 record.
             for key in ("k_new", "v_new", "q_v", "s_aux", "cp_tot_seqused_k", "leftpad_k", "kv_batch_idx", "rotary_cos", "rotary_sin"):
-                if a_ := bound_args(fa).get(key):
-                    if a_ is not None and a_ != 0:
-                        return unsupported(node, f"FA3 op argument {key!r} is bound: not the registered chain", **{key: repr(a_)})
+                if (a_ := bound_args(fa).get(key)) and a_ is not None and a_ != 0:
+                    return unsupported(node, f"FA3 op argument {key!r} is bound: not the registered chain", **{key: repr(a_)})
             for key in ("q_descale", "k_descale", "v_descale"):
                 a_ = bound_args(fa).get(key)
                 if a_ is not None and a_ != 0 and getattr(a_, "dtype", "float32") != "float32":

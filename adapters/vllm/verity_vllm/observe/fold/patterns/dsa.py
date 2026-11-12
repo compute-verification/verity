@@ -527,7 +527,7 @@ class DsaSparseMla:
             return unsupported(node, "FA3 sparse MLA q/q_v/k/v/out pointers are not bound")
         out = outs[0]
         M, NH, DR, DV = q.shape[0], q.shape[1], q.shape[2], qv.shape[2]
-        if (M, NH, DR, DV) != (len(ctx.start.rows), 8, 64, 512) or qv.shape != (M, NH, DV) or out.shape != (M, NH, DV):
+        if (len(ctx.start.rows), 8, 64, 512) != (M, NH, DR, DV) or qv.shape != (M, NH, DV) or out.shape != (M, NH, DV):
             return unsupported(node, "FA3 sparse MLA views differ from [M,8,64]/[M,8,512]", q=repr(q), q_v=repr(qv), out=repr(out))
         if not (q.dtype == qv.dtype == k.dtype == v.dtype == out.dtype == "bfloat16"):
             return unsupported(node, "FA3 sparse MLA views are not bf16")

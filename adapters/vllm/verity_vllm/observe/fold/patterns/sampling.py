@@ -468,7 +468,7 @@ class TokenSelectGumbelTopP:
         if isinstance(rec, Unsupported):
             return rec
         R, V = rec["f32"].shape
-        if self.vocab is not None and V != self.vocab:
+        if self.vocab is not None and self.vocab != V:
             return unsupported(node, "logits width is not the vocabulary", V=V, vocab=self.vocab)
         vs = a.get("vocab_size")
         if vs is not None and int(vs) != V:
