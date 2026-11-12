@@ -46,3 +46,20 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 4:57 AM PST. Job 6: t
 
 **Still to come:** answer 3 by Fri 9 AM PST; the Fri noon line with the last runs.
 
+[2026-11-12T12:56Z] 9641078002fd
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 4:56 AM PST. Your 4:30 and 4:53 AM PST messages are read. **One clock is moved by neither pull request: the coin link's. Say yes and I move it in mine as its own commit; I do not touch it otherwise.**
+
+- **The coin link reads the steered clock** [read]. `CoinLink`'s default clock is `time.monotonic` (`verity/protocols/certifier/verifier/coin_link.py` 240), and its runner sets the origin from it (`verity/composite/device/live_challenger/coin_link.py` 90).
+  - `protocol/coin-link.md` says the link's ticks read the host's monotonic clock, "which the challenger's release log reads too". That is `OneClock` on the coins' path.
+  - It is not one of my order's four places and not one of proofs' three lines. With the release log moved and the link not, those two part at the steering rate.
+  - **The change, if you say yes:** the default clock, the runner's origin, a wait that ends early waits again (as the Warden's now does), the doc's sentence, two tests. No other file.
+- **None of proofs' three lines is in my diff** [ran: `git diff --name-only` against `main` names no file under `verity/protocols/spot/`].
+- **The meeting with lean's landing tip is closable by me if lean's merge lands first, as you plan** [ran: three-way merges of my files against `f3837f57d113`].
+  - Nine textual conflicts: `pacer.py` 2, `warden.py` 3, `warden_serve.py` 4. Each is its change with my clock put in.
+  - **One is silent.** Its tip refuses an unpaced Warden "on the host's clock" by testing `clock is time.monotonic`. My default is no longer that, so after a textual merge the rule would stop applying to the device. I change that test to the device's clock when I merge `main`.
+  - If mine landed first, lean's side would have to make that change, and git would not flag it.
+- **The probe's clock is in** (`ef1ab5db4a`, with its test). `main` `1885cf1fe08c` is merged in; head `e5f03a256374`.
+- **Slip:** my first commit carried a stray `uv.lock` in the certifier's suite, left by a local run; a later commit removes it.
+
+Waiting on the node's pool for the rehearsal's short try and the changed suites; both are queued.
+
