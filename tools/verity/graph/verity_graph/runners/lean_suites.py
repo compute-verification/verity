@@ -121,7 +121,8 @@ def run(task: dict, work: Path) -> dict:
     if unrun:
         return {"status": "error", "detail": {**detail, "error": f"not run: {', '.join(unrun)}"}}
     failed = [r for r in rows if r["status"] not in PASSED]
-    named = [r for r in failed if r.get("failed_tests") or r.get("outside") or r.get("child_outside") or r.get("timed_out")]
+    named = [r for r in failed if r.get("failed_tests") or r.get("outside") or r.get("child_outside") or r.get("timed_out")
+             or r.get("undeclared_untraced")]
     if rc == 0 and not failed:
         return {"status": "pass", "detail": detail}
     if named:
@@ -135,7 +136,8 @@ def run(task: dict, work: Path) -> dict:
 
 def row(r: dict) -> dict:
     """What drive reads of a failed suite's report row: its name and directory, its failed tests, whether it failed for more than
-    them (`beyond_tests`, as suites.py gives it, and when the list is cut), and its timeout."""
+    them (`beyond_tests`, as suites.py gives it, and when the list is cut), its timeout, and the test files that started programs
+    the read guard can't trace that its `[tool.verity.tests] untraced` doesn't name."""
     tests = [str(t) for t in r.get("failed_tests") or ()]
     out = {"name": r["name"], "suite": r.get("suite") or ".", "failed_tests": tests[:NAMED]}
     if len(tests) > NAMED:
@@ -144,4 +146,6 @@ def row(r: dict) -> dict:
         out["beyond_tests"] = r["beyond_tests"]
     if r.get("timed_out"):
         out["timed_out"] = r["timed_out"]
+    if r.get("undeclared_untraced"):
+        out["undeclared_untraced"] = r["undeclared_untraced"]
     return out

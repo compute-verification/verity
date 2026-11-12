@@ -1716,7 +1716,8 @@ def _traced_workspace(root: Path) -> None:
     (root / "lib" / "unused.py").write_text("OTHER = 2\n")
     (root / "pkg" / "tests").mkdir(parents=True)
     (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\ndependencies = ["lib"]\n\n[tool.pytest.ini_options]\n'
-                                                 'testpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n')
+                                                 'testpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
+                                                 'untraced = ["tests/test_spawn.py"]\n')
     for name, text in {"conftest.py": "import pathlib, sys\nsys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / 'lib'))\n",
                        "test_a.py": "from used import VALUE\n\ndef test_a():\n    assert VALUE == 1\n",
                        "test_b.py": "def test_b():\n    pass\n",
@@ -1757,6 +1758,53 @@ def test_a_traced_pass_is_reused_until_a_file_its_run_read_changes(tmp_path):
     (lib / "maybe.txt").write_text("now it's here\n")
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
+def test_a_program_no_tracer_sees_into_fails_its_suite_until_the_suite_names_its_file(tmp_path):
+    """The graph's test-file runner fails a test file that starts a program the read guard can't trace unless its suite names
+    it under `[tool.verity.tests] untraced`, so a suite that doesn't fails here too, naming the line to add, and keeps no pass
+    of that file for a later run to reuse; one that names it, by its path or a pattern, passes as before."""
+    root = tmp_path / "tree"
+    _traced_workspace(root)
+    pyproject = root / "pkg" / "pyproject.toml"
+    declared = pyproject.read_text()
+    pyproject.write_text(declared.replace('untraced = ["tests/test_spawn.py"]\n', ""))
+    for reused in ([], ["tests/test_a.py::test_a", "tests/test_b.py::test_b", "tests/test_probe.py::test_probe"]):
+        p = _run_suite(root, tmp_path, "--json", str(tmp_path / "suites.json"))
+        assert p.returncode == 1 and "failed  pkg" in p.stdout and _reused(tmp_path) == reused, p.stdout
+        assert ("doesn't name, which the graph's test-file runner fails:\n          tests/test_spawn.py: sh\n" in p.stdout
+                and 'pkg/pyproject.toml: add under [tool.verity.tests]\n          untraced = ["tests/test_spawn.py"]\n' in p.stdout), p.stdout
+        [row] = json.loads((tmp_path / "suites.json").read_text())
+        assert (row["status"], row["beyond_tests"], row["undeclared_untraced"]) == ("failed", True, {"pkg/tests/test_spawn.py": ["sh"]})
+    pyproject.write_text(declared.replace('"tests/test_spawn.py"', '"tests/test_sp*.py"'))
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
+def test_an_untraced_program_is_named_by_its_file_or_every_file_the_run_ran_as_the_graph_runner_names_it(monkeypatch, tmp_path):
+    """`undeclared_untraced` decides as the graph's test-file runner does: a file whose path from its suite's directory matches a
+    pattern of `untraced` may start any program, and a conftest's (`*`) only when each file the run ran may, since each file's own
+    run repeats it; compilers alone pass, the runner's `COMPILERS`. The fix names the files to add, in the list or as a new key."""
+    import ast
+
+    S = _suites(monkeypatch, tmp_path)
+    suite = S.Suite("pkg", "a/pkg", (), (), untraced=("tests/test_git.py", "tests/deep/*"))
+    started = {"a/pkg/tests/test_git.py": ["git"], "a/pkg/tests/deep/test_lake.py": ["lake"], "a/pkg/tests/test_sh.py": ["/bin/sh"],
+               "a/pkg/tests/test_build.py": ["/usr/bin/gcc", "ninja"], "a/pkg/tests/test_mixed.py": ["gcc", "git"]}
+    assert S.undeclared_untraced(suite, started, ["tests/test_git.py"]) == {"a/pkg/tests/test_sh.py": ["/bin/sh"],
+                                                                            "a/pkg/tests/test_mixed.py": ["gcc", "git"]}
+    assert S.undeclared_untraced(suite, {"*": ["git"]}, ["tests/test_git.py", "tests/deep/test_lake.py"]) == {}
+    assert S.undeclared_untraced(suite, {"*": ["git"]}, ["tests/test_git.py", "tests/test_sh.py"]) == {"*": ["git"]}
+    assert S.undeclared_untraced(suite, {"*": ["git"]}, []) == {"*": ["git"]}
+    assert S.undeclared_untraced(S.Suite("r", ".", (), (), untraced=("*",)), {"*": ["git"], "tests/test_x.py": ["git"]}, []) == {}
+    assert S.untraced_fix(suite, {"a/pkg/tests/test_sh.py": ["sh"], "*": ["git"]}) == (
+        'a/pkg/pyproject.toml: add to [tool.verity.tests] untraced = [...]\n    "*",\n    "tests/test_sh.py",')
+    assert S.untraced_fix(S.Suite("r", ".", (), ()), {"tests/test_x.py": ["git"]}) == (
+        'pyproject.toml: add under [tool.verity.tests]\nuntraced = ["tests/test_x.py"]')
+    runner = ast.parse((HERE.parent / "graph" / "verity_graph" / "runners" / "test_file.py").read_text())
+    [compilers] = [ast.literal_eval(n.value.args[0]) for n in runner.body
+                   if isinstance(n, ast.Assign) and [getattr(t, "id", "") for t in n.targets] == ["COMPILERS"]]
+    assert S.COMPILERS == compilers
 
 
 def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_the_cache(tmp_path):

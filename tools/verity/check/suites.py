@@ -65,7 +65,10 @@ starts, or a Python started by a program it starts, traces its own opens while i
 (`guard/child/`): one that opens a file outside the inputs fails the suite as the test would, and so does one whose tracer
 doesn't start; the failure names the test and the file. Nothing sees into other programs (bash, git, `uv`, a Python run with
 `-I`, `-E` or `-S`, or on a PYTHONPATH without the tracer): what they read is unchecked, and checking it would mean keying
-their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it. The one exception is the
+their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it. A test file that starts one
+fails its suite unless the suite names it under `[tool.verity.tests] untraced` (fnmatch patterns from its directory; a conftest's
+program, every file the run ran), as the graph's test-file runner decides (`undeclared_untraced`), and the failure names the line
+to add; a compiler alone passes, as the runner lets a file whose code builds native code start one. The one exception is the
 suite's own build outputs (`artifacts`, a Lean executable reads only what its arguments name): such a program's start is taken
 as reading the repository paths it is given, a file with the files beside it and a directory whole, checked against the inputs
 like any read, and `lake build` of them in their package as reading nothing the key doesn't hold (`VERITY_SUITE_PROGRAMS`).
@@ -155,6 +158,7 @@ import argparse
 import ast
 import concurrent.futures
 import contextlib
+import fnmatch
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -321,6 +325,7 @@ class Suite:
     worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded)
     nested: tuple[str, ...] = ()  # the suites under its directory, which its own directory leaves out (`dropped`)
     parts: int = 0               # [tool.verity.tests] parts: the parts by test id check runs it in (`id_part_of`; 0: whole)
+    untraced: tuple[str, ...] = ()   # [tool.verity.tests] untraced: test files (fnmatch patterns) that may start untraced programs
 
 
 def _pyproject(path: str) -> dict:
@@ -473,7 +478,7 @@ def discover() -> list[Suite]:
                              "runs the suite in is an integer of at least 2; leave it out to run the suite whole")
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
                             tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True,
-                            float(tests.get("worker_gb", 0)), parts=parts))
+                            float(tests.get("worker_gb", 0)), parts=parts, untraced=tuple(tests.get("untraced", []))))
     # the repository's own suite keeps every path: its tests (test_repository, test_boundaries, test_doc_paths) read the whole tree
     return [replace(s, nested=tuple(sorted(t.path for t in suites if t.path != s.path and _under(t.path, [s.path]))))
             if s.path != "." else s for s in suites]
@@ -1382,11 +1387,11 @@ class PerTest:
             by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[1][node] = when
         self.dir.mkdir(parents=True, exist_ok=True)
         n = 0
-        blind = r.child_outside or {}
+        blind = {**(r.child_outside or {}), **(r.undeclared or {})}      # an undeclared program fails its module until it is named
         untraced = r.untraced or {}
         run_reads = self.trace(r.traced) if self.narrow and r.traced is not None and "*" not in untraced else None
         for m, (passed, failed) in sorted(by_module.items()):
-            if m not in self.keys or m in blind or "*" in blind:     # a child read what no key covers: nothing vouches for it
+            if m not in self.keys or m in blind or "*" in blind:     # a child read what no key covers, or started what none names
                 continue
             keep = self.keeps[m]
             reads = {self._rel(f): self.own.get(f, "absent") for f in [*(r.reads or {}).get(m, []), *(r.reads or {}).get("*", [])]
@@ -1867,10 +1872,48 @@ def combine_parts(rows: list[dict]) -> list[dict]:
         out.append({"suite": rs[0]["suite"], "name": name, "status": status, "why": why, "beyond_tests": beyond,
                     "seconds": round(sum(r.get("seconds") or 0 for r in rs), 1),
                     "failed_tests": [t for r in rs for t in (r.get("failed_tests") or [])],
+                    "undeclared_untraced": {m: sorted({p for r in rs for p in (r.get("undeclared_untraced") or {}).get(m, ())})
+                                            for m in sorted({m for r in rs for m in r.get("undeclared_untraced") or {}})},
                     "parts": [{"ks": r["part"]["ks"], "status": r.get("status"), "key": r.get("key"), "seconds": r.get("seconds")}
                               for r in rs],
                     "partition": {"m": m, "digests": sorted({p["digest"] for p in ps})}})
     return out
+
+
+#: what a test file whose code builds native code may start without its suite naming it under `untraced`: the graph's test-file
+#: runner's `COMPILERS` (`tools/verity/graph/verity_graph/runners/test_file.py`), which `tests/test_suites.py` holds this to
+COMPILERS = frozenset({"g++", "gcc", "c++", "cc", "clang", "clang++", "nvcc", "ninja"})
+
+
+def undeclared_untraced(suite: Suite, untraced: dict[str, list[str]], ran: list[str]) -> dict[str, list[str]]:
+    """{test module (or "*"): its programs} of ``untraced`` (a run's programs no tracer sees into, by the root-relative module
+    whose tests started them) that the suite's `[tool.verity.tests] untraced` doesn't name, as the graph's test-file runner
+    decides (`runners/test_file.allowed`, its family's `_named_tests`): a module is named when its path from the suite's
+    directory matches one of the fnmatch patterns, and "*" (a conftest or hook, which every test file's own run repeats) when
+    every module of ``ran`` (the run's tests' files, from the suite's directory) is. Compilers alone pass: the runner lets a
+    file whose closure builds native code start them, a closure this run doesn't see."""
+    base = "" if suite.path == "." else suite.path + "/"
+
+    def named(rel: str) -> bool:
+        return any(fnmatch.fnmatchcase(rel, p) for p in suite.untraced)
+
+    out = {}
+    for m, progs in untraced.items():
+        if all(Path(p).name in COMPILERS for p in progs):
+            continue
+        if not (all(named(f) for f in ran or ["*"]) if m == "*" else named(m.removeprefix(base))):
+            out[m] = sorted(progs)
+    return out
+
+
+def untraced_fix(suite: Suite, undeclared: dict[str, list[str]]) -> str:
+    """The lines to add to the suite's pyproject.toml that name ``undeclared``'s modules under `[tool.verity.tests] untraced`."""
+    base = "" if suite.path == "." else suite.path + "/"
+    names = sorted({"*" if m == "*" else m.removeprefix(base) for m in undeclared})
+    where = f"{base}pyproject.toml"
+    if suite.untraced:
+        return f"{where}: add to [tool.verity.tests] untraced = [...]\n" + "\n".join(f'    "{n}",' for n in names)
+    return f"{where}: add under [tool.verity.tests]\nuntraced = [{', '.join(json.dumps(n) for n in names)}]"
 
 
 @dataclass
@@ -1899,6 +1942,7 @@ class Result:
     child_outside: dict | None = None    # test module (or "*") -> what a process its tests started read outside the inputs
     traced: set | None = None        # "F<tab>file" / "L<tab>directory" every process of the run read (None: the guard traced nothing)
     untraced: dict | None = None     # test module (or "*") -> programs its tests started that no tracer sees into
+    undeclared: dict | None = None   # those of `untraced` its suite's `[tool.verity.tests] untraced` doesn't name, which fail it
     ran_all: bool = False            # pytest itself passed: every test it ran passed
     child_reads: list | None = None  # (kind, file or why, tests): "O" a file a child read outside the inputs, "E" a child untraced
     signal: str = ""                 # the signal pytest died by ("" when it exited)
@@ -1910,9 +1954,10 @@ class Result:
     @property
     def beyond_tests(self) -> bool:
         """Whether it failed for anything besides its failed tests: a read outside its inputs (its own or a child's), an untraced
-        child, an unguarded worker, a timeout, a signal, a nondeterministic test, or no guard report."""
-        return bool(self.outside or self.child_outside or self.child_reads or self.unguarded or self.timed_out or self.signal
-                    or self.nondeterministic or not self.reported)
+        child, a program no tracer sees into that its suite doesn't name, an unguarded worker, a timeout, a signal, a
+        nondeterministic test, or no guard report."""
+        return bool(self.outside or self.child_outside or self.child_reads or self.undeclared or self.unguarded or self.timed_out
+                    or self.signal or self.nondeterministic or not self.reported)
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -2157,14 +2202,17 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
     out = rep.get("outside") or {}
     rep["outside"] = dict.fromkeys(out, "*") if isinstance(out, list) else out      # a report written before the attribution
+    ran = sorted({n.split("::", 1)[0] for n in [*(rep.get("passed") or {}), *(rep.get("failed") or [])]})
+    undeclared = undeclared_untraced(suite, untraced, ran)
     # a child's read outside the inputs is the test's own: no key covers it, so nothing vouches for a pass
-    passed = ran_all and reported and not rep["outside"] and not rep["unguarded"] and not child_outside and not timed_out
+    passed = (ran_all and reported and not rep["outside"] and not rep["unguarded"] and not child_outside and not timed_out
+              and not undeclared)
     return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
                   rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=reported,
                   watched=rep.get("watched"), distributions=rep.get("distributions"), missing=rep.get("missing"),
                   passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse),
                   child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
-                  untraced={m: sorted(v) for m, v in untraced.items()}, ran_all=ran_all,
+                  untraced={m: sorted(v) for m, v in untraced.items()}, undeclared=undeclared, ran_all=ran_all,
                   child_reads=[(k, rel, sorted(w)) for (k, rel), w in sorted(by.items())], signal=sig,
                   peak_rss_gb=usage.ru_maxrss / 2**20, oom=oom, leftover=leftover, timed_out=timed_out)
 
@@ -2686,6 +2734,13 @@ def main(argv: list[str] | None = None) -> int:
                   + "\n          ".join(lines[:10]) + (f"\n          and {len(lines) - 10} more" if len(lines) > 10 else "")
                   + (f"\n        list each file under [tool.verity.tests] inputs in {s.path}/pyproject.toml with a comment saying why, "
                      "or give the test a stand-in for it" if files else ""))
+        if r.undeclared:
+            few = [f"{'a conftest or hook' if m == '*' else m.removeprefix(s.path + '/')}: {', '.join(p[:4])}"
+                   for m, p in list(r.undeclared.items())[:10]]
+            print("        its tests started programs the read guard can't trace, in files its [tool.verity.tests] untraced doesn't "
+                  "name, which the graph's test-file runner fails:\n          " + "\n          ".join(few)
+                  + "\n        name each, which keys it on the suite's whole tree, or give the test a stand-in:\n          "
+                  + untraced_fix(s, r.undeclared).replace("\n", "\n          "))
         if r.nondeterministic:
             print(f"        NONDETERMINISTIC: {', '.join(r.nondeterministic[:5])}{' ...' if len(r.nondeterministic) > 5 else ''} both passed "
                   "and failed under one key: their inputs were identical, so each is flaky; delete it, don't rerun or fix it")
@@ -2707,7 +2762,7 @@ def main(argv: list[str] | None = None) -> int:
                   f" (a file of a dependency that lists `exports`: under those, if its dependents read it)")
         elif r.unguarded:
             print(f"        xdist workers {', '.join(r.unguarded)} sent the guard no record of what they read\n        log: {r.log}")
-        elif r.log is not None and not (r.ran_all and r.child_reads):     # failed on its children's reads alone: said above
+        elif r.log is not None and not (r.ran_all and (r.child_reads or r.undeclared)):     # failed on what is said above alone
             if not r.reported:
                 print("        the guard wrote no report, so nothing vouches for what the tests read")
             print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
@@ -2762,6 +2817,7 @@ def main(argv: list[str] | None = None) -> int:
                                        "seconds": round(r.seconds, 1), "workers": r.workers, "counts": r.counts,
                                        "failed_tests": r.failed_tests, "beyond_tests": r.beyond_tests,
                                        "log": str(r.log) if r.log else None, "outside": r.outside, "child_outside": r.child_outside, "unguarded": r.unguarded,
+                                       "undeclared_untraced": r.undeclared,
                                        "since": r.since, "reused": r.reused,
                                        "contradicts": r.contradicts, "nondeterministic": r.nondeterministic,
                                        "timed_out": r.timed_out, "forced_by": forced.get(r.suite),
