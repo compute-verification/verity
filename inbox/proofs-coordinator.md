@@ -84236,3 +84236,44 @@ Two commits of prose, no declaration: `e5918b326689` (the README's paragraph on 
 **Not established:** the records run was not repeated at the head (the two commits after it change no declaration, and the interface's lock lists no guarantee) [derived]; the 63 suites' verdict.
 
 **Next:** the quick tier's verdict into the body; then every three hours, or when you write.
+
+## WIRED, Thu 12 Nov 10:44Z: READY LINE for #9043 at head `b2585b1f5bb6`: both runs at the head exit 0, no lock record moves, `git merge-tree` against `main` names no file, no stop beyond `main`'s 23 against lean's `f3837f57d113`; the no-growth gate is red on the allowlist's two lines as ruled; the records run is the fast one, without the kernel replay
+
+**READY LINE, #9043**
+
+- [run] Head `b2585b1f5bb6` on `cursor/proofs-wired-7ac3`, the same on GitHub. `research queue status` has it "waiting: not marked ready at b2585b1f". `main` is `33faab2be81c` and is an ancestor of the head. Read 10:38Z to 10:44Z.
+- [run] `r20261112-094323-b9fe`, at this head, exit 0: the records run (`lean_changed.py --records security/Proofs --update`). Verdict in the next section.
+- [run] `r20261112-094511-6be4`, at this head, exit 0: quick suites against `33faab2be81c`, 6 suites, 6 passed (0 cached), 0 failed.
+- [run] At the head below, `8209970890da`: `r20261112-084241-b4cd` exit 0 (records run), `r20261112-084216-f9a3` exit 0 (6 suites passed), `r20261112-084126-12f1` run exit 0 (one-file tries: Lean exit 0 and no axiom beyond the three on all five; the `--siblings` step 0, 0, 1, 1, 1).
+- [relayed] Those three exits 1 are no finding against this change: each line names two modules, neither of them the tried file (lean, LEAN-290, 10:28Z; lean's to fix on LEAN-292). I spent no run on the rebuild that line offers.
+- [derived] The one-file tries were not rerun at `b2585b1f5bb6`. The merge that made this head brought in `main`'s changes, none of which the five files import, and its one hand-made part is two numbers in the caps file. `b9fe`'s audit of `security/Proofs` at this head holds the five: 3,888 modules, the 3,882 of the head below and the six `main` added.
+- [run] **Lock records that move against `main`: none.** No `lean-audit.json` differs from `main`'s at the head, and `b9fe` regenerated none. So the body needs no notice line; it now says "Lock records. None moves against `main`" (sent 10:40Z).
+- [run] `git merge-tree --write-tree --name-only origin/main HEAD`: exit 0, it prints the merged tree `df2457d4421a` and names no file.
+- [run] Against `origin/cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`: `main` alone stops on 23 paths, the head on the same 23. **Beyond `main`'s own: none**, so I owe lean no close.
+- [run] Of this change's 8 files, three are changed on both sides of that merge and merge by themselves: `security/Proofs/Flock.lean`, the retired-terms list, the caps file. The merged caps hold 272 and 2,283 for `Proofs/Flock`; lean's branch does not change that area.
+- [run] `ratchet_gate.py origin/main HEAD` exit 1, on the list's two lines and nothing else (`AddressesAt.lean` 0 to 4, `WireMap.lean` 0 to 3): the red that stands as ruled, off the merge gate. `unread_gate.py origin/main HEAD` exit 0.
+- [run] Against `main` the head is 8 files, 2,104 lines added, 2 changed: five new Lean files, two import lines in `security/Proofs/Flock.lean`, two lines in the retired-terms list, two numbers in the caps file.
+
+**The records run `b9fe`, read from its own log**
+
+- [run] It audited three packages: `security/Proofs`, then `security` with `security/Proofs`, then `security/Properties` with `security/Proofs`. Started 09:44:56Z, slot from 10:03:41Z, ended 10:28:33Z. Outcome pass on each.
+- [run] `security/Proofs`: PASS, 195,720 declarations in 3,888 modules, `check.py` exit 0 in 546 s. `security`: PASS, 27,098 declarations in 712 modules, 1,103 guarantees, exit 0 in 466 s. `security/Properties`: PASS, 3,093 declarations in 94 modules, 465 guarantees, exit 0 in 462 s. Axioms `propext`, `Classical.choice`, `Quot.sound` only.
+- [run] **No lock record moved and none was asked for.** `regenerated {}` in all three `audit.json`; every report's `failures` and `failure_codes` are empty; the lock it kept for `security/Proofs` is byte for byte the commit's. No line of the log names a record, a premise list or bookkeeping to mend.
+- [run] The trust-gap lines are as at the head below: 35 premises over the 14 deployed guarantees in `security`, 37 over the 6 in `security/Properties`.
+- [run] **The caps:** the run kept the `unread-caps.json` it ran with, equal to the commit's, `Proofs/Flock` at 272 modules and 2,283 declarations. It printed no count of unread modules and ran no ratchet on them.
+- [read] Why: `lean_changed.py` calls the ratchet nowhere, and the ratchet joins facts that only an audit with the kernel replay writes (`lean_audit.unread_ratchet`).
+- [derived] So 272 and 2,283 rest on the rule (`main`'s 267 and 2,141 plus this change's 5 and 142), not on a count of mine. The queue's full Lean check judges them.
+- [run] It is a `lean-fast/v1` result, "without the kernel replay or the tests", which `check` and `research merge` refuse as a Lean verdict.
+
+**What a marker should know that the line does not show**
+
+- [derived] If `main`'s cap for `Proofs/Flock` moves again before this lands, the conflict returns. Then I merge once more, set the cap to `main`'s plus 5 and 142, and run the quick suites only, as your 10:17Z section rules.
+- [read] The body's "Not shown" still holds the open point on a parameter laid on several rows (`π#0`, `π#1`); you placed its answer with pull request 2.
+
+**Mailbox (164 lines, newest section 10:17Z), what is still open there**
+
+- [run] #9215 is marked: `research queue status` has it "ready" at `20512920`, admitted. I push nothing to `cursor/proofs-wired-deciders-ef61`.
+- [relayed] Item 7 is lean's, on LEAN-290. Nothing of mine under `tools/verity/lean/`.
+- Owed by me with pull request 2: whether the verifier itself refuses a two-stage file with a parameter on several rows, or the theorem takes that as a hypothesis by name.
+- Owed by me when `WiresDecided.lean` goes into its pull request: its docstring says the registration's parts, wires and rows, not the run's.
+- Next, once #9043 is marked: pull request 2 (`rewires_wireMap`, with the size bound out of the statement) on `b2585b1f5bb6`. Not started. I marked nothing and opened nothing.
