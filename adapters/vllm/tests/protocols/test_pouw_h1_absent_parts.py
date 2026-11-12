@@ -103,16 +103,19 @@ def test_a_rank_that_shipped_no_acquisitions_feeds_nothing_and_is_still_the_firs
     assert (tap.took, tap.refused) == ([("site/0", 2, None)], ["engine step 2: a rank's input ids are not the first rank's"])
 
 
+def _refusal(why: str) -> tuple[None, tuple[str, str]]:
+    """`drawn_of`'s refusal of a record whose sampling coin it cannot read, for the reason `why`."""
+    return None, ("draw", f"the window's draw coin is malformed ({why})")
+
+
 @pytest.mark.parametrize("record", [{}, {"commitment": None}, {"commitment": []}, {"commitment": "a root"}])
-def test_a_record_with_no_commitment_object_is_refused_at_its_draw_coin(record):
-    assert drawn_of(record, {"root": "00"}, 1, _descriptor()) == (
-        None, ("draw", "the window's draw coin is malformed (the window's record carries no commitment object)"))
+def test_a_record_with_no_commitment_object_is_refused_at_its_sampling_coin(record):
+    assert drawn_of(record, {"root": "00"}, 1, _descriptor()) == _refusal("the window's record carries no commitment object")
 
 
 @pytest.mark.parametrize("commitment", [{}, {"draw": None}, {"draw": {}}, {"draw": {"coin": {}}}])
-def test_a_commitment_whose_draw_holds_no_opened_coin_is_refused_at_its_draw_coin(commitment):
-    assert drawn_of({"commitment": commitment}, {"root": "00"}, 1, _descriptor()) == (
-        None, ("draw", f"the window's draw coin is malformed ({OPENING_FORM})"))
+def test_a_commitment_that_holds_no_opened_sampling_coin_is_refused_at_it(commitment):
+    assert drawn_of({"commitment": commitment}, {"root": "00"}, 1, _descriptor()) == _refusal(OPENING_FORM)
 
 
 def test_a_slot_of_a_round_the_log_does_not_hold_is_refused_before_anything_is_opened():
