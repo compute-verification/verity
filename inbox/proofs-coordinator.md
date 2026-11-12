@@ -88443,3 +88443,66 @@ I end my turn here on `ae58`; resume me and the next entry is its exit code and 
 - [read] What ties the gate's challenger session to the ZK server's stream or session. Nothing in the release side's package names a gate or a reserve.
 - [guess] Every size above. I wrote no line of the change.
 - [derived] Which of (b)'s two ways for PoUW's public table is right is a design choice with a wire change on one side and a new executable on the other; it is yours, and if the wire changes what a guarantee's hypotheses read, Daniel's through you.
+
+## COUNT, Thu 12 Nov 13:09Z: Row A and the three rows C are the same at `main` `1885cf1fe08c` (run `r20261112-125814-fcb9`), on cells priced at an older tree; the driver's 6,770.4, 4,887.1 and 1,452.5 GB reproduce at `main` and are no row of the table; one of the two readings holds and the other holds at 62 of 63 points; the advice's length is in the exfiltration table already as the output count (24,453,012 GB a world's year, assumed) and its finish bit is not (2,223,001 GB); the driver's run at `main` reads 6,770.4 GB and the two labels follow this entry (all modeled)
+
+Tags: [run] a run or command of mine read now; [read] a place I read now; [relayed] another lane's statement I did not check; [derived] my arithmetic; [local] run on my machine, no run record. Times from `date -u`. Mailbox read 13:09Z: 37 sections, the newest yours of 12:40Z. This answers your 11:57Z and 12:40Z sections and adds one line to my 12:44Z entry (section 6). Everything below is modeled: the cost model's arithmetic. Nothing ran on the served engine. No branch moved, nothing marked, no card, no code changed.
+
+**1. Which tree each row is read at.**
+
+| the row | GB | the planner and the cards, read at | the cells (each block type's count, proving seconds, statement size), priced at |
+|---|---|---|---|
+| Row A, the partition `main` defines, a fresh verifier process a session, the program's read at 609.3 and 692.0 s | 9,060.1 and 9,757.0 | `main` `1885cf1fe08c` | the pricing run `r20261111-163515-2cd7`, tree `a5e4e56a1171` |
+| Row A, the best designed configuration, the same reads | 3,720.7 and 4,016.0 | `main` `1885cf1fe08c` | the same |
+| the three rows C (the check as timed, the fold, the one pass), a kept verifier process | 933.8, 710.8, 683.5 | `main` `1885cf1fe08c` | the same |
+| the three rows C with each table at the census's size (my 12:44Z entry) | 935.3, 710.8, 683.5 (the last 710.8 if the prover's fixed seconds are not scaled with the table) | `main` `1885cf1fe08c` | the same |
+| the driver's three rows (section 2) | 6,770.4, 4,887.1, 1,452.5 | `main` `1885cf1fe08c` | `main`'s own cards |
+| the plan of record's figure | 2,635.9 (2,767.7 with the 1.05) | not read again this turn: as #9185's body states it | the plan's own inputs |
+
+- [run: `r20261112-125814-fcb9`, tree `1885cf1fe08c`, exit 0, record `art:a7f04066aa14139471d191ea1aa4d6073e1d9ed59f7fe7a98da55bd9859c4107`] `main` `1885cf1fe08c` holds #9112 and #9185. The run plans all 30 designs of my 12:44Z entry again there. The 12 rows as quoted come back with the same GB, the same sampled replay blocks, the same sampled proof blocks and the same bits: 0 differ.
+- [run] One thing moves and no figure with it: the three rows C plan 0.16% more sessions (982,122 for 980,563; 1,292,197 for 1,290,145; 1,343,896 for 1,341,762). `main`'s card gives one block type, `MoeSum_v1{TOPK=8,H=96}`, a table of 8,192 blocks where the earlier tree's staging gave 262,144.
+- [read] What is not at `main`: the cells. They are the pricing run's, made at tree `a5e4e56a1171` with kernels' steady rows as staged then. The verifier's seconds are the timings my 11:17Z entry cites. Nobody has priced the cells again from `main`'s cards, so "read at `main`" here means the planner's code and the tables' sizes, not the prices.
+- [read: `research data show r20261111-163515-2cd7`; `git log a5e4e56a1171..origin/main -- benchmarks/spot_figures/cards/workload.glm-5.3.json`] That tree is a commit of 8 Nov on a branch, not an ancestor of `main`. On `main`'s side the workload card has changed three times since, last by #9185, which made it the census the plan of record was planned on. What ties the two: the pricing run's cells and the plan of record's hold the same count, proving seconds and statement size in 181 of 193 block types [run: `r20261112-123831-25c9`].
+
+**2. The three figures: 6,770.4, 4,887.1 and 1,452.5 GB.**
+
+- [run: `r20261112-124742-a3fe`, tree `1885cf1fe08c`, exit 0, record `art:a48cb83580fdc561f1c9d134a67e1aa1b9602356b9d8e5f9cfb5be7c563232e3`] They reproduce at `main`: the driver's three rows for the world's year at 10% of compute, with the 1.05, read 6,770.4, 4,887.1 and 1,452.5 GB. They are the figures of the reading in your section (`r20261112-112251-6f72`), to the last digit.
+- **They are no row of Daniel's table.** [read: `benchmarks/spot_figures/breakeven/headline.py`; the run's `rows.jsonl`] They are the tree's driver's rows: the served tokens' line; the per-expert partition with its reads fused; and that with its warm block types at a quarter of their seconds. Three things separate them from Row A and the rows C:
+  - the prices: the driver reads the tree's own price tables, and the planner's assumed default price (`reprice.DEFAULT`, any block type no table names) covers 97.9%, 95.4% and 87.5% of the three rows' proving seconds [run]. Row A and the rows C price their cells from kernels' steady rows;
+  - the sessions: each of the three designs has a session of 4 tables, past the 1 the GPU prover takes; the driver prints that limit on each row [run]. Row A and the rows C are one table a session;
+  - the verifier: the driver takes a session's verifier seconds from the `verifier_cost` card. The program's read at 609.3 or 692.0 s a process, and a kept process, are axes of my scripts and not of the driver [read: `benchmarks/spot_figures/total_cost.py`'s `verifier_seconds`].
+- [read: #9185's body] The nearest row Daniel has is the plan of record's: 2,635.9 GB is the driver's second row with benchmarks' prices handed in, where the tree's own tables give 4,887.1.
+
+**3. The two readings in your 11:57Z section** [read: `r20261112-111618-d9e7`'s `out/at-budgets-split.json`, recomputed now].
+
+- **The first is right.** At one machine's verification phase none of `total_cost.py`'s eight two-stage lines has a design at 0.1%, 1% or 10% of compute in any of the six scopes: all 144 points fall back to the served bound. One sampled replay block costs 19.7 of that phase's budgets at 10% on the token lines, 20.2 on the per-expert lines, 20.8 on the head-units lines, 9.7 where a request is replayed alone and 7.7 on the line by layer. The one-stage line, which has no phase, has a design at 4 of its 18 points.
+- **The second is right at 62 of 63 points.** Of the 63 points with a design at a pod's or a datacenter's phase, 62 plan more sessions than block types: from 3.0 times (758.9 sessions for 250 block types) to about 1,705 times (330,744 for 194). The exception is the per-expert line at a pod's phase, the world's year, 10%: 194.0 sessions for 194 block types. So "every point" should read "every point but one". The README's sentence stands as quoted: such a design prices sessions the verifier's second stage refuses [read: `benchmarks/spot_figures/README.md`].
+
+**4. The advice's length term** [read: `adapters/vllm/verity_vllm/pipeline/advice_code/lengths.py` 1 to 15; local: `verity bench exfiltration`'s own build and render on `a3fe`'s rows].
+
+- **Is it in the table already: half of it.** The output length is. The table calls it the output count: 11 bits a request (⌈log2 1,025⌉, for an assumed class of at most 1,024 ids a response), 24,453,012 GB over the world's year and 6,521 GB over a datacenter's. It is the schedules of the network certifier's rows `scan`, `timing`, `entries` and `design, no stop block`, and it is 0 in `lengths`, `all three` and `design`, where a stop block holds it. The finish bit is in no row. The compute audit's part prices no advice at all: its input `advice` reads 0, "not counted".
+- **What it adds at the table's load.** The load is 1.778e16 requests over the world's year, about 5.6e8 a second, and its `max_tokens` is the class's 1,024 ids [derived]. There the term is 12 bits a request, 26,676,013 GB a year. Of that, 24,453,012 GB is the output count the four rows above already charge, so beside them the term adds only the finish bit: **2,223,001 GB over the world's year, 592.9 GB over a datacenter's** [derived]. In the three rows that take the length at 0 it adds nothing either: the sampled stop block they assume is the proof the term waits for [derived from the docstring's "while no proof holds the length rule"]. At `max_tokens` 4,096 the term is 14 bits, 31,122,015 GB a world's year; at 131,072 it is 19 bits, 42,237,021 GB [derived]. For scale: the compute audit's part over the same year is 6,770 GB.
+- **The agentic load: the table has none.** [read: a search of `benchmarks/` at `main`] Nothing in `benchmarks/certifier_term`, `benchmarks/exfiltration` or the bench's reader names AgentX or a session's requests. The table's one load is the sampling plan's request.
+
+**5. The driver's run at `main`, and the two labels.**
+
+- [run: `r20261112-124742-a3fe`] One run of the driver at `main` `1885cf1fe08c`, made as `r20261111-052546-d670` was: the first row at the six scopes and the nine budgets, 54 rows in `out/rows.jsonl`. At 10% of compute with the 1.05 the first row reads: the world's week 6,609.0, month 6,608.1, year **6,770.4 GB**; a datacenter's week 6,459.3, month 6,458.1, year 6,457.3 GB.
+- **Why it is not the 11,712.7 GB your 06:38Z section expected.** That figure was #9112 alone. `main` held #9185's card before any run was made, so this one run is at both, and 6,770.4 GB is the figure #9185's body gives for it. The clause that goes beside it wherever it is quoted: 97.9% of its proving seconds are at the planner's assumed default price [run].
+- [local, read 12:56Z] `verity bench exfiltration` prints 14,229 GB today, from `d670`, which alone holds the label and is superseded by nothing.
+- [local: the reader's own `build` and `render` on the new rows, no label read or written] On `a3fe`'s rows it prints **6,770 GB**, 17.97 copies of the weights and 0.003046 bits a request; it refuses nothing, and the network certifier's part is unchanged (50,753,639 GB as the scan's check charges it).
+- **The labels are not written as I post this.** Your 06:38Z section says the entry gives the reason before the label. I write them next, the label moving once as you ruled: `run_of_record=exfiltration-glm53-compute-audit` on `r20261112-124742-a3fe`, and `superseded_by` it on `r20261111-052546-d670`, both `--by proofs --ref r20261112-124742-a3fe`. A short entry follows with what the store then shows.
+
+**6. One line my 12:44Z entry left open: the driver's rows and the entries measured on parts** [run: `a3fe`'s rows, each row's own plan at the budget nearest 10%].
+
+- The driver reads no steady row of kernels'. It reads the card as it stands.
+- The entries measured on statements of parts (7 to 16, 43, and 17 to 76 with them) price 0.62%, 0.87% and 3.15% of the three rows' proving seconds.
+- Entry 1 prices 29.41% of the first row's and none of the other two. Its statement is not a part's: the staged Definition, `MoeExpertFp8GemmW_v1` at `K=256,N=1`, is the census's own block type by name for 89% of those blocks, and its sibling with the other dot product for the rest [read: `benchmarks/served_units/stage.py`'s `moe-gemmw`; the card's entry 1; the workload card]. Its table is one size above the census's (`k_log` 27 for 26).
+- The largest family of each row is the sparse-attention head block at a computed price: 67.5%, 94.5% and 86.0% of its proving seconds [run].
+
+**Not established.**
+
+- The cells at `main`'s prices: nobody has rerun the pricing at `1885cf1fe08c`, so Row A and the rows C rest on the pricing run's tree for every price.
+- The plan of record's figure was not read again at `main` this turn.
+- Whether the row `N2` (1,857,720 GB, its schedules counted by link) bounds a response's length without the term: I did not read N2's check.
+- Whether the finish bit is a choice the server has beyond the output length: `lengths.py` refuses a string whose finish is not the stop rule's, so it may be 0 bits of choice though 1 bit is sent and charged. I did not settle it; the 2,223,001 GB is the charge as the code makes it.
+- The `max_tokens` of a real load: the table's 1,024 is an assumed class.
