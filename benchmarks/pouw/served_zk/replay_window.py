@@ -364,5 +364,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if passed(report) else 1
 
 
+__all__ = ["REASONS", "Sides", "passed", "replay"]
+
 if __name__ == "__main__":
     sys.exit(main())

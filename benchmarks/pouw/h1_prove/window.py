@@ -109,7 +109,7 @@ def window_records(com: dict, A: np.ndarray, SA: np.ndarray, B: np.ndarray, SB: 
     return out
 
 
-def cmd_commit(a) -> int:
+def cmd_commit(a: argparse.Namespace) -> int:
     lay = np.load(a.layer)
     priv = Path(a.priv)
     priv.mkdir(parents=True, exist_ok=True)
@@ -254,7 +254,7 @@ def _receipts(com: dict, rw: np.ndarray, sr: np.ndarray) -> tuple[list[bytes], b
     return bcr, U.levels(U.domain(com["window"], "receipt", com["tiles"]), bcr)[-1][0]
 
 
-def cmd_serve(a) -> int:
+def cmd_serve(a: argparse.Namespace) -> int:
     priv_dir = Path(a.priv)
     com = json.loads((priv_dir / "commitment.json").read_text())
     salt = bytes.fromhex(a.salt)
@@ -334,7 +334,7 @@ def _record(a, com: dict, priv: dict, salt: bytes) -> tuple[dict[int, np.ndarray
     return out, info
 
 
-def cmd_tamper(a) -> int:
+def cmd_tamper(a: argparse.Namespace) -> int:
     src, dst = Path(a.priv), Path(a.tampered)
     dst.mkdir(parents=True, exist_ok=True)
     com = json.loads((src / "commitment.json").read_text())
@@ -414,7 +414,7 @@ def table_bcs(priv: dict, com: dict, value: str) -> list[bytes]:
     return _bl(priv["bca"][int(c)]) if name == f"a/{k}" else _bl(priv["bczy"][call["tile0"]:call["tile0"] + call["tiles"]])
 
 
-def cmd_open(a) -> int:
+def cmd_open(a: argparse.Namespace) -> int:
     priv_dir, out = Path(a.priv), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     com = json.loads((priv_dir / "commitment.json").read_text())
@@ -481,7 +481,7 @@ def cmd_open(a) -> int:
 FLAGS = ("receipt", "receipt_word", "d_word", "xa_flip", "zy_word", "y_cell", "z_cell", "swap", "call", "z_only")
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("commit")
@@ -517,6 +517,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     return {"commit": cmd_commit, "serve": cmd_serve, "tamper": cmd_tamper, "open": cmd_open}[a.cmd](a)
 
+
+__all__ = ["tile_of", "unit_of"]
 
 if __name__ == "__main__":
     raise SystemExit(main())
