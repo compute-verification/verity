@@ -101120,3 +101120,59 @@ What a clean merge does not show is that the merged Lean builds. #9375 (branch `
 
 - No code changed this turn, and nothing was timed.
 - At 21:15Z I read `r20261112-205424-6997`'s slot and write one short entry: started, with its ETA, or moved to vy-nebius-cpu-8. When it ends I read it whole and write its line for #9251; resume me then.
+
+## PERIODREAD, Thu 12 Nov 20:59Z: FOR THE COORDINATOR: f.wrong: the period check takes `wrong` from the answer's `bound` as given; SPOT's own check computes that number itself and `Properties.Spot.AcceptMeans` says so, but no statement says the answer the period check reads is SPOT's check's
+
+Your 20:50Z message is read (hook `7837b4ffddb4`), and LEAN-249's comments from 20:40Z to 20:51Z. Everything below is read at #9375's marked head `bafae2eaec2e`; nothing was built. I can pause.
+
+### What `factsOf` reads to fill `wrong`
+
+- **`wrong` is the natural number under `bound` in the answer's public** [read: `NetworkCheck/Period.lean:1156-1157`]. `units` is the size of the profile's one level, `drawn` its `subset`'s `k` or its strata's `k` summed, `delta` the profile's δ (`:1144-1147`, `:1157`).
+- **The public and the profile are an answer's, and the answer is evidence.** `answered` takes `a.published` and `a.profile` of a `Core.Answer` (`:921-931`) that the period's evidence carries (`Evidence.audits`, `:422-424`). It holds two things of the answer: its protocol is `verity/sampled-proofs/one-stage/v1` (`:270`, `:922`) and its digest is the registration's (`:923`).
+- **Nothing compares `bound` with a number the period check computes.** The only checks on the facts are `drawn ≤ units`, the strata's sizes (`:1148-1155`), and `units` equal to the verifier's own count: the Program's units for an audit (`:1191`), `2T` for a scan (`:1180`). So N is the verifier's; `drawn`, the strata, δ and `bound` are the answer's.
+- **Where `wrong` is used:** `faultyBits = wrong · bits` and `faultySets` for every audit and scan (`:1269`, `:1277-1278`), and the trigger `1 ≤ wrong` for a tied audit sampled in part (`:1338`).
+
+### Which record of ours it is
+
+- **SPOT's one-stage v1 answer.** `Core.Protocol.answer` publishes `publicJson` of what the check accepted with (`CoreProtocol/Protocol.lean:108-110`). One-stage's `publicJson` writes `bound` from its `Public` (`Spot/OneStage.lean:569-571`).
+- **SPOT's check computes that number itself**: `bound := Bound.boundOf population draw p.delta` (`Spot/OneStage.lean:536`). `population` is the registration's, `draw` is the sample of the law the verifier derives from its own program and query (`:519`, `:528`), δ is the verifier's parameter. Nothing of it is read from the evidence.
+- **It is not #9416's file and not the period reader of PR 1.** #9416 writes a case for the compiled v2 check; `factsOf` reads neither. The period check accepts v1 answers only; a v2 answer is refused by its protocol id (`:922`).
+
+### Which statement ties it to SPOT's bound
+
+**For SPOT's own check, one exists and is listed. For the number the period check reads, none exists.**
+
+- **`Properties.Spot.AcceptMeans`** (`security/Properties/Spot.lean:433-440`): if `OneStage.check` accepts with `pub` and `prof`, then `pub = publicOf p e law d n` and `prof = profileOf p c e d n`. `publicOf`'s `bound` is `Bound.boundOf n d p.delta` (`:416`), and `profileOf` is one level of `n` units sampled by `d` at `delta := p.delta` (`:422-427`). It is the listed guarantee `Properties.Spot.acceptMeans` in `security/Properties/lean-audit.json`, proved through `acceptMeans_iff` (`security/Proofs/Properties/Spot.lean:1263`).
+- **`Bound.boundOf` to incorrect blocks**: `countBound_miss_design` (`security/Proofs/Flock/Claims/Sampling/Count.lean:630-638`): more than `countBound strata δ` incorrect proof blocks escape a strata sample with probability below δ. The audit's own curve is `audit_count` (`security/Proofs/Flock/Soundness/Audit/OneStage.lean:192`), δ(K) = miss K + ε_ks + δ_link. I read the statements and docstrings, not the proofs, and did not look up whether `countBound_miss_design` is a listed guarantee or a lemma under one.
+- **Nothing in `Properties.NetworkPeriod` names either.** The file (218 lines) has no `Bound` and no `OneStage.check` [run: `rg`]. `AuditFacts` says only that `answered` and `factsOf` gave `f` from the answer `x` (`:133-135`); `RowsTiedChargedAt` takes `f` so (`:148-158`). No statement says `x` is `OneStage.protocol.answer` of anything. That agrees with network-accounting's 20:49Z read.
+
+### The statements that would, and whose file each is
+
+**1. The check's own bound: network-accounting's, in `security/Properties/NetworkPeriod.lean`, with the change in `factsOf`.** This is soundness's "first way".
+
+- In the tree's names: for every `factsOf what prof pub = .ok f` there are `l` and `d` with `prof.levels = #[l]`, `l.draw = some d` and `Bound.boundOf l.size d prof.delta ≤ f.wrong`. `factsOf` computes `Bound.boundOf` on the profile it already reads and refuses a smaller `bound`.
+- **It refuses no honest answer** [derived from `AcceptMeans`]: SPOT's check publishes exactly `Bound.boundOf n d p.delta` beside a profile of one level of `n` units sampled by `d` at that δ. So the check could hold equality, not only "at least".
+- **One thing they need to know: the period check's package cannot call `Bound.boundOf` today.** `network_check`'s lakefile requires Flock's verifier, `nci_check`, `core_protocol`, `certifier_program`, `lms` and `core_identity`, not SPOT's verifier [read: its `lakefile.toml`]. `Spot/Bound.lean` imports only `CoreProtocol.Profile` (`:13-14`), so it can move down into the interface package, or the package takes a path require on SPOT's. Moving `Bound.lean` is a change to a file of ours.
+- **What it still leaves** [soundness's point, 20:49Z]: the strata, `drawn` and δ are the answer's too. A forged answer can name every unit sampled and owe nothing.
+
+**2. That the answer is SPOT's check's: NET-352's, not ours.** If `x = OneStage.protocol.answer` at the audit's own verifier's parameters, `AcceptMeans` gives `f.wrong = Bound.boundOf n d δ` with nothing more to state.
+
+- **One small statement on that path would be ours**, in `security/Properties/Spot.lean`. `AcceptMeans` is over `OneStage.check`, and the protocol answers with `checkLive` (`Spot/OneStage.lean:587`). An accept of `checkLive` is an accept of `check` with the same public and profile [derived: `checkAt` rejects or is `check`, `:549-552`; `Core.atCoins`]. That step is proved inline today, in `stage_registered` (`security/Proofs/Properties/Remote.lean:288-295`), and is no statement of its own. I add nothing for it unless you say so: it is a new guarantee's statement.
+
+### Not established
+
+- **Anything by a build**: nothing was built or run.
+- **Whether `main` reads the same**: I read the marked head only. network-accounting says `factsOf` on `main` takes `bound` the same way [relayed].
+- **`countBound_miss_design`'s place in a lock**, and the Bernoulli case, which `factsOf` refuses anyway (`:1145-1147`).
+- **Who writes the answers in the period's evidence in a real run**: not read.
+
+### The stale sentence (your point 1)
+
+- **#9375 is still open** at `bafae2eaec2e` [run: `gh pr view`, 20:56Z]. I look at each checkpoint and branch from `main` the hour it lands.
+- The sentence at the marked head is `security/Properties/Spot.lean:135-136`. I say whether a lock record moves before I push.
+
+### State
+
+- PR 1 at `44b84839217d`: its quick tier `r20261112-203704-77ca` took a slot at 20:50Z and is running; I cancelled its copy `989a`. ETA about 21:30Z.
+- PR 2's branch `cursor/proofs-prf600-period-audit-9c4e` at `4fa7425a19`, two commits, not built: the parameters at a window (your table, in the module's docstring, with my default for the public file) and the `auditedOpen` split. Its build `r20261112-204826-f29e` is in line. I build nothing on the public file's row before your word.
+- Neither of your two pieces moves a date of mine.
