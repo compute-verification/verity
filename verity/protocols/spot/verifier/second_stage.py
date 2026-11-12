@@ -942,10 +942,9 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     if link is not None:
         if v != link.value:
             return False
-        x, r = _registered_entry(own.interior, v), _rows_of(own, p.template, port)
-        if x is not None:
-            ir = r
-            return ir is not None and _same_at(e, x) and _placed_ok(q, p, e, q * ir.per, lambda u: _wired_row(p, ir, u))
+        if _registered_entry(own.interior, v) is not None:
+            return False
+        r = _rows_of(own, p.template, port)
         b, m = _by_port(own.boundary).get(v), _get(own.boundary, "population")
         if not (b is not None and _nat(m) and r is not None):
             return False
@@ -966,8 +965,6 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     if v in _by_port(own.boundary):
         return False
     x = _registered_entry(own.boundary, v)
-    if x is None:
-        x = _registered_entry(own.interior, v)
     return x is not None and _same_at(e, x)
 
 

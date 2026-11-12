@@ -845,10 +845,9 @@ def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bo
   let q := own.sample.size
   match getD e "value", linkOf own p.template port, wireOf own p.template port with
   | .str v, some l, _ =>
-    v == l.value && match registeredEntry own.interior v, rowsOf own p.template port with
-      | some x, some r => sameAt e x && placedOk q p e (q * r.per) (wiredRow p r)
-      | some _, none => false
-      | none, _ =>
+    v == l.value && match registeredEntry own.interior v with
+      | some _ => false
+      | none =>
         match (Record.byPort own.boundary).find? (·.1 == v), nat? (getD own.boundary "population"),
             rowsOf own p.template port with
           | some (_, b), some m, some r => sameAt e b && placedOk q p e (m * r.per) (linkedRow own p r)
@@ -862,7 +861,7 @@ def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bo
     match (Record.byPort own.interior).find? (·.1 == v), (Record.byPort own.boundary).find? (·.1 == v) with
     | some (_, x), _ => v == portOf named p.template port && sameAt e x && rowsOk q p e (q * p.n) fun u => some (u - p.lo)
     | none, some _ => false
-    | none, none => match registeredEntry own.boundary v <|> registeredEntry own.interior v with
+    | none, none => match registeredEntry own.boundary v with
       | some x => sameAt e x
       | none => false
   | _, _, _ => false
