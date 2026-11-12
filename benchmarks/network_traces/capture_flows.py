@@ -55,7 +55,10 @@ and FIN and no hole, the two counts are equal in each direction.
   record's; likewise the watermark stream once it stopped.
 A direction says "agrees" only where both counts are exact and equal, "differs by N bytes" where both are exact, and
 otherwise the range the difference (the capture's less the record's) lies in. What the server answers on the
-watermark's connection is in no record (the certifier never reads it): it is given, and is in no sum.
+watermark's connection is in no record (the certifier never reads it). Where that connection pairs with a flow, the
+answer is given and is in no sum. Where it pairs with none, the answer can't be told from the server's other bytes, so
+it stays in the sum from the server, and that direction is a bound: its difference may be lower by as many bytes as
+the capture counts from the server on the largest flow in no pair.
 
 **Pairing.** No record holds a port, so the flows and the connections are held against each other as multisets of
 their two counts: a connection pairs with a flow of exactly its counts that the capture holds whole, the watermark's
@@ -473,9 +476,13 @@ def compare(flows: list[dict], record: dict) -> dict:
     (`record_counts`), as the module docstring's "Where only a bound holds" and "Pairing" have it: each direction's
     sums, the range its difference lies in (`difference`: its least and its most, None where it has none) and what it
     `says`; the pairs, and what stays unpaired on each side. The server's answer on the watermark's connection is in
-    no sum."""
-    whole = [f for f in flows if all(f[w]["syn"] and f[w]["fin"] and not f[w]["holes"]
-                                     for w in ("to_server", "from_server"))]
+    no sum where that connection pairs with a flow (`watermark_answer_bytes`); where it pairs with none, the answer
+    stays in the sum from the server, at most `watermark_answer_in_sum` bytes of it, and the direction's least
+    difference is lower by as much."""
+    def held_whole(f: dict) -> bool:
+        return all(f[w]["syn"] and f[w]["fin"] and not f[w]["holes"] for w in ("to_server", "from_server"))
+
+    whole = [f for f in flows if held_whole(f)]
     left = [(f["to_server"]["stream_bytes"], f["from_server"]["stream_bytes"]) for f in whole]
     answer = None
 
@@ -497,6 +504,13 @@ def compare(flows: list[dict], record: dict) -> dict:
     unpaired = [c for c in rest if c["exact"] or not take(
         c, lambda c, t, f: t <= c["to_server"] and (c["from_server"] is None or f >= c["from_server"]))]
     bounded = [c for c in connections if not c["exact"]]
+    # the watermark's connection in no pair: its flow, if the capture holds it, is in no pair, or has the counts of
+    # one that is (a least difference is given only where every other pair is of equal counts), so the sum from the
+    # server holds at most the largest count of those of the server's answer on it
+    stray = 0
+    if any(c["from_server"] is None for c in unpaired):
+        stray = max([f for _, f in left] + [f["from_server"]["stream_bytes"] for f in flows if not held_whole(f)],
+                    default=0)
     out = {}
     for way in ("to_server", "from_server"):
         capture = {k: sum(f[way][k] for f in flows)
@@ -511,6 +525,8 @@ def compare(flows: list[dict], record: dict) -> dict:
         else:  # and a floor; the watermark's has no count from the server, and its flow's answer is in no sum
             floor, ceiling = stated, None if any(c[way] is not None for c in bounded) else stated
         low, high = None if ceiling is None else counted - ceiling, None if most is None else most - floor
+        if way == "from_server" and low is not None:
+            low -= stray
         out[way] = {"capture": capture, "record_bytes": stated, "difference": [low, high], "says": says(low, high)}
     keys = ("connection", "why", "to_server", "from_server")
     pairs, inside = len(connections) - len(rest), len(rest) - len(unpaired)
@@ -522,7 +538,7 @@ def compare(flows: list[dict], record: dict) -> dict:
                               f"counts"},
                   "bounded": [{k: c[k] for k in keys} for c in bounded],
                   "unpaired": [{k: c[k] for k in keys} for c in unpaired],
-                  "watermark_answer_bytes": answer}
+                  "watermark_answer_bytes": answer, "watermark_answer_in_sum": stray}
 
 
 def _row(cells: list, widths: list[int]) -> str:
@@ -573,6 +589,9 @@ def table(result: dict) -> str:
         if compared["watermark_answer_bytes"] is not None:
             lines.append(f"the server's answer on the watermark's connection: {compared['watermark_answer_bytes']:,} "
                          f"bytes, in no record and no sum above")
+        elif any(c["from_server"] is None for c in compared["unpaired"]):
+            lines.append("the watermark's connection is in no pair: the server's answer on it is in no record, and "
+                         f"the sum from the server holds at most {compared['watermark_answer_in_sum']:,} bytes of it")
     others = result["others"]
     widths = [max([36, *(len(f"{f['of']} with {f['peer']}, {f['protocol']}") for f in others)]), 11, 14, 14, 11, 14, 14]
     lines += ["", _head(["other flows with a given address", "packets out", "wire bytes out", "payload out",

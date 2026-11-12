@@ -246,12 +246,14 @@ result file holds every flow's sums, and the table is:
   of sequence numbers the capture missed) and `record bytes`. Then what the direction says: `agrees`; `differs by N
   bytes`, the capture's less the record's, where both counts are exact; `bound: …` with the range the difference lies
   in, where a count is only a bound (a hole, a flow without its SYN or FIN, a connection that failed or whose release
-  was lost) and the range holds 0; `differs: …` where it doesn't.
+  was lost, the watermark's connection in no pair) and the range holds 0; `differs: …` where it doesn't.
 - The pairing. No record holds a port, so connections and flows are paired by their two counts, as multisets: how many
   paired and how many of each stay unpaired. Two connections of equal counts aren't told apart, and "agree" is said of
   the sums and the multisets, never of one connection.
 - Each connection whose counts are bounds, and the bytes the server answered on the watermark's connection, which are
-  in no record and in no sum.
+  in no record and in no sum. Where that connection pairs with no flow, its answer can't be told from the server's
+  other bytes and stays in the sum from the server: that direction is then a bound, lower by as many bytes as the
+  capture counts from the server on the largest flow in no pair, and the line says so.
 - Every other flow with a given address on one side, a line each: what the given side sent (`out`) and received
   (`in`). Machines are named `server`, `certifier` and `other-N`, with their ports: no address is printed or written.
 

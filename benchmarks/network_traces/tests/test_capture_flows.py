@@ -8,7 +8,8 @@ every capture format read to the same sums, and each thing the reader doesn't re
 the network certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
 server's side saw: the two counts agree in each direction, the watermark stream's among them and the server's answer
 on it in no sum; a request's place in the release order is its `END` cell's in the ingress record, where a bucket's
-are not in their ordinals' order; and a connection that failed is a bound."""
+are not in their ordinals' order; the answer on a watermark connection in no pair makes its direction a bound; and a
+connection that failed is a bound."""
 from __future__ import annotations
 
 import argparse
@@ -688,6 +689,38 @@ def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ing
     assert (got["to_server"]["says"], got["from_server"]["says"]) == ("agrees", "agrees")
     assert got["pairing"] == {"connections": 13, "flows": 13, "pairs": 13, "pairs_inside_bounds": 0,
                               "unpaired_connections": 0, "unpaired_flows": 0, "partial_flows": 0, "says": "agrees"}
+
+
+def test_the_servers_answer_on_a_watermark_connection_in_no_pair_makes_its_direction_a_bound(tmp_path):
+    """The capture holds one byte fewer to the server on the watermark's connection than the record has, so that
+    connection pairs with no flow, and the server answered on it. The answer is in no record and can't be told from
+    the server's other bytes, so it stays in the sum from the server: that direction says the range, from 0 to the
+    bytes the capture counts from the server on the largest flow in no pair, never that it differs by the answer's
+    bytes. Where the capture holds no flow in no pair, no answer is in the sum and the direction is exact; a flow in
+    no pair that lacks its FIN from the server counts as it does whole, and its direction has no most."""
+    out, _, _, responses, servers, mark = _three(tmp_path)
+    streams = [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark)[:-1], ANSWER)]
+    result = cf.read([_seen(tmp_path, streams)], *_given(), run=out)
+    got = result["compared"]
+    assert (got["to_server"]["says"], got["from_server"]["difference"], got["from_server"]["says"]) == \
+        ("differs by -1 bytes", [0, len(ANSWER)], f"bound: difference 0 to +{len(ANSWER)} bytes")
+    assert [c["connection"] for c in got["unpaired"]] == ["watermark"]
+    assert (got["watermark_answer_bytes"], got["watermark_answer_in_sum"]) == (None, len(ANSWER))
+    assert "the watermark's connection is in no pair: the server's answer on it is in no record, and the sum from " \
+        f"the server holds at most {len(ANSWER)} bytes of it" in cf.table(result).splitlines()
+    # on the fixture's two flows: the second as the flow of a watermark connection whose record has a byte more
+    record = _record((300, 700), (121, None))
+    held = cf.compare([FIRST, SECOND], record)
+    assert (held["to_server"]["says"], held["from_server"]["says"], held["watermark_answer_in_sum"]) == \
+        ("differs by -1 bytes", "bound: difference 0 to +64 bytes", 64)
+    absent = cf.compare([FIRST], record)
+    assert (absent["to_server"]["says"], absent["from_server"]["says"], absent["watermark_answer_in_sum"]) == \
+        ("differs by -121 bytes", "agrees", 0)
+    cut = cf.compare([FIRST, SECOND | {"from_server": _tcp(5, 334, 64, 64, fin=False)}], record)
+    assert (cut["from_server"]["says"], cut["watermark_answer_in_sum"]) == ("bound: difference at least 0 bytes", 64)
+    paired = cf.compare([FIRST, SECOND], _record((300, 700), (120, None)))
+    assert (paired["from_server"]["says"], paired["watermark_answer_bytes"], paired["watermark_answer_in_sum"]) == \
+        ("agrees", 64, 0)
 
 
 def test_a_byte_the_record_doesnt_hold_and_a_flow_it_doesnt_hold_are_differences(tmp_path):
