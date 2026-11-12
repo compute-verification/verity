@@ -3143,7 +3143,7 @@
     {"file": "benchmarks/pouw/hidden_zk/send_check.sh", "count": 17},
     {"file": "benchmarks/pouw/lean_headline.py", "count": 7},
     {"file": "benchmarks/pouw/lean_headline_dc.py", "count": 10},
-    {"file": "benchmarks/pouw/machine_model/data/table.toml", "count": 1},
+    {"file": "benchmarks/machine_model/data/table.toml", "count": 1},
     {"file": "benchmarks/pouw/masked_gemm/egemm.cu", "count": 3},
     {"file": "benchmarks/pouw/masked_gemm/lpgemm.cu", "count": 3},
     {"file": "benchmarks/pouw/masked_gemm/mgemm.cu", "count": 2},
@@ -5461,6 +5461,8 @@
     {"file": "security/Proofs/WeightSecurity.lean", "count": 16},
     {"file": "security/Proofs/WeightSecurity/Reg.lean", "count": 9},
     {"file": "security/Proofs/WeightSecurity/RegPeriod.lean", "count": 20},
-    {"file": "security/Proofs/WeightSecurity/RegWitnesses.lean", "count": 6}
+    {"file": "security/Proofs/WeightSecurity/RegWitnesses.lean", "count": 6},
+    {"file": "security/Proofs/Flock/SpotFlock/AddressesAt.lean", "count": 4},
+    {"file": "security/Proofs/Flock/SpotFlock/WireMap.lean", "count": 3}
   ]
 }

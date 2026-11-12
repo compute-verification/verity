@@ -18,7 +18,7 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
- "meaning": ["NetworkCheck", "NetworkCertifier"],
+ "meaning": ["NetworkCheck", "NetworkCertifier", "Base"],
  "layers": {
   "NetworkCheck.Certificate": {
    "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon", "Identity.Tagged"],
@@ -59,9 +59,6 @@
    "except": [],
    "why": "the clock openings are code: v4's certificate and sync, its encodings and its one LMS check, no Mathlib, nothing of Security and nothing of the inference-only policy's check, so `network-records` builds without it"
   }
- },
- "reads_exempt": {
-  "Base": "the bytes, hashes and parsing below C-Flock (`core_base`), excepted with C-Flock until its spec is extracted: the records check's evidence bridge reads its `V`, JSON accessors and `unhex`, on both sides of its equation"
  },
  "guarantees": {
   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
@@ -149,6 +146,23 @@
   }
  },
  "reads": {
+  "Base.Bytes": {
+   "digest": "eac9ae1a7ef63f519e5b78ddeef06e91a00cd7c1d46f8f3c28c9476d8ad332cf",
+   "definitions": {
+    "Flock.V": "9a2fbe4642d5cc5cadfef0c823bb3b77ffe1f0a9ec677602dad8a142eeb4f4ee",
+    "Flock.unhex": "8bd6065ce900e4d8fc7e4d2a2c53501ed1e58aa583d9f77c275fa70e9e300f8a"
+   }
+  },
+  "Base.Canon": {
+   "digest": "42ff3c69beb2a0b5638e6dde39c656c79bbf13cfab1f090513868d52b2bec928",
+   "definitions": {
+    "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
+    "Flock.J.asArr": "8c8fe69a75431b26078e305bdad40a3b268662295d9220586464d390d136c81e",
+    "Flock.J.asNat": "49b227feff28956c302a2052b79f700f29c909592cc1608bb096b432f5830089",
+    "Flock.J.asStr": "313977466d5e7304826be7ecbdd33553eb995855321e50f66a2c24dafce41fae",
+    "Flock.J.get": "83264da7cfd473882e5cd6482d8674aa9f59c256d3389bc2ff70c0e5713ebccc"
+   }
+  },
   "NetworkCertifier.Grid": {
    "digest": "59a58292501a755ca4903f9c9ad222cf7241923d31b27272557daa397f783bcd",
    "definitions": {
