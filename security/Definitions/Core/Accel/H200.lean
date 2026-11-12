@@ -23,7 +23,7 @@ def card : Card where
     | .reg => 132 * (65536 + 4494)
     | .smem => 132 * 65536
     | .l2 => 50 * 2 ^ 20 / 4
-    | .dram => 141 * 2 ^ 30 / 4
+    | .dram => 144 * 2 ^ 30 / 4
   size_pos := by intro s; cases s <;> decide
   ρ
     | .tensor => 132 * 4096 * tensorClock
@@ -40,6 +40,6 @@ def card : Card where
     | .b1 => 1 / 8
     | _ => 1
   exact := 31
-  text := 141 * 2 ^ 30 / 16
+  text := 144 * 2 ^ 30 / 16
 
 end Verity.Accel.H200

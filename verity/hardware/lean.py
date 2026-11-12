@@ -10,7 +10,8 @@ it, so a number written another way, or an arm moved, is a changed record though
 - a clock, and device memory's rate, is its millions times ``10 ^ 6``; every other rate is ``SMs * the entry *`` the name
   of its clock;
 - a per-SM store is ``SMs * the entry``; a store in bytes is the bytes in binary units (``binary``) over the bytes of a
-  word, and ``text`` the same over an instruction's bytes;
+  word, and ``text`` the same over an instruction's bytes; device memory is ``store.dram_installed``, the memory on the
+  board, the entry a registered sheet reads (``verity.hardware.site.Sheet.of_file``), in ``size`` and in ``text``;
 - a field's arms are in the card file's order, and constructors whose arms read the same share the first one's
   (``arms``); ``weight``'s arms are the formats whose weight is not 1, in ``FORMATS``' order, and the rest are its
   default.
@@ -41,6 +42,8 @@ CARD = "Definitions.Core.Accel.Card"
 #: ``weight``'s arms, in order: the formats that have one where their weight is not 1. A format this doesn't name goes
 #: after these, in the card file's order. An arm's place is part of the term (a match's alternatives are positional).
 FORMATS = ("nvf4", "mxf4", "f16", "bf16", "tf32", "f64", "b1")
+#: The card file's entry a table's device memory is: the memory on the board, the larger of the card's two readings.
+DRAM = "dram_installed"
 #: The one command that writes the generated modules: each module's header names it, and so does the test's failure.
 COMMAND = "uv run python -m verity.hardware.lean --write"
 
@@ -70,11 +73,11 @@ def table(card: dict | str) -> tuple[dict[str, Fraction], dict[str, dict[str, Fr
     store = card["store"]
     size = {"reg": sms * (number(store["reg"]) + number(store["reg_extra"])),
             "smem": sms * number(store["smem"]) / WORD, "l2": number(store["l2"]) / WORD,
-            "dram": number(store["dram"]) / WORD}
+            "dram": number(store[DRAM]) / WORD}
     rho = {r: rate(card, r) for r in [*card["rate"], "dram"]}
     return clocks, {"size": size, "ρ": rho, "weight": {f: number(e) for f, e in card["weight"].items()},
                     "exact": number(card["model"]["exact"]),
-                    "text": number(store["dram"]) / number(card["model"]["instruction_bytes"])}
+                    "text": number(store[DRAM]) / number(card["model"]["instruction_bytes"])}
 
 
 def numeral(q: Fraction, *, nat: str | None = None) -> str:
@@ -152,7 +155,7 @@ def render(card: dict | str) -> str:
     size = [("reg", f"{count} * ({whole(number(store['reg']), 'store.reg')} + "
                     f"{whole(number(store['reg_extra']), 'store.reg_extra')})"),
             ("smem", f"{count} * {whole(number(store['smem']) / WORD, 'store.smem in words')}"),
-            *((s, over(s, Fraction(WORD), f"store.{s} in words")) for s in ("l2", "dram"))]
+            *((s, over(key, Fraction(WORD), f"store.{key} in words")) for s, key in (("l2", "l2"), ("dram", DRAM)))]
     weights = fields["weight"]
     listed = sorted((f for f in weights if weights[f] != 1),
                     key=lambda f: FORMATS.index(f) if f in FORMATS else len(FORMATS))
@@ -168,7 +171,8 @@ def render(card: dict | str) -> str:
         "  ρ", *arms([(r, resource(r)) for r in fields["ρ"]]),
         "  weight", *arms([(f, numeral(weights[f])) for f in listed], "1" if len(listed) < len(weights) else None),
         f"  exact := {whole(fields['exact'], 'model.exact')}",
-        "  text := " + over("dram", number(card["model"]["instruction_bytes"]), "store.dram over model.instruction_bytes"),
+        "  text := " + over(DRAM, number(card["model"]["instruction_bytes"]),
+                            f"store.{DRAM} over model.instruction_bytes"),
         "",
         f"end Verity.Accel.{name}", ""])
 
