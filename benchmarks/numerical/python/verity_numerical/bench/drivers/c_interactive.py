@@ -17,9 +17,15 @@ TCP-connect RTT probe to ``RTT_TARGET`` (the verifier pod's sshd) before the swe
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
+from typing import Any
+
+__all__ = ["BACKEND", "FAMILY", "INTERACTIVE", "RESULT", "jobs", "register", "unmet"]
 
 BACKEND = "C-interactive"
 FAMILY = "C-Flock"
@@ -45,9 +51,6 @@ def supports_relation(relation: str, sub, scheme: str):
 
 def set_tarball(cell) -> str:
     """The cell's input set as one tarball both pods receive (``research run --send``), under ``$TMPDIR/verity-cell-sets``."""
-    import tarfile
-    import tempfile
-
     src = Path(cell.input_set["path"])
     out = Path(tempfile.gettempdir()) / "verity-cell-sets" / f"{cell.input_set['content_digest']}.tar"
     if not out.exists():
@@ -111,16 +114,20 @@ def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> li
     return [cmd + ["--lane", cell.lane] if takes_lane() else cmd]
 
 
-def ir_binary(prover_run: Path) -> str:
-    """An IR cell's verifier binary: the prover's own (the result's ``software.backend.name``: ``flock-ir-frame``, or
-    ``flock-ir-sampling`` for the sampling statement), ``flock-ir-frame`` when the result does not say."""
-    import json
+def _backend_name(result: Any) -> str | None:
+    """A result's ``workload_fingerprint.software.backend.name``; None where it names none."""
+    for key in ("workload_fingerprint", "software", "backend", "name"):
+        result = result.get(key) if isinstance(result, dict) else None
+    return result if isinstance(result, str) and result else None
 
+
+def ir_binary(prover_run: Path) -> str:
+    """An IR cell's verifier binary: the prover's own (the ``software.backend.name`` of the run's first ``result.json`` that
+    names one: ``flock-ir-frame``, or ``flock-ir-sampling`` for the sampling statement), ``flock-ir-frame`` when none does.
+    A ``result.json`` that is no JSON raises."""
     for p in (Path(prover_run) / "result.json", *Path(prover_run).glob("**/result.json")):
-        try:
-            return json.loads(p.read_text())["workload_fingerprint"]["software"]["backend"]["name"] or "flock-ir-frame"
-        except (OSError, ValueError, KeyError, TypeError):
-            continue
+        if p.is_file() and (name := _backend_name(json.loads(p.read_text()))):
+            return name
     return "flock-ir-frame"
 
 
