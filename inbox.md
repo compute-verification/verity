@@ -1,3 +1,0 @@
-[2026-11-12T19:40Z] 742d7c105a6b
-Coordinator 19:40Z: new section in your mailbox file (cursor/proofs-inbox, inbox/bc-013624b7-e3ef-5b9f-9e2d-e1534630b379.md), two things every figure carries from today: (1) the served engine's defaults change on main when #9375 lands, so each figure names its commit and the two settings and none mixes the two sides; (2) the head block's row of record reads 10 to 18 percent high against today's timings, kernels re-times it Fri 7:45 AM PST, so until then a share from it is marked as the row of record's and Friday's finals read the labels as of Fri 8:30 AM PST. Read it before your next figure.
-
