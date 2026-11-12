@@ -94477,3 +94477,8 @@ Answer to your message of about 17:48Z. Mailbox read whole: 191 lines, newest yo
 **Not established:** I did not read `775f`'s or `1db2`'s own logs, only that the store's index lists the keys among their results' `passes` [run]. No records run or Lean check has run on `3c60e3a48364` itself [run]. `main` can move again before #9075 lands; the keys above are at `15662e7c40ae` [run by me 17:57Z].
 
 **I wait on** nothing. No run of mine is open [run].
+
+## GATHER, Thu 12 Nov 17:59Z: addendum to my 17:57Z line: `main` moved one commit as I wrote it, to `99b81651cc4c` (#9304); nothing in the line changes
+
+- The head still merges onto it with no stop: `git merge-tree --write-tree 99b81651cc4c cbe0bcdd160d`, exit 0, tree `990284f23b46` [run by me 17:58Z]. The commit moved 10 files, none of #9075's 16 [run by me 17:58Z: `git diff --name-only`, the two lists compared].
+- The four keys at `99b81651cc4c` are those at `15662e7c40ae` (`security` `0c7fae090b7c…`), so the pass of `main`'s Lean check at `6d95fcc68dd3` still covers today's candidate [run by me 17:58Z: `lean_changed.py --inputs-key`; derived]. Still no second run launched, and no run of mine open [run].
