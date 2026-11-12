@@ -225,6 +225,62 @@ def test_history_tables_start_on_rank_0_at_the_first_step_with_a_kv_cache_outsid
     assert other.state == {"hook": None} and steps == [3, 4] and len(made) == 2
 
 
+def test_tables_that_cant_start_fail_every_step_and_a_refused_cache_stops_the_engine_as_it_binds_its_caches(monkeypatch):
+    """A step whose tables can't start raises, and so does every step after it: none is served with the tables off. The
+    guard itself (the step hook's construction, stood in for here) runs on rank 0 as Model Runner V2 binds its caches,
+    so an engine whose cache the tables can't read never serves a step."""
+    import pytest
+
+    def refuse(runner, cfg):
+        raise ValueError("serve with --kv-cache-dtype auto")
+
+    monkeypatch.setattr(P, "rank0_tables", refuse)
+    run = P._tables_runner(lambda self, so, **kw: "out", {"out": "."}, capturing=lambda: False, rank=lambda: 0)
+    runner = NS(kv_caches=["kv"])
+    for step in range(3):
+        with pytest.raises(ValueError, match="--kv-cache-dtype auto"):
+            run(runner, step)
+    assert run.state == {}
+
+    class Channel:
+        def start(self, builder):
+            raise RuntimeError("no thread")
+
+    monkeypatch.setattr(P, "rank0_tables", lambda runner, cfg: ("hook", Channel(), "b"))
+    for step in range(2):
+        with pytest.raises(RuntimeError, match="no thread"):
+            run(runner, step)
+    assert run.state == {}
+
+    hooks, bound = [], []
+
+    def step_hook(model, layers):
+        hooks.append((model, layers))
+        if model == "fp8":
+            raise ValueError("its cache doesn't hold DsaLatentRow_v1's 576 bf16 words a row; serve with --kv-cache-dtype auto")
+
+    tables = types.ModuleType("verity_vllm.pipeline.boundary_tables")
+    tables.StepHook, tables.layers_of = step_hook, lambda spec: tuple(range(spec))
+    monkeypatch.setitem(sys.modules, tables.__name__, tables)
+    if "verity_vllm.pipeline" in sys.modules:
+        monkeypatch.setattr(sys.modules["verity_vllm.pipeline"], "boundary_tables", tables, raising=False)
+    cfg = {"boundary_rows": {"tables": {"layers": 2}}}
+
+    def initialize(self, config, is_profiling=False):
+        bound.append(config)
+        self.kv_caches = ["kv"]
+        return "bound"
+
+    guard = P._tables_guard(initialize, cfg, rank=lambda: 0)
+    assert guard(NS(model="bf16"), "c", is_profiling=False) == "bound" and hooks == [("bf16", (0, 1))]
+    with pytest.raises(ValueError, match="DsaLatentRow_v1.*serve with --kv-cache-dtype auto"):
+        guard(NS(model="fp8"), "c")
+    # another rank reads no rows, and a runner that bound no cache has none to refuse
+    assert P._tables_guard(initialize, cfg, rank=lambda: 1)(NS(model="fp8"), "c") == "bound"
+    assert P._tables_guard(lambda self, c: "none", cfg, rank=lambda: 0)(NS(model="fp8"), "c") == "none"
+    assert len(bound) == 3 and len(hooks) == 2
+
+
 class RankExecutor:
     """A stand-in tensor-parallel executor: three ranks answering `boundary.rank_pool` and `boundary.rank_take`, rank 2's
     root different."""

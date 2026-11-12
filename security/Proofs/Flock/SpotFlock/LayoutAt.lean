@@ -155,7 +155,7 @@ theorem placesAt_layoutAt (rank : Msg → Msg → Msg → ℕ → ℕ) {pick : �
     exact (col_val a hgi (Fin.cast (congrArg FlockSoundness.Rows.w (rows_keyProg hU a hparse k)) cc)).symm
 
 /-- **A session statement that passes round 2 has a table** (`zkOk_sound`). -/
-theorem sts_pos_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ} {p : Parsed}
+theorem sts_pos_of_stmtOkAt {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {t : ℕ} {p : Parsed}
     (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) (hp : parseBytes (FlockDeploy.readOf true) xS = some p) :
     0 < p.sts.size := by
   have hs := sessionOk_of_stmtOkAt h hok

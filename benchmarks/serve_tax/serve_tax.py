@@ -59,17 +59,22 @@ The arms, each one engine configuration; each adds its change to the arm it name
   seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under a fresh key
   and copied to pinned host memory (on the ranks ``--kv-copy`` names), and the scheduler's state and each rank's runner
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
-- ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
-  window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object the two-stage
-  serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead (``check``,
-  ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``tables`` for each span's latent history tables
+- ``boundary-rows``: ``record`` with the two-stage audit's boundary commitment at serve, each window's finished
+  requests committed by size class (`verity_vllm.pipeline.boundary_rows`), vLLM's prefix cache left on, its object the
+  two-stage serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead
+  (``check``, ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``tables`` for each span's latent history tables
   (`servetax_plugin`) or ``stop``, the serve's stop rule, which has no tables), at ``--window-s``; the server is held
   after its loads until its windows' commits account for every finished request (`await_commits`).
 - ``canonical-topk``: ``compiled`` with the canonical DSA top-k (`benchmarks/dsa_topk`'s vLLM plugin, `TOPK`), which
   rewrites only the indexer's rows of more than 2,048 keys, so it acts on long contexts alone;
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
-  canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`). The line
-  is this arm's data and is stated nowhere else: a job that serves the two-stage audit serves this arm.
+  canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`), with
+  prefix caching off: a table holds its request's rows from position 0, and a request served from the cache computes
+  none before its hit's end (`BoundaryWindows.install` refuses the pair). The line is this arm's data and is stated
+  nowhere else: a job that serves the two-stage audit serves this arm.
+- ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
+  function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
+  and like every tick arm the corpus's client serves it, standing in for the certifier.
 - ``prod``: ``published``'s server, as the stock arm the arms made from it are costed over, at the same settings
   (`STOCK`, `stock_of`);
 - ``prod-again``: ``prod`` in a second server lifetime, the noise floor of a cost over ``prod``;
@@ -212,7 +217,8 @@ class Arm:
     rows: dict = field(default_factory=dict)
     #: whether the server starts as vLLM's recipe for the model starts it: the model's published flags added
     #: (`Model.published`), at the job's context limit or else the recipe's (`published_context`), the flags of
-    #: `BASE_ARGS` no recipe sets left to vLLM's own defaults (`UNPUBLISHED`), behind the job's front end (`FRONT_ENDS`)
+    #: `BASE_ARGS` no recipe sets left to vLLM's own defaults (`UNPUBLISHED`), behind the job's front end (`FRONT_ENDS`),
+    #: with the flags of vLLM's own the job adds to the line (`published_args`)
     published: bool = False
 
 
@@ -265,12 +271,12 @@ ARMS = {
                     "state and each rank's runner rows and generators taken and kept; no leaf dump, no per-step timing",
                     plugin=("record", "tokens"), edges=True, edge_dump=False, edge_busy=False),
     "boundary-rows": Arm("record", "+ the two-stage boundary commitment at serve: each window's finished requests committed "
-                         "by size class (boundary_rows), prefix caching off", ("--no-enable-prefix-caching",),
-                         plugin=("record", "boundary_rows"), rows=ROWS),
+                         "by size class (boundary_rows)", plugin=("record", "boundary_rows"), rows=ROWS),
     "canonical-topk": Arm("compiled", "+ the canonical DSA top-k (dsa_topk's plugin, VERITY_DSA_TOPK=canonical)",
                           env=TOPK_ENV, general=TOPK),
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
-                     "layer's history tables in the boundary commitment", ("--no-enable-prefix-caching",),
+                     "layer's history tables in the boundary commitment, prefix caching off",
+                     ("--no-enable-prefix-caching",),
                      plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
     "prod": Arm("published", "that server, as the stock arm the arms made from it are costed over", published=True),
     "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by",
@@ -278,6 +284,7 @@ ARMS = {
     "prod-record": Arm("prod", "+ the scheduler's step trace (StepTrace), each request's prompt ids and served ids, and "
                        "the canonical DSA top-k", plugin=("record", "ids"), env=TOPK_ENV, general=TOPK, published=True),
 }
+ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 #: the stock arms, vLLM with no change of ours: an arm's cost is over the nearest of them above it (`stock_of`)
 STOCK = ("compiled", "published", "prod")
 #: the changes of ours an arm's engine can have on, each read from the arm's data: what a serving cost is made of, and
@@ -413,8 +420,7 @@ MODELS = {
                    # own draft layer. The command's tokenizer mode is its Rust front end's, and the recipe names the
                    # other for a build without it. The command names no context limit and the model's own does not
                    # fit these cards' KV cache, so the limit is the one the recipe's command builder sets for these
-                   # cards. Under vLLM's `AUTO` the model is built at its own length before the limit is fitted,
-                   # and the engine's warm-up does not fit these cards at that length; a job may still name it
+                   # cards; a job that wants the longest the cache holds names `AUTO`
                    published=("--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
                               "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
                               "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
@@ -532,6 +538,17 @@ def published_context(arm: str, model_id: str | None, given: int | str | None) -
     return model.published_context if given is None else given
 
 
+def published_args(text: str | None) -> tuple[str, ...]:
+    """``--published-args``: the flags of vLLM's own a job adds to the line of an arm that starts the server as the
+    recipe does (the values a recipe leaves to the operator: the requests at once, the cards' share of memory), each one
+    ``--FLAG=VALUE``, comma-separated."""
+    args = tuple(x for x in (text or "").split(",") if x)
+    bad = [x for x in args if not x.startswith("--") or len(x.split("=")) != 2 or not all(x.split("=")) or " " in x]
+    if bad:
+        raise SystemExit(f"--published-args: {', '.join(bad)}: each flag is --FLAG=VALUE, the flags comma-separated")
+    return args
+
+
 def front_end(arm: Arm, given: str | None) -> str:
     """The front end ``arm``'s server starts behind: the job's (``--published-frontend``) for an arm that starts the
     server as the recipe does, and vLLM's Python server for every other arm, whose plugins and tick it loads."""
@@ -539,18 +556,27 @@ def front_end(arm: Arm, given: str | None) -> str:
 
 
 def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None,
-                max_model_len: int | str | None = None, front: str = PYTHON) -> list[str]:
+                max_model_len: int | str | None = None, front: str = PYTHON, added: Sequence[str] = ()) -> list[str]:
     """The server's command: vLLM's Python server, or behind `RUST` ``vllm serve``, the command that starts the Rust
-    front end (under `RUST_ENV`, `server_env`)."""
+    front end (under `RUST_ENV`, `server_env`). ``added`` (`published_args`) goes on the line of an arm that starts the
+    server as the recipe does, after the recipe's flags and the runner's, and is refused where it names a flag the line
+    already sets; no other arm's line takes it."""
     base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
     serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
              else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
     mode = model.published_tokenizer.get(front)
     published = (*model.published, *(("--tokenizer-mode", mode) if mode else ())) if arm.published else ()
-    return [sys.executable, "-m", *serve, "--served-model-name",
+    line = [sys.executable, "-m", *serve, "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *published, *base, *arm.args,
             *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
+    added = tuple(added) if arm.published else ()
+    flags = [x.split("=")[0] for x in added]
+    twice = sorted({f for f in flags if f in line or flags.count(f) > 1})
+    if twice:
+        raise SystemExit(f"--published-args: {', '.join(twice)}: the arm's line sets it already; name each flag once, "
+                         "and the context limit with --max-model-len")
+    return [*line, *added]
 
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
@@ -1618,7 +1644,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     site = plugin_site(out / ".site", arm)
     port = corpus().free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
-    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front)
+    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
+                       published_args(getattr(a, "published_args", None)))
     BODY_EXTRA.clear()
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
@@ -3324,6 +3351,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
     r.add_argument("--published-frontend", choices=FRONT_ENDS, help="the front end of an arm that starts the server as "
                    "the model's recipe does (default: python, which the other arms have)")
+    r.add_argument("--published-args", metavar="FLAG=VALUE,...", help="flags of vLLM's own added to that arm's line, each "
+                   "--FLAG=VALUE, given as --published-args=--FLAG=VALUE,... (no other arm's line takes them)")
     r.add_argument("--max-model-len", type=context_arg, help="the engines' context limit, a number of tokens or auto "
                    "(default: BASE_ARGS's)")
     r.add_argument("--edges-s", metavar="S,S,...", help="the restore arms' edges, seconds after the first load's first request")

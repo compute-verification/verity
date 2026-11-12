@@ -60,9 +60,6 @@ envs:
   RESEARCH_PY: /workspace/jobs/bin/py312
   RESEARCH_RUNS: /workspace/jobs/runs
   RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
-  HOT_ROOT: /workspace/jobs/hot
-  HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
-  HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
   GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
   BUILD_JOBS: auto
   BUILD_RAM_BUDGET_GB: "160"
@@ -152,9 +149,6 @@ envs:
   RESEARCH_PY: /workspace/jobs/bin/py312
   RESEARCH_RUNS: /workspace/jobs/runs
   RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
-  HOT_ROOT: /workspace/jobs/hot
-  HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
-  HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
   GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
   OV_NOISY: "true"
   REPLAY_DEFERRED: auto     # auto: defer when the tree has the CPU replay (PR B); 1 or 0 forces it
@@ -296,9 +290,6 @@ envs:
   RESEARCH_PY: /workspace/jobs/bin/py312
   RESEARCH_RUNS: /workspace/jobs/runs
   RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
-  HOT_ROOT: /workspace/jobs/hot
-  HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
-  HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
   GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
   VERITY_UNIT_RULE_CACHE: /workspace/jobs/cache/unit-rules
   UV_CACHE_DIR: /workspace/jobs/cache/uv

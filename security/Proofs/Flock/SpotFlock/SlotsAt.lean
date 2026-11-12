@@ -118,7 +118,7 @@ end Columns
 
 namespace CheckedRun
 
-variable (r : CheckedRun)
+variable (r : CheckedRun h.stage)
 
 /-- **The unit's instance is one of its session's first table's instances.** -/
 def Counted : Prop := r.n h < r.sts[0]!.pub.n
@@ -166,7 +166,7 @@ def slotsOf (addr : ℕ → Option Address) (g : ℕ) : Option Slot := (addr g).
 
 namespace CheckedRun
 
-variable {h} {r : CheckedRun}
+variable {h} {r : CheckedRun h.stage}
 
 /-- **An accepted run's checked unit's session has a table** (`zkOk_sound`). -/
 theorem sts_pos (hr : r.Ok h) : 0 < r.sts.size := by
@@ -309,7 +309,7 @@ end CheckedRun
 /-- **`SlotsAt` at any address map whose addresses hold**: where each gate a checked unit of an accepted run needs has
 an address that holds there (`CheckedRun.slotsAtGate`). -/
 theorem slotsAt_of {addr : ℕ → Option Address}
-    (hS : ∀ r : CheckedRun, r.Ok h → ∀ g, r.s.prog.Needs r.b g → ∃ S, addr g = some S ∧ r.AddressHolds h S g)
+    (hS : ∀ r : CheckedRun h.stage, r.Ok h → ∀ g, r.s.prog.Needs r.b g → ∃ S, addr g = some S ∧ r.AddressHolds h S g)
     (c₀ : Code) : SlotsAt h (slotsOf addr) (revealCode h addr c₀) (layoutFor h) := by
   intro x s Pt d m₀ m₁ m₂ c₀' c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
   have hr : CheckedRun.Ok h ⟨x, s, m₀, m₁, m₂, c₀', c₁, rest, wF, u, b, ρ, rb, ins, sts⟩ :=
@@ -320,19 +320,20 @@ theorem slotsAt_of {addr : ℕ → Option Address}
 /-- **Every gate's value has one address**, fixed before the run, that holds at every accepted run's checked unit that
 needs the gate (`CheckedRun.AddressHolds`). The premise `SlotsAt` rests on (the module's docstring). -/
 def Addresses : Prop :=
-  ∀ g, ∃ S : Address, ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g
+  ∀ g, ∃ S : Address, ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g
 
 open Classical in
 /-- **The address map**: each gate's address where it has one that holds at every run that needs it. -/
 noncomputable def addressMap (g : ℕ) : Option Address :=
-  if hx : ∃ S : Address, ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g then some hx.choose
+  if hx : ∃ S : Address, ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g then
+    some hx.choose
   else none
 
 /-- **The slot map**: each gate's address's slot. -/
 noncomputable def slotMap : ℕ → Option Slot := slotsOf (addressMap h)
 
 theorem addressMap_spec (hS : Addresses h) (g : ℕ) :
-    ∃ S, addressMap h g = some S ∧ ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g :=
+    ∃ S, addressMap h g = some S ∧ ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g :=
   ⟨(hS g).choose, dite_eq_left (hS g), (hS g).choose_spec⟩
 
 /-- **`SlotsAt` at the slot map** (the module's docstring). -/
