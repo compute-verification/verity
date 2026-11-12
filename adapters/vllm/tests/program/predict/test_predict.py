@@ -453,6 +453,34 @@ def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
         build_program(_phi(cfg, **phi_kw), "step")
 
 
+@pytest.mark.parametrize("empty", ["absent", None, {}, 0, "", False, []])
+def test_a_family_that_states_no_rules_facts_or_constructor_is_read_as_one_with_none(monkeypatch, empty):
+    """A family's entry of the family facts table may leave `rules`, `facts` or `arch` out, or state it empty.  The predictor then
+    reads no rule (qwen2 without its rule has no q/k/v bias), no fact the vocabulary lacks, and no constructor, which
+    `model_shape` refuses by name."""
+    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
+    from verity_vllm.program.predict import model_shape as MS
+    cfg = {**TINY, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "use_sliding_window": False, "sliding_window": 32}
+    stated = FAMILY_FACTS["qwen2"]
+
+    def entry(block: str) -> dict:
+        rest = {k: v for k, v in stated.items() if k != block}
+        return rest if empty == "absent" else {**rest, block: empty}
+
+    as_stated = model_shape(cfg)
+    assert as_stated.qkv_bias
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("rules"))
+    assert not model_shape(cfg).qkv_bias
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("facts"))
+    with monkeypatch.context() as m:
+        m.setattr(MS, "resolve_facts", lambda hf, C: ({}, {}))    # the table's own reader of the block is not the predictor's
+        assert model_shape(cfg) == as_stated
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("arch"))
+    named = None if empty == "absent" else empty
+    with pytest.raises(Unexpressible, match=re.escape(f"family 'qwen2' constructor {named!r} (the dense and MoE blocks only)")):
+        build_program(_phi(cfg), "step")
+
+
 def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():
     """No module outside `verity_vllm.program.predict` imports it: the record path runs it only as `predict emit`, the derive of a switched
     row's AOT Build (`row_tp.TpRow.derive`, under `config_record.aot_of`; `tests/pipeline/test_tp_build_width.py`), and the trace
