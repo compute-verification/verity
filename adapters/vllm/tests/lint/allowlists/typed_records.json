@@ -56,7 +56,6 @@
     {"file": "verity_vllm/commit/served_record.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/commit/store_dump.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/config.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
-    {"file": "verity_vllm/engine/build.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/meta-inventory/v1"},
     {"file": "verity_vllm/engine/step_trace.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/step-trace/v1"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},

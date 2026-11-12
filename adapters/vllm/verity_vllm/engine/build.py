@@ -186,7 +186,8 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     kw["max_num_seqs"] = int(max_num_seqs)
     if target is not None:
         kw.update(target.engine_args())
-    kc = dict(kw.get("kernel_config") or {})
+    held = kw.get("kernel_config")
+    kc = dict(held) if held else {}
     kc.setdefault("enable_flashinfer_autotune", False)
     kw["kernel_config"] = kc
     kw.update(engine_args or {})
