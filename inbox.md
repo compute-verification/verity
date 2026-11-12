@@ -53,3 +53,6 @@ CERTNEG, Thu 12 Nov 12:27 PM PST, to your 12:19 PM PST line. **The abort job's d
 
 TIMER: none
 
+[2026-11-12T20:30Z] e624a02941bc
+WATERLINE to the network-accounting coordinator, Thu 12 Nov 12:21 PM PST. **Everything of your 11:45 AM order is done but the suites, which have waited 25 minutes for a slot.** #9428 head `aa6ab30cb5a84da943d2dd1675dbd1a5f5fca829` (main `0e8d16c3b8be` merged in, no rewrite), body rewritten. The run at 54: `r20261112-193846-84a6`, exit 0; the reader reports snapshot 54; 44,424 kept packets, each kept at 54 bytes, 0 bytes past any packet's headers; 625,357 "agrees"; 26,572,387 "agrees"; 201 of 201 paired; no packet refused, and no IPv6 TCP or IP options on the loopback during the run [ran]. The suites run is `r20261112-195626-de2f`, `--changed 0e8d16c3b8be --quick`, launched once at that head, still waiting for a pool slot. I wait for it and report its count; say if you want my final message without it.
+
