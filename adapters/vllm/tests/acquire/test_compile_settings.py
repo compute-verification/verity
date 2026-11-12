@@ -1,10 +1,11 @@
 """What `compile_settings` records of a built engine's compilation, and where it finds the engine's configuration.
 
-The Commit hands it the engine (`pipeline.commit`).  It reads the configuration from the engine, else from a model runner it is
-given, else from the engine's in-process model runner (`verity_vllm.engine.handle`), and records nothing but the compile cache's
-switch where it finds none.  The engines here are stand-ins that hold only the attributes read.  CPU only."""
+The Commit hands it the engine (`pipeline.commit`).  It reads the configuration from the engine, else from the engine's in-process
+model runner (`verity_vllm.engine.handle`), and records nothing but the compile cache's switch where it finds none.  The engines
+here are stand-ins that hold only the attributes read.  CPU only."""
 from __future__ import annotations
 
+import inspect
 import types
 from typing import Any
 
@@ -75,31 +76,30 @@ def test_at_most_256_capture_sizes_are_recorded() -> None:
     assert compile_settings(_engine(config))["cudagraph_capture_sizes"] == list(range(45, 301))
 
 
-@pytest.mark.parametrize(("llm", "runner", "mode"), [
-    (_engine(_config(1)), None, 1),
-    (_engine(_config(1)), ns(vllm_config=_config(2)), 1),
-    (_engine(None), ns(vllm_config=_config(2)), 2),
-    (None, ns(vllm_config=_config(2)), 2),
-    (ns(), ns(vllm_config=_config(2)), 2),
-    (_in_process(_config(3)), None, 3),
-    (_in_process(_config(3)), ns(vllm_config=None), 3),
-    (_in_process(_config(3)), ns(vllm_config=_config(2)), 2),
-    (ns(llm_engine=_in_process(_config(3))), None, 3),
+@pytest.mark.parametrize(("llm", "mode"), [
+    (_engine(_config(1)), 1),
+    (ns(llm_engine=_in_process(_config(3), vllm_config=_config(1))), 1),
+    (_in_process(_config(3)), 3),
+    (ns(llm_engine=_in_process(_config(3))), 3),
+    (ns(llm_engine=_in_process(_config(3), vllm_config=None)), 3),
 ])
-def test_the_configuration_is_the_engines_then_a_given_runners_then_the_in_process_runners(llm: Any, runner: Any, mode: int) -> None:
-    assert compile_settings(llm, runner) == _stated(mode)
+def test_the_configuration_is_the_engines_then_the_in_process_runners(llm: Any, mode: int) -> None:
+    assert compile_settings(llm) == _stated(mode)
 
 
-@pytest.mark.parametrize(("llm", "runner"), [
-    (None, None),
-    (None, ns()),
-    (ns(), None),
-    (_engine(None), ns(vllm_config=None)),
-    (_in_process(None), None),
-    (ns(engine_core=ns(model_executor=ns(driver_worker=None))), None),
+@pytest.mark.parametrize("llm", [
+    None,
+    ns(),
+    _engine(None),
+    _in_process(None),
+    ns(engine_core=ns(model_executor=ns(driver_worker=None))),
 ])
-def test_an_engine_that_states_no_configuration_in_this_process_is_recorded_by_the_cache_switch_alone(llm: Any, runner: Any) -> None:
-    assert compile_settings(llm, runner) == NOTHING
+def test_an_engine_that_states_no_configuration_in_this_process_is_recorded_by_the_cache_switch_alone(llm: Any) -> None:
+    assert compile_settings(llm) == NOTHING
+
+
+def test_the_engine_is_all_it_takes() -> None:
+    assert list(inspect.signature(compile_settings).parameters) == ["llm"]
 
 
 def test_an_engine_is_found_as_the_handle_finds_it() -> None:

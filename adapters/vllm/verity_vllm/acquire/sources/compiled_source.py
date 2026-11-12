@@ -10,14 +10,12 @@ from verity_vllm import settings
 from verity_vllm.engine import handle
 
 
-def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
+def compile_settings(llm: Any = None) -> dict[str, Any]:
     """What is actually compiled / graphed in this engine: CompilationMode, CUDAGraphMode, capture sizes, splitting ops, inductor graph
     partition, enforce_eager.  Recorded for every attempt (control and treatment must agree)."""
     out: dict[str, Any] = {}
     try:
         vc = getattr(handle.engine_of(llm), "vllm_config", None)
-        if vc is None and runner is not None:
-            vc = getattr(runner, "vllm_config", None)
         if vc is None and llm is not None:
             try:
                 vc = getattr(handle.model_runner(llm), "vllm_config", None)
