@@ -135,6 +135,33 @@ def test_fast_row_digests_are_s512_rows(host, k, rows):
         assert host.read(out, 64 * rows) == want, sha
 
 
+@pytest.mark.parametrize("k", [33024, 128256, 1000, 0])
+@pytest.mark.parametrize("sha,scratch", [("fast", 64), ("ref", 64), ("fast", 0)])
+def test_row_digests_refuse_a_row_their_kernels_cant_take(host, monkeypatch, k, sha, scratch):
+    """pearl_c_sm120/run.py's `row_digests` launches nothing for a row past RS_MAX_SEGS segments, or of k not a positive
+    multiple of 256: s512_rows, s512_row_segs and s512_folds hold no bound of their own, and past it they read and write out
+    of bounds (the fast path can return a wrong digest with no error)."""
+    launched = []
+    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.append(name))
+    with pytest.raises(ValueError, match="^s512_rows takes"):
+        R.Pipeline.row_digests(SimpleNamespace(dev=host, k=k, sha=sha), 0, 0, scratch, 1)
+    assert not launched
+
+
+def test_a_row_digest_launch_its_kernel_cant_take_never_reaches_the_device():
+    """`rs_refusal`, which pearl_c_sm120/run.py's `Dev.launch` raises before anything else, so whatever calls it: each of
+    RS_KERNELS past RS_MAX_SEGS segments (hash_h3.cuh's constant), or with k not a positive multiple of 256.  Up to 128
+    segments, and the tile leaves' folds, go through."""
+    assert R.RS_MAX_SEGS == int(re.search(r"\bRS_MAX_SEGS = (\d+)", (HERE / "hash_h3.cuh").read_text()).group(1))
+    assert set(R.RS_KERNELS) == {"s512_rows", "s512_row_segs", "s512_folds"}
+    for name, i in (("s512_rows", (3, 32768)), ("s512_row_segs", (3, 256)), ("s512_folds", (5, 128, 5, 128)), ("s512_folds", (9, 32, 8, 31))):
+        assert R.rs_refusal(name, i) is None
+    for name, i in (("s512_rows", (1, 33024)), ("s512_row_segs", (1, 128256)), ("s512_folds", (4, 129, 4, 129)),
+                    ("s512_folds", (4, 32, 2, 501)), ("s512_rows", (1, 1000)), ("s512_row_segs", (1, 0)), ("s512_rows", ())):
+        with pytest.raises(ValueError, match=f"^{name} takes"):       # before `self` is read: nothing is launched
+            R.Dev.launch(None, name, 1, 128, p=(0, 0), i=i)
+
+
 def unit_block(salt: bytes, root_b: bytes, unit: int) -> bytes:
     """-h3's unit block (hash_h3.cuh's `s512_seeds`): salt ‖ root_B (64 B) ‖ the unit index u64 LE."""
     return salt + root_b + unit.to_bytes(8, "little")

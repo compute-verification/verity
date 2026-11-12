@@ -273,7 +273,10 @@ class Dev:
         self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, self.stream if stream is None else stream)
 
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None, pdl: bool = True) -> None:
-        """`name` on `stream` (else `stream`'s attribute); one of `pdl_names` programmatically unless `pdl` is False."""
+        """`name` on `stream` (else `stream`'s attribute); one of `pdl_names` programmatically unless `pdl` is False.  A
+        row-digest launch its kernel can't take is refused here, before the device (`rs_refusal`)."""
+        if name in RS_KERNELS and (why := rs_refusal(name, i)):
+            raise ValueError(why)
         a = Args()
         for j, v in enumerate(p):
             a.p[j] = v
@@ -335,8 +338,10 @@ def cdiv(a: int, b: int) -> int:
 TILE = 64                                        # the leaf's tile
 #: a tree node's bytes: SHA-512's
 NB = 64
-#: s512_rows' most segments a row (hash_h3.cuh's RS_MAX_SEGS), 1 KiB each
+#: s512_rows' most segments a row (hash_h3.cuh's RS_MAX_SEGS), 1 KiB each, and hash_fast.cuh's header tables'
 RS_MAX_SEGS = 128
+#: the row-digest kernels with the slot of `i` that holds k, each held to RS_MAX_SEGS segments by `rs_refusal`
+RS_KERNELS = {"s512_rows": 1, "s512_row_segs": 1, "s512_folds": None}
 #: hash_fast.cuh's blocks: the segment kernels' (RS_FAST_NT, as built) and s512_folds' (RS_FOLD_NT)
 RS_FAST_NT, RS_FOLD_NT = int(os.environ.get("PEARLC_RS_FAST_NT", "128")), 32
 #: their scratch, the segment digests of A's rows, B's and the tiles'
@@ -371,6 +376,24 @@ PD_STAMP_BYTES = 16 * PD_SLOTS * (PD_MAX_ROWS + 1)
 #: PL_SEEDS rows a CTA.  Ranks and indices below PL_MAX_ROWS; "h3" is hash_h3.cuh's launches (hm_leaves, s512_frame_leaves,
 #: s512_nodes, s512_tree_small, s512_seeds)
 PL_VARIANT, PL_ROWS, PL_LEVELS, PL_SEEDS, PL_MAX_ROWS, CHAINS = 851, 16, 7, 32, 1 << 16, ("pl", "h3")
+
+
+def rs_refusal(name: str, i) -> str | None:
+    """Why a launch of one of RS_KERNELS with the ints `i` must not reach the device, None if it may.  The kernels hold no
+    bound of their own: past RS_MAX_SEGS segments a row they write shared memory and read their header tables out of
+    bounds, and can return a wrong digest with no error.  Each takes rows of whole segments (k a positive multiple of
+    256), s512_folds a count of them."""
+    slot, i = RS_KERNELS[name], (*i, 0, 0, 0, 0)
+    if slot is None:                                         # s512_folds: i1 segments a unit, i3 the rest's
+        segs = max(i[1], i[3])
+    else:
+        k = i[slot]
+        if k <= 0 or k % 256:
+            return f"{name} takes rows of whole 1 KiB segments (k a positive multiple of 256), not k = {k}"
+        segs = k // 256
+    if segs <= RS_MAX_SEGS:
+        return None
+    return f"{name} takes at most {RS_MAX_SEGS} 1 KiB segments a row (k <= {256 * RS_MAX_SEGS}), not {segs}"
 
 
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
@@ -547,8 +570,8 @@ class Pipeline:
         self.tile = tile_suffix(self.bm, self.bn)
         if m % self.bm or n % self.bn or k % 256 or k < 256:
             raise ValueError(f"the kernels take m a multiple of {self.bm}, n of {self.bn} and k of 256, not {(m, n, k)}")
-        if 4 * k > RS_MAX_SEGS * 1024:
-            raise ValueError(f"s512_rows takes rows of at most {RS_MAX_SEGS} 1 KiB segments (k <= {RS_MAX_SEGS * 256}), not k = {k}")
+        if why := rs_refusal("s512_rows", (0, k)):
+            raise ValueError(why)
         self.nb, self.weight = NB, weight
         self.row_bytes = 4 * k
         self.tiles = cdiv(self.m_real, TILE) * (n // TILE)
@@ -679,8 +702,11 @@ class Pipeline:
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
         """The sha512/row-seg/v1 digests of `count` FP32 rows at x into out: s512_rows, or with a scratch buffer
-        s512_row_segs then s512_folds."""
+        s512_row_segs then s512_folds.  A row they can't take (`rs_refusal`: past RS_MAX_SEGS segments, or not whole
+        segments) is refused here, before any launch."""
         d, segs = self.dev, self.k // 256
+        if why := rs_refusal("s512_rows", (count, self.k)):
+            raise ValueError(why)
         if self.sha == "ref" or not scratch:
             d.launch("s512_rows", count, 128, p=(x, out), i=(count, self.k))
             return

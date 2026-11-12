@@ -754,6 +754,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert g[0] == threads(name, i) and ev["block"] == 32 and i[0] % 16 == 0 and i[1] % 64 == 0
         if name in ("s512_row_segs", "s512_tile_segs"):
             assert ev["block"] == RUN.RS_FAST_NT and i[1] % (256 if name == "s512_row_segs" else 64) == 0
+            assert name == "s512_tile_segs" or i[1] <= 256 * RUN.RS_MAX_SEGS
         if name == "s512_folds":
             assert ev["block"] == RUN.RS_FOLD_NT and i[1] <= RUN.RS_MAX_SEGS and i[3] <= RUN.RS_MAX_SEGS
         if name.startswith("pd_commit_"):
@@ -780,3 +781,23 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
                 assert ev["smem"] == RUN.PD_PAIR_SMEM // 2
             else:
                 assert g[0] == tiles and ev["block"] == 32 and ev["smem"] == 0
+
+
+def test_a_row_digest_launch_its_kernel_cant_take_never_reaches_the_device():
+    """`rs_refusal`, which `Dev.launch` raises before anything else, so whatever calls it: s512_rows, s512_row_segs and
+    s512_folds past RS_MAX_SEGS segments (they hold no bound of their own), or with k not a positive multiple of 256.  Up
+    to 128 segments, and the tile leaves' folds, go through; `row_digests` refuses the row before its first launch."""
+    assert RUN.RS_MAX_SEGS == int(re.search(r"\bRS_MAX_SEGS = (\d+)", HASH_SOURCE).group(1))
+    assert set(RUN.RS_KERNELS) == {"s512_rows", "s512_row_segs", "s512_folds"}
+    for name, i in (("s512_rows", (3, 32768)), ("s512_row_segs", (3, 256)), ("s512_folds", (5, 128, 5, 128)), ("s512_folds", (9, 32, 8, 31))):
+        assert RUN.rs_refusal(name, i) is None
+    for name, i in (("s512_rows", (1, 33024)), ("s512_row_segs", (1, 128256)), ("s512_folds", (4, 129, 4, 129)),
+                    ("s512_folds", (4, 32, 2, 501)), ("s512_rows", (1, 1000)), ("s512_row_segs", (1, 0)), ("s512_rows", ())):
+        with pytest.raises(ValueError, match=f"^{name} takes"):       # before `self` is read: nothing is launched
+            RUN.Dev.launch(None, name, 1, 128, p=(0, 0), i=i)
+    launched = []
+    dev = SimpleNamespace(launch=lambda name, *a, **kw: launched.append(name))
+    for k, sha, scratch in ((33024, "fast", 7), (128256, "ref", 7), (128256, "fast", 0), (1000, "fast", 7), (0, "ref", 0)):
+        with pytest.raises(ValueError, match="^s512_rows takes"):
+            RUN.Pipeline.row_digests(SimpleNamespace(dev=dev, k=k, sha=sha), 1, 2, scratch, 5)
+    assert not launched
