@@ -33,7 +33,7 @@ SERVING_ROWS_INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
 NOT_EXECUTED_RECONCILIATION_SCHEMA = "verity-sweep/not-executed-reconciliation/v3"
 
 # --- the Commit's driver (`verity_vllm.pipeline`)
-#: the Commit plan's document (`pipeline.commit_plan.SCHEMA`), which `derive` writes and `use` refuses any other than
+#: the Commit plan's document (`pipeline.commit_plan.SCHEMA`), which `derive` writes; `use` takes no plan of another
 COMMIT_PLAN_SCHEMA = "verity-vllm/commit-plan/v1"
 #: a slim keep's `slim.json` (`pipeline.cpu_replay.SLIM_SCHEMA`), which `keep` writes and `open_keep` refuses any other
 #: than
@@ -48,8 +48,8 @@ SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
 # --- the row driver (`verity_vllm.pipeline`)
 #: a row's `config_record.json` (`pipeline.config_record.SCHEMA`), which `record` writes
 CONFIG_RECORD_SCHEMA = "verity-vllm/config-record/v1"
-#: the circuit database's index, `manifests/records.json` (`pipeline.config_record.INDEX_SCHEMA`), which `load_index`
-#: gives an empty index and refuses any other than
+#: the circuit database's index, `manifests/records.json` (`pipeline.config_record.INDEX_SCHEMA`): `load_index` gives
+#: an empty index with it and refuses any other
 RECORDS_INDEX_SCHEMA = "verity-vllm/records-index/v1"
 #: a run's `spec.json`, what was to run as known before execution (`pipeline.experiment.SPEC_SCHEMA`), which
 #: `build_spec` writes
