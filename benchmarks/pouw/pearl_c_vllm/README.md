@@ -30,7 +30,8 @@ before.
 | `noise_sweep` | leased GPUs, a point a lease | the served decode overhead over stock FP8 across a list of points, untimed screens (`noise_sweep.py` summarizes) | `points/<point>/`, `progress.jsonl`, `sweep.json` and `sweep.md` |
 | `forming_domain` | CPUs, after a pass | whether a retained pass's credited rows meet the forming lemma's domain conditions (`forming_domain.py`) | one JSON file |
 
-`flashinfer_env.sh` is sourced by `setup`, `window` and `served_profile`; it is not a job.
+`flashinfer_env.sh` is sourced by `setup`, `window` and `served_profile`, and by `benchmarks/vllm_encoded/stack.sh`;
+it is not a job.
 
 ## The scripts with no job of their own
 
@@ -48,6 +49,9 @@ before.
 ## Who reads it
 
 `../pearl_c_sm90/` and `../served_zk/` load this directory's Python by path, and `../served_zk/`'s jobs start
-`window.sh`; the harness loads `bench_arm.py` by its module name with `benchmarks/pouw` on `PYTHONPATH`; the tests in
-`../tests/` run the arm on a stand-in driver. A replay here opens rows and words in the clear, a development shortcut:
-its ACCEPT is never the protocol's verdict, which is a zero-knowledge proof. Nothing here is read by a verifier.
+`window.sh`; `benchmarks/vllm_encoded/stack.sh` sources `flashinfer_env.sh`; the harness loads `bench_arm.py` by its
+module name, `pearl_c_vllm.bench_arm` with `benchmarks/pouw` on `PYTHONPATH` and
+`benchmarks.pouw.pearl_c_vllm.bench_arm` from the repository's root (its two Pearl-C specs under `benchmarks/specs/`,
+its vLLM runner and its tests); the tests in `../tests/` run the arm on a stand-in driver. A replay here opens rows and
+words in the clear, a development shortcut: its ACCEPT is never the protocol's verdict, which is a zero-knowledge proof.
+Nothing here is read by a verifier.

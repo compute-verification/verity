@@ -19,6 +19,13 @@
      "properties": {"holds": {"const": false}, "why": {"type": "string"}}}
    ]
   },
+  "named_terms": {
+   "description": "The terms an error leaves out, by name, as the subprotocol's answer names them (PoUB's ledger.NAMED_TERMS): each has no number and is in no total, so the error, its certificates at each delta and every sum over it read with them beside it.",
+   "type": "object", "minProperties": 1, "additionalProperties": {
+    "type": "object", "required": ["claim", "term", "value", "in_total", "status"], "additionalProperties": false,
+    "properties": {"claim": {"type": "string", "minLength": 1}, "term": {"type": "string", "minLength": 1},
+                   "value": {"type": "null"}, "in_total": {"const": false}, "status": {"type": "string", "minLength": 1}}}
+  },
   "leg": {
    "oneOf": [
     {"type": "null"},
@@ -45,7 +52,8 @@
       "error_from": {"type": "string"},
       "at": {"type": "object", "required": ["1/100", "1/1000000"], "additionalProperties": false,
              "properties": {"1/100": {"$ref": "#/$defs/at"}, "1/1000000": {"$ref": "#/$defs/at"}}},
-      "runs": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      "runs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+      "named_terms": {"$ref": "#/$defs/named_terms"}
      }}
    ]
   }
@@ -66,7 +74,9 @@
    "type": "object", "additionalProperties": false,
    "required": ["integrity", "pouw", "pous", "bandwidth", "certifier", "wipe"],
    "properties": {"integrity": {"$ref": "#/$defs/leg"}, "pouw": {"$ref": "#/$defs/leg"}, "pous": {"$ref": "#/$defs/leg"},
-                  "bandwidth": {"$ref": "#/$defs/leg"}, "certifier": {"$ref": "#/$defs/leg"}, "wipe": {"$ref": "#/$defs/leg"}}
+                  "bandwidth": {"$ref": "#/$defs/leg", "if": {"type": "object"}, "then": {"required": ["named_terms"]},
+                                "description": "Its error leaves terms out (its openings are sampled from a keyed stream whose PRF advantage nothing prices), so it always names them."},
+                  "certifier": {"$ref": "#/$defs/leg"}, "wipe": {"$ref": "#/$defs/leg"}}
   },
   "composed": {
    "type": "object", "required": ["verdict", "answer", "legs", "missing", "elsewhere", "joint_horizon"], "additionalProperties": false,
@@ -85,11 +95,13 @@
                                          "reason": {"type": ["string", "null"]},
                                          "commitment": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^([0-9a-f]{2})*$"}]}}}]},
     "joint_horizon": {
-     "type": "object", "required": ["statement", "terms", "error_sum", "outside_statement", "at"], "additionalProperties": false,
+     "type": "object", "required": ["statement", "terms", "error_sum", "named_terms", "outside_statement", "at"], "additionalProperties": false,
      "properties": {
       "statement": {"type": "object", "required": ["name", "proved", "file", "audits"]},
       "terms": {"type": "object", "additionalProperties": {"$ref": "#/$defs/frac"}},
       "error_sum": {"$ref": "#/$defs/frac"},
+      "named_terms": {"type": "object", "additionalProperties": {"$ref": "#/$defs/named_terms"},
+                      "description": "By subprotocol, the terms its error in `terms` leaves out: `error_sum` and each sum of `at` leave them out too. Empty when no error summed leaves any out."},
       "outside_statement": {"type": "array", "items": {"type": "string"}},
       "at": {"type": "object", "additionalProperties": {
        "type": "object", "required": ["error_sum", "not_established"],
