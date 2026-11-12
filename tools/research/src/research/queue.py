@@ -128,7 +128,8 @@ candidate and those above it are built again without them in the same tick.
                                                    origin/main) has and it lacks, as `tools/move/restack.py` carries it
                                                    (`map_moves`), N heads at a time, as JSON by `mapped_key`: copied into
                                                    `mapped-changes.d/` beside the verified queue's loop's cache, it spares the
-                                                   loop's threads the work, each head running every move's script on a whole tree
+                                                   loop's detached mapping jobs the work, each head running every move's script
+                                                   on a whole tree, and outweighs a job's refusal of the head
     research queue cross [--main REF] [--move-commit SHA]... [--only N...] [--jobs N] [--out DIR] [--push [--from DIR]]
                                                    each open PR into `main` marked ready at a head that lacks the moves REF
                                                    (default origin/main) has, with a land verdict (one without is its owner's
@@ -301,7 +302,6 @@ import signal
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import tomllib
 import weakref
@@ -1606,11 +1606,11 @@ class Queue:
         self._own: dict[tuple[str, str], str | None] = {}
         self._kept: dict[str, str | None] | None = None
         self._kept_at = Path()
-        #: each (old head, new head)'s `mapped_change`; those worked out, kept by `mapped_key` (at `_mapped_at`, else the
-        #: clone's git directory); those `research queue map-moves` worked out elsewhere, read from the directory beside it
-        #: (`mapped-changes.d/`) as its files were when `_mapped_seen`; why each that couldn't be couldn't, until a restart
-        #: tries it again; the moves between each (main, old head); what `mapped_change` deferred to `work_out_mapped`; and
-        #: those mapping on a thread
+        #: each (old head, new head)'s `mapped_change`; those worked out here, kept by `mapped_key` (at `_mapped_at`, else
+        #: the clone's git directory); those read from the directory beside it (`mapped-changes.d/`: `work_out_mapped`'s
+        #: jobs' and `research queue map-moves`'s) as its files were when `_mapped_seen`; why each that couldn't be couldn't
+        #: (read from there for a job's, else until a restart tries it again); the moves between each (main, old head); and
+        #: what `mapped_change` deferred to `work_out_mapped`
         self._mapped: dict[tuple[str, str], str | None] = {}
         self._mapped_kept: dict[str, str] | None = None
         self._mapped_at: Path | None = None
@@ -1619,9 +1619,8 @@ class Queue:
         self._mapped_failed: dict[str, str] = {}
         self._crossed: dict[tuple[str, str], list[tuple[str, list[str]]]] = {}
         self._mapped_wanted: dict[str, tuple[str, str, list[tuple[str, list[str]]]]] = {}
-        self._mapped_running: dict[str, concurrent.futures.Future] = {}
-        #: how many heads `work_out_mapped` maps across moves at once, each on a thread no tick waits on, deferring each
-        #: `mapped_change` wants to it; 0 maps each there and then
+        #: how many heads `work_out_mapped`'s detached jobs map across moves at once, deferring each `mapped_change` wants to
+        #: them; 0 maps each there and then
         self.mapped_jobs = 0
 
     # -- the clone and its state
@@ -1817,18 +1816,19 @@ class Queue:
     def mapped_change(self, old: str, new: str) -> str | None:
         """``old``'s own change once it has crossed the moves that ``new``'s merge base with the landing branch has and it lacks,
         as `tools/move/restack.py` carries a branch (`mapped_change`, the function), or None: when there are none, when it can't
-        (logged once, with why), and, with `mapped_jobs`, until `work_out_mapped` has worked it out.  What a mark or land
-        verdict at ``old`` carries to ``new`` by besides `own_change` (`StoreLabels`): a restack across a move keeps them, and
-        one that changes anything besides doesn't.  The scripts run on whole trees, so each is kept as `own_change`s are, by
-        old head and the moves it crosses (`mapped_key`), whatever else `main` holds: one worked out for an earlier new head,
-        or elsewhere by `research queue map-moves`, serves."""
+        (logged once, with why), and, with `mapped_jobs`, until a job `work_out_mapped` started has worked it out.  What a
+        mark or land verdict at ``old`` carries to ``new`` by besides `own_change` (`StoreLabels`): a restack across a move
+        keeps them, and one that changes anything besides doesn't.  The scripts run on whole trees, so each is kept as
+        `own_change`s are, by old head and the moves it crosses (`mapped_key`), whatever else `main` holds: one worked out
+        for an earlier new head, by a job, or elsewhere by `research queue map-moves`, serves, and so does a job's refusal."""
         if (key := (old, new)) in self._mapped:
             return self._mapped[key]
         onto = _git(self.workdir, "merge-base", self.base, new, check=False).stdout.strip()
-        if not onto or not (moves := self._moves_crossed(onto, old)) or (at := mapped_key(old, moves)) in self._mapped_failed:
+        if not onto or not (moves := self._moves_crossed(onto, old)) or (
+                (got := self._mapped_got(at := mapped_key(old, moves))) is None and at in self._mapped_failed):
             self._mapped[key] = None
             return None
-        if (got := self._mapped_got(at)) is None:
+        if got is None:
             if self.mapped_jobs:
                 self._mapped_wanted.setdefault(at, (old, onto, moves))
                 return None
@@ -1838,31 +1838,76 @@ class Queue:
         return got
 
     def work_out_mapped(self) -> int:
-        """Keep each mapping a thread has finished since the last call, read again what `research queue map-moves` left in
-        `mapped-changes.d/`, and start the heads `mapped_change` deferred since, each on a daemon thread of its own, while
-        fewer than `mapped_jobs` run: no tick waits on one, and a loop that stops leaves its threads (their scripts' scratch
-        directories are swept).  A later `mapped_change` finds each kept, and defers again those not started.  How many it
-        kept."""
-        done = 0
-        for at, f in list(self._mapped_running.items()):
-            if f.done():
-                del self._mapped_running[at]
-                self._mapped_done(at, *f.result())
-                done += 1
+        """Read the mapping jobs that ended since the last call, read again `mapped-changes.d/` (beside `_mapped_at`), and start
+        the heads `mapped_change` deferred since, each in a job of its own, while fewer than `mapped_jobs` run.  A job is a
+        process detached from this one (`MAP_JOB`, `landing.detach`), so it outlives the tick that starts it (the loop's
+        `--once` ticks are each a process): it writes its head's mapping to `mapped-changes.d/` (`write_mapped`), where every
+        later tick reads it, and its marker there (`MAPPING_MARK`) holds any later tick from starting a second job for the
+        head while it runs.  A refusal is written there too, so no tick maps that head across those moves again (a new head,
+        or a move landed since, is another `mapped_key`, mapped afresh), and so is a job that exited with none written.  A
+        marker whose process is gone with no exit written (a restart of the pod), or with no result `_mapped_lost` after
+        its start, is dropped, so a later `mapped_change` starts its head again.  How many jobs it read that ended with a
+        result, a mapping or a refusal (each refusal logged)."""
+        from .landing import _hhmm, _job_end
+
         self._kept_mapped()
+        drop, now, ended = self._mapped_at.with_suffix(".d"), self.now(), []
+        running = set()
+        for mark in sorted(drop.glob(f"*{MAPPING_MARK}")):
+            result = mark.with_suffix(MAPPED_SUFFIX)
+            try:
+                job = json.loads(mark.read_text())
+                end, at = _job_end(job, result.name), job["at"]
+            except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
+                job, end, at = {}, f"its marker doesn't read: {type(e).__name__}: {e}", ""
+            if end is None and now <= job.get("until", now):
+                running.add(mark.name)
+                continue
+            mark.unlink(missing_ok=True)
+            if not isinstance(end, tuple) and job.get("dir"):
+                shutil.rmtree(job["dir"], ignore_errors=True)
+            if isinstance(end, tuple) and not result.is_file():
+                rc, tail = end[0], " | ".join(end[1].splitlines()[-3:])
+                write_mapped(result, at, None, f"its mapping job exited {rc} with none written" + (f": {tail}" if tail else ""))
+            if result.is_file():
+                ended += [at] if at else []
+                continue
+            why = end or f"none written by {_hhmm(job['until'])}, its time"
+            self.log(f"research queue: the mapping job of {mark.stem} ended with no result ({why}): a later tick that wants "
+                     "it starts it again")
         self._read_mapped_elsewhere()
+        for at in ended:
+            if self._mapped_got(at) is None and at in self._mapped_failed:
+                self.log(f"research queue: {at[:8]}'s own change isn't mapped across the moves `main` landed since: "
+                         f"{self._mapped_failed[at]}")
         wanted, self._mapped_wanted = self._mapped_wanted, {}
         for at, (old, onto, moves) in wanted.items():
-            if len(self._mapped_running) >= self.mapped_jobs:
+            if len(running) >= self.mapped_jobs:
                 break
-            if at in self._mapped_running or self._mapped_got(at) is not None:
+            mark = drop / f"{mapped_name(at)}{MAPPING_MARK}"
+            if mark.name in running or self._mapped_got(at) is not None or at in self._mapped_failed:
                 continue
-            self._mapped_running[at] = f = concurrent.futures.Future()
-            threading.Thread(target=self._mapped_thread, args=(f, old, onto, moves), name=f"mapped-{old[:8]}",
-                             daemon=True).start()
-            self.log(f"research queue: mapping {old[:8]} across the {len(moves)} move(s) `main` landed since, on a thread "
-                     f"({len(self._mapped_running)} of {self.mapped_jobs} running)")
-        return done
+            self._start_mapping(mark, at, old, onto, moves, now)
+            running.add(mark.name)
+            self.log(f"research queue: mapping {old[:8]} across the {len(moves)} move(s) `main` landed since, in a detached "
+                     f"job ({len(running)} of {self.mapped_jobs} running)")
+        return len(ended)
+
+    def _start_mapping(self, mark: Path, at: str, old: str, onto: str, moves: list[tuple[str, list[str]]], now: float) -> None:
+        """Detach ``old``'s mapping job (`MAP_JOB`), writing its result beside ``mark``, and write the marker: what `detach`
+        returned, ``at``, and the time past which a job with no result is taken as lost (`_mapped_lost`).  The job runs this
+        process's `research`, whatever the clone holds, with none of the queue's credentials (`SCRIPT_UNSET`): it pushes
+        nothing, and the head's own code runs in it."""
+        from .landing import detach
+
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        argv = [sys.executable, "-c", MAP_JOB, str(Path(__file__).resolve().parents[1]), str(self.workdir), old, onto,
+                json.dumps(moves), str(mark.with_suffix(MAPPED_SUFFIX)), str(MERGED_ROOT or "")]
+        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET}
+        job = {**detach(self.workdir, argv, env), "out": str(mark.parent), "at": at, "until": now + _mapped_lost(moves)}
+        tmp = mark.with_name(f"{mark.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(job))
+        tmp.replace(mark)
 
     def _moves_crossed(self, onto: str, old: str) -> list[tuple[str, list[str]]]:
         if (key := (onto, old)) not in self._crossed:
@@ -1878,18 +1923,24 @@ class Queue:
         return self._mapped_kept
 
     def _read_mapped_elsewhere(self) -> None:
-        """Read the files in `mapped-changes.d/` beside `_mapped_at` again once one has changed: what `research queue map-moves`
-        worked out elsewhere, copied in by hand.  One that doesn't parse is logged, and read once it changes again."""
-        files = sorted(self._mapped_at.with_suffix(".d").glob("*.json"))
+        """Read the files in `mapped-changes.d/` beside `_mapped_at` again once one has changed: what `work_out_mapped`'s jobs
+        wrote, and what `research queue map-moves` worked out elsewhere, copied in by hand.  Each holds {`mapped_key`: its
+        patch-id}, or {`mapped_key`: {"refused": why}} for a job's refusal (`write_mapped`), which a patch-id for the key in
+        any file outweighs.  One that doesn't parse is logged, and read once it changes again."""
+        files = sorted(self._mapped_at.with_suffix(".d").glob(f"*{MAPPED_SUFFIX}"))
         if (seen := tuple((p.name, (s := p.stat()).st_mtime_ns, s.st_size) for p in files)) == self._mapped_seen:
             return
-        self._mapped_seen, got = seen, {}
+        self._mapped_seen, got, refused = seen, {}, {}
         for p in files:
             try:
-                got.update(json.loads(p.read_text()))
+                doc = dict(json.loads(p.read_text()))
             except (OSError, ValueError, TypeError) as e:
                 self.log(f"research queue: {p} isn't read: {type(e).__name__}: {e}")
+                continue
+            got.update({at: v for at, v in doc.items() if isinstance(v, str)})
+            refused.update({at: str(v["refused"]) for at, v in doc.items() if isinstance(v, dict) and "refused" in v})
         self._mapped_elsewhere = got
+        self._mapped_failed.update(refused)
 
     def _mapped_got(self, at: str) -> str | None:
         return self._kept_mapped().get(at) or self._mapped_elsewhere.get(at)
@@ -1897,17 +1948,11 @@ class Queue:
     def _mapped_one(self, old: str, onto: str, moves: list[tuple[str, list[str]]]) -> tuple[str | None, str]:
         return map_one(self.workdir, old, onto, moves)
 
-    def _mapped_thread(self, f: concurrent.futures.Future, old: str, onto: str, moves: list[tuple[str, list[str]]]) -> None:
-        try:
-            f.set_result(self._mapped_one(old, onto, moves))
-        except Exception as e:  # noqa: BLE001 -- a future never set would hold its job for good
-            f.set_result((None, f"{type(e).__name__}: {e}"))
-
     def _mapped_done(self, at: str, got: str | None, why: str) -> None:
         """Keep what `_mapped_one` gave for ``at`` (`mapped_key`): its patch-id, written whole as `own_change`s are, or why it
         couldn't, logged."""
         if got is None:
-            self._mapped_failed[at] = why or "it has no own change once mapped"
+            self._mapped_failed[at] = why or UNMAPPED
             self.log(f"research queue: {at[:8]}'s own change isn't mapped across the moves `main` landed since: "
                      f"{self._mapped_failed[at]}")
             return
@@ -3973,6 +4018,47 @@ def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]]
             return mapped_change(repo, head, onto, moves, restack, env)
     except (QueueError, OSError, subprocess.SubprocessError) as e:
         return None, f"{type(e).__name__}: {e}"
+
+
+#: why a head maps to nothing when `mapped_change` gives no why
+UNMAPPED = "it has no own change once mapped"
+#: a mapping's job (`Queue.work_out_mapped`), detached: `map_job` with argv[2:], from the `research` in the directory argv[1]
+MAP_JOB = "import sys; sys.path.insert(0, sys.argv[1]); from research.queue import map_job; map_job(*sys.argv[2:])"
+#: in `mapped-changes.d/`, a mapping's result (`write_mapped`; the files the loop reads) and a running job's marker, each named
+#: by its `mapped_key` (`mapped_name`)
+MAPPED_SUFFIX, MAPPING_MARK = ".json", ".running"
+#: what a mapping job does besides its moves' scripts (`MAPPED_TIMEOUT_S` each): merges and own changes, seconds at most
+MAPPED_SLACK_S = 600.0
+
+
+def mapped_name(at: str) -> str:
+    """The name of ``at``'s files in `mapped-changes.d/` (`mapped_key`; `MAPPED_SUFFIX`, `MAPPING_MARK`): its old head's start and
+    the start of the key's SHA-512."""
+    return f"{at[:12]}-{hashlib.sha512(at.encode()).hexdigest()[:16]}"
+
+
+def _mapped_lost(moves: list[tuple[str, list[str]]]) -> float:
+    """How long after its start a mapping job across ``moves`` with no result is taken as lost, its pid another's after a
+    restart of the pod: each script's time and the rest."""
+    return len(moves) * MAPPED_TIMEOUT_S + MAPPED_SLACK_S
+
+
+def write_mapped(path: Path, at: str, got: str | None, why: str) -> None:
+    """``at``'s mapping (`mapped_key`) written whole to ``path`` as `mapped-changes.d/` holds one: {at: its patch-id}, as
+    `research queue map-moves` writes them, or {at: {"refused": why}} (`Queue._read_mapped_elsewhere`)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps({at: got if got is not None else {"refused": why or UNMAPPED}}) + "\n")
+    tmp.replace(path)
+
+
+def map_job(repo: str, head: str, onto: str, moves: str, out: str, root: str) -> None:
+    """A mapping's job (`MAP_JOB`): `map_one` of ``head`` across ``moves`` (`moves_between`'s, as JSON) onto ``onto`` in
+    ``repo``, its scratch under ``root`` (the loop's `MERGED_ROOT`, '' for none), written to ``out`` (`write_mapped`)."""
+    global MERGED_ROOT
+    MERGED_ROOT = Path(root) if root else None
+    crossed = [(m, list(parents)) for m, parents in json.loads(moves)]
+    write_mapped(Path(out), mapped_key(head, crossed), *map_one(Path(repo), head, onto, crossed))
 
 
 def map_moves(repo: Path, heads: Iterable[str], main: str, jobs: int,
@@ -6397,8 +6483,9 @@ def _map_moves(a: argparse.Namespace) -> int:
     head HEAD of PR N whose own land verdict counts there (`StoreLabels.lands`, from the evidence store's labels, pulled from
     its remote; its mark's author's and the owner's own don't count), mapped across the moves --tip has and it lacks, as JSON
     by `mapped_key`, which the loop reads once the file is copied into `mapped-changes.d/` beside its `mapped-changes.json`; a
-    line for each head on stderr.  The loop's threads map a head on the control pod's few cores; this maps them on a node with
-    many (`research run --on`)."""
+    line for each head on stderr.  The loop's detached jobs (`Queue.work_out_mapped`) map a head on the control pod's few
+    cores; this maps them on a node with many (`research run --on`), and
+    its patch-id for a head outweighs a job's refusal of it (one that ran out of time there)."""
     from .store.local import LocalStore
 
     top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
