@@ -2118,7 +2118,6 @@
     {"file": "security/Proofs/Flock/Soundness/assumption-notes/a4-prf-sha512.md", "count": 1},
     {"file": "security/Proofs/Flock/Soundness/assumption-notes/lock-listed-premises.md", "count": 10},
     {"file": "security/Proofs/Flock/Soundness/assumption-notes/trusted-components.md", "count": 1},
-    {"file": "security/Proofs/Flock/SpotFlock/AddressesAt.lean", "count": 4},
     {"file": "security/Proofs/Flock/SpotFlock/Code.lean", "count": 13},
     {"file": "security/Proofs/Flock/SpotFlock/Facts.lean", "count": 3},
     {"file": "security/Proofs/Flock/SpotFlock/Opens.lean", "count": 5},

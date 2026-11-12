@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Rewire
-public import Proofs.Flock.SpotFlock.AddressesAt
+public import Proofs.Flock.SpotFlock.SlotsAt
+public import Proofs.Flock.SpotFlock.Facts
+public import Proofs.Flock.SamplingGeneric.TwoCount
 public import Proofs.Flock.SpotFlock.EntriesAt
 public import Proofs.Flock.SpotFlock.Sessions
 
@@ -43,8 +45,6 @@ is the one an accepted run's registered reads are held to.
   name. Which of the two a linked read is held to is the interior record's, which the run states, not the auditor's
   copies. The row a slot reads at a wired port and the unit its gates go to are one cell position of the writer
   (`wireRow_unit`).
-* **One slot a gate** (`addresses_one_way`): under `Addresses`, every accepted run that needs a gate reads it as a
-  registered value, or every one reads it off the interior record, since an address has one slot.
 -/
 
 @[expose] public section
@@ -643,28 +643,5 @@ theorem linked_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage 
           true := hpl
     rw [hrow]
     exact hpl'
-
-/-! ## One slot a gate -/
-
-/-- **Under `Addresses`, a gate is read one way**: every accepted run's checked unit that needs it reads it as a
-registered value, or every one reads it off the interior record. An address has one slot, which a registered read asks
-not sized and the interior record's port sized; so no address holds at a gate one unit's session reads as a registered
-value and another's off the interior record. -/
-theorem addresses_one_way (hA : Addresses h) (g : ℕ) : ∃ S : Address,
-    (∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.ReadsRegistered h S g) ∨
-      ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.ReadsInterior h S g := by
-  obtain ⟨S, hS⟩ := hA g
-  refine ⟨S, ?_⟩
-  by_cases hs : S.slot.sized = true
-  · refine Or.inr fun r hr hg => ?_
-    obtain ⟨-, -, hrd⟩ := hS r hr hg
-    rcases hrd with ⟨reg, -, -, -, -, -, hf, -⟩ | hI
-    · exact absurd (hf.symm.trans hs) (by decide)
-    · exact hI
-  · refine Or.inl fun r hr hg => ?_
-    obtain ⟨-, -, hrd⟩ := hS r hr hg
-    rcases hrd with hR | ⟨-, -, -, -, -, ht, -⟩
-    · exact hR
-    · exact absurd ht hs
 
 end SpotFlock
