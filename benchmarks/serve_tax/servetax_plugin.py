@@ -10,7 +10,7 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``,
-  ``ids``): the
+  ``verdicts``, ``ids``): the
   two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_windows.BoundaryWindows`), each window's finished
   requests committed by size class as the window closes, each class's public part in ``boundary.PID.jsonl``. A class's
   directory holds its requests' tokens and its salts, which are values: it goes under ``private``, the configuration's

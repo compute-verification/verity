@@ -279,6 +279,24 @@ def returns(program: Any, key: str, record: Mapping[str, Any], members: Members,
     return tuple(out)
 
 
+def wired(rows: Sequence[Any], template: str, port: str, n: int, per: int) -> tuple[int, ...]:
+    """The writer unit each of ``template``'s ``n`` units a block reads at its wired port ``port``, among the writer's
+    ``per`` a block, as round 2 reads a wired port (`second_stage.wiredRow`): unit j's row under the port's runs in
+    ``rows`` (the replay block's, `second_stage.replay_rows`). Without rows for the port, the writer's one unit; a
+    writer of several units a block is refused, since a wire alone does not say which each unit reads."""
+    r = next((x for x in rows if (x.template, x.port) == (template, port)), None)
+    if r is None:
+        if per != 1:
+            raise ValueError(f"{template}: its wired {port!r} reads a writer of {per} units a block, and nothing says which "
+                             "each of its units reads: give the replay block's rows (`second_stage.replay_rows`)")
+        return (0,) * n
+    at = tuple(SS.row_at(r.runs, j) for j in range(n))
+    if r.per != per or any(a is None or a >= per for a in at):
+        raise ValueError(f"{template}: its wired {port!r} rows place other than its {n} units a block on its writer's "
+                         f"{per}")
+    return tuple(int(a) for a in at)
+
+
 def _supplies(links: Sequence[Link]) -> tuple[Supply, ...]:
     return tuple(x for x in values(links).values() if isinstance(x, Supply))
 
@@ -466,4 +484,4 @@ def opened(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, t
 
 __all__ = ["DIGEST", "HELD", "INDEX", "READ", "TABLE", "Cells", "Link", "Members", "Operand", "Return", "Supply", "cells",
            "history", "kept_table", "link_schemas", "link_values", "link_words", "links", "opened", "operand", "placed",
-           "reader", "returns", "sources", "span_values", "supplied", "table_reads", "values"]
+           "reader", "returns", "sources", "span_values", "supplied", "table_reads", "values", "wired"]
