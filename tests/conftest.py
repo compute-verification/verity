@@ -25,7 +25,7 @@ BOOKKEEPING = {
     "tests/lint/test_repo_retired_terms.py": ("test_no_new_retired_terms",),
     "tests/test_retired_terms.py": ("test_no_retired_term_in_prose", "test_no_retired_term_in_the_maintained_docs",
                                     "test_no_retired_word_in_a_new_lean_name", "test_the_glossary_records_the_retired_terms",
-                                    "test_spot_s_older_name_only_falls"),
+                                    "test_spot_s_older_name_only_falls", "test_the_slowdown_s_older_name_is_gone"),
     "tests/test_doc_paths.py": ("test_every_path_a_document_names_exists", "test_not_paths_are_current"),
     "tests/test_documented_commands.py": ("test_every_documented_command_line_parses",
                                           "test_known_lists_only_lines_that_still_fail"),
