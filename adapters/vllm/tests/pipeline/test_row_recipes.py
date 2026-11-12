@@ -6,8 +6,9 @@ checkpoint and one stage.
 
 A recipe is a command in a script of this tree (`SCRIPTS`: a `.sh`, `.yaml`, `.yml` or `.toml` file outside the tests) whose
 launcher is `verity-vllm`, `python -m verity_vllm.pipeline.cli` or `"$VV"`, the name the epoch's scripts give the launcher they
-write. Its words are the shell's (`shlex`), up to the first operator. `${NAME:+WORDS}` gives WORDS and `${NAME:-WORD}` gives WORD;
-any other variable gives `STAND_IN`. Words the line doesn't spell (`"$@"`, `"${NAME[@]}"`, `$(...)`) and a line whose quotes
+write. Its words are the shell's (`shlex`), up to the first operator. A number that touches the redirect after it (`2>/dev/null`) is
+that redirect's file descriptor and no word; one a space parts from it (`--config-run 1 > log`) is a word. `${NAME:+WORDS}` gives WORDS
+and `${NAME:-WORD}` gives WORD; any other variable gives `STAND_IN`. Words the line doesn't spell (`"$@"`, `"${NAME[@]}"`, `$(...)`) and a line whose quotes
 `shlex` can't follow are failures that name the line (`UNREAD`), never a recipe passed over.
 """
 from __future__ import annotations
@@ -42,6 +43,9 @@ _DEFAULT = re.compile(r"\$\{\w+:-([^{}]*)\}")
 _UNSPELLED = re.compile(r"\$[@*]|\$\{\w+\[[@*]\]|\$$")
 _VARIABLE = re.compile(r"\$\{[^{}]*\}|\$\w+")
 _OPERATOR = re.compile(r"[();<>|&]+")
+#: a redirect's file descriptor: a number that is a whole word and touches the operator after it. The first group is text the shell
+#: quotes, where a number is never one.
+_DESCRIPTOR = re.compile(r"""('[^']*'|"(?:\\.|[^"\\])*"|\\.)|(?<![^\s;|&()<>])\d+(?=[<>])""", re.DOTALL)
 
 
 class Unread(Exception):
@@ -68,7 +72,8 @@ def recipes(line: str) -> Iterator[tuple[str, list[str]]]:
     """Each (command, its arguments) of COMMANDS the line runs. A word that holds a whole command (`bash -c '...'`, `"$(...)"`) is
     read as a line."""
     try:
-        lex = shlex.shlex(_IF_SET.sub(r"\1", line), posix=True, punctuation_chars=True)
+        spelled = _DESCRIPTOR.sub(lambda m: m.group(1) or "", _IF_SET.sub(r"\1", line))
+        lex = shlex.shlex(spelled, posix=True, punctuation_chars=True)
         lex.whitespace_split = True
         toks = list(lex)
     except ValueError as e:
@@ -78,8 +83,6 @@ def recipes(line: str) -> Iterator[tuple[str, list[str]]]:
             yield from recipes(tok)
         elif (tok.endswith("verity-vllm") or tok in ("verity_vllm.pipeline.cli", "$VV")) and i + 1 < len(toks) and toks[i + 1] in COMMANDS:
             end = next((j for j in range(i + 2, len(toks)) if _OPERATOR.fullmatch(toks[j])), len(toks))
-            if end < len(toks) and toks[end][0] in "<>" and toks[end - 1].isdigit():       # `2>/dev/null`: the 2 is the operator's
-                end -= 1
             argv = toks[i + 2:end]
             if unspelled := [a for a in argv if _UNSPELLED.search(a)]:
                 raise Unread(f"{' '.join(unspelled)}: words the line doesn't spell")
@@ -133,6 +136,15 @@ def test_every_line_that_names_a_command_is_read():
      [("row", ["stage", "build", "1", "1", "1", "1", "--config-run", "1"])]),
     ('stage() {  # stage NAME: `verity-vllm row run --stages NAME` under its deadline', []),
     ('log "ran verity-vllm commit and verity-vllm rows"; "$VV" timeline report "$T" --md "${MD:-}"', [("timeline", ["report", "1", "--md", ""])]),
+    ("verity-vllm row stage build R ROLE REPO REV --config-run 1 > log", [("row", ["stage", "build", "R", "ROLE", "REPO", "REV", "--config-run", "1"])]),
+    ("verity-vllm row stage build R ROLE REPO REV --config-run 1 2>/dev/null",
+     [("row", ["stage", "build", "R", "ROLE", "REPO", "REV", "--config-run", "1"])]),
+    ("verity-vllm row stage build R ROLE REPO REV 2>&1 | tee log", [("row", ["stage", "build", "R", "ROLE", "REPO", "REV"])]),
+    ('"$VV" epoch job "$RUN" --store-reserve-s 2400 >out 2> err', [("epoch", ["job", "1", "--store-reserve-s", "2400"])]),
+    ('"$VV" epoch job "$RUN" --store-reserve-s=2400>out', [("epoch", ["job", "1", "--store-reserve-s=2400"])]),
+    ('"$VV" timeline report "$T" --md "a 2>b" 1>out', [("timeline", ["report", "1", "--md", "a 2>b"])]),
+    ("bash -c 'verity-vllm row stage build R ROLE REPO REV --config-run 1 2>/dev/null' 2>&1",
+     [("row", ["stage", "build", "R", "ROLE", "REPO", "REV", "--config-run", "1"])]),
 ])
 def test_a_line_is_read_as_the_shell_gives_it(line: str, expected: list[tuple[str, list[str]]]):
     assert [r for _, text in lines(line) for r in recipes(text)] == expected

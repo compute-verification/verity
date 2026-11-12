@@ -11,17 +11,17 @@ returns no Program for a derivation that left holes. `survey` builds it from the
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import torch
-
 from verity.circuits.program import Program
+
 from verity_vllm.program.frontend.derive import _no_rule
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, Refuse, Unsupported
 from verity_vllm.program.frontend.rules.base import ANY, Rule, RuleInfo, RuleSet
 from verity_vllm.program.frontend.value_types import type_of_tensor
-
 
 
 class Hole(Rule):
@@ -93,7 +93,7 @@ def _guarded(rule: Rule, hole: Hole) -> Rule:
                 del ctx.env[key]
             hole.emit(node, ctx, e)
 
-    g = object.__new__(type(f"Guarded{cls.__name__}", (cls,), {"applies": applies, "emit": emit}))
+    g: Rule = object.__new__(type(f"Guarded{cls.__name__}", (cls,), {"applies": applies, "emit": emit}))
     g.__dict__.update(rule.__dict__)
     return g
 
