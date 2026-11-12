@@ -14,8 +14,10 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `captured`: a span of a token-select template from what a replay at the served step shapes took at the sampler
   (`engine.sampler_capture`: each sampled token's logits row and id), laid out as `span` lays a token select's units out.
   A replay on the GPU writes it for a served model the CPU `Replay` is too slow for; tests write it from a `Replay`.
-* `pieces`: a token select's span as the units Flock proves it by, each token's `TokenSelectChunk_v2` units over its
-  chunks of logits and its `TokenSelectCombine_v2`, since a served vocabulary's whole select is past one Flock block.
+* `pieces`: a token select's span as the units Flock proves it by, since a served vocabulary's whole select is past one
+  Flock block: `TokenSelect_v4`'s, each token's `TokenSelectChunk_v2` units over its chunks of logits and its
+  `TokenSelectCombine_v2`; `GreedySelect_v1`'s, each token's one unit of each chunk position's `GreedyChunk_v2` and its
+  `GreedyCombine_v2`, whose every wired row is one chunk's output row.
 * `interior`: the replay sample's spans, template t's each padded to its n_t with copies of its last instance's units
   (`Span.group`: a token's chunks), so an inlined replay block's padded instances stay whole, committed template-major
   as one window (`ml.windows.rows`, every leaf's salt fresh from the OS) of one shared-row member a template, each input
@@ -53,6 +55,7 @@ from verity.protocols.spot.verifier.one_stage import partition as P, registratio
 from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity.definitions.registry import greedy_stages as GS
 from verity.definitions.registry.dead_free import CHUNK
 from verity.commitments.windows import links as LK, rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
@@ -260,15 +263,45 @@ def member(template: str, n: int = 1) -> CS.Member:
     return named(CR.unit_member(SRW.template(template), n))
 
 
-def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
-    """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
-    `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
-    logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
-    (`chunk_rows.unit_member`), each row named after its parameter (`named`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
-    be ``s``'s tokens, or nothing is committed. The chunks' ``group`` is a token's V / c units, so a span pads by whole
-    tokens, as `TokenSelect_v4` inlined in a replay block (one instance a served token) lays its pieces out.
+def _greedy(s: Span, V: int, N: int) -> tuple[Span, ...]:
+    """`pieces` of a `GreedySelect_v1{V, N}` span: a span a unit of `greedy_stages.plan`, in its order, each of one unit a
+    token. A chunk's row is its lanes of the token's logits and its output its (best, token index low, high) words; the
+    combine's rows are the last chunk's lanes and each other chunk's output row, whole, and its output the token's words
+    (`greedy_stages.twin`), which must be ``s``'s tokens, or nothing is committed."""
+    ((port, _V),), ((out, _),) = s.member.rows, s.member.outs
+    us, x = GS.plan(V, V // N), s.data["rows"][port]
+    twins = [GS.twin(V, row, V // N) for row in x]
+    tok, want = np.array([t for t, _w in twins], dtype=np.int64), s.data["outs"][out].view("<u4")[:, 0]
+    if not np.array_equal(tok, want):
+        raise ValueError(f"request {s.rid}: its units select other ids than its span's at "
+                         f"{int(np.count_nonzero(tok != want))} of its {s.n} tokens")
+    words = {u.key: np.stack([w[u.key][0] for _t, w in twins]).astype(np.uint16) for u in us}
+    got = []
+    for u in us:
+        m, wired = member(u.defn.id, s.n), {p: k for p, k, _field in u.wires}
+        rows = {p: words[wired[p]] if p in wired else x[:, u.lanes[0]:u.lanes[1]] for p, _w in m.rows}
+        (o, _wide), = m.outs
+        got.append(Span(s.rid, m, {"rows": {p: a.astype(np.uint16) for p, a in rows.items()}, "outs": {o: words[u.key]}},
+                        [list(e) for e in s.entries], s.program))
+    return tuple(got)
+
+
+def pieces(s: Span, c: int | None = None) -> tuple[Span, ...]:
+    """A token select's span ``s`` as the units Flock proves it by, as its template calls them. `TokenSelect_v4`: each
+    token's V / c `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}`
+    unit over logits[0] and the chunks' (best, idx). `GreedySelect_v1{V, N}`: each token's units of `greedy_stages.plan`,
+    one of each chunk position's `GreedyChunk_v2{N, OFF}` and its `GreedyCombine_v2{V, N}` (`_greedy`). Each piece's member
+    is its template's bit rows, as Flock stages a unit (`chunk_rows.unit_member`), each row named after its parameter
+    (`named`). `TokenSelect_v4`'s chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
+    be ``s``'s tokens, or nothing is committed. Its chunks' ``group`` is a token's V / c units, so a span pads by whole
+    tokens, as the select inlined in a replay block (one instance a served token) lays its pieces out.
     ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
     ((port, V),), ((out, _),) = s.member.rows, s.member.outs
+    fn = SRW.template(s.member.template).fn
+    if getattr(fn, "defn", None) is GS.GreedySelect:
+        if c is not None:
+            raise ValueError(f"{s.member.template}: its chunks are its own N, not {c}")
+        return _greedy(s, V, int(fn.bindings["N"]))
     c = min(CHUNK, V) if c is None else int(c)
     if not 1 <= c <= V or V % c:
         raise ValueError(f"{s.member.template}: {V} logits in chunks of {c} are not whole chunks, and a narrower last chunk "
