@@ -85,8 +85,9 @@ def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, boo
     file is its template's params', every Lean verdict accepted, every negative refused, and round 2 and the stream's
     outcome are the run's. For a record of round 1 that commits the block's return (``code`` None): round 2 accepts
     the statements with no code, and the outcome is accepted, or refused by its interior record's statements check
-    with the two-stage form's code alone (`FORM`). For an unlinked run (``code`` `UNWIRED`): round 2 refuses the
-    statements by that code alone, and so does the outcome. Either way its replay sample's record fails nothing."""
+    with the two-stage form's code alone (`FORM`), and the one-stage audit's own record of the interior, which holds no
+    check of round 2's, fails none of its own (``record``). For an unlinked run (``code`` `UNWIRED`): round 2 refuses
+    the statements by that code alone, and so does the outcome. Either way its replay sample's record fails nothing."""
     audit, o, r2 = summary.get("audit") or {}, summary.get("outcome") or {}, summary.get("round_two") or {}
     inner = audit.get("audit") or {}
     negatives = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (audit.get("negatives") or {}).values()]
@@ -94,12 +95,13 @@ def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, boo
     if code is None:
         r2_ok = r2.get("ok") is True and r2.get("codes") == []
         o_ok = (o.get("accepted") is True and o.get("statements") == []) or (refused and o.get("statements") == [FORM])
+        record_ok = (summary.get("record") or {}).get("failed") == []
     else:
-        r2_ok, o_ok = r2.get("codes") == [code], refused and o.get("statements") == [code]
+        r2_ok, o_ok, record_ok = r2.get("codes") == [code], refused and o.get("statements") == [code], True
     return {"before_draw": bool(audit.get("checks_before_draw")) and all(audit["checks_before_draw"].values()),
             "pins": bool(summary.get("pins")) and all(summary["pins"].values()),
             "lean_verdicts": bool(inner.get("verdicts")) and all(v is True for v in inner["verdicts"].values()),
-            "negatives": bool(negatives) and all(negatives),
+            "negatives": bool(negatives) and all(negatives), "record": record_ok,
             "round_two": r2_ok, "outcome": o_ok and o.get("replay_sample") == []}
 
 

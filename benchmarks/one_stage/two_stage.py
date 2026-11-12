@@ -788,8 +788,11 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     (`round_two`, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
     the verifier's other copies the interior registration's check takes beside the boundary record (`a5.tie`: the
     values it registers, their schemas, its window root). -> (a5's summary, its acceptance, the audit record, what the
-    run reports, the sessions' statements: None without a draw). The report names what the proof server refused, in
-    flock-circuit's words, where a session never ran."""
+    run reports, the sessions' statements: None without a draw). The audit record is a5's own of the interior, decided
+    as the stream decides the interior's before round 2's check is attached to it (a5's ``drawn``), so it is not the
+    run's outcome: the report's ``accepted`` and ``record`` (the checks it fails) are that record's, ``round_two`` is
+    round 2's with the form allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
+    server refused, in flock-circuit's words, where a session never ran."""
     for d in (HERE.parent / "prove_path", HERE):
         if str(d) not in sys.path:
             sys.path.insert(0, str(d))
