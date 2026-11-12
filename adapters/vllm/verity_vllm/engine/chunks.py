@@ -58,19 +58,6 @@ import re
 from typing import Any
 
 
-def scheduler_of(llm: Any) -> Any | None:
-    """The in-process V1 scheduler of an offline `LLM` (`llm_engine.engine_core[.engine_core].scheduler`, as
-    `verity_vllm.engine.handle.scheduler`), or None when the path does not exist or exposes no `requests` dict."""
-    try:
-        eng = llm.llm_engine
-        core = getattr(eng, "engine_core", None)
-        inner = getattr(core, "engine_core", None) or core
-        sched = getattr(inner, "scheduler", None)
-        return sched if isinstance(getattr(sched, "requests", None), dict) else None
-    except Exception:  # noqa: BLE001
-        return None
-
-
 class Collector:
     """Per-iteration facts for `attribute()`: whether `step()` returned outputs, the new tokens per request (child 0), and --
     when a scheduler is given -- {rid: (num_computed_tokens after this iteration's schedule, num_prompt_tokens)}."""
