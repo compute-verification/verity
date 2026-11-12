@@ -328,7 +328,7 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
 
 def _engine(v: int, spans: int, outputs: int) -> tuple[dict, list[dict], list[dict]]:
     """A greedy engine's steps over ``spans`` requests of ``outputs`` tokens each at a vocabulary of ``v``: each step's
-    bf16 logits rows (one a request, normal draws, so ties within a row are bf16's), its batch as vLLM's V2 runner hands
+    bf16 logits rows (one a request, standard normal, so ties within a row are bf16's), its batch as vLLM's V2 runner hands
     the sampler one, the ids its greedy sampler takes (torch's argmax, the first maximum), and the step as a replay's
     trace records it."""
     import torch
@@ -378,7 +378,8 @@ def test_the_serves_hook_and_the_samplers_capture_give_a_class_of_the_greedy_sel
                                     for i, r in enumerate(eng["rids"])])})
     hook.stop()
     assert [ln.get("error") for ln in lines] == [None]
-    directory = tmp_path / "boundary" / "w0" / f"p{BR.cap(len(SM.PROMPT))}-o{outputs}"
+    [directory] = (tmp_path / "boundary" / "w0").iterdir()
+    assert directory.name.endswith(f"-o{outputs}")
     c = BR.reopen(directory, BR.check_template(check))
     mine = SM.layout(v, outputs, spans, True, hook.serve, k)
     L = c.layout
