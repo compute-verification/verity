@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import verity_difftest as D
+from replay_core import store_runs
 
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import window as Wd
@@ -347,12 +348,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        if a.runs is None:
-            sys.path.insert(0, str(Path(__file__).resolve().parent))
-            from replay_core import store_runs
-            runs = store_runs(Path(tmp) / "runs")
-        else:
-            runs = list(a.runs)
+        runs = store_runs(Path(tmp) / "runs") if a.runs is None else list(a.runs)
         runs = [*runs, *(r for r in a.add if r.name not in {x.name for x in runs})]
         sides = Sides()
         try:
