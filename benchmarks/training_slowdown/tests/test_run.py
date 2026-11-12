@@ -222,8 +222,9 @@ def test_a_weight_handed_over_as_its_trained_parts_is_what_the_plans_codec_rebui
     """An output may give a weight of θ's as the parts the run trained of it. E is the plan's codec's packing of
     those parts, and the output model's weight is what that codec decodes from E on θ: here codes the run's own
     weight was never made from, so the model scored is E's, not the one the run holds. The checkpoint says how many
-    weights came as parts and has no digest of a trained state. Parts with no E leave no model to score, and the run
-    is invalid: parts of a weight θ lacks, parts that are not of the weight's size, and parts with no plan."""
+    weights came as parts, and its `trained_sha256` is the digest of the model the run trains, which took no step
+    here and is θ. Parts with no E leave no model to score, and the run is invalid: parts of a weight θ lacks, parts
+    that are not of the weight's size, and parts with no plan."""
     codes = SparseTernary.round(torch.randn(D, D, generator=torch.Generator().manual_seed(3)), 0.25)
     scored, ternary = [], Plan([("w1.*", SparseTernary(0.25))])
 
@@ -247,7 +248,7 @@ def test_a_weight_handed_over_as_its_trained_parts_is_what_the_plans_codec_rebui
 
     rec = run_one("parts", {"w1.weight": codes})
     (cp,) = rec["checkpoints"]
-    assert rec["invalid"] == [] and "trained_sha256" not in cp
+    assert rec["invalid"] == [] and cp["trained_sha256"] == run.theta_sha256(theta) != cp["output_sha256"]
     assert (cp["format"], cp["changed"], cp["parts"], cp["rebuild_macs"]) == ("codecs", 1, 1, 2 * D * D)
     (sha, output), = scored
     want = SparseTernary.apply(theta["w1.weight"], *codes)

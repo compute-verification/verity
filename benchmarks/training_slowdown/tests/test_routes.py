@@ -397,7 +397,8 @@ def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path
     """Route `qat` through the harness: θ loads into a model that holds latents and codes θ has none of, every op is
     counted and priced, and each checkpoint's output is what the library's codec rebuilds on θ from the codes the
     route handed over: the weights the route's next step would train on, bit for bit, and θ everywhere else. E is
-    those codes, at most two bits an entry. The count takes the coded matrices' products as updated from the second
+    those codes, at most two bits an entry, and the checkpoint states the digest of the model the route trains, its
+    latents among it (`trained_sha256`). The count takes the coded matrices' products as updated from the second
     step on. The step traces, and what one step hands the next forward is the codes:
     the update's cut is two bits an entry and a 16-bit scale a matrix, where the latents and Muon's momentum, 32
     bits an entry each, are carried state no token op reads."""
@@ -408,8 +409,9 @@ def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path
     entries = sum(theta[k].numel() for k in targets)
     for cp in rec["checkpoints"]:
         assert (cp["format"], cp["changed"], cp["parts"], cp["rebuild_macs"]) == ("codecs", 2, 2, 2 * entries)
-        assert "trained_sha256" not in cp and 8 * cp["e_bytes"] <= 2 * entries + 8 * 600
+        assert cp["trained_sha256"] != cp["output_sha256"] and 8 * cp["e_bytes"] <= 2 * entries + 8 * 600
     assert [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]
+    assert rec["checkpoints"][-1]["trained_sha256"] == run.theta_sha256(model.state_dict())
     layers = qat.coded(model, config.dials(qat, {"targets": ",".join(targets)}, "test"))
     assert set(outputs[-1]) == set(theta) and sorted(layers) == sorted(targets)
     for k, v in outputs[-1].items():
