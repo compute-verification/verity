@@ -612,6 +612,8 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert got["capacity at measured"]["unit"] == f"{M.BYTES}, at the measured read rate: {M.OWN_RATE}"
     assert {got[n]["unit"] for n in ("verified", "free at spec", "free at measured")} == {M.BYTES}
     assert got["error"]["unit"] == M.ERROR and "PRF advantages" in M.ERROR and "are not in it" in M.ERROR
+    # and says it in the words every δ of the session's is read in, never as a bare error
+    assert "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), this number its δ" in M.ERROR
     rate, span = "ledger.{}.capacity_bytes_per_s", "ledger.inputs.span_ns"
     assert {n: m["inputs"] for n, m in got.items()} == {
         "metric": [RUN, "ledger.spec.gamma"], "verified": [RUN, "ledger.spec.certified_bytes"],
