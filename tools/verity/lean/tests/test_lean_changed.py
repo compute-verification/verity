@@ -1305,7 +1305,7 @@ def test_try_elaborates_the_files_probed_copy_and_ends_with_the_theorems_beyond_
     x.write_text("namespace F\ntheorem holey : 1 = 2 := sorry\ntheorem clean : True := trivial\nend F\n")
     seen = []
 
-    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None):
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None, at=None):
         if cmd is None:
             return 0, ""
         seen.append((t / pkg / cmd[2]).read_text())
@@ -1332,7 +1332,7 @@ def test_try_names_a_theorem_lean_fails_on_and_echoes_no_axioms_answer(trying, t
              "use `set_option maxRecDepth <num>` to increase limit\n",
              "'F.clean' does not depend on any axioms\n", "'F.refused' does not depend on any axioms\n"]
 
-    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None):
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None, at=None):
         if cmd is None:
             return 0, ""
         for line in lines:
@@ -1649,7 +1649,7 @@ def test_build_builds_the_files_modules_on_the_slot_tree_and_reports_each_files_
     monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda _: ["Sec/Proofs/Flock/X.lean", "Sec/Proofs/Flock/Y.lean",
                                                                    "Sec/Defs/A.lean"])
     calls["deps_rc"] = 1
-    monkeypatch.setattr(LC, "build", lambda pkg, t, lake_, targets=None, sandbox=True, cmd=None: (
+    monkeypatch.setattr(LC, "build", lambda pkg, t, lake_, targets=None, sandbox=True, cmd=None, at=None: (
         calls["build"].append((pkg, targets)) or 1,
         "✖ [3/9] Building Proofs.Flock.Y\nerror: ././../Proofs/Flock/Y.lean:2:4: unknown identifier 'foo'\n  more\n"
         "error: ./../Defs/A.lean:1:0: unexpected token\nerror: ././../Proofs/Flock/Y.lean:5:0: a later one\n"
