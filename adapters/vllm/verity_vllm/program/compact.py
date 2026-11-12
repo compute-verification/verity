@@ -38,6 +38,10 @@ from verity.circuits.codec import (
 )
 from verity.circuits.refs import Affine, Concat, Explicit, Strided
 
+__all__ = ["expand", "expand_mixed", "expanded_file_args", "file_items_from_refs", "first_runs", "from_runs",
+           "hash_operand", "idx_values", "is_file_prog", "lean_root", "n_crosses_step", "n_max_producer", "n_producers",
+           "p_item_indices", "p_item_weight_span", "rle_mapped", "runs_from_file_items"]
+
 Prog = tuple  # head... , base: tuple[int, ...], delta: tuple[int, ...], count: int
 
 

@@ -46,6 +46,8 @@ from verity.circuits.refs import (
 from verity.circuits.types import Array
 from verity.definitions.registry import dead_free as DF
 
+__all__ = ["BATCHED", "COLUMNS", "dead_free", "dead_free_versions", "dead_units", "kept_records", "registered_form"]
+
 
 def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
     """The parts of `r` a walk that accumulates (a union, idempotent) has yet to visit: for a `Concat` cut from a `PartLog`, the

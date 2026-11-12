@@ -26,6 +26,8 @@ from verity_vllm.program.compiled_norm_literal import literal_variants
 if TYPE_CHECKING:
     import torch
 
+__all__ = ["OUTPUT_ROLES", "kernel_key", "pointer_arity", "relation", "rms_eps_of", "roles_of", "warm_vml"]
+
 # hook/wrapper argument index -> committed member name (roles), per kernel-name prefix; registered weights are not committed.
 # a kernel NAME does not fix its argument list: Inductor names pointwise kernels `triton_poi_fused_<n>` in both the
 # Llama RoPE (in_ptr0..2, out_ptr0..1: qkv, positions, cos|sin -> k, q) and the Qwen2.5 RoPE-with-QKV-bias (in_ptr0..3, out_ptr0..1: qkv,
