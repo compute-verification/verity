@@ -32,6 +32,7 @@ import random
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -154,51 +155,38 @@ def params(sampling: dict[str, Any], max_tokens: int) -> Any:
                           detokenize=False)
 
 
-def run(a: argparse.Namespace) -> dict[str, Any]:
-    """One engine: the serve of ``a.arm``, or the replay of the serve in ``a.dir``."""
-    if os.environ.get("PYTHONHASHSEED") != "0":
-        raise SystemExit("specdec-replay: PYTHONHASHSEED=0 (a set's order decides a batch's row order)")
-    os.environ["VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"] = "1"
-    sys.path.insert(0, str(ADAPTER))
-    from verity_vllm.engine import env, served_seed
-    from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.engine.step_trace import StepTrace, load
+def arrivals(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Where a trace's records say each request arrived, for `drive`'s replay."""
+    return [{"id": r["request"], "before_step": r["before_step"], "after_empty": r.get("after_empty", 0)}
+            for r in recs if r["kind"] == "arrive"]
 
-    env.apply_engine(None)
-    out = Path(a.dir)
-    reqs = {r["id"]: r for r in plan(served_seed.DEFAULT_SEED)}
-    if a.phase == "serve":
-        cfg = {**SERVE, "speculative": ARMS[a.arm]}
-        due = [{"id": r["id"], "iteration": r["iteration"]} for r in reqs.values()]
-        (out / "trace.jsonl").unlink(missing_ok=True)
-    else:
-        recs = load(out / "trace.jsonl")
-        cfg = recs[0]["config"]
-        due = [{"id": r["request"], "before_step": r["before_step"], "after_empty": r.get("after_empty", 0)}
-               for r in recs if r["kind"] == "arrive"]
-    model = Path(tempfile.mkdtemp(prefix="specdec-stand-in-"))
-    stand_in(model)
-    eng = engine(model, cfg, eager=not a.compiled)
-    redrawn = rescale(eng) if a.weights == "scaled" else None
-    trace = StepTrace(out / "trace.jsonl" if a.phase == "serve" else None).install(eng)
+
+def drive(eng: Any, trace: Any, phase: str, due: list[dict[str, Any]], add: Callable[[str], None]) -> dict[str, Any]:
+    """Step ``eng``, whose scheduler ``trace`` is installed on, until every request of ``due`` has arrived (``add``) and
+    finished. On the serve a request arrives before the engine iteration its entry names, or at once where the engine is
+    idle. On the replay it goes back where the trace says (`arrivals`), before the first schedule at its step: one that came
+    after a schedule that scheduled nothing waits for such a schedule, or for the engine to be idle, so the step in flight
+    has finished its requests and cached their blocks as it had when the request was served. What came out: the trace's
+    steps, each request's tokens, the draft tokens each step scheduled for each request, and how many schedules scheduled
+    nothing."""
+    from verity_vllm.engine.hooks import Hooks
+
+    due = list(due)
     drafted: dict[int, dict[str, int]] = {}
     tokens: dict[str, list[int]] = {}
     empty = 0
 
-    def add(rid: str) -> None:
-        r = reqs[rid]
-        got = eng.add_request(rid, {"prompt_token_ids": r["prompt_ids"]}, params(r["sampling"], r["max_tokens"]))
-        if got not in (None, rid):
-            raise SystemExit(f"specdec-replay: the engine named {rid} {got}")
+    def put_back(idle: bool) -> None:
+        while due and due[0]["before_step"] == trace.scheduled and (idle or not due[0]["after_empty"] or trace.empty):
+            add(due.pop(0)["id"])
+        if due and due[0]["before_step"] < trace.scheduled:
+            raise SystemExit(f"specdec-replay: the replay passed step {due[0]['before_step']} before {due[0]['id']} arrived")
 
     def schedule(orig: Any) -> Any:
         def wrapped(*args: Any, **kw: Any) -> Any:
             nonlocal empty
-            # a request goes back before the schedule it arrived before: the first at its step, or the one after as many
-            # schedules that scheduled nothing as its arrival says
-            while (a.phase == "replay" and due and due[0]["before_step"] == trace.scheduled
-                   and due[0]["after_empty"] == trace.empty):
-                add(due.pop(0)["id"])
+            if phase == "replay":
+                put_back(idle=False)
             before = trace.scheduled
             so = orig(*args, **kw)
             if trace.scheduled > before:
@@ -212,28 +200,62 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     hooks.wrap(trace.sched, "schedule", schedule)
     iteration = 0
     while due or eng.has_unfinished_requests():
-        if a.phase == "serve":
+        if phase == "serve":
             idle = not eng.has_unfinished_requests()
             while due and (due[0]["iteration"] <= iteration or idle):
                 add(due.pop(0)["id"])
                 idle = False
-        elif due and (due[0]["before_step"] < trace.scheduled or not eng.has_unfinished_requests()):
-            if due[0]["before_step"] != trace.scheduled:
-                raise SystemExit(f"specdec-replay: at step {trace.scheduled} with {due[0]['id']} due before step "
-                                 f"{due[0]['before_step']}")
-            add(due.pop(0)["id"])
+        elif not eng.has_unfinished_requests():
+            put_back(idle=True)
+            if not eng.has_unfinished_requests():
+                raise SystemExit(f"specdec-replay: the replay is idle at step {trace.scheduled} with {due[0]['id']} due before "
+                                 f"step {due[0]['before_step']}")
         for o in eng.step():
             if o.finished:
                 tokens[o.request_id] = [int(t) for t in o.outputs[0].token_ids]
         iteration += 1
     hooks.uninstall()
-    trace.uninstall()
-    steps = [r for r in trace.records if r["kind"] == "step"]
+    return {"steps": [r for r in trace.records if r["kind"] == "step"], "drafted": {str(s): d for s, d in sorted(drafted.items())},
+            "tokens": tokens, "empty_schedules": empty,
+            "arrived_after_an_empty_schedule": {r["request"]: r["after_empty"] for r in trace.records
+                                                if r["kind"] == "arrive" and "after_empty" in r}}
+
+
+def run(a: argparse.Namespace) -> dict[str, Any]:
+    """One engine: the serve of ``a.arm``, or the replay of the serve in ``a.dir``."""
+    if os.environ.get("PYTHONHASHSEED") != "0":
+        raise SystemExit("specdec-replay: PYTHONHASHSEED=0 (a set's order decides a batch's row order)")
+    os.environ["VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"] = "1"
+    sys.path.insert(0, str(ADAPTER))
+    from verity_vllm.engine import env, served_seed
+    from verity_vllm.engine.step_trace import StepTrace, load
+
+    env.apply_engine(None)
+    out = Path(a.dir)
+    reqs = {r["id"]: r for r in plan(served_seed.DEFAULT_SEED)}
+    if a.phase == "serve":
+        cfg = {**SERVE, "speculative": ARMS[a.arm]}
+        due = [{"id": r["id"], "iteration": r["iteration"]} for r in reqs.values()]
+        (out / "trace.jsonl").unlink(missing_ok=True)
+    else:
+        recs = load(out / "trace.jsonl")
+        cfg = recs[0]["config"]
+        due = arrivals(recs)
+    model = Path(tempfile.mkdtemp(prefix="specdec-stand-in-"))
+    stand_in(model)
+    eng = engine(model, cfg, eager=not a.compiled)
+    redrawn = rescale(eng) if a.weights == "scaled" else None
+    trace = StepTrace(out / "trace.jsonl" if a.phase == "serve" else None).install(eng)
+
+    def add(rid: str) -> None:
+        r = reqs[rid]
+        got = eng.add_request(rid, {"prompt_token_ids": r["prompt_ids"]}, params(r["sampling"], r["max_tokens"]))
+        if got not in (None, rid):
+            raise SystemExit(f"specdec-replay: the engine named {rid} {got}")
+
     doc = {"phase": a.phase, "arm": a.arm, "weights": a.weights, "compiled": a.compiled, "config": trace.records[0]["config"],
-           "redrawn": redrawn, "steps": steps, "drafted": {str(s): d for s, d in sorted(drafted.items())}, "tokens": tokens,
-           "sampling": {rid: r["sampling"] for rid, r in reqs.items()}, "empty_schedules": empty,
-           "arrived_after_an_empty_schedule": {r["request"]: r["after_empty"] for r in trace.records
-                                               if r["kind"] == "arrive" and "after_empty" in r}}
+           "redrawn": redrawn, **drive(eng, trace, a.phase, due, add), "sampling": {rid: r["sampling"] for rid, r in reqs.items()}}
+    trace.uninstall()
     (out / f"{a.phase}.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     return doc
 
