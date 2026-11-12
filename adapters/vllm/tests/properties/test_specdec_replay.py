@@ -299,8 +299,9 @@ def test_a_replay_from_the_trace_alone_repeats_vllms_scheduler_under_drafts(k, t
     before it ran is recorded ahead of its true position by what that row rejected, and nowhere else."""
     pytest.importorskip("vllm")
     reqs = _load()
-    seen: dict[str, Any] = {"after_empty": 0, "early_differs": 0, "hits": 0, "empty": 0, "steps": 0,
-                            "first": {"true": 0, "ahead_by_rejected": 0, "other": 0}, "kept": {}}
+    seen: dict[str, Any]
+    seen = {"after_empty": 0, "early_differs": 0, "hits": 0, "empty": 0, "steps": 0, "first": {"true": 0, "ahead_by_rejected": 0, "other": 0},
+            "kept": {}}
     for gap in range(1, 13):
         serve = _run({**SERVE, **_draft(k)}, tmp_path / "model", "serve", [{"id": rid, "iteration": i * gap} for i, rid in enumerate(reqs)], reqs)
         header = serve["records"][0]["config"]
