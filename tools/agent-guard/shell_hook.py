@@ -75,7 +75,8 @@ there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends i
 `research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
-a branch registered to another agent.
+a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
+(`compute-verification/verity` and `compute-verification/infra`) and no other: the notes' `main` is every agent's to push.
 
 It also carries messages to running agents, the one channel that reaches a subagent mid-run, on any VM (`inbox.py send
 AGENT_ID`). A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next

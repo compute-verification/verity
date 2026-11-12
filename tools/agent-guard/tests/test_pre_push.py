@@ -1,7 +1,8 @@
 """A push an agent's script or child process makes meets the branch rule a typed `git push` meets: the git guard (git_guard.sh)
 gives every push the pre-push hook (pre_push.py), which refuses a branch registered to another agent and `main`, `checked`
-and `next`, and then runs the hook the push would have run without it. A push no agent started (a person's, the queue's)
-is not judged."""
+and `next`, and then runs the hook the push would have run without it, for a push to the repositories whose `main`,
+`checked` and `next` drive lands (verity and infra). A push no agent started (a person's, the queue's) is not judged, and
+neither is one to another repository (the notes, whose `main` every agent's `research notes sync` pushes)."""
 import json
 import os
 import subprocess
@@ -18,7 +19,7 @@ REAL_GIT = "/usr/bin/git"
 
 class VM:
     """An agent VM in miniature: `git` on PATH is the guard, whose pushes go through a hooks directory with pre_push.py in it;
-    `origin` stands in for GitHub (AGENT_GUARD_PUSH_REMOTES), `node` for a node's bare repository."""
+    `origin` stands in for verity on GitHub (AGENT_GUARD_PUSH_REMOTES), `node` for a node's bare repository."""
 
     def __init__(self, tmp: Path):
         self.tmp, self.origin, self.node, self.ws = tmp, tmp / "origin.git", tmp / "node.git", tmp / "ws"
@@ -164,3 +165,84 @@ def test_install_writes_the_hook_the_git_guard_runs():
     text = (GUARD / "install.sh").read_text()
     assert "hooks=/usr/local/lib/agent-guard/hooks" in text and "/pre_push.py" in text
     assert "${AGENT_GUARD_GIT_HOOKS:-/usr/local/lib/agent-guard/hooks}" in (GUARD / "git_guard.sh").read_text()
+
+
+#: a GitHub installation token's shape, from parts, as the URL a Cursor VM's insteadOf rewrites to carries one
+TOKEN = "gh" "s_" "dummyDUMMYdummy0123456789abcdefABCDEF"
+NOTES = "https://github.com/compute-verification/research-notes.git"
+VERITY = ["https://github.com/compute-verification/verity.git", "https://github.com/compute-verification/verity",
+          "git@github.com:compute-verification/verity.git", "ssh://git@github.com/compute-verification/verity.git",
+          f"https://x-access-token:{TOKEN}@github.com/compute-verification/verity"]
+INFRA = ["https://github.com/compute-verification/infra.git", f"https://x-access-token:{TOKEN}@github.com/compute-verification/infra"]
+NOT_QUEUE = [NOTES, f"https://x-access-token:{TOKEN}@github.com/compute-verification/research-notes.git",
+             "https://github.com/someone/verity-fork", "https://github.com/compute-verification/verity-notes",
+             "https://github.com/someone/compute-verification/verity", "https://github.com/compute-verification/verity.git.bak",
+             "git@github.com:someone/verity.git"]
+ZERO, A, B = "0" * 40, "1" * 40, "2" * 40
+
+
+def hook(url: str, *lines: str, agent: str | None = ME, tmp: Path, **env: str) -> subprocess.CompletedProcess:
+    """pre_push.py as git runs it for a push to `url` (`origin`), fed git's lines, with the default repositories."""
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("AGENT_GUARD_", "CURSOR_"))}
+    (tmp / "state").mkdir(exist_ok=True)
+    (tmp / "state" / "branches.json").write_text(json.dumps({"theirs": OTHER, "lanes/infra": OTHER}))
+    e = {**base, "AGENT_GUARD_STATE": str(tmp / "state"), **({"CURSOR_CONVERSATION_ID": agent} if agent else {}), **env}
+    return subprocess.run(["python3", str(GUARD / "pre_push.py"), "origin", url], input="".join(f"{x}\n" for x in lines),
+                          capture_output=True, text=True, env=e)
+
+
+MAIN, NEXT = f"refs/heads/main {A} refs/heads/main {B}", f"HEAD {A} refs/heads/next {B}"
+LANE, DELETE = f"refs/heads/lanes/infra {A} refs/heads/lanes/infra {B}", f"(delete) {ZERO} refs/heads/theirs {B}"
+
+
+def test_a_notes_sync_push_of_main_to_the_notes_passes(tmp_path):
+    """`research notes sync` pushes the notes' `main` from a child of the agent's shell (notes_sync.py, through a token URL),
+    and `research notes push` a lane's branch, which may share a name with a registered verity branch."""
+    for url in NOT_QUEUE[:2]:
+        for refs in (MAIN, NEXT, LANE, DELETE):
+            assert hook(url, refs, tmp=tmp_path).returncode == 0, (url, refs)
+
+
+def test_the_same_refs_to_verity_are_refused(tmp_path):
+    for url in VERITY:
+        for refs, said in ((MAIN, "only drive and the lander move"), (NEXT, "only drive and the lander move"),
+                           (f"refs/heads/x {A} refs/heads/checked {ZERO}", "only drive and the lander move"),
+                           (LANE, f"belongs to agent {OTHER}"), (DELETE, f"belongs to agent {OTHER}")):
+            p = hook(url, refs, tmp=tmp_path)
+            assert p.returncode == 1 and said in p.stderr, (url, refs)
+    assert hook(VERITY[0], MAIN, agent=None, tmp=tmp_path).returncode == 0, "no agent's push is judged"
+
+
+def test_the_infra_repositorys_main_is_refused(tmp_path):
+    for url in INFRA:
+        p = hook(url, MAIN, tmp=tmp_path)
+        assert p.returncode == 1 and "only drive and the lander move" in p.stderr, url
+
+
+def test_a_url_that_only_holds_the_repositorys_name_elsewhere_is_not_verity(tmp_path):
+    for url in NOT_QUEUE[2:]:
+        for refs in (MAIN, LANE):
+            assert hook(url, refs, tmp=tmp_path).returncode == 0, (url, refs)
+
+
+def test_a_url_with_a_token_in_it_is_matched_and_never_printed(tmp_path):
+    for url in (VERITY[4], INFRA[1]):
+        p = hook(url, MAIN, LANE, tmp=tmp_path)
+        assert p.returncode == 1 and "refused" in p.stderr
+        assert TOKEN not in p.stderr + p.stdout and "x-access-token" not in p.stderr + p.stdout
+
+
+def test_agent_guard_push_remotes_names_other_repositories_in_the_defaults_place(tmp_path):
+    line = f"refs/heads/main {A} refs/heads/main {B}"
+    assert hook(NOTES, line, tmp=tmp_path, AGENT_GUARD_PUSH_REMOTES=r"research-notes").returncode == 1
+    assert hook(VERITY[0], line, tmp=tmp_path, AGENT_GUARD_PUSH_REMOTES=r"research-notes").returncode == 0
+
+
+def test_an_inbox_message_pushed_to_verity_passes(vm):
+    """`inbox.py send` commits a message onto `inbox/AGENT` and pushes it to the checkout's origin, verity, through `git`."""
+    code = ("import sys; sys.dont_write_bytecode = True; sys.path.insert(0, sys.argv[1]); import inbox; from pathlib import Path; "
+            "print(inbox.commit(Path(sys.argv[2]), sys.argv[3], 'hello', None, 'message'))")
+    p = subprocess.run(["python3", "-c", code, str(GUARD), str(vm.ws), OTHER], capture_output=True, text=True,
+                       env={**vm.env, "CURSOR_CONVERSATION_ID": ME})
+    assert p.returncode == 0, p.stderr
+    assert f"inbox/{OTHER}" in vm.heads()

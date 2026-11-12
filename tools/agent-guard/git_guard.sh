@@ -116,6 +116,9 @@ case $sub in
     hooks=${AGENT_GUARD_GIT_HOOKS:-/usr/local/lib/agent-guard/hooks}
     if [ -x "$hooks/pre-push" ]; then
       chain=$("$REAL" "${pre[@]}" rev-parse --path-format=absolute --git-path hooks 2>/dev/null)
+      # git before 2.31 echoes the option it doesn't know and prints a relative path: then no hook is chained, and the push
+      # still runs, judged
+      [[ $chain == /* && $chain != *$'\n'* ]] || chain=
       [ -n "$chain" ] && [ "$chain" -ef "$hooks" ] && chain=
       kept=()
       for a in "${rest[@]}"; do

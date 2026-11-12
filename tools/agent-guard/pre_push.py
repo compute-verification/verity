@@ -10,19 +10,21 @@ pre-push hook git would have run without it (`AGENT_GUARD_CHAIN_HOOKS`, the hook
 `--no-verify` or `core.hooksPath=/dev/null`), with the same arguments and input, and git takes that hook's verdict.
 
 The pusher is the agent whose shell started it: `CURSOR_CONVERSATION_ID`, which Cursor sets in every agent's shell and every
-process under it inherits. A push is judged when that is set and the push goes to GitHub (its URL matches
-`AGENT_GUARD_PUSH_REMOTES`, default `github\\.com[:/]`): for each `refs/heads/` branch it creates, moves, forces or deletes,
+process under it inherits. A push is judged when that is set and it goes to a repository whose `main`, `checked` and `next`
+drive lands, compute-verification/verity or compute-verification/infra on GitHub (`worktree_guard.queue_remote`: the URL git
+hands the hook, whole, in https, ssh or scp form, with or without `.git` and a credential; `AGENT_GUARD_PUSH_REMOTES`, a
+regular expression, names others in their place): for each `refs/heads/` branch it creates, moves, forces or deletes,
 the push is refused when the branch is `main`, `checked` or `next` (a lander's repair of `next` alone passes with
 `AGENT_GUARD_PUSH_NEXT_OK='REASON'` in its environment, logged as the typed one is), or registered to another agent
 (`$AGENT_GUARD_STATE/branches.json`) that hasn't handed it over; an unregistered branch passes. Without
 `CURSOR_CONVERSATION_ID` nothing is judged: no agent started the push (a person, a boot script), and the queue's pushes on
-the control pod, CI tooling and a person's laptop run no wrapper and so no hook at all. A push to another remote (a node's
-bare repository, a scratch clone) is not judged either. The URL git hands the hook can hold a token, so nothing prints it.
+the control pod, CI tooling and a person's laptop run no wrapper and so no hook at all. A push to another repository is not
+judged either: the notes' `main`, which every agent's `research notes sync` pushes, a lane's notes branch, a fork, a node's bare
+repository, a scratch clone. The URL can hold a token, so nothing prints it.
 """
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 
@@ -44,7 +46,7 @@ def branches(lines: list[str]) -> list[str]:
 def reason(remote: str, url: str, lines: list[str], env: dict[str, str]) -> str | None:
     """Why this push may not run (module doc), or None."""
     agent = env.get("CURSOR_CONVERSATION_ID", "").strip()
-    if not agent or not re.search(env.get("AGENT_GUARD_PUSH_REMOTES") or r"github\.com[:/]", url):
+    if not agent or not worktree_guard.queue_remote(url, env.get("AGENT_GUARD_PUSH_REMOTES")):
         return None
     pushed = branches(lines)
     targets = worktree_guard.PROTECTED & set(pushed)

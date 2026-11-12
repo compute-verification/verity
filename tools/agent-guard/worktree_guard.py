@@ -37,6 +37,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from settings import PUSH_REMOTES
+
 STATE = Path(os.environ.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
 OWNER_FILE = "agent-owner"
 
@@ -193,7 +195,7 @@ def push_url(directory: str, args: list[str]) -> str | None:
 def queue_push(directory: str, args: list[str]) -> bool:
     """Whether the push rules judge `git push ARGS` run in `directory` (module doc)."""
     url = push_url(directory, args)
-    return url is None or queue_remote(url, os.environ.get("AGENT_GUARD_PUSH_REMOTES"))
+    return url is None or queue_remote(url, PUSH_REMOTES)
 
 #: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
 #: so even `--name-only` prints it
