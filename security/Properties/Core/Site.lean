@@ -15,9 +15,10 @@ the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests
 * `Fold`: the code's Site of a log is the spec's Site of the log it denotes (`Verity.Site.ofLog`).
 * `Refuses`: an entry's refusal in code is the spec's (`Verity.Registration.Entry.refusal`), check for check, so
   `EntryValid`: the code accepts an entry exactly when it is valid (`Verity.Registration.Entry.Valid`).
-* `Checks`: the code's check of a log accepts it exactly when the log is valid (`Verity.Registration.Valid`), with the
-  spec's Site of it, and `RefusedAt`: when it refuses, the index it names is the first entry the spec refuses, with that
-  refusal.
+* `Checks`: the code's check of a log accepts it exactly when the log is valid (`Verity.Registration.Valid`) and its
+  Site is complete against the auditor's figures (`Verity.Registration.Complete`), with the spec's Site of it, and
+  `RefusedAt`: when it refuses, the index it names is the first entry the spec refuses, with that refusal, or the log's
+  end, where every entry passes and the log's Site is not complete.
 
 The code's difftest (`site-difftest`) holds it to `verity.core.site`, so these carry the Python Site to the spec. A code
 figure (`Core.Site.Figure`, a nonnegative `Rat`) denotes the same rational in `ℚ≥0` (`figure`).
@@ -218,27 +219,32 @@ def EntryValid : Prop :=
     e.refusal D A c S head = none ↔
       Verity.Registration.Entry.Valid (digests D) (auditor A) (composite c) (site S) head (regEntry e)
 
-/-- **The check of a log is the spec's**: it accepts a log exactly when the log it denotes is valid, and then with the
-spec's Site of that log. -/
+/-- **The check of a log is the spec's**: it accepts a log exactly when the log it denotes is valid and its Site is
+complete against the auditor's figures, and then with the spec's Site of that log. -/
 def Checks : Prop :=
   ∀ (D : Core.Site.Registration.Digests) (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
     (l : Core.Site.Registration),
     (Core.Site.Registration.check D A c l).toOption.map site =
-      if Verity.Registration.Valid (digests D) (auditor A) (composite c) (log l) then
+      if Verity.Registration.Valid (digests D) (auditor A) (composite c) (log l) ∧
+          Verity.Registration.Complete (digests D) (auditor A) (Verity.Site.ofLog (log l)) then
         some (Verity.Site.ofLog (log l))
       else none
 
-/-- **A refusal names the first invalid entry**: when the check refuses a log at index `i` with refusal `r`, the log's
-first `i` entries are valid, and the spec refuses entry `i` against them with `r`. -/
+/-- **A refusal names the first invalid entry, or the log's end**: when the check refuses a log at index `i` with
+refusal `r`, the log's first `i` entries are valid, and either `i` is an entry's index and the spec refuses entry `i`
+against them with `r`, or `i` is the log's length, `r` is `inventory`, and the log's Site is not complete against the
+auditor's figures. -/
 def RefusedAt : Prop :=
   ∀ (D : Core.Site.Registration.Digests) (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
     (l : Core.Site.Registration) (i : Nat) (r : Core.Site.Registration.Refusal),
     Core.Site.Registration.check D A c l = .error (i, r) →
-      ∃ hi : i < l.length,
-        Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (l.take i)) ∧
-          Verity.Registration.Entry.refusal (digests D) (auditor A) (composite c)
+      Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (l.take i)) ∧
+        ((∃ hi : i < l.length,
+            Verity.Registration.Entry.refusal (digests D) (auditor A) (composite c)
               (Verity.Site.ofLog (log (l.take i))) (Verity.Registration.head (digests D) (composite c) (log (l.take i)))
-              (regEntry l[i]) = some (refusal r)
+              (regEntry l[i]) = some (refusal r)) ∨
+          (i = l.length ∧ r = .inventory ∧
+            ¬Verity.Registration.Complete (digests D) (auditor A) (Verity.Site.ofLog (log l))))
 
 /-! ## The witnesses' instances
 
