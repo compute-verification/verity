@@ -1291,6 +1291,47 @@ def test_a_record_whose_bytes_are_not_the_ones_its_name_digests_is_never_taken(t
     assert _records_only(root)["rebuilt"] == ["_sized_roots"] and rec.read_bytes() == whole
 
 
+def _records_main(root: Path, out: Path, listed: Path | None = None, env: dict[str, str] | None = None) -> tuple[dict, str]:
+    """``circuit-check --all --records-only`` over ``root`` as the command line runs it (`RECORDS_MAIN`), told to list its
+    records at ``listed``: its report and the line it printed."""
+    r = subprocess.run([sys.executable, "-c", RECORDS_MAIN, str(root), str(REPO), str(out), *([str(listed)] if listed else [])],
+                       capture_output=True, text=True, cwd=REPO, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **(env or {})})
+    assert r.returncode == 0, r.stderr
+    (line,) = [ln for ln in r.stdout.splitlines() if ln.startswith("circuit-check --records-only: ")]
+    return json.loads(out.read_text()), line
+
+
+def _keys(root: Path) -> set[str]:
+    """Each key ``root``'s cache holds an entry under, by its directory (`cache._dir`)."""
+    return {p.parent.name for p in (root / "cache").glob("*/*/*.json")}
+
+
+@pytest.mark.slow
+def test_two_runs_that_differ_only_in_where_they_list_their_records_make_the_same_keys(tmp_path):
+    """Where a run lists its records is in no key, as where it writes its report is in none: a ``--records-only`` told another
+    path than the one before it builds no binding and lists the records that one listed, a ``--catalog-units`` run told
+    another reuses every target and lists the records the one before it did, and neither adds a key to the cache's."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    one, two = tmp_path / "one" / "records.json", tmp_path / "two" / "other.json"
+    first, _ = _records_main(root, tmp_path / "out.json", one)
+    assert first["stored"] == 5 and len(first["rebuilt"]) == 5, first
+    keys = _keys(root)
+    again, _ = _records_main(root, tmp_path / "out.json", two)
+    assert again["reused"] == 5 and again["rebuilt"] == [] and again["stored"] == 0 and _keys(root) == keys, again
+    assert {b: rec for b, (rec, _) in _listed(root, two).items()} == {b: rec for b, (rec, _) in _listed(root, one).items()}
+
+    step = "units=True, manifest=Path({!r}))"
+    ran = _run(root, HARNESS.replace("units=True)", step.format(str(tmp_path / "one" / "step.json"))))
+    assert ran["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and ran["hits"] == []
+    rows = _listed(root, tmp_path / "one" / "step.json")
+    assert len(rows) == 5 and rows.items() <= _listed(root, two).items()
+    keys = _keys(root)
+    again = _run(root, HARNESS.replace("units=True)", step.format(str(tmp_path / "two" / "step-other.json"))))
+    assert again["hits"] == sorted(again["values"]) == sorted(ran["values"]) and _keys(root) == keys
+    assert again["stats"]["units"] == ran["stats"]["units"] and _listed(root, tmp_path / "two" / "step-other.json") == rows
+
+
 def test_no_key_holds_the_variables_that_say_where_records_are_or_how_a_suite_runs(monkeypatch):
     """A record a session's build stores is the one `check`'s circuit-check takes only when both key it alike: the variables
     only the suite's runner and conftest.py read are in no key, and any other of the keyed prefixes still is."""
