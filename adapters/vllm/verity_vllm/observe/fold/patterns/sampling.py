@@ -379,7 +379,7 @@ class TokenSelectGumbelTopP:
 
     def _temperature(self, node: TreeNode, ctx: StepContext) -> Resolution:
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         rec = self._row_state(node, ctx, a.get("logits_ptr"))
         if isinstance(rec, Unsupported):
             return rec
@@ -398,7 +398,7 @@ class TokenSelectGumbelTopP:
 
     def _topp(self, node: TreeNode, ctx: StepContext, k: str) -> Resolution:
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         rec = self._row_state(node, ctx, first(a.get("LOGITS"), a.get("logits_ptr")))     # the split kernels' signature: LOGITS, STATS, PARTS, K, P, ROUND
         if isinstance(rec, Unsupported):
             return rec
