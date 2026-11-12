@@ -11,7 +11,7 @@ from research.store.tool import Tool
 
 TREE = workspace_root(__file__)
 #: core and the catalog, the kernels and the verifiers beside it, wherever the tree keeps them
-CORE = [p for n in ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core") for p in package_paths(TREE, n, "**")]
+CORE = [p for n in ("verity", "verity.circuits", "verity.definitions.kernels") for p in package_paths(TREE, n, "**")]
 
 KEYS = ("REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS")
 
@@ -28,7 +28,7 @@ def parse(argv: list[str]) -> dict:
 FLOCK_PURE = Tool(
     name="flock_pure", version="1",
     command=["bash", "verity/protocols/flock/pod/20-pure.sh"],
-    closure=["verity/protocols/flock/prover/**", "verity/protocols/flock/verifier/**", "benchmarks/numerical/**", *CORE],
+    closure=["verity/protocols/flock/prover/**", "verity/protocols/flock/pod/**", "verity/protocols/flock/agreement/**", "verity/protocols/flock/tool.py", "verity/protocols/flock/verifier/**", "benchmarks/numerical/**", *CORE],
     key_params=["REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS"],
     key_conditions=["hw.family"],
     caches=[],
@@ -56,7 +56,7 @@ def parse_class_sweep(argv: list[str]) -> dict:
 FLOCK_CLASS_SWEEP = Tool(
     name="flock_class_sweep", version="1",
     command=["bash", "verity/protocols/flock/pod/70-class-sweep.sh"],
-    closure=["verity/protocols/flock/prover/**", "verity/protocols/flock/verifier/**", "benchmarks/numerical/python/**", *CORE,
+    closure=["verity/protocols/flock/prover/**", "verity/protocols/flock/pod/**", "verity/protocols/flock/agreement/**", "verity/protocols/flock/tool.py", "verity/protocols/flock/verifier/**", "benchmarks/numerical/python/**", *CORE,
              "adapters/vllm/verity_vllm/**", "tools/verity/circuit_check/src/**"],
     key_params=list(CLASS_SWEEP_KEYS),
     param_artifacts=["GRAPH", "DEFS", "SHAPES"],

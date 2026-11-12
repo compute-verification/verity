@@ -202,6 +202,9 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
+    # archive/integrations/vllm/tools/train_step_census.py imports these two: they go when the archived file is deleted
+    "verity_vllm.program.frontend.rules",
+    "verity_vllm.program.frontend.rules.training",
     "verity_vllm.program.frontend.rules.family",
     "verity_vllm.program.frontend.rules.vocab",
     "verity_vllm.program.frontend.targets",

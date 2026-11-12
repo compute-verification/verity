@@ -356,7 +356,7 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
     (repo / "tools/agree/tool.py").write_text("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', "
                                               "command=['true'], merge_requires={'agreement': ['verity/protocols/flock/prover/']})\n")
     (repo / "verity/protocols/flock/prover").mkdir(parents=True)
-    (repo / "verity/ml/flock/a.py").write_text("x = 1\n")
+    (repo / "verity/protocols/flock/prover/a.py").write_text("x = 1\n")
     git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
     git("init", "-q")
     git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")

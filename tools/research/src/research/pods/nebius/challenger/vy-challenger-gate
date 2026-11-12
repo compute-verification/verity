@@ -8,4 +8,4 @@ set -eu
 if [ "$(id -u)" != 0 ]; then
   exec sudo -n /usr/local/sbin/vy-challenger-gate --ssh "${SSH_ORIGINAL_COMMAND:-}" --key "${1:--}"
 fi
-exec /usr/bin/python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py gate "$@"
+exec /usr/bin/python3 -I /opt/vy-challenger/current/verity/composite/device/live_challenger/auditor.py gate "$@"
