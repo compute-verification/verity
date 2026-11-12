@@ -36,7 +36,6 @@
     {"file": "verity_vllm/commit/capture_map.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/capture-map/v0"},
     {"file": "verity_vllm/config.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/meta-inventory/v1"},
-    {"file": "verity_vllm/engine/step_trace.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/step-trace/v1"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/observe/fold/profiles/generic.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 8},
     {"file": "verity_vllm/observe/fold/resolve_log.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
