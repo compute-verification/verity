@@ -1,1 +1,1 @@
-2026-11-12T18:03Z CHECKTIME: Part C posted on CIR-255 (~18:02Z); PR #9390 open unmarked at df3b53faac. Parts B and C done.
+2026-11-12T18:27Z CHECKTIME: lead's follow-up on #9390; gate at df3b53faac failures []; run r20261112-182439-0086 (cpu-14 research pool) for by-calls roots (head merged into main, and main) and suites at the head.
