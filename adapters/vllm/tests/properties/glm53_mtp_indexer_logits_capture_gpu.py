@@ -70,7 +70,7 @@ def lengths(spec: tuple[int | None, ...], rng: np.random.Generator) -> np.ndarra
 
 
 def operands(L: np.ndarray, seed: int) -> dict[str, np.ndarray]:
-    """The cache, block table, queries and weights for requests of lengths L: each request's ceil(L / BLOCK) blocks drawn at random
+    """The cache, block table, queries and weights for requests of lengths L: each request's ceil(L / BLOCK) blocks picked at random
     from the cache's (one spare block first), unused table entries 0; key rows e4m3 of N(0, 1) * 2^U(-2, 2) with scales
     2^U(-10, -6); queries e4m3 of N(0, 1) * 2^U(-2, 2); weights N(0, 1) * 2^-4 in f32."""
     import torch
