@@ -404,6 +404,25 @@ def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other
         BR.commit([BR.Span("a", (1,) * 5, GREEDY, (2,) * 4, "stop")], L, 0)
 
 
+def test_history_tables_refuse_a_scheduler_that_caches_prefixes(tmp_path):
+    """A request served from the prefix cache computes no latent row before its hit's end, and rank 0 refuses rows that
+    start past what it holds: every class committed after the first hit would register nothing. So the hook is refused
+    on a caching scheduler before it serves a request, and nothing is wrapped; without tables it is installed
+    (`test_boundary_rows`)."""
+    sched, hooks, lines = Scheduler(), Hooks(tag="test-boundary-tables-caching"), []
+    sched.cache_config.enable_prefix_caching = True
+    bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
+                            tables=BT.LocalChannel(BT.Builder(BT.Latents([0, 3]))), layers=(0, 3))
+    try:
+        with pytest.raises(ValueError, match="history tables need prefix caching off"):
+            bw.install(sched, hooks)
+        assert "add_request" not in vars(sched) and "schedule" not in vars(sched)
+    finally:
+        bw.stop()
+        hooks.uninstall()
+    assert lines == []
+
+
 def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_path):
     cfg = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAP, "timeout_s": 5}}
     bw = BW.BoundaryWindows.of(cfg, tmp_path / "out", public=[tmp_path / "run"])

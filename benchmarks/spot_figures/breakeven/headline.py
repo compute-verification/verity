@@ -11,7 +11,7 @@ reaches 10% of its compute, and a row's sampling plan, from one entry point at a
 
 from the repository's root. A row (`ROWS`) is the proof server's line at its last step
 (`sweep.served_line()["P5+poolwin600"]`) with its case's levers at their measured values, over the 128k workload with
-every sparse-MLA head's blocks (`volume`). `price` prices its strata: the planner's per-type pricing, the built AND
+every sparse-MLA head's blocks (`volume`), its verification phase a datacenter's window. `price` prices its strata: the planner's per-type pricing, the built AND
 gates of FlashInfer K6144 and K2048 in lookup slots at their measured warm sessions, the quant types' host walk, the
 Lean verifier as measured and the row's scale. `evaluate` charges it: the carried pool's pages recommitted at each edge
 (a copy stratum and the kv arm's hash tax), a request cut at the edge recomputed, its prefix hits reproved, B128's
@@ -66,9 +66,10 @@ WORLD = "ours"
 PROVER_MEASURED = 1.101 / (2.088 / 3.71)
 #: every modelled lever of the P5 path at its measured value: the prover, the templated check as measured, two dense
 #: provers a GPU, no flat-column verifier cut, no front run beside device work, and replay over every machine block,
-#: not its lifetime alone
+#: not its lifetime alone; and the rows' verification phase, a datacenter's window, whose first stage samples a whole
+#: count of its replay blocks
 MEASURED = {"prover": PROVER_MEASURED, "tmpl": "measured", "dense_k": 2, "verify_cut": False, "front": False,
-            "replay": 5258.0, "live": False, "commit_write": False}
+            "replay": 5258.0, "live": False, "commit_write": False, "registration": "datacenter"}
 #: the served tokens' line, unfused
 TOKENS = {"line": "tokens", "fuse": False, "fused": ""}
 #: the types whose seconds a warm served block replaces in (iii)
@@ -289,7 +290,7 @@ def copy_stratum(strata: list, tokens_window: float) -> dict:
     return dict(block=f"PageCopy[{CLASS_MAX} bits]", kind="PageCopy",
                 per_token=POOL_BLOCKS * PAGE_ROWS / tokens_window, out_bits=CLASS_MAX, in_bits=CLASS_MAX,
                 ands=COPY_ANDS, macs=0, seconds_per_block=COPY_ANDS * s_and, fixed_seconds=k27[len(k27) // 2],
-                statement_blocks=256, k_log=27, priced="modeled", basis=COPY_BASIS)
+                statement_blocks=256, table_blocks=256, k_log=27, priced="modeled", basis=COPY_BASIS)
 
 
 def hash_tax(window: float, gpus: int) -> float:
@@ -378,7 +379,10 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
     serve is the line's serving tax without the pool window's lost hits (the pool is carried), plus the kv arm's hash
     tax and the edge's wait; edge is the cut's recompute; proving is scaled by it and the reproved prefix hits; pool is
     the pool's AND gates a window when only replays read it, at the line's price an AND; compile is the sampled replay
-    blocks' compile; total adds them to beta."""
+    blocks' compile; total adds them to beta.  The row's verification phase is its case's (`MEASURED`: a datacenter's
+    window), the first stage a whole count of its replay blocks, and the row carries it (`verification_phase`: its
+    size, the count sampled, its sessions and the first limit of today's second-stage code the design meets,
+    `total_cost.limits`); a beta that pays for no sampled replay block of it has no design and is refused."""
     P = P or planner()
     sweep, levers, reprice = P.sweep, P.levers, P.reprice
     scope, t, b = spec["scope"], spec["run_s"], spec["beta"]
@@ -402,6 +406,11 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
         if len(trace.designs) != designs + 1:
             raise RuntimeError(f"{spec['row']}, {scope}: the bound made {len(trace.designs) - designs} designs, not one")
         p, gs = pt["plan"], sweep.SCOPES[scope].gpu_seconds
+        if p is None:
+            raise ValueError(f"{spec['row']}, {scope}: beta {b:g} pays for no sampled replay block of the row's "
+                             f"verification phase (one costs {pt['sample_budgets']:.3g} of its budgets): no design")
+        d = trace.designs[-1]
+        phase = P.tc.registration_gpu_seconds(case.registration, levers.c)
         comp = p["replay_sample"] * COMPILE_CORE_H * 3600 / reprice.CORE_PER_GPU / gs
         pools = sweep.pool(L, case, pt["registration_sample"])
         pool = pools["every"]["v5 walked"] / sweep.POOL_WINDOW_ANDS["v5 walked"] * REPLAY_ONLY
@@ -413,6 +422,11 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
                "prove": p["prove"] / gs, "replay": p["replay"] / gs, "replay_sample": p["replay_sample"],
                "q": p["replay_sample"] / s.requests, "bound_bits": y, "weights_bits": w,
                "target_bits": (1 - spec["share"]) * w, "delta_seen": model.delta, "S_seen": float(spec["S"]),
+               "verification_phase": {"name": case.registration, "seconds": sweep.WINDOW,
+                                      "machines": phase / (sweep.MACHINE_GPUS * sweep.WINDOW),
+                                      "replay_blocks": d["kw"]["registration"],
+                                      "sampled": pt["registration_sample"], "sessions": pt["sessions"],
+                                      "limit": pt["limit"]},
                "served_bits": L[1]["served_bits"].value, "requests": s.requests, "flop_request": s.flop_request,
                "gpu_seconds": gs, "case": spec["case"], "scale": spec["scale"], "volume": spec["volume"],
                "census_scope": {k: getattr(sweep.SCOPES[scope], k) for k in ("requests", "flop_request")}}
@@ -457,12 +471,11 @@ def plan(spec: dict, row: dict, reads: dict, known: dict, P: SimpleNamespace | N
     P = P or planner()
     opt, f1, sweep = P.opt, P.f1, P.sweep
     d, case, strata = reads["design"], reads["case"], reads["strata"]
-    drow, cells, span = d["row"], d["cells"], d["kw"].get("registration", 0.0)
+    drow, cells = d["row"], d["cells"]
     if len(strata) != len(cells):
         raise ValueError(f"{spec['row']}, {spec['scope']}: {len(strata)} strata against {len(cells)} cells")
-    split = [replace(x, stratum=0 if opt._size_class(x.bits) <= drow["merged"] else opt._size_class(x.bits))
-             for x in cells]
-    st = opt.two_stage_statements(split, drow["k"], drow["q"], span)
+    split = f1.split_cells(cells, drow["merged"])
+    st = opt.two_stage_statements(split, drow["k"], drow["registration_sample"], drow["form"])
     total = sum(x["prove"] for x in st)
     s = sweep.SCOPES[spec["scope"]]
     seconds = dict(f1.PERIODS)[s.period]
@@ -472,7 +485,8 @@ def plan(spec: dict, row: dict, reads: dict, known: dict, P: SimpleNamespace | N
             continue
         n = next((k for pattern, k in case.split if re.match(pattern, x["block"])), 1)
         cell = {"block": x["block"], "type": type_of(x["block"], known), "kind": x.get("kind"),
-                "k_log": x["k_log"] + log2(n), "cap": c.cap, "taken": t["taken"] / n, "shared": t["shared"],
+                "k_log": x["k_log"] + log2(n), "cap": c.cap, "table": c.table, "taken": t["taken"] / n,
+                "shared": t["shared"],
                 "fixed_s": c.fixed, "block_s": c.prove, "prove_s": t["prove"], "share": t["prove"] / total}
         if n > 1:
             cell |= {"split": n, "taken_split": t["taken"], "k_log_split": x["k_log"]}
