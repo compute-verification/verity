@@ -95,10 +95,8 @@ def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
         problems.append(f"compute capability {capability}, not {want_cap}")
     if sms != want_sms:
         problems.append(f"{sms} SMs, not {want_sms}")
-    try:
-        major = int(driver.split(".")[0])
-    except ValueError:
-        major = -1
+    head = driver.split(".")[0]
+    major = int(head) if head.isdecimal() else -1
     if major < min_driver:
         problems.append(f"driver {driver!r}, need {min_driver} or later")
     if problems:
