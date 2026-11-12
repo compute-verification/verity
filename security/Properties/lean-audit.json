@@ -1028,6 +1028,12 @@
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
+  },
   "Properties.Site.refuses": {
    "honest": ["Properties.Site.refuses_honest"],
    "nontrivial": "Properties.Site.refuses_nontrivial"
@@ -3872,6 +3878,18 @@
    },
    "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3",
    "unfolded_hash": "1c16068947d528cb1770783ec230022902093b9de5b0f13adaff41feb18468fb"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "owner": "@proofs"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "owner": "@proofs"
+  },
+  "Properties.Challenger.familyOneCommitmentRead_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.Challenger.familyOneCommitment_nontrivial": {
+   "owner": "@proofs"
   },
   "Properties.Composition.acceptMeans": {
    "owner": "@proofs",
@@ -11033,6 +11051,14 @@
    },
    "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
     "function": "PouwCheck.Credit.Internal.credited",
+    "outcome": "accept"
+   },
+   "Properties.Challenger.Drawn.familyOneCommitment": {
+    "function": "Spot.Challenger.drawCoins",
+    "outcome": "accept"
+   },
+   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+    "function": "Spot.Challenger.coinsReason",
     "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
