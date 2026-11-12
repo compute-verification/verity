@@ -10,23 +10,27 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.commitments.limits import VerificationLimits  # noqa: E402
-from verity.commitments.merkle import Commitment, verify_opening  # noqa: E402
-from verity.protocols.pouw.verifier.audit import HM96, rows_domain  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import tagged  # noqa: E402
+from verity.commitments.limits import VerificationLimits
+from verity.commitments.merkle import Commitment, verify_opening
+from verity.protocols.pouw.verifier.audit import HM96, rows_domain
+from verity.protocols.pouw.verifier.protocol import tagged
 
-from verity_vllm.engine import int8_ops  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import records as ZR  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import tables_device as TD  # noqa: E402
+from verity_vllm.engine import int8_ops
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import records as ZR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import tables_device as TD
 
 KEY = bytes(range(32))
 #: (rows, K, owner, table): an A table's T slots or a z table's records (K = ZY_BYTES - 4)

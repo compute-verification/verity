@@ -41,7 +41,7 @@ from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
 
 REF = dict(mode="reference")
-T, H, I, E, K = 4, 8, 16, 4, 2
+T, H, INTER, E, K = 4, 8, 16, 4, 2
 
 RESULTS: list[dict] = []
 
@@ -106,8 +106,8 @@ def _inputs_with_different_routing(m) -> tuple[torch.Tensor, torch.Tensor, torch
 class Experts(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.w1 = nn.ModuleList([nn.Linear(H, I, bias=False) for _ in range(E)])
-        self.w2 = nn.ModuleList([nn.Linear(I, H, bias=False) for _ in range(E)])
+        self.w1 = nn.ModuleList([nn.Linear(H, INTER, bias=False) for _ in range(E)])
+        self.w2 = nn.ModuleList([nn.Linear(INTER, H, bias=False) for _ in range(E)])
 
     def expert(self, e: int, x):
         return self.w2[e](F.relu(self.w1[e](x)))
@@ -168,7 +168,7 @@ class Top1SwitchMoE(Experts):
 
 def test_M1_sparse_gather_moe_is_refused_at_the_routing_for_every_example_input():
     torch.manual_seed(0)
-    m = ex.NegMoE(H=H, I=I, E=E, k=K)
+    m = ex.NegMoE(H=H, I=INTER, E=E, k=K)
     reps = [derive_report(m, (torch.empty(T, H),), **REF, name="NegMoE") for _ in range(2)]
     for rep in reps:
         assert not rep.ok, "a sparse-gather MoE derived to a Program: its structure would encode the example input's routing"

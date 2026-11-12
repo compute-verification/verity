@@ -16,6 +16,8 @@ from typing import Any, Self
 
 from verity_vllm.records.fields import RecordError, objects, optional, present, required
 
+__all__ = ["QueryChecks"]
+
 
 @dataclass(frozen=True)
 class Findings:
