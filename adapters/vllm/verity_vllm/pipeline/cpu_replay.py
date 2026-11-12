@@ -56,22 +56,18 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from verity_vllm.check import derived_weights, fp8_ue8m0
-from verity_vllm.check import weights_of_record as WR
-from verity_vllm.check.cublas_route_pin import stamp
-from verity_vllm.check.replay.driver import PoolDoesNotFit
-from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
-from verity_vllm.commit.partition import require_partition
 from verity_vllm.config import option
 from verity_vllm.errors import Refused
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
-from verity_vllm.pipeline.telemetry.admission import CALIBRATION
-from verity_vllm.pipeline.timeline import Timeline
 from verity_vllm.program.compiled_relations import warm_vml
+
+# The checks this command reads (the weights of record and their rewrites, the route pin, the verdict, the driver's refusal), the
+# partition, the admission's calibration and the timeline are imported inside the functions that read them: the route pin's and the
+# driver's imports put the catalog's Definitions into the Definition table, which this module's import is to leave as it found it.
 
 __all__ = ["OnRead", "Options", "Refused", "WORDS", "main", "manifest_of", "of_record", "open_weights", "opener",
            "provider", "registered_roles", "replay_args", "tensor_root_of", "tree_refusal", "weights_attest",
@@ -237,6 +233,9 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
     (`fp8_ue8m0.Rewrites` over the registered names): the fields vLLM rewrites at load, composed as it rewrites them.  ``roles`` (the
     Build's, by registered name): a field vLLM makes at load by more than a copy, composed by its role's rule (`derived_weights`), as
     the weights of record are."""
+    from verity_vllm.check import derived_weights
+    from verity_vllm.check import weights_of_record as WR
+
     name, dt, shape, nb = tree["names"][i]
     src = "bundle" if name in bundle_tensors(tree) else "checkpoint"
     if tensor_key_of(tree, i) is None:
@@ -266,6 +265,8 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
 def registered_roles(program_dirs: Iterable[str | None], prefix: str = "") -> dict[str, dict[str, Any]]:
     """The Build's `weight_roles` (`fp8_ue8m0.build_roles` of each Program dir) by registered name: the Program's field less the
     wrapper prefix its index strips (`ProgramIndex.prefix`, as the replay's weights provider does)."""
+    from verity_vllm.check import fp8_ue8m0
+
     roles: dict[str, dict[str, Any]] = {}
     for d in program_dirs:
         roles.update(fp8_ue8m0.build_roles(d))
@@ -275,6 +276,9 @@ def registered_roles(program_dirs: Iterable[str | None], prefix: str = "") -> di
 def rewrites(tree: dict[str, Any], roles: dict[str, dict[str, Any]] | None, ck: Any, tp: dict[str, int] | None) -> Any:
     """`fp8_ue8m0.Rewrites` over the tree's servable tensors: the fields of ``roles`` that vLLM rewrites at load, each read from
     the checkpoint as `weights_of_record.compose` composes it (a TP rank's shard under ``tp``).  None without roles or a checkpoint."""
+    from verity_vllm.check import fp8_ue8m0
+    from verity_vllm.check import weights_of_record as WR
+
     if not roles or ck is None:
         return None
     dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in tree["names"] if dt in WORDS}
@@ -441,6 +445,8 @@ def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[l
 
 
 def manifest_of(o: Options, ctx: dict[str, Any], args: SimpleNamespace) -> tuple[str | None, Any]:
+    from verity_vllm.commit.partition import require_partition
+
     want = ctx.get("required_manifest_sha256")
     if not want:
         return None, None
@@ -471,6 +477,8 @@ class WorkerPeakOption(Protocol):
 
 
 def worker_peak(o: WorkerPeakOption) -> int:
+    from verity_vllm.pipeline.telemetry.admission import CALIBRATION
+
     return int(o.worker_peak_gb * 2**30) if o.worker_peak_gb else int(CALIBRATION["commit.c2.replay_workers.small_vu"]["value"])
 
 
@@ -501,6 +509,9 @@ def weights_attest(c: dict[str, Any], wc: dict[str, Any], consumed: set[str], wo
 def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict[str, Any], consumed: set[str],
            words: dict[str, np.ndarray], extra: Any) -> None:
     """The run's value correspondence and verdict with the replay on the record (in the in-process Commit's component order)."""
+    from verity_vllm.check.cublas_route_pin import stamp
+    from verity_vllm.check.verdict import commit_verdict
+
     c = row["commit"]
     stamp(c)
     vc = c["value_correspondence"]
@@ -604,6 +615,9 @@ kept_draw = kept_sample
 
 def replay(o: Options) -> bool | None:
     """The bundle's C2 replay and the run's verdict on the record; the verdict's commit_pass."""
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.pipeline.timeline import Timeline
+
     t0 = time.perf_counter()
     tl = Timeline.from_env("commit_replay")
     b = open_source(o.bundle)
@@ -647,6 +661,8 @@ def replay(o: Options) -> bool | None:
 
 
 def main(o: Options) -> int:
+    from verity_vllm.check.replay.driver import PoolDoesNotFit
+
     warm_vml()
     try:
         ok = replay(o)
