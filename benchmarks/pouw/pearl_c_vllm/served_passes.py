@@ -5,7 +5,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain [--seeded]]
   served_passes.py same A.json B.json --out same.json
-  served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
+  served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device CUBIN [--device-check N]]
   served_passes.py volunteer-needed [--over-cap reject|uncredited] [--verdict run|pass]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...] [--window-record W]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
@@ -17,29 +17,30 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 
 ``arm`` writes the spec's Pearl-C arm's pouw settings (`pearl_c_arm`, each ``"$NAME"`` read from the environment the
 spec's setup exports) as serve-openai's ``--protocols-config`` takes them for the same arm (`serve_pearl.config_of`): the
-keys of `serve_pearl.CONFIG` alone, the server drawing each window's coins and naming its transcript dir itself.
+keys of `serve_pearl.CONFIG` alone, the server flipping each window's coins and naming its transcript dir itself.
 
 ``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
 ``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
 ``transcript_dir`` DIR, so each pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to
-``DIR/coins.json`` before the engine starts.  With ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER`` set the epoch's
-salt coin is a live session's on the auditor host instead (`bench_arm.live_coins`: a salt-only session reserved under
-``PEARLC_CHALLENGER_LANE`` before the engine starts, which the install opens on its salt epoch's root and closes at
-``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the document's
-``coins`` says which (`pearl_c.window.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
-``generate`` of one short request takes the first calls' one-time
-costs (the screen's Triton build); then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
-O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It
-writes each pass's counts, commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made
-it (``timed``), the timed call's wall (``generate_s``), each of its engine steps' (``step_s``) and the engine's close
-(``close_s``: what retaining completes behind the steps, waited for there), the engine steps, the
-caps, the install's ``max_step_tokens`` and whether every pass is within the caps, to ``--out`` and ``DIR/served.json``,
-and exits non-zero unless the timed call's passes hold calls in at least three (two boundaries crossed) and every pass is
-within its caps.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
-so its walls are the option's without retention, its passes have no manifest or MACs, and ``verify`` refuses it
-(``retained`` false).  With ``--seeded`` too (`seed_install`; refused with retention or the challenger gate) the
-in-process challenger's coins and the install's hm96 salt key are drawn from fixed streams (`seeded`), so its
-commitments hide nothing and bind nothing a verdict may read: two seeded serves of one load draw the same salt and key.
+``DIR/coins.json`` before the engine starts.  With ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER`` set the
+epoch's salt coin is a live session's on the auditor host instead (`bench_arm.live_coins`: a salt-only session reserved
+under ``PEARLC_CHALLENGER_LANE`` before the engine starts, which the install opens on its salt epoch's root and closes
+at ``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the
+document's ``coins`` says which (`pearl_c.window.coins_of`: the source, the session without its secret, and how it
+closed).  A warm-up ``generate`` of one short request takes the first calls' one-time costs (the screen's Triton build);
+then one timed ``generate`` call serves R requests of P seeded random prompt tokens and O output tokens each (greedy,
+EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It writes each pass's counts,
+commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made it (``timed``), the
+timed call's wall (``generate_s``), each of its engine steps' (``step_s``) and the engine's close (``close_s``: what
+retaining completes behind the steps, waited for there), the engine steps, the capacities a pass is held within
+(``caps``), the install's ``max_step_tokens`` and whether every pass is within them, to ``--out`` and
+``DIR/served.json``, and exits non-zero unless the timed call's passes hold calls in at least three (two boundaries
+crossed) and every pass is within its capacities.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass
+is committed and none is written, so its walls are the option's without retention, its passes have no manifest or MACs,
+and ``verify`` refuses it (``retained`` false).  With ``--seeded`` too (`seed_install`; refused with retention or the
+challenger gate) the in-process challenger's coins and the install's hm96 salt key come from fixed streams (`seeded`),
+so its commitments hide nothing and bind nothing a verdict may read: two seeded serves of one load take the same salt
+and key.
 
 ``same`` holds two seeded serves of one load (their ``served.json``) to the same passes, field by field (`KEEP`: each
 pass's transcript root, activation roots and counts), which they give only where the served path commits the same bytes
@@ -48,31 +49,32 @@ for the same load.  It writes the passes compared and the fields of each that di
 served different loads or that drew different salts, and a serve with nothing committed to compare (no pass with calls, or
 one without its roots).
 
-``volunteer`` is the prover's step between the serve and the verifier's coin (`volunteer_pass.volunteer`, V-EX's remedy): on
-each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
-the pass's records, the rows that leave a tile or one of its credited rows over its debit cap, which the serve's screen
-can't see (the debit reads the noised codes); the transcript is the serve's.  With ``--device`` (pearl_c_sm90's
-debit_sm90.cubin, on this node's H100 or H200) the words' counts are the card's (`volunteer_pass.words_device`), and
-every ``--device-check``-th tile (default `volunteer_pass.CROSS_CHECK`) and each tile with a word the card marks
-non-finite are replayed on the CPU too and held equal.  It writes each pass's outcome and seconds to ``--out`` as each
-pass ends (``done`` once all have), with the node it ran on and, on the device, the cubin, that rate and what it
-replayed (``device``), prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that
-retained none, and any once the verifier's coin is drawn (``DIR/coin.json``).
+``volunteer`` is the prover's step between the serve and the verifier's coin (`volunteer_pass.volunteer`, V-EX's
+remedy): on each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes
+and gives up, in the pass's records, the rows that leave a tile or one of its credited rows over its inert-work bound,
+which the serve's screen can't see (the inert work is counted on the noised codes); the transcript is the serve's.  With
+``--device`` (pearl_c_sm90's debit_sm90.cubin, on this node's H100 or H200) the words' counts are the card's
+(`volunteer_pass.words_device`), and every ``--device-check``-th tile (default `volunteer_pass.CROSS_CHECK`) and each
+tile with a word the card marks non-finite are replayed on the CPU too and held equal.  It writes each pass's outcome
+and seconds to ``--out`` as each pass ends (``done`` once all have), with the node it ran on and, on the device, the
+cubin, that rate and what it replayed (``device``), prints one line and exits 0 only when no pass has a tile left over
+its inert-work bound; it refuses a serve that retained none, and any once the verifier's coin is flipped
+(``DIR/coin.json``).
 
-``volunteer-needed`` prints ``yes`` and the over-cap rule (`over_cap_rule`) where the verdict a pipeline calls (``run``,
-the default: ``verify``'s, `verify_run.verify_passes`; ``pass``: `verify_run.verify`, a pass at a time) rejects a run on
-a drawn tile with a credited row or tile over its debit cap under ``--over-cap`` (default: the verdict's own rule), and
-``no`` and the rule where it credits such a row nothing instead.  The pipelines (`served_pearlplus.sh`,
-`pearl_c_sm90/h200.sh`) ask it before they serve: they run ``volunteer`` exactly when it says ``yes``, and refuse to skip
-it then.
+``volunteer-needed`` prints ``yes`` and the rule on a tile over its inert-work bound (`over_cap_rule`) where the verdict
+a pipeline calls (``run``, the default: ``verify``'s, `verify_run.verify_passes`; ``pass``: `verify_run.verify`, a pass
+at a time) rejects a run on a sampled tile with a credited row or tile over its inert-work bound under ``--over-cap``
+(default: the verdict's own rule), and ``no`` and the rule where it credits such a row nothing instead.  The pipelines
+(`served_pearlplus.sh`, `pearl_c_sm90/h200.sh`) ask it before they serve: they run ``volunteer`` exactly when it says
+``yes``, and refuse to skip it then.
 
 ``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
-``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
-pass that step didn't finish or left over a cap.  A dropped pass credits nothing and its MACs stay in what the run
-declared.  It refuses once the coin is drawn.  With ``--window-record W`` (a tied run) it drops the warm-up's rounds too
-(``timed`` false), which a tied run's W doesn't list, and after ``DIR/retention.json`` writes Pearl+'s window record W
-over the rounds it retains, each under its round (`pearl_c.window.write`), for ``verify --tie W`` and the one-stage
-audit tied to it.
+``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``,
+each pass that step didn't finish or left over its inert-work bound.  A dropped pass credits nothing and its MACs stay
+in what the run declared.  It refuses once the coin is flipped.  With ``--window-record W`` (a tied run) it drops the
+warm-up's rounds too (``timed`` false), which a tied run's W doesn't list, and after ``DIR/retention.json`` writes
+Pearl+'s window record W over the rounds it retains, each under its round (`pearl_c.window.write`), for ``verify --tie
+W`` and the one-stage audit tied to it.
 
 ``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
 ``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, each at its
@@ -86,47 +88,48 @@ reads every pass, holds the window record ``--tie W`` (``retain --window-record 
 the salt and the call's index, and each weight's ``pearl-b/<w>`` its epoch's weight root and `audit.weight_binding`'s
 domain; a W that states no version, written before W registered the weights, ties the calls alone, its weights named
 untied, `verify_run.WEIGHTS_UNTIED`), takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
-set, a draw session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
+set, a sampling session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
 ``PEARLC_CHALLENGER_LANE`` once that lane has no period open, and as its first reserve after the Pearl-C period the salt
 session joined closed (``served.json``'s ``coins.reserved.period``); else the node's, `verify_run.node_draw`; the format is
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  A tile that passes every check but its inert-work bound is credited nothing under
-``--over-cap uncredited`` (the default, CMP-311 option A; the credit takes the draws on such tiles, X_O) and rejects the run
+``--over-cap uncredited`` (the default; the credit takes the samples on such tiles, X_O) and rejects the run
 under ``--over-cap reject``; the verdict records which (``over_cap``).  The run of record takes ``--over-cap uncredited``
 and volunteers no row (``volunteer-needed`` says ``no``, so the pipelines run no ``volunteer``): a volunteered A row
 uncredits its whole band of 64 rows, and a B row its block of 64 columns (`pearl_c_work.UnitRecord.credited`), a third
-or more of an honest run's credit, where the over-cap tiles it would spare cost under half a percent.  The passes are
-of one salt and, but under ``--test-instance`` (a test instance's passes, whose verdict credits nothing), of the served instance, k_min 1,024 at 64 x 64 tiles.  It writes the details to ``--out``, with, where
+or more of an honest run's credit, where the tiles over the bound it would spare cost under half a percent.  The
+passes are of one salt and, but under ``--test-instance`` (a test instance's passes, whose verdict credits nothing), of the served instance, k_min 1,024 at 64 x 64 tiles.  It writes the details to ``--out``, with, where
 ``served.json`` says which passes the timed call made and no ``--manifest`` names others, the credit over those retained
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
 PouwCheck).
 
-``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``):
-the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them and held to the names and SHA-256s
-that document gives them, the epoch's ``DIR/coins.json``, that document's draws, over-cap rule and test instance, the
-verifier's coin record it wrote (``DIR/coin.json``), which pins the Lean's source to the Python's, the W ``verify --tie``
-held the passes to, and, on a live session's coins, ``--of-record``, under which the Lean takes only a challenger draw
-(`lean_argv`, the one place the Lean's command line is written). It holds the Lean's printout to the Python's verdict on
-every field both give (`LEAN_HELD`: the verdict, its reason and refusal, the run's commitment and source, the over-cap
-rule, each opened tile's verdict, and an accepted run's work), and its ``tie`` to the Python's: the same W, or none on
-both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
-printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
-answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
-line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits
-0 on a written accept, 1 on a written reject and 2 when it wrote no answer.
+``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its
+``pouw-pearlplus``): the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them and held
+to the names and SHA-256s that document gives them, the epoch's ``DIR/coins.json``, that document's sample count, rule
+on a tile over its inert-work bound and test instance, the verifier's coin record it wrote (``DIR/coin.json``), which
+pins the Lean's source to the Python's, the W ``verify --tie`` held the passes to, and, on a live session's coins,
+``--of-record``, under which the Lean takes only a challenger's sample (`lean_argv`, the one place the Lean's command
+line is written). It holds the Lean's printout to the Python's verdict on every field both give (`LEAN_HELD`: the
+verdict, its reason and refusal, the run's commitment and source, the rule on a tile over its inert-work bound, each
+opened tile's verdict, and an accepted run's work), and its ``tie`` to the Python's: the same W, or none on both. Where
+they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the printout with W at ``tie``), the file
+`served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't answer within ``--timeout`` seconds,
+it writes none and removes any there. Either way both verdicts, the Lean's command line and the executable's SHA-256 go
+to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits 0 on a written accept, 1 on a written
+reject and 2 when it wrote no answer.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
 remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
 registration record, to ``--out`` (0700, its files 0600: the manifests carry the passes' salt key, and the files their
-values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's draws and its coin
-record's run commitment and source; the retained manifests, in order; the evidence, each pass's files the Lean's opened
-tiles read (`tile_files`), by path, under the SHA-512 of their bytes; the Lean's verdict, reason, tiles drawn and work;
-and the document's δ) and ``blobs/<SHA-512>``, each of those files' bytes once. `served_cases.pearlplus_case` makes the
-case of them once the window's registration record R is made, its commitment naming R's digest. It refuses (exit 2)
-without a Lean verdict or a coin record, on retained passes other than those the document names, and on a Lean verdict
-over another run or source.
+values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's sample count and
+its coin record's run commitment and source; the retained manifests, in order; the evidence, each pass's files the
+Lean's opened tiles read (`tile_files`), by path, under the SHA-512 of their bytes; the Lean's verdict, reason, tiles
+sampled and work; and the document's δ) and ``blobs/<SHA-512>``, each of those files' bytes once.
+`served_cases.pearlplus_case` makes the case of them once the window's registration record R is made, its commitment
+naming R's digest. It refuses (exit 2) without a Lean verdict or a coin record, on retained passes other than those the
+document names, and on a Lean verdict over another run or source.
 """
 from __future__ import annotations
 
@@ -155,15 +158,16 @@ SPEC = HERE.parents[1] / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.tom
 #: 6000, ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
 ARM_PREFIX = "pouw:pearl-c-"
 SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
-#: t = 459 accepted draws leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
+#: t = 459 accepted samples leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
 DRAWS = 459
 #: what `volunteer` keeps of each pass's `volunteer_pass.volunteer` (``device`` on the device alone)
 VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root",
                   "credit_kept", "device")
 #: what `volunteer`'s document sums of its passes' ``device``
 DEVICE_SUMS = ("replayed", "bad_tiles", "form_s", "device_s", "replay_s")
-#: Pearl+'s rules for a drawn tile with a credited row or tile over its debit cap (``verify --over-cap``, `verify_run`'s
-#: ``over_cap``): the verdict rejects the run, or credits the row nothing; ``volunteer`` is the prover's under the first
+#: Pearl+'s rules for a sampled tile with a credited row or tile over its inert-work bound (``verify --over-cap``,
+#: `verify_run`'s ``over_cap``): the verdict rejects the run, or credits the row nothing; ``volunteer`` is the prover's
+#: under the first
 OVER_CAP = ("reject", "uncredited")
 #: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
@@ -180,7 +184,7 @@ LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer 
 #: `case`'s parts of the run's case, and its directory of the files they name, each under the SHA-512 of its bytes
 CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
 CASE_PARTS, CASE_BLOBS = "parts.json", "blobs"
-#: why `retain` and `volunteer` refuse once the verifier's coin is drawn
+#: why `retain` and `volunteer` refuse once the verifier's coin is flipped
 DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
 #: why ``retain --window-record`` drops a warm-up pass (`pearl_c.window`)
 WARM_UP = "the warm-up's (timed false): a tied run's W lists only the timed call's rounds, so it credits nothing"
@@ -213,7 +217,7 @@ def pearl_c_arm(spec, name: str | None = None):
 
 def seeded(label: str):
     """`serve --seeded`'s entropy for `label`: SHA-512 over the label and a counter, its whole outputs taken in order, so
-    every stream of one label gives the same bytes however they are drawn."""
+    every stream of one label gives the same bytes however it is read."""
     buf, count = bytearray(), itertools.count()
 
     def draw(n: int) -> bytes:
@@ -226,7 +230,7 @@ def seeded(label: str):
 
 
 def seed_install(pouw: dict) -> None:
-    """`serve --seeded`: the PoUW settings' in-process challenger drawing from `seeded` coins, and the hm96 salt key the
+    """`serve --seeded`: the PoUW settings' in-process challenger flipping `seeded` coins, and the hm96 salt key the
     install's weight commitment takes (`pearl_c.new_salt_key`) a `seeded` one, in this process."""
     from verity.protocols.pouw.verifier.coins import Challenger
     from verity_vllm.protocols.pouw import pearl_c as PPD
@@ -452,9 +456,9 @@ def volunteer(args: argparse.Namespace) -> int:
 
 
 def over_cap_rule(verdict, rule: str | None = None) -> str:
-    """The rule `verdict` (`verify_run.verify_passes` or `verify_run.verify`) takes on a drawn tile with a credited row or
-    tile over its debit cap, given ``over_cap=rule`` where `rule` isn't None: its ``over_cap`` default, or ``reject``
-    where it takes no ``over_cap``, a verdict without it having that one rule."""
+    """The rule `verdict` (`verify_run.verify_passes` or `verify_run.verify`) takes on a sampled tile with a credited row
+    or tile over its inert-work bound, given ``over_cap=rule`` where `rule` isn't None: its ``over_cap`` default, or
+    ``reject`` where it takes no ``over_cap``, a verdict without it having that one rule."""
     took = inspect.signature(verdict).parameters.get("over_cap")
     if took is None:
         if rule is not None:
@@ -576,7 +580,7 @@ def arm(args: argparse.Namespace) -> int:
     picked = pearl_c_arm(P.resolve_spec(args.spec), args.arm)
     if tuple(picked.protocols) != (SPL.ENTRY,):
         raise SystemExit(f"served_passes.py arm: serve-openai serves {SPL.ENTRY} alone; {picked.id} is {list(picked.protocols)}")
-    # read with no protocol enabled, so no in-process challenger draws coins the server draws per window itself
+    # read with no protocol enabled, so no in-process challenger flips coins the server flips per window itself
     pouw = A.protocols_config(dataclasses.replace(picked, protocols=()), os.environ).get("pouw", {})
     doc = SPL.config_of(json.dumps({"pouw": {k: v for k, v in pouw.items() if k in SPL.CONFIG}}))
     Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
@@ -587,9 +591,10 @@ def arm(args: argparse.Namespace) -> int:
 def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None,
               over_cap: str = OVER_CAP[1], test_instance: bool = False, of_record: bool = False) -> list[str]:
     """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
-    the draws, the verifier's coin record, which pins the Lean's source to the one the Python drew, the over-cap rule and
-    test instance the Python ran under, the window record W (`tie`) the passes are held to where there is one, and
-    ``--of-record`` (`of_record`, a run on a live session's coins), under which the Lean takes only a challenger draw:
+    the sample count, the verifier's coin record, which pins the Lean's source to the one the Python drew, the rule on a
+    tile over its inert-work bound and test instance the Python ran under, the window record W (`tie`) the passes are
+    held to where there is one, and ``--of-record`` (`of_record`, a run on a live session's coins), under which the Lean
+    takes only a challenger's sample:
     ``--coins COINS --draws T --record RECORD --over-cap RULE [--test-instance] [--tie W] [--of-record] MANIFEST...``."""
     return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), "--over-cap", over_cap,
             *(["--test-instance"] if test_instance else []), *(["--tie", str(tie)] if tie is not None else []),
@@ -791,7 +796,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="run: verify's (verify_run.verify_passes); pass: verify_run.verify's, a pass at a time")
     r = sub.add_parser("retain")
     r.add_argument("--passes", required=True)
-    r.add_argument("--volunteer", help="volunteer's document: drop each pass it didn't finish or left over a cap")
+    r.add_argument("--volunteer", help="volunteer's document: drop each pass it didn't finish or left over its "
+                   "inert-work bound")
     r.add_argument("--drop", type=int, action="append", default=[], metavar="ROUND",
                    help="drop this round (its place among served.json's passes with calls), repeated")
     r.add_argument("--window-record", metavar="W", help="a tied run: drop the warm-up's rounds too and write Pearl+'s window "
@@ -812,8 +818,9 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--cross-check", type=int, default=256)
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
-    v.add_argument("--over-cap", choices=OVER_CAP, help="the rule on a drawn tile over its inert-work bound: uncredited "
-                   "credits it nothing, reject rejects the run (default: verify_run.verify_passes' own, uncredited)")
+    v.add_argument("--over-cap", choices=OVER_CAP, help="the rule on a sampled tile over its inert-work bound: "
+                   "uncredited credits it nothing, reject rejects the run (default: verify_run.verify_passes' own, "
+                   "uncredited)")
     v.add_argument("--test-instance", action="store_true", help="the passes are a test instance's: their tile may be "
                    "other than 64 x 64, and the verdict credits nothing")
     a = sub.add_parser("arm")
