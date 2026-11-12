@@ -490,7 +490,7 @@ circuit.
 3. Measurements: the longest cache hit read back this way is 384 tokens; nothing at an agentic load or past
    131,072 context. The design does not limit context; this node's memory stops near 400,000 tokens.
 
-## Addendum, Thu 12 Nov 03:49Z, revised 05:20Z for the two builds, the pin first (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
+## Addendum, Thu 12 Nov 03:49Z, revised 05:21Z for the two builds, the pin first (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
 
 **Row 16 stays the route. For this serve none of it is shown bit for bit: every showing was at a BF16 cache, with no
 draft token, at the pin, and the FP8 cache puts another attention kernel under every layer. What serving commits
@@ -502,7 +502,7 @@ advice for every request, at most 2.585 bits a decoding request a step, until ea
 nothing outside the token's own row, so zero stand-ins stay enough for the write. For the FP8 read, and for
 anything with draft tokens, that is not established.**
 
-**Revised 05:20Z, the pin first** (the lead's 04:06Z, 04:30Z and 04:38Z sections). **My 03:49Z lines were all read
+**Revised 05:21Z, the pin first** (the lead's 04:06Z, 04:30Z and 04:38Z sections). **My 03:49Z lines were all read
 at vLLM `main`, `20ad1db3fe90`, which is neither the build Friday serves, the pin `d9105ea8001e` (P), nor the tag
 `v0.34.0rc1` (T).** Section 0 puts each of the 69 cited places at both: at P 34 have the same text, 26 differ and 9
 are not there; at T 66 have the same text and 3 differ. **The conflict, at each build apart: at P a hit under `mtp`
@@ -975,7 +975,7 @@ that nobody is building it.
   `Accept_v1{K}` exists for another workload (V `verity/definitions/registry/spec.py:1-21`).
 - The sampler's noise at T: the MurmurHash3 Gumbel draw: none [relayed, prodserve: `rg -i murmur`]. P's is Philox,
   which the tree's sampler Definitions are written for (V `verity/definitions/registry/sampling.py:1-17`) [read].
-- DeepGEMM: exists; pinned again at the new build, and reached from 6 decoding requests.
+- DeepGEMM: exists, pinned at P; to be pinned again for T; reached from 6 decoding requests under drafts.
 - The compile slice: a decode row of K + 1 tokens, the roll-back, the draft count a step gives a request, the
   build's rule for a block's key (section 0): none in `verity/protocols/certifier/prover/compile_slice_v6.py` [relayed, prodserve].
 - A kept-count class in the advice code: none, and its charge counts one output a row a step (V
@@ -1078,7 +1078,8 @@ that nobody is building it.
 ### 6. Not established, and the one run that settles each
 
 All on node A, so the lead's to place; none launched by me. Each is a run at one build, and where section 0 has a
-note a result at P says nothing of T.
+note a result at P says nothing of T. One question is not a run's: whether Friday's serve at P keeps a BF16 cache
+and no draft token (section 0); it is vllm's to say, and I was not relayed it.
 
 1. **Which attention backend and cache format the engine picks under `--kv-cache-dtype fp8`, and whether the draft
    layer is a KV cache group of its own:** one engine start with the line's flags; the log.
