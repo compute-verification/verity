@@ -13,11 +13,15 @@ import hashlib
 import importlib
 import random
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
-# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
+
 from torch import nn
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier.coins import Challenger
