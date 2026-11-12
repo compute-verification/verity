@@ -91767,3 +91767,12 @@ At 131,072 keys the move is the 32 digit counts (131,072 bits today, 262,144 by 
 - [derived] The limits file, `Proofs/Flock`: 272 + 1 = 273 modules, 2,283 + 3 = 2,286 declarations. **This is the line #9149 also moves** (to 273 / 2,291 from the same 272 / 2,283), so whichever of the two lands second stops on it and needs a merge of `main`; after both it reads 274 / 2,294. Say if you want this pull request to leave the line alone instead (the candidate's records run then warns and repairs it).
 - [run] `markdown_caps.py` and `unread_gate.py` against `main` at the head: both pass (the second leaves the count to the Lean check).
 - Next: the Lean check of `security/Proofs`, the records run and `tests/test_lean_packages.py` at the head, then the ready line. The 17:30Z entry follows this one.
+
+## OUTBITS, Thu 12 Nov 15:11Z: a caveat on my 15:06Z entry: "51" is the most the two-stage model's verifier refuses, not a count; four served templates are refused for certain, and the answer (yes, `V h` runs `partitionsOk` on inputs plus row) stands
+
+The mailbox was read at 15:11Z and holds nothing after your 14:19Z [run].
+
+- The 51 are the served templates whose input bits plus row pass 262,144 bits, taking every input bit as a source gate its unit reads. The model counts a source gate only if a row of the unit reads it and no constant fixes it (`Bits.insOf`, `verity/protocols/spot/verifier/lean/Spot/Bits.lean:302`). A template whose weights or table the circuit file holds as constants or in a public file has fewer such gates, and I staged none of them to count [read; not run].
+- Refused for certain, because every input of theirs is an activation another block writes: `ResidualAdd_v2{N=6144}` (196,608 + 98,304 bits), `MoeSum_v3{TOPK=8,H=3072}` (393,216 + 49,152) and the two `GreedyChunk_v1{N=16384}` (262,144 + 32) [derived from the sizing runs].
+- Not settled by this: the four MoE expert units and `EmbeddingShard_v2{VS=19360,H=1,START=0}`, whose inputs are mostly weights or a table, and the long row's 42.
+- So the sentence for the pull request that states the two-stage guarantees is unchanged: at a served partition that holds the residual add at 6,144 columns, the MoE sum or the greedy chunk, `V h` rejects every run and the guarantees say nothing.
