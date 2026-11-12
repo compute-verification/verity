@@ -83508,3 +83508,48 @@ K=1 prover(s) on the card
 - Not run: the grader README's `bash check.sh`; the Lean check with the kernel replay (the queue's).
 
 Nothing is marked. I give the ready line when `e39d`, `4d1b`, `8e14` and `07a8` have ended.
+
+## WIDEZK, Thu 12 Nov 10:31Z: the merged records run is out: `r20261112-101722-00de` on vy-nebius-cpu-12 at `d7db58522f0e` (`main` `33faab2be81c` merged into `6160c59e6c22`; no file stopped; caps as on `main`); expected end about 11:25Z; `e716` runs on as the control
+
+Mailbox read at 10:29Z: nothing after your 09:12Z section. [read]
+
+**1. The branch.**
+
+- [run on my VM] `cursor/proofs-widezk-onmain-e2b7` at `d7db58522f0e`: made from `6160c59e6c22`, one commit on it, the merge of `main` at `33faab2be81c`. The merge drivers were registered first (`merge.py --install`). Pushed; no pull request.
+- [run on my VM] **No file stopped.** 303 files differ from `main`, the branch's own 303 (274 under `security/Proofs/Flock`, 22 under the verifier's package). Three files changed on both sides: `security/Proofs/Flock/SpotFlock/Code.lean`, `KS.lean` and `tests/lint/allowlists/repo_retired_terms.json`. In each, the merged file differs from `main`'s by exactly the lines the branch changed.
+- [run on my VM] Every `lean-audit.json` at `d7db58522f0e` is `main`'s, byte for byte: the branch changes no lock, so the driver had nothing to merge. The Lean check's tool there is `main`'s too (`git diff 33faab2be81c d7db58522f0e -- tools/verity/lean` is empty).
+- **Caps: both files are `main`'s, and this change's own count is 0 by read, so I raised nothing.**
+  - [run on my VM: `unread_gate.py`'s own lookup of the facts a recorded check of `main` `33faab2be81c` published; no build] At `main`, `Proofs/Flock` counts 262 wholly unread modules and 2,009 declarations, under `main`'s caps of 267 and 2,141.
+  - [derived: those facts and the text] The branch adds no Lean file and deletes one. It adds or removes a declaration, by name, in 10 files of `security/`; none of the 10 is wholly unread at `main`. It changes 19 modules that are wholly unread at `main`, and in none of them does the set of declaration names change.
+  - [derived] What that cannot see: a module that is read at `main` and that this change leaves wholly unread. Only the full Lean check's count on the merged tree's own facts shows that; a records run writes no such facts. The room under the cap is 5 modules and 132 declarations.
+  - [read] `UNWITNESSED` and `INLINE` in `tests/test_lean_packages.py`: the locks at `d7db58522f0e` hold 229, 182 and 7 `unwitnessed` entries under caps of 247, 191 and 7, and 887, 128 and 6 inline premises under 915, 132 and 6. The branch lists no guarantee, so its own count is 0. If `00de`'s kept locks move either count, I set that cap to `main`'s plus the difference in the records commit and say so.
+
+**2. The run.**
+
+- [run] `r20261112-101722-00de`, placed by `--on auto` on vy-nebius-cpu-12, source `d7db58522f0e`, launched 10:17:22Z, detached. It took check slot r5 (35 cores) at 10:18:55Z. Command: `research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone --as proofs --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records verity/protocols/flock/verifier --update`.
+- [run] At 10:28Z: the verifier's package, exit 0 in 52 s; the certifier's Lean, exit 0 in 32 s; 198 module versions taken from other nodes' bundles; `security` with `security/Proofs` building.
+- [guess] Expected end about 11:25Z: it has about three times `e716`'s cores and started 17 min later. Its limit is 13:18Z [run].
+- [run] The control, `r20261112-092800-e716` (vy-nebius-cpu-1, 12 cores), at 10:28Z: its two small packages ended exit 0; `security` with `security/Proofs` building. [guess] About 11:25Z, as I said at 10:07Z; limit 13:01Z [run].
+- [derived] If `e716` fails I cancel `00de` by its id and report the failing line. I am not awake between turns, so that happens when you resume me.
+
+**3. By read, in both directions, nothing of one side uses what the other retypes.** [run on my VM, text only]
+
+- No line `main` added to Lean since the merge base uses a name whose signature the branch touches (542) or removes (20): my 10:07Z entry.
+- No line the branch adds uses a name whose signature `main` touched (112) or removed (206) since the merge base.
+- [derived] Text only, so a floor. `00de` is the first build of the two together.
+
+**4. Against lean's branch.** [run on my VM, 10:29Z] `git merge-tree --write-tree --name-only` of `d7db58522f0e` with lean's branch `f3837f57d113` exits 1 and names 23 files. `main` `33faab2be81c` alone against lean's branch names the same 23. So this head has no stop beyond `main`'s; I will say so in the ready line and name none as mine. `main` did not move between 10:12Z and 10:29Z [read].
+
+**5. How the merged branch gets to #9108.**
+
+- [run on my VM: `git merge-base --is-ancestor`] #9108's head `8428b506e6b9` is an ancestor of `d7db58522f0e`, and so is `main` `33faab2be81c`. So #9108's branch reaches the merged branch by one fast-forward (`git merge --ff-only`), with no force. That push is the base's owner's or yours to order; I push nothing there.
+- [derived] The head it goes to is `d7db58522f0e` plus one records commit, in this order, your steps of 06:22Z:
+  1. `00de` ends exit 0. I read each lock it kept under `lean-audit/record/` against `main`'s lock at `33faab2be81c`: that is what this change moves on today's `main`. I read `e716`'s kept locks against the locks at `6160c59e6c22` only to tell the branch's own moves from those the merge adds.
+  2. The stop test: a deployed guarantee whose statement changes other than by taking the leaf's version at today's value, or a guarantee that gains or loses a premise. Then I write both texts and commit nothing.
+  3. Otherwise one records commit on `cursor/proofs-widezk-onmain-e2b7`: the kept locks, and a cap only where a count moved.
+  4. The counted list for #9108's body goes in my entry, since I cannot edit the body: the line for the top, each listed guarantee whose own statement hash moves with one line on what changed, both texts collapsed, the read definitions as counts by module.
+  5. One quick-suites run at that head (`suites.py --changed origin/main --quick`). The last pass of the quick suites was at a head from before the merge, so I would run them all once and not only the suites that read a lock; say if you want it narrower.
+  6. The merge check against lean's branch, the `why` check, then the ready line. I mark nothing.
+- [derived] `cursor/proofs-widezk-3e4d` stays at `6160c59e6c22`, the control's head. If `main` moves again in Lean before the mark, I say so in the ready line and launch nothing on my own.
+
+**Other.** [relayed: your 10:12Z message] vy-nebius-cpu-7 takes sources again since 09:29Z. [run] My VM was reset again before this turn; the checkout, tools and run lists came back from the notes.
