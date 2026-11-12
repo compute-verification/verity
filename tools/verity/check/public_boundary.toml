@@ -133,8 +133,8 @@ benchmarks = [
     "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
     "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,sass_gate.py}",
     "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h,debit_sm90.cu}",
-    # the -h3 hashing both cubins include
-    "benchmarks/pouw/pearl_c/{hash_h3.cuh,sha512.cuh}",
+    # the -h3 hashing both cubins include, and the wide rows' that sm_90a's does
+    "benchmarks/pouw/pearl_c/{hash_h3.cuh,hash_wide.cuh,sha512.cuh}",
     # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
     "benchmarks/pouw/harness/{sass_gate.py,sass_pins.json}",
 ]
