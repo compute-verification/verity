@@ -2,7 +2,7 @@
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
 # model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
 # (neither, open). Per-SM rates are a SM-clock's. No Lean card table is held to this file yet: the B200's numbers in Lean
-# are Security/Definitions/Accounting/Sheets/B200.lean's. The host the card sits in is its own card.
+# are security/Definitions/Accounting/Sheets/B200.lean's. The host the card sits in is its own card.
 
 kind = "gpu"
 sku = "b200-sxm-180gb"

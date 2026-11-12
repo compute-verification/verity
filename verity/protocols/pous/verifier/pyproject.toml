@@ -16,10 +16,10 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/configuration/wire", "verity/configuration/deploy",
           "verity/core/devices/__init__.py", "verity/protocols/pous/device/__init__.py",
           "verity/protocols/pous/device/challenger_party.py",
-          "Security/Definitions/Pous.lean", "Security/Definitions/Pous", "Security/Proofs/Pous",
-          "Security/Definitions/Core/Game.lean", "Security/Proofs/Core/Game/Basic.lean",
-          "Security/lean-audit.json", "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
-          "Security/Proofs/lakefile.toml", "Security/Proofs/lake-manifest.json",
+          "security/Definitions/Pous.lean", "security/Definitions/Pous", "security/Proofs/Pous",
+          "security/Definitions/Core/Game.lean", "security/Proofs/Core/Game/Basic.lean",
+          "security/lean-audit.json", "security/lakefile.toml", "security/lake-manifest.json", "security/lean-toolchain",
+          "security/Proofs/lakefile.toml", "security/Proofs/lake-manifest.json",
           "verity/protocols/pous/lean/README.md",
           # the grader's package and the memory challenger's modules, each by its own path: the tests read them wherever
           # they are, in this suite's directory or outside it

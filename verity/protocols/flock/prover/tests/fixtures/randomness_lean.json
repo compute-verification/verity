@@ -1333,9 +1333,9 @@
   "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean": "5716832e6f67b8d7281cb188fbec72890df28311d11050ead97b6b29a721ea9f",
   "verity/commitments/randomness/tests/vectors.json": "ddf31f7f92ac4e022bd9cbe26f2df3a3b66b529825c5d57efda665454eea1b63",
   "verity/commitments/randomness/Randomness.lean": "b5a31856648ab4d91545f3ac9478650e36a3126b1c305b9dfb73bf5cb2d6de7a",
-  "Security/Proofs/Flock/Soundness/PlanDraw.lean": "e850f9254f1c0b80c4b3c4540ba1a7ffc4da189557b882a528ab8901606965e8",
-  "Security/Proofs/lake-manifest.json": "3c09da0b9dd0e28e7021ae7bd9b25d9fa98b7562bfde5ab4d212fa434e8c7135",
-  "Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
+  "security/Proofs/Flock/Soundness/PlanDraw.lean": "e850f9254f1c0b80c4b3c4540ba1a7ffc4da189557b882a528ab8901606965e8",
+  "security/Proofs/lake-manifest.json": "3c09da0b9dd0e28e7021ae7bd9b25d9fa98b7562bfde5ab4d212fa434e8c7135",
+  "security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
   "verity/protocols/flock/verifier/Flock/Hash.lean": "5c0a1aab9d43cdab5c18c0d03f6fca0c559200cd727dcb75d73557d2d892aacc",
   "verity/protocols/flock/verifier/Flock/Draw.lean": "2ceac90f640ed36060dbef9c665181a20c9abe3d670f192ac79ea4741a129076"
  }

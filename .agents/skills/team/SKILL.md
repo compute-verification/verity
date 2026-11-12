@@ -16,7 +16,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - **An agent VM only edits.** Its 16 GB are shared by every agent on it, and one out-of-memory kill takes them all down.
   Locally, run only git, reading and editing, messaging and the notes, one test file or `-k` selection under about a
   minute and 1 GB, `lake env lean` on one file of a built tree, a Lean package with no Mathlib or ArkLib, and the lock
-  fast path. Everything else (every suite, `verity check`, circuit-check, any build of `Security`, cargo, nvcc, every
+  fast path. Everything else (every suite, `verity check`, circuit-check, any build of `security`, cargo, nvcc, every
   e2e and GPU job) runs through `research run --on auto --cwd source [--wait] -- CMD` (the writing-runs skill): an
   `agent-test` job on the cluster queue (4 CPUs, 16 GiB, 60 min unless `--cpus`, `--mem-gb` or `--timeout` say
   otherwise), or a `research` pool when one starts sooner. The shell hook refuses those locally and names the remote
@@ -68,8 +68,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
   moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself; a
   held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
-  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and `Security/`'s
-  Lake files) or to Lean that runs as code (a `.lean` outside `Security/`) lands on its verdict like any other. Drive
+  `lean-audit.json` lock, to the spec (Lean under `security/Definitions/`, `security/Definitions.lean` and `security/`'s
+  Lake files) or to Lean that runs as code (a `.lean` outside `security/`) lands on its verdict like any other. Drive
   then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated as `Lock
   records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
   ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's

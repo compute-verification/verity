@@ -54,11 +54,11 @@ class Instance:
 PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("cr", "Collision resistance", "CR"),
     # success linear in the finder's expected time (Chiesa-Dall'Agnol-Guan-Spooner-Yogev, ePrint 2024/1434, Thm 2); the constant
-    # is the assumption's statement (A2 in Security/Proofs/Flock/Soundness/ASSUMPTIONS.md), not restated here
+    # is the assumption's statement (A2 in security/Proofs/Flock/Soundness/ASSUMPTIONS.md), not restated here
     Property("ecr", "Expected-time collision resistance", "ECR"),
     Property("xof", "Extendable-output-function security", "XOF"),
     Property("sis", "Ring-SIS binding", "SIS"),
-    # A3 in Security/Proofs/Flock/Soundness/ASSUMPTIONS.md, for the unit sample's bytes
+    # A3 in security/Proofs/Flock/Soundness/ASSUMPTIONS.md, for the unit sample's bytes
     Property("uniform", "Independent uniform output", "Uniform"),
     # A4 there, for verity.commitments.randomness's keyed streams (prf/sha-512): SHA-512's compression function as a PRF keyed by
     # its chaining value (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the
@@ -104,9 +104,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("rs-proximity-johnson", "assumption", "Reed–Solomon proximity gaps up to the Johnson bound", "RS proximity · Johnson", "proven"),
     Entry("logup", "assumption", "LogUp fractional-sum soundness", "LogUp", "proven"),
     Entry("live-verifier", "model", "Live verifier: the verifier's coins arrive online during the proof", "Live verifier"),
-    # `Flock.Assumptions.RegistrantCovers` (Security/Proofs/Flock/Soundness/Assumptions/Registrant.lean), a premise of the
+    # `Flock.Assumptions.RegistrantCovers` (security/Proofs/Flock/Soundness/Assumptions/Registrant.lean), a premise of the
     # recursive audit (Flock.Guarantees.RecursiveAuditC3At's _hRC) on the provers it covers; and the salt binder of
-    # `TopOf` and `StackedTopAt` (Security/Proofs/Flock/Recursive/HoloExec.lean) and of Flock.Guarantees.RecursiveAuditC3At,
+    # `TopOf` and `StackedTopAt` (security/Proofs/Flock/Recursive/HoloExec.lean) and of Flock.Guarantees.RecursiveAuditC3At,
     # the salts the prover's workers committed R's level-0 top rows under, at which the guarantee is applied
     Entry("registrant-holds-openings", "model",
           "Registrant holds its openings: the prover holds a row and salt under every leaf it registered at a row the "
@@ -119,7 +119,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
-    # the device of PoUB's per-pass bound (Bandwidth.Device, Security/Definitions/Accounting/Bandwidth/Game.lean):
+    # the device of PoUB's per-pass bound (Bandwidth.Device, security/Definitions/Accounting/Bandwidth/Game.lean):
     # the guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is
     # such; a co-audited set would be one such device over its members' stores, which no guarantee states yet, and side
     # sources that may carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
@@ -151,7 +151,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("bandwidth-instantiation", "assumption",
           "The blocks of E, the PoUS encoding's, are no easier to hold information about than uniformly random blocks, "
           "except by rebuilding them from setup", "Bandwidth instantiation", "conjectured"),
-    # the rate audit's device (Accounting.Guarantees.RateAudit, Security/Definitions/Accounting/Guarantees/RateAudit.lean): the
+    # the rate audit's device (Accounting.Guarantees.RateAudit, security/Definitions/Accounting/Guarantees/RateAudit.lean): the
     # bandwidth device with a certified stream on its side link and rebuilds paid in compute
     Entry("rate-device", "model",
           "Rate device model: the bandwidth device model, with the trusted host streaming rho fresh bits to each device over "
@@ -166,7 +166,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # costs more than the claim at 512 bits, as does the reduction's operation-count floor, an estimate from operation
     # counts, unmeasured. At k = 1 with the payload known, F27 is such a completion, at a floor of half a GMP extended
     # GCD. In partial-completion form it is `Accounting.Assumptions.WorkHardness`
-    # (Security/Definitions/Accounting/Assumptions/RateAudit.lean)
+    # (security/Definitions/Accounting/Assumptions/RateAudit.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
           "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
@@ -192,7 +192,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # what lets the stacking guarantees treat the blocks a pass reads as uniform when every appended block is keyed by
     # a live coin flipped after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
-    # (Security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
+    # (security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
     # encoding, and each coin keys a block apart (verity/protocols/poub/verifier/tests/test_key_binding.py)
     Entry("key-binding", "assumption",
           "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
@@ -211,20 +211,20 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedHost` (Security/Definitions/Core/Assumptions.lean) states its part about one run; no
+    # `Verity.Assumptions.TrustedHost` (security/Definitions/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
     Entry("trusted-host", "assumption",
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
-    # `Verity.Assumptions.ZkServerOwnUser` (Security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
+    # `Verity.Assumptions.ZkServerOwnUser` (security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
     # `Verity.Guarantees.RegisteredLeakage` and `Verity.Guarantees.RegisteredStreamLeakage`: a stack is the same function
     # under every salt key of the ZK server's
     Entry("zk-server-own-user", "assumption",
           "The ZK server's value service and its session loop run under the ZK server's own OS user, which no worker and no "
           "serving stack shares, and the salt key's file is that user's alone, so nothing the serving stack runs reads the "
           "key", "ZK server's own user", "standard"),
-    # The four per-party assumptions of `Accounting.Assumptions.Parties` (Security/Definitions/Accounting/Assumptions/
+    # The four per-party assumptions of `Accounting.Assumptions.Parties` (security/Definitions/Accounting/Assumptions/
     # Parties.lean), each about one auditor party p; the reason to believe them is that p runs on a machine the auditor
     # owns, which is not itself an assumption.  The device-attest statements (`Properties.Attest`) read them
     Entry("faithful", "assumption",
@@ -243,20 +243,20 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Witness path private: the path between an auditor party and the prover carries no observer but its two "
           "endpoints, so the party's private messages (its signed roots and records, the prover's witness) reach nobody "
           "else; they travel unencrypted for now", "Witness path private", "standard"),
-    # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
+    # `Accounting.Covered` (security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
-    # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form. Falsified by a
+    # `Accounting.Placed.LatencyAtMost` (security/Definitions/Accounting/Physical.lean) is its Lean form. Falsified by a
     # delivery slower than the ceiling, measured on the server's certified egress links
     Entry("latency-ceiling", "assumption",
           "Latency ceiling: every wire from the audited server to the network certifier on its egress delivers within "
           "the stated ceiling of its send, and nothing between them holds a value longer",
           "Latency ceiling", "measured"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
-    # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
+    # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
     # session per audit cites trusted-host.
     Entry("pous-ring-device", "model",
@@ -281,7 +281,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
           "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
           "conjectured"),
-    # `Pouw.PearlC.GGapPerCoin (W1.w1Priced dv salt)` (Security/Definitions/Pouw/PearlC/W1Stop.lean): the one open
+    # `Pouw.PearlC.GGapPerCoin (W1.w1Priced dv salt)` (security/Definitions/Pouw/PearlC/W1Stop.lean): the one open
     # hypothesis of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced);
     # it implies the gap property GGap itself (Pouw.PearlC.W1Stop.gGap_of_withStop)
     Entry("pouw-gamma-per-coin", "assumption",
@@ -300,7 +300,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
-    # the min-cut bound's cut conjectures (Security/Definitions/Assumptions.lean): (H) is
+    # the min-cut bound's cut conjectures (security/Definitions/Assumptions.lean): (H) is
     # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
     Entry("training-cut-hardness", "assumption",
           "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
@@ -311,9 +311,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(E), cut exports: every set B of computed gates has κ(B → E(B)) ≥ b |E(B)|, E(B) the outputs fed by a MAC "
           "inside B with no wire in B: each output B finishes costs b of the gates separating B from it; refuted by "
           "exhibiting a set of computed gates with κ(B → E(B)) < b |E(B)|", "(E) cut exports", "conjectured"),
-    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean):
+    # EPS1's tensor–scalar model (security/Definitions/Accounting/Assumptions/TS.lean):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
-    # (Security/Definitions/Accounting/Assumptions/Stages.lean)
+    # (security/Definitions/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
           "Measured facets are ceilings for the stated device on the measured vector its statement names (sm_120 RTX "
           "PRO 6000: VF3s-16, the measured headline's (I1)): on every run the counts and cycles are nonnegative and the "
@@ -355,7 +355,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
           "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
           "or the host provider's instance record", "Declared device", "standard"),
-    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean):
+    # The data-sheet axioms A1–A7 (security/Definitions/Accounting/Assumptions/Sheet.lean):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
@@ -522,7 +522,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
-    # the two premises UnitFixed rests on under option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
+    # the two premises UnitFixed rests on under option A (security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
     Entry("accounting-ts-modes-run", "assumption",
           "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
           "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "
@@ -533,7 +533,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
           "folds", "TS counts fixed", "conjectured"),
     # `Claims.ZKServer.Relay.RelayServes` and `Claims.ZKServer.Relay.WorkerDeterministic`
-    # (Security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
+    # (security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
     Entry("flock-relay-serves", "assumption",
           "The firewall's relay serves each session's requests as its IO code reads: at each request that reaches a "
           "slot of the session's schedule, the loop's references (the rep frames, the level 0s, the link, the loop's "
@@ -545,7 +545,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "the content LiveChallenger::round sends in its Req::Round is the value the model's worker gives at the "
           "coins the worker has received, from the statement, the witness and its tapes", "Worker deterministic",
           "standard"),
-    # `Claims.ZKServer.Loop.Src` (Security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
+    # `Claims.ZKServer.Loop.Src` (security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
     Entry("flock-firewall-os-src", "assumption",
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
@@ -555,7 +555,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
           "since zero knowledge protects the developer", "Firewall OS source", "standard"),
-    # the training formalism v2's assumptions (Security/Definitions/Assumptions.lean): A1 is
+    # the training formalism v2's assumptions (security/Definitions/Assumptions.lean): A1 is
     # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
     # `Nci.Formalism.Assumptions.EfficiencyFloor`
     Entry("training-cut-cost", "assumption",

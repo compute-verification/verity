@@ -2,7 +2,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The coin link (`coin_link`)
 
-D7 (`Security/Definitions/NetworkCertifier/Guarantees.lean`, "The coins (D7)") puts the challenger's coins on one more
+D7 (`security/Definitions/NetworkCertifier/Guarantees.lean`, "The coins (D7)") puts the challenger's coins on one more
 ingress link of the server's network certifier: its timing is charged on the ingress grid, its content is exempt for
 coin openings that open against the challenger's committed coin root, and everything else on it is counted. The
 prover's requests for coins are egress, charged on their own grid. `coin_link.CoinLink` is that link for one window's

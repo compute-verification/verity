@@ -13,10 +13,10 @@ a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_ca
   `tools/verity/lean/`) passes with a note: the Lean check runs the ratchet on it (`lean_audit.unread_ratchet`).
 - Otherwise, from git alone: what each changed seed file names at ``LO`` and no longer at ``HEAD`` (`seeds`), less what any
   seed file still names at ``HEAD``. It passes when nothing went that could name the analysis's Lean: a declaration whose last
-  component no Lean file of `Security/` declares (`declared`; an instance's name aside, which Lean may make up), a module or
+  component no Lean file of `security/` declares (`declared`; an instance's name aside, which Lean may make up), a module or
   a path no file there has.
-- Otherwise it runs the ratchet on both trees, ``LO``'s and ``HEAD``'s, from the facts the audits of `Security` and
-  `Security/Proofs` wrote (`lean_audit.facts_file`, by each package's key): ``LO``'s, else ``MAIN``'s, as this machine keeps them
+- Otherwise it runs the ratchet on both trees, ``LO``'s and ``HEAD``'s, from the facts the audits of `security` and
+  `security/Proofs` wrote (`lean_audit.facts_file`, by each package's key): ``LO``'s, else ``MAIN``'s, as this machine keeps them
   (a node's passes, or this gate's cache) or as a recorded check published them in the evidence store: one of that commit
   (drive runs a commit's Lean check before it lands it), else one of the `SCAN` newest. When neither's are (a Lean landing's are
   published once its lock run lands, about an hour after it), it reads stale ones: those of the newest commit below ``LO``
@@ -60,7 +60,7 @@ CODE = (f":(glob){LEAN_TOOL}*", COMMON, "tools/verity/graph/verity_graph/contrac
 #: what a kept verdict's key holds of ``MAIN``: `CODE`'s trees (the Lean tools with their tests: a superset)
 CODE_TREES = (LEAN_TOOL.rstrip("/"), *CODE[1:])
 #: the analysis's Lean, all of whose packages (`unread.ANALYSIS`) are under it
-ANALYSIS_DIR = "Security/"
+ANALYSIS_DIR = "security/"
 CAPS = f"{LEAN_TOOL}unread-caps.json"
 #: how many of the newest recorded checks the store lookup lists the files of
 SCAN = 64
