@@ -1,0 +1,1 @@
+2026-11-12T13:41Z FP8READ: read the pin's call (b=1, s_q=T, 64 padded heads, no sink), FlashMLA V32 kernel source at 6bc49418, vllm's run r20261112-113028-b56a (how it takes the lease); writing the item-1 card job for 18:05Z; no code yet.
