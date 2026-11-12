@@ -68,9 +68,6 @@ from verity_vllm.commit.committer.native_host import (
     memtrace,
 )
 from verity_vllm.commit.committer.plan_cache import PlanCache, PlanMetas
-from verity_vllm.commit.committer.topp_splits import (SPLITS_IDENTITY, TOPP_SPLIT_KERNELS, TOPP_SPLIT_MODULE, _SplitKernelProxy,  # noqa: F401
-                                                      batch_top_p, install_split_kernel_proxies, split_count_of_launches, step_splits,
-                                                      uninstall_split_kernel_proxies)
 
 def plan_key_of(sched: Any, ntok: int, nreq: int, targets: bytes = b"") -> tuple[int, str]:
     """The collector's plan key for one engine step = the step's SHAPE CLASS, i.e. everything the staged byte layout depends on.
@@ -171,8 +168,6 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.profile = bool(profile)
         self.gather = bool(gather)
         self.native_hooks = bool(native_hooks)
-        # SplitsFor_v1 when the required manifest names `sampler_splits` (a derived-S Program; set by `taps.attach`): see `topp_splits.step_splits`
-        self.prescribe_idle_splits = None
         if self.gather and not self.wrap:
             raise ValueError("gather mode needs wrap mode (flush points are module wrappers)")
         if self.native_hooks and (not self.wrap or self.profile):
@@ -396,14 +391,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             self._hooks.patch(runner, "gather_batch_req_state", gather_batch_req_state)
         if "sample" in self._orig:
             orig_sample = self._orig["sample"]
-            # the top-p split count S of this step's sampling (manifest family `sampler_splits`, identity
-            # `runner.sampler/splits`, one i32 per sequence) is a HOST constant of vLLM `_apply_topp_split` -- never on the device -- so it is
-            # read from the split kernels' launches (constexpr kwarg `S`) by launch proxies on the module's kernel globals, not recomputed.
-            self._split_launches: list[tuple] = []
-            self._split_orig = install_split_kernel_proxies(self._split_launches)
 
             def sample(*a, **kw):
-                del me._split_launches[:]
                 res = orig_sample(*a, **kw)
                 job = me._cur
                 if job is not None:
@@ -417,16 +406,6 @@ class NativeCollectCommitter(NativeHostCommitter):
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
                             for s in draw_srcs:
                                 s.on_sample(ib, int(st.shape[0]), job)
-                            # launched S, or (a derived-S Program's step on which vLLM skipped top-p) the prescribed S -- once per sampled row
-                            S, why, counter = step_splits(list(me._split_launches), int(st.shape[0]), me.prescribe_idle_splits, lambda: batch_top_p(runner, a, kw),
-                                                          lambda: torch.cuda.get_device_properties(st.device).multi_processor_count)
-                            if why:
-                                me.errors.append(f"sampler splits: {why}"[:200])
-                            elif S is not None:
-                                me._acquire(SPLITS_IDENTITY, torch.full((int(st.shape[0]),), S, dtype=torch.int32, device=st.device), job)
-                                setattr(me, counter, getattr(me, counter, 0) + 1)
-                                me.splits_seen = getattr(me, "splits_seen", {})
-                                me.splits_seen[S] = me.splits_seen.get(S, 0) + 1
                         # the per-sequence SEED the sampler consumed this step (manifest family `sampler_seed`, identity
                         # `runner.sampler/seed`, one i64 per sequence): `sampling_states.seeds.gpu[input_batch.idx_mapping]` -- the very buffer
                         # `_gumbel_sample_kernel` reads (`seeds_ptr + req_state_idx`), gathered in the step's row order.  Bound only when the
@@ -452,8 +431,6 @@ class NativeCollectCommitter(NativeHostCommitter):
             return
         super().uninstall()
         self._wrapped = []
-        uninstall_split_kernel_proxies(getattr(self, "_split_orig", None) or {})
-        self._split_orig = {}
 
     def _flush_leaf(self, name: str) -> bool:
         """Legal collection points of the gather design (P0/P1/P2).  Negative test `VERITY_FAULT=late_flush`: the qkv_proj flush

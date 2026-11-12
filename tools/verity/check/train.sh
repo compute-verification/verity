@@ -7,9 +7,9 @@
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
 # `check.py --record --on MACHINE --priority --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
-# URLs of the pinned upstream build when COMMIT changes verity/protocols/flock/prover/ or verity/protocols/flock/verifier/ against origin/main, which
-# the run fetches. --agreement sends them whatever the train changes: the lander's rule for a train that adds or changes a
-# guarantee (`lean-audit.json`) anywhere.
+# URLs of the pinned upstream build when COMMIT changes verity/protocols/flock/ or a Lean package its verifier requires by path
+# (but sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
+# changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
 # COMMIT's branch. With MACHINE `auto` and no free slot, check.py launches twins, one run per machine that can take it (`slot.py
 # --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
@@ -35,6 +35,10 @@
 # plan PLAN (`check.py --shard-plan --out PLAN`, made once for all N; drive's `after_landing_shards = "auto"`), sent as the run's
 # input.
 #
+# `--deselect FILE` (with --deferred; an absolute path): the run's pytest and lean-suites steps leave out the tests FILE names, one
+# node id a line (`check.py --record --deselect`: the vqueue loop's list); on a COMMIT whose check.py predates it, the run goes
+# without it.
+#
 # `--cc-records`: circuit-check's records step alone (`check.py --record --cc-records`), which drive's sharded after-landing run
 # runs first; `--cc-records-from ART@SHA256` (with `--shard`) gives a shard that step's artifact, so its circuit-check builds
 # no binding.
@@ -44,9 +48,9 @@
 # --of-record`: one that skips the store-backed tests), and a COMMIT that is empty (its tree is its base's: where it leaves
 # origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep=
+pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep= deselect=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -67,7 +71,9 @@ while [ $# -gt 0 ]; do
     --cc-records) records=1 ;;
     --cc-records-from) [[ $# -ge 2 && $2 =~ ^art:[0-9a-f]+@[0-9a-f]{64}$ ]] || { echo "train: --cc-records-from needs ART@SHA256" >&2; exit 2; }
       recfrom=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --ratchet-base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN, --bookkeeping-warn and --cc-records[-from] alone" >&2; exit 2 ;;
+    --deselect) [[ $# -ge 2 && $2 == /* && -f $2 ]] || { echo "train: --deselect needs a list's absolute path" >&2; exit 2; }
+      deselect=$2; shift ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --ratchet-base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN, --bookkeeping-warn, --deselect FILE and --cc-records[-from] alone" >&2; exit 2 ;;
   esac
   shift
 done
@@ -83,7 +89,9 @@ done
   || { echo "train: --base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
 [ -z "$rbelow" ] || [ -n "$deferred" ] \
   || { echo "train: --ratchet-base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
-[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$rbelow$recfrom${pass[*]+x}" ] \
+[ -z "$deselect" ] || [ -n "$deferred" ] \
+  || { echo "train: --deselect refused without --deferred: a check that leaves tests out is no check a gate takes" >&2; exit 2; }
+[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$rbelow$recfrom$deselect${pass[*]+x}" ] \
   || { echo "train: --cc-records refused with another flag: it builds circuit-check's records alone" >&2; exit 2; }
 [ -z "$recfrom" ] || [ -n "$shard" ] \
   || { echo "train: --cc-records-from refused without --shard: only a shard's circuit-check takes the records" >&2; exit 2; }
@@ -112,8 +120,9 @@ tell() {
   if [ "$rc" -ne 0 ]; then
     { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${records:+ --cc-records}${deferred:+ --deferred $deferred}${shard:+ --shard $shard} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
-    uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet --report \
-      --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
+    # from the queue's own checkout, never the checked commit's tree: its code would run with the queue's Slack token
+    (cd "${root:-.}" && uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" \
+      --quiet --report --file "$why.post") > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
   fi
   rm -f "$why" "$why.post"
 }
@@ -164,14 +173,20 @@ if [ -n "$bookkeep" ]; then
   if grep -q -- "--bookkeeping-warn" tools/verity/check/check.py; then pass+=(--bookkeeping-warn)
   else echo "train: ${sha:0:12}'s check.py predates --bookkeeping-warn: its lock run fails on bookkeeping"; fi
 fi
+if [ -n "$deselect" ]; then
+  if grep -q DESELECT_FILE tools/verity/check/check.py; then pass+=(--deselect "$deselect")
+  else echo "train: ${sha:0:12}'s check.py predates --deselect: its run leaves no test out"; fi
+fi
 echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
-# `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
-setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
+# `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine). The
+# commit's own code runs from here, so without the queue's GitHub and Slack credentials: any PR in it could push `main`
+setsid nohup env -u GH_TOKEN -u GITHUB_TOKEN -u GH_CONFIG_DIR -u SLACK_BOT_TOKEN \
+  uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
-# 30 min: drive launches several runs at once, each placing itself and shipping its tree to its machine
-launch_wait_s=1800
+# 60 min: the queue launches a check's shards at once, each placing itself and shipping its tree to its machine
+launch_wait_s=3600
 want=1 ids=
 for _ in $(seq $((launch_wait_s / 5))); do
   kill -0 "$pid" 2>/dev/null || break

@@ -1,11 +1,14 @@
 {
- "about": "Pinned vectors of Q_template_instance v0 and Q_template_instances v0 (verity.ml.circuits.partition_object), checked by verity/ml/circuits/tests/test_template_instance.py; written by it with --write.  Programs are descriptor bytes; units are [unit, root node, member, first gate, end gate, inputs, outputs].",
+ "about": "Pinned vectors of Q_template_instance v0 and Q_template_instances v0 (verity.circuits.partition_object), checked by verity/circuits/tests/test_template_instance.py; written by it with --write.  Programs are descriptor bytes; units are [unit, root node, member, first gate, end gate, inputs, outputs].",
  "descriptors": {
   "population": "{\"callees\":[\"TMul32_v1\",\"Input32_v1\",\"TScale_v1{N=2,C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"}}\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TemplateInstances_v0{N=3}]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":6,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":3,\"out\":3},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,6]},\"type\":4},{\"refs\":{\"affine\":[\"n\",1,0,3]},\"type\":3}],\"axes\":[0,0],\"fn\":2,\"form\":\"batch\",\"n\":3,\"out\":4}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,6]},\"ret_type\":[\"Array\",3,[\"Array\",2,[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[TemplateInstances_v0{N=3}]_v1\"},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TScale_v1{N=2,C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"}}\":{\"bindings\":{\"C\":{\"f64\":\"0x1.8000000000000p+0\"},\"N\":2},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":1}],\"axes\":[0,null],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",32]]],[\"k\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,2]},\"ret_type\":[\"Array\",2,[\"Value\",32]]},\"form\":\"composite\",\"id\":\"TScale_v1\"}},\"program_fn\":\"TemplateInstances_v0{N=3}\",\"root\":\"Root[TemplateInstances_v0{N=3}]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",32]],[\"Value\",32],[\"Array\",6,[\"Value\",32]],[\"Array\",3,[\"Value\",32]],[\"Array\",3,[\"Array\",2,[\"Value\",32]]]]}",
   "mixed": "{\"callees\":[\"TMul32_v1\",\"TAdd32_v1\",\"Input32_v1\",\"TScale_v1{N=2,C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"}}\",\"TDot_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TMix_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":6,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":1,\"out\":3},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":6,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":6,\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,6]},\"type\":4},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":1}],\"axes\":[0,null],\"fn\":3,\"form\":\"batch\",\"n\":3,\"out\":4},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"n\",3,0,2]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,2,4]},\"type\":5},{\"refs\":{\"affine\":[\"n\",3,2,4]},\"type\":5}],\"axes\":[0,0],\"fn\":4,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",4,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"n\",3,0,2]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":1}],\"params\":[],\"ret\":{\"concat\":[{\"affine\":[\"n\",4,0,6]},{\"affine\":[\"n\",5,0,1]},{\"affine\":[\"n\",6,0,2]},{\"affine\":[\"n\",7,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Array\",3,[\"Array\",2,[\"Value\",32]]],[\"Value\",32],[\"Array\",2,[\"Value\",32]],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[TMix_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TDot_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":1}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":1},{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":1}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":1}],\"fn\":1,\"form\":\"primitive\",\"out\":1}],\"params\":[[\"a\",[\"Array\",2,[\"Value\",32]]],[\"b\",[\"Array\",2,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TDot_v1\"},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TScale_v1{N=2,C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"}}\":{\"bindings\":{\"C\":{\"f64\":\"0x1.8000000000000p+0\"},\"N\":2},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":1}],\"axes\":[0,null],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",32]]],[\"k\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,2]},\"ret_type\":[\"Array\",2,[\"Value\",32]]},\"form\":\"composite\",\"id\":\"TScale_v1\"}},\"program_fn\":\"TMix_v0\",\"root\":\"Root[TMix_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",32]],[\"Value\",32],[\"Array\",6,[\"Value\",32]],[\"Array\",1,[\"Value\",32]],[\"Array\",3,[\"Array\",2,[\"Value\",32]]],[\"Array\",2,[\"Array\",2,[\"Value\",32]]]]}",
   "scan": "{\"callees\":[\"TAdd32_v1\",\"Input32_v1\",\"TStep_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TScanProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":3,\"out\":1},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":1,\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",0,0,3]},\"type\":1}],\"fn\":2,\"form\":\"scan\",\"n\":3,\"n_xs\":1,\"out\":3}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,4]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]]},\"form\":\"composite\",\"id\":\"Root[TScanProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TStep_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"c\",[\"Value\",32]],[\"x\",[\"Value\",32]]],\"ret\":{\"strided\":[\"n\",0,0,1,0,0,2]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"TStep_v1\"}},\"program_fn\":\"TScanProg_v0\",\"root\":\"Root[TScanProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",3,[\"Value\",32]],[\"Array\",1,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]]]}",
   "primitive": "{\"callees\":[\"Input32_v1\",\"TAdd32_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TPrimProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"n\",0,1,1]},\"type\":1}],\"fn\":1,\"form\":\"primitive\",\"out\":1}],\"params\":[],\"ret\":{\"affine\":[\"n\",1,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Root[TPrimProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TPrimProg_v0\",\"root\":\"Root[TPrimProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",32]],[\"Value\",32]]}",
-  "empty": "{\"callees\":[\"TMul32_v1\",\"TAdd32_v1\",\"TDot_v1\"],\"definitions\":{\"Root[TEmptyProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"explicit\":[]},\"type\":1},{\"refs\":{\"explicit\":[]},\"type\":1}],\"axes\":[0,0],\"fn\":2,\"form\":\"batch\",\"n\":0,\"out\":2}],\"params\":[],\"ret\":{\"affine\":[\"n\",0,0,0]},\"ret_type\":[\"Array\",0,[\"Value\",32]]},\"form\":\"composite\",\"id\":\"Root[TEmptyProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TDot_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"a\",[\"Array\",2,[\"Value\",32]]],[\"b\",[\"Array\",2,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TDot_v1\"},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TEmptyProg_v0\",\"root\":\"Root[TEmptyProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",0,[\"Array\",2,[\"Value\",32]]],[\"Array\",0,[\"Value\",32]]]}"
+  "empty": "{\"callees\":[\"TMul32_v1\",\"TAdd32_v1\",\"TDot_v1\"],\"definitions\":{\"Root[TEmptyProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"explicit\":[]},\"type\":1},{\"refs\":{\"explicit\":[]},\"type\":1}],\"axes\":[0,0],\"fn\":2,\"form\":\"batch\",\"n\":0,\"out\":2}],\"params\":[],\"ret\":{\"affine\":[\"n\",0,0,0]},\"ret_type\":[\"Array\",0,[\"Value\",32]]},\"form\":\"composite\",\"id\":\"Root[TEmptyProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TDot_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"a\",[\"Array\",2,[\"Value\",32]]],[\"b\",[\"Array\",2,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TDot_v1\"},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TEmptyProg_v0\",\"root\":\"Root[TEmptyProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",0,[\"Array\",2,[\"Value\",32]]],[\"Array\",0,[\"Value\",32]]]}",
+  "keyed": "{\"callees\":[\"TMul32_v1\",\"TAdd32_v1\",\"Input32_v1\",\"TSq_v1\",\"Input8_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Input8_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Input8_v1\"},\"Root[TKeyedProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":1,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"fn\":3,\"form\":\"call\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":0}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Root[TKeyedProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TSq_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TSq_v1\"}},\"program_fn\":\"TKeyedProg_v0\",\"root\":\"Root[TKeyedProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",1,[\"Value\",32]]]}",
+  "keyed_first": "{\"callees\":[\"TAdd32_v1\",\"TMul32_v1\",\"Input32_v1\",\"Input8_v1\",\"TSq_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Input8_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Input8_v1\"},\"Root[TKeyedProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":1,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"fn\":3,\"form\":\"call\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":0}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Root[TKeyedProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TSq_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TSq_v1\"}},\"program_fn\":\"TKeyedProg_v0\",\"root\":\"Root[TKeyedProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",1,[\"Value\",32]]]}",
+  "keyed_registered": "{\"callees\":[\"TMul32_v1\",\"TAdd32_v1\",\"Input32_v1\",\"TSq_v1\",\"RegisteredInput8_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"RegisteredInput8_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"RegisteredInput8_v1\"},\"Root[TKeyedProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":1,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"fn\":3,\"form\":\"call\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":0}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Root[TKeyedProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TSq_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TSq_v1\"}},\"program_fn\":\"TKeyedProg_v0\",\"root\":\"Root[TKeyedProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",1,[\"Value\",32]]]}"
  },
  "template_ids": {
   "TScale descriptor id": "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}",
@@ -525,6 +528,87 @@
      ]
     ]
    }
+  ],
+  [
+   "a listed composite whose id is an input id is an instance",
+   "keyed",
+   {
+    "name": "Q_template_instances",
+    "version": 0,
+    "params": {
+     "templates": [
+      "TSq_v1",
+      "Input8_v1"
+     ]
+    }
+   },
+   {
+    "object": {
+     "format": "verity/partition/v1",
+     "program": "e1353458f6a1e40874f0307f8e9571025bbd72fd80487636473b48f871cfb17fdd2e41ed83411c1bce9a76b5b8a57fa55bb1a8970fcfc054c1adf1360d7b7154",
+     "query": {
+      "name": "Q_template_instances",
+      "version": 0,
+      "params": {
+       "templates": [
+        "TSq_v1",
+        "Input8_v1"
+       ]
+      }
+     }
+    },
+    "digest": "806dbc1ea611280e267bdaa3d2fc4f42a180528eab034d93c7b0da2c03e7f754b61848ad6852b24422ecc792ed21de4be8d3c79f45690311a5efd749f29e02f3",
+    "population": 2,
+    "ranges": [
+     [
+      1,
+      "TSq_v1",
+      0,
+      1
+     ],
+     [
+      2,
+      "Input8_v1",
+      1,
+      1
+     ]
+    ],
+    "ranges_digest": "13b09b4129f4bf186c26f9e47270d5d16b811d6eef999e2f00574ace9041cd9a48bcc027e44e0dd941de8c0e10bb12980b174628e4e426a2f42bf9df6d4692e8",
+    "committed": [
+     0,
+     1,
+     2
+    ],
+    "verify": true,
+    "units": [
+     [
+      0,
+      1,
+      0,
+      1,
+      2,
+      [
+       0
+      ],
+      [
+       1
+      ]
+     ],
+     [
+      1,
+      2,
+      0,
+      2,
+      3,
+      [
+       1
+      ],
+      [
+       2
+      ]
+     ]
+    ]
+   }
   ]
  ],
  "refused": [
@@ -603,6 +687,42 @@
     }
    },
    "('query-inapplicable',) the program has no instance of ['TDot_v1']"
+  ],
+  [
+   "a composite whose id is an input id is no input",
+   "keyed",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TSq_v1"
+    }
+   },
+   "('query-inapplicable',) root node 2 is a call of 'Input8_v1': an instance is a call or batch of one of ['TSq_v1']"
+  ],
+  [
+   "a composite whose id is an input id, which the instance reads",
+   "keyed_first",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TSq_v1"
+    }
+   },
+   "('query-inapplicable',) root node 1 is a call of 'Input8_v1': an instance is a call or batch of one of ['TSq_v1']"
+  ],
+  [
+   "a composite whose id is a registered input id is no input",
+   "keyed_registered",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TSq_v1"
+    }
+   },
+   "('query-inapplicable',) root node 2 is a call of 'RegisteredInput8_v1': an instance is a call or batch of one of ['TSq_v1']"
   ]
  ],
  "order_refused": [

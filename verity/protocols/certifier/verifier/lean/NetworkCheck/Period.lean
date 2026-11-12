@@ -58,12 +58,14 @@ The rows form has, in place of `sync_set`,
 
     "scan": descriptor,
     "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
-                 "lanes", "queue", "slots", "window"}
+                 "lanes", ["max_tokens_cap",] "queue", "slots", "window"}
 
 the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
-link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
+link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`;
+and its response cap `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a cell's payload holds
+an id request's `max_tokens` field, `maxTokensEnd`),
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
 descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
@@ -191,8 +193,13 @@ unsampled (`Properties.NetworkPeriod.RowsTiedSampled`), and a tied audit's `faul
 with the change that ties a compute audit sampled in part and lifts that refusal:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ,
-     "scans": [terms, …], "schedules": c, "windows": m}
+     ["max_tokens_cap": cap,] "scans": [terms, …], "schedules": c, "windows": m}
 
+* `max_tokens_cap`, present when the schedule has a response cap and absent when it has none, is that cap: each
+  response the network certifier released in the period has at most its request's `max_tokens` tokens, and every
+  request it released has `max_tokens` at most the cap (`warden`'s "The response cap",
+  `NetTiming.Guarantees.ResponseCapped`). The schedule's digest, which every registration binds, binds it
+  (`Schedule.digest`), and the check publishes the schedule's (`Properties.NetworkPeriod.RowsCapPublished`).
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
   schedule (`CertifierSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
   sets a lane's length, when its stream ends, at most `cap_c` cells, and nothing else of it: the network certifier
@@ -252,11 +259,17 @@ def rowSchema : String := "hm96-sha512/row/v2"
 /-- The cell kinds (`PAD`, `DATA`, `END`, `FAIL`, `REFUSED`) and the fail reasons the schedule's digest binds. -/
 def cellKinds : List Nat := [0, 1, 32, 33, 34]
 def failReasons : List String := ["late", "limit", "upstream", "ingress", "malformed", "format"]
+/-- The fail reason a schedule with a response cap adds after `failReasons` (`warden.REASONS`' last): a request past
+the cap, or whose `max_tokens` doesn't parse. -/
+def capReason : String := "cap"
 /-- The egress form (`WardenParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
 of another form has a digest no schedule here has. -/
 def egressForm : String := "id"
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
+/-- The byte of an id request past its `max_tokens` field (`active.MAX_TOKENS_AT + ID_DIGITS`): under a response cap a
+cell's payload holds at least this much, so the network certifier reads the field off the request's first cell. -/
+def maxTokensEnd : Nat := 130
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
@@ -283,6 +296,13 @@ structure Schedule where
   queue : Nat
   slots : Nat
   window : Nat
+  /-- The response cap (`WardenParams.max_tokens_cap`), or none. -/
+  maxTokensCap : Option Nat := none
+
+/-- The `fails` record's reasons under the schedule: `failReasons`, and `capReason` after them under a response cap
+(`WardenParams.reasons`). -/
+def Schedule.reasons (s : Schedule) : List String :=
+  if s.maxTokensCap.isSome then failReasons ++ [capReason] else failReasons
 
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
@@ -308,6 +328,11 @@ digest), read by the scan whose terms are the last. -/
 inductive Form where
   | clock (syncSet : NetworkCertifier.SyncSet)
   | rows (schedule : Schedule) (digest : ByteArray) (scan : Scan)
+
+/-- The response cap of the form's schedule: the rows form's `maxTokensCap`, none in the clock form. -/
+def Form.maxTokensCap : Form → Option Nat
+  | .clock _ => none
+  | .rows s .. => s.maxTokensCap
 
 structure Params where
   audits : Array Audit
@@ -401,9 +426,19 @@ def paramsKeys : List String :=
 def rowsParamsKeys : List String :=
   ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
 
+/-- A schedule's keys without a response cap. -/
+def scheduleKeys : List String :=
+  ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes", "queue",
+    "slots", "window"]
+
+/-- A schedule's keys with a response cap. -/
+def cappedScheduleKeys : List String :=
+  ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
+    "max_tokens_cap", "queue", "slots", "window"]
+
 def scheduleOf (j : Json) : V Schedule := do
-  exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
-    "queue", "slots", "window"] "schedule"
+  let capped := keysOf j == cappedScheduleKeys
+  unless capped do exactly j scheduleKeys "schedule"
   let pos : String → V Nat := fun k => do
     let x ← Flock.J.nat j k "schedule"
     unless 1 ≤ x do throw s!"schedule: {k} is a positive integer"
@@ -412,23 +447,31 @@ def scheduleOf (j : Json) : V Schedule := do
     { bucketMs := ← pos "bucket_ms", cellBytes := ← pos "cell_bytes", delay := ← pos "delay",
       egressCells := ← pos "egress_cells", every := ← pos "every", ingressBuckets := ← pos "ingress_buckets",
       ingressCells := ← pos "ingress_cells", lanes := ← pos "lanes", queue := ← pos "queue", slots := ← pos "slots",
-      window := ← pos "window" }
+      window := ← pos "window", maxTokensCap := ← if capped then some <$> pos "max_tokens_cap" else pure none }
   unless cellHeader + 1 < s.cellBytes do throw s!"schedule: a cell holds its {cellHeader}-byte header and a byte"
   unless s.cellBytes < 2 ^ 32 ∧ s.allocation < 2 ^ 32 ∧ s.window < 2 ^ 32 do
     throw "schedule: B, S = lanes · slots and T = window are u32s"
   unless s.window % s.every == 0 do throw "schedule: every divides the window: a window is whole timesteps"
+  if let some cap := s.maxTokensCap then
+    unless cap < 2 ^ 32 ∧ cap < s.egressCells do
+      throw "schedule: max_tokens_cap is a u32 below egress_cells: a capped response's END is its egress cell \
+        max_tokens"
+    unless maxTokensEnd + cellHeader ≤ s.cellBytes do
+      throw s!"schedule: under a response cap a cell is at least {maxTokensEnd + cellHeader} bytes, so it holds an id \
+        request's max_tokens"
   pure s
 
 /-- `WardenParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
-tagged. -/
+tagged. A schedule without a response cap has neither the cap nor `capReason` in it, so its digest is the one it had
+before the cap was a parameter. -/
 def Schedule.digest (s : Schedule) : V ByteArray :=
-  Identity.identityDigestSha512 scheduleTag (Json.mkObj [
+  Identity.identityDigestSha512 scheduleTag (Json.mkObj ([
     ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
     ("egress", toJson egressForm), ("egress_cells", toJson s.egressCells), ("every", toJson s.every),
     ("ingress_buckets", toJson s.ingressBuckets),
     ("ingress_cells", toJson s.ingressCells), ("lanes", toJson s.lanes), ("queue", toJson s.queue),
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
-    ("reasons", toJson failReasons)])
+    ("reasons", toJson s.reasons)] ++ (s.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList))
 
 /-- The scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`, from the empty
 state), each later ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`),
@@ -476,6 +519,42 @@ def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
     | some n => if NciCheck.Desc.isInputNode P n then some k else none
     | none => none
   | _ => none
+
+/-- Whether the arguments `own` (the templates' row, state and egress arguments) read input nodes of their own: their
+input nodes (`inputArg`) are pairwise distinct, and none is one of `pks`, the slot entries' input nodes. At the cost of
+the arguments. -/
+def argsApart (P : Flock.Program.Prog) (own : List Flock.Program.Arg) (pks : List Nat) : Bool :=
+  let ks := own.map (inputArg P)
+  decide ks.Nodup && pks.all fun pk => !ks.contains (some pk)
+
+/-- Whether the root's input nodes hold what the scan reads and no other leaf: each argument of `own` is one run over
+all its node's leaves (as many as the node has members), each node of `pks` has `entries` leaves, and every input node
+of the root is one of `pks` or an argument's of `own`. At the cost of the root's nodes, each against the arguments. -/
+def inputsRead (P : Flock.Program.Prog) (own : List Flock.Program.Arg) (pks : List Nat) (entries : Nat) : Bool :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  let ks := own.map (inputArg P)
+  own.all (fun a => match a.seq.parts.toList with
+    | [.affine false k 0 c] => nodes[k]?.map (·.members) == some c
+    | _ => false) &&
+  pks.all (fun pk => nodes[pk]?.map (·.members) == some entries) &&
+  (List.range nodes.size).all fun k => !NciCheck.Desc.isInputNode P nodes[k]! || pks.contains k || ks.contains (some k)
+
+/-- Whether two types have as many leaves, each of one width, the same in both (`Flock.Program.Widths.homo`): what a
+tie of two rows of gates, leaf by leaf, needs of their types. From the types' structure, no walk over their leaves. -/
+def sameLeaves (a b : Flock.Program.Ty) : Bool :=
+  a.leaves == b.leaves && (Flock.Program.Widths.homo a).isSome &&
+    Flock.Program.Widths.homo a == Flock.Program.Widths.homo b
+
+/-- Whether `ret` is the generator form's ingress return, over the leaves the scan's two ties equate: a tuple of
+exactly a u16, the state the next bucket reads and the view the bucket's egress unit reads, in that order. The state
+has the leaves of `sin`, the later ingress template's parameter of that name (no condition where there is no later
+template), and the view the leaves of `state`, the egress template's parameter (`sameLeaves`: a view of bits is read as
+u16 words, so the types themselves differ). -/
+def ingressReturn (ret : Flock.Program.Ty) (sin : Option Flock.Program.Ty) (state : Flock.Program.Ty) : Bool :=
+  match ret with
+  | .tuple fs => fs.size == 3 && fs[0]! == .array outBits (.value 1) && sin.all (sameLeaves fs[1]!) &&
+      sameLeaves fs[2]! state
+  | _ => false
 
 /-- Refuses with `why` unless `b`: one step of a `do` block, so what its acceptance gives is read off it step by step
 (`Properties.NetworkScan`). -/
@@ -576,7 +655,23 @@ is an ingress row's input node, so no egress gate depends on an ingress gate; an
 The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and read one input node of their own,
 the slot entries (`lanes · T / every` rows, counted once among the input gates): bucket `t`'s `prog<j>` is its row
 `j · T / every + ⌊t / every⌋` (`readsEntries`), the row the period check's `wired` holds to an audit's
-`SlotEntry_v1` entries port. -/
+`SlotEntry_v1` entries port.
+
+The scan's two ties equate rows of one length: a later bucket's `sin` with the state the bucket before returned, and an
+egress bucket's `state` with the view its ingress bucket returned. So the ingress templates return exactly a u16, a
+state of `sin`'s leaves and a view of the egress template's `state`'s leaves (`ingressReturn`); a return of another
+shape is refused.
+
+An input gate is read as one thing: the row, state and egress arguments read input nodes of their own, none the slot
+entries' (`argsApart`). The input gates are counted as a sum of bits against the parameters' and the slot entries', so
+two arguments on one node would leave that sum room for an input node nothing reads, and a state argument on the slot
+entries' node would make a slot entry a state gate.
+
+And every input gate is read: each of those arguments is all its node's leaves, the slot entries' node holds the
+`lanes · T / every` entries and no other leaf, and the root has no other input node (`inputsRead`). That sum counts
+bits and this counts leaves, node by node, so the scan's input gates are read off the check itself, with no appeal to
+the widths the decoder holds a reference to. A slot entry's leaves are at most its bits (a leaf is at least a bit wide,
+which the decoder gives and this holds), so the entries' bits bound the entries' gates. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -604,6 +699,10 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     "scan: the ingress templates' entry ports' types or returns differ"
   need (de.ret == .tuple #[.array outBits (.value 1), row])
     "scan: the egress template doesn't return a u16 and the schedule's row"
+  need (ingressReturn df.ret (later.map (·.2.params[1]!.2)) de.params[0]!.2)
+    "scan: the ingress templates don't return a u16, a state of a later bucket's sin's leaves and a view of an egress \
+      bucket's state's leaves, so a tie of the scan's state or view would equate rows of two lengths \
+      (NetworkCheck.Period.ingressReturn)"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
     | none => 0) 0
@@ -644,6 +743,14 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       later.all fun (x, _) => readsEntries x 2 1 s.lanes nb s.every ety.leaves pk)
     s!"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input node, lane j's \
       slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)"
+  let own := (xf.args.extract 0 1 ++ (later.map fun (x, _) => x.args.extract 0 2).getD #[] ++ xe.args).toList
+  need (argsApart prog own [pk]) "scan: two of the templates' row, state and egress arguments read one input node, or \
+    one reads the slot entries': an input node would be left that nothing reads, or a slot entry would be a state gate \
+    (NetworkCheck.Period.argsApart)"
+  need (inputsRead prog own [pk] (s.lanes * nb * ety.leaves) && ety.leaves ≤ bitsOf ety)
+    s!"scan: an input node with a leaf nothing reads: a row, state or egress argument that is not all its input \
+      node's leaves, a slot entries' node of other leaves than its {s.lanes * nb} entries' (each of at least a bit), \
+      or an input node that is neither's (NetworkCheck.Period.inputsRead)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret }
@@ -796,6 +903,20 @@ def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Dire
     ("direction", .str d.value), ("window", toJson w), ("cell_bytes", toJson s.cellBytes),
     ("slots", toJson s.allocation), ("rows", toJson s.window), ("row_schema", .str rowSchema)])
   pure (Flock.FV3.Sha512.Domain.make binding (-1) 0 s.window).id
+
+/-- `WardenParams()`'s schedule, the defaults. -/
+def defaultSchedule : Schedule :=
+  { bucketMs := 100, cellBytes := 256, delay := 10, egressCells := 4096, every := 1, ingressBuckets := 50,
+    ingressCells := 64, lanes := 16, queue := 64, slots := 4, window := 600 }
+
+-- `WardenParams().digest` and `WardenParams(max_tokens_cap=4).digest`: the cap and its reason are in the digest only
+-- under a cap
+#guard (defaultSchedule.digest.map Flock.hexOf).toOption == some
+  "9a727d16f6c1f351d316465c101269c2a4666cbcdf1dbaaef01579fd7e72315a\
+    ae2be1451412c6328d9f6688f534fb8bbe5416bbaeb5cfc0cae48597c5fd0d50"
+#guard (({ defaultSchedule with maxTokensCap := some 4 } : Schedule).digest.map Flock.hexOf).toOption == some
+  "8832fdae0616446e90e1b4178ab99c0e3d67bf790d5bb81512f13c651767adc3\
+    0a29f9401b9eb0a2cdf2a8d1c02c50304353250f06af526a970074a207bf3d12"
 
 /-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
@@ -1072,6 +1193,8 @@ structure Public where
   rows : Bool := false
   schedules : Nat
   windows : Nat
+  /-- The schedule's response cap (`Form.maxTokensCap`), published when it has one. -/
+  maxTokensCap : Option Nat := none
 
 def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
 
@@ -1134,9 +1257,10 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
     | some (_, r) => .undecided r
     | none =>
       let audits := as.filterMap (·.toOption)
-      .accept (match p.form with
+      .accept { (match p.form with
           | .clock ss => terms p.audits audits p.cells p.jitter (ss.deltas.length * ss.rhos.length) p.windows
-          | .rows _ _ scan => rowsTerms audits scan scans p.cells p.jitter p.windows)
+          | .rows _ _ scan => rowsTerms audits scan scans p.cells p.jitter p.windows) with
+          maxTokensCap := p.form.maxTokensCap }
         { link := p.link, windows := p.windows }
 
 def termsJson (ts : Array AuditTerms) : Json :=
@@ -1153,7 +1277,8 @@ def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("scans", termsJson x.units)] else []))
+    (if x.rows then [("scans", termsJson x.units)] else []) ++
+    (x.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList)
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]

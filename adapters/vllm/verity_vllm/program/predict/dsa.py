@@ -33,7 +33,9 @@ both kinds of layer read the TOPK rows DsaButterflyRows routes at those settings
 `VERITY_DSA_TOPK=canonical` serves); below its class through DsaButterflyRowsPad, the history and its pad two arguments, so a
 row's history is the row before's plus one part in the descriptor.  In class G's batched form a call's rows past INDEX_TOPK go in
 blocks (`vllm_dsa.long_row_blocks`), each row read at its block's keys and selecting among its own (DsaTopKMaskCounted), each
-op over a block's rows in turn, and a token's latent row is one DsaLatentRow, as the rule writes them.  A fact outside it raises
+op over a block's rows in turn, and a token's latent row is one DsaLatentRow, as the rule writes them; under table reads
+(`Registered.dsa_table_reads`) a long row's selection is DsaTopKIndex's positions and both kinds of layer read their rows at
+them by DsaHistoryReads (`program.dsa_table`).  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
 chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
@@ -291,10 +293,13 @@ class _Model:
     `vllm_dsa` keeps them (one `PartLog` per history); every token-count-dependent selection reads the call's launch (`launch`).
     `topk` is the last indexer layer's selection by position, which an IndexShare layer reads.  `batched`: class G's batched form
     (`build.build_program`'s `batched`), whose latent rows are one Definition each and whose rows past INDEX_TOPK go in blocks
-    (`vllm_dsa.long_row_blocks`), each op over a block's rows in turn, so that `prune.batched_form` batches them."""
+    (`vllm_dsa.long_row_blocks`), each op over a block's rows in turn, so that `prune.batched_form` batches them.  `table_reads`:
+    in that form, those rows by table reads (`build.build_program`'s `table_reads`): `topk` holds a long row's `DsaTopKIndex`
+    positions, and each layer reads its rows at them (`DsaHistoryReads`) in place of the rows network."""
 
     reads_launch = True
     batched = False
+    table_reads = False
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
         self.net, self.C, self.B, self.peers = net, net.C, B, peers
@@ -366,7 +371,7 @@ class _Model:
         V, W = int(self.C["V"]), self.net.world
         lg = self.cublas([row], self.w["lm_head"], sampled=True)
         gathered = self.call(self.k("all_gather", WORLD=W, N=V), self.peers.rows(lg)[0])
-        return select_token(self.call, self.k, gathered.refs, V * W, self.net.tp, event, pos, policy)
+        return select_token(self.call, self.k, gathered.refs, V * W, pos, policy)
 
     # -- collectives (`collectives.AllReduceRule`, `FusedAllReduceRmsNormRule`)
 
@@ -467,9 +472,9 @@ class _Model:
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         IH, ID, TOPK = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"]), int(C["INDEX_TOPK"])
-        D, indexer = NOPE + R, L in self.net.indexers
+        D, indexer, E = NOPE + R, L in self.net.indexers, self.launch.entry(M)
         w = lambda f: self.w[(L, f)]  # noqa: E731
-        prefills = self.launch.prefills((M, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
+        prefills = self.launch.prefills((E, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
         dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
         logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
@@ -497,7 +502,7 @@ class _Model:
         context = len(logs["latent"])
         for i in range(M):
             logs["latent"].append(concat([kvc[i], kpe[i]]))
-        own = (M, pos0) in dense
+        own = (E, pos0) in dense
         mqa = self.launch.keys([] if own else keys, without=dense)
         if indexer:
             fn = self.k("dsa_indexer_q", H=IH, D=ID, ROPE=R)
@@ -530,19 +535,21 @@ class _Model:
                 logits = [self.call(lg, iq[i][0].refs, iq[i][1].refs, ik, iks).refs for i in rows]
                 counts = [self.pad(32, keys[i], 1, 1) for i in rows]
                 tail = [self.pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if N > Nb else []
-                fm, fs = self.k("dsa_topk_mask_counted", N=N, TOPK=TOPK), self.k("dsa_butterfly_settings", N=N, TOPK=TOPK)
+                fm = self.k("dsa_topk_mask_counted", N=N, TOPK=TOPK)
+                fs = self.k("dsa_topk_index" if self.table_reads else "dsa_butterfly_settings", N=N, TOPK=TOPK)
                 masks = [self.call(fm, concat([s, *tail]) if tail else s, c).refs for s, c in zip(logits, counts)]
                 for i, m in zip(rows, masks):
                     self.topk[pos0 + i] = self.call(fs, m)
         if own:
-            return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense), w("o_w"), w("o_ws"))
+            return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense, E), w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
         batch = [min(n, TOPK) for n in mqa]
         by_keys = dict(zip(batch, launch_num_splits(batch, int(self.net.tp.num_sms), TOPK, 0)))
         rows_of: dict[int, Refs] = {}
         for Nb, rows in (long_row_blocks(keys, TOPK) if self.batched else ()):
             N, hist = long_row_keys(Nb, TOPK), logs["latent"].cut(Nb)
-            fr, rest = ((self.k("dsa_butterfly_rows_pad", T=Nb, N=N, TOPK=TOPK, W=KVL + R),
+            fr, rest = ((self.k("dsa_history_reads", V=Nb, TOPK=TOPK, H=KVL + R), ()) if self.table_reads else
+                        (self.k("dsa_butterfly_rows_pad", T=Nb, N=N, TOPK=TOPK, W=KVL + R),
                          (self.pad(16, 0, pad_words(TOPK, KVL + R), (N - Nb) * (KVL + R)),)) if N > Nb else
                         (self.k("dsa_butterfly_rows", N=N, TOPK=TOPK, W=KVL + R), ()))
             for i in rows:
@@ -562,9 +569,10 @@ class _Model:
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))
 
     def _dense_prefill(self, L: int, qb: list[Refs], qpe: list[Refs], kvc: list[Refs], kpe: list[Refs], context: int, pos0: int,
-                       dense: list[tuple[int, int]]) -> list[Refs]:
+                       dense: list[tuple[int, int]], entry: int) -> list[Refs]:
         """The rows' attention by dense MHA (`MLACommonBaseImpl.forward_mha`, `FlashAttnPrefillBackend`), the step's prefills `dense`
         (rows, start) all of at most TOPK keys (`use_dense_mha`), this request's `context` history rows before them -> rows [NH * VH].
+        `entry`: its sequence's rows in the launch, of which the call computes the first.
 
         kv_b_proj over the prefills' latent rows (eager, at their row count), then per row i and head h FA3's causal varlen self-attention
         over the request's own rows 0..i (`run_prefill_new_tokens`), bound per head as `DsaDenseMhaRule` binds it, at the split count
@@ -576,7 +584,8 @@ class _Model:
         C, M = self.C, len(qb)
         KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         D, KW = NOPE + R, NOPE + VH
-        plan = self.net.dense_plan(self.k, M, pos0, context, dense)
+        plan = self.net.dense_plan(self.k, entry, pos0, context, dense)
+        plan = plan._replace(heads=plan.heads[:M])
 
         def w(f: str):
             return self.w[(L, f)]

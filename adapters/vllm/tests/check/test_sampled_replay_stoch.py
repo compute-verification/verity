@@ -1,15 +1,14 @@
 """The stochastic selector is REPLAYED in form (A): `GumbelTopPTokenSelect_v1{V}` has a registered
-evaluator in `sampled_replay` -- the registry's own composite (TemperatureScale -> TopPMask_v1 with the committed `splits` S as its
-operand -> GumbelSelectF32 from the committed seed + the Const64 pos) on the committed bf16 logits row -- so a stochastic Commit's
-sampled ids are recomputed from committed inputs, not excluded as 'no registered evaluator'.  CPU only, small V.
+evaluator in `sampled_replay` -- the registry's own composite (TemperatureScale -> TopPMask_v1 with the Program's `Const32[S]` as its
+split-count operand -> GumbelSelectF32 from the committed seed + the Const64 pos) on the committed bf16 logits row -- so a stochastic
+Commit's sampled ids are recomputed from committed inputs, not excluded as 'no registered evaluator'.  CPU only, small V.
 
 What is pinned:
   * the evaluator IS the registry walk (`evaluate_spec` on `spec_registered`), bit-equal to the difftest adapter's static-S spec;
-  * the six operands resolve by NAME: logits = the committed lm_head member of this step, top_p / pos / temperature = the Program's
-    Const32/Const64 rows (read from the spec text), seed = committed runner.sampler/seed of THIS (step, request), splits = committed
-    runner.sampler/splits of the step the Program's slice names;
-  * the committed seed and splits words are LOAD-BEARING: a different committed seed replays to a different id -> FAIL by name;
-  * a missing splits identity is PARTIAL (result None, named), never a pass; a splits slice that names another step is unresolved by name;
+  * the six operands resolve by NAME: logits = the committed lm_head member of this step, top_p / pos / temperature / S = the Program's
+    Const32/Const64 rows (read from the spec text), seed = committed runner.sampler/seed of THIS (step, request);
+  * the committed seed word is LOAD-BEARING: a different committed seed replays to a different id -> FAIL by name;
+  * a missing seed identity is PARTIAL (result None, named), never a pass; a selector reading S from a Program input is unresolved by name;
   * a flipped committed sampled id fails at (request, step, runner.sampler/sampled_token_ids).
 """
 from __future__ import annotations
@@ -29,13 +28,14 @@ def _f32(x: float) -> int:
     return int(np.float32(x).view(np.uint32))
 
 
-TOP_P, TEMP, S_OF_STEP, SEED = 0.95, 0.8, [4, 2, 1], 0x1234_5678_9ABC
+TOP_P, TEMP, S, SEED = 0.95, 0.8, 4, 0x1234_5678_9ABC
 LG_MEMBER = "out"              # the lm_head Gemm's committed member (required_manifest.members_for)
 
 
-def _program():
-    """Per step: a logits Gemm (lm_head, committed `logits` member) -> Const32 top_p, Const64 pos, Const32 temperature -> the selector wired
-    exactly as the fold wires it (registry signature order: logits, top_p, seed, pos, temp, splits; `splits[s]` = the step's event)."""
+def _program(splits_input: bool = False):
+    """Per step: a logits Gemm (lm_head, committed `logits` member) -> Const32 top_p, Const64 pos, Const32 temperature, Const32[S] -> the
+    selector wired exactly as the fold wires it (registry signature order: logits, top_p, seed, pos, temp, S).  ``splits_input``: each
+    selector reads S from a `splits` Program input instead (its step's entry)."""
     rows, i = [], 0
 
     def add(spec, name, args):
@@ -46,14 +46,17 @@ def _program():
 
     for s in range(1 + T):
         sfx = "" if s == 0 else f"_{s}"
-        lg = add(f"Gemm_v1{{K={H},N={V}}}", f"model.logits_processor/triton_launch_{s}[0]", [[["p", 0, 0, H]], [["p", 3, 0, H * V]]])
+        lg = add(f"Gemm_v1{{K={H},N={V}}}", f"model.logits_processor/triton_launch_{s}[0]", [[["p", 0, 0, H]], [["p", 2, 0, H * V]]])
         p = add(f"Const32[0x{_f32(TOP_P):08x}]_v1", f"gumbel_topp_token_select{sfx}/top_p", [])
         pos = add(f"Const64[0x{(100 + s):016x}]_v1", f"gumbel_topp_token_select{sfx}/pos", [])
         tm = add(f"Const32[0x{_f32(TEMP):08x}]_v1", f"gumbel_topp_token_select{sfx}/temperature", [])
+        split = [["p", 3, s, s + 1]] if splits_input else [["n", add(f"Const32[0x{S:08x}]_v1", f"gumbel_topp_token_select{sfx}/splits", []), 0, 1]]
         add(f"GumbelTopPTokenSelect_v1{{V={V}}}", f"gumbel_topp_token_select{sfx}[0]",
-            [[["n", lg, 0, V]], [["n", p, 0, 1]], [["p", 1, 0, 1]], [["n", pos, 0, 1]], [["n", tm, 0, 1]], [["p", 2, s, s + 1]]])
-    params = [["prompt", f"Array<{H},Value<32>>"], ["seed", "Array<1,Value<64>>"], ["splits", f"Array<{1 + T},Value<32>>"],
+            [[["n", lg, 0, V]], [["n", p, 0, 1]], [["p", 1, 0, 1]], [["n", pos, 0, 1]], [["n", tm, 0, 1]], split])
+    params = [["prompt", f"Array<{H},Value<32>>"], ["seed", "Array<1,Value<64>>"],
               ["weights", f"{{model.model.embed_tokens.weight: Array<{V},Array<{H},Value<16>>>}}"]]
+    if splits_input:
+        params.append(["splits", f"Array<{1 + T},Value<32>>"])
     return {"schema": "cb-a/instance-sequence/v1", "digest": "s" * 64, "params": params, "rows": rows}
 
 
@@ -77,8 +80,8 @@ def _logits(rng, seed_row):
     return (np.asarray(rng.standard_normal(V) * 3, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _honest(arrive: int = 5, rid: str = "r0", seed: int = SEED, splits=S_OF_STEP):
-    """The committed world of one honest request: logits rows, seed / splits words per step, and sampled ids = the registry's own evaluation."""
+def _honest(arrive: int = 5, rid: str = "r0", seed: int = SEED):
+    """The committed world of one honest request: logits rows, seed words per step, and sampled ids = the registry's own evaluation."""
     inst = _program()
     pi = IX.ProgramIndex(inst)
     rng = np.random.default_rng(7)
@@ -89,10 +92,9 @@ def _honest(arrive: int = 5, rid: str = "r0", seed: int = SEED, splits=S_OF_STEP
         lg = _logits(rng, s)
         blocks[(rid, arrive + s, lg_op, LG_MEMBER)] = lg
         blocks[(rid, arrive + s, IX.SAMPLER_OP, "seed")] = np.asarray([seed], dtype=np.uint64)
-        blocks[(rid, arrive + s, IX.SAMPLER_OP, "splits")] = np.asarray([splits[s]], dtype=np.uint32)
         tok = RK.gumbel_topp_token_select({"V": V}, [lg, np.asarray([_f32(TOP_P)], np.uint32), np.asarray([seed], np.uint64),
                                                     np.asarray([100 + s], np.uint64), np.asarray([_f32(TEMP)], np.uint32),
-                                                    np.asarray([splits[s]], np.uint32)])
+                                                    np.asarray([S], np.uint32)])
         blocks[(rid, arrive + s, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)] = np.asarray([tok], dtype=np.uint64)
     return inst, pi, blocks, lg_op
 
@@ -139,9 +141,9 @@ def test_honest_stochastic_request_replays_every_selector_from_committed_inputs_
         kinds = [(x["kind"], x.get("identity", [None, None, None, None])[2:4] if x["kind"] == "committed" else x.get("spec")) for x in rec["inputs"]]
         assert kinds == [("committed", [lg_op, LG_MEMBER]), ("const", f"Const32[0x{_f32(TOP_P):08x}]_v1"),
                          ("committed", [IX.SAMPLER_OP, "seed"]), ("const", f"Const64[0x{(100 + s):016x}]_v1"),
-                         ("const", f"Const32[0x{_f32(TEMP):08x}]_v1"), ("committed", [IX.SAMPLER_OP, "splits"])]
-        # the seed and splits identities are THIS step's (engine step = arrive + s), request-local element 0
-        assert [x["identity"][1] for x in rec["inputs"] if x["kind"] == "committed"] == [5 + s] * 3
+                         ("const", f"Const32[0x{_f32(TEMP):08x}]_v1"), ("const", f"Const32[0x{S:08x}]_v1")]
+        # the logits and seed identities are THIS step's (engine step = arrive + s), request-local element 0
+        assert [x["identity"][1] for x in rec["inputs"] if x["kind"] == "committed"] == [5 + s] * 2
         assert rec["outputs"][0]["committed"] == rec["outputs"][0]["evaluated"] == int(blocks[("r0", 5 + s, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)][0])
 
 
@@ -155,9 +157,9 @@ def test_a_flipped_committed_sampled_id_fails_named_at_the_sampler_identity():
     assert "runner.sampler/sampled_token_ids" in rec["why"] and "step 1" in rec["why"]
 
 
-def test_the_committed_seed_and_splits_words_are_load_bearing():
+def test_the_committed_seed_word_is_load_bearing():
     """A different committed seed (the sampler consumed another seed than the Program's) replays to a different id at some step -> FAIL
-    by name; the committed sampled ids stay the honest ones.  Likewise the committed S: TopPMask_v1's split geometry is the operand."""
+    by name; the committed sampled ids stay the honest ones."""
     inst, pi, blocks, _ = _honest()
     honest = {k: v for k, v in blocks.items()}
     for s in range(1 + T):
@@ -173,26 +175,22 @@ def test_the_committed_seed_and_splits_words_are_load_bearing():
                for r in _select_rows(pi))
 
 
-def test_a_missing_splits_identity_is_partial_by_name_never_a_pass():
+def test_a_missing_seed_identity_is_partial_by_name_never_a_pass():
     inst, pi, blocks, _ = _honest()
-    del blocks[("r0", 7, IX.SAMPLER_OP, "splits")]
-    r = _select_rows(pi)[2]
-    rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
-    assert rec["result"] is None and "runner.sampler/splits" in rec["why"] and "step 7" in rec["why"]
     del blocks[("r0", 6, IX.SAMPLER_OP, "seed")]
     r = _select_rows(pi)[1]
     rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
     assert rec["result"] is None and "runner.sampler/seed" in rec["why"] and "step 6" in rec["why"]
 
 
-def test_a_splits_slice_naming_another_step_is_unresolved_by_name():
-    inst = _program()
-    sel = [r for r in inst["rows"] if r["spec"].startswith("GumbelTopPTokenSelect_v1")][2]
-    sel["args"][5] = [["p", 2, 0, 1]]                                            # step 2's selector reading splits[0]
-    pi = IX.ProgramIndex(inst)
+def test_a_selector_reading_its_split_count_from_a_program_input_is_unresolved_by_name():
+    """S is the registered constant the Program carries: a selector reading it from a Program input (a value the live batch could set)
+    is never resolved to a committed word, at any step."""
+    pi = IX.ProgramIndex(_program(splits_input=True))
     _, _, blocks, _ = _honest()
-    rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": sel["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
-    assert rec["result"] is None and "splits slice [0, 1) names step 0" in rec["why"] and "step 2" in rec["why"]
+    for s, r in enumerate(_select_rows(pi)):
+        rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
+        assert rec["result"] is None and "reads its split count S from Program input 'splits'" in rec["why"], (s, rec["why"])
 
 
 def test_the_selector_is_a_replayed_stratum_of_the_population_not_a_no_evaluator_gap():

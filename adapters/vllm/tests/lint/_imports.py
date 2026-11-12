@@ -9,7 +9,7 @@ resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
-sits in ``pipeline``, as does PoUB's ``commit_map``, which reads the replay's store.  ``OPTIONAL`` names the packages a
+sits in ``pipeline``.  ``OPTIONAL`` names the packages a
 tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``engine.makers``, a seam's parts, ``settings``,
 the environment's registry, and ``log``, the logger, import nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
@@ -38,7 +38,6 @@ LAYER = {
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
     "verity_vllm.protocols.remote_bandwidth": "observe|commit",                     # the node's store: registry, codecs, receipts, vLLM binder
-    "verity_vllm.protocols.remote_bandwidth.commit_map": "pipeline",                # the Commit's memory map: reads the replay's store
     "verity_vllm.engine": "engine",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",
@@ -72,7 +71,7 @@ PROPERTY_MODULES = ("verity_vllm.properties",)
 
 #: The replay drivers (check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
-    "check.replay", "check.value_check", "check.compiled_value_check", "check.oracle_compare"))
+    "check.replay", "check.value_check", "check.oracle_compare"))
 
 #: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
 VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_pass", "verity_vllm.check.commit_rules",
