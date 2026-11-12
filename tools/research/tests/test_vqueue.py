@@ -20,8 +20,9 @@ MAIN = "m0"
 
 
 def pr(n: int, head: str | None = None, *files: str, rank: int | None = None, lean: bool = False,
-       conflict: bool = False) -> Ready:
-    return Ready(n, head or f"h{n}", frozenset(files or (f"pkg{n}/mod.py",)), lean, n if rank is None else rank, conflict)
+       conflict: bool = False, lean_input: bool = False) -> Ready:
+    return Ready(n, head or f"h{n}", frozenset(files or (f"pkg{n}/mod.py",)), lean, n if rank is None else rank, conflict,
+                 lean_input)
 
 
 def prs(*ns: int) -> list[Ready]:
@@ -734,6 +735,24 @@ def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_s
     assert decide(s) == [Advance("c0"), Drop("c0", "on main", Outcome((3,), heads(3), PASS)), Build((2,), "c0", 3)]
     s = replace(s, candidates=(cand("c0", MAIN, 3), waiting("c1", "c0", 1), cand("c2", "c0", 2)))
     assert decide(s) == decide(replace(s, depth=2)) == []
+
+
+@pytest.mark.parametrize("files", [("tools/verity/check/check.py",), ("verity/protocols/pous/lean/scripts/gen.py",)],
+                         ids=["check's code", "a Python file of a Lake package"])
+def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_once_that_batch_is_on_the_chain(files):
+    """A PR with no Lean change whose files are Lean inputs (`Ready.lean_input`), built beside a staged batch, would change the
+    Lean inputs of the chain's top that batch goes onto, so its records would be regenerated there again: no batch takes it
+    while the batch is staged, a PR touching no Lean input is built beside it meanwhile, and it is built in rank order once
+    the batch is on the chain (committed as staged, or merged again on the top as its records commit), as with none staged."""
+    touching = pr(2, None, *files, lean_input=True)
+    s = snap(waiting("c1", MAIN, 1), ready=[lean(1), touching], depth=3, records=True)
+    assert decide(s) == []
+    assert decide(replace(s, ready=(*s.ready, pr(3)))) == [Build((3,), MAIN, 3)]
+    assert decide(replace(s, candidates=(cand("c1", MAIN, 1),), ready=(*s.ready, pr(3)))) == [Build((2, 3), "c1", 2)]
+    fixed = (cand("c3", MAIN, 3), replace(cand("c1r", "c3", 1), repairs="c1"))
+    assert decide(replace(s, candidates=fixed)) == [Build((2,), "c1r", 1)]
+    assert decide(replace(s, candidates=(), ready=(touching,))) == [Build((2,), MAIN, 3)]
+    assert decide(replace(s, ready=(lean(1), replace(touching, lean_input=False)))) == [Build((2,), MAIN, 3)]
 
 
 def test_a_pr_set_aside_waits_behind_a_staged_batch_as_behind_any_pr_waiting():
@@ -1487,7 +1506,8 @@ class World:
     Lean PRs change), and are what the tree below it holds until a records run regenerates them.  Commit is applied as the
     loop applies it: on the staged batch's own base, its records commit or the batch as built; on another, its members merged
     again there, its records carried onto the merge only when the two trees' Lean inputs are the same, else the merge staged
-    again.  No check reads stale records, so only the invariants catch them."""
+    again, never for a Lean input a PR built while a batch was staged changed (`Ready.lean_input`).  No check reads stale
+    records, so only the invariants catch them."""
 
     def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
                  policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False,
@@ -1556,6 +1576,8 @@ class World:
         self.seen: Counter[str] = Counter()
         self.records_first = records
         self.touch = frozenset(m for m in numbers if not self.marks[m].lean and rng.random() < 0.2) if records else frozenset()
+        self.marks = {m: replace(r, lean_input=r.lean or m in self.touch) for m, r in self.marks.items()}
+        self.beside_staged: set[int] = set()     # the PRs built while a batch was staged, not as a rebuild (`Build.replaces`)
         self.lockers = frozenset(m for m in numbers if self.marks[m].lean and rng.random() < 0.7) if records else frozenset()
         self.locks: dict[str, frozenset[int]] = {MAIN: frozenset()}      # sha -> the lock records its tree holds
         self.regenerated_on: dict[str, frozenset[int]] = {}             # sha -> the Lean inputs its records were regenerated on
@@ -1991,15 +2013,17 @@ class World:
     def beside(self, s: Snapshot, acts: list, where: str) -> None:
         """While every staged batch's records run is pending, and none is dropped, the builds are the plain ones `decide` makes
         with no staged batch and none of their members: plain batches up to the depth and the rebuilds of what a red or a
-        leave dropped (one with a Lean member staged again), and no Lean batch beside them, nor a PR set aside, which goes
-        behind the staged batch as behind any PR waiting."""
+        leave dropped (one with a Lean member staged again), and no Lean batch beside them, nor a PR changing a Lean input,
+        nor a PR set aside, which goes behind the staged batch as behind any PR waiting."""
         staged = [c for c in s.candidates if c.waits]
         if not staged or any(c.records is None or c.records.state != PENDING for c in staged) or any(
                 isinstance(a, (Drop, Commit)) and a.sha in {c.sha for c in staged} for a in acts):
             return
         out = {m for c in staged for m in c.members}
         alone = replace(s, candidates=tuple(c for c in s.candidates if not c.waits), ready=tuple(
-            replace(r, conflict=r.conflict or r.lean or r.number in out) for r in s.ready))
+            replace(r, conflict=r.conflict or r.lean or r.lean_input or r.number in out) for r in s.ready))
+        self.seen["a PR changing a Lean input waited behind a staged batch"] += any(
+            r.lean_input and not r.lean for r in self.pool(s, acts))
         now = [a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None]
         aside = {(m, h) for o in [*s.history, *now] for m, h in zip(o.members, o.heads)
                  if o is [p for p in [*s.history, *now] if (m, h) in zip(p.members, p.heads)][-1] and o.state == INFRA}
@@ -2077,6 +2101,8 @@ class World:
             base = self.rebuilds.get(a.base, a.base)
             assert base == self.main or base in self.cands, where
             assert not a.records or self.records_first, where
+            if a.replaces is None and any(c.waits for c in self.cands.values()):
+                self.beside_staged |= set(a.members)
             sha = self._built(base, a.members, tuple(self.marks[m].head for m in a.members), staged=a.records)
             if a.replaces is not None:
                 self.rebuilds[a.replaces] = sha
@@ -2163,8 +2189,11 @@ class World:
             self.due[a.sha], self.regenerated_on[a.sha] = self.tick + self.rng.randint(1, 3), inputs
             self.seen["a staged batch checked as built"] += 1
             return
-        if a.base != c.base and not self.same(frozenset(m for m in self.tree[a.base] | set(c.members)
-                                                        if self.marks[m].lean or m in self.touch), inputs):
+        top = frozenset(m for m in self.tree[a.base] | set(c.members) if self.marks[m].lean or m in self.touch)
+        if a.base != c.base and not self.same(top, inputs):
+            assert not (top ^ inputs) & self.beside_staged, (
+                f"{where}: staged again for a Lean input #{min((top ^ inputs) & self.beside_staged)} changed, built while a "
+                "batch was staged")
             self._built(a.base, c.members, c.heads, staged=True, repairs=a.sha)
             self.seen["a staged batch staged again on other Lean inputs"] += 1
             return
@@ -2278,15 +2307,17 @@ def _settle(w: World) -> World:
 def test_the_simulated_queue_with_records_runs_builds_plain_batches_beside_a_staged_one_and_lands_only_fresh_records():
     """With each Lean batch's records run first (`Snapshot.records`), wide PRs in every third seed and pins in every fourth:
     every invariant holds, among them that while every staged batch's records run is pending the builds are those `decide`
-    makes with no staged batch and no Lean PR, plain batches up to the depth; that nothing is built on a staged batch, so no
-    candidate is dropped because a records commit replaced the one below it; and that every tree `main` advances to holds
-    the lock records of its Lean inputs, a Lean batch's regenerated on that tree's Lean inputs; and that a red or a leave
-    takes out only its suspects or that member, a Lean candidate it drops and a staged batch holding a leaver staged again
-    in its tick (`World.restacked`).  Every scenario settles within `ticks`."""
+    makes with no staged batch, no Lean PR and no PR changing a Lean input, plain batches up to the depth; that nothing is
+    built on a staged batch, so no candidate is dropped because a records commit replaced the one below it; that no batch is
+    staged again for a Lean input a PR built beside a staged batch changed; that every tree `main` advances to holds the
+    lock records of its Lean inputs, a Lean batch's regenerated on that tree's Lean inputs; and that a red or a leave takes
+    out only its suspects or that member, a Lean candidate it drops and a staged batch holding a leaver staged again in its
+    tick (`World.restacked`).  Every scenario settles within `ticks`."""
     seen: Counter[str] = Counter()
     for seed in SEEDS:
         seen.update(_settle(World(seed, wide=seed % 3 == 0, pinned=seed % 4 == 0, records=True)).seen)
     for what in ("a plain batch built beside a staged batch", "a plain batch built beside a staged batch, the chain above one",
+                 "a PR changing a Lean input waited behind a staged batch",
                  "a staged batch checked as built", "its records committed on it", "its records carried onto another base",
                  "checked as built on another base", "a staged batch staged again on other Lean inputs", "a Lean batch landed",
                  "a records run ended in infra", "a records run ended in fail", "main moved elsewhere",
@@ -2303,6 +2334,7 @@ RECORDS_MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
     "no records run as passed": lambda s: _candidates(
         s, lambda c: replace(c, records=replace(c.records, state=PENDING)) if c.records else c),
     "nothing repaired": lambda s: _candidates(s, lambda c: replace(c, repairs=None)),
+    "no PR changing a Lean input": lambda s: replace(s, ready=tuple(replace(r, lean_input=False) for r in s.ready)),
 }
 
 
@@ -2313,6 +2345,17 @@ def test_records_carried_onto_other_lean_inputs_land_stale_in_the_simulated_queu
         for seed in SEEDS:
             w = World(seed, records=True)
             w.same = lambda a, b: True
+            _settle(w)
+
+
+def test_a_pr_changing_a_lean_input_built_beside_a_staged_batch_stages_it_again_in_the_simulated_queue():
+    """The restage invariant holds `decide` to `Ready.lean_input` alone: handed snapshots in which no PR changes a Lean input,
+    and with the invariant on builds beside a staged batch (`World.beside`) off, it stages a batch again for a Lean input a
+    PR it built beside a staged batch changed, in some seed."""
+    with pytest.raises(AssertionError, match="staged again for a Lean input"):
+        for seed in SEEDS:
+            w = World(seed, records=True, policy=lambda s: decide(RECORDS_MISREADS["no PR changing a Lean input"](s)))
+            w.beside = lambda s, acts, where: None
             _settle(w)
 
 

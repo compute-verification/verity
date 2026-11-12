@@ -30,14 +30,16 @@ A batch with a member that changes Lean, a lock or a spec (`Ready.lean`) has its
 drive's lock run regenerated them once such a change landed (`Build.records`): it is staged off main's chain, its members
 merged onto the chain's top, and its records run, drive's lock run on that tree, runs there (`Candidate.waits`).  Nothing is
 built on a staged batch and it counts toward no `depth`, so the chain goes on filling with batches of PRs with no Lean change
-while the run runs; only no second Lean batch is staged meanwhile.  Once the run passed and the chain has room, the batch goes
-onto the chain's top (`Commit`): as staged when that top is still its base, else its members merged again onto it, and checked
-there with its records included, on a records commit of what the run regenerated, whatever its records change of what a
-guarantee says, or as built when it regenerated nothing.  Records regenerated on one tree go onto another only when the two
-trees' Lean inputs are the same (`vqueue_slim.lean_key`), which are all the records depend on; else the batch is staged again
-there, its records run first again.  A run that ended in infra is launched once more (`Regenerate`).  One that failed or ended
-in infra twice refuses them: the staged batch is dropped and its Lean members are ejected, and infra is rung of infra.  A
-records commit still held `pending_s` after it was first drops its staged batch, whose members are built again.
+while the run runs; only no second Lean batch is staged meanwhile, and no PR changing a Lean input (`Ready.lean_input`) is
+taken until the staged batch is on the chain, so none built beside it changes the Lean inputs of the top it goes onto.  Once
+the run passed and the chain has room, the batch goes onto the chain's top (`Commit`): as staged when that top is still its
+base, else its members merged again onto it, and checked there with its records included, on a records commit of what the
+run regenerated, whatever its records change of what a guarantee says, or as built when it regenerated nothing.  Records
+regenerated on one tree go onto another only when the two trees' Lean inputs are the same (`vqueue_slim.lean_key`), which
+are all the records depend on; else (a change below it left the chain, or `main` moved elsewhere) the batch is staged again
+there, its records run first again.  A run that ended in infra is launched once more (`Regenerate`).  One that failed or
+ended in infra twice refuses them: the staged batch is dropped and its Lean members are ejected, and infra is rung of
+infra.  A records commit still held `pending_s` after it was first drops its staged batch, whose members are built again.
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
 the `Action`s that bring the world closer to it.  The loop builds the snapshot, applies the actions and keeps nothing between
@@ -89,6 +91,8 @@ class Ready:
                                    # but for a batch of pinned ones (`Snapshot.pinned`)
     rank: int = 0                  # the queue's order, lowest first (drive's priority file, then mark time)
     conflict: bool = False         # it doesn't merge onto `main`: the queue skips it until its head changes
+    lean_input: bool = False       # a path of ``files`` is a Lean input (`vqueue_slim.lean_inputs`, what `lean_key` hashes),
+                                   # Lean change or not: no batch takes it while a batch is staged (`_pool`)
 
 
 @dataclass(frozen=True)
@@ -331,8 +335,9 @@ def decide(s: Snapshot) -> list[Action]:
     what its records run calls for (`_first`), and nothing is built on it.  Once its run passed it goes onto the chain's top
     (`Commit`) as soon as the chain has room, in place of that tick's batch, and in a tick that rebuilds nothing; one whose
     member isn't marked at the head it was staged at goes only onto its own base, as built, and is dropped, built again
-    without that member, when that is no longer the top.  While one is staged the batch takes no Lean PR, nor a lone PR set
-    aside (`_aside`), which goes behind it as behind any PR waiting.
+    without that member, when that is no longer the top.  While one is staged the batch takes no Lean PR, nor a PR changing a
+    Lean input (`Ready.lean_input`), so its records carry onto the top it goes onto, nor a lone PR set aside (`_aside`), which
+    goes behind it as behind any PR waiting.
 
     A red or a member set aside drops its candidate and every one above it, a refused records run drops its staged batch, and
     a member others took from the queue drops its own candidate and every one above it, or its staged batch (`_chain`); in
@@ -447,11 +452,13 @@ def decide(s: Snapshot) -> list[Action]:
 
 def _pool(ready: dict[int, Ready], busy: set[int], staged: list[Candidate]) -> list[Ready]:
     """The PRs a batch may take, in rank order: ready, merging onto `main`, and in no candidate on main's chain or on it (``busy``)
-    nor in a staged batch kept (``staged``), which keeps every Lean PR out too: one Lean batch is staged at a time, so its
-    records are regenerated on a tree no other staged batch will change."""
+    nor in a staged batch kept (``staged``), which keeps every Lean PR out too, and every PR changing a Lean input
+    (`Ready.lean_input`): one Lean batch is staged at a time, and no batch built beside it changes the Lean inputs
+    (`vqueue_slim.lean_key`) of the chain's top it goes onto, so its records carry there rather than its records run starting
+    again (`Commit`)."""
     busy = busy | {m for c in staged for m in c.members}
-    return sorted((r for r in ready.values() if r.number not in busy and not r.conflict and not (staged and r.lean)),
-                  key=lambda r: (r.rank, r.number))
+    return sorted((r for r in ready.values() if r.number not in busy and not r.conflict
+                   and not (staged and (r.lean or r.lean_input))), key=lambda r: (r.rank, r.number))
 
 
 def _aside(members: tuple[int, ...], ready: dict[int, Ready], outcomes: list[Outcome]) -> bool:

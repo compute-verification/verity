@@ -882,7 +882,17 @@ class World:
         for n in order:
             place(n)
         self.prs, self.left, self.pulled = {n: entries[n].pr for n in chosen}, left, pulled
-        return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
+        inputs = self._lean_inputs(main, (f for v in chosen.values() for f in v[0])) if chosen else frozenset()
+        return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2],
+                      lean_input=vqueue.meets(chosen[n][0], inputs)) for i, n in enumerate(placed)]
+
+    def _lean_inputs(self, main: str, files: Iterable[str]) -> frozenset[str]:
+        """The Lean inputs (`vqueue_slim.lean_inputs`) of ``main``'s tree with ``files``, the ready PRs' changed files, in it, so
+        a Lean package a ready PR adds is one: a PR whose own change meets them changes the Lean key (`vqueue_slim.lean_key`)
+        of a tree it is merged into (`Ready.lean_input`)."""
+        from .vqueue_slim import lean_inputs
+
+        return frozenset(lean_inputs({*self._tree(main), *files}))
 
     def _carry(self, landed: list[str], entries: dict[int, Entry], why: dict[int, str | None], mode: str) -> set[int]:
         """The verdict carry (`carry`), as drive.toml's `verdict_carry` at `main` says: an admitted PR with no land verdict at
