@@ -134,12 +134,12 @@ def test_the_arm_is_read_from_the_ladder_s_settings(monkeypatch):
 def serve_capacity_only(tmp_path, monkeypatch) -> tuple[Path, list[Path]]:
     """`serve` for qwen3-8b with its capacity server failing at once: the sites serve_tax would have built."""
     out = tmp_path / "qwen3-8b"
-    monkeypatch.setattr(L.S, "plugin_site", lambda site, tick: site)
+    monkeypatch.setattr(L.S, "plugin_site", lambda site, arm: site)
     sites = []
 
     def main(argv):
         o = Path(argv[argv.index("--out") + 1])
-        sites.append(L.S.plugin_site(o / ".site", False))
+        sites.append(L.S.plugin_site(o / ".site", L.S.ARMS["compiled"]))
         return 1
 
     monkeypatch.setattr(L.S, "main", main)
@@ -165,7 +165,7 @@ def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatc
     monkeypatch.delenv("ROUTECAP_OUT", raising=False)
     out, sites = serve_capacity_only(tmp_path, monkeypatch)
     assert json.loads((sites[0] / L.P.CONFIG).read_text()) == {"pin": True, "tilings": str(out / L.SERVING_TILINGS)}
-    assert L.S.plugin_site(out / "record" / ".site", False) == out / "record" / ".site"
+    assert L.S.plugin_site(out / "record" / ".site", L.S.ARMS["record"]) == out / "record" / ".site"
     assert json.loads((out / "record" / ".site" / L.P.CONFIG).read_text()) == {"pin": True, "tilings": None}
     assert not (sites[0] / "route_capture_plugin.py").exists() and "ROUTECAP_OUT" not in served_env(sites[0])
 
@@ -182,7 +182,7 @@ def test_serving_with_the_route_capture_loads_it_in_each_server_writing_its_own_
     entry = (sites[0] / "verity_route_capture-0.0.dist-info" / "entry_points.txt").read_text()
     assert entry == "[vllm.general_plugins]\nverity_route_capture = route_capture_plugin:register\n"
     assert {f.name for f in sites[0].glob("*.py")} >= {"route_capture_plugin.py", "settings.py", "inductor_pin.py"}
-    site = L.S.plugin_site(out / "record" / ".site", False)
+    site = L.S.plugin_site(out / "record" / ".site", L.S.ARMS["record"])
     assert served_env(site)["ROUTECAP_OUT"] == str(out / "record" / "route_capture")
 
 

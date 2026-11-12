@@ -167,6 +167,38 @@ def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():
     assert made == [1] and ticks == [["kv"], ["kv"]]
 
 
+def test_history_tables_start_on_rank_0_at_the_first_step_with_a_kv_cache_outside_a_capture(monkeypatch):
+    """``boundary_rows.tables``: rank 0's step hook, channel and builder (`rank0_tables`) are made at the first step with
+    a KV cache that is neither a dummy run nor captured, the builder starts answering the channel then, and the hook
+    reads that step and every later one; another rank makes none."""
+    made, steps, capturing = [], [], [False]
+
+    class Hook:
+        def after(self, runner, so):
+            steps.append(so)
+
+    class Channel:
+        def start(self, builder):
+            made.append(("start", builder))
+            return "stop"
+
+    monkeypatch.setattr(P, "rank0_tables", lambda runner, cfg: made.append(("tables", runner)) or (Hook(), Channel(), "b"))
+    run = P._tables_runner(lambda self, so, **kw: "out", {"out": "."}, capturing=lambda: capturing[0], rank=lambda: 0)
+    runner = NS()
+    assert run(runner, 0) == "out" and not made
+    runner.kv_caches = ["kv"]
+    run(runner, 1, dummy_run=True)
+    capturing[0] = True
+    run(runner, 2)
+    capturing[0] = False
+    assert not made
+    run(runner, 3), run(runner, 4)
+    assert made == [("tables", runner), ("start", "b")] and steps == [3, 4] and run.state["stop"] == "stop"
+    other = P._tables_runner(lambda self, so, **kw: None, {"out": "."}, capturing=lambda: False, rank=lambda: 1)
+    other(runner, 5), other(runner, 6)
+    assert other.state == {"hook": None} and steps == [3, 4] and len(made) == 2
+
+
 class RankExecutor:
     """A stand-in tensor-parallel executor: three ranks answering `boundary.rank_pool` and `boundary.rank_take`, rank 2's
     root different."""
@@ -240,14 +272,15 @@ def test_a_tensor_parallel_engine_takes_an_edge_each_period_of_each_loads_servin
 
 
 def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_configs_object(tmp_path, monkeypatch):
-    """``boundary_rows`` hands its object to the integration's boundary windows (`verity_vllm.pipeline.boundary_rows`, a
-    stand-in here), which commit each class under out/boundary/ and write a line each to boundary.<pid>.jsonl."""
+    """``boundary_rows`` hands its object to the integration's boundary windows (`verity_vllm.pipeline.boundary_windows`, a
+    stand-in here), which commit each class under out/boundary/ and write a line each to boundary.<pid>.jsonl. Behind
+    the certifier's release order they also get the gate's key, each request's release; without it, none."""
     got: dict = {}
 
     class Windows:
         @classmethod
-        def of(cls, cfg, out, sink):
-            got.update(cfg=cfg, out=out)
+        def of(cls, cfg, out, sink, release=None, public=()):
+            got.update(cfg=cfg, out=out, release=release, public=public[:1])
             sink({"window": 0, "spans": 2})
             return cls()
 
@@ -255,14 +288,27 @@ def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_confi
             got["sched"] = sched
             return self
 
-    stub = types.ModuleType("verity_vllm.pipeline.boundary_rows")
+    stub = types.ModuleType("verity_vllm.pipeline.boundary_windows")
     stub.BoundaryWindows = Windows
     monkeypatch.setitem(sys.modules, stub.__name__, stub)
     if "verity_vllm.pipeline" in sys.modules:
-        monkeypatch.setattr(sys.modules["verity_vllm.pipeline"], "boundary_rows", stub, raising=False)
+        monkeypatch.setattr(sys.modules["verity_vllm.pipeline"], "boundary_windows", stub, raising=False)
     sched, cfg = Scheduler(), {"check": "t", "per_prompt": 0, "per_output": 1, "window_s": 5.0}
     done = P.install(sched, {"out": str(tmp_path), "boundary_rows": cfg})
-    assert isinstance(done[0], Windows) and got == {"cfg": cfg, "out": tmp_path / "boundary", "sched": sched}
+    assert isinstance(done[0], Windows)
+    assert got == {"cfg": cfg, "out": tmp_path / "boundary", "public": (tmp_path,), "sched": sched, "release": None}
     (lines,) = tmp_path.glob("boundary.*.jsonl")
     assert json.loads(lines.read_text()) == {"window": 0, "spans": 2}
+    done[-1].uninstall()
+    (tmp_path / "ordered").mkdir()
+    done = P.install(Scheduler(), {"out": str(tmp_path / "ordered"), "boundary_rows": cfg, "release_order": True})
+    assert got["release"] is P.release_key
+    done[-1].uninstall()
+    # a class's directory holds its requests' tokens and salts: with a private directory named it goes there, and
+    # out keeps only the classes' public lines and stays the directory the history tables are refused under
+    out, private = tmp_path / "out", tmp_path / "kept"
+    out.mkdir()
+    done = P.install(Scheduler(), {"out": str(out), "private": str(private), "boundary_rows": cfg})
+    assert got["out"] == private / "boundary" and got["public"] == (out,)
+    assert [f.name.split(".")[0] for f in out.iterdir()] == ["boundary"]
     done[-1].uninstall()

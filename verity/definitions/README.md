@@ -3,7 +3,7 @@
 The Definitions of the kernels served models run: each kernel vLLM launches (a GEMM, an RMSNorm, attention, MoE routing,
 sampling, a training step's optimizer) written as a composite Definition over the primitives of `verity.definitions.ops`,
 gate for gate what the kernel computes on the GPU, together with its Boolean version, the fast evaluators that reproduce
-it, and the partition of a served Program into proof blocks. The integrations (`adapters/vllm/`) build served
+it, and the partition of a served Program into proof blocks. The adapters (`adapters/vllm/`) build served
 Programs from these Definitions. The terms and the front doors (building, evaluating, checking, regenerating pins) are
 [`verity.circuits`](../circuits/README.md)'s.
 

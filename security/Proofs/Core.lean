@@ -20,6 +20,9 @@ public import Proofs.Core.Game.Lock
 public import Proofs.Core.Game.Batch
 public import Proofs.Core.Game.BatchInduced
 public import Proofs.Core.Game.Rewinding
+public import Proofs.Core.Game.RewindingCanon
+public import Proofs.Core.SamplingGeneric.FirstHit
+public import Proofs.Core.SamplingGeneric.FirstHitClass
 public import Proofs.Core.Game.Unambiguous
 public import Proofs.Core.Game.TwoRun
 public import Proofs.Core.Game.Tape

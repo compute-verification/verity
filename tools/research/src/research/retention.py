@@ -29,12 +29,12 @@ A record's expiry is its owner's word that the data may go. The remote check (`s
 preserved path) is there so that gc never deletes the only copy of data somebody still promises to keep. Its answer is one of
 STORED. gc deletes on `verified` (the remote holds the artifact; with no remote to ask, as on a node, which holds no store key, the
 replica this store's catalog verified when custody pushed it), on `expired` (the remote holds its manifest and has dropped its blobs
-past its kind's time to live, `store.gc.TTL_DAYS`) and on `withdrawn` (its `withdrawn` label): there the store gave the copy up by
-its own rule, so nothing still promised is lost. It keeps the path on `uncovered` (the artifact doesn't hold every file now under the
-path at its size, so files custody trimmed never count as stored, whatever the remote says), on `mismatch` (the remote's copy is not
-the artifact's, or a blob is absent that neither rule explains), on `unknown` (the remote has no manifest for it: it never stored
-it) and on `unreachable` (the remote, or with none this store, could not be asked), and an `unreachable` fails the pass (exit 1).
-Every --apply reports how many of each it found.
+past its kind's time to live, `store.gc.TTL_DAYS`) and on `withdrawn` (every blob the remote lacks is under a `withdrawn` label,
+`research data preserved`'s WITHDRAWN): there the store gave the copy up by its own rule, so nothing still promised is lost. It
+keeps the path on `uncovered` (the artifact doesn't hold every file now under the path at its size, so files custody trimmed never
+count as stored, whatever the remote says), on `mismatch` (the remote's copy is not the artifact's, or a blob is absent that neither
+rule explains), on `unknown` (the remote has no manifest for it: it never stored it) and on `unreachable` (the remote, or with none
+this store, could not be asked), and an `unreachable` fails the pass (exit 1). Every --apply reports how many of each it found.
 
 Neither command deletes a path that is, lies in or holds a Lean records tree (LEAN_RECORDS) whose `.lock` a run holds: it is
 refused, naming the run its `.who` names, to retry when that run ends. Each deletion holds those trees' locks while it runs, as
@@ -596,16 +596,17 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
     """The default remote check, run just before a deletion: what became of the path's stored copy (STORED, module docstring).
     The artifact must hold the path's files (`covers`); then `preserved.check` in head mode says whether the remote holds it (remote
     sizes, and the single-part ETag against the local blob's MD5 where the blob is here, else a read-back; `LocalStore.verify`
-    would read back every blob). Where it holds the manifest and lacks blobs, a `withdrawn` label (pulled from the remote first) or
-    a manifest older at `now` than its kind's time to live says the store gave the copy up. Without a usable remote (a node holds no
-    store key) it is `recorded` mode: the remote replica the store's catalog verified when custody pushed it, which is what the
-    store eviction trusts too; an artifact that catalog doesn't vouch for is `unreachable`, since nothing here can be asked."""
+    would read back every blob). Where it holds the manifest and lacks blobs, the store gave the copy up when that check's verdict is
+    WITHDRAWN (it pulls the artifact's labels from the remote, and a `withdrawn` label covers every blob the remote lacks), or when
+    the manifest is older at `now` than its kind's time to live; a blob absent that neither explains is a `mismatch`. Without a
+    usable remote (a node holds no store key) it is `recorded` mode: the remote replica the store's catalog verified when custody
+    pushed it, which is what the store eviction trusts too; an artifact that catalog doesn't vouch for is `unreachable`, since
+    nothing here can be asked."""
     st = None
 
     def chk(art: str, path: Path) -> Stored:
         nonlocal st
         from .store import gc as G
-        from .store import labels_sync as LS
         from .store import preserved as P
         from .store.local import LocalStore, NotFound, manifest_key, object_key
 
@@ -626,7 +627,11 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
                               "verified on the remote when custody pushed it, by this store's catalog")
             if err := rep["targets"][0].get("error"):
                 return Stored("unreachable", err)
-            errs = [e for x in rep["not_preserved"] for e in x.get("errors") or []] or [rep.get("reason") or "not preserved"]
+            if rep["verdict"] == P.WITHDRAWN:
+                return Stored("withdrawn", f"withdrawn from the remote: {st.withdrawn(art)}")
+            # what fails besides withdrawn blobs: `preserved` lists those in the artifact's `withdrawn`, never as absent in its errors
+            errs = (rep["artifacts"][art]["errors"] + [e for x in rep["not_preserved"] if x["kind"] == "labels" for e in x["errors"]]
+                    or [rep.get("reason") or "not preserved"])
             if r is None:
                 return Stored("unreachable", f"{errs[0]}: {nobody}")
             mkey = manifest_key(ids.hex_of(art))
@@ -635,9 +640,6 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
             dropped = {f"{object_key(h)}: absent" for h, _ in man.blobs()}
             if other := [e for e in errs if e not in dropped]:
                 return Stored("mismatch", other[0])
-            LS.pull_targets(st, [art])
-            if why := st.withdrawn(art):
-                return Stored("withdrawn", f"withdrawn from the remote: {why}")
             ttl, age = G.TTL_DAYS.get(man.kind), (now() - parse_utc(dict(r.list_times(mkey))[mkey])).total_seconds() / 86400
             if ttl is not None and age >= ttl:
                 return Stored("expired", f"expired on the remote: a {man.kind} lives {ttl:g} d there, and its manifest is {age:.1f} d old")

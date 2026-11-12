@@ -27,7 +27,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
                      cb_plan: Any = None, served: Any = None) -> SimpleNamespace:
     """The Commit's acquisition on ``com`` (``eng``'s model and runner) for its required-value manifest: the attention hidden source
     (``args.hidden_so``) when the manifest names the hidden class, the taps (`taps.attach`: the norm scales and every other family
-    the manifest names), the KV-slots source under ``args.memory_map``, the MoE block source, the promoted members' consumer
+    the manifest names), the MoE block source, the promoted members' consumer
     inputs, the X-03 attention plane classes from the Build's record, and the committer's hook sets from the acquisition plan
     (written into ``out``; refused, exit 3, as the Commit refuses). `main` builds every committer of a Commit here, and
     serve-openai's rows-sha512 Commit (`serve_seal.committer`) builds its own here too, over its row's manifest of record.
@@ -63,11 +63,6 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
                   f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                   f"telemetry {_hsrc.telemetry_path}", flush=True)
     required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
-    if args.memory_map:
-        from verity_vllm import protocols
-        from verity_vllm.acquire.sources import kv_slots_source
-        protocols.driver("remote-bandwidth", "commit_map")
-        kv_slots_source.attach(com)
     # the MoE block source stages six planes per MoE layer
     # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
     # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the

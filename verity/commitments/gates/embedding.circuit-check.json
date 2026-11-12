@@ -4,9 +4,18 @@
    "and": 32792,
    "type": "8d50c6aed456b8191fd921a2c7e03961ae6b89ee721f83ee0d8460464b8ef20806215876bc9ace16d5a561187f6d41b183bae2039f0ee9072e4482352e2ac025"
   },
+  "EmbeddingReadSelect_v1{V=131072,H=576}": {
+   "and": 9231,
+   "type": "29b5da92f12c75b7a4edc1c71e43110528e65b40853747c96a7809331017912b47c3b55b6178c628389ea247f3c0931ebd60a919ec4ddde023ddec49856aa18b"
+  },
   "EmbeddingReadSelect_v1{V=2,H=1}": {
    "and": 47,
    "type": "641dc5e6908aa43ade4ca58529e4b7eb73ec793c20b3b9e6d414e1fbc00f1630fc2ce931347566bfa4c05983466a589916a0f248ea7ec4dbb0ad81ef4147b32d"
+  }
+ },
+ "digests": {
+  "EmbeddingRead_v1{V=131072,H=576}": {
+   "sha512": "bbfe1d1a16bce1f539358c10d390e32a170213363df527e1f219d0a22bc2dc6bfea72f74459fadade9f7cd88bc832379547d965e8587eeca7ecb1334c07cdad6"
   }
  }
 }

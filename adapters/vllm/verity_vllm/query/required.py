@@ -665,9 +665,12 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         step = step_of(c.id)
         if c.family in SAMPLING_EVENTS:
             add("sampled_token_ids", step, 0, "runner.sampler", "sampled_token_ids", 0, n_seq, dtype="i64", spec=c.family)
-            for r in c.reads:                                   # the runtime inputs the selector consumes (seed, splits): the sampler's
+            for r in c.reads:                                   # the runtime inputs the selector consumes (its seed): the sampler's
                 if r.call < 0 and r not in record_fields and r not in pop.supplied:
                     pin = P.input(r.call)
+                    if pin.name not in fmt.SAMPLER_INPUTS:
+                        raise ValueError(f"{c.family} at step {step} reads the runtime input {pin.name!r}: a selector reads only "
+                                         f"{sorted(fmt.SAMPLER_INPUTS)}; its split count is the registered constant, a Const32[S] of the Program")
                     add(f"sampler_{pin.name}", step, 0, "runner.sampler", pin.name, 0, n_seq, dtype=_dtype(pin.port_table[0].width), spec=c.family)
             continue
         for cm in pop.members_of(cid):

@@ -69,7 +69,7 @@
   "handles": [
     {
       "handle": "infra",
-      "holder": "bc-5a69647d-04f7-5d94-9ff1-56593e2e1037",
+      "holder": "bc-6a6f43b8-948e-5389-a706-1b4904497078",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0CA15YVA0P",
@@ -88,7 +88,9 @@
       "branch_suffixes": [
         "558b",
         "9e59",
-        "98f5"
+        "98f5",
+        "1037",
+        "5127"
       ],
       "examples": [
         "Which machines do we have right now, and what is each one busy with?",
@@ -125,7 +127,6 @@
         "verity/composite/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
@@ -177,7 +178,6 @@
         "benchmarks/served_units/",
         "benchmarks/unit_block/",
         "benchmarks/served_commit/",
-        "benchmarks/g2/",
         "benchmarks/compile_cost/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
@@ -196,7 +196,6 @@
         "adapters/vllm/verity_vllm/pipeline/build.py",
         "adapters/vllm/verity_vllm/pipeline/match.py",
         "adapters/vllm/verity_vllm/pipeline/commit.py",
-        "adapters/vllm/verity_vllm/pipeline/commit_group.py",
         "adapters/vllm/verity_vllm/pipeline/commit_plan.py",
         "adapters/vllm/workloads/",
         "adapters/vllm/manifests/",
@@ -248,9 +247,8 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "verity/protocols/inference_only/nci/",
-        "benchmarks/int8_class_rate/",
-        "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
+        "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
         "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
         "adapters/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -294,14 +292,11 @@
         "security/Proofs/Accounting/HMu/",
         "security/Proofs/Accounting/PouwWork.lean",
         "security/Proofs/Accounting/TS.lean",
-        "security/Proofs/Accounting/TS/",
-        "archive/examples/h200/",
-        "demos/dither_full_util/"
+        "security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
         "e9ac",
-        "ea24",
         "1de3"
       ],
       "examples": [
@@ -321,7 +316,22 @@
       "linear": "CMP",
       "linear_label": "lane:compute-research",
       "owns": [
-        "verity/hardware/"
+        "verity/hardware/",
+        "benchmarks/pouw/tensor_kinds/",
+        "benchmarks/pouw/opcode_probe/",
+        "benchmarks/pouw/sass_census/",
+        "benchmarks/pouw/facet_break/",
+        "benchmarks/pouw/dc/",
+        "benchmarks/pouw/theory/",
+        "benchmarks/pouw/lean_headline.py",
+        "benchmarks/pouw/lean_headline_dc.py",
+        "benchmarks/pouw/tests/test_lean_headline.py",
+        "benchmarks/pouw/tests/test_lean_headline_dc.py",
+        "benchmarks/tensor_duty/",
+        "benchmarks/int8_class_rate/"
+      ],
+      "branch_suffixes": [
+        "ea24"
       ]
     },
     {
@@ -434,7 +444,7 @@
     },
     {
       "handle": "network-accounting",
-      "holder": "bc-5c916421-64a5-5c38-94ba-2e28fe629237",
+      "holder": "bc-61b263cf-c60b-54d2-9f4f-d20a83b15a1a",
       "remit": "Network accounting: the network certifier (verity/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
@@ -450,15 +460,20 @@
         "security/Definitions/NetworkCertifier/",
         "security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/certifier_term/",
         "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
-        "benchmarks/prove_path/"
+        "benchmarks/prove_path/",
+        "benchmarks/certifier_timing/"
       ],
       "branch_suffixes": [
         "728f",
         "a190",
-        "061a"
+        "061a",
+        "9237",
+        "0a40",
+        "2b94"
       ],
       "examples": [
         "How do you stop a GPU node from secretly sending data out over the network?",
@@ -506,9 +521,7 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py",
-        "tools/research/src/research/drive.py",
-        "tools/research/tests/test_queue_drive.py"
+        "tools/research/src/research/merge.py"
       ],
       "branch_suffixes": [
         "4292",
@@ -601,8 +614,7 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore",
-        "archive/"
+        ".gitignore"
       ]
     },
     {
@@ -643,8 +655,10 @@
       "owns": [
         "benchmarks/harness/",
         "benchmarks/overhead/",
+        "benchmarks/prove/",
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
+        "benchmarks/exfiltration/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py",
@@ -664,7 +678,7 @@
     },
     {
       "handle": "kernels",
-      "holder": "bc-0104b328-7489-5a12-a90e-2a15e14ff08a",
+      "holder": "bc-026b7d5e-6674-5e9c-9eef-4aac970acc3b",
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
@@ -675,7 +689,9 @@
         "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
-        "15ad"
+        "15ad",
+        "f08a",
+        "0ebe"
       ],
       "examples": [
         "How much slower is serving with the commitments on, compared with plain vLLM at full load?",
@@ -695,6 +711,7 @@
       "owns": [
         "verity/protocols/inference_only/rho/",
         "benchmarks/circuit_properties/",
+        "benchmarks/inference_only/",
         "benchmarks/training_slowdown/"
       ],
       "branch_suffixes": [

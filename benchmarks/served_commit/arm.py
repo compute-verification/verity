@@ -9,8 +9,7 @@ captured into the graph and drained at the logits), and the native collector (`N
 staging) hashes them into one root per step. Its control is ``stock`` token for token: committing must not change what
 is served.
 
-An arm commits under its ``commit_scheme``, ``rows-sha512``; `benchmarks/g2/curve.py` reads a recorded run's scheme from its
-arm's name. The Commit is
+An arm commits under its ``commit_scheme``, ``rows-sha512``. The Commit is
 what `prof_arm`'s rows arms and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`) measure.
 
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),

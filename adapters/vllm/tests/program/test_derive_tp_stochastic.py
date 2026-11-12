@@ -1,7 +1,7 @@
 """A tensor-parallel rank's stochastic Program takes the TP1 Program's inputs, then the peers.  `vllm_meta.with_peers` wraps a
-`make_wrapper` module for the rank's export: the stochastic wrappers' `seed`, a request wrapper's seed rule's inputs and `splits`
-come after the prompt, in the TP1 order, and the peers (`peers_<k>`, one per collective) after them, so the replay and the manifest
-find the sampler's inputs by the names TP1 gives them (`check.replay.index.SEED_PARAM`, `query.manifest.format.SPLITS_PARAM`).  The plain `WithPeers` took the prompt alone, and the seed
+`make_wrapper` module for the rank's export: the stochastic wrappers' `seed` and a request wrapper's seed rule's inputs come after
+the prompt, in the TP1 order, and the peers (`peers_<k>`, one per collective) after them, so the replay and the manifest find the
+sampler's input by the name TP1 gives it (`check.replay.index.SEED_PARAM`); its split count is the registered constant.  The plain `WithPeers` took the prompt alone, and the seed
 landed in the peers: derive_step failed with `forward() missing 1 required positional argument: 'seed'`.  The
 greedy rank Program is the `WithPeers` one, its digest unchanged.
 
@@ -28,8 +28,8 @@ from verity.definitions.registry import b1
 
 PROF = {"mode": "profile", "profile": "b1-eager-v3"}
 LP, T = 3, 2
-STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived", "rid": 4}
-SINGLE = dict(STOCH, splits=32, geometry={"sampler_batch": 1, "num_sms": 84})
+STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32, "rid": 4,
+         "geometry": {"sampler_batch": 1, "num_sms": 84}}
 SELECT = "GumbelTopPTokenSelectSharedGreedy_v1"
 
 
@@ -97,39 +97,36 @@ def _base(n) -> str:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("kind,sampling,form", [("request", STOCH, vm.SeedRuleSplitsWithPeers), ("step", STOCH, vm.SplitsWithPeers),
-                                                ("request", SINGLE, vm.SeedRuleWithPeers), ("step", SINGLE, vm.SeededWithPeers)],
-                         ids=["request-derived-S", "step-derived-S", "request-single-S", "step-single-S"])
-def test_a_stochastic_rank_program_takes_the_tp1_inputs_then_the_peers(kind, sampling, form):
-    wrapped, inputs, bus, n_own = _rank(kind, sampling)
+@pytest.mark.parametrize("kind,form", [("request", vm.SeedRuleWithPeers), ("step", vm.SeededWithPeers)])
+def test_a_stochastic_rank_program_takes_the_tp1_inputs_then_the_peers(kind, form):
+    wrapped, inputs, bus, n_own = _rank(kind, STOCH)
     assert type(wrapped) is form and len(bus.record) == (1 if kind == "step" else T + 1)
     rank = _derive(wrapped, inputs)
-    tp1 = _derive(*_wrapper(kind, sampling, None))
+    tp1 = _derive(*_wrapper(kind, STOCH, None))
     own, tp1_params = _params(rank), _params(tp1)
     n_peer = len(bus.record)
     # the rank Program's parameters: the TP1 Program's own inputs (the step wrapper's first one named `prompt`, as every rank Program's),
     # one bf16 peer per collective, then the TP1 Program's weights (their fields under the wrapper's `inner.`, as every rank Program's)
-    names = ["prompt", "seed", *(SEED.PARAMS if kind == "request" else ()), *(["splits"] if sampling["splits"] == "derived" else [])]
+    names = ["prompt", "seed", *(SEED.PARAMS if kind == "request" else ())]
     assert [n for n, _ in own[:n_own]] == names
     assert own[1:n_own] == tp1_params[1:n_own] and own[0][1] == tp1_params[0][1]
     assert [n for n, _ in own[n_own:n_own + n_peer]] == [f"peers_{k}" for k in range(n_peer)]
     assert all(t == f"Array<{r['shape'][0]},Array<{r['shape'][1]},Value<16>>>" for (_n, t), r in zip(own[n_own:n_own + n_peer], bus.record))
     assert [(n, t.replace("{inner.", "{").replace(",inner.", ",")) for n, t in own[n_own + n_peer:]] == tp1_params[n_own:]
-    # the selects are TP1's (operands: row, top_p, seed, pos, temperature, S), each reading the seed at parameter 1 and (derived S) its
-    # event's entry of `splits`, the parameter after the seed rule's on a request wrapper
+    # the selects are TP1's (operands: row, top_p, seed, pos, temperature, S), each reading the seed at parameter 1 and S from no
+    # parameter
     sel = [n for n in rank.flat_definition.body.nodes if _base(n).startswith("GumbelTopPTokenSelect")]
     sel1 = [n for n in tp1.flat_definition.body.nodes if _base(n).startswith("GumbelTopPTokenSelect")]
     assert [n.fn.id for n in sel] == [n.fn.id for n in sel1] and len(sel) == (1 if kind == "step" else T + 1)
     for s_i, n in enumerate(sel):
         assert n.args[2].refs[0][:2] == ("p", 1), (s_i, n.args[2].refs)
-        if "splits" in names:
-            assert n.args[5].refs[0] == ("p", names.index("splits"), s_i), (s_i, n.args[5].refs)
+        assert all(r[0] != "p" for r in n.args[5].refs), (s_i, n.args[5].refs)
     assert sum(1 for n in rank.flat_definition.body.nodes if _base(n) == "AllReduce2_v1") == sum(r["shape"][0] for r in bus.record)
     assert rank.program.fn.bindings["SRC"]["class"] == f"verity-vllm/with-peers/v1[{type(wrapped.inner).DERIVE_SOURCE}]"
 
 
-def test_the_seed_and_splits_are_inputs_on_every_rank():
-    """Two seeds are one Program on a rank as on TP1 (the seed and S are bound at run time); the two ranks' Programs differ only where
+def test_the_seed_is_an_input_on_every_rank():
+    """Two seeds are one Program on a rank as on TP1 (the seed is bound at run time); the two ranks' Programs differ only where
     their collectives place their own partials."""
     a, ia, _, _ = _rank("request", STOCH, rank=0)
     b, ib, _, _ = _rank("request", STOCH, rank=1)
@@ -152,8 +149,8 @@ def test_the_greedy_rank_program_is_the_with_peers_one():
     assert rep.digest == "42d4f7c1c5d41a7f6e0f66c8b2aa498e5ccd7570eb58526ebc000f61e8e67467b2ff2fd6d62014d6beffee7eeebca2430d5c35ba68987af03a42dfddd83c7f5a"
 
 
-@pytest.mark.parametrize("n", [0, 4, 5, 8])
+@pytest.mark.parametrize("n", [0, 3, 4, 7])
 def test_with_peers_refuses_a_wrapper_it_does_not_know(n):
     bus = CollectiveBus(rank=0, world=2)
-    with pytest.raises(ValueError, match=r"takes \[1, 2, 3, 6, 7\] inputs of its own"):
+    with pytest.raises(ValueError, match=r"takes \[1, 2, 6\] inputs of its own"):
         vm.with_peers(nn.Identity(), tuple(torch.empty(1, device="meta") for _ in range(n)), bus)
