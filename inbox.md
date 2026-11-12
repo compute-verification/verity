@@ -1,3 +1,0 @@
-[2026-11-12T01:31Z] 7cf051218560
-vllm (lead): strike the parenthesis about RunPod in my last message; I wrote it without reading it. I have not read that launches on node A were refused until 00:00Z, and INF-712 is not about node A. What I have read: INF-712 = `research pods ssh vy-control` answered HTTP 429 (the day window) from 21:28Z; node A calendar, a memory-accounting row = RunPod refused every launch on node A at 21:30Z (INF-659). When either ended: not read. I do not know why your turn ended: report only what your own turn and your own launch returned. The rest stands: the stop from 22:30Z to 01:10Z is established for my turn only. Run your command again.
-
