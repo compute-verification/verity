@@ -252,7 +252,7 @@ def test_the_tied_policy_is_never_priced_as_a_stated_policy(capsys) -> None:
     assert e.value.code == 2 and "--uncredited-share S" in err and "never printed alone" in err and "37,653" not in out
 
 
-@pytest.mark.parametrize("text", ["2", "-0.1", "101%", "a tenth", ""])
+@pytest.mark.parametrize("text", ["2", "-0.1", "101%", "a tenth", "", "nan", "inf"])
 def test_a_share_is_a_number_from_zero_to_one_or_a_percentage(text, capsys) -> None:
     assert report._share("0.2315%") == pytest.approx(report._share("0.002315")) and report._share("0") == 0
     with pytest.raises(SystemExit) as e:

@@ -46,13 +46,14 @@ def _class(text: str) -> tuple[int, int, int]:
 
 
 def _share(text: str) -> float:
+    refused = argparse.ArgumentTypeError(f"{text!r}: a share of a block's work is a number from 0 to 1, or a percentage "
+                                         "written with %")
     try:
         s = float(text.removesuffix("%")) / (100 if text.endswith("%") else 1)
     except ValueError:
-        s = -1.0
+        raise refused from None
     if not 0 <= s <= 1:
-        raise argparse.ArgumentTypeError(f"{text!r}: a share of a block's work is a number from 0 to 1, or a percentage "
-                                         "written with %")
+        raise refused
     return s
 
 
