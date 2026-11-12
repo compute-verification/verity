@@ -2,6 +2,7 @@
 front door as a served model (`derive_graph.derive_graph`), with the training rules (`rules/training.py`) added to the default ones.
 
     step_program(model, loss_fn, optimizer, example_batch, mode="reference", cc=None) -> Program | Unsupported
+    structure_program(model, loss_fn, optimizer, example_batch, cc=cc) -> Program | Unsupported   the step at a cc, cells unread
 
 The step is one function of everything a step reads,
 
@@ -297,10 +298,13 @@ class StepSurvey:
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
                 mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, cc: tuple[int, int] | None = None, name: str = "TrainStep",
-                exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
+                exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None,
+                structure: bool = False) -> DeriveReport | StepSurvey:
     """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc, tf32=...,
     deterministic=...)`, with the step's two settings at a `cc`). `exported`: `export_step`'s result, at a `cc` traced as the GPU runs it (`gpu=True`).
-    `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole (`rules.training_survey.survey`)."""
+    `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole (`rules.training_survey.survey`).
+    `structure`, at a `cc`: `structure_program`'s report, with `training_rules(cc=cc, structure=True)`, and its Program's
+    `annotations["train_step"]["structure"]` True (no other step's annotation has the key)."""
     from verity_vllm.program.frontend.rules.training import training_rules
     from verity_vllm.program.frontend.rules.training_survey import (
         survey as survey_graph,
@@ -308,17 +312,21 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
 
     if rules is not None and cc is not None:
         raise ValueError("step_report: pass rules or cc, not both (training_rules(cc=...) is the rule set cc names)")
+    if structure and (cc is None or survey):
+        raise ValueError("step_report: a structure derivation is of a step at a cc, and has no survey")
     gpu = cc is not None
     gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch, gpu=gpu)
     if gpu and not layout.gpu:
         raise ValueError("step_report: at a cc the step is the GPU's, its CUDA branches, its attention kernel and its settings: "
                          "export it with export_step(..., gpu=True)")
-    ruleset = rules if rules is not None else training_rules(cc=cc, tf32=layout.tf32, deterministic=layout.deterministic)
+    ruleset = rules if rules is not None else (training_rules(cc=cc, structure=True) if structure else
+                                               training_rules(cc=cc, tf32=layout.tf32, deterministic=layout.deterministic))
     theta = layout.inputs[:len(layout.params)]
     rep = derive_graph(gm, metas, mode=mode, rules=ruleset, name=name, input_names=layout.inputs, theta=theta)
-    rep.provenance["train_step"] = layout.to_json()
+    ann = {**layout.to_json(), **({"structure": True} if structure else {})}
+    rep.provenance["train_step"] = ann
     if rep.program is not None:
-        rep.program.annotations["train_step"] = layout.to_json()
+        rep.program.annotations["train_step"] = ann
     if not survey:
         return rep
     holes, prog = ([], rep.program) if rep.program is not None else survey_graph(gm, metas, mode=mode, rules=ruleset, name=name,
@@ -362,6 +370,18 @@ def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | t
     return report.result
 
 
+def structure_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer,
+                      example_batch: torch.Tensor, *, cc: tuple[int, int], mode: str = "reference") -> Program | Unsupported:
+    """The step at a `cc` as a structure Program: `step_program`'s graph as that GPU runs it (`export_step(..., gpu=True)`), at
+    `example_batch`'s shape, of which a reader takes only the occurrences and the views their inputs are read through, never a
+    cell. So no capture fits it and none is read: its matrix products are lowered as without a `cc` and each flash attention op is
+    its head Definition at a stand-in block size (`training_rules(cc=cc, structure=True)`). Its
+    `annotations["train_step"]["structure"]` is True, which marks it as no step's Program."""
+    report = step_report(model, loss_fn, optimizer, example_batch, mode=mode, cc=cc, structure=True)
+    assert isinstance(report, DeriveReport)
+    return report.result
+
+
 def in_bits_beyond_theta(program: Program, gates: GateSet) -> int | parts.Unsupported:
     """The bits a witness block `gates` reads beyond theta: the summed widths of the distinct gates outside it with a wire into it
     (`boundary.in_gates`), less theta's input gates (the start's weights, `Program.root.theta`) and structure (a constant, or a gate
@@ -399,4 +419,5 @@ def _structure(circuit, g: int, memo: dict[int, bool]) -> bool:
     return True
 
 
-__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "primitives", "step_report", "step_program"]
+__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "primitives", "step_report", "step_program",
+           "structure_program"]
