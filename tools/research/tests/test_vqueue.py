@@ -1986,7 +1986,10 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     pending past the bound is retried once and rung past twice it; a lone member's own failure is rerun once
     before it is ejected; a batch holds at most `lean` Lean PRs, and none beside a PR with no Lean change or while one it may
     take waits; a move of main by someone else drops the stale candidates
-    and rebuilds on it; an inherited failure ejects nobody, and its red rings once; a restart repeats nothing but a ring, or
+    and rebuilds on it; a red or a leave takes out only its suspects or that member, every other member of what it dropped
+    built again in its tick, in order, and a fail above the lowest is decided before its base's word only on `main`'s, where
+    no member below meets it (`World.restacked`);
+    an inherited failure ejects nobody, and its red rings once; a restart repeats nothing but a ring, or
     a red whose drop it didn't apply; every failure is read from its check's records as the loop reads them, never as
     unnamed where its report names its tests, its reads covering every file it read; and every good PR reaches main and
     every bad one is ejected within `ticks`, every erring one too with `tree_ejects`, and without it only erring PRs stay
