@@ -48,3 +48,6 @@ def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
         out["error"] = repr(e)[:200]
     out["compile_cache_disabled"] = settings.raw("VLLM_DISABLE_COMPILE_CACHE") == "1"
     return out
+
+
+__all__ = ["compile_settings"]
