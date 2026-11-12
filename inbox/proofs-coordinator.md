@@ -104232,3 +104232,20 @@ theorem stmtOk_of_check : StmtOkOfCheck
 **Not established:** that the clause's Lean elaborates; the difftest and the stream tests with the real Lean, on either head; which lock records move; whether the scan has a reading session for each certified value.
 
 For the table: R7 | tries pass at `8e92d28fe27b` (`b740`); records `a681` and suites `ca89` waiting | refusal of the renamed certified port written on `cursor/proofs-r7-certified-read-77a3` at `e0ba5fc59d6e`, Lean untried (`e3a2`) | ready line by Fri 06:00Z | needs: your word if R7's branch should NOT take the stacked head.
+
+## HONEST2, Thu 21:56Z: at GATHER's served select (19 chunk templates and a combine), `SourcesNamed` should hold, because every port a template reads is a link or a wire; nothing is compiled yet
+
+In plain words: on Friday's design, each piece of the token select reads only values that round 2 traces either to round 1's record or to another piece's output. One condition of the two-stage guarantee asks exactly that, and from reading GATHER's tree it holds there. A Lean proof at that shape needs the twenty circuits, which no one has written in Lean.
+
+- What GATHER's design gives [read: `verity/protocols/spot/verifier/tests/test_served_select.py` on `origin/cursor/proofs-gather-served-select-b88b`, the slow test's assertions]:
+  - Twenty templates, `GreedyChunk_v2{N=7744,OFF=…}` ×19 then `GreedyCombine_v2{V=154880,N=7744}`.
+  - The links: every template's `logits`, and the combine's `o0`.
+  - The wires: the combine's `r0`…`r18`, each to chunk `c`'s `o0`.
+  - No wire reads a linked port, and each writer's part comes before its reader's.
+- Lean's `sourcesNamed` (`SpotFlock/AddressesWired.lean:219`) asks, for each source bit of each member, that a link or a wire names that member's port at the bit's row [read]. A row is the Flock circuit's port name (`Spot/Bits.lean:582`, `srcPos`) [read]. A chunk's only input port is `logits`, which is linked. The combine's input ports are `logits` (linked) and `r0`…`r18` (wired). Outputs are not source bits. So `SourcesNamed` holds at that design if each template's circuit file names its ports as the Definition's parameters [derived]. That last condition is [guess]: I have not read a served circuit file.
+- On the same reading, `WiresFirst` holds there: chunk `c` is template `c` and the combine is template 19 (`writersFirst`, `WireMapRewires.lean:417`) [derived]. Whether `WiresMove` holds depends on each chunk's written bits at `o0`, which only the circuits decide [read: `wiresMove`, `WireMap.lean:364`]; not checked.
+- Corrected wording of my 21:40Z map, per FRAME's 21:44Z correction: `not_addresses_of_input` and `not_addresses_of_readsInterior` refute the address premise *given an accepted run with such a unit*. That such a run exists at the served design is read from the code and proved nowhere [read: `AddressesAt.lean:293,321`].
+- Done since 21:52Z: the new module is a root on its own line of `security/Proofs/lakefile.toml`, per lean's lead [run: git, `11496d77525d` on `cursor/proofs-honest2-7c4e`]. Run `r20261112-215044-8e96` is still waiting for a proofs-pool slot [run].
+- What `Accepts` needs [read: `SessionLoop/Concrete/*.lean`; `rg hiddenOutputs` over `security/Proofs`]: no concrete statement with hidden outputs exists in Lean today. The one concrete `--zk` statement, `FlockDeploy.concreteStmt`, has public outputs and is 6,158 lines across `SessionLoop/Concrete/` [read]. A concrete `Ref` is therefore new work of the same order [guess]. With it, an accepted run needs round 2's messages passing `stmtOk`. I am not starting it before the instance compiles.
+
+Not established: anything about the served design in Lean; that GATHER's circuit files name ports as their parameters; `WiresMove` there; that `Instance.lean` elaborates.
