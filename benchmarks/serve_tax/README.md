@@ -420,7 +420,9 @@ utilization integrated), and `table.md` lays them out per thousand output tokens
 ## What it writes
 
 Under the job's `out/`: `plan.jsonl` (the requests), one directory per arm with its `meta.json` (the server's command,
-the plugin's changes, τ, versions, each load's start), `server/` (the server's log and the plugin's records: the step
+the plugin's changes, τ, versions, each load's start, and under `settings` the integration's value settings in force in
+the environment its server is started with, `verity_vllm.settings.record`: each variable set there that can change what
+an engine computes, a credential by name only, and their digest), `server/` (the server's log and the plugin's records: the step
 trace, each window's token roots, each KV edge's bytes and kernel time) and `<load>/rep-<r>/client.jsonl` (each request's
 send, streamed chunks and tokens), then `table.md` and `table.json` (`serve_tax.py table`): per arm and load, output tokens
 and requests a second, goodput at the SLO (TTFT and time per output token), TTFT and ITL at p50 and p99, each a mean over
@@ -428,8 +430,9 @@ reps with a 95% interval, the requests sent and not served, each load's schedule
 scheduled and the rows each sampled, from the server's `/metrics` before and after the load), and each arm's tax, its
 compute per token over the reference's at the same load less one, against `compiled` and against its parent. Below capacity the throughput is set
 by the arrivals, so the tax there reads the drain and the cost shows in the latencies; a tax beside unserved requests
-isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts, its differing requests and
-its wall time beside the served window's, and `replay_tokens.jsonl.gz` its tokens. Each request decodes to its cap, so the
+isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts, its differing requests,
+its wall time beside the served window's and the same record of its engine's environment (`settings`), and
+`replay_tokens.jsonl.gz` its tokens. Each request decodes to its cap, so the
 schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
 in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from
 serving from one that differs from itself; `REPLAY_FROM` with no `ARMS` replays an earlier job's window alone, reading

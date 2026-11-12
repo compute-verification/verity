@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import inspect
 import json
 import math
 import re
@@ -50,6 +51,36 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
         with pytest.raises(SystemExit, match=f"arm {arm} starts the server as vLLM's recipe.*no recipe for moonlight"):
             S.published_context(arm, "moonlight", None)
         assert S.published_context(arm, "glm53", 131072) == 131072
+
+
+def test_an_arms_meta_holds_the_value_settings_in_force_in_the_environment_its_server_is_started_with(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A variable that changes what the engine computes can come from the job, from run.sh or from the arm; the launch
+    line and the arm's own ``env`` show only the last. The record is of the dict the server is started with."""
+    monkeypatch.setenv("NCCL_P2P_DISABLE", "1")                    # the job's, and a value setting by its family
+    monkeypatch.setenv("VLLM_API_KEY", "a credential's value")    # named, never held
+    monkeypatch.setenv("VLLM_PLUGINS", "none")                     # what `server_env` unsets is not in force
+    monkeypatch.setenv("HF_HOME", "/where/not/what")               # no value setting
+    monkeypatch.delenv("VERITY_DSA_TOPK", raising=False)
+    site, private = tmp_path / "site", tmp_path / "private"
+    env = {n: S.server_env(S.ARMS[n], tmp_path, site, None, 600.0, 600.0, private=private)
+           for n in ("prod", "prod-again", "prod-record")}
+    stock, again, ours = (S.value_settings(env[n]) for n in ("prod", "prod-again", "prod-record"))
+    assert stock["schema"] == "verity-vllm/settings/v1" and len(stock["digest"]) == 128
+    for name, value in (("NCCL_P2P_DISABLE", "1"), ("VLLM_API_KEY", "<redacted>"), ("VLLM_BATCH_INVARIANT", "0"),
+                        ("VLLM_SERVER_DEV_MODE", "1")):
+        assert stock["values"][name] == ours["values"][name] == value, name
+    assert not {"VLLM_PLUGINS", "HF_HOME", "PYTHONPATH"} & set(stock["values"]) and "a credential's value" not in json.dumps([stock, ours])
+    # stock's second lifetime is started with what its first was; ours differs from stock by the canonical top-k alone,
+    # and where the top-k keeps its counters is no value setting
+    assert again == stock and ours["digest"] != stock["digest"]
+    assert {k: v for k, v in ours["values"].items() if stock["values"].get(k) != v} == {"VERITY_DSA_TOPK": "canonical"}
+    assert set(stock["values"]) < set(ours["values"]) and env["prod-record"]["VERITY_DSA_TOPK_LOG"] == f"{private}/topk-log"
+    # a record of no dict is of this process's environment, which is how a replay takes its engine's
+    assert S.value_settings()["values"]["NCCL_P2P_DISABLE"] == "1"
+    # `serve` records the dict it starts the server with
+    assert '"settings": value_settings(env)' in inspect.getsource(S.serve)
+
 
 
 def test_the_pinned_corpus_is_a_whole_sha512_and_a_commit_of_its_repository():
