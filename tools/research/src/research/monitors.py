@@ -1546,8 +1546,10 @@ MONITORS: list[Monitor] = [
             "carries one. A check job that is the loop's heavy shard (one the loop pins to a machine for its memory) can "
             "read as stranded, because its ticket records no memory need yet; that is cured in slot.py's asker, ci's. "
             "A lane pool (infra): read why `--on auto` put each job there and fix the placement rule. Shut: the "
-            "pool's machine (its disk floor, or why it can't be read). Stalled: set `peaks=` on the pool's slots. Lean: the "
-            "machine's Lean slots. Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
+            "pool's machine (its disk floor, or why it can't be read). Stalled: where the pool's slots carry `peaks=`, the "
+            "line's head waits for memory, and a waiter asking more than `auto.BACKFILL_MAX_GB` may not pass it and holds "
+            "those behind (slot.py's line rule); where they don't, set `peaks=` on them. Lean: the machine's Lean slots. "
+            "Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
             every_s=120, clear_s=300),
 ]
 BY_ID = {m.id: m for m in MONITORS}
