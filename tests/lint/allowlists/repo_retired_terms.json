@@ -3114,13 +3114,9 @@
     {"file": "benchmarks/pouw/filler/arms.py", "count": 1},
     {"file": "benchmarks/pouw/filler/comm/tpcomm.cu", "count": 18},
     {"file": "benchmarks/pouw/filler/dcap.cu", "count": 2},
-    {"file": "benchmarks/pouw/filler/dfill.sh", "count": 1},
     {"file": "benchmarks/pouw/filler/flin.cuh", "count": 12},
-    {"file": "benchmarks/pouw/filler/flin.sh", "count": 2},
     {"file": "benchmarks/pouw/filler/pfill.cuh", "count": 2},
-    {"file": "benchmarks/pouw/filler/psched.sh", "count": 1},
-    {"file": "benchmarks/pouw/filler/score.py", "count": 2},
-    {"file": "benchmarks/pouw/filler/scoring.py", "count": 13},
+    {"file": "benchmarks/pouw/filler/scoring.py", "count": 1},
     {"file": "benchmarks/pouw/floored_gemm/fgemm.cu", "count": 3},
     {"file": "benchmarks/pouw/gpu_kit/bench.cuh", "count": 1},
     {"file": "benchmarks/pouw/h1_lanes/j10r.py", "count": 4},
@@ -5475,6 +5471,7 @@
     {"file": "security/Proofs/WeightSecurity.lean", "count": 16},
     {"file": "security/Proofs/WeightSecurity/Reg.lean", "count": 9},
     {"file": "security/Proofs/WeightSecurity/RegPeriod.lean", "count": 20},
-    {"file": "security/Proofs/WeightSecurity/RegWitnesses.lean", "count": 6}
+    {"file": "security/Proofs/WeightSecurity/RegWitnesses.lean", "count": 6},
+    {"file": "verity/hardware/tests/test_cards.py", "count": 1}
   ]
 }
