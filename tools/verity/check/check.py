@@ -223,7 +223,8 @@ local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical i
                     result in its `audit.json`, cached or not (`lean_fast`): no merge check accepts an audit without the kernel
                     replay
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/protocols/flock/agreement/'s
-                    tracked files, which pin the upstream build and inputs, the interpreter, the platform, the environment)
+                    tracked files but its Markdown, which pin the upstream build and inputs, the verifier's Lean packages, the
+                    interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
                     the live crate, that toolchain's `rustc -vV`, the platform, the environment), so only a change to those pays
                     for the Rust tests
@@ -2643,9 +2644,11 @@ def agreement_closure(files: list[str]) -> list[str]:
     """The tracked files the agreement job can read: verity/protocols/flock/agreement/, the verifier's Lean package and the
     packages of the tree it requires by path (`required_in_tree`), which its executable is built from; less any Lake package
     nested in the verifier's (Flock's proofs are under `security/Proofs/`), which it is not built from as long as the Lean
-    package requires nothing (a `require` in its lakefile keeps them all in), and less each of those packages'
+    package requires nothing (a `require` in its lakefile keeps them all in), less each of those packages'
     `lean-audit.json`, which only `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the
-    verifier's lakefile mention it)."""
+    verifier's lakefile mention it), and less their Markdown, which neither Lake nor a script of the agreement reads (a
+    test fails if a file this keeps names a doc but to cite it, or a Lean file of it has an `include_str`), so a doc edit
+    keeps the agreement's pass."""
     pre, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
@@ -2654,7 +2657,8 @@ def agreement_closure(files: list[str]) -> list[str]:
         nested = ()
     packages = (lean, *required_in_tree(lean))
     locks = {p + "lean-audit.json" for p in packages}
-    return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))]
+    return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))
+            and not f.endswith(".md")]
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
