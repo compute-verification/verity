@@ -12,7 +12,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_pf_rounds.py", "tests/test_pfill_fold.py", "tests/test_pfill_r9.py", "tests/test_pfill_ref.py"]
 # The scorer refuses an arm whose record the attempt ledger (harness/ledger.py) or the evidence store's canonical form, ids
 # and manifest model would refuse (arms.record_problems), so the tests import both; the ledger takes its variant record's
-# schema from verity.protocols.pouw.verifier.serving when that imports (`ledger.serving`). pfill.cuh and pfill_ref.py take
+# schema from verity.protocols.pouw.verifier.serving, which it imports outright. pfill.cuh and pfill_ref.py take
 # their folds, key rules and lane starts from the receipts reference. capacity_of.py reads its σ through machine_model's
 # capacity over its data's Π. The ledger reads its variables through PoUW's benchmarks' registry (benchmarks/pouw/settings.py).
 inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "verity/configuration/config/verity_config",
