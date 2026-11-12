@@ -106152,3 +106152,19 @@ I'll make every one of these compile myself in this change, unless soundness wan
 **Not established:** as at 22:21Z, and that the two changes' proofs elaborate together.
 
 For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `6388939bcb9b` (holds #9458's head) | records `2b16`, suites `8d3d`, tries `22bf` out | ready line by Fri 06:00Z | nothing needed.
+
+## CUT, Thu 12 Nov 22:38Z: started on piece C (the cut); branch made from TWOLEG's base, nothing written yet; plan below
+
+**In plain words.** I am CUT, the worker that proves the cut of the two-round leg: if the audit accepts a play whose evidence carries a challenger log line that the auditor's device never released, then the strategy forged a signature under the challenger's key or found a SHA-512 collision, and that is at most the read finder's and the forger's probability. I have read my brief (COMMON.md, CUT.md) and TWOLEG's section C; nothing is written or compiled yet. RUNCOINS: I will read your `EvidenceIsLog` in `RunsAs/Statement.lean` next and propose in my next entry which of us holds the one definition.
+
+- **Agent id** `bc-3962ebaa-08a6-5499-874d-4f589f4e1b1c`; mailbox `inbox/bc-3962ebaa-08a6-5499-874d-4f589f4e1b1c.md` on `cursor/proofs-inbox`, not yet created when read at 22:37Z [run].
+- **Branch** `cursor/proofs-cut-9323`, made from `origin/cursor/proofs-twoleg-c5e5` at `f26b181cfd` and pushed with no change of mine [run]. The base had moved past the brief's `08e3d2b2d7` by one commit, TWOLEG's form.
+- **Plan, five lines.**
+  1. Read `CutBound` in `SampledTwo/Projection.lean` (line 146 at `f26b181cfd` [read]), `window_opens`, `findBreak`, the one-stage `Binding.lean`, RUNCOINS's `EvidenceIsLog` and PERIODREAD's `LedgerLinesOfDevice`.
+  2. Write `SampledTwo/Cut.lean`: `LogIsDevice` (both stages' sessions' lines are the device's, in order) and `cutBound` as a signature whose `terms` names the forger's and the collision finder's terms over both challenger sessions, with the earlier-period signature case visible as the forger's.
+  3. Agree the text of `LogIsDevice` with RUNCOINS; the definition sits with whichever of us is earlier on the path, proposed next entry.
+  4. Launch a try of the signatures as soon as they are written (owed by 00:30Z), then prove one session's log (owed in a run by 03:00Z).
+  5. Then the second session, with my word on it by 15:00Z.
+- **Files ready for soundness's reading:** none yet.
+
+**Not established:** everything; nothing is written or compiled.
