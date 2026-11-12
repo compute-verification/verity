@@ -3213,7 +3213,7 @@ def test_the_tick_that_puts_a_staged_batch_on_main_s_chain_builds_on_what_it_put
 
 def test_at_lean_0_a_pin_puts_no_lean_batch_ahead_of_a_pr_changing_a_lean_input_which_is_built_before_the_next_is_staged(env):
     """End to end at `--lean 0`, pinned Lean batches back to back: #2 is pinned while pinned #1 is staged, and #3, which
-    changes check's code, a Lean input, is marked beside it and kept out of every build.  The tick that puts #1 on main's
+    changes check's `common.py`, a Lean input, is marked beside it and kept out of every build.  The tick that puts #1 on main's
     chain stages no batch of #2: #3 goes first, built on #1's candidate, and the next tick stages #2 on #3's, its records
     run started then."""
     head = env.put(1, LEAN)
@@ -3226,7 +3226,7 @@ def test_at_lean_0_a_pin_puts_no_lean_batch_ahead_of_a_pr_changing_a_lean_input_
     sha = staged["sha"]
     assert (staged["members"], staged["heads"], staged["records_first"], started["action"]) == ([1], [head], True, "regenerate")
     pins.write_text("1\n2\n")
-    env.put(3, {"tools/verity/check/notes.txt": "3\n"})
+    env.put(3, {"tools/verity/check/common.py": "3\n"})
     assert loop.tick() == [] and records.started == [("drive", sha)]
     records.verdicts["regen-1"] = RecordsRun(PASS)
     judged, fixed, built = loop.tick()
