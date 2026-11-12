@@ -158,6 +158,8 @@ def test_twins_are_one_job_and_its_move_is_a_late_twin_where_the_machine_can_cla
     short = {A: home, B: away, C: {**free, "peers": [B]}}
     (w,) = stranded.analyse(short, T0, CPUS)["waits"]
     assert w["stranded"] and w["move"]["how"] == "none" and f"names {A} in its /etc/vy/peers" in w["move"]["why_not"]
+    (w,) = stranded.analyse({**short, C: {**free, "peers": None}}, T0, CPUS)["waits"]
+    assert w["move"]["how"] == "none", "a machine with no peers file claims on no home"
 
 
 def test_a_job_without_a_pair_moves_only_at_its_next_launch():
@@ -175,6 +177,8 @@ def test_a_stalled_line_is_printed_with_its_memory_and_is_no_stranded_wait():
     assert doc["stalled"] == [{"machine": A, "pool": "research", "in_line": 1, "head_minutes": 12, "available_gb": 500.0,
                                "free_gb": 50, "unreached_gb": 450.0}]
     assert "reserved and not reached 450 GB" in stranded.text(doc)
+    empty = pool(slot("r0", "0-15", blocked=MEM_BLOCK), free_gb=50)
+    assert stranded.analyse({A: machine(research=empty)}, T0, CPUS)["stalled"] == [], "a pool no one waits in is no stalled line"
 
 
 def test_a_window_is_printed_with_its_end_and_note_and_is_no_place():
@@ -185,7 +189,7 @@ def test_a_window_is_printed_with_its_end_and_note_and_is_no_place():
     assert stranded_jobs(docs) == [] and doc["pools"]["research"]["blocked"] == {"window": 1}
     assert doc["windows"] == [{"machine": B, "pool": "research", "slot": "r0", "start": "2026-11-12T19:00Z",
                                "end": "2026-11-12T20:00Z", "note": "lean bench"}]
-    assert "slot r0: 2026-11-12T19:00Z to 2026-11-12T20:00Z: lean bench" in stranded.text(doc)
+    assert f"{B}: 2026-11-12T19:00Z to 2026-11-12T20:00Z: lean bench; closes research r0" in stranded.text(doc)
 
 
 def test_an_unread_machine_and_a_pool_that_answered_late_are_listed_and_the_rest_is_read():

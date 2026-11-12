@@ -367,14 +367,14 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
                 if w.get("run") and w["run"] not in j["runs"]:
                     j["runs"].append(w["run"])
                 j["lines"].append({"machine": m, "since": w.get("since"), "minutes": w.get("minutes") or 0})
-            if p != CHECK and (m, p) not in shut:
+            head = max((w.get("minutes") or 0 for w in pd.get("waiters") or []), default=0)
+            if p != CHECK and (m, p) not in shut and head >= auto.STALL_MIN:
                 try:
                     auto._pool(pd, 1, auto.BACKFILL_MAX_GB + 1)
                 except auto.Stalled:
                     free = pd.get("free_gb")
                     avail = d.get("available_gb")
-                    out["stalled"].append({"machine": m, "pool": p, "in_line": len(pd.get("waiters") or []),
-                                           "head_minutes": max((w.get("minutes") or 0 for w in pd.get("waiters") or []), default=0),
+                    out["stalled"].append({"machine": m, "pool": p, "in_line": len(pd.get("waiters") or []), "head_minutes": head,
                                            "available_gb": avail, "free_gb": free,
                                            "unreached_gb": round(avail - free, 1) if isinstance(avail, (int, float)) and
                                            isinstance(free, (int, float)) else None})
@@ -387,10 +387,10 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
         if isinstance(lean, dict) and "error" in lean:
             out["unread"].append({"machine": m, "pool": "lean", "why": lean["error"]})
         names = d.get("peers")
-        others = sorted(set(cpu_machines) - {m})
+        others = [x for x in cpu_machines if x != m]
         if names is None or set(others) - set(names):
             out["peers"].append({"machine": m, "file": names is not None,
-                                 "missing": others if names is None else sorted(set(others) - set(names))})
+                                 "missing": [x for x in others if names is None or x not in names]})
     peers = {m: d.get("peers") for m, d in docs.items() if isinstance(d, dict)}
 
     def places(j: dict) -> list[dict]:
@@ -406,8 +406,7 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
                 n, first = _lane_free(doc, ask)
             if n > 0 and first is not None:
                 found.append({"machine": m, "slot": first["name"], "cores": first.get("cpus"), "mem": first.get("mem"),
-                              "lane_cores": first.get("lane_cores", 0), "count": n,
-                              "reaches_home": None if peers.get(m) is None else j["home"] == m or j["home"] in peers[m]})
+                              "lane_cores": first.get("lane_cores", 0), "count": n, "reaches_home": j["home"] in (peers.get(m) or ())})
         return sorted(found, key=lambda f: -f["count"])
 
     def deal(j: dict, at: dict) -> None:
@@ -473,7 +472,7 @@ def _move(j: dict) -> dict:
     if not j.get("stranded"):
         return {"how": "none", "to": [], "why_not": "it has no place elsewhere now"}
     own = sorted({ln["machine"] for ln in j["lines"]})
-    reach = [p["machine"] for p in j["places"] if p["reaches_home"] is not False]
+    reach = [p["machine"] for p in j["places"] if p["reaches_home"]]
     if not reach:
         return {"how": "none", "to": own, "why_not": f"no machine with a place names {j['home']} in its {PEERS}, so a twin there "
                                                       "can't claim on its home"}
@@ -514,7 +513,7 @@ def text(doc: dict, with_moves: bool = False) -> str:
                 + (f"; lane runs hold {p['lane_cores']} of its cores" if p["lane_cores"] else "") for p in w["places"]]
         if with_moves:
             mv = w["move"]
-            out.append(f"  move: {mv['how']}" + (f" to {', '.join(mv['to'])}" if mv["to"] else "")
+            out.append(f"  move: {mv['how']}" + (f" to {', '.join(mv['to'])}" if mv["how"] != "none" else "")
                        + (f" ({mv['why_not']})" if mv["why_not"] else ""))
     out += ["", "pools:"]
     for p, s in doc["pools"].items():
@@ -526,17 +525,22 @@ def text(doc: dict, with_moves: bool = False) -> str:
         ("stalled lines (a waiter beside an idle slot, for more memory than is left unreserved)", "stalled",
          lambda x: f"{x['machine']} {x['pool']}: {x['in_line']} in line, head {x['head_minutes']} min; available "
                    f"{_gb(x['available_gb'])}, not reserved {_gb(x['free_gb'])}, reserved and not reached {_gb(x['unreached_gb'])}"),
-        ("windows", "windows", lambda x: f"{x['machine']} {x['pool']} slot {x['slot']}: {x['start']} to {x['end']}"
-                                         + (f": {x['note']}" if x["note"] else "")),
+        ("windows", "windows", lambda x: f"{x['machine']}: {x['start']} to {x['end']}" + (f": {x['note']}" if x["note"] else "")
+                                         + f"; closes {x['slots']}"),
         ("waits for a Lean slot", "lean_waits", lambda x: f"{x['machine']} {x['pool']}: {x['job']}, {x['minutes']} min"),
         ("shut", "shut", lambda x: f"{x['machine']} {x['pool']}: {x['why']}"),
         ("not read", "unread", lambda x: f"{x['machine']}" + (f" {x['pool']}" if x["pool"] else "") + f": {x['why']}"),
         (f"{PEERS} short", "peers", lambda x: f"{x['machine']}: " + ("names none of " if not x["file"] else "lacks ")
                                               + (", ".join(x["missing"]) if x["file"] else f"{len(x['missing'])} machines (no file)"))
     )
+    windows: dict[tuple, list[str]] = {}
+    for x in doc["windows"]:
+        windows.setdefault((x["machine"], x["start"], x["end"], x["note"]), []).append(f"{x['pool']} {x['slot']}")
+    rows = {**doc, "windows": [{"machine": m, "start": s, "end": e, "note": n, "slots": ", ".join(v)}
+                               for (m, s, e, n), v in windows.items()]}
     for title, key, fmt in sections:
-        if doc[key]:
-            out += ["", f"{title}:"] + [f"  {fmt(x)}" for x in doc[key]]
+        if rows[key]:
+            out += ["", f"{title}:"] + [f"  {fmt(x)}" for x in rows[key]]
     return "\n".join(out)
 
 
@@ -573,7 +577,8 @@ def findings(ctx: Any) -> list:
             out.append(Finding(f"check|{w['job']}", f"*Check job `{w['job']}` waits in {lines} check line while a check slot "
                                                    f"stands free on {where}* ({w['minutes']} min in line; by {w['by'] or 'no one named'}"
                                                    + (", priority" if w["priority"] else "") + f"). Its move: {w['move']['how']}"
-                                                   + (f" to {', '.join(w['move']['to'])}" if w["move"]["to"] else ""),
+                                                   + (f" to {', '.join(w['move']['to'])}" if w["move"]["how"] != "none" else
+                                                      f" ({w['move']['why_not']})"),
                                owners=("ci",), for_s=STRANDED_S))
     for pool in sorted({w["pool"] for w in now_stranded.values()}):
         late = sorted((w for k, w in now_stranded.items() if w["pool"] == pool and ctx.now - first[k] >= STRANDED_S),
