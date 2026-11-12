@@ -1,6 +1,7 @@
 """The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the one over ``infra/``.
 
-    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
+    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  hardware
+    (the Lean card tables' writer) reads the card files through core.site;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, the served
     workloads' Definitions (ml.definitions) on the catalog, the kernels and the commitments' gates, and the protocols'
     circuit builders (ml.protocols) on the catalog and their protocols;
@@ -53,8 +54,8 @@ ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
     "ml.crypto": set(),
-    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
-    "hardware": set(),
+    # the Lean card tables' writer (`lean.py`), which reads the card files through the Site's readers of them
+    "hardware": {"core.site"},
     "ml.commitments": {"ml.circuits", "ml.crypto"},
     # the catalog and the kernels, distributions of their own before the platform layout
     "ml.circuits.silicon": {"ml.circuits"},
@@ -80,7 +81,8 @@ ALLOWED = {
     # a protocol and a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
-    # views a protocol reads. Its digests are canonical JSON's, the wire's.
+    # views a protocol reads, and the readers of the card files and the node files, one TOML a SKU or a kind of node,
+    # the one source of each card's numbers. Its digests are canonical JSON's, the wire's.
     "core.site": {"core.wire"},
     "core.deploy": {"core.wire"},
     # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: the Site's

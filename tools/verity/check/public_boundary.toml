@@ -87,10 +87,11 @@ shared = [
     # the reporting grid every monitoring-period report states: its periods and δs
     "verity/protocols/reporting.py",
     "verity/configuration/config",
-    # the hardware cards, the data sheets' numbers, which the integration's served device reads, and the node files, which
-    # say which cards a kind of node carries and what its host holds (the Lean tables' test reads Accounting's B200 sheet
-    # and the node files' test reads the Site, so each stays private)
-    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,nodes,tests/test_cards.py}",
+    # the hardware cards, the data sheets' numbers, which the integration's served device reads, the node files, which say
+    # which cards a kind of node carries and what its host holds, and the Site's file, which holds the readers of both
+    # (the Lean tables' test reads Accounting's B200 sheet, so it stays private; the node files' test stays private
+    # until a boundary decision exports it)
+    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,nodes,site/__init__.py,tests/test_cards.py}",
     # the vLLM endpoint's load generator, which the served run's requests come from
     "demos/vllm/serve_load.py",
     "security/Properties/Spot/{Draw,Bits}.lean",
