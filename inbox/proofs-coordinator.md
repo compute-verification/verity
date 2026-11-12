@@ -95715,3 +95715,15 @@ Python and Lean:
 - Who builds the tie's record, the prover or the tie's verifier.
 - Anything of a response tie's verifier: none is written. #9378 was read for `check_registration` and `port` only, on its branch.
 - How the tie's verdict reaches the period check under NET-387: as one-stage's answer for the tie's registration, or as the tie's verifier's own verdict, which for the ingress tie names registrations by digest only (`tie_service.py:46-48`).
+
+## CROSSCLOSE, Thu 12 Nov 18:50Z: lean's head moved to `e209a56847d4` (`main` `30d6fcc92ff7` in): it holds `b7fb9c30eab1`'s `FlockVerify.lean` and `716bd4cad467`'s pin, and all nine files of ours as my trial has them; my three tries wait for a slot
+
+- [run: `git fetch`, 18:48Z] `cursor/lean-remote-merge-onmain-fc8d` is `e209a56847d4b207d0246db9c4576d5bd97dac3b`: `25f40229fc` (`main` `30d6fcc92ff7` merged), then one commit naming `EnvSettings` in `verity_numerical/settings.py` (the `Registry` meet, closed by lean as it said).
+- [run] **Our nine files there are blob for blob my trial's:** `FlockVerify.lean` `ee4aab1a9baf` (`b7fb9c30eab1`'s), the pin `a08ebe4756ba` (`716bd4cad467`'s), `test_difftest.py` `fc4019234796`, the README `71ad3eb23f5c`, `a5.py` `a704f32474f1`, `optimize.py`, `test_optimize.py`, `test_a5_wiring.py`, `whole_run.py`.
+- [run] Lean's head differs from my trial `c04d04289624` in four files, none ours: the three `lake-manifest.json` (lean's own, where mine were a stand-in) and `tests/test_lean_packages.py` (4 lines). Lean's rename is byte for byte my stand-in. [derived] So `9fdd`, when it runs, tries lean's head but for those four files.
+- [run] **The rows of 18:25Z hold against that head, row for row:** #9237 `82a48d3a8dda`; #9253 `fed2063c5d79`; #9091 `ceffc70c0052`; #9176, #9080, #9212, #9075 no stop; #9229 stops against `main` itself.
+- [run] Lean's head with `main` `0582899c4392`: three stops, none ours (`pyproject.toml` and the two spec files, as at 18:37Z).
+- **Runs:** `r20261112-182234-9fdd`, `r20261112-182303-e169`, `r20261112-182335-606d` are in state `waiting` since launch [run: `research status`, 18:50Z]: no slot on their nodes yet, nothing has run. ETA unknown; each needs about 30 minutes from its slot for the Lean tries and the pin's test [guess]. `r20261112-171809-f6bf`: 116 of 125 suites passed, 0 failed, running.
+- **So `716bd4cad467`, `ceffc70c0052` and the use of `b7fb9c30eab1` and `fed2063c5d79` on this `main` are still not tried by me.** Lean's own check on its head is the other try of the first and third [guess: I have not read its runs].
+
+Branches: `cursor/proofs-landing-closes-99d1` at `ceffc70c005281a7800ab13636ecc2ccec83e23f`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
