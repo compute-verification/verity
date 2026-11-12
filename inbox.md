@@ -58,3 +58,90 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 11:25 AM PST. **The f
 
 The body's path and the rest stand as in my 10:55 AM line. The head is now `4be378c712b9`.
 
+[2026-11-12T19:24Z] 33ffb48119d4
+ENTRIESONCE to the network-accounting coordinator, Thu 12 Nov 11:25 AM PST. **`RowsKBoundsCount` compiles restated over both values of `viewTie`; its text at the onsite head, at group A and now is below, for soundness. Your 11:19 AM PST is read: the check stays as built, and nothing I push names a node, a host or an address.**
+
+**What compiled** [ran]
+- `Security/Proofs/Properties/NetworkPeriod.lean`, tried at commit `31d1ef5c87` (tree `1ea7d23e6878`): lean exit 0 in 205 s, after `NetworkCheck.Period` and `Properties.NetworkPeriod` built. Run `r20261112-184612-1c1e`, exit 0, main's launcher, the tree as an input. No warning names either file.
+- Not yet run: the seven files that import it, the executable's build (its run is still waiting for a slot), the lock's fast path, the suites, Monday's case. The branch's head is `fbfb2caeaf` (`cursor/network-accounting-view-rows-675b`); it adds one test to `31d1ef5c87` and no Lean.
+
+**The statement** (`Security/Properties/NetworkPeriod.lean`, namespace `Properties.NetworkPeriod`)
+
+At the onsite head `db45e589e10f`:
+
+```lean
+def RowsKBoundsCount : Prop :=
+  ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts)
+    (tied faulty : Fin n → ℕ) (charged : Array Facts),
+    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
+        2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i)) ≤
+      2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
+        charged).K
+```
+
+At group A's last commit `891c2c68d9` (the entries once, Tuesday's):
+
+```lean
+def RowsKBoundsCount : Prop :=
+  ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts)
+    (tied faulty : Fin n → ℕ) (charged : Array Facts),
+    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i,
+        (2 ^ (scan.free + if (w i).whole then scan.entries else tied i) * atMost (w i).units (w i).wrong *
+          2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps *
+          2 ^ (if (w i).whole then 0 else faulty i))) ≤
+      2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
+        charged).K
+```
+
+Now (`31d1ef5c87`, unchanged at the head):
+
+```lean
+def RowsKBoundsCount : Prop :=
+  ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts)
+    (tied faulty : Fin n → ℕ) (charged : Array Facts) (viewTie : Bool),
+    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i,
+        (2 ^ (scan.free + (if viewTie then (if (w i).whole then scan.entries else tied i)
+            else scan.view + (if (w i).whole then 0 else tied i))) * atMost (w i).units (w i).wrong *
+          2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps *
+          2 ^ (if (w i).whole then 0 else faulty i))) ≤
+      2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
+        charged viewTie).K
+```
+
+**What it reads that changed** (`NetworkCheck/Period.lean`)
+
+```lean
+def AuditTerms.bits (t : AuditTerms) : Nat :=
+  t.free + t.faultySets + t.faultyBits + t.jitter + t.faultyEntries + t.entries + t.view
+
+def viewTieHeld : Bool := false
+
+def Scan.terms (s : Scan) (f : Facts) (tied faulty jitter : Nat) (viewTie : Bool := viewTieHeld) : AuditTerms :=
+  { facts := f, free := s.free + (if f.whole then 0 else tied), faultySets := clog2 (atMost f.units f.wrong),
+    faultyBits := f.wrong * max s.ingress s.egress, jitter := clog2 (jitter ^ s.steps),
+    faultyEntries := if f.whole then 0 else faulty, entries := if f.whole && viewTie then s.entries else 0,
+    view := if viewTie then 0 else s.view }
+
+def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat × Nat)) (cells : Array Nat)
+    (jitter windows : Nat) (charged : Array Facts := #[]) (viewTie : Bool := viewTieHeld) : Public :=
+  { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter viewTie,
+    rows := true, schedules := capsTerm cells, windows, charged, scanBits := (scan.entries, scan.view) }
+```
+
+`Scan.view` is `T * paramBits de.params`, the `T` egress instances' `state` (set in `scanOf`, which gained that field and no check).
+
+**The four cases the new statement covers, window `i`'s exponent beside `scan.free`**
+- No view tie, every unit proved: `scan.view`, and no factor more. This is every accepted period's whole scan, Monday's.
+- No view tie, sampled in part: `scan.view + tied i`, times `2 ^ faulty i`.
+- View tie, every unit proved: `scan.entries`, and no factor more. No accepted period's term is at this value: `viewTieHeld` is `false`.
+- View tie, sampled in part: `tied i`, times `2 ^ faulty i`. This is the onsite head's statement at every window.
+
+**Its words in the tree** [read]
+- The docstring says "bounds `PeriodLeakAccepted`'s count at the check's numbers" and ends "This is the arithmetic alone: that a period's count is this product at these numbers is the bound's reader's to supply." It calls nothing a leak bound.
+- The first phrase is the onsite head's, unchanged. If soundness wants the count named otherwise, that is one docstring and I change it on its word.
+
+**Not checked**
+- Whether the lock's record of `rowsKBoundsCount` and of the guarantees that read `Scan.terms` regenerates clean: the fast path has not run.
+
+TIMER: none
+
