@@ -241,8 +241,9 @@ ARGS_TOO_LONG = f"[Errno {errno.E2BIG}] "
 
 def cannot_start(answer: dict[str, Any]) -> str | None:
     """The reason of a machine's answer to a launch (`_launch_request`'s) when it refused as one that can start no run
-    (CannotStart), None for any other answer.  A shipped research package that predates CannotStart names a runner whose
-    process could not be started RunnerFailed, in NOT_STARTED's words, and says nothing else in them but ARGS_TOO_LONG."""
+    (CannotStart), None for any other answer.  A shipped research package that predates CannotStart answers RunnerFailed
+    for a runner whose process could not be started, in NOT_STARTED's words, which it says of nothing else: all of those
+    but ARGS_TOO_LONG are read as the machine's too."""
     reason, fault = str(answer.get("refused") or ""), answer.get("fault")
     older = fault == RunnerFailed.__name__ and reason.startswith(NOT_STARTED) and ARGS_TOO_LONG not in reason
     return reason if reason and (fault == CannotStart.__name__ or older) else None
@@ -1746,7 +1747,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         except OSError as e:
             _release_launch(req, request_path, mem_rec)
             reason = f"{NOT_STARTED}: {type(e).__name__}: {e}"
-            fault = (RunnerFailed if ARGS_TOO_LONG in reason else CannotStart).__name__      # every other failure to start is the machine's
+            fault = (RunnerFailed if e.errno == errno.E2BIG else CannotStart).__name__      # every other failure to start is the machine's
             write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": fault, "at_utc": utc_now_ms()})
             return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": reason, "fault": fault}
         started["runner_pid"] = proc.pid
