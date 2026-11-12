@@ -29,6 +29,9 @@ at the size of what it reads; no check calls it.
 * `decided` is the three together, and `failures` each one's refusal: `second-wire-rows`, `second-part-names` and
   `second-wire-widths`, with its reason.
 
+Each is stated on the wires and the rows themselves (`rowsUnderAt`, `wiresWideAt`, `decidedAt`, `failuresAt`) and read
+at what the verifier holds of the run, its wires, none where none is derived, and its rows.
+
 `piece` is the difftest's `second_wires`, which holds `second_wires`' Python to these.
 -/
 
@@ -37,16 +40,20 @@ at the size of what it reads; no check calls it.
 namespace Spot.SecondWires
 
 open Lean (Json)
-open Spot.SecondStage (Own Part Wire Rows Run rowsOf)
+open Spot.SecondStage (Own Part Wire Rows Run)
 
 /-! ## The rows and the names -/
 
-/-- **Each run's last row is one of its replay block's rows**: at the rows of each port a wire names, each run's last
-unit reads a row under `per` (`row + (count - 1)·step < per`), so every unit the run holds does. A wire whose port has
-no rows passes: `SecondStage.wiresOk` refuses it. -/
-def rowsUnder (own : Own) : Bool :=
-  (own.wires.getD #[]).all fun w => (rowsOf own w.template w.port).all fun r =>
+/-- **Each run's last row is one of its replay block's rows**, at wires `ws` and rows `rows`: at the rows of each
+port a wire names, the first of that template and port, each run's last unit reads a row under `per`
+(`row + (count - 1)·step < per`), so every unit the run holds does. A wire whose port has no rows passes:
+`SecondStage.wiresOk` refuses it. -/
+def rowsUnderAt (ws : Array Wire) (rows : Array Rows) : Bool :=
+  ws.all fun w => (rows.find? fun r => r.template == w.template && r.port == w.port).all fun r =>
     r.runs.all fun x => decide (x.row + (x.count - 1) * x.step < r.per)
+
+/-- `rowsUnderAt` at what the verifier holds of the run: its wires and its rows (`SecondStage.rowsOf`). -/
+def rowsUnder (own : Own) : Bool := rowsUnderAt (own.wires.getD #[]) own.rows
 
 /-- **Each name is one template's**: no two parts have one template name. -/
 def namesOnce (ps : Array Part) : Bool := decide (ps.toList.map (·.template)).Nodup
@@ -93,21 +100,28 @@ def covers (c : Flock.Circuit) (port : String) (bits : Nat) : Bool :=
   let l := writes c port
   decide (bits ≤ l.length) && (marks bits l).all id
 
-/-- **A reader's port is no wider than what its writer writes**: for each wire, every bit under the `bits` of each
-port of the wire's name in the reader's circuit file is one the writer's circuit file writes on the wire's output row
-(`covers`). `cs` names each template's circuit file; a wire whose reader or writer it names no file for fails. -/
-def wiresWide (cs : Array (String × Flock.Circuit)) (own : Own) : Bool :=
-  (own.wires.getD #[]).all fun w =>
+/-- **A reader's port is no wider than what its writer writes**, at wires `ws`: for each wire, every bit under the
+`bits` of each port of the wire's name in the reader's circuit file is one the writer's circuit file writes on the
+wire's output row (`covers`). `cs` names each template's circuit file, the first of a name its file; a wire whose
+reader or writer it names no file for fails. -/
+def wiresWideAt (cs : Array (String × Flock.Circuit)) (ws : Array Wire) : Bool :=
+  ws.all fun w =>
     match cs.find? (·.1 == w.template), cs.find? (·.1 == w.writer) with
     | some r, some x => r.2.ports.all fun p => p.name != w.port || covers x.2 w.wport p.bits
     | _, _ => false
 
+/-- `wiresWideAt` at the wires the verifier holds of the run. -/
+def wiresWide (cs : Array (String × Flock.Circuit)) (own : Own) : Bool := wiresWideAt cs (own.wires.getD #[])
+
 /-! ## The three together -/
 
-/-- **The three conditions**, over parts `ps`, the templates' circuit files `cs` and what the verifier holds of the
-run. -/
+/-- **The three conditions**, over parts `ps`, the templates' circuit files `cs`, wires `ws` and rows `rows`. -/
+def decidedAt (ps : Array Part) (cs : Array (String × Flock.Circuit)) (ws : Array Wire) (rows : Array Rows) : Bool :=
+  rowsUnderAt ws rows && namesOnce ps && wiresWideAt cs ws
+
+/-- **The three conditions** at what the verifier holds of the run: `rowsUnder`, `namesOnce` and `wiresWide`. -/
 def decided (ps : Array Part) (cs : Array (String × Flock.Circuit)) (own : Own) : Bool :=
-  rowsUnder own && namesOnce ps && wiresWide cs own
+  decidedAt ps cs (own.wires.getD #[]) own.rows
 
 def ROWS_WHY : String :=
   "a wire's rows give a unit of a run a row that is not one of its writer's units of the unit's replay block"
@@ -118,12 +132,17 @@ def WIDTHS_WHY : String :=
   "a wire's reader port has a bit its writer's circuit file does not write on the wire's output row, or the " ++
   "reader's or the writer's circuit file is not given"
 
-/-- `second-wire-rows` unless `rowsUnder`, `second-part-names` unless `namesOnce` and `second-wire-widths` unless
-`wiresWide`, each with its reason; none exactly when `decided`. -/
-def failures (ps : Array Part) (cs : Array (String × Flock.Circuit)) (own : Own) : List (String × Json) :=
-  (if rowsUnder own then [] else [("second-wire-rows", Json.str ROWS_WHY)]) ++
+/-- `second-wire-rows` unless `rowsUnderAt`, `second-part-names` unless `namesOnce` and `second-wire-widths` unless
+`wiresWideAt`, each with its reason; none exactly when `decidedAt`. -/
+def failuresAt (ps : Array Part) (cs : Array (String × Flock.Circuit)) (ws : Array Wire) (rows : Array Rows) :
+    List (String × Json) :=
+  (if rowsUnderAt ws rows then [] else [("second-wire-rows", Json.str ROWS_WHY)]) ++
     (if namesOnce ps then [] else [("second-part-names", Json.str NAMES_WHY)]) ++
-    if wiresWide cs own then [] else [("second-wire-widths", Json.str WIDTHS_WHY)]
+    if wiresWideAt cs ws then [] else [("second-wire-widths", Json.str WIDTHS_WHY)]
+
+/-- `failuresAt` at what the verifier holds of the run; none exactly when `decided`. -/
+def failures (ps : Array Part) (cs : Array (String × Flock.Circuit)) (own : Own) : List (String × Json) :=
+  failuresAt ps cs (own.wires.getD #[]) own.rows
 
 /-! ## The difftest's piece -/
 
@@ -153,18 +172,18 @@ def circuitOf? (j : Json) : Option Flock.Circuit := do
     outPorts, outRowPorts, upv, leavesOut, nets := #[("unit", unit)], unitNet := 0 }
 
 /-- The `second_wires` piece: `{"parts": [[template, lo, n], ...], "wires": <SecondStage.wiresOf?'s, null for none>,
-"rows": <SecondStage.rowsOf?'s>, "circuits": [[template, <circuitOf?'s>], ...]}` to each decider's answer, the three
-together and the failures' codes. -/
+"rows": <SecondStage.rowsOf?'s>, "circuits": [[template, <circuitOf?'s>], ...]}` to each decider's answer at those
+wires, no wire for null, and rows, the three together and the failures' codes. -/
 def piece (j : Json) : Except String Json := do
   let .arr ps := getD j "parts" | throw "parts is not a list"
   let some parts := ps.mapM (fun p => match p with
       | .arr #[.str t, lo, n] => do pure (Part.mk t (← nat? lo) (← nat? n))
       | _ => none : Json → Option Part)
     | throw "parts is not a list of [template, lo, n], a string and two naturals"
-  let wires ← match getD j "wires" with
-    | .null => pure none
+  let ws ← match getD j "wires" with
+    | .null => pure #[]
     | ws => match SecondStage.wiresOf? ws with
-      | some ws => pure (some ws)
+      | some ws => pure ws
       | none => throw "wires is null or a list of {template, port, writer, wport}, strings"
   let some rows := SecondStage.rowsOf? (getD j "rows")
     | throw "rows is not a list of {template, port, per, runs}, runs [unit, count, row, step] naturals"
@@ -173,10 +192,8 @@ def piece (j : Json) : Except String Json := do
       | .arr #[.str t, l] => do pure (t, ← circuitOf? l)
       | _ => none : Json → Option (String × Flock.Circuit))
     | throw "circuits is not a list of [template, layout], a layout its eight fields, naturals and lists of them"
-  let own : Own :=
-    { sample := #[], parts := some parts, interior := .null, boundary := .null, drawn := #[], wires, rows }
-  return Json.mkObj [("rows_under", .bool (rowsUnder own)), ("names_once", .bool (namesOnce parts)),
-    ("wires_wide", .bool (wiresWide cs own)), ("decided", .bool (decided parts cs own)),
-    ("codes", .arr ((failures parts cs own).map fun x => Json.str x.1).toArray)]
+  return Json.mkObj [("rows_under", .bool (rowsUnderAt ws rows)), ("names_once", .bool (namesOnce parts)),
+    ("wires_wide", .bool (wiresWideAt cs ws)), ("decided", .bool (decidedAt parts cs ws rows)),
+    ("codes", .arr ((failuresAt parts cs ws rows).map fun x => Json.str x.1).toArray)]
 
 end Spot.SecondWires

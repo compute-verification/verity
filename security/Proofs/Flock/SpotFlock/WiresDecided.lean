@@ -183,7 +183,7 @@ theorem writesBit_of_mem_writes {c : _root_.Flock.Circuit} {port : String} {β :
 /-- **The verifier's `wiresWide` gives the condition.** -/
 theorem wiresWide_of_decided {cs : Array (String × _root_.Flock.Circuit)} {own : Spot.SecondStage.Own}
     (hd : Spot.SecondWires.wiresWide cs own = true) : wiresWide cs own = true := by
-  unfold Spot.SecondWires.wiresWide at hd
+  unfold Spot.SecondWires.wiresWide Spot.SecondWires.wiresWideAt at hd
   unfold wiresWide
   rw [Array.all_eq_true_iff_forall_mem] at hd ⊢
   intro w hw
@@ -216,13 +216,13 @@ wired source bit**: at a registration whose two-stage design evaluates, where ro
 what the verifier holds of the run and `SecondWires.decided` holds at the run's parts, the templates' circuit files
 and what the verifier holds of the run, every source bit at a port a wire names and no link names has a gate to go to
 (`wiresMove`). -/
-theorem wiresMove_of_decided (h : Held) (s : AuditStatement) (st : Roots) (rec draw : Lean.Json)
-    (c₀ : FlockDeploy.Coin) (htwo : (two h s).isSome) (hchk : wiresCheckedAt h st rec draw c₀ = true)
+theorem wiresMove_of_decided (h : Held) (s : AuditStatement) (st : Roots) (rec second : Lean.Json)
+    (c₀ : FlockDeploy.Coin) (htwo : (two h s).isSome) (hchk : wiresCheckedAt h st rec second c₀ = true)
     (hd : Spot.SecondWires.decided (partsAt h (h.reg.sample (src c₀)).size) (circuitsOf h)
-      (ownOf h st rec draw c₀) = true) : wiresMove h = true := by
-  unfold Spot.SecondWires.decided at hd
+      (ownOf h st rec second c₀) = true) : wiresMove h = true := by
+  unfold Spot.SecondWires.decided Spot.SecondWires.decidedAt at hd
   rw [Bool.and_eq_true, Bool.and_eq_true] at hd
-  exact secondWiresMove h s st rec draw c₀ htwo hchk (rowsUnder_of_decided hd.1.1) (namesOnce_of_decided hd.1.2)
+  exact secondWiresMove h s st rec second c₀ htwo hchk (rowsUnder_of_decided hd.1.1) (namesOnce_of_decided hd.1.2)
     (wiresWide_of_decided hd.2)
 
 end SpotFlock

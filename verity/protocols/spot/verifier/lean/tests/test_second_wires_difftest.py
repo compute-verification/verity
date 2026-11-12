@@ -9,16 +9,15 @@ field replaced by arbitrary JSON, and must reach both answers of every decider.
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
 
 import pytest
 from hypothesis import strategies as st
 
+from test_wires_difftest import PACKAGE, PIECES
+
 import verity_difftest as D
 from verity.protocols.spot.verifier import second_stage, second_wires
 
-PACKAGE = Path(__file__).resolve().parents[1]
-PIECES = "sampled-proofs-difftest"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 LAYOUT_KEYS = ["const_pos", "in_words", "leaves_out", "out_col", "out_ports", "out_row_ports", "ports", "upv"]
@@ -74,7 +73,7 @@ def reference(j, seen: dict | None = None):
     if not (isinstance(cs, list) and all(isinstance(c, list) and len(c) == 2 and isinstance(c[0], str) for c in cs)):
         raise D.Reject("circuits is a list of [template, layout]")
     circuits = tuple((t, _layout(c)) for t, c in cs)
-    own = second_stage.Own(sample=(), parts=parts, interior=None, boundary=None, drawn=(), wires=ws, rows=rows)
+    own = second_stage.Own((), parts, None, None, (), wires=ws, rows=rows)
     out = {"rows_under": second_wires.rows_under(own), "names_once": second_wires.names_once(parts),
            "wires_wide": second_wires.wires_wide(circuits, own), "decided": second_wires.decided(parts, circuits, own),
            "codes": [code for code, _why in second_wires.failures(parts, circuits, own)]}
