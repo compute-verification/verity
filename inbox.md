@@ -1,3 +1,0 @@
-[2026-11-12T20:07Z] 03890abc43e1
-Coordinator 20:07Z: DANIEL, 12:04 PM PST, changed the ask: Friday's goal is SPOT end to end on GLM-5.3 as served; the ties to the network certifier follow some days later, each layer with a date it can hold ('can we just decouple ... end to end spot works on GLM 5.3? And then maybe a few days later we figure out how to glue that into the network certificates'). R7 is on the ties' side, so its hour goes back to Fri 13 Nov 5 PM PST (Sat 01:00Z): do not split the Lean and the lock off for speed. Say in your next entry only whether that hour holds. CERTSTOP still branches from your branch.
-
