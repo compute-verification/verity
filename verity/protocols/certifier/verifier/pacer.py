@@ -109,7 +109,8 @@ class Pacer:
     def hand(self, t: int, due: float, parts: Sequence[tuple[int, bytes, bool]]) -> None:
         """Bucket `t`, to be released at `due` on the host's monotonic clock: each part its link's key, its bytes and
         whether the link closes once they are written. The pacer then ends the stream the link's socket sends and
-        closes its own descriptor; a caller that still holds the socket reads what the peer sends after."""
+        closes its own descriptor; a caller that still holds the socket reads what the peer sends after. A link that
+        takes its last part's bytes and not the stream's end leaves the bucket unwritten."""
         out = [HEAD.pack(t, due, len(parts))]
         for key, data, last in parts:
             out += [PART.pack(key, len(data), last), data]
@@ -216,9 +217,10 @@ class _Links:
             part[0] = part[0][n:]
             if not part[0]:
                 pending.popleft()
+                if part[2] and not _end(fd):
+                    part[1].written = False
                 _done(part[1])
                 if part[2]:
-                    _end(fd)
                     self.close(key)
                     return
 
@@ -243,16 +245,22 @@ def _ready(fd: int) -> bool:
     return bool(poller.poll(0))
 
 
-def _end(fd: int) -> None:
-    """End the stream the socket `fd` sends, with its last part: closing the pacer's descriptor ends it only once no
-    other is open, and the handing process may keep its own to read what the peer still sends."""
-    link = socket.socket(fileno=fd)
+def _end(fd: int) -> bool:
+    """End the stream the socket `fd` sends, with its link's last part, and say whether it took the end: closing the
+    pacer's descriptor ends the stream only once no other is open, and the handing process may keep its own to read
+    what the peer still sends. A link that is connected to nothing by then, as one its peer has reset is, or that is
+    no socket, takes no end, and its part's bucket is reported unwritten."""
+    try:
+        link = socket.socket(fileno=fd)
+    except OSError:
+        return False
     try:
         link.shutdown(socket.SHUT_WR)
     except OSError:
-        pass  # the peer has gone: the close that follows is all there is to do
+        return False
     finally:
         link.detach()
+    return True
 
 
 def _done(bucket: _Bucket) -> None:

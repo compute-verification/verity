@@ -304,20 +304,21 @@ class Ticking:
 
 def test_a_turned_away_link_stays_open_to_its_clients_end_of_stream_and_what_it_sends_is_dropped():
     """The tick that releases a turn-away's cell ends the device's stream on the link and leaves the link open. The
-    device reads what the client still sends and drops it, closes the link at the client's end of stream, and
-    closes at the run's end one whose client never ends its stream. None of those bytes reaches a server, takes an
-    ordinal or is in a record, and the execution phase is published complete and handed."""
+    device reads what the client still sends and drops it, closes the link at the client's end of stream, or when
+    the client resets it, which it counts, and closes at the run's end one whose client never ends its stream. None
+    of those bytes reaches a server, takes an ordinal or is in a record, and the execution phase is published
+    complete and handed."""
     async def main():
         server = Server([])
         run = Ticking(server)
         device, first = run.device, T - SPAN
         await run.tick(*range(first))
-        clients = [Client(device, (cells(id_req(j, 3), B), False)) for j in (1, 2)]
+        clients = [Client(device, (cells(id_req(j, 3), B), False)) for j in (1, 2, 3)]
 
         def links() -> list:
             return [(list(c.writes), c.ended, c.closed, len(c.reader._buffer)) for c in clients]
 
-        await device.until(lambda w: w.turned_away + w.ordinals + w.refused == 2)
+        await device.until(lambda w: w.turned_away + w.ordinals + w.refused == 3)
         seen = [links()]
         await run.tick(first)
         seen.append(links())
@@ -326,6 +327,7 @@ def test_a_turned_away_link_stays_open_to_its_clients_end_of_stream_and_what_it_
         await run.tick(first + 1)
         seen.append(links())
         clients[0].reader.feed_eof()
+        clients[2].reader.set_exception(ConnectionResetError("reset by its client"))
         await run.tick(first + 2)
         closed = [[c.closed for c in clients]]
         await run.tick(*range(first + 3, T))
@@ -335,9 +337,10 @@ def test_a_turned_away_link_stays_open_to_its_clients_end_of_stream_and_what_it_
 
     device, server, clients, seen, closed = asyncio.run(main())
     held = ([(T - SPAN, AWAY)], T - SPAN, False, 0)
-    assert seen == [[([], None, False, B)] * 2, [held] * 2, [held] * 2]
-    assert closed == [[True, False], [True, True]] and all(c.writes == [(T - SPAN, AWAY)] for c in clients)
-    assert (device.turned_away, device.ordinals, device.refused, len(server.conns)) == (2, 0, 0, 0)
+    assert seen == [[([], None, False, B)] * 3, [held] * 3, [held] * 3]
+    assert closed == [[True, False, True], [True, True, True]] and device.turned_away_reset == 1
+    assert all(c.writes == [(T - SPAN, AWAY)] for c in clients)
+    assert (device.turned_away, device.ordinals, device.refused, len(server.conns)) == (3, 0, 0, 0)
     assert device.withheld == [] and all(r.status.complete for link in records(device) for r in link)
     assert ends(device) == [(0, True)] and handed(device) == CR.of_records(TWO, *records(device)[:2])
     assert not any(frame is not None for link in records(device) for r in link for row in r.grid for frame in row)

@@ -854,9 +854,10 @@ def _sha(data: bytes) -> str:
 
 def counts(warden: Warden) -> dict:
     """What `warden.json` counts of a run: the connections that took an ordinal, the refusals and their windows, the
-    arrivals turned away, which are neither, and the ticks."""
+    arrivals turned away, which are neither, those of them whose client reset its link after the cell, and the
+    ticks."""
     return {"ordinals": warden.ordinals, "refused": warden.refused, "refused_windows": sorted(warden.refused_windows),
-            "turned_away": warden.turned_away, "ticks": warden.ticks}
+            "turned_away": warden.turned_away, "turned_away_reset": warden.turned_away_reset, "ticks": warden.ticks}
 
 
 def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shim, origin: float,

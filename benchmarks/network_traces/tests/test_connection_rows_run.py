@@ -329,7 +329,7 @@ def test_under_form_2_a_run_through_its_last_buckets_passes_the_check_which_coun
                        arrive=dict(enumerate((0, 0, T, first - 1, *late))))
     (out / "warden.json").write_text(json.dumps({"connections": device.log, **ws.counts(device)}))
     assert ws.counts(device) == {"ordinals": 4, "refused": 0, "refused_windows": [], "turned_away": 4,
-                                 "ticks": 2 * T}
+                                 "turned_away_reset": 0, "ticks": 2 * T}
     assert [(c["admitted"], c["failed"], c["cut"]) for c in device.log] == \
         [(t, None, False) for t in (0, 0, T, first - 1)]
     assert phases_of(out, ENDS) == [(0, "registration"), (1, "registration")]

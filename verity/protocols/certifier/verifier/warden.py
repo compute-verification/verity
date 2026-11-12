@@ -567,7 +567,8 @@ class Warden:
       connection was refused (`refused_windows`; by default kept in `withheld`): nothing of that window is to be
       certified; `log` has one entry a connection once it ends, `refused` the ordinal-less refusals' count,
       `turned_away` that of the arrivals form 2 turned away in the run's last buckets, which are no refusals,
-      `lateness` each tick's in seconds;
+      `turned_away_reset` that of the links among them their clients reset after the cell, `lateness` each tick's in
+      seconds;
     - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
@@ -641,6 +642,7 @@ class Warden:
         self.refused = 0
         self.refused_windows: set[int] = set()
         self.turned_away = 0
+        self.turned_away_reset = 0
         self._away = cell(REFUSED, 0, b"", params.cell_bytes)  # every turn-away's cell, made once
         #: the arrivals turned away since the last tick: each one's count, its reader and its writer
         self._turned: list[tuple[int, asyncio.StreamReader, Any]] = []
@@ -800,12 +802,13 @@ class Warden:
     async def _leave(self, reader: asyncio.StreamReader, writer: Any) -> None:
         """A turned-away link from the tick that releases its cell and its stream's end: what its client still sends is
         read and dropped, to the client's end of stream, and the link is closed then. A link closed with its client's
-        bytes unread is reset, and a reset client may lose the cell it has not read."""
+        bytes unread is reset, and a reset client may lose the cell it has not read. A link its client resets first
+        is closed as well, and `turned_away_reset` counts it."""
         try:
             while await reader.read(READ_BYTES):
                 pass
         except OSError:
-            pass
+            self.turned_away_reset += 1
         finally:
             writer.close()
             self._leaving.pop(writer, None)
