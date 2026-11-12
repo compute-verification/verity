@@ -126,7 +126,10 @@ def test_product_is_the_popcount_identity(kind):
     k = 64 if kind == R.E2M1 else 32
     a_rows, b_cols = R.rows(C0, C1, 3, 0, 0, kind), R.rows(C0, C1, 3, R.CTR_B, 0, kind)
     ent = (lambda b: b) if kind == R.BITS else (lambda b: 1 - 2 * b)
-    val = lambda w: np.array([ent((int(w) >> i) & 1) for i in range(k)])
+
+    def val(w):
+        return np.array([ent((int(w) >> i) & 1) for i in range(k)])
+
     a = np.stack([val(w) for w in a_rows])
     b = np.stack([val(w) for w in b_cols]).T
     x, y = a_rows[:, None], b_cols[None, :]
