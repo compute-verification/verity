@@ -22,9 +22,9 @@
 "closure_escape_le_window" = "closure_escape_le_executionPhase"
 
 [[words_in]]
-# `window` is the file's prose word too; only its declaration and the code span that names it are renamed.
-files = ["security/Proofs/Flock/Soundness/PlanDraw.lean"]
-words = { "def window" = "def executionPhase", "`window key calls L`" = "`executionPhase key calls L`" }
+# `window` is these files' prose word and a vector's key too; only the declaration and what names or calls it are renamed.
+files = ["security/Proofs/Flock/Soundness/PlanDraw.lean", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean"]
+words = { "def window" = "def executionPhase", "`window key calls L`" = "`executionPhase key calls L`", "match window (derive" = "match executionPhase (derive" }
 
 [[words_in]]
 # Whole names, since `audit_window` begins `audit_window_split_of_record`, which keeps its name here.
