@@ -105122,3 +105122,68 @@ With 1, 2 and 6 the session is most of the work for `familyOneCommitment` and `f
 - **Mailbox:** 168 lines, its last section yours of 21:18Z. [run, 22:18Z]
 
 **Next.** I build to the signatures above on `cursor/proofs-keyheld-3c9a`, Lean first (`ChallengerCoins`, `Run`, `RecordAcross`, `Pieces`, then the property and its proof), then Python and the negative test. [derived] If you rule otherwise on 3(a), 3(b), the dropped fields or `drawCoins`, the change is small while only the Lean is written. [guess]
+
+## PROVED, Thu 12 Nov 22:21Z: A17: a registered read is accepted and not covered: the theorem's bound holds of the accept, but its claim speaks of the port as of any other and never says its rows are the registered value's; A39: the one statement that does say it is not deployed, and of its five open premises three already have their lemma and two are about the reads, held by nobody
+
+**In plain words, for Daniel.** A proof block can read a value that was registered ahead of time, such as a model's weights; the auditor holds the root of that value's tree. Row A17 asked what the theorem says about such a read. The compiled check does the right thing: it refuses unless each row a sampled block reads opens the registered root, at the position the auditor's own program reads. The theorem does not say so. Its bound holds of the accept, but its claim treats the port like any other: the value is the one committed under the root the prover's public file gives for that port. That this root holds the registered rows is checked by the verifier and stated nowhere in the guarantee the accept cites. For weights, that tie is what makes "the block computed on the registered weights" true, so the row stays open. One statement in the tree does say it, for an older form of the session. It is not among the deployed guarantees, and it has five open premises. Three of the five are proved elsewhere in the tree and only need applying; the other two are about the reads themselves, and nobody holds them.
+
+Clock: `date -u` read 22:21Z before the push. Mailbox read at `9edca491c1`: 3 messages, the newest headed "Coordinator, Thu 12 Nov 21:50Z: the whole list by 22:30Z,". `origin/main` is `783b526ab6`; the tree I read is `5f0c008aa040`, which differs only under `benchmarks/compute/`. No file of the tree changed; no run of mine is out.
+
+### 1. A17, one conclusion: accepted and not covered
+
+**What the compiled check does** [read].
+
+- The parameters carry the auditor's own registered file (`proofs.registered`, `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean:239-243`); a program that reads registered values with no such file is refused (`:634-636`).
+- Each statement of the session passes `Flock.checkRegistered` against it (`buildSessionOf`, `:317-320`), then `checkComplete`, `checkCover` and the known reads (`setupChecks`, `:481-486`).
+- What that check establishes is proved as a fact about the check: for each of the verifier's registered ports and each instance, the verifier's program reads a position of the value in that instance's unit, and the instance's row climbs from its leaf at that position to the registered root (`check_ok`, `security/Proofs/Flock/Verifier/Registered.lean:88-94`).
+
+**What the proof does with it** [read].
+
+- It drops it. From a session set up at any reads `rd`, the leg takes only the session's setup with no registered file: `setupAt_setupOfP` (`security/Proofs/Properties/Verity/Sampled/Accepts.lean:139-143`), used at `Sampled/Event.lean:237`. The event it hands the theorem, `Accepted` (`Event.lean:200-209`), has no field for the reads.
+- So an accept with registered reads is an accept the theorem bounds: the extra checks only narrow it. **The bound is covered.**
+- [run: `rg 'checkRegistered|Registered\.check|OwnReads|Reads\.Checked'` over `security/Proofs/Properties/Verity/Sampled*` and `security/Properties/Verity`] No file of the one-stage leg reads the registered check. The only matches under `Properties/Verity` are the recursive leg's (`Recursive/SetupChecks.lean`, `Recursive/Refusals.lean`).
+
+**What the claim says of the port** [read].
+
+- The claim is a trace on the committed files' circuit (`Live.fileRead`, `Sampled.lean:512`; `Live.extract`, `:542-547`), opened under the session's roots, "one a port", at the public file's leaf map (`Live.roots`, `:530`; `Live.Lm`, `:521`). The session has no field for a registered port (`Live`, `:130-195`).
+- [derived] So of a registered read the claim says: the value at the port is the one committed under the public file's root for that port. It does not say that root's rows are rows of the registered value, nor at which positions.
+- [read] The statement that does say it names the gap itself. `Flock.Guarantees.EndToEndRegistered` (`security/Proofs/Flock/EndToEndRegistered/Statement.lean:92`) has a second conjunct: at every accept, each registered read that is the verifier's own "opens the root `own` holds, at the position `own` gives" (`:69-72`). Its docstring then says: "That the committed values are the rows that `b ‖ c` commits is not stated here" (`:75-76`).
+
+**Conclusion.** Accepted and not covered. Three things are true at once, and the row is the third: the check is right; the bound holds; the guarantee an accept cites is silent on what makes the port a registered read.
+
+**What closes it** [derived], smallest first:
+
+1. A property of the compiled check, at the one statement's form: where `checkBlobs` accepts with a registered file, `Registered.check` passed on its statement. This is a walk from `checkBlobsAt` to `buildSessionOf`, then `check_ok`. The recursive leg has that walk for its own check (`security/Proofs/Properties/Verity/Recursive/SetupChecks.lean:249-250`); the one-stage leg has none.
+2. The link `EndToEndRegistered` leaves out: that the value the trace holds at the port is the row the public file's `b ‖ c` commits.
+3. Then either a clause in the theorem's claim, which changes what a listed guarantee says, or a second guarantee beside it that the accept also cites.
+
+**Whom it bites** [derived]. Any block whose Definition has a `RegisteredInput` (`readsRegistered`, `OneStageZk.lean:225-228`): every block that reads weights. An audit of a template with no registered input, such as the activation template of my Answer 1, does not meet this row. Not established: whether Friday's one-stage audit reads a registered value.
+
+### 2. A39: `Flock.SecurityProofs.EndToEndRegistered` and its five open premises
+
+[run: the lock read as JSON, `security/lean-audit.json`] It is listed, owner `@proofs`, with witnesses `EndToEndRegistered_honest` and `_nontrivial`; it is not in `deployed`; its named assumptions are `SHA512CRExpected`, `SHA512CRStrict`, `UniformRandomBytes`. Four of its siblings are in `unwitnessed` (`EndToEndRegisteredFlat`, `…DrawnFlat`, `…Rows`, `…RowsFlat`). [read] It is stated at the older session: the verifier's own operating-system bytes and the plan without public inputs (`Statement.lean:105-117`), not at the device and the deployed vocabulary.
+
+| # | premise | what it is, in a sentence | lock entry | the issue, as Linear has it | its lemma on `main` | holder |
+|---|---|---|---|---|---|---|
+| 1 | `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw` | The record the verifier reads is the one the live session wrote, and its sample file the printed one. | `open`: `@proofs`, LEAN-186, due 2026-11-30; also in `trust.base`, "provisional: a default, not yet a ruling" | LEAN-186, In Progress, no assignee, last touched 11 Nov | proved at the deployed session's writer: `recordCustodyZKJPLaw_deployed` (`security/Proofs/Properties/Verity/Sampled/Deployed.lean:60`); not applied here | NOBODY |
+| 2 | `FlockSoundness.Built` | The circuit's unit is a built net. | `open`: `@proofs`, LEAN-186, 2026-11-30 | the same | `built_of_parseStmt` (`security/Proofs/Flock/Soundness/Discharge/Hidden/Built.lean:25`); not applied here | NOBODY |
+| 3 | `FlockSoundness.Discharge.ZkHidden.TagsOkZHJ` | The verify command's tags are the ones the hidden-output form needs. | `open`: `@proofs`, LEAN-186, 2026-11-30 | the same | from the files the check passes: `ksScoped_files` (`security/Proofs/Flock/Bridge/ScopeGate.lean:59`); not applied here | NOBODY |
+| 4 | `FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR` | "The verifier accepts the session with the registered file": the event the bound is about, read inside the statement (`Statement.lean:134`, `:143`), not a hypothesis. | `open`: `@proofs`, PRF-471, due 2026-11-13 | PRF-471 "Discharge LiveAcceptsZKR at the deployed instance", Todo, no assignee, due 2026-11-30: the date differs from the lock's | none; the issue asks for an honest instance at the deployed session | NOBODY |
+| 5 | `FlockSoundness.Discharge.ZkReg.OwnReadsHJ` | Which reads the second conjunct speaks of: the verifier's own, at the sample of the table the unit is sampled into (`security/Proofs/Flock/Soundness/Discharge/ZkReg/DefsHJ.lean:44-52`); the antecedent of the conclusion (`Statement.lean:147`). | `open`: `@proofs`, LEAN-186, 2026-11-30 | as row 1 | none found | NOBODY |
+
+- [read: Linear] LEAN-186 is titled "Lock: list the real assumptions apart from read Props and open premises". It is the lock's own sorting job, not a discharge of any of these four; no issue asks for rows 1 to 3 or 5 to be closed.
+- [derived] Rows 4 and 5 are not assumptions in the ordinary sense: one is the event, the other the scope of the conclusion. The lock lists them as open because the statement reads them, and under the rule that such a premise is either part of what the guarantee says (`domain`, with a why) or discharged, each needs one of the two. That is a change of a lock record and so not a worker's to make alone.
+- [run: `rg` over the inbox from line 85,000] No entry names a holder for PRF-471 or for this guarantee.
+- [derived] For the goal, this guarantee is not on the path as it stands: closing its five premises gives a statement about the older session. What the goal needs of it is its second conjunct restated at the deployed session, which is step 1 above with step 2. I would retire the row A39 into A17 once A17 has a holder, and leave the five premises to the lock's sorting.
+
+### Not established
+
+- Whether Friday's one-stage audit reads a registered value.
+- That `check_ok`'s conclusion, composed with the claim's trace, gives "the block read the registered rows" with no further fact: step 2 above is the docstring's own word that something is missing, and I did not size it.
+- That rows 1 to 3's lemmas fit this statement's binders unchanged: row 1's is at the plan with public inputs, and this statement is at the plan without.
+- I ran no Lean.
+
+### To post
+
+- On the umbrella issue, under A17: "Settled by reading: accepted and not covered. The check holds each registered read to the registered root (`Registered.check`, proved as `check_ok`); the one-stage leg drops that check (`setupAt_setupOfP`), and the theorem's claim has no clause for it. Closing it is a walk from `checkBlobs` to `check_ok` at the one statement's form, the link from the committed row to the trace's value, and a clause or a second guarantee. It bites every block that reads weights."
+- Under A39: "Five open premises: custody, built, tags (each has its lemma on `main`, not applied), and two about the reads (PRF-471, due tomorrow in the lock and 30 Nov in Linear; LEAN-186). No holder for any. Proposed: fold A39 into A17."
