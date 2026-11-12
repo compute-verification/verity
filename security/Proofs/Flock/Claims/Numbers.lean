@@ -12,7 +12,8 @@ The numbers Flock's claims read (`Claims.Flock.κ`, `γ`, `lamOf`) at the deploy
 * `k = ⌈4N₀/e⌉` exactly, at every level-0 length `N₀ = 2^d` a `fast100` schedule has, `d ∈ {10, …, 15, 18, …, 23}`
   (`kRep_eq`): from `1507` at `d = 10` to `12343986` at `d = 23`;
 * `κ ≤ 2^{−203} + 2^{−210} + 2^{−231} + 2^{−250} ≤ 2^{−202.98}` once `ε_table ≤ 2^{−205}`, `m′ ≥ 210`, `K = 2^256` and
-  `2^10 ≤ N₀ ≤ 2^23` (`κ_le_sum`, `κ_le`);
+  `2^10 ≤ N₀ ≤ 2^23` (`κ_le_sum`, `κ_le`), and `κ ≤ 2^{−203} + 2^{−210} + 2k/K₀ + 2^{−250}` at a truncation `K = K₀`
+  once `N₀ ≥ 2^10` (`κ_le_sum_cap`);
 * `λ = lamOf κ γ ≥ 201.98` whenever moreover `γ ≤ 2^105` (`lam_ge`): the hash side, `255.5 − ½ log₂ γ`, is then at
   least `203`, so the table error binds and `γ`'s exact value doesn't move the bits. `γ` at the deployed weight is at
   most `2^48` at every schedule and up to `768` rounds (`NumbersGamma`).
@@ -122,11 +123,11 @@ theorem slack_le : (1 + 2⁻¹ ^ 7 + 2⁻¹ ^ 28 + 2⁻¹ ^ 47 : ℝ) ≤ 2 ^ ((
   rw [← pow_le_pow_iff_left₀ h0 (by positivity) (by norm_num : (50 : ℕ) ≠ 0), h2]
   exact h50
 
-/-- **`κ` at the deployed numbers, term by term**: `ε_table ≤ 2^{−205}`, `m′ ≥ 210`, `K = 2^256` and
-`2^10 ≤ N₀ ≤ 2^23` give `κ ≤ 2^{−203} + 2^{−210} + 2^{−231} + 2^{−250}`. -/
-theorem κ_le_sum (D : Deploy Coin Col T) (x : Msg) (hε : D.εtable x ≤ 2 ^ (-(205 : ℝ))) (hw : 210 ≤ D.waits x)
-    (hK : D.cap x = cap) (hN : 2 ^ 10 ≤ D.N₀ x) (hN' : D.N₀ x ≤ 2 ^ 23) :
-    κ D x ≤ 2 ^ (-(203 : ℝ)) + 2 ^ (-(210 : ℝ)) + 2 ^ (-(231 : ℝ)) + 2 ^ (-(250 : ℝ)) := by
+/-- **`κ` at a truncation `K₀`, term by term**: `ε_table ≤ 2^{−205}`, `m′ ≥ 210`, `K = K₀` and `N₀ ≥ 2^10` give
+`κ ≤ 2^{−203} + 2^{−210} + 2k/K₀ + 2^{−250}`. -/
+theorem κ_le_sum_cap (D : Deploy Coin Col T) (x : Msg) (K₀ : ℕ) (hε : D.εtable x ≤ 2 ^ (-(205 : ℝ)))
+    (hw : 210 ≤ D.waits x) (hK : D.cap x = K₀) (hN : 2 ^ 10 ≤ D.N₀ x) :
+    κ D x ≤ 2 ^ (-(203 : ℝ)) + 2 ^ (-(210 : ℝ)) + 2 * D.k x / K₀ + 2 ^ (-(250 : ℝ)) := by
   unfold κ
   have h1 : 4 * D.εtable x ≤ 2 ^ (-(203 : ℝ)) := by
     have : (2 : ℝ) ^ (-(203 : ℝ)) = 4 * 2 ^ (-(205 : ℝ)) := by
@@ -135,16 +136,24 @@ theorem κ_le_sum (D : Deploy Coin Col T) (x : Msg) (hε : D.εtable x ≤ 2 ^ (
   have h2 : (2 : ℝ) ^ (-(D.waits x : ℝ)) ≤ 2 ^ (-(210 : ℝ)) :=
     Real.rpow_le_rpow_of_exponent_le (by norm_num) (neg_le_neg (by exact_mod_cast hw))
   have hk1 : 1507 ≤ D.k x := k_ge hN
+  have h4 : Real.exp (-(D.k x : ℝ) / 8) ≤ 2 ^ (-(250 : ℝ)) := exp_neg_k_le hk1
+  rw [hK]
+  exact add_le_add (add_le_add (add_le_add h1 h2) le_rfl) h4
+
+/-- **`κ` at the deployed numbers, term by term**: `ε_table ≤ 2^{−205}`, `m′ ≥ 210`, `K = 2^256` and
+`2^10 ≤ N₀ ≤ 2^23` give `κ ≤ 2^{−203} + 2^{−210} + 2^{−231} + 2^{−250}` (`κ_le_sum_cap` at `K₀ = 2^256`). -/
+theorem κ_le_sum (D : Deploy Coin Col T) (x : Msg) (hε : D.εtable x ≤ 2 ^ (-(205 : ℝ))) (hw : 210 ≤ D.waits x)
+    (hK : D.cap x = cap) (hN : 2 ^ 10 ≤ D.N₀ x) (hN' : D.N₀ x ≤ 2 ^ 23) :
+    κ D x ≤ 2 ^ (-(203 : ℝ)) + 2 ^ (-(210 : ℝ)) + 2 ^ (-(231 : ℝ)) + 2 ^ (-(250 : ℝ)) := by
   have hk2 : D.k x ≤ 2 ^ 24 := k_le hN'
-  have h3 : 2 * (D.k x : ℝ) / D.cap x ≤ 2 ^ (-(231 : ℝ)) := by
+  have h3 : 2 * (D.k x : ℝ) / (cap : ℝ) ≤ 2 ^ (-(231 : ℝ)) := by
     have hk : (D.k x : ℝ) ≤ 2 ^ 24 := by exact_mod_cast hk2
-    have hc : (D.cap x : ℝ) = 2 ^ 256 := by rw [hK, cap]; push_cast; ring
+    have hc : (cap : ℝ) = 2 ^ 256 := by rw [cap]; push_cast; ring
     rw [hc, Real.rpow_neg (by norm_num), show (231 : ℝ) = ((231 : ℕ) : ℝ) by norm_num, Real.rpow_natCast,
       div_le_iff₀ (by positivity)]
     calc 2 * (D.k x : ℝ) ≤ 2 * 2 ^ 24 := by linarith
       _ = (2 ^ 231)⁻¹ * 2 ^ 256 := by norm_num
-  have h4 : Real.exp (-(D.k x : ℝ) / 8) ≤ 2 ^ (-(250 : ℝ)) := exp_neg_k_le hk1
-  exact add_le_add (add_le_add (add_le_add h1 h2) h3) h4
+  exact (κ_le_sum_cap D x cap hε hw hK hN).trans (add_le_add (add_le_add le_rfl h3) le_rfl)
 
 /-- **`κ ≤ 2^{−202.98}`** at the deployed numbers. -/
 theorem κ_le (D : Deploy Coin Col T) (x : Msg) (hε : D.εtable x ≤ 2 ^ (-(205 : ℝ))) (hw : 210 ≤ D.waits x)

@@ -16,17 +16,17 @@ line (`CircuitWork`, 0.744%, `a = 0.218`, `b = 0.998`) at least 10,552 equal liv
 per-tile luck, and on the headlines' sm_120 bound (0.656% sheet, 0.591% measured) 9,496 rounds (sheet) and 9,652
 (measured). A window has far fewer (the served H1 window has 18), but over a period the rounds are the period's,
 `n·M`, so windows reach the floor by being many. Compose's line is a time credit, which no statement here gives over
-a period: the numbers below are the proved word credit's (`CircuitCreditPeriod` at `a = b = 1`), and Compose's time
-line, where quoted, is labeled unstated.
+a period: the line below is the proved word credit's (`CircuitCreditPeriod` at `a = b = 1`), and Compose's time
+line is unstated.
 
 On a masked tile Definition a dead tile has the canonical empty receipt at every coin, so its whole skip always passes
 and no guess bound holds of it. So each window names its live tiles (`WindowPlay`), the per-tile claims are asked of
 live tiles only (`PerLiveTile`), and a dead tile's words count for nothing (`liveCone`, `periodMode`, `creditedLive`).
 
-An honest period of 82,403 windows completes with probability `(1 − f)^n`, 44% at a per-window failure rate
-`f = 10^-5`, and dropping failed windows instead hides about `0.26` of the live words per dropped share. So a period
-is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping time, and the tail is taken
-at it (`PeriodTailMax`).
+An honest period of `n` windows completes with probability `(1 − f)^n` at a per-window failure rate `f`, and dropping
+failed windows instead would credit a skip in every window it passes at the cost of the windows it fails
+(*Liveness*). So a period is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping
+time, and the tail is taken at it (`PeriodTailMax`).
 
 * `CircuitWorkMonitoringPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
   (`Proofs.Accounting.ComposeMonitoringPeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
@@ -156,47 +156,46 @@ when its salt is opened after the weights' root alone, before the activations ar
 The seeded pair has no period form: its premium is per window, so it would not divide by `j`.
 
 Its line, with equal rounds (`w_max = 1/M`), `ρ = 1/r` (`F = 1`), `x = K_d/(r·M)`: `Λ` is `SplitRateExp`'s,
-`max(a/(M·−ln(p + (1 − p)e^{−x})), b/(M·−ln(p0 + (1 − p0)e^{−x})))`, and the logical term per credited window is
-`Λ·ln(1/δ_s)/(min(a, b)·j)` of a window's declared words, or `/(u·j)` of the gate's credit. The proved line is the
-word credit's (`CircuitCreditPeriod`), best at `a = b = 1`. At `p = 7/8`, `p0 = ½`, `δ_s = 2^-40` and `D₀ = 0`,
-the served H1 window's shape (`M = 18`, `r = 2.87`) with a sample of `K_d = 8` has `Λ = 3.070`
-(`Λ·ln(1/δ_s) = 85.1`), so `ε(j) = 85.1/(u·j)`, with no `ε_♭` term. With every tile live (`u = 1`) `ε` is below 1%
-from 8,513 credited windows. At one measured served load it is below 1% of the live tiles' words (17/36 of tiles
-live) from 18,026 windows, and of the gate's credit (`u = 119/1152`, 10.3% of rows admitted) from 82,403 windows:
-1,483,254 live rounds, 659,224 sampled tiles, 419 days of one stream at a measured 439 s a window (the masked circuit's
-own). Compose's time line, at the physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%` (the sm_120 sheet,
-`ε_μ = 0`), is `0.571% + 20.65/(u·j)` (`Λ = 0.745`), below 1% from 4,815, 10,195 and 46,604 windows (237 days): that
-is the time credit, which no statement here gives (`CircuitCreditPeriod`), so those numbers are unstated. They are
-all live windows (*Live coins only*). For small `x` the term is about
-`max(a/(1 − p), b/(1 − p0))·r·ln(1/δ_s)/(min(a, b)·u·j·K_d)`, `8r·ln(1/δ_s)/(u·j·K_d)` at `a = b = 1`: the prefix's
-total samples `j·K_d` and its load set it, not how it is cut into windows.
+`max(a/(M·−ln(p + (1 − p)e^{−x})), b/(M·−ln(p0 + (1 − p0)e^{−x})))`. A window, here and in the names, is an execution
+phase with its verification phase, and the logical term per credited execution phase is `Λ·ln(1/δ_s)/(min(a, b)·j)`
+of an execution phase's declared words, or that over `u` as a share of what is credited: `u` is the live tiles' words
+over the declared ones (`N_live/(j·N_w)`, which gives `epsPrefix`'s `ε(j)`), or for the gate's credit its admitted
+rows over the declared ones (*Live tiles on the served gate*). The proved line is the word credit's
+(`CircuitCreditPeriod`), best at `a = b = 1` and with no `ε_♭` term: at `D₀ = 0`, `ε(j) = Λ·ln(1/δ_s)/(u·j)`, which
+is at least `1` up to `Λ·ln(1/δ_s)/u` credited execution phases and below `ε₀` only from `Λ·ln(1/δ_s)/(u·ε₀)` of
+them. For small `x` the term is about `max(a/(1 − p), b/(1 − p0))·r·ln(1/δ_s)/(min(a, b)·u·j·K_d)`,
+`8r·ln(1/δ_s)/(u·j·K_d)` at `a = b = 1`, `p = 7/8` and `p0 = ½`: the prefix's total samples `j·K_d` and its load set
+it, not how it is cut into execution phases. An illustration in round numbers, none of them a measurement: at
+`r·ln(1/δ_s) = 100`, `K_d = 8` and `u = 1/10` the term is about `1,000/j`, below 1% from about 100,000 credited
+execution phases. Compose's time line, at physical costs `a, b` with `ε_♭ + ε_μ` added, is the time credit, which
+no statement here gives (`CircuitCreditPeriod`), so it is unstated. All of it is for live coins (*Live coins only*).
 
-`D₀ = 0` is an assumption of these numbers, not a computed fact. `zeroCone` is `0` when no tile of no words reaches
+`D₀ = 0` is an assumption of this line, not a computed fact. `zeroCone` is `0` when no tile of no words reaches
 a tile of words, which COMPILE's `salt-flow` and `noise-in-z` checks are meant to give, and nothing computes
 `zeroCone` of a served circuit until a `Declared` is built from its Program. `DeadConeDead` rests on it too: at
 `D₀ > 0` a tile of no words reaches a tile of words, and in a window where that tile is dead and the tile it reaches is
 live, `DeadConeDead` fails, the premise is false and the statement says nothing. Only where every such tile is live,
 in every window, does a positive `D₀` merely add `D₀/u` to `ε(j)`, a term that doesn't shrink with `j`.
 
-*Liveness.* An honest stream whose windows fail independently at rate `f` (a late proof, a certifier or a
-node fault; no rate is measured) completes an 82,403-window period with probability `(1 − f)^n`: 44% at `f = 10^-5`,
-19% at `2·10^-5` and 0.03% at `10^-4`; half fail from `f = 8.4·10^-6` (`8.1·10^-5` at 8,513 windows). A failed
-period is credited for its prefix and the stream opens the next, each paying `Λ·ln(1/δ_s)` once, so over a stream the
-gate's logical term is `Λ·ln(1/δ_s)/(u·E[j])`, `E[j]` the mean credited prefix: under 1% of the gate's credit only
-while `f < 1/82,403 = 1.2·10^-5`, with a cap of 173,748 windows at `f = 10^-5` (1.468% at a cap of 82,403). On the
-unstated time line these are 63%, 39% and 0.95% at 46,604 windows, `f < 2.1·10^-5`, and a cap of 62,743. A window
-that fails ends its period; dropping it and running on would hide about `0.26` of the live words per dropped share,
-and a period picked from `N` windows after the fact would pay `ln C(N, n)` in place of `ln(1/δ_s)`.
+*Liveness.* An honest stream whose execution phases fail independently at rate `f` (a late proof, a certifier or a
+node fault; no statement gives a rate) completes a period of `n` with probability `(1 − f)^n`, so half its periods
+fail from about `f = ln 2/n`. A failed period is credited for its prefix and the stream opens the next, each paying
+`Λ·ln(1/δ_s)` once, so over a stream the logical term is `Λ·ln(1/δ_s)/(u·E[j])`, with
+`E[j] = (1 − f)(1 − (1 − f)^n)/f` the mean credited prefix. `E[j]` is below `1/f` at every cap, so the term is under
+`ε₀` only while `f < u·ε₀/(Λ·ln(1/δ_s))`, and then only from the cap at which `E[j]` reaches `Λ·ln(1/δ_s)/(u·ε₀)`. An
+execution phase that fails ends its period. Dropping it and running on would credit a skip that passes with
+probability `q` in a share `q` of the execution phases at the cost of the other `1 − q`, which no `ln(1/δ_s)` pays
+for, and a period picked from `N` execution phases after the fact would pay `ln C(N, n)` in place of `ln(1/δ_s)`.
 
-*The whole δ.* The period fails with probability `δ_s + n·(δ_bind + δ_ks)`, `n` the cap, and binding is
-priced at one prover budget `T` (`BindingOfECR`): `|L|·2^-88` a window at `T = 2^80` and `|L|·2^-64` at `2^128`, `|L|`
-from `2^20` to `2^30`. At `n = 82,403` (`2^16.3`) the binding term is `2^-51.7` to `2^-41.7` at `T = 2^80`, so
-`δ_s + n·δ_bind` is `2^-40.0` to `2^-39.6`; at `T = 2^128` it is `2^-27.7` to `2^-17.7`, set by binding, not by `δ_s`
-(`2^-30.9` to `2^-20.9` at 8,513). `δ_ks` has no number (`WindowDelta`'s `max_c κ_c + coll` is unstated), and
-`n·δ_ks` stays under `2^-40` at 82,403 windows only if `δ_ks ≤ 2^-56.3` a window.
+*The whole δ.* The period fails with probability at most `δ_s + n·(δ_bind + δ_ks)`, `n` the cap. Neither `δ_bind` nor
+`δ_ks` has a value here. `Pouw.Guarantees.PeriodBindingPerProver` bounds `δ_bind` by `|L|·√(q/2^256 + κ)` under
+`ecr/sha-512` at the prover's fork finder: `L` is the period's positions, `n` times a verification phase's, `q` is
+that finder's SHA-512 calls, its two runs from a position's cut and the checks of their openings, and `κ` is its
+unverified-opening and split terms, which no statement bounds. `δ_ks` is `Pouw.Guarantees.Window.WindowDelta`'s
+`max_c κ_c + coll`, stated and not proved.
 
 What it doesn't say: no window's own `ε` (an accepted prefix may hold windows skipped whole, `Λ·ln(1/δ_s)` of
-declared-word share in all, about 824 windows' worth of the gate's credit at `u = 0.103` and `a = b = 1`); no
+declared-word share in all at `a = b = 1`, `Λ·ln(1/δ_s)/u` windows' worth of the gate's credit); no
 attribution inside the period (one certificate for the prefix's device interval); no credit for windows past the
 first failure (no retry, and none dropped); no link between windows beyond each window's inputs, cut where its IR
 cuts them; no period over windows run at once (above); no check that the service's record ran the windows in order
@@ -240,14 +239,12 @@ prefix's deficit is at most what the discount takes. `ε` is read at the prefix 
 is priced by `PeriodTailMax`.
 
 It counts words, each one unit, so its best line is at `a = b = 1` (`r(j)/min(a, b)` is homogeneous in `(a, b)` and
-least at `a = b`): `Λ = 3.070` at the served H1 window's shape with a sample of `K_d = 8` (`Λ·ln(1/δ_s) = 85.1`
-windows of declared words, `D₀ = 0`, an assumption: *Its line*). Then `ε(j) ≥ 1` up to 85 windows with every tile
-live, 180 at the measured served load's live words (17/36 of tiles) and 824 of the gate's credit (`u = 119/1152`),
-and `ε(j) < 1%` from 8,513, 18,026 and 82,403 windows: the proved line. Compose's line is the time credit, at the
-physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%`, where `ε(j) ≥ 1` up to 20, 43 and 201 windows and
-`ε(j) < 1%` from 4,815, 10,195 and 46,604: that credit, `(1 − ε_♭ − ε_μ − r(j)·N_w/N_live)₊` of the prefix's live
-words' `T_cred`, needs `CreditOfWork` on each credited window's run, which the period's one `Pl.run` doesn't give, and
-is not stated. Everything `CircuitWorkMonitoringPeriod` doesn't say, this doesn't either. -/
+least at `a = b`): there, at `D₀ = 0` (an assumption: *Its line*), `ε(j) = Λ·ln(1/δ_s)/(u·j)`, `u` the prefix's live
+words over its declared ones, so `ε(j) ≥ 1` up to `Λ·ln(1/δ_s)/u` credited windows and `ε(j) < ε₀` only from
+`Λ·ln(1/δ_s)/(u·ε₀)`: the proved line. Compose's line is the time credit, at physical costs `a, b`: that credit,
+`(1 − ε_♭ − ε_μ − r(j)·N_w/N_live)₊` of the prefix's live words' `T_cred`, needs `CreditOfWork` on each credited
+window's run, which the period's one `Pl.run` doesn't give, and is not stated. Everything
+`CircuitWorkMonitoringPeriod` doesn't say, this doesn't either. -/
 def CircuitCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)

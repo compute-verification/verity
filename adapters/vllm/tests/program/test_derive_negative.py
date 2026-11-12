@@ -28,7 +28,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.circuits import Program, bind, program_digest  # noqa: E402
-from verity_vllm.correspondence.capture_identities import LazyTranscript, Segments, check_call  # noqa: E402
+from tests.program.capture_check import LazyTranscript, Segments, check_call  # noqa: E402
 from verity.circuits.evaluation import evaluate_region  # noqa: E402
 from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
@@ -1021,7 +1021,7 @@ def test_missing_operand_is_reported_not_invented():
 
 
 def test_wrong_dtype_or_shape_in_record_fails_shape_check():
-    from verity_vllm.correspondence.capture_identities import _shape_ok
+    from tests.program.capture_check import shape_ok as _shape_ok
     P, truth, call = _tiny_program_with_truth()
     ok, _ = _shape_ok(call, call.returns, {"shape": [8], "dtype": "bfloat16"})
     assert ok

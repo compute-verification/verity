@@ -204,9 +204,70 @@ def test_a_vocabulary_kind_that_does_not_bind_leaves_the_call_families_refused_b
     `test_every_call_the_suite_checks_is_partitioned` pass without it."""
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "_BOUND", {})
-    monkeypatch.setattr(TG, "load_registries", lambda: None)
     monkeypatch.setattr(TG, "templates", lambda: [])
-    monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
+    _binding_files(monkeypatch, syn={"_vocabulary_roots": lambda: [], "_vocabulary_bindings": lambda: [
+        ("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")]})
+    errors = list(TG.ROOT_ERRORS)
     with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
         TG.word_call_families()
+    assert "words" not in TG._SHORT and TG.ROOT_ERRORS == errors
+
+
+def test_a_path_no_binding_file_binds_a_vocabulary_on_leaves_the_call_families_refused(monkeypatch):
+    """The vocabulary kinds are bound by a sidecar of the package that owns them, which circuit-check finds only where Python
+    imports that package: without it no kind is a word Call family, and every partition would be judged as no Call's."""
+    monkeypatch.setattr(TG, "_SHORT", {})
+    monkeypatch.setattr(TG, "_BOUND", {})
+    monkeypatch.setattr(TG, "templates", lambda: [])
+    _binding_files(monkeypatch, syn={"_other_roots": lambda: []})
+    with pytest.raises(RuntimeError, match="no binding file binds a frontend vocabulary"):
+        TG.word_call_families()
     assert "words" not in TG._SHORT
+
+
+def test_a_root_function_with_its_bindings_beside_it_is_made_from_them_and_names_each_that_does_not_bind(monkeypatch):
+    made = object()
+    _binding_files(monkeypatch, syn={"_pair_roots": lambda: pytest.fail("made from `_pair_bindings`"),
+                                     "_pair_bindings": lambda: [("a", made), ("b", "KeyError: 'K'")],
+                                     "_lone_roots": lambda: [made]})
+    errors: list = []
+    [(units, make)] = TG._root_bindings("_pair_roots", errors)
+    assert units == ("syn.circuit-check#_pair_roots", "syn.circuit-check#_pair_bindings")
+    assert make() == [made] and errors == [("b", "KeyError: 'K'")]
+    [(units, make)] = TG._root_bindings("_lone_roots", errors)
+    assert units == ("syn.circuit-check#_lone_roots",) and make() == [made] and errors == [("b", "KeyError: 'K'")]
+
+
+def test_a_request_program_is_read_by_the_one_sidecar_that_defines_its_reader(monkeypatch):
+    _binding_files(monkeypatch, a={"request_program": lambda path: ("P", "Q", path)}, b={})
+    assert TG.request_program("build/instances.json.gz") == ("P", "Q", "build/instances.json.gz")
+    _binding_files(monkeypatch, a={}, b={})
+    with pytest.raises(ValueError, match="x: a request Program is read by the one sidecar .* 0 that .* do: none"):
+        TG.request_program("x")
+    _binding_files(monkeypatch, a={"request_program": len}, b={"request_program": len})
+    with pytest.raises(ValueError, match=r"2 that .* do: a.circuit-check#, b.circuit-check#"):
+        TG.request_program("x")
+
+
+def test_a_struct_slots_split_is_read_by_the_one_sidecar_that_defines_its_reader(monkeypatch):
+    """`structural_slots` reads a split as the row check reads a request Program, importing nothing of Flock: the sidecar
+    beside `verity_flock.struct_slots` defines the reader, and a tree with none or two is refused by name."""
+    import ast
+
+    from circuit_check import sidecars as SC
+
+    tree = ast.parse(SC.discover()["verity_flock.struct_slots"]["py"].read_text())
+    assert [n.name for n in tree.body if isinstance(n, ast.FunctionDef)] == [TG.SPLIT_READER]
+
+    def reader(path):
+        return (lambda: path), "struct-slots/v1", {"rcp": (8, 32)}, len
+
+    _binding_files(monkeypatch, a={TG.SPLIT_READER: reader}, b={})
+    read, form, slots, words = TG.struct_slots_split("d")
+    assert (read(), form, slots, words) == ("d", "struct-slots/v1", {"rcp": (8, 32)}, len)
+    _binding_files(monkeypatch, a={}, b={})
+    with pytest.raises(ValueError, match="d: a struct-slots split is read by the one sidecar .* 0 that .* do: none"):
+        TG.struct_slots_split("d")
+    _binding_files(monkeypatch, a={TG.SPLIT_READER: reader}, b={TG.SPLIT_READER: reader})
+    with pytest.raises(ValueError, match=r"2 that .* do: a.circuit-check#, b.circuit-check#"):
+        TG.struct_slots_split("d")

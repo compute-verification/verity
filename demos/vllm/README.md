@@ -22,8 +22,8 @@ remote's PoUW subprotocol reads. So the remote verdict can't accept on this run 
 `demo.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
-errors. But the remote protocol has no guarantee in Lean for the demo to instantiate: `Verity.Soundness` is not in Lean
-yet, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
+errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
+targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
 itself, to `SampledKSLiveV3`'s event (`verity/protocols/remote/verifier/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
 meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
@@ -91,8 +91,13 @@ the run recorder from the tree root, on the node `placement.toml` names, and ret
 recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints the command.
 
 1. `verity demo vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
-   that seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names
-   the Commit whose traced Build the endpoint's Build of record is held to.
+   that seals its replay bundle. The workload dir stays on the node, the only copy: the bundle and the Commit's records
+   under `commit/` hold values (the committed store with its salts, the weights key, the requests and served tokens)
+   and `match/spec.json` holds the prompts, so nothing stores the dir. The run's record holds only the files
+   `published.sh` lists, each with the reason it holds nothing of a request (the node and the tree's commit, each
+   stage's flags, exit code and verdict word, the sealed bundle's manifest digest, the GPU lease's times, the row's
+   target), and the run names every file it left on the node; to publish another file, give it an entry there.
+   `placement.toml`'s `COMMIT_RUN` names the Commit whose traced Build the endpoint's Build of record is held to.
 2. `verity demo vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `verity demo vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed execution
    phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and

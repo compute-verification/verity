@@ -1,0 +1,12 @@
+# The full-utilization demo (examples/README.md): level 0, with no runner yet. Level 1 needs its run of record on the H200
+# and a run.sh that calls its runner.
+protocol = "pouw"
+workload = "none"              # an 8B model's linear layers at M = 16,384, s8, on seeded weights registered before the coin
+run = "moved"
+proof = "none"
+
+[placement]
+prover = "gpu-node"            # the demo H200 (an RTX PRO 6000 node is the development rig)
+challenger = "auditor-host"    # the challenger host, a live session each period
+
+[evidence]

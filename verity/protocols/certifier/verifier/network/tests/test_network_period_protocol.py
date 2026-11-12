@@ -116,6 +116,7 @@ ROWS_REFUSALS = {
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
     "rows-answer-window": ("another window's answer", "another window's answer"),
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
+    "rows-cap-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
     "rows-delta": ("is not the period's", "is not the period's"),
     "rows-units": ("not the scan's 2T", "not the scan's 2T"),
     "rows-prog-untied": ("is no compute audit's output",) * 2,
@@ -128,7 +129,8 @@ ROWS_REFUSALS = {
 def test_the_rows_form_refuses_what_it_must(server):
     """A link-window missing one of its records' certificates, one the network certifier left uncertified for refusing a
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
-    another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
+    another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another response
+    cap or none), scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
     no `SlotEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit unsampled, and a scan whose
     state is not its wired audit's `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
@@ -151,6 +153,32 @@ def test_the_rows_form_accepts_a_wired_state_tied_period(server):
             assert out["verdict"] == want, (m, n, out)
             verdict, got = D.replay(PORT, case, server)
             assert verdict == want and json.loads(got).get("public") == out.get("public"), (m, n, got)
+
+
+def test_a_capped_period_passes_and_publishes_its_cap(server):
+    """A rows-form period under a schedule with a response cap passes the period check, and its public names the cap
+    (`max_tokens_cap`), Lean's as the mirror's; an uncapped period's public names none, so its bytes are the ones it had
+    before the cap was a parameter."""
+    for n in range(4):
+        case = build("rows-capped", n, small=n % 2 == 0)
+        out = reference(case)
+        cap = case["params"]["schedule"]["max_tokens_cap"]
+        assert out["verdict"] == ACCEPT and out["public"]["max_tokens_cap"] == cap, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+        verdict, got = D.replay(PORT, build("rows-honest", n, small=n % 2 == 0), server)
+        assert verdict == ACCEPT and "max_tokens_cap" not in json.loads(got)["public"], (n, got)
+
+
+def test_a_bad_response_cap_is_refused(server):
+    """A schedule whose response cap is no positive u32 below `egress_cells`, or whose cell doesn't hold an id request's
+    `max_tokens`, is refused at the parameters, by Lean as by the mirror."""
+    case = build("rows-honest", 0, small=True)
+    for params in PC._bad_caps(case["params"]["schedule"], case["params"]):
+        bad = case | {"params": params}
+        assert reference(bad)["verdict"] == REJECT, params["schedule"]
+        verdict, out = D.replay(PORT, bad, server)
+        assert verdict == REJECT and "schedule" in json.loads(out)["reason"], (params["schedule"], out)
 
 
 def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypatch):
@@ -316,7 +344,8 @@ def test_the_scan_is_read_off_its_program(server):
     another Program's, one
     in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
     and T instances, or rows other than the schedule's, one with an input gate no template's, and each negative of a
-    check of what `NetTiming.Layout.Fits` asks."""
+    check of the rows the scan's ties equate, of what `NetTiming.Layout.Fits` asks or of the input nodes its arguments
+    read."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
@@ -330,12 +359,16 @@ def test_the_scan_is_read_off_its_program(server):
             assert verdict == REJECT and "scan" in json.loads(out)["reason"], (n, out)
 
 
-def test_each_fits_check_refuses_its_negative(server):
-    """Each of the scan's checks of what `NetTiming.Layout.Fits` asks refuses, in Lean and in the mirror, a scan that
-    passes every check before it (`PC.scan_negatives`): one past the resolution's walk, one whose root doesn't return
+def test_each_scan_check_refuses_its_negative(server):
+    """Each of the scan's checks of the rows its ties equate, of what `NetTiming.Layout.Fits` asks and of the input
+    nodes its arguments read refuses, in Lean and in the mirror, a scan that passes every check before it
+    (`PC.scan_negatives`): one whose ingress view is not its egress `state`'s leaves, one (a window of more than one
+    bucket) whose `sin` is not the returned state's, one past the resolution's walk, one whose root doesn't return
     an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
-    gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, and
-    one whose ingress template names a later root node."""
+    gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, one
+    (a window of more than one bucket) whose `sin` reads its row's input node, one whose egress state is the slot
+    entries' input node, one with an input node no argument reads, and one whose ingress template names a later root
+    node."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         for name, (bad, fragment) in PC.scan_negatives(case["params"]).items():

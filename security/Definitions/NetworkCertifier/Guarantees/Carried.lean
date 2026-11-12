@@ -43,10 +43,11 @@ open Claims.SamplingGeneric (Arg Compiled)
 its opening gates `prow`, inputs of its circuit (`OpensAtInputs`), and leaves a row at its closing gates `nrow`, at every
 compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds:
 
-* on the statements in scope whose trace run the check holds on except with probability `εchk` (`CheckedWitness`),
-  `Pr[acc ∧ ¬RLeakCarried δ] ≤ δ + ε_ks + ε_bind + εchk`: except with that probability, every observation sequence of
-  length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is accepted with a
-  valid run from the trace's values at `prow`, leaving the trace run's values at `nrow`, both read off the witness;
+* on the statements in scope whose trace run the check holds on except with probability `εchk` (`CheckedWitness` at
+  `traceRun`), `Pr[acc ∧ ¬RLeakCarried δ] ≤ δ + ε_ks + ε_bind + εchk`: except with that probability, every observation
+  sequence of length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is
+  accepted with a valid run from the trace's values at `prow`, leaving the trace run's values at `nrow`, both read off
+  the witness;
 * on a statement in scope whose check pins `chk` (`CheckedUnique`), at every `ρ` and every opened row `rin`, the
   sequences accepted from `rin` (`AccSeqsCarried`) number at most
   `2^#(freeInputs \ (reg ∪ chk ∪ prow)) · #faultySets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible
@@ -57,7 +58,7 @@ def SampledLeakCarried : Prop :=
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow) (εchk : Claims.Msg → ℝ) (Dj : ℕ),
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D (traceRun H D.commit) valid εchk x)
         (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
         D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) ∧
       ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →

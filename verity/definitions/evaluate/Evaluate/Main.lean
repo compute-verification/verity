@@ -4,7 +4,7 @@ module
 
 public import Difftest
 public import Evaluate.Serve
-import Flock.Sizes
+import Base.Sizes
 import Std.Data.HashMap
 import Std.Data.TreeMap.Raw.Lemmas
 

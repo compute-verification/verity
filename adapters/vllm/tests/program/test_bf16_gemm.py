@@ -305,7 +305,7 @@ def test_cublas_gemv_agrees_with_its_twin_and_contracts() -> None:
 
 @pytest.mark.parametrize("M,K,SPLIT_K", [(1, 2048, 5), (4, 1024, 3), (303, 512, 2)])
 def test_route_probe_rows_tell_every_candidate_route_apart(M, K, SPLIT_K) -> None:
-    """`served routes` keeps the one candidate route (`cublas_routes_at`) whose twin computes every word of `route_probe_rows`; on
+    """`probe_routes` keeps the one candidate route (`cublas_routes_at`) whose twin computes every word of `route_probe_rows`; on
     the rows it reads, each pair of candidates at a split count differs somewhere, so the device's route is never ambiguous."""
     rows = sorted({0, M // 2, M - 1})
     tests = [(x[rows], w) for x, w in C.route_probe_rows(M, K, 64, np.random.default_rng([M, K]))]

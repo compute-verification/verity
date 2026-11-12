@@ -38,12 +38,15 @@ under.  Exit 1 when it finds anything; run it before the first push and after (a
 With `RESEARCH_NOTES_SYNC=1`, `research notes checkpoint | bind | relaunch` run `sync` for the lane directories they wrote once
 they succeed (a cloud agent's default; the laptop keeps the watcher's snapshot until the switch-over).
 
-With `RESEARCH_NOTES_TOKEN` set, every fetch, pull and push of a github.com notes remote (`remote_target`: `sync`, the standby
+With a notes token (`notes_token`), every fetch, pull and push of a github.com notes remote (`remote_target`: `sync`, the standby
 steward's pull, budgets.toml's fetch) goes to its explicit-user URL `https://x-access-token@github.com/<owner>/<repo>.git` with a
-credential helper that reads the token from the environment.  A cloud VM's global `url.<cursor[bot] token>.insteadOf
-https://github.com/` matches only the plain URL, so it no longer turns the request into the bot's, which the notes repo refuses;
-the token itself is never in a URL, an argument or a message.  Unset, a Cursor agent gets one from the agents' GitHub broker
-(`notes_token`), so a cloud VM needs no secret; elsewhere nothing changes.  With a token, a notes command (and machine
+credential helper that reads the token from the environment (`RESEARCH_NOTES_TOKEN`).  A cloud VM's global `url.<cursor[bot]
+token>.insteadOf https://github.com/` matches only the plain URL, so it no longer turns the request into the bot's, which the
+notes repo refuses; the token itself is never in a URL, an argument or a message.  A Cursor agent's token is the agents' GitHub
+broker's, asked for with its Cursor identity whatever the variable held, so a cloud VM needs no secret and one it still
+injects is not used.  Where the broker gives none (no Cursor identity: a laptop, the control pod), the token is the variable as it
+was set, and with neither nothing changes.  When GitHub refuses the variable's token (401 or 403), `sync`, `pull` and the clone
+say so in one line and go on with the broker's where it gives one (`refused_given`).  With a token, a notes command (and machine
 resolution, which reads `<notes>/machines.d`) on a machine without the notes clone clones `NOTES_URL` there first
 (`ensure_clone`).
 """
@@ -62,9 +65,8 @@ import tempfile
 import threading
 import time
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
-
-from .secret_hint import FRESH_SHELL, lost
 
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
@@ -128,20 +130,30 @@ def _out(root: Path, *args: str) -> str | None:
     return r.stdout if r.returncode == 0 else None
 
 
-_BROKER_REFUSED: list[float] = []
+clock = time.time
+NO_IDENTITY = "no Cursor identity here"
+_BROKER_REFUSED: list[tuple[float, str]] = []       # (when, why) the broker last gave no token; empty once it gives one
+_SET_ASIDE: list[str] = []                          # non-empty once the broker's token replaced one the variable was given
+
+
+def _held() -> tuple[str | None, bool, float]:
+    """(the token in the environment, whether `notes_token` put it there from the broker, when that one expires)."""
+    tok, source, expires = (os.environ.get(k) for k in (TOKEN_ENV, SOURCE_ENV, EXPIRES_ENV))
+    return tok or None, source == "broker", float(expires or 0) if source == "broker" else 0.0
 
 
 def notes_token(now: float | None = None) -> str | None:
-    """RESEARCH_NOTES_TOKEN when it was set by hand (a laptop, the control pod); else, on a Cursor agent, an hour's token for the
-    notes repository from the agents' GitHub broker (`GITHUB_BROKER`, scope `notes`), which this puts in the environment with its
-    source and expiry, so git's credential helper and child processes read it, and mints again REFRESH_S before it expires.  None
-    when there is neither; a broker that refused is asked again only after BROKER_RETRY_S."""
-    now = time.time() if now is None else now
-    tok = os.environ.get(TOKEN_ENV)
-    if tok and (os.environ.get(SOURCE_ENV) != "broker" or float(os.environ.get(EXPIRES_ENV) or 0) > now + REFRESH_S):
+    """A token for the notes repository.  On a Cursor agent, an hour's token from the agents' GitHub broker (`GITHUB_BROKER`, scope
+    `notes`), asked for with the agent's Cursor identity whatever RESEARCH_NOTES_TOKEN held: this puts it in the environment with
+    its source and expiry, so git's credential helper and child processes read it, and mints again REFRESH_S before it expires.
+    Where the broker gives none (`broker_why`: no Cursor identity, as on a laptop or the control pod; a refusal; an outage),
+    RESEARCH_NOTES_TOKEN as it was set, else None; a broker that gave none is asked again only after BROKER_RETRY_S."""
+    now = clock() if now is None else now
+    tok, minted, expires = _held()
+    if tok and minted and expires > now + REFRESH_S:
         return tok
-    if _BROKER_REFUSED and now < _BROKER_REFUSED[-1] + BROKER_RETRY_S:
-        return tok or None
+    if _BROKER_REFUSED and now < _BROKER_REFUSED[-1][0] + BROKER_RETRY_S:
+        return tok
     try:
         from .slack import _NoRedirect, oidc_token
         req = urllib.request.Request(GITHUB_BROKER, data=json.dumps({"scope": "notes"}).encode(), method="POST",
@@ -153,11 +165,64 @@ def notes_token(now: float | None = None) -> str | None:
         expires = dt.datetime.fromisoformat(d["expires_at"].replace("Z", "+00:00")).timestamp()
         if not isinstance(new, str) or not new or any(c.isspace() for c in new):
             raise ValueError("malformed token")
-    except Exception:  # noqa: BLE001  (no Cursor identity, a refusal or an outage: the caller goes on without a token)
-        _BROKER_REFUSED.append(now)
-        return tok or None
+    except Exception as e:  # noqa: BLE001  (no Cursor identity, a refusal or an outage: the caller goes on with what it was given)
+        code = getattr(e, "code", None)
+        _BROKER_REFUSED[:] = [(now, f"the broker answered HTTP {code}" if isinstance(code, int) else
+                               NO_IDENTITY if type(e).__name__ == "SlackError" else f"the broker gave no usable answer ({type(e).__name__})")]
+        return tok
+    if tok and not minted:
+        _SET_ASIDE.append(TOKEN_ENV)
+    _BROKER_REFUSED.clear()
     os.environ.update({TOKEN_ENV: new, SOURCE_ENV: "broker", EXPIRES_ENV: f"{expires:.0f}"})
     return new
+
+
+def broker_why() -> str | None:
+    """Why the broker last gave no token (`NO_IDENTITY`, its HTTP status, the class of an outage); None once it gave one, or
+    before it was asked."""
+    return _BROKER_REFUSED[-1][1] if _BROKER_REFUSED else None
+
+
+def token_source() -> tuple[str | None, str]:
+    """(where `notes_token` gets the token now, the same in words for a message): "broker", with whether a RESEARCH_NOTES_TOKEN
+    this process was given is now unused; "env", the variable, with why the broker gave none; None, with why there is none."""
+    tok, minted = notes_token(), _held()[1]
+    if tok and minted:
+        return "broker", "the GitHub broker's token, by this agent's Cursor identity" + (
+            f"; {TOKEN_ENV} is set here too and is not used: a Cursor agent no longer needs it" if _SET_ASIDE else "")
+    why = broker_why() or "the broker was not asked"
+    return ("env", f"{TOKEN_ENV}, since the GitHub broker gave no token ({why})") if tok else \
+        (None, f"git's own: there is no notes token ({why}, and {TOKEN_ENV} is not set)")
+
+
+#: what git says when GitHub answers a credential with 401 or 403
+TOKEN_REFUSED = ("Authentication failed", "Invalid username or token", "returned error: 401", "returned error: 403", "denied to")
+
+
+def refused_given() -> bool:
+    """GitHub refused the notes token (401 or 403) and it was RESEARCH_NOTES_TOKEN as this process was given it, not the broker's:
+    say so in one line on stderr, never the token, and ask the broker now.  Whether the broker gave one, so the refused request
+    is worth making again; False, and nothing said, when the refused token was the broker's or there was none."""
+    tok, minted, _ = _held()
+    if not tok or minted:
+        return False
+    _BROKER_REFUSED.clear()                                 # asked now, though it may have given none a moment ago
+    notes_token()
+    again = _held()[1]
+    print(f"notes: {TOKEN_ENV} was refused by GitHub: it is expired or revoked; "
+          + ("going on with the GitHub broker's token" if again else f"the GitHub broker gave no token to go on with ({broker_why()})"),
+          file=sys.stderr)
+    return again
+
+
+def _authed(target: Callable[[], tuple[list[str], str]], git: Callable[[list[str], str], subprocess.CompletedProcess]
+            ) -> subprocess.CompletedProcess:
+    """`git(options, repository)` for what `target` gives now (`remote_target`, `token_url`); when GitHub refuses
+    RESEARCH_NOTES_TOKEN as given (`TOKEN_REFUSED`, `refused_given`), once more with the broker's token."""
+    r = git(*target())
+    if r.returncode and any(k in r.stderr for k in TOKEN_REFUSED) and refused_given():
+        r = git(*target())
+    return r
 
 
 def token_url(url: str) -> tuple[list[str], str] | None:
@@ -189,23 +254,27 @@ def refused(stderr: str) -> bool:
 
 
 def token_hint(root: Path, remote: str = "origin") -> str:
-    """'' unless RESEARCH_NOTES_TOKEN is empty here and `remote` is github.com's; then why git failed and what to do, for the end of
-    a fetch or push failure (a laptop's own credentials need no token, so an empty one is no refusal by itself)."""
+    """'' unless there is no notes token here and `remote` is github.com's; then why git failed and what to do, for the end of
+    a fetch or push failure (a laptop's own credentials need no token, so having none is no refusal by itself)."""
     url = _out(root, "config", "--get", f"remote.{remote}.url") or ""
     if not GITHUB_URL_RE.match(url.strip()) or notes_token():
         return ""
-    return (f" -> {TOKEN_ENV} is empty in this shell, so git used the VM's own credentials, which the notes repo refuses: "
-            + (lost(TOKEN_ENV) or f"set it (a Cursor secret, Cloud Agents > Secrets) or {FRESH_SHELL}"))
+    return (f" -> no notes token here ({broker_why()}), so git used this machine's own credentials, which the notes repo refuses "
+            f"on a cloud VM: a Cursor agent's token comes from the GitHub broker (`research doctor` checks it), so sync again in "
+            f"a minute; where there is no Cursor identity, set {TOKEN_ENV}")
 
 
 def pull(root: Path, remote: str = "origin") -> subprocess.CompletedProcess:
     """`git pull --ff-only` of the current branch from `remote` (`remote_target`), its remote-tracking branch updated as a plain
     pull does."""
-    opts, where = remote_target(root, remote)
     branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
-    if not opts or not branch:
-        return _run(root, "pull", "-q", "--ff-only", timeout=300)
-    return _run(root, *opts, "pull", "-q", "--ff-only", where, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}", timeout=300)
+
+    def git(opts: list[str], where: str) -> subprocess.CompletedProcess:
+        if not opts or not branch:
+            return _run(root, "pull", "-q", "--ff-only", timeout=300)
+        return _run(root, *opts, "pull", "-q", "--ff-only", where, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}", timeout=300)
+
+    return _authed(lambda: remote_target(root, remote), git)
 
 
 _CLONE_LOCK = threading.Lock()
@@ -217,18 +286,19 @@ def ensure_clone(root: Path) -> str | None:
     (`research run`'s machine probes run in parallel, so a clone directory named by pid alone would be each other's), and each
     clones into a directory of its own, so another process cloning beside it never touches it."""
     root = Path(root).expanduser()
-    if root.exists() or not (t := token_url(NOTES_URL)):
+    if root.exists() or not token_url(NOTES_URL):
         return None
     with _CLONE_LOCK:
         if root.exists():
             return None
-        return _clone(root, *t)
+        return _clone(root)
 
 
-def _clone(root: Path, opts: list[str], url: str) -> str:
+def _clone(root: Path) -> str:
     root.parent.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix=f".{root.name}.clone-", dir=root.parent))
-    r = subprocess.run(["git", *opts, "clone", "-q", url, str(tmp)], capture_output=True, text=True, errors="replace", timeout=900)
+    r = _authed(lambda: token_url(NOTES_URL) or ([], NOTES_URL), lambda opts, url: subprocess.run(
+        ["git", *opts, "clone", "-q", url, str(tmp)], capture_output=True, text=True, errors="replace", timeout=900))
     if r.returncode == 0:
         _run(tmp, "remote", "set-url", "origin", NOTES_URL)
         try:
@@ -574,10 +644,13 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
         return {**rep, "note": f"no remote {remote!r}: committed locally only"}
     secrets = _secret_values() if secrets is None else secrets
     tracking = f"refs/remotes/{remote}/{branch}"
-    opts, where = remote_target(root, remote)
+
+    def net(verb: str, refspec: str) -> subprocess.CompletedProcess:
+        return _authed(lambda: remote_target(root, remote), lambda opts, where: _run(root, *opts, verb, "-q", where, refspec, timeout=300))
+
     for n in range(retries + 1):
         rep["attempts"] = n + 1
-        f = _run(root, *opts, "fetch", "-q", where, f"+refs/heads/{branch}:{tracking}", timeout=300)
+        f = net("fetch", f"+refs/heads/{branch}:{tracking}")
         has_remote = f.returncode == 0
         if not has_remote and "couldn't find remote ref" not in f.stderr:
             if n < retries and not refused(f.stderr):
@@ -602,9 +675,9 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
         if keys:
             return {**rep, "rc": 4, "keys": keys, "error": "key material in outgoing commits; nothing pushed: " + "; ".join(keys[:5])}
         cites = outgoing_citations(root, base) if cite_check_on() else {}
-        p = _run(root, *opts, "push", "-q", where, f"HEAD:refs/heads/{branch}", timeout=300)
+        p = net("push", f"HEAD:refs/heads/{branch}")
         if p.returncode == 0:
-            _run(root, *opts, "fetch", "-q", where, f"+refs/heads/{branch}:{tracking}", timeout=300)
+            net("fetch", f"+refs/heads/{branch}:{tracking}")
             return {**rep, "pushed": True, "warn": rep["warn"] + citation_warnings(cites)}
         if refused(p.stderr) or n == retries and not any(k in p.stderr for k in RACE):
             return {**rep, "rc": 1, "error": f"git push failed (local commit kept): {p.stderr.strip()[-300:]}{token_hint(root, remote)}"}
