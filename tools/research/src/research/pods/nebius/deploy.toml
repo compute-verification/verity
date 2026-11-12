@@ -165,31 +165,29 @@ managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/lo
            "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
-# cpu-14 to cpu-17 (uk-south2, train slots): cpu-12's entries. pods/nebius/launch.sh creates each with NEBIUS_VM_NAME, cpu-13's
-# shape (cpu-d3, 192vcpu-768gb, ubuntu24.04-driverless) and a data disk whose size is a multiple of 93 GiB
+# cpu-14 to cpu-17 (uk-south2, train slots): cpu-12's entries; cpu-16 and cpu-17 are staged. pods/nebius/launch.sh creates one
+# with NEBIUS_VM_NAME, cpu-13's shape (cpu-d3, 192vcpu-768gb, ubuntu24.04-driverless) and a data disk of a multiple of 93 GiB
 [nodes.vy-nebius-cpu-14]
-staged = "uk-south2 has no public IPv4 address or instance slot free for it"
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
            "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
 [nodes.vy-nebius-cpu-15]
-staged = "uk-south2 has no public IPv4 address or instance slot free for it"
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
            "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
 [nodes.vy-nebius-cpu-16]
-staged = "uk-south2 has no public IPv4 address or instance slot free for it"
+staged = "uk-south2's limits on public IPv4 addresses and on instances are full"
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
            "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
 [nodes.vy-nebius-cpu-17]
-staged = "uk-south2 has no public IPv4 address or instance slot free for it"
+staged = "uk-south2's limits on public IPv4 addresses and on instances are full"
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
            "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",

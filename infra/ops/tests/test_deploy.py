@@ -513,8 +513,8 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
 
 
 def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
-    """vy-nebius-cpu-14 to -17 are installed from this manifest the hour they exist, so their first install is one a live
-    node of their kind has already run: cpu-12's entries, its managed patterns and its record."""
+    """vy-nebius-cpu-14 to -17 get what a live node of their kind runs, so a staged one's first install, the hour it exists, is
+    one cpu-12 has already run: cpu-12's entries, its managed patterns and its record."""
     nodes = deploy.load()
     twin = nodes["vy-nebius-cpu-12"]
     want = sorted(twin.entries, key=lambda e: e.path)
