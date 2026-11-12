@@ -381,7 +381,6 @@
     {"file": "tests/properties/norm_tap_exactness_gpu.py", "kind": "union-attr", "symbol": "check_source", "detail": ""},
     {"file": "tests/properties/norm_tap_exactness_gpu.py", "kind": "union-attr", "symbol": "check_triton", "detail": ""},
     {"file": "tests/properties/sigmoid_router_capture_gpu.py", "kind": "arg-type", "symbol": "run", "detail": "", "count": 2},
-    {"file": "tests/protocols/local_gate.py", "kind": "union-attr", "symbol": "_start.start", "detail": "", "count": 2},
     {"file": "tests/protocols/pouw_h1_gpu.py", "kind": "arg-type", "symbol": "fill", "detail": "", "count": 2},
     {"file": "tests/protocols/pouw_h1_gpu.py", "kind": "arg-type", "symbol": "producer", "detail": ""},
     {"file": "tests/protocols/pouw_h1_gpu.py", "kind": "call-arg", "symbol": "main", "detail": ""},
