@@ -305,7 +305,8 @@ Lean's job in `check` and the tools around the audit:
   the entry).
 - `trusted_size.py`: the size of a package's spec, per area.
 - `bits.py`: `verity lean bits`, each guarantee's error term in bits and the source of the number.
-  `bits_mirror.py`: the Python mirrors of error terms it evaluates, each with the hashes it pins.
+  `bits_mirror.py`: the Python mirrors of error terms it evaluates; `bits_pins.json`: the guarantees and definitions
+  each one pins, with their hashes in the locks.
 - `tool.py`: the store's declarations of the scheduled runs.
 - `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.
 
