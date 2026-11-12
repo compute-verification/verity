@@ -228,7 +228,9 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         reported := Record.sessionRegistered i.verdicts, verified := SecondStage.verifiedOf i.verdicts,
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
-        rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn }
+        rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+        supplied := it.params.verifier.supplied,
+        fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1) }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
