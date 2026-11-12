@@ -40,8 +40,6 @@ from verity_vllm.commitments.vllm_v1 import (
 
 VECTORS = Path(vllm_v1.__file__).with_name("vectors_sha512.json")
 S = "sha512"
-#: the file's ``generator`` field, kept as the pinned file has it (``vectors.GENERATOR``)
-GENERATOR = "python -m verity_vllm.commitments.vllm_v1.vectors_sha512"
 
 
 def _h(b: bytes) -> str:
@@ -137,9 +135,10 @@ def _opening_vectors() -> list[dict[str, Any]]:
 
 
 def build() -> dict[str, Any]:
+    """The vectors, their ``generator`` field carried over from the pinned file as ``vectors.build`` carries its own."""
     return {
         "scheme": NAME_SHA512,
-        "generator": GENERATOR,
+        "generator": load()["generator"],
         "encoding": ("lowercase hex; vllm-v1 with SHA-512 for every hash the scheme computes (tags, framing and field order unchanged); "
                      "scheme-computed digests are 64 bytes, the integration's identity digests 32"),
         "hash": _hash_vectors(),
