@@ -54,7 +54,8 @@ The probability half: each execution phase's audit, given the earlier phases' co
 most `(1 - q)^|W_i| + e_i` plus the average over the phase's own coins of a charge that is not negative, and the
 escapes multiply over the phases with the errors adding and the charges paid once, at the average over the period's
 coins of their sum (`pr_adaptive_add_ex_le`, the area's one step over a period's phases); a union bound adds the leak
-relations' errors `e' i` (`pr_pooled_ex_le`). At the charge zero that is `pr_pooled_le`, which `pooledLeak` reads.
+relations' errors `e' i` (`pr_pooled_ex_le`). With the count half that is `pooledLeak_charge`, the statement of
+`PooledLeakAccepted` with the charge; `pooledLeak` is it at the charge zero, as `pr_pooled_le` is `pr_pooled_ex_le`.
 
 The count half: a family of incorrect sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
@@ -355,12 +356,49 @@ theorem pr_pooled_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (acc : Fin
   simp only [Finset.sum_const_zero, Ex_const, add_zero] at h
   exact h
 
-/-- **The leak through the network certifier over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
-`pr_pooled_le` at the leak relations, `(1 - q)^Fmax ≤ δ` at `Fmax ≥ ln(1/δ)/q`, and `encard_pooledGood_le` at each sample
-of the coins. -/
-theorem pooledLeak : Guarantees.PooledLeakAccepted := by
+set_option linter.unusedVariables false in
+/-- **The leak through the network certifier over a monitoring period, with a charge paid once**:
+`Guarantees.PooledLeakAccepted`'s statement where a phase's conditional escape `hesc` holds one more term, the average
+over the phase's own coins of a charge `cl z i ω` that is not negative and reads only the earlier phases' coins; the
+period's bound then holds the average, over the period's coins, of the charges' sum. From `pr_pooled_ex_le` at the
+leak relations, `(1 - q)^Fmax ≤ δ` at `Fmax ≥ ln(1/δ)/q`, and `encard_pooledGood_le` at each sample of the coins. -/
+theorem pooledLeak_charge :
+    ∀ {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+      (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
+      (ρ : Fin m → ℕ → Bool) (op : Fin m → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
+      (n : Fin m → ℕ) (b : ℕ) (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
+      {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn]
+      (arr : Srv → Conn → Arrivals Cell) (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+      (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+      (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+      (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
+      (hfit : ∀ s ∈ Ss, f.fits s)
+      (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
+      (hs : ∀ z ∈ Zs, ∀ ω, schedOf z ω ∈ Ss) (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
+      (hdz : ∀ z ∈ Zs, ∀ ω, dec ω (run tap (schedOf z ω, srvOf z ω)).1 = z)
+      (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+      (hacc : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → acc z i ω = acc z i ω')
+      (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
+      (hW : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z ω i = W z ω' i)
+      (hWn : ∀ z ω i, W z ω i ⊆ range (n i)) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i)
+      (cl : Z → Fin m → (Fin m → Ω) → Ω → ℝ)
+      (hcl : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → cl z i ω = cl z i ω') (hcl0 : ∀ z i ω x, 0 ≤ cl z i ω x)
+      (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+      (hesc : ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i + Ex (cl z i ω))
+      (hleak : ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
+        ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (run tap (schedOf z ω, srvOf z ω)).2 i))
+          (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i)) ≤ e' i)
+      (δ : ℝ) (hδ : 0 < δ) (Fmax : ℕ) (hF : Real.log (1 / δ) ≤ q * Fmax),
+      (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
+          ¬PooledGood lay k reg Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2) ≤
+          δ + ∑ i, e i + (Ex fun ω => ∑ i, cl z i ω (ω i)) + ∑ i, e' i) ∧
+        ∀ ω, {z | z ∈ Zs ∧
+            PooledGood lay k reg Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2}.encard ≤
+          Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
+            ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i)) : ℕ) :
+              ℕ∞) := by
   intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
-    schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
+    schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he cl hcl hcl0 q hq0 hq1 hesc hleak δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => encard_pooledGood_le lay k reg Dj sw Pw ρ op n b hb arr f tap run htrust cap Ss
     hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω) (fun z hz => hdz z hz ω)
     (fun z => W z ω) (fun z i => hWn z ω i) Fmax⟩
@@ -370,11 +408,27 @@ theorem pooledLeak : Guarantees.PooledLeakAccepted := by
       _ = Real.exp (Fmax * (-q)) := (Real.exp_nat_mul _ _).symm
       _ ≤ Real.exp (-Real.log (1 / δ)) := Real.exp_le_exp.2 (by nlinarith)
       _ = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
-  have h := pr_pooled_le (acc z) (hacc z) (W z) (hW z) e e' he q hq0 hq1 (hesc z hz)
+  have h := pr_pooled_ex_le (acc z) (hacc z) (W z) (hW z) e e' he (cl z) (hcl z) (hcl0 z) q hq0 hq1 (hesc z hz)
     (fun i ω => LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (run tap (schedOf z ω, srvOf z ω)).2 i))
       (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i))
     (hleak z hz) Fmax
   exact h.trans (by linarith)
+
+/-- **The leak through the network certifier over a monitoring period**: `Guarantees.PooledLeakAccepted`, which is
+`pooledLeak_charge` at the charge zero. -/
+theorem pooledLeak : Guarantees.PooledLeakAccepted := by
+  intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
+    schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
+  have h0 := pooledLeak_charge lay k reg Dj sw Pw ρ op n b hb arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf
+    hs dec hdz acc hacc W hW hWn e e' he (fun _ _ _ _ => 0) (fun _ _ _ _ _ => rfl) (fun _ _ _ _ => le_rfl) q hq0 hq1
+    (fun z hz i ω => by
+      simp only [Ex_const, add_zero]
+      exact hesc z hz i ω)
+    hleak δ hδ Fmax hF
+  refine ⟨fun z hz => ?_, h0.2⟩
+  have h1 := h0.1 z hz
+  simp only [Finset.sum_const_zero, Ex_const, add_zero] at h1
+  exact h1
 
 set_option linter.unusedVariables false in
 /-- **`PooledLeakAccepted` at operators fixed before the period**: its statement with window `i`'s operator `op i` one

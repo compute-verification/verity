@@ -24,9 +24,10 @@ What the sample gives at one execution phase, and the form the pooled bound take
   `(1 - q)^{|F|} + c`. It takes no knowledge soundness and no binding. `pr_acc_regX_le` and `pr_acc_regTwoX_le` are
   that bound at the trace read at the statement, at one stage and at two.
 * The monitoring period. `phasesMiss_of_scope` turns a bound at each statement in scope into the bound on each
-  phase's verdict that `NetTiming.pr_pooled_le` takes, the verifier refusing what is out of scope and reading the
-  first of the phase's coins (`pr_castLE`); `phasesMiss_of_event` is it at the trace with the registered openings from
-  any bound on each phase's event, and `phasesMiss_regX` at the trace read at the statement. `phaseAcc_prefix` and
+  phase's verdict that `NetTiming.pr_pooled_ex_le` takes, the verifier refusing what is out of scope and reading the
+  first of the phase's coins (`pr_castLE`); the bound's error `E z ω i` may read the secret and the period's coins, as
+  an error with a charge does. `phasesMiss_of_event` is it at the trace with the registered openings from any bound on
+  each phase's event, and `phasesMiss_regX` at the trace read at the statement. `phaseAcc_prefix` and
   `wreg_prefix`: a phase's verdict and its incorrect set read only the earlier phases' coins where its statement, its
   prover's strategy and its registered openings do.
 -/
@@ -212,17 +213,18 @@ theorem pr_castLE [Fintype Tp] {n : ℕ} (h : n ≤ kV) (f : Tp → (Fin n → C
   exact congrArg Ex (funext fun t => Claims.Sampling.Pr_comp_inj (Fin.castLE h) (Fin.castLE_injective h) (f t))
 
 /-- **The bound on each execution phase's verdict from a bound at each statement in scope**: the verifier refuses
-what is out of scope, so the bound is needed only in scope. Its conclusion is the form `NetTiming.pr_pooled_le` takes
-each phase's acceptance in. -/
+what is out of scope, so the bound is needed only in scope. The error `E z ω i` is any that is not negative; it may
+read the secret and the period's coins. Its conclusion is the form `NetTiming.pr_pooled_ex_le` takes each phase's
+acceptance in. -/
 theorem phasesMiss_of_scope [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled Coin A} (hS : ∀ y, (D y).Sessions H)
     (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
-    (W : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Finset ℕ) {q : ℝ} (hq1 : q ≤ 1) {e : Fin m → ℝ}
-    (he0 : ∀ i, 0 ≤ e i)
+    (W : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Finset ℕ) {q : ℝ} (hq1 : q ≤ 1)
+    (E : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → ℝ) (hE0 : ∀ z ω i, 0 ≤ E z ω i)
     (hphase : ∀ z ∈ Zs, ∀ i ω, (D (x z ω i)).Scope (x z ω i) →
       Pr (fun p : Tp × (Fin ((D (x z ω i)).V.k (x z ω i)) → Coin) =>
-        (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) p.1 p.2).out = .acc) ≤ (1 - q) ^ (W z ω i).card + e i) :
-    ∀ z ∈ Zs, ∀ i ω, Pr (phaseAcc H D x Pv hk z i ω) ≤ (1 - q) ^ (W z ω i).card + e i := by
+        (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) p.1 p.2).out = .acc) ≤ (1 - q) ^ (W z ω i).card + E z ω i) :
+    ∀ z ∈ Zs, ∀ i ω, Pr (phaseAcc H D x Pv hk z i ω) ≤ (1 - q) ^ (W z ω i).card + E z ω i := by
   intro z hz i ω
   by_cases hsc : (D (x z ω i)).Scope (x z ω i)
   · have hc : Pr (phaseAcc H D x Pv hk z i ω) =
@@ -238,7 +240,7 @@ theorem phasesMiss_of_scope [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled
           (fun j => c.2 (Fin.castLE (hk z ω i) j))).out = .acc := hc
       exact (hS (x z ω i)).refuses _ _ _ _ _ hc'
     have h1 := pow_nonneg (sub_nonneg.2 hq1) (W z ω i).card
-    have h2 := he0 i
+    have h2 := hE0 z ω i
     linarith
 
 /-- **The bound on each execution phase's verdict at the trace read at the statement**: at `KSRegX` and the sessions'
@@ -255,14 +257,14 @@ theorem phasesMiss_regX [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Msg �
     (he : ∀ z ∈ Zs, ∀ ω i, (D (x z ω i)).εregX H (x z ω i) (Pv z ω i) ≤ e i) :
     ∀ z ∈ Zs, ∀ i ω, Pr (phaseAcc H D x Pv hk z i ω) ≤
       (1 - q) ^ ((D (x z ω i)).FregX H (Pv z ω i) (x z ω i)).card + e i :=
-  phasesMiss_of_scope hS Zs x Pv hk (fun z ω i => (D (x z ω i)).FregX H (Pv z ω i) (x z ω i)) hq1 he0
-    fun z hz i ω hsc =>
+  phasesMiss_of_scope hS Zs x Pv hk (fun z ω i => (D (x z ω i)).FregX H (Pv z ω i) (x z ω i)) hq1 (fun _ _ i => e i)
+    (fun _ _ i => he0 i) fun z hz i ω hsc =>
       (pr_acc_regX_le (hS (x z ω i)) (hK (x z ω i)) hsc hq1 (fun s Pt hs hPt => hrate z hz ω i s Pt hs hPt) Tp
         (Pv z ω i)).trans (add_le_add le_rfl (he z hz ω i))
 
 /-- **The bound on each execution phase's verdict at the trace with the registered openings, from any bound on each
-phase's event**: `e i` bounds the probability that phase `i`'s run accepts with a sampled proof block of its `FregR`,
-at every statement in scope the period plays it with. -/
+phase's event**: `E z ω i`, not negative, bounds the probability that phase `i`'s run accepts with a sampled proof
+block of its `FregR`, at every statement in scope the period plays it with. -/
 theorem phasesMiss_of_event [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Msg → Compiled Coin A}
     (hS : ∀ y, (D y).Sessions H) (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
@@ -270,14 +272,14 @@ theorem phasesMiss_of_event [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Ms
     {q : ℝ} (hq1 : q ≤ 1)
     (hrate : ∀ z ∈ Zs, ∀ ω i s Pt, (D (x z ω i)).parse (x z ω i) = some s →
       (D (x z ω i)).partition s = some Pt → RateAt s Pt q)
-    {e : Fin m → ℝ} (he0 : ∀ i, 0 ≤ e i)
+    (E : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → ℝ) (hE0 : ∀ z ω i, 0 ≤ E z ω i)
     (hev : ∀ z ∈ Zs, ∀ ω i, (D (x z ω i)).Scope (x z ω i) →
       Pr (fun p : Tp × (Fin ((D (x z ω i)).V.k (x z ω i)) → Coin) =>
         (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) p.1 p.2).out = .acc ∧
           ∃ u ∈ (D (x z ω i)).checked (x z ω i) p.2,
-            u ∈ FregR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i)) ≤ e i) :
-    ∀ z ∈ Zs, ∀ i ω, Pr (phaseAcc H D x Pv hk z i ω) ≤ (1 - q) ^ (WregR H D x Pv ops z ω i).card + e i :=
-  phasesMiss_of_scope hS Zs x Pv hk (WregR H D x Pv ops) hq1 he0 fun z hz i ω hsc =>
+            u ∈ FregR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i)) ≤ E z ω i) :
+    ∀ z ∈ Zs, ∀ i ω, Pr (phaseAcc H D x Pv hk z i ω) ≤ (1 - q) ^ (WregR H D x Pv ops z ω i).card + E z ω i :=
+  phasesMiss_of_scope hS Zs x Pv hk (WregR H D x Pv ops) hq1 E hE0 fun z hz i ω hsc =>
     pr_acc_of_event (hS (x z ω i)) hsc hq1 (fun s Pt hs hPt => hrate z hz ω i s Pt hs hPt) Tp (Pv z ω i)
       (FregR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i))
       (fregR_lt H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i)) (hev z hz ω i hsc)
