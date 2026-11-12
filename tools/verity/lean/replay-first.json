@@ -4,17 +4,17 @@
     "security/Proofs": [
       {
         "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Gram",
-        "threads": 6,
+        "threads": 4,
         "why": "Each of its theorems is one kernel computation over a whole test vector, which holds its memory until it ends. The replay gives every declaration a task of its own, so at the replay's threads it would hold all of them at once; at these threads it holds no more than the rest of the replay does."
       },
       {
         "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Fa",
-        "threads": 6,
+        "threads": 8,
         "why": "As Noise.Gram: each theorem is one kernel computation over a whole test vector."
       },
       {
         "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Fb",
-        "threads": 6,
+        "threads": 8,
         "why": "As Noise.Gram: each theorem is one kernel computation over a whole test vector."
       }
     ]
