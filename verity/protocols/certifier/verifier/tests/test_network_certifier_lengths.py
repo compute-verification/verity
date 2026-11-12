@@ -13,7 +13,7 @@ from verity.protocols.certifier.verifier import connection_rows as CR
 from verity.protocols.certifier.verifier import io_request as Q
 from verity.protocols.certifier.verifier import io_tie as IT
 from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD, id_request
+from verity.protocols.certifier.verifier.active import DATA, HEADER, ID_DIGITS, ID_REQUEST_HEAD, PAD, id_request
 from verity.protocols.certifier.verifier.tests.test_network_certifier_warden import EOF, reasons, records, request, run
 from verity.protocols.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, WardenParams,
                                                     audit, cells, read_reason, reason_frame)
@@ -314,16 +314,33 @@ def read_as_requests(warden, ordinal: int) -> tuple[int, int] | None:
     return carry
 
 
+def with_body(body: bytes) -> bytes:
+    """An id request's head before `body`, with that body's length as its content-length."""
+    return ID_REQUEST_HEAD + b"%*d" % (ID_DIGITS, len(body)) + b"\r\n\r\n" + body
+
+
 def no_id_requests() -> dict[str, tuple[bytes, int]]:
     """Requests that are no canonical id request in the network certifier's cells, each with the cells the ingress
-    proof block still reads as a request's before the one it refuses."""
+    proof block still reads as a request's before the one it refuses. Among them: a request without `max_tokens` at
+    its place, and one with an `ignore_eos` key, each with the content-length of its own body."""
     long, linked = id_req(2, 40), id_request(model="m", user="user-2", prompt=[2000 + k for k in range(40)],
                                              max_tokens=8, seed=2, temperature=0.7, top_p=0.95, frame_bytes=B)
     assert len(cells(long, B)) == 2 * B and len(long) > P and linked != long
     at = long.index(b",", P + 5) + 5
     length = b"%*d" % (10, len(long) - Q.BODY_AT)
     assert long.count(length) == 1
-    return {"bytes": (request(300, 5), 0),
+    short = id_req(2, 3)
+    body, asks, said = short[Q.BODY_AT:], b'{"max_tokens":         8,', b',"stop":[],"stream":true'
+    assert with_body(body) == short and body.startswith(asks) and body.count(said) == 1 and body.endswith(b"]}")
+    return {"no max_tokens": (with_body(b"{" + body[len(asks):]), 0),
+            "its max_tokens after another key": (
+                with_body(b'{"temperature":0.700000,"max_tokens":         8' + body[body.index(b',"top_p"'):]), 0),
+            "a max_tokens that is no number": (short.replace(asks, b'{"max_tokens":      null,'), 0),
+            "an ignore_eos key": (with_body(body.replace(said, said + b',"ignore_eos":true')), 0),
+            "an ignore_eos key where its stop and stream are": (
+                short.replace(said, b',"ignore_eos":true,"x":1'), 0),
+            "an ignore_eos key after its prompt": (with_body(body[:-1] + b',"ignore_eos":true}'), 0),
+            "bytes": (request(300, 5), 0),
             "a name that needs an escape": (id_req(2, 3, model='a "b"'), 0),
             "an id that is no number": (long[:at] + b"x" + long[at + 1:], 1),
             "another length than its head says": (long.replace(length, b"%*d" % (10, len(long) - Q.BODY_AT + 1)), 1),
