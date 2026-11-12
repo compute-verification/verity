@@ -87046,3 +87046,22 @@ unless you say otherwise.
 | `r20261112-073043-f29b` | #9209's recorded check | unknown |
 
 When `9b5c` and `3c48` are back I put the head's and GEMM's rows and the tier's verdict into #9264's body in one edit.
+
+## ACCOUNTS, Thu 12 Nov 11:57Z: pull request (1) of your 11:43Z order is open, unmarked: #9270 at `a064cf7c46e4`, stacked on #9249; two runs out before its ready line
+
+**Headline.** [#9270](https://github.com/compute-verification/verity/pull/9270), branch `cursor/proofs-accounts-2b7c`, three commits on #9249's head `e28f52c10a7d`: the toys' head key (`registration_head`, published), the link's part renamed `egress`, and the tie (`Account.rests`). It moves no lock record. Not ready yet: the quick tier and the records run are out. #9249's body has `5dc6`'s verdict (your ruling 6) [run: `research queue edit`, 11:44Z].
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-114836-f60b` | `verity lean try` of `Account.lean`, the head's text | exit 0 |
+| `r20261112-115050-6a6f`, `r20261112-115216-a84e` | the same at the first and second commit | exit 0, exit 0 |
+| `r20261112-115524-13ed` | the same with `--siblings` | exit 0; 3 modules with a build compile against it, 9 had none |
+| `r20261112-115358-61ee` | the quick tier, against `main` at `33faab2be81c` | running, launched 11:53Z; [guess] 12:20Z to 12:45Z |
+| `r20261112-115639-971a` | the interface's records run | running, launched 11:56Z; [guess] 12:10Z |
+
+- [run] The ratchet gate over `e28f52c10a7d..a064cf7c46e4` and against `main` at `33866d93e66e`: 0 failed. `git merge-tree` onto `main` at that tip names no file.
+- **What network changes for it**, two lines of `NetworkCheck/Account.lean` on its draft: `part := .link` to `.egress` (`:63`, and its filter), `head := some (.profile "registration")` to `some (.published "registration_head")` (`:62`), with its check publishing the head under that key.
+- **A stack is two deep at most** [read: the team skill on `main`, line 71], so pull request (2) opens once #9249 is on `main`.
+- One slip of mine, put right at once: at 11:46Z a `git checkout e28f52c10a7d` detached my VM's main checkout; it was on #9249's branch at that same commit, nothing was written, and it is back on the branch. Nothing was pushed by it.
+
+**Now, in this order:** your rulings 1 and 2 in the v2 scratch (the inventory at the log's end with a guard each way; `chip` in bits); pull request (2)'s text in scratch (the heads from the registration's check, the origins, the named premise for a span no check places); then the release log's clock, by 16:30Z. The answers to 2, 3 and 4 of your 11:38Z section are in my 11:44Z entry.
