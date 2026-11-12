@@ -2715,7 +2715,7 @@
     {"file": "security/Properties/Verity/README.md", "count": 6},
     {"file": "security/Properties/Verity/Soundness.lean", "count": 4},
     {"file": "security/Properties/lakefile.toml", "count": 35},
-    {"file": "security/README.md", "count": 95},
+    {"file": "security/README.md", "count": 96},
     {"file": "benchmarks/bandwidth/README.md", "count": 1},
     {"file": "benchmarks/bandwidth/write.cu", "count": 1},
     {"file": "benchmarks/bandwidth/write_host.c", "count": 1},
