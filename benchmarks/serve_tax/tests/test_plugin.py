@@ -65,6 +65,63 @@ def test_the_gate_adds_in_release_order_and_the_trace_sees_that_order(tmp_path):
     done[0].uninstall()
 
 
+def stops(request: Request) -> str | None:
+    """Why vLLM's scheduler stops a request at its last output id (its ``check_stop``): the parameters'
+    end-of-sequence id, one of their stop ids, or the request's length."""
+    params, out = request.sampling_params, request.output_token_ids
+    if out[-1] == params.eos_token_id:
+        return "eos"
+    if out[-1] in (params.stop_token_ids or ()):
+        return "stop"
+    return "length" if len(out) >= params.max_tokens else None
+
+
+class Params(NS):
+    """vLLM's sampling parameters as far as its stop rule reads them: the end-of-sequence id is a property of a
+    private field."""
+
+    @property
+    def eos_token_id(self):
+        return self._eos_token_id
+
+
+def test_to_length_holds_a_request_sent_without_ignore_eos_to_its_max_tokens_as_one_sent_with_it(tmp_path):
+    """A request as vLLM's front end makes one sent without ``ignore_eos`` (the tokenizer's end-of-sequence id, and
+    the generation config's as stop ids) stops at either; under ``to_length`` the scheduler gets it with the
+    parameters of the same request sent with ``ignore_eos``, and it stops at its length alone. A request with no
+    sampling parameters passes untouched, and an arm without the change leaves every request as it came."""
+    def request(ignore_eos: bool) -> Request:
+        r = Request("r", [1, 2])
+        r.sampling_params = Params(temperature=0.0, max_tokens=4, ignore_eos=ignore_eos, _eos_token_id=None if ignore_eos
+                                   else 7, stop_token_ids=[] if ignore_eos else [8, 9], _all_stop_token_ids={7, 8, 9})
+        return r
+
+    def run(r: Request, ids: list[int]) -> tuple[int, str]:
+        for n in range(1, len(ids) + 1):
+            r.output_token_ids = ids[:n]
+            if why := stops(r):
+                return n, why
+        raise AssertionError("never stopped")
+
+    ids = [5, 7, 8, 9, 6]
+    assert run(request(False), ids) == (2, "eos") and run(request(False), [5, 8, 7]) == (2, "stop")
+    assert run(request(True), ids) == (4, "length")
+    sched = Scheduler()
+    (hooks,) = P.install(sched, {"out": str(tmp_path), "to_length": True})
+    came, pooled = request(False), Request("p", [3])
+    pooled.sampling_params = None
+    sched.add_request(came)
+    sched.add_request(pooled)
+    assert sched.order == ["r", "p"] and run(came, ids) == (4, "length") and pooled.sampling_params is None
+    assert vars(came.sampling_params) == vars(request(True).sampling_params)
+    hooks.uninstall()
+    plain, same = Scheduler(), request(False)
+    (hooks,) = P.install(plain, {"out": str(tmp_path)})
+    plain.add_request(same)
+    assert run(same, ids) == (2, "eos")
+    hooks.uninstall()
+
+
 def test_a_missing_number_is_skipped_after_its_hold_and_a_held_abort_never_reaches_the_scheduler():
     sched, now = Scheduler(), [0.0]
     gate = P.ReleaseGate(sched.add_request, lambda ids: sched.finish_requests(ids, "aborted"), key=P.release_key,

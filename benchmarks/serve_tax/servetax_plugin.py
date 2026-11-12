@@ -4,6 +4,8 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), its
   records stamped with the wall clock and written by a thread of its own to ``step_trace.PID.jsonl``;
+- ``to_length``: each request decoded to its ``max_tokens`` (`to_length`), as vLLM decodes one sent with
+  ``ignore_eos``, for requests that come through the network certifier, whose id request has no such field;
 - ``release_order``: `ReleaseGate`, the requests added to the scheduler in the certifier's release order
   (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
   numbers them, standing in for the certifier's headers);
@@ -62,6 +64,21 @@ def config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
     if not isinstance(cfg, dict) or not cfg.get("out"):
         raise ValueError(f"{ENV}: a JSON object with out and the changes to make, not {raw[:80]!r}")
     return cfg
+
+
+def to_length(request: Any) -> None:
+    """Hold a request to its ``max_tokens``, as vLLM holds one sent with ``ignore_eos``: its sampling parameters say
+    so, name no end-of-sequence id, and keep no stop id. vLLM's scheduler stops a request at the parameters'
+    end-of-sequence id, at one of their stop ids, or at its length; for a request sent without ``ignore_eos`` its
+    front end sets the first to the tokenizer's and adds the generation config's to the second. The canonical id
+    request has no ``ignore_eos`` and no stop ids of its own, so with both cleared a request that came as one stops
+    where the same request sent to vLLM itself with ``ignore_eos`` stops, at its length. A request without sampling
+    parameters (pooling) is left as it is."""
+    params = getattr(request, "sampling_params", None)
+    if params is not None:
+        params.ignore_eos = True
+        params._eos_token_id = None
+        params.stop_token_ids = []
 
 
 class ReleaseGate:
@@ -596,8 +613,9 @@ def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[
 
 
 def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
-    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the tokens' commit and the
-    boundary commitment, then the release gate (outside them, so that they see a request when the gate adds it)."""
+    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then each request's hold to its
+    length, the tokens' commit and the boundary commitment, then the release gate (outside them, so that they see a
+    request when the gate adds it)."""
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 
@@ -608,6 +626,14 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         trace = StepTrace(out / f"step_trace.{pid}.jsonl", clock=time.time, writer=True).install(sched)
         done.append(trace)
     hooks = Hooks(tag="serve-tax")
+    if cfg.get("to_length"):
+        def held(orig):
+            def wrapped(request, *a, **kw):
+                to_length(request)
+                return orig(request, *a, **kw)
+            return wrapped
+
+        hooks.wrap(sched, "add_request", held)
     if cfg.get("tokens"):
         tc = TokenCommit(float(cfg.get("window_s", 600)), _lines(out / f"tokens.{pid}.jsonl"))
 
