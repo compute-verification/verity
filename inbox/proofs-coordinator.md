@@ -98196,3 +98196,62 @@ whole at `main` `30d6fcc92ff7`: seven Lean tries with `FlockVerify.lean` among t
 suite), `r20261112-182303-e169` (#9253 in), `r20261112-182335-606d` (#9091 in), `r20261112-171809-f6bf`. Ends [guess]:
 the tries of `e169` and `606d` by 20:10Z and their suites by 20:40Z; `9fdd`'s tries by 20:20Z and its suites by
 21:10Z; `f6bf` was at 116 of 125 at 18:50Z and has not ended, which is longer than I expected; I read why next.
+
+## GATHER, Thu 12 Nov 19:44Z: the two pieces are pushed, `cursor/proofs-gather-served-select-b88b` at `08528b27dcc8`: tree 1 with #9075's head merged (no stop), the interior's layout for the 20 templates, the stand-in serve's check, and one change the layout needed in the driver; both rehearsals are in pool lines; with the return port in, the stand-in's class commits its return and round 2 derives the return link
+
+**The branch** [run: `git push`, 19:36:09Z]. `cursor/proofs-gather-served-select-b88b` at `08528b27dcc8c29d854f96d650073be8243af0e0` (tree `5ae876ae0d25`). It never lands as it is: its base is STOPS' tree 1, a scratch merge. Four commits on `64dc9e6158bb`:
+
+| commit | what | files |
+|---|---|---|
+| `1e06774f4ec9` | merge of #9075's head `cbe0bcdd160d` | #9075's own 16 files |
+| `a3e30e055561` | piece 1, the interior's layout: `interior_rows.pieces` lays a `GreedySelect_v1{V,N}` span out as one unit of each of its K templates a token | `adapters/vllm/verity_vllm/pipeline/interior_rows.py` (+42 −9), `adapters/vllm/tests/pipeline/test_interior_rows.py` (+50 −1) |
+| `e187fe56dab9` | what the layout needs of the driver: a class's design carries its replay block's rows and hands them to the interior | `benchmarks/one_stage/two_stage.py` (+9 −6) |
+| `08528b27dcc8` | piece 2, the stand-in serve's check: `two_stage_small.py serve --units K` makes the check `GreedySelect_v1{V, N=V / K}` | `benchmarks/one_stage/two_stage_small.py` (+31 −16), `two_stage_small.sh` (+3, its header), `benchmarks/one_stage/tests/test_two_stage_second.py` (+50) |
+
+**Whose files** [read: `git log --first-parent origin/main -- FILE`]. All six are the vLLM lane's by origin. `interior_rows.py` and its test are the adapter's. The driver `two_stage.py`, the rehearsal `two_stage_small.py` and `.sh`, and `test_two_stage_second.py` came to `main` with the vLLM lane's #8875; the proofs lane has changed the driver since (#9116, and the mend #9237 on this tree). Nothing of ours (no Lean, no lock, no Definition, no pin) is touched by the three commits.
+
+**Every stop.**
+
+1. [run: `git merge --no-ff --no-commit cbe0bcdd160d` on `64dc9e6158bb`, 19:20Z] The merge of #9075's head met no stop: 16 files, two merged by git without a stop (`serving_templates.py`, the difftest's test file), no file by hand.
+2. [read] The pieces are no longer in a checkout: my development tree was lost with the VM. What survived is its diff against the rehearsal branch, 177 lines, kept with the run's records. It did not apply to tree 1 as it stood, for four reasons, each resolved by hand:
+   - [read] its `pieces` hunk replaced a branch for a select by units of another design (`TokenSelectUnits_v1`), which the rehearsal branch had and tree 1 does not. I wrote the hunk onto tree 1's `pieces`: the `GreedySelect_v1` case is taken first and `TokenSelect_v4`'s lines are unchanged.
+   - [read] tree 1's `pieces` refuses a replay that selected other ids by how many differ and never by an id (an id is a served value). The development tree printed ids. The new case follows tree 1's rule.
+   - [run: `gh pr view 9121`, merged 07:25Z] its `a5.wiring_negatives` hunk is already in tree 1 (it is #9121's, on `main`). Dropped.
+   - [read] tree 1's `two_stage_small.py` has no `--units` flag (it was the other design's, in the rehearsal branch). Added, with the class's return (below).
+3. [run: the new test, first try, 19:25Z] **The one stop in the code.** On tree 1 the interior's window refuses a wired port whose writer has more than one unit a replay block unless it is given the block's rows (`interior_links.wired`: "nothing says which each of its units reads: give the replay block's rows"). That came with the long row's interior (#8707, on `main` since 17:41Z [run: `gh pr view 8707`]), which the development tree did not have. The 20-unit design is such a block: the combine's 19 wired rows each read a chunk template that has one unit a served token. The driver's `Design` held the wires and not the rows, so `replayed` stopped before anything was committed. Resolution, `e187fe56dab9`: `Design.rows` is `second_stage.replay_rows` of the block, handed to `interior_window` and to `interior`. Round 2 already read the same rows (`round_two`). [derived] Every 20-unit class needs this change on `main` as it is today; it is the vLLM lane's file.
+
+**Local tests at the head** [run, 19:41Z; a named file each, on the VM; log `local-tests-08528b27dcc8.log`]:
+- `adapters/vllm/tests/pipeline/test_interior_rows.py -k pieces`: 8 passed. The new one holds each chunk's row and output and the combine's rows and output to their Definitions by the reference evaluator, at K = 20 (V = 160) and K = 4, on random words and on NaN, ±0, ±inf and ties across chunks.
+- `benchmarks/one_stage/tests/test_two_stage_second.py`, the new test and four of the driver's old ones: 5 passed. The new one runs an inlined class at K = 4 through `first`, `resume` and `replayed`, then holds the hand-over to round 2 without the sessions: no code. [run, 19:26Z to 19:32Z] The same test at K = 20 and V = 1,280 passed in 362 s; I committed it at K = 4 (16 s) since a test that long needs a reason a cheaper one lacks.
+- [run, 19:36Z] At GLM-5.3's vocabulary, on the VM: the reference evaluator on `GreedySelect_v1{V=154880,N=7744}` takes 3.0 s a token and agrees with `greedy_stages.twin`; the class's design is 20 templates, 19 wires, 20 links to the block's `logits`, one return.
+
+**What in this tree is a stand-in that the real serve does not have.**
+
+- [read: `two_stage_small.py`] No engine and no model. A span's logits are random 16-bit words, and its ids are what the check's Definition selects from them, so "the replay selected the ids the serve emitted" holds by construction. A real serve's ids are the engine's sampler's, and must equal `GreedySelect_v1` on the captured logits, NaN and ties included.
+- [read] The class is written by `boundary_rows.commit` and `write` from a script, not by the serve's `BoundaryWindows`: one class, 6 spans, a prompt of 3 ids, `per_prompt` 0 and `per_output` 1 (the replay block is the check's instances, one a served token, and nothing else), no history tables, no stop rule.
+- [read] The capture is `sampler_capture.write` from the same random rows, laid out on the host by `interior_rows.captured` and `pieces`. The serve's path on the logits' device (`sampler_capture.piece_rows`) has no case for the 20 templates; the next entry says what it needs.
+- [read: `two_stage_small.sh`] Both stages' coins are from a local challenger session (`--challenger local`), not from a challenger host's gate. The first stage's rule is fixed at `rate:2/6` with one proof block sampled in each (replay block, template) cell.
+- [read] The reference statements are made inside the run, so it is a development run (VLLM-375 not landed), and its `second` verdict is a rehearsal's (PRF-583 not landed).
+- [read: `SecondStage.lean:149`, `second_stage.py:90`] The two-stage form's switch is off, as on `main`: the last line of a run that holds is `two-stage-form`.
+- [read] The tree itself: `main` at `99b81651cc4c`, the mend's head (#9237), the return port (#9082's earlier merge) and #9075's head, none of the three on `main` at 19:40Z [run: `git merge-base --is-ancestor`, `main` at `74dd339a10f1`].
+
+**The return (your first question): yes to both, on this tree.**
+
+- [run: `design-probe-2560.log`, 19:41Z; and at 154,880, 19:36Z] With the return port in, the stand-in's inlined class of the 20 units commits its block's return as ids: `Layout.return_rows` is (O rows a block, 32 bits a row) and its port is `o0`. `Layout.return_rows` accepts a class of ids only where round 2 derives exactly one return link, from one template whose output is 32 bits, one unit an output, in output order; the 20-unit design passes that check. The link round 2 derives is from `GreedyCombine_v2{V,N}`'s `o0`, unit j of a block writing row j of the port.
+- [run: the new test] Round 2 then takes the hand-over with no code, the combine's `o0` read at round 1's rows; and with that port read at the interior's own rows instead, as a record without the port leaves it, round 2 refuses at the combine's statement, `second-read`, statement K − 1. That is `17b9`'s ending, now explained by the missing port and removed by it.
+- [read: `two_stage_small.py`, the layout] In the stand-in this is one argument: `ids` is true for a class of whole instances and for an inlined class of the greedy select in units, false for an inlined `TokenSelect_v4`, which round 2 derives no return link from.
+- [read: `boundary_windows.py:120-136`] **For the real serve nothing is missing in the files I read, but it is a configuration the serve must set**: `BoundaryWindows.of` reads `check`, `inline` and `ids` from the serve's configuration and passes them to `Layout`. A serve whose configuration says `"check": "GreedySelect_v1{V=154880,N=7744}"`, `"inline": true`, `"ids": true` commits the return; one that leaves `ids` out commits none and ends on `second-read`. Which file sets that configuration for Friday's serve I have not yet traced; the next entry.
+
+**The rehearsals, launched** [run]. Both `bash benchmarks/one_stage/two_stage_small.sh`, `--cwd clone`, at `08528b27dcc8`, the class inlined by its 20 units and `second` linked (no `--unlinked`):
+
+- `r20261112-193700-5a5c`, vy-nebius-cpu-8's pool, 16 CPUs, 64 GB, `SMALL_ARGS="--inline --units 20 --v 2560"`. Launched 19:37Z; waiting for a slot at 19:39Z.
+- `r20261112-193739-c30d`, vy-nebius-cpu-7's pool, 16 CPUs, 96 GB, `SMALL_ARGS="--inline --units 20 --v 154880 --outputs 2"`. Launched 19:37Z; waiting at 19:39Z.
+- `r20261112-193819-8a02`, vy-nebius-cpu-5's pool, the driver's own tests on the branch (`suites.py --fresh benchmarks/one_stage -- -k two_stage`, `--cwd source`). Launched 19:38Z; waiting at 19:39Z.
+- ETA [guess: STOPS' runs took 25 to 35 minutes to a slot today, the build is about 9 minutes, and `17b9`'s 20 sessions at 2,560 took a few minutes]: the small one's end by about 20:30Z, the large one's by about 21:00Z. Expected of each if it holds: exit 0, round 2 no code, the outcome refused by `two-stage-form` alone, `held` true.
+
+**Next from me:** the engine's side and the shape, by reading, in the next entry; each run's verdict when it ends; the pull request after 21:00Z unless you write that vllm said no.
+
+**One thing about the pull request's base, for you to rule on before 21:00Z.** #9075 is not on `main` at 19:40Z. You asked for a base that shows only the two pieces, #9075's branch if #9075 is not on `main`. [run: `git show cbe0bcdd160d:FILE`, `git show origin/main:FILE`, 19:43:55Z] The pieces as they ran read two names #9075's head does not have: `Layout.ids`, which only the return port brings (#9082, open, its head now `b39caa2b3e01`), and the interior's `rows` argument, which is on `main` since 17:41Z and not in #9075's head (its last merge of `main` is earlier). So a pull request against #9075's branch cannot hold the pieces as they ran. Two ways:
+
+- **(a) what I do at 21:00Z unless you say otherwise:** a base branch of my own at `1e06774f4ec9` (tree 1 with #9075's head merged, nothing else) and the pull request from `cursor/proofs-gather-served-select-b88b` against it. It shows the three commits and six files, exactly what the rehearsals run, and it is plainly not landable: its body says it is for the vLLM lane's read, that it sits on #9075, the mend and the return port, and that it is made again on `main` when those three are there.
+- **(b)** the three commits adapted to #9075's head: the layout whole, the stand-in's check without the return and the driver's change left out. It could land after #9075, but it is `17b9`'s tree again (`second-read` at the combine), not the tree that reaches the last withheld accept, and its test would assert an ending the return port then changes.
