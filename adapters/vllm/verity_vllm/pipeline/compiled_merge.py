@@ -12,6 +12,7 @@ import statistics
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from verity_vllm.config import option
 
@@ -24,6 +25,36 @@ def _rows(p: Path) -> list[dict]:
 def _json(p: Path, name: str) -> dict:
     f = p / name
     return json.loads(f.read_text()) if f.exists() else {}
+
+
+def _generated_kernels(compilation: dict) -> dict:
+    """What a process's compilation says of the kernels Inductor generated for it; nothing where it identified none."""
+    generated = compilation.get("generated_kernels")
+    return generated if generated else {}
+
+
+def _kernel_sources(generated: dict) -> dict:
+    """Each generated kernel's source digest by its name; none where the process listed no kernel by name."""
+    kernels = generated.get("kernels")
+    return kernels if kernels else {}
+
+
+def _commit_of(run: dict) -> dict:
+    """A run's Commit record; an empty one for a run that made none."""
+    commit = run.get("commit")
+    return commit if commit else {}
+
+
+def _commit_part(run: dict, part: str, field: str) -> Any:
+    """One field of a part of a run's Commit record (its openings' `verified`); None where the record has no such part."""
+    block = _commit_of(run).get(part)
+    return block.get(field) if block else None
+
+
+def _run_roots(verdict: dict) -> list:
+    """The run roots a process's verdict lists; none where it lists none."""
+    roots = verdict.get("run_roots")
+    return list(roots) if roots else []
 
 
 def _bootstrap_ci(xs: list[float], n: int = 4000, *, seed: int) -> tuple[float, float]:
@@ -83,10 +114,10 @@ def main(a: Options) -> None:
     # the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over
     # {(name, source sha256)}) and the per-piece launch programs.  The treatment's wrappers carry its hooks' lines, so its launch
     # programs (call_set) legitimately differ; its KERNEL SET must equal the control's, and a difference is listed kernel by kernel.
-    gkc, gkt = cc.get("generated_kernels") or {}, ct.get("generated_kernels") or {}
+    gkc, gkt = _generated_kernels(cc), _generated_kernels(ct)
     kernels_identified = bool(gkc.get("kernel_set_sha256")) and bool(gkt.get("kernel_set_sha256"))
     kernel_set_equal = kernels_identified and gkc.get("kernel_set_sha256") == gkt.get("kernel_set_sha256")
-    kc, kt = gkc.get("kernels") or {}, gkt.get("kernels") or {}
+    kc, kt = _kernel_sources(gkc), _kernel_sources(gkt)
     kernel_diff = {"only_control": sorted(set(kc) - set(kt))[:40], "only_treatment": sorted(set(kt) - set(kc))[:40],
                    "same_name_different_source": sorted(k for k in set(kc) & set(kt) if kc[k] != kt[k])[:40]} if kernels_identified else None
     # served: the Build of record is derived from the treatment's own Inductor artifact and rebuilt after its runs (manifest_verify); the
@@ -108,16 +139,16 @@ def main(a: Options) -> None:
         pairs.append({"pair": i, "control_wall_s": c["wall_s"], "treatment_wall_s": t["wall_s"], "delta_wall_s": t["wall_s"] - c["wall_s"],
                       "control_decode_mean_s": c.get("step_wall_decode_mean_s"), "treatment_decode_mean_s": t.get("step_wall_decode_mean_s"),
                       "control_prefill_s": c.get("step_wall_prefill_s"), "treatment_prefill_s": t.get("step_wall_prefill_s"),
-                      "commit_pass": (t.get("commit") or {}).get("commit_pass"), "run_root": (t.get("commit") or {}).get("run_root")})
+                      "commit_pass": _commit_of(t).get("commit_pass"), "run_root": _commit_of(t).get("run_root")})
     deltas = [p["delta_wall_s"] for p in pairs]
     ratio = [p["treatment_wall_s"] / p["control_wall_s"] for p in pairs if p["control_wall_s"]]
     lo, hi = _bootstrap_ci(deltas, seed=0)
-    commit_pass = bool(trt) and all(bool((r.get("commit") or {}).get("commit_pass")) for r in trt) and not problems
-    fail_reasons = [(r.get("commit") or {}).get("commit_fail_reason") for r in trt if not (r.get("commit") or {}).get("commit_pass")]
+    commit_pass = bool(trt) and all(bool(_commit_of(r).get("commit_pass")) for r in trt) and not problems
+    fail_reasons = [_commit_of(r).get("commit_fail_reason") for r in trt if not _commit_of(r).get("commit_pass")]
     tv = _json(T, "verdict.json")
     for X in Ts[1:]:
         v2 = _json(X, "verdict.json")
-        tv["run_roots"] = list(tv.get("run_roots") or []) + list(v2.get("run_roots") or [])
+        tv["run_roots"] = _run_roots(tv) + _run_roots(v2)
         tv["runs_instrumented"] = int(tv.get("runs_instrumented") or 0) + int(v2.get("runs_instrumented") or 0)
         tv["runs_failed"] = int(tv.get("runs_failed") or 0) + int(v2.get("runs_failed") or 0)
     summary = {
@@ -138,11 +169,11 @@ def main(a: Options) -> None:
         "prefill_control_s": statistics.fmean([p["control_prefill_s"] for p in pairs if p["control_prefill_s"]]) if pairs else None,
         "prefill_treatment_s": statistics.fmean([p["treatment_prefill_s"] for p in pairs if p["treatment_prefill_s"]]) if pairs else None,
         "per_pair": pairs, "commit_pass": commit_pass, "commit_fail_reasons": fail_reasons, "problems": problems,
-        "openings_verified": [((r.get("commit") or {}).get("openings") or {}).get("verified") for r in trt],
-        "coverage": [((r.get("commit") or {}).get("coverage") or {}).get("ok") for r in trt],
-        "value_correspondence": [((r.get("commit") or {}).get("value_correspondence") or {}).get("result") for r in trt],
-        "compiled_source": [((r.get("commit") or {}).get("compiled_source") or {}).get("stats") for r in trt],
-        "run_roots": [(r.get("commit") or {}).get("run_root") for r in trt],
+        "openings_verified": [_commit_part(r, "openings", "verified") for r in trt],
+        "coverage": [_commit_part(r, "coverage", "ok") for r in trt],
+        "value_correspondence": [_commit_part(r, "value_correspondence", "result") for r in trt],
+        "compiled_source": [_commit_part(r, "compiled_source", "stats") for r in trt],
+        "run_roots": [_commit_of(r).get("run_root") for r in trt],
         "treatment_verdict": tv, "versions": vt, "versions_control": vc,
     }
     md = [f"### Execution=compiled paired Commit ({n} pairs over {rounds} alternating round(s); control/treatment separate processes, same compilation settings: {summary['compilation_settings_equal']})",
