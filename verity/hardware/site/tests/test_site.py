@@ -240,6 +240,14 @@ CARD_FILE = {"sku": "sim-file", "sm": {"count": _entry(2)}, "clock": {"sm": _ent
 """A card file's table as `verity.hardware.cards.load(sku)` returns it, with the entries `Sheet.of_file` reads."""
 
 
+def test_a_sheet_reads_the_memory_a_program_gets() -> None:
+    """A card file's second reading of device memory and the caches only a run found are not the sheet's: its `mem`
+    is `store.dram`, and its `chip` the registers', shared memory's and L2's."""
+    more = {"dram_installed": _entry(24 << 30), "l15": _entry(147456), "l1i": _entry(65536), "l0i": _entry(24576),
+            "const_l0": _entry(12288)}
+    assert Sheet.of_file({**CARD_FILE, "store": {**CARD_FILE["store"], **more}}) == Sheet.of_file(CARD_FILE)
+
+
 def test_a_sheet_from_its_card_file() -> None:
     """The clock is 1.53 GHz, and every class's peak rate 2 SMs x 1024 MACs a clock at it. At a nanosecond tick that is
     3133.44 MACs, rounded up; 1.23456e12 B/s is 9876.48 bits, rounded up; on-chip state is the registers', shared
