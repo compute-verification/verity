@@ -259,6 +259,49 @@ def test_a_sheet_from_its_card_file() -> None:
     assert refusal(log, over, auditor) == "capacity"
 
 
+NODE_FILE = {"node": "sim-file-x2", "device": {"sku": "sim-file", "count": _entry(2)}, "host": {"sku": "sim-host"},
+             "memory": {"dram": {"tier": "dram", "bytes": _entry(1 << 39)},
+                        "vda": {"tier": "disk", "bytes": _entry(1 << 40)}}}
+"""A node file's table as `verity.hardware.nodes.load(kind)` returns it: two devices of the card file's SKU, and the
+host's DRAM and one disk."""
+
+
+def test_a_nodes_entry_from_its_files() -> None:
+    """The entry holds the card's sheet, the site, the host under the id its caller gives, each device with one `hbm`
+    leaf at the sheet's device memory, whole, and the host's own leaves in the file's order. A second node on the same
+    log adds neither the sheet nor the site again. Remote accepts both; onsite refuses the entry by `challenger-reach`
+    until a memory challenger links to the host."""
+    sheet, auditor = Sheet.of_file(CARD_FILE), Auditor.of_files([CARD_FILE], TOLERANCE, {"chal0": ""})
+    log = Registration("remote")
+    first = log.node_entry(NODE_FILE, CARD_FILE, "n0", "site0")
+    hbm = {"tier": "hbm", "bytes": 16 << 30}
+    assert first == log.entry([sheet], [
+        Loc("site0", "site"), Loc("n0", "host", "site0"),
+        Loc("n0/gpu0", "device", "n0", sheet=sheet.digest()), Loc("n0/gpu0/hbm", "memory", "n0/gpu0", **hbm),
+        Loc("n0/gpu1", "device", "n0", sheet=sheet.digest()), Loc("n0/gpu1/hbm", "memory", "n0/gpu1", **hbm),
+        Loc("n0/dram", "memory", "n0", tier="dram", bytes=1 << 39),
+        Loc("n0/vda", "memory", "n0", tier="disk", bytes=1 << 40)])
+    log = check_registration(log, first, auditor)
+    second = log.node_entry(NODE_FILE, CARD_FILE, "n1", "site0")
+    assert second.sheets == () and [x.id for x in second.locs[:2]] == ["n1", "n1/gpu0"]
+    site = check(log.append(second), auditor)
+    assert site.units == ("n0/gpu0", "n0/gpu1", "n1/gpu0", "n1/gpu1") and site.sheet("n1/gpu1") == sheet
+    assert site.tiers("n1") == {"hbm": 2 * (16 << 30), "dram": 1 << 39, "disk": 1 << 40}
+    assert refusal(log, first, auditor) == "previous"
+    assert refusal(log, log.node_entry(NODE_FILE, CARD_FILE, "n0", "site0"), auditor) == "duplicate-id"
+    onsite = Registration("onsite")
+    bare = onsite.node_entry(NODE_FILE, CARD_FILE, "n0")
+    assert bare.locs[0] == Loc("site", "site") and refusal(onsite, bare, auditor) == "challenger-reach"
+    reached = replace(bare, locs=(*bare.locs, Loc("chal0", "challenger", "site", "auditor")),
+                      links=(Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000),))
+    assert refusal(onsite, reached, auditor) is None
+
+
+def _node_entry(**tables: object) -> Entry:
+    """The entry of `NODE_FILE` with these tables in place of its own."""
+    return Registration("remote").node_entry({**NODE_FILE, **tables}, CARD_FILE, "n0")
+
+
 def test_the_encoding_round_trips_and_is_pinned() -> None:
     """A rational is the string `n` or `n/d` in lowest terms, so a sheet has one encoding and one digest."""
     log = grown()
@@ -305,6 +348,15 @@ def _sheet_json(**f: object) -> Sheet:
     (lambda: _sheet_json(clock="-1"), "lowest terms"),
     (lambda: _sheet_json(clock="1e9"), "lowest terms"),
     (lambda: Auditor.of_json({**AUDITOR["remote"].to_json(), "tolerance": "0.05"}), "lowest terms"),
+    (lambda: _node_entry(device={"sku": "sim-file"}), "count"),
+    (lambda: _node_entry(device={"sku": "sim-file", "count": 2}), "not an entry"),
+    (lambda: _node_entry(device={"sku": "sim-file", "count": _entry(1.5)}), "whole number"),
+    (lambda: _node_entry(device={"sku": "sim-int8-a", "count": _entry(1)}), "the card given"),
+    (lambda: _node_entry(memory={"dram": {"tier": "dram"}}), "bytes"),
+    (lambda: _node_entry(memory={**NODE_FILE["memory"], "x": {"tier": "sram", "bytes": _entry(1)}}), "tier"),
+    (lambda: _node_entry(memory={"vda": NODE_FILE["memory"]["vda"]}), "no dram leaf"),
+    (lambda: _node_entry(memory={"dram": NODE_FILE["memory"]["dram"]}), "no disk leaf"),
+    (lambda: _node_entry(memory={}), "no dram and no disk leaf.*lsmem -b --summary=only; lsblk -b -d"),
 ])
 def test_what_no_site_holds_is_malformed(make, what: str) -> None:
     with pytest.raises(Malformed, match=what):
