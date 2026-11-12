@@ -1,7 +1,8 @@
 """Training rules: the ops a training step adds to a forward (its backward, its loss and its optimizer), lowered in reference mode to
-registered Definitions, as a rule set of their own (`training_rules()`): the default rules, with the training rules before and after
-them. The default rules are unchanged; a node either kind of rule lowers is lowered as before unless a training rule claims it first,
-and the training rules placed first claim only what the defaults lower per row or cannot represent at a step's sizes.
+registered Definitions, as a rule set of their own (`training_rules()`): the default rules that target ATen ops (`rules.TORCH_RULES`,
+the default without the rules of vLLM's own ops), with the training rules before and after them. Those default rules are unchanged; a
+node either kind of rule lowers is lowered as before unless a training rule claims it first, and the training rules placed first
+claim only what the defaults lower per row or cannot represent at a step's sizes.
 
 Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is the f32 operation torch's CPU kernel performs for
 it (true division, IEEE `sqrt`, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
@@ -575,7 +576,8 @@ class FusedAdamW(_TrainRule):
 
 
 def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
-    """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
+    """The default rules that target ATen ops (`rules.TORCH_RULES`) and the default families, with the training rules: views of
+    static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, optimizer-count, reduction, softmax, loss, embedding,
     comparison, mask, integer, conversion, lookup, order-statistic and copy rules after. `min_view_leaves` is 0 by default:
     the default views write a permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then
@@ -590,7 +592,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs: `Matmul` lowers an `mm` at a shape the TF32 capture covers
     (`cublas_bf16.TRAIN_TF32`) as cuBLAS's unsplit TF32 GEMM (`GemmTf32_v1`) and refuses the rest
     (``training-cc<major>.<minor>-tf32``)."""
-    from verity_vllm.program.frontend.rules import DEFAULT_RULES
+    from verity_vllm.program.frontend.rules import DEFAULT_FAMILIES, TORCH_RULES
 
     first = [StaticFloats(cc), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
     last = ([] if cc else [Binary()]) + [Unary(cc), Lerp(cc), Addcmul(), Addcdiv(cc), SiluBackward(cc), ForeachAdd(cc),
@@ -599,7 +601,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
                                          EmbeddingDenseBackward(cc), Log(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
                                          KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
-    return RuleSet(name, first + ([FlashSdpa(cc)] if cc else []) + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
+    return RuleSet(name, first + ([FlashSdpa(cc)] if cc else []) + list(TORCH_RULES) + last, list(DEFAULT_FAMILIES))
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",
