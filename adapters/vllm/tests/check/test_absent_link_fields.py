@@ -47,13 +47,8 @@ SERVED_NONE = (f"r0: the Commit served 11 tokens (last {EOS}) but the Match reco
 
 
 def left_out(empty: Any) -> pytest.MarkDecorator:
-    """A field absent, null and empty (`empty`: the empty value of its kind)."""
-    return pytest.mark.parametrize("stated", [ABSENT, None, empty], ids=["absent", "null", "empty"])
-
-
-def nothing_stated(empty: Any) -> pytest.MarkDecorator:
-    """`left_out`'s three and every other value that tests false, for a reader that takes a field by its truth: a reader that took
-    only an absent or a null field as nothing stated would answer these differently."""
+    """A field absent, null and empty (`empty`: the empty value of its kind), and every other value that tests false.  The readers
+    take a field by its truth: one that took only an absent or a null field as nothing stated would answer the others differently."""
     others = {"zero": 0, "no-text": "", "false": False, "no-item": [], "no-key": {}}
     names = [name for name, value in others.items() if type(value) is not type(empty)]
     return pytest.mark.parametrize("stated", [ABSENT, None, empty, *(others[name] for name in names)], ids=["absent", "null", "empty", *names])

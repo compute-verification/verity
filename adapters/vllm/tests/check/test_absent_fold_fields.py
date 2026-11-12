@@ -2,7 +2,7 @@
 
 `compare_tokens` reads the accepted tokens of each request from the capture's tokens file, and `compare_structure` the
 extra nodes from the matcher's report, which lists them only for a superset.  Each test leaves the field out (absent,
-null, empty, or any other value that tests false: `nothing_stated`) and states what the comparison then reports.
+null, empty, or any other value that tests false: `left_out`) and states what the comparison then reports.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tests.check.test_absent_commit_fields import put
-from tests.check.test_absent_link_fields import nothing_stated
+from tests.check.test_absent_link_fields import left_out
 from tests.observe.test_fold_synthetic import (
     BN,
     REQ,
@@ -47,14 +47,14 @@ def accepted_mismatches(report: dict[str, Any]) -> list[str]:
     return [m for m in report["mismatches"] if m.startswith("accepted tokens")]
 
 
-@nothing_stated([])
+@left_out([])
 def test_a_tokens_file_that_names_no_request_records_no_accepted_tokens(tmp_path, folded, stated):
     report = tokens_report(tmp_path, folded, stated)
     assert report["fold"] == {REQ: TOKENS}
     assert report["accepted"] is None and accepted_mismatches(report) == []
 
 
-@nothing_stated([])
+@left_out([])
 def test_a_request_that_states_no_accepted_token_records_none(tmp_path, folded, stated):
     request = put({"request_id": REQ, "accepted_record_token_ids": TOKENS}, ("accepted_record_token_ids",), stated)
     report = tokens_report(tmp_path, folded, [request])
@@ -82,7 +82,7 @@ def structure_report(monkeypatch, folded: FoldResult, matcher) -> dict[str, Any]
     return report
 
 
-@nothing_stated([])
+@left_out([])
 @pytest.mark.parametrize(("stated_by_the_matcher", "status"), [({"matched": True}, "pass"), ({"matched": False, "superset": True}, "pass"),
                                                              ({"matched": False, "reason": "node 3 differs"}, "fail")])
 def test_a_report_that_lists_no_extra_node_counts_none(monkeypatch, folded, stated, stated_by_the_matcher, status):
