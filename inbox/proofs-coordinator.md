@@ -70473,3 +70473,102 @@ Tags: [run] a run's log or a command now, [read] a file read this session, [rela
 - `r20261112-035032-53f8` exit 0, every try exit 1: one error, `SecondStage.lean:409`, a pattern whose type Lean could not tell; the eight other files never built past it; mended at `dd3df7d8e0` [run]. In line or running: `r20261112-042306-1065` (cpu-1, the nine tries again), `r20261112-040512-6c5f` (cpu-5, the Python suites at `d5688d8601`) [run].
 - Base `origin/main` `be9a3d566905`, not #9116's head: both add a field to `Own` and an entry to `interiorFailures`, so the second to land merges those hunks by hand [read].
 - Not done: Lean compiled; the suites and the Lean difftest run; (d) above; the pull request (open and unmarked by 16:00Z); `main` merged into #9080 (next, once, with its build and quick suites as runs).
+
+## ONSITE, Thu 12 Nov 04:32Z: second entry, to your 04:06Z ask: each of the note's four sets is a case of the proved general statement once a composite is a list; the ties on `main` hold one record and one store, every other join the note's claims read is in no tie and no statement, `k_S` is an open premise nothing derives, and your "stitching" line is half right
+
+Read on `origin/main` at `62bf29346f76`. The note is draft 3 as my notes store had it at 04:18Z. MEM-279's comments to 04:20Z are data, tagged [relayed] with their lane and time. Paths: `P/` is `verity/protocols/`, `S/` is `security/`. My entry of 04:13Z answered the brief's two sets and reached you before I read your 04:06Z message (my inbox reads were 03:58Z and 04:14Z); this one answers the note's sets.
+
+**Headline.** With a composite as a list, `remote`, `onsite_network`, `onsite_compute` and `onsite_full` each need no new soundness theorem, only the general statement at their list, on 3, 3, 5 and 7 open targets. What each row of the note claims beyond that reads joins that `main` has nowhere: the ties in code hold two things equal, one record and one store, and four joins the rows need are in no tie and in no statement on `main`. Until those are stated, each set's claim is its parts side by side, as soundness says [relayed, soundness 04:04Z].
+
+### 1. The ties: what is in `tiedSame` today and what is nowhere
+
+| # | Join | What is compared | On `main` | Sets that need it |
+|---|---|---|---|---|
+| T1 | the policy and sampled proofs commit to one record | the two commitments' digests | in `same` (`tied`) [read `P/remote/verifier/CoreRemote.lean:52`, `P/onsite/verifier/CoreOnsite.lean:68`] | remote, onsite_compute, onsite_full |
+| T2 | every window of PoUW's period names that record | the policy's digest and each window's Commit record digest | in ties (`windows`) [read `CoreRemote.lean:55-68`] | remote, onsite_compute, onsite_full |
+| T3 | PoUS and PoUB on one store | PoUS's commitment's `root` and the P2 registration's `root` | in ties (`store`) [read `CoreOnsite.lean:73-82`] | onsite_full |
+| T4 | each sampled-proofs answer the certifier's check reads is the deployment's own sampled-proofs verdict on that registration | nothing | nowhere: the check takes answers under `verity/sampled-proofs/one-stage/v1` from its own evidence, and the deployment's sampled-proofs component refuses v1 [read `P/certifier/verifier/lean/NetworkCheck/Period.lean:247, 942-952`, `P/recursion/verifier/recursive/VStarRecursive/Sampled.lean:38-41, 60, 67`] | the three onsite sets |
+| T5 | the wipe's egress count is the certifier's count over the wipe | nothing | nowhere in Lean: prose in two docstrings, and `egress : ℕ` is a field of the wipe's model [read `S/Definitions/Core/Blocks.lean:32-33, 140`, `S/Properties/Pous/Wipe.lean:20-27`]. Soundness states it [relayed, your 04:06Z]; not drafted here | the three onsite sets |
+| T6 | each matrix product's output, as the served program reads it, is what PoUW proved | nothing | nowhere on `main` [read: no tie in `CoreRemote.lean`, `CoreOnsite.lean`]; the statement is on a soundness branch [relayed, soundness 04:01Z] | onsite_compute, onsite_full, and `remote` as its row is worded |
+| T7 | PoUW's committed weights are the weights the record registers | nothing | nowhere, and the file says so [read `CoreRemote.lean:14-15`]; a Python check exists on branch `remote` [relayed, compute-accounting 04:05Z] | remote, onsite_compute, onsite_full |
+
+- T1 does nothing in `onsite_network`: that set has no policy, and a record check over one subprotocol compares nothing. [read `P/remote/verifier/composition/CoreComposition/Same.lean:25-29`]
+- **A tie that names a subprotocol the list lacks never rejects.** `strays` returns no reason when a named subprotocol has no case, in `same` and in `Tie` alike. So a list built by dropping subprotocols from onsite must drop or refuse the ties that name them, or it keeps a tie that checks nothing. [read `Same.lean:19-29`, `CoreComposition/Tie.lean:23-31`]
+- **A tie reads the first case under an id.** A deployment with one sampled-proofs case for each of the certifier's scans and audits, which is how network-accounting would close T4 [relayed, 04:13Z], cannot be tied by today's `Tie`. [read `Tie.lean:26-27`, `S/Properties/Composition.lean:96-97`]
+
+### 2. Each of the note's sets
+
+**`remote`: sampled proofs, PoUW, the policy.**
+- Statements listed: `Verity.remote_soundness_of_subprotocols`, deployed, trust gap its 3 targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`), each open under LEAN-186, due 30 Nov. What acceptance gives: `Properties.Remote.SecurityProofs.acceptInferenceOnly` and `acceptComplies`, not deployed, 5 and 4 open premises. The parts' own: `Flock.SecurityProofs.SampledKSLiveV3` and `V5` (deployed, no gap) and `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` (deployed, a gap of 12 premises). [read `S/Properties/lean-audit.json`, `S/lean-audit.json`: `deployed`, `trust_gap`, `open`, `guarantees`]
+- Ties: T1 and T2 in place. T6 and T7 nowhere.
+- Missing: the row's second half, "its matrix products were done as verified compute", joins PoUW's credit to the served program. That is T6 and T7. The note lists them under `onsite_compute` only (its item 3); as worded they apply here too. [read: the note's section 4; the inference is mine]
+
+**`onsite_network`: the certifier, sampled proofs, the wipe.**
+- Statements listed: under the general statement, 3 targets: `SpotSound` (@proofs), `NetworkCertifierSound` (@network-accounting), `WipeSound` (@memory-accounting), all open, LEAN-186, due 30 Nov. The parts' own: `NetTiming.SecurityProofs.PeriodLeakAccepted` (deployed; gap `Compiled.KS`, `CertifierRegisters`, `ScopeAcc`), `Pous.SecurityProofs.StreamedWipe` (deployed, no gap), `SampledKSLiveV3` and `V5`. A bridge to the wipe's target exists: `Verity.wipe_target`, from `Verity.Wipe.SurvivorBound` (open) and a coupling of the play to the wipe's game. [read both locks; `S/Properties/Verity/Coupling.lean:244-255, 294-300`]
+- The note's "each deployed (proofs, 7:28 PM PST)" is true of the two `deployed` lists. Two things it does not say. `StreamedWipe` is "a bound in the wipe game's model, which no Lean function computes", with the egress `E` a parameter, so it is not about the wipe's compiled check. [read `S/Definitions/Pous/Guarantees/StreamedWipe.lean:36-56`] And no statement about K holds of a run while T4 is open [relayed, soundness 04:14Z], which agrees with what I read of `answered` in my first entry.
+- Ties: needs T4 and T5. Neither exists.
+- Missing: T4, T5, and the list itself (soundness's).
+
+**`onsite_compute`: those three, PoUW, the policy.**
+- Statements listed: 5 targets (the three above, `PouwSound`, `InferenceOnlySound`). `Accounting.SecurityProofs.ServingBlocks.ServingBlockBound`: proved, owner @training, not deployed, 7 open premises (`ServingSizes`, `PerBlockCap`, `UncertifiedCap`, `OperationBodies`, `Overlap`, `WeightsAtMost`, `Verity.Partition.IsCK`). [read `S/lean-audit.json`]
+- `ServingBlockBound` is counting on one circuit. It has no verifier, no acceptance and no probability: "The statements are about one circuit; Layer 2's envelopes supply the premises, each with its probability". [read `S/Definitions/Accounting/Guarantees/ServingBlocks.lean:17, 60-69`]
+- **The note's item 4, answered: `k_S` is not proved, and nothing derives it.** It is the premise `ServingSizes` (each serving block has at most `c_S` gates and reads at most `k_S` unregistered input bits), open in the lock under @training. Its only uses are the bound itself and the four small layouts of its witnesses: 7 hits in 4 files. No statement takes a wipe's or a certifier's record to it. [read `S/Definitions/Accounting/ServingBlocks.lean:105-108`; `rg ServingSizes security`]
+- Ties: T1 and T2 in place. T4 to T7 nowhere.
+- Missing: T4 to T7, and a statement from an accepted run to the bound's 7 premises. The nearest listed statement over a server's blocks between wipes is `Accounting.SecurityProofs.JointPooledBlocksLive` (@lean, not deployed, 3 open premises), which sums each block's errors, its wipe's and its PoUS term. [read `S/Definitions/Accounting/Guarantees/JointLive.lean:100-140`; the lock]
+
+**`onsite_full`: the seven.**
+- Statements listed: `Verity.soundness_of_subprotocols`, **not** deployed, on 7 open targets. `Accounting.SecurityProofs.Joint`: proved, owner @memory-accounting, not deployed, 3 open premises (`Accounting.Run.ComputeSound`, `BandwidthSound`, `CapacitySound`). [read both locks]
+- `Joint` covers three audits (compute, bandwidth, capacity) in the coins model, and reads no verifier function, no certifier, no wipe, no sampled proofs and no policy. So the row's "stands on" covers three of the seven, in a model. The statement about onsite's compiled verifier is the first one. [read `S/Definitions/Accounting/Guarantees/Joint.lean:8-14, 36-41`]
+- Ties: T1, T2, T3 in place. T4 to T7 nowhere. No statement says what T3 buys: under `security/` it appears only inside `SameAccepts`, as an equality of bytes, and remote's T2 is the one tie a statement reads further. [read: `rg "Onsite\.store|Onsite\.ties|Remote\.windows" security`: `S/Properties/Verity/Game.lean:168`, `S/Proofs/Properties/Verity/Soundness.lean:70`, and `Remote.lean` for T2]
+- "Memory held": PoUS's figure bounds the device's state at one tick, not memory over the session. [relayed, memory-accounting 03:52Z; unchecked by me]
+
+### 3. Sizes, by what `main` already has
+
+| What | Size | Source |
+|---|---|---|
+| A set as a case of the general statement, as remote is today | 1 statement of 7 lines, 1 proof of 8 lines, 2 witness lemmas of 11 lines, 3 lock records, 1 `deployed` and 1 `trust_gap` entry | [read `S/Properties/Verity/Soundness.lean:89-95`, `S/Proofs/Properties/Verity/Soundness.lean:130-137, 481-491`; the Properties lock] |
+| The same once a composite is a list | possibly nothing per set; the union bound "needs nothing about which list" | [relayed, soundness 03:37Z] |
+| "What acceptance gives" for a list that reads its ties, as remote has | 178 lines of statements and 544 lines of proofs, for 3 subprotocols and 1 tie. Onsite has no such file | [read `wc -l S/Properties/Remote.lean S/Proofs/Properties/Remote.lean`; `ls S/Properties`] |
+| T4 inside the certifier's check | `protocol` is a `Core.Protocol`, which takes no blobs, so it cannot run the one-stage verifier today; all three reads of an answer go through `answered`; 3 listed properties quantify over `check p c e` and change with it. The file is 1,426 lines | [read `Period.lean:942-952, 974, 1166, 1177, 1367`; `S/Properties/NetworkPeriod.lean:78-127`] |
+| T5, T6, T7, and `k_S` from records | not sized: T5 is soundness's, T6's statement is on a branch I did not read, and no statement of the last exists | see "Not established" |
+
+- The four sampled-proofs lemmas I flagged at 04:13Z (`composite_readsV2` and its users) hold for every one of the note's sets, since each lists sampled proofs. That obstacle is gone. [read `S/Proofs/Properties/Verity/Sampled.lean:605-610`]
+- In `verity run`, the certifier's `requires=("sampled-proofs",)` is met by all three onsite sets. [read `demos/onsite_served/served_table.py:130-135`]
+
+### 4. Your sentence on "stitching" (MEM-279, 04:01Z, line 3): half right
+
+1. **Inside SPOT, in the spec, nothing is compared.** The statement holds one program and one list of roots. A block's correctness reads `w.val g`, the first opening at gate position `g` that opens under those roots, so two blocks that read gate `g` read one value. [read `S/Definitions/Claims/Sampling.lean:338, 354, 174, 360`]
+2. **What the statement gets there:** the faulty blocks are defined over one witness, and binding is the named piece that makes the opened value the only one (`CommitmentScheme.Binds`). [read `Sampling.lean:94, 360-374`]
+3. **In SPOT's code it is the same inside one record:** a value one block writes and another reads is one entry of the record's `roots`, and R8 refuses a run input the blocks don't each read alone unless it is registered or tied. [read `P/spot/verifier/lean/Spot/Registration.lean:70-77`]
+4. **Across records SPOT's code does compare:** R7 holds an entry to the root and domain of a port or a value of an earlier record, found by that record's digest in the log, with the same leaf count. [read `Registration.lean:43-52`]
+5. **The certifier's check compares too:** the root and domain of its scan's `scan/prog` and `scan/state` entries against an entry of a compute audit's registration, the port chosen by a rule, for some audit. Three listed properties say an accepted period passed these; what it means for values is in their docstrings. [read `Period.lean:1060-1121`, `S/Properties/NetworkPeriod.lean:78-127`]
+6. **Across protocols, a `Tie` compares byte strings**, each read off a subprotocol's case by that subprotocol's own decoder. It carries no scheme, domain, leaf count or position. [read `Tie.lean:19-31`]
+7. **Two of today's three ties do not name a committed value.** T1 and T2 compare digests of the run's record: they say two subprotocols are on one registration. Only T3 compares a committed value's root, and the root alone. [read `CoreRemote.lean:52-68`, `CoreOnsite.lean:73-78`]
+8. **What a statement gets from a `Tie`:** accepted means each tie's names gave one byte string, or one gave none. That goes into every target's verdict (`SameAccepts`), so "ties are not in the general statement" [relayed, soundness 03:37Z] is true of its conclusion and not of what each target is handed. One listed statement reads a tie's content, remote's `AcceptInferenceOnly` (T2); none reads T3. [read `S/Properties/Composition.lean:101-116`, `S/Properties/Verity/Game.lean:228-231, 776-777`, `S/Properties/Remote.lean:139-150`]
+9. **So:** right that SPOT's cut and a tie on a value both come to "two statements read one committed value". Wrong on "twice": I count four places (the cut by position, R7, the certifier's ties, `Tie`). Wrong that `tiedSame`'s ties are that operation today: two of three say "one registration", which is what makes a shared position mean one value, and is a different thing.
+10. **One statement could cover the three that compare** (R7, the certifier's ties, T3): two entries with one scheme, root, domain and leaf count open to one value at each position, under `Binds`; SPOT's cut is the case where the two entries are one. What stops it: `Tie` holds bytes with no scheme or position, so nothing about values follows from it; it reads one case per id; and the certifier's ties feed its number (a tied audit's free inputs are charged in K, and a tied audit must be sampled whole), which a tie that only rejects cannot do. [mine, from 1 to 8; the last clause read `NetworkPeriod.lean:78-85` and relayed, network-accounting 04:07Z]
+
+### 5. The rename: not started, and I need you to resume me for it
+
+- It needs a branch of my own and a pull request. The brief I run under rules both out ("You push to no branch except the one file below ... no commits, no pull request"), and the team skill sends a change of that size through a resume, not the inbox ("larger changes go in when you resume it"). [read: my brief; `.agents/skills/team/SKILL.md:125-129`] Resume me with it, and with the issue key `research queue open --issue` requires, and I do it. [read `SKILL.md:51-54`]
+- memory-accounting's diff is open as #9129, head `47c7b338a8f4`, four files under `benchmarks/memory/`; its name is "PoUS state bound". I did not check whether it is marked. [read `gh pr view 9129`]
+- Scope of ours on `62bf29346f76`, by read. The line is `benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py:114` now, not `:93`.
+
+| Place | What it holds |
+|---|---|
+| `block_record.py:114`, and its docstring at `:13` | writes `{"symbol": "S_cert", "value": s_bits, "unit": "bits", "certified": ...}` |
+| `verity_e2e_demo/schemas/block-record.v2.schema.json:37` | `symbol` is an enum of six names; `S_cert` is one |
+| `interfaces/tests/fixtures/block-record-r2-period0.json`, `block-record-b71a-w30.json` | one `S_cert` each; `block_record.py:309` generates the first |
+| `benchmarks/pous/tests/test_pous_served_piece.py:225` | another package's test pins the symbol |
+| `report.py:592`, `interfaces/README.md:57`, `benchmarks/datacenter/datacenter/claims.py:19` | prose that calls PoUS's figure `S_cert` |
+
+- One thing to decide before the diff: the name is a value of a versioned record's schema, so renaming it makes every v2 record written so far fail the schema unless the enum keeps both names or the format moves to v3. [read the schema line; the consequence is mine]
+- `ARCHITECTURE.md:159-160` defines `S_cert` as bits held on average over the period, and three files under `S/Definitions/Accounting/` use it that way. Those stay. [read `rg S_cert`]
+
+### Not established by read
+
+- The sizes of T5, T6 and T7 as statements and proofs: T5 is soundness's and I drafted nothing; T6's statement is on `cursor/soundness-value-tie-8fb2`, which I did not read; T7 has no Lean on `main`.
+- Whether the policy's claim (`Nci.CompliesRate`) gives `Verity.Partition.IsCK`, one of `ServingBlockBound`'s 7 premises.
+- Whether any proof uses the tie half of `SameAccepts`. `rg Tied` under `S/Proofs/Properties/Verity` finds only the lemma that produces it (`Soundness.lean:66-76`); I did not read the sampled lemmas' bodies.
+- How #8569 or soundness's list will carry ties and repeated ids; #8569 is open (65 files) and I did not read it. [read `gh pr view 8569`]
+- Whether the note moved past draft 3 after 04:18Z.
