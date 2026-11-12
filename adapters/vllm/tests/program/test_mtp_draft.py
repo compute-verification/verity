@@ -10,10 +10,15 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import pytest
 
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
 from verity.commitments.windows import interface as IF
+from verity.definitions.boolean import boolean_version
 from verity.definitions.numerics import dsa_norm_rows as NR
+from verity.definitions.registry import boolean_mtp_draft as BM
 from verity.definitions.registry import dsa_norm as DN
 from verity.definitions.registry import mtp_draft as MD
 from tests.program.test_dsa_norm import OVERFLOW, _bf16_row, _edge_rows, _w, ptx_block_model
@@ -96,6 +101,34 @@ def test_the_cut_returns_the_launchs_words() -> None:
     e, p, ew, hw = (_bf16_row(rng, H, 1.0).tolist() for _ in range(4))
     for pos in (0, 7):
         assert _staged(whole, pos, e, p, ew, hw) == list(evaluate(whole, pos, e, p, ew, hw)), pos
+
+
+@pytest.mark.parametrize("name", ["MtpEhZero", "TritonBlockRMSNormSumSq", "MtpEhNorm"])
+def test_on_bits_each_is_the_switchs_boolean_version_and_returns_its_words(name: str) -> None:
+    """At a row of 256 in a block of 512 on one warp (its second run masked): `boolean_mtp_draft`'s `_v2` is what the switch takes
+    the word Definition to, and on `test_dsa_norm`'s edge rows, at positions 0, 7 and 2^32, returns its words."""
+    N, small = 256, {"BLOCK": 512, "WARPS": 1, "EPS": EPS}
+    word = {"MtpEhZero": lambda: bind(MD.MtpEhZero, H=N), "MtpEhNorm": lambda: bind(MD.MtpEhNorm, H=N, **small),
+            "TritonBlockRMSNormSumSq": lambda: bind(MD.TritonBlockRMSNormSumSq, N=N, **small)}[name]()
+    bits = boolean_version(word)
+    assert BL.is_boolean(bits) and TR.word_of(bits).id == word.id and bits.id.startswith(f"{name}_v2")
+    rows = np.stack(_edge_rows(np.random.default_rng(69), N))
+    R = len(rows)
+    pos = np.array([(0, 7, 1 << 32)[i % 3] for i in range(R)], dtype=np.uint64)
+    served = np.stack([_bf16_row(np.random.default_rng(70 + i), N, 1.0) for i in range(3)])
+    ops = {"MtpEhZero": (pos, rows), "TritonBlockRMSNormSumSq": (rows,),
+           "MtpEhNorm": (pos, rows, np.roll(rows, 1, axis=0), np.tile(served[1], (R, 1)), np.tile(served[2], (R, 1)))}[name]
+    got = BS.evaluate_words(bits, *ops).reshape(R, -1).tolist()
+    for i in range(R):
+        want = evaluate(word, *(int(a[i]) if a.ndim == 1 else a[i].tolist() for a in ops))
+        assert got[i] == ([want] if isinstance(want, int) else list(want)), (name, i)
+
+
+def test_the_scale_on_bits_refuses_a_register_live_in_some_threads_only() -> None:
+    """96 of a 128 block on two warps leaves threads 48-63's register masked and the rest live: refused by name."""
+    with pytest.raises(ValueError, match="live in some threads and masked in others"):
+        BM.live_registers(96, 128, 2)
+    assert BM.live_registers(H, BLOCK, WARPS) == [k // 8 < 6 for k in range(64)]
 
 
 def test_each_unit_of_the_cut_fits_a_proof_block() -> None:
