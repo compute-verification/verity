@@ -818,6 +818,7 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
     if list(xs.shape) != list(L["input"].shape):
         raise RuntimeError(f"probe {list(xs.shape)} for input {list(L['input'].shape)}")
     x = torch.from_numpy(xs.view(np.int16)).to(L["input"].device).view(torch.bfloat16)
+    classes: dict[str, list[list[int]]]
     launches, specs, classes = [], [], {}
     for tk, tn, b in candidates(moe_block_size_of(cap["M"])):
         out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)

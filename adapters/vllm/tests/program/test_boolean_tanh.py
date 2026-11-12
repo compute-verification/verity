@@ -205,7 +205,7 @@ def _procs() -> int:
 
 
 def _tanh_chunk(c0: int):
-    words = np.arange(c0, c0 + CHUNK, dtype=np.uint64)
+    words: np.ndarray = np.arange(c0, c0 + CHUNK, dtype=np.uint64)
     got, want = _bits(bind(BT.TanhF32Rn), words), _tanh_ref(words)
     bad = np.flatnonzero(got != want)
     region = (words >= T.TANH_RN_LO) & (words < T.TANH_RN_HI)
@@ -219,6 +219,8 @@ def test_tanh_on_every_f32_word() -> None:
     """`TanhF32Rn_v3` is `TanhF32Rn_v1` on all 2^32 words, and its results at the region's 123,179,281 positive words, by their
     low 27 bits, are the pinned `tanh_rn`."""
     BS.compile(bind(BT.TanhF32Rn))
+    table: np.ndarray
+    first: list[tuple[int, int, int]]
     table, bad, first = np.zeros(1 << 27, np.uint32), 0, []
     with mp.get_context("fork").Pool(_procs()) as pool:
         for n, few, idx, vals in pool.imap_unordered(_tanh_chunk, range(0, 1 << 32, CHUNK)):

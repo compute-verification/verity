@@ -153,7 +153,7 @@ def mufu(work: Path, sm: str) -> dict[str, Any]:
             continue
         out = work / f"tables_{tag}.bin"
         t = _run([str(exe), "table", str(out)])
-        words = np.fromfile(out, dtype="<u4")
+        words: np.ndarray = np.fromfile(out, dtype="<u4")
         n = 1 << 23
         ex2, rcp = words[:n], words[n:2 * n]
         v = _run([str(exe), "verify", str(ref)])
@@ -463,6 +463,7 @@ def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, on
     from torch.profiler import ProfilerActivity, profile, record_function
 
     op = torch.ops._vllm_fa2_C.varlen_fwd
+    jobs: list[dict[str, Any]]
     doc["launches"], jobs = [], []
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
         for i, c in enumerate(case_list()):
