@@ -39,16 +39,17 @@ summaries can't count exactly (one value bound to two activation leaves above th
 
 ## The min-cut bound's work
 
-`work.read(program)` reads off a word Program what `min_cut.bound` takes of a circuit: |C|, the charged
-products' MACs N and output wires O, each operand's kind and width, and the arrays they multiply, which give F. The
-products are a reader-side table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and
-`DotRef`), and the lookups another (`work.LOOKUPS`, the gathers). A product is charged where both operands are wholly
-reached from a fresh input, neither reads a lookup of a table no fresh input reaches, and the two are no one array; in
-a scan, a carried operand is a weight, charged from the iteration that first finds it reached from a fresh input (the
-carry is iterated to a fixed point, so a loop's iterations cost what its distinct contexts do). `work.bound(work, c, k)`
-is the most blocks over its sub-works, through the calculator's `min_cut`. Everything is per array, and uncertain
-statuses charge less, so the work read is a sub-work of what the statements count. The module docstring has the rules;
-the training benchmark's `tests/test_program_reading.py` holds a training loop's reading beside its trace's.
+`work.read(program)` reads off a word Program what `min_cut.bound` takes of a circuit: |C| in Boolean gates (each
+primitive at its registered Boolean version's, `work.boolean_gates`), the charged products' MACs N and output wires O,
+each operand's kind, width and source bits, and the arrays they multiply, which give F. The products are a reader-side
+table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and `DotRef`), and the lookups
+another (`work.LOOKUPS`, the gathers). A product is charged where both operands are wholly reached from a fresh input,
+neither reads a lookup of a table no fresh input reaches, and the two are no one array; in a scan, a carried operand is
+a weight, charged from the iteration that first finds it reached from a fresh input (the carry is iterated to a fixed
+point, so a loop's iterations cost what its distinct contexts do). `work.bound(work, c, k)` is the most blocks over its
+sub-works, through the calculator's `min_cut` at its defaults for the β and b, each under its width and a β under the
+source bits its values hold. The module docstring has the rules and which way each of the reading's errors moves the
+bound; the training benchmark's `tests/test_program_reading.py` holds a training loop's reading beside its trace's.
 
 ## Interface
 

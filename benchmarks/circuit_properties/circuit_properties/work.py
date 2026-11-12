@@ -4,7 +4,8 @@ The circuit is a Program in the `verity-ir/descriptor/v1` format, and nothing be
 language, trace, model or optimizer. It is computed once per specialized Definition and context and multiplied through
 batches and scans, so it never walks the unrolled circuit. It reads, for `min_cut.bound`'s inputs:
 
-* `|C|` (`Work.gates`): the Program's gates, a primitive 1, as the format counts them.
+* `|C|` (`Work.gates`, `boolean_gates`): Boolean gates, each primitive at its Boolean version's AND, XOR and NOT
+  gates and an input node at none; a primitive with no Boolean version is refused by name.
 * The products: each activation of a Definition in `PRODUCTS` (outermost first, so a `LinearRef`'s own dots are its
   MACs) multiplies its parameter `x` by its parameter `w`, one MAC a word of the larger of the two, and gives its
   returned leaves. A product's operand reads the arrays its argument's references name.
@@ -17,18 +18,28 @@ batches and scans, so it never walks the unrolled circuit. It reads, for `min_cu
 * `N` and `O`: the charged products' MACs, and their returned leaves times their width.
 * The kinds: an operand is a weight where it reads nothing of the current iteration's inputs: in a scan, its
   sequence arguments' (`xs`), so a carried value is a weight from the iteration that first finds it reached from a
-  fresh input; outside every scan, nothing is a weight. A weight's `β` is its width (the most (H) holds at), an
-  activation's `min(width, β(k))`.
+  fresh input; outside every scan, nothing is a weight.
+* The `β` and `b`: a weight's `β` at most `min_cut`'s default (bf16's 16 bits), an activation's at most `β(k)` and
+  `b` at most bf16's 16, each at most its width and a `β` at most the source bits its operand's values hold. A fresh
+  input's word and, in a scan, a carried word reached from one hold their width; a computed array's words hold on
+  average the bits of the source words its node reads, each once, over its words, at most their width. So a weight a
+  body decodes from a narrower carry (a ternary code's two bit planes and a scale) holds its code's bits.
 * `F`: `share(ω)`, ω the largest set of arrays the work multiplies pairwise (at least 2).
 
 Each status is per array, never per word: a node's output has one status unless it is a call's or a scan's, whose
-status is its callee's returned runs. Where a status is uncertain the reading charges less: a value is fresh only
-where every word read is, a lookup's where any may be, and two arrays are one where any references overlap, so the
-work it reads is a sub-work of the one the statements count, and any sub-work's bound holds.
+status is its callee's returned runs. A value is fresh only where every word read is, a lookup's where any may be, and
+two arrays are one where any references overlap. Against the statements, the reading's errors go both ways:
+
+* Less work than they count, so a bound true but weak: a product the tables don't name is not counted, a value with
+  any word no fresh input reaches is θ's, and overlapping references are one array (F may be higher).
+* More than they may support, so a bound the theorem may not give: (H) fails at a `β` above the bits a value holds,
+  and the source bits are an average from data flow, which a value holds no more of where words repeat, as a gather's
+  rows do over the tokens that share an id; and a value carried through a scan's state is a weight, at bf16's 16
+  bits where an activation is at `β(k)`, which a submitter can choose.
 
 `bound` takes the most blocks over the sub-works whose products are at least a threshold β_w·β_x, at least a
-contraction length and of one kind or both, each at the β_w·β_x, the least output width and the ω of its own
-products, through the calculator's `min_cut`.
+contraction length and of one kind or both, each at the least β_w·β_x, the least `b` and the ω of its own products,
+through the calculator's `min_cut`.
 """
 
 from __future__ import annotations
