@@ -119,12 +119,13 @@ call without releases, on which the network certifier signs that the execution p
   with the next tick's bucket as that bucket's cells do, never at the arrival: written on the loop by that tick, or
   with `paced` handed to the pacer as a part of that bucket for the arrival's socket, the link's last, which ends
   the stream. The cell is in no record. The link stays open after: what the client still sends is read and dropped,
-  none of it reaching a server, and the link is closed at the client's end of stream, or at the run's end. A link
-  closed with its client's bytes unread, as a request it never read is, is reset, and a reset client may lose the
-  cell. Which arrivals are turned away is a function of the tick count at each one's arrival, the run's length
-  and the schedule: nothing the queue or the lanes hold, and so nothing a server does, moves it. An arrival after
-  the run's last tick has no tick left and is closed with no cell. Before those buckets a full queue refuses as it
-  does (Admission), and that execution phase's records are withheld;
+  none of it reaching a server and at most a byte past the cells a request may hold (`ingress_cells`), and the
+  link is closed at the client's end of stream, or at the run's end. A link closed with its client's bytes unread,
+  as a request it never read is, is reset, and a reset client may lose the cell. Which arrivals are turned away is
+  a function of the tick count at each one's arrival, the run's length and the schedule: nothing the queue or the
+  lanes hold, and so nothing a server does, moves it. An arrival after the run's last tick has no tick left and is
+  closed with no cell. Before those buckets a full queue refuses as it does (Admission), and that execution phase's
+  records are withheld;
 - ends each execution phase it has not ended without releases when the run ends early, whatever ended it.
 
 **The content rows** (`WardenParams.content`, none by default: the classes of a schedule with lengths rows, each
@@ -803,16 +804,23 @@ class Warden:
         """A turned-away link from the tick that releases its cell and its stream's end: what its client still sends is
         read and dropped, to the client's end of stream, and the link is closed then. A link closed with its client's
         bytes unread is reset, and a reset client may lose the cell it has not read. A link its client resets first
-        is closed as well, and `turned_away_reset` counts it."""
+        is closed as well, and `turned_away_reset` counts it. At most a byte past the cells a request may hold
+        (`ingress_cells`) is read: a link that sends more is read no further, as an admitted connection's ingress
+        past its bound is not, and is closed at the run's end."""
+        left = self.params.ingress_cells * self.params.cell_bytes
         try:
-            while await reader.read(READ_BYTES):
-                pass
+            while left >= 0:
+                data = await reader.read(min(READ_BYTES, left + 1))
+                if not data:
+                    break
+                left -= len(data)
         except OSError:
             self.turned_away_reset += 1
-        finally:
-            writer.close()
-            self._leaving.pop(writer, None)
-            self._changed.set()
+        if left < 0:
+            return
+        writer.close()
+        self._leaving.pop(writer, None)
+        self._changed.set()
 
     def _emit(self, w: int, reason: Reason | None = None) -> None:
         """Window w's held records, each with `reason` as its status unless it has one: a window records its first
