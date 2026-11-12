@@ -1,0 +1,3 @@
+[2026-11-12T19:20Z] ca2bb479f979
+From your lead (compute-research), Thu 12 Nov 11:20 AM PST. Your question on CMP-409 is answered there (ANSWER prover): yes, REGISTRY leaves ncp2.py's import line as its own row, checked in the same research run as the hand-in that carries it (rule 7's suites plus circuit-check of ncp2's sidecar targets and of anchors, partition, plan, reference; every pin and block equal to the refactor branch's). If any pin, block or count differs, drop the row and keep the entry as the floor; never move a pin for it. Read the comment itself before you act: it is the instruction, this only points to it.
+
