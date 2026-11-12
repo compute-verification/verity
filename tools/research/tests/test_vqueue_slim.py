@@ -7,25 +7,31 @@ the content the step reads at the candidate and at its base, so `vqueue.decide` 
 base, each failure by the tests it names."""
 from __future__ import annotations
 
+import itertools
 import json
+import os
 import shutil
 import signal
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from research import merge
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
-                              SIGTERM_RC, SLIM_STEPS, shard_machines, step_paths, step_records)
+                              SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, Read, _json, _text, abandon, audit_built,
-                                  audit_failures, audited, audits, based, combine, failures, judge, key, lean_inputs, lean_reads,
-                                  read_step, read_suite, reads, shard_count, start, step_test, suite_kind, traced_reads, unnamed)
+from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read, _json,
+                                  _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures, judge,
+                                  key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced, shard_count, start,
+                                  step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
+from test_vqueue_loop import NEW, _check, env  # noqa: F401  (env: the loop's fixture)
+from test_vqueue_loop import _row as _loop_row
 
 #: policy.toml's `off_gate` in the tree: ratchet-gate is off the merge gate
 OFF = ("circuit-check", "ratchet-gate")
@@ -647,6 +653,193 @@ def test_abandon_gives_up_a_plan_still_being_made_and_keeps_one_its_launching_sh
     abandon({"ids": ["r-1"], "tip": sha})
 
 
+# -- carry: a check replacing dropped candidates' checks
+
+
+def _handed() -> dict[str, str]:
+    """The environment `landing.train_launch` hands train.sh: this process's, whole."""
+    return dict(os.environ)
+
+
+def _carry(h: Beside, monkeypatch) -> tuple[set[str], list[str | None]]:
+    """The runs whose records the store holds (`left`), and what the environment named (`CARRY_ENV`) as each launch returned
+    (`Landing._started`, which reads every launch's run ids)."""
+    published, named = set(), []
+    monkeypatch.setattr("research.vqueue_slim.left", lambda d, rid: rid in published)
+    h.d._started = lambda got: named.append(_handed().get(CARRY_ENV)) or Landing._started(got)
+    return published, named
+
+
+@pytest.mark.parametrize("shards", [0, 3])
+def test_a_check_replacing_dropped_ones_waits_for_their_records_then_launches_naming_them(world, monkeypatch, shards):
+    """A check replacing the runs of dropped candidates' checks (``after``) launches nothing while the store lacks any one's
+    record: its record waits, pending, across saves; the `judge` that finds every record launches it, ``at`` then, each launch
+    naming the runs (`CARRY_ENV`), which leave the environment with it."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on = "m1,m2,m3"
+    published, named = _carry(h, monkeypatch)
+    after = {"r-b": h.clock - 30, "r-a": h.clock - 10}
+    rec = start(h.d, sha, base, shards=shards, after=after)
+    assert (rec["ids"], rec["carry"], rec["wait"]["runs"], h.posted) == ([], ["r-a", "r-b"], after, [])
+    assert world.logs[-1].endswith(f": waiting for the records of r-a r-b, whose passes it reuses, at most "
+                                   f"{CARRY_WAIT_S // 60} min after their cancel"), world.logs
+    published.add("r-a")
+    h.clock += 60
+    rec = json.loads(json.dumps(rec))
+    assert judge(h.d, rec) == Verdict(PENDING) and h.posted == [] and "wait" in rec
+    published.add("r-b")
+    h.clock += 1
+    assert judge(h.d, rec) == Verdict(PENDING)
+    n = max(shards, 1)
+    assert len(h.posted) == n and named == ["r-a,r-b"] * n and CARRY_ENV not in _handed()
+    assert ("wait" in rec, rec["at"], len(rec["ids"]), "carry_without" in rec) == (False, h.clock, n, False)
+    h.run_state.update({i: ("running", None, None) for i in rec["ids"]})
+    assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and len(h.posted) == n, "it launches once"
+
+
+@pytest.mark.parametrize("shards", [0, 3])
+def test_a_check_waits_at_most_carry_wait_s_after_a_cancel_then_launches_without_that_runs_passes(world, monkeypatch, shards):
+    """The wait is bounded: `CARRY_WAIT_S` after a run's cancel the check launches without its record, still naming it, and
+    its record and log say whose passes it went without (``carry_without``)."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on = "m1,m2,m3"
+    published, named = _carry(h, monkeypatch)
+    rec = start(h.d, sha, base, shards=shards, after={"r-a": h.clock - 20, "r-b": h.clock})
+    published.add("r-b")
+    h.clock += CARRY_WAIT_S - 21
+    assert judge(h.d, rec) == Verdict(PENDING) and h.posted == []
+    h.clock += 1
+    assert judge(h.d, rec) == Verdict(PENDING) and named == ["r-a,r-b"] * max(shards, 1)
+    assert rec["carry_without"] == ["r-a"] and "wait" not in rec and rec["at"] == h.clock
+    assert world.logs[-1].endswith(f"; without the passes of r-a, whose records weren't in the store {CARRY_WAIT_S // 60} min "
+                                   "after their cancel"), world.logs
+
+
+@pytest.mark.parametrize("how", ["left", "late", "none"])
+def test_a_check_launches_at_once_when_nothing_it_replaces_is_awaited(world, monkeypatch, how):
+    """Every record already in the store, or every cancel `CARRY_WAIT_S` old, launches at once, ``carry`` naming the runs
+    (the late one in ``carry_without``); no ``after`` names no run and keeps no ``carry``."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    published, named = _carry(h, monkeypatch)
+    published.add("r-a")
+    after = {"left": {"r-a": h.clock}, "late": {"r-z": h.clock - CARRY_WAIT_S}, "none": None}[how]
+    rec = start(h.d, sha, base, after=after)
+    assert rec["ids"] == ["r-post-0"] and "wait" not in rec
+    assert named == [{"left": "r-a", "late": "r-z", "none": None}[how]]
+    assert (rec.get("carry"), rec.get("carry_without")) == {"left": (["r-a"], None), "late": (["r-z"], ["r-z"]),
+                                                            "none": (None, None)}[how]
+
+
+def test_a_launch_names_the_runs_it_carries_by_the_setting_check_py_reads_and_the_next_launch_names_none(world, monkeypatch):
+    """`CARRY_ENV` is the setting `check.carried_packs` reads, which settings.py declares under this name; a launch that
+    carries nothing, after one that did, names nothing, though its launch failed."""
+    assert CARRY_ENV == "TRAIN_CARRY_FROM"
+    h, base, sha, _ = _harness(world, monkeypatch)
+    published, named = _carry(h, monkeypatch)
+    published.add("r-a")
+    h.got = ([], "train.sh: no slot")
+    assert start(h.d, sha, base, after={"r-a": h.clock}) is None
+    h.got = None
+    start(h.d, sha, base)
+    assert named == ["r-a", None] and CARRY_ENV not in _handed()
+
+
+def test_an_auto_plan_waits_then_is_made_and_each_of_its_shards_names_the_runs_it_carries(world, monkeypatch, tmp_path):
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on = "m1,m2"
+    published, named = _carry(h, monkeypatch)
+    plans = Plans(h.d, tmp_path)
+    rec = start(h.d, sha, base, shards="auto:2", after={"r-a": h.clock})
+    assert "wait" in rec and plans.asked == []
+    published.add("r-a")
+    assert judge(h.d, rec) == Verdict(PENDING) and len(plans.asked) == 1 and h.posted == []
+    plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
+    assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and named == ["r-a", "r-a"]
+
+
+def test_a_check_that_waited_and_then_registered_no_run_is_infra_kept(world, monkeypatch):
+    h, base, sha, _ = _harness(world, monkeypatch)
+    published, _ = _carry(h, monkeypatch)
+    h.got = ([], "train.sh: no slot")
+    rec = start(h.d, sha, base, after={"r-a": h.clock})
+    published.add("r-a")
+    got = judge(h.d, rec)
+    assert got.state == INFRA and got.infra[0].task.endswith("registered no run: train.sh: no slot"), got
+    assert rec["verdict"]["state"] == INFRA and judge(h.d, rec) == got and len(h.posted) == 1
+
+
+def test_a_check_replaces_the_runs_the_loop_cancelled_for_a_candidate_sharing_a_member_in_the_last_carry_wait_s():
+    """Of the loop's lines, a drop's or a launched drop's (`Loop._launched`) cancel of a check in the last `CARRY_WAIT_S` of a
+    candidate sharing a member: every run it names (one whose cancel failed among them) but one `KEEP_RUNS` left running,
+    each by its first such line; not a records run's, nor a line without a time."""
+    from research.vqueue_loop import stamp
+
+    now = 1_800_000_000.0
+    lines = [{"action": "drop", "at": stamp(now - CARRY_WAIT_S - 1), "members": [2], "beside_cancelled": ["r-old"]},
+             {"action": "drop", "at": stamp(now - 100), "members": [1, 2], "beside_cancelled": ["r-1", "r-kept", "r-stuck"],
+              "beside_cancel_failed": {"r-kept": "left running: /data/keep names it", "r-stuck": "cancel exited 1"}},
+             {"action": "drop", "at": stamp(now - 50), "members": [3], "beside_cancelled": ["r-other"]},
+             {"action": "slim", "at": stamp(now - 40), "members": [2], "dropped": True, "beside_cancelled": ["r-late", "r-1"]},
+             {"action": "drop", "at": stamp(now - 30), "members": [2], "records_cancelled": ["r-records"]},
+             {"action": "drop", "at": "a while ago", "members": [2], "beside_cancelled": ["r-bad"]}]
+    assert replaced(lines, [2, 4], now) == {"r-1": now - 100, "r-stuck": now - 100, "r-late": now - 40}
+    assert replaced(lines, [5], now) == {} == replaced([], [2], now)
+
+
+def test_a_run_has_left_its_passes_once_the_store_holds_its_attempt():
+    """`check.run_packs` finds a run's packs through its attempt, which custody publishes once it ended; a store that can't
+    answer, or none, finds none."""
+    class Store:
+        def get_attempt(self, rid):
+            if rid == "r-away":
+                raise RuntimeError("the store is away")
+            return {"id": rid} if rid == "r-done" else None
+
+    d = SimpleNamespace(q=SimpleNamespace(store=Store()))
+    assert [left(d, r) for r in ("r-done", "r-running", "r-away")] == [True, False, False]
+    assert not left(SimpleNamespace(q=SimpleNamespace()), "r-done")
+
+
+@pytest.mark.parametrize("how", ["left", "late"])
+def test_the_loops_rebuild_after_a_drop_waits_for_the_cancelled_shards_records_then_launches_naming_them(env, monkeypatch,
+                                                                                                        how):
+    """The loop under the check that gates, on `test_vqueue_loop`'s fakes (`Runs`: a run's record is in once it ended): the lower candidate fails, so the upper one is
+    dropped with it while its shards run, and its member, built again on `main`, launches nothing while their records are
+    out: its line's record waits naming them.  A later tick launches it once they ended (``left``), or the first past
+    `CARRY_WAIT_S` after the cancel without them (``late``), each shard naming every one."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"b.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    named, d = [], loop.world.slim_driver()
+    d._started = lambda got: named.append((got[0][0], _handed().get(CARRY_ENV))) or Landing._started(got)
+    lower = loop.tick()[1]["sha"]
+    upper = loop.tick()[0]["sha"]
+    commit = {f"c-{n}": c for n, (c, *_) in enumerate(runs.launches, 1)}
+    replaced_ids = sorted(rid for rid, c in commit.items() if c == upper)
+    runs.end(main)
+    runs.end(lower, 3, "pytest", rows=(_loop_row(NEW),))
+    frozen, reads = loop.now, itertools.count()
+    loop.now = lambda: frozen() + next(reads)              # the drop's line is older than the rebuild's start
+    logged = loop.tick()
+    loop.now = frozen
+    assert sorted(next(r for r in logged if r["action"] == "drop" and r["sha"] == upper)["beside_cancelled"]) == replaced_ids
+    rebuilt = next(r for r in logged if r["action"] == "build")["sha"]
+    waits = next(r for r in logged if r["action"] == "slim" and r["sha"] == rebuilt)["record"]
+    assert (waits["carry"], sorted(waits["wait"]["runs"]), waits["ids"]) == (replaced_ids, replaced_ids, [])
+    assert not [rid for rid, _ in named if commit[rid] == rebuilt]
+    if how == "left":
+        runs.end(upper)
+    else:
+        env.clock += CARRY_WAIT_S + 60
+    loop.tick()
+    commit = {f"c-{n}": c for n, (c, *_) in enumerate(runs.launches, 1)}
+    assert [x for rid, x in named if commit[rid] == rebuilt] == [",".join(replaced_ids)] * 3
+    rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == rebuilt][-1]["record"]
+    assert "wait" not in rec and len(rec["ids"]) == 3
+    assert rec.get("carry_without") == (replaced_ids if how == "late" else None)
+
+
 @pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS),
                                         ("flock-rust-tests", FAIL), ("preflight-lock", FAIL)])
 def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(world, monkeypatch, tmp_path, red, state):
@@ -996,36 +1189,106 @@ def test_where_lean_audit_gates_nothing_no_check_lends_it_and_none_waits_on_its_
     assert not audits(h.d, rec_base) and audited(h.d, own, rec, rec_base) == own == Verdict(PASS)
 
 
-def test_a_lean_input_is_a_lean_or_lake_file_or_lock_anywhere_the_check_s_or_lean_check_s_code_or_the_lean_tree_whole():
-    """The conservative set a member's change is judged against: a README under security/ counts as much as a Lean file;
-    `Security/`, the tree's name before, too; a path that only starts like one of them doesn't, nor the environment's
-    files, which every step reads."""
-    lean = ["security/README.md", "security/Definitions/Core.lean", "Security/Proofs/README.md", "Main.lean",
-            "verity/core/protocols/pous/lean/Grader.lean", "verity/core/service/flock/lakefile.toml",
-            "verity/core/service/flock/lakefile.lean", "lean-toolchain", "verity/x/lake-manifest.json",
-            "verity/core/protocols/nci/lean/lean-audit.json", "tools/verity/lean/check.py", "tools/verity/check/policy.toml"]
-    other = ["docs/security.md", "verity/security/x.py", "tools/verity/checkers/x.py", "tools/verity/lean-tools/x.py",
-             "verity/ml/circuits/ops.py", "uv.lock", ".python-version", "lean.md"]
-    assert [p for p in [*lean, *other] if meets((p,), LEAN_INPUTS)] == lean
+def _lean(files, paths):
+    """Those of ``paths`` that are Lean inputs of the tree holding ``files``."""
+    inputs = lean_inputs(files)
+    return [p for p in paths if meets((p,), inputs)]
 
 
-def test_a_tree_s_lean_inputs_hold_each_directory_of_a_lakefile_or_a_lock_whole_where_the_tree_puts_it():
-    """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
-    pouw's `check/models.json`: every directory of the tree holding a lakefile or a lock is a Lean input whole, a file the
-    tree doesn't hold yet too, and the root's is all of it; a directory beside or above one isn't, nor one named like it."""
+def test_of_check_s_own_code_a_lean_input_is_common_py_and_the_code_that_runs_the_lean_audit_step():
+    """Of `tools/verity/check`: `common.py`, which every audit's key holds (the auditor imports it: `lean_audit.tool_files`),
+    and the code that runs the lean-audit step, which no key holds (`LEAN_AUDIT_STEP`): `check.py` and the wrapper it runs
+    an audit in.  A change to check.py alone is a Lean input, so its candidate audits itself: on the verdict of the candidate
+    below, a step it broke would land unrun and fail in the next candidate that audits.  What every candidate's check runs
+    is none: `slot.py`, check's settings, its policy, or a test of any of them."""
+    check = "tools/verity/check"
+    lean = [f"{check}/check.py", f"{check}/common.py", f"{check}/lean_slot.py"]
+    other = [f"{check}/slot.py", f"{check}/settings.py", f"{check}/policy.toml", f"{check}/drive.toml",
+             f"{check}/tests/test_slot.py", f"{check}/tests/test_check.py", f"{check}/tests/test_verdicts.py"]
+    assert tuple(lean[::2]) == LEAN_AUDIT_STEP
+    assert _lean([*lean, *other], [*lean, *other]) == lean
+    assert _lean([*lean, *other], [f"{check}/check.py"]) == [f"{check}/check.py"]
+    assert _lean([*lean, *other], [f"{check}/slot.py", f"{check}/settings.py"]) == []
+    assert set(lean) <= set(lean_inputs(other)), "each is one in a tree that doesn't hold it yet"
+
+
+def test_of_the_lean_check_s_code_a_lean_input_is_what_a_key_holds_and_the_ratchet_with_its_caps():
+    """Of `tools/verity/lean`: the files every audit's key holds (`lean_audit.tool_files`), with the task graph's contract;
+    `lean_changed.py`, which every records key holds beside them; and what no key holds but lean-audit's verdict or a lock run's
+    commit does: the unread ratchet, its caps, and the caps a lock run repairs in `tests/test_lean_packages.py`.  Not its
+    tests and their fixtures, a Lake file among them, its docs, nor the tools beside the audit that no key holds."""
+    tool = "tools/verity/lean"
+    lean = [f"{tool}/check.py", f"{tool}/lean_audit.py", f"{tool}/lean_changed.py", f"{tool}/module_keys.py",
+            f"{tool}/unread.py", f"{tool}/unread-caps.json", "tools/verity/graph/verity_graph/contract.py",
+            "tests/test_lean_packages.py"]
+    other = [f"{tool}/README.md", f"{tool}/merge.py", f"{tool}/warm.py", f"{tool}/unread_gate.py", f"{tool}/pyproject.toml",
+             f"{tool}/tests/test_cache.py", f"{tool}/tests/fixtures/control/lakefile.toml",
+             f"{tool}/tests/fixtures/control/lake-manifest.json", f"{tool}/tests/fixtures/control/data.json",
+             "tools/verity/graph/verity_graph/keys.py", "tests/test_repository.py", "tools/verity/lean-tools/x.py"]
+    assert _lean([*lean, *other], [*lean, *other]) == lean
+
+
+def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_and_pytest_files_are_not():
+    """A Lean package is a directory holding a lakefile or a lock, wherever the tree puts it, and a Lean input is each file
+    of it an audit reads (`lean_audit.own_files`): a Lean file, the lock, the Lake files, a file a module reads with
+    `include_str`, as pouw's `check/models.json`, a script, the vectors its tests read, and those of a package nested in it.
+    Its README, its pytest files and their settings and its .gitignore, which no audit reads, are not, nor a file beside or
+    above the package or in a directory named like it."""
     pouw, rand, pous = ("verity/protocols/pouw/verifier/lean/check", "verity/commitments/randomness",
                         "verity/protocols/pous/lean")
-    files = [f"{pouw}/lakefile.toml", f"{pouw}/models.json", f"{rand}/lakefile.lean", f"{rand}/__init__.py",
-             f"{pous}/lean-audit.json", f"{pous}/check.sh", "verity/protocols/README.md", "verity/protocols/pouw/models.json",
-             "a.txt"]
-    inputs = lean_inputs(files)
-    assert inputs[:len(LEAN_INPUTS)] == LEAN_INPUTS
-    lean = [f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{rand}/__init__.py", f"{rand}/tests/vectors.json",
-            f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
-    other = ["verity/protocols/README.md", "verity/protocols/pouw/models.json", "verity/commitments/randomness2/x.py",
+    lean = [f"{pouw}/lakefile.toml", f"{pouw}/lake-manifest.json", f"{pouw}/lean-toolchain", f"{pouw}/PouwCheck/Credit.lean",
+            f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{pouw}/inner/lakefile.toml", f"{pouw}/inner/data.json",
+            f"{rand}/lakefile.lean", f"{rand}/__init__.py", f"{rand}/tests/vectors.json",
+            f"{pous}/lean-audit.json", f"{pous}/Grader.lean", f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
+    other = [f"{pouw}/README.md", f"{pouw}/tests/test_pouw_check.py", f"{pouw}/tests/conftest.py", f"{pouw}/pyproject.toml",
+             f"{pouw}/.gitignore", f"{pouw}/inner/README.md", f"{rand}/tests/test_vectors.py", f"{pous}/DESIGN.md",
+             "verity/protocols/README.md", "verity/protocols/pouw/models.json", "verity/commitments/randomness2/x.py",
              "verity/protocols/pous/leaner/x.json", "a.txt"]
-    assert [p for p in [*lean, *other] if meets((p,), inputs)] == lean
+    assert _lean([*lean, *other], [*lean, *other]) == lean
     assert meets(("a.txt",), lean_inputs(["lakefile.toml", "a.txt"])) and not meets(("a.txt",), lean_inputs(["a.txt"]))
+
+
+def test_a_lean_source_is_a_lean_input_wherever_it_is_and_any_other_file_only_in_a_lean_package():
+    """A Lean file counts in a package or outside every one.  A README, a Lake manifest or a toolchain file outside every
+    package, under security/ as anywhere, is in no key and doesn't; a path that only starts like a Lean input doesn't, nor
+    the environment's files, which every step reads."""
+    lean = ["Main.lean", "security/Definitions/Core.lean", "benchmarks/verifier_cost/whole_run/Main.lean",
+            "tools/verity/lean/tests/fixtures/control/Control.lean"]
+    other = ["security/README.md", "security/Proofs/notes.txt", "lean-toolchain", "verity/x/lake-manifest.json",
+             "docs/security.md", "tools/verity/checkers/x.py", "verity/ml/circuits/ops.py", "uv.lock", ".python-version",
+             "lean.md"]
+    assert _lean([*lean, *other], [*lean, *other]) == lean
+
+
+def test_a_path_a_change_deletes_is_a_lean_input_of_the_tree_listed_with_it():
+    """The audit's declaration says of a path what it says of a file there, and the tree a change leaves no longer lists a
+    file it deletes: a package's deleted file is a Lean input of that tree listed with the path, as a change is judged, and
+    a deleted README of it still isn't."""
+    pkg = "verity/protocols/pouw/verifier/lean/check"
+    left = [f"{pkg}/lakefile.toml", f"{pkg}/PouwCheck/Credit.lean"]
+    gone = [f"{pkg}/models.json", f"{pkg}/README.md"]
+    assert _lean(left, gone) == [] and _lean([*left, *gone], gone) == [f"{pkg}/models.json"]
+
+
+def test_the_lean_inputs_are_read_through_the_loop_s_own_copy_of_the_audit_s_declaration(monkeypatch, tmp_path):
+    """`lean_inputs` holds no list of its own: it calls the `own_files` and `tool_files` of the `lean_audit.py` in the tree
+    the loop runs from, the functions every audit's key and every records key is built from, so a file that module stops or
+    starts reading leaves or joins the loop's Lean inputs with it.  A copy that can't be loaded is an error the caller is
+    told (the loop then audits), never an empty list."""
+    from research import vqueue_slim
+    from research.queue import QueueError
+
+    assert vqueue_slim.OWN_AUDIT == Path(__file__).resolve().parents[3] / "tools" / "verity" / "lean" / "lean_audit.py"
+    files = ["pkg/lakefile.toml", "pkg/A.json", "pkg/README.md", "tools/verity/lean/check.py", "tools/verity/lean/warm.py"]
+    audit = vqueue_slim._declaration()
+    assert _lean(files, files) == ["pkg/lakefile.toml", "pkg/A.json", "tools/verity/lean/check.py"]
+    monkeypatch.setattr(audit, "UNREAD_NAMES", {"*.json": "read by nothing"})
+    monkeypatch.setattr(audit, "NOT_READ", {"check.py": "read by nothing"})
+    assert _lean(files, files) == ["pkg/lakefile.toml", "pkg/README.md", "tools/verity/lean/warm.py"]
+    monkeypatch.setattr(vqueue_slim, "OWN_AUDIT", tmp_path / "lean_audit.py")
+    monkeypatch.setattr(vqueue_slim, "_declaration", vqueue_slim._declaration.__wrapped__)
+    with pytest.raises(QueueError, match="the audit's declaration of what it reads .* can't be loaded: FileNotFoundError"):
+        lean_inputs(files)
 
 
 def test_failures_are_what_an_ended_run_failed_of_a_step_by_what_its_log_names_once_its_verdict_is_kept(
