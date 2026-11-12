@@ -36,7 +36,8 @@ from verity_vllm.pipeline.advice_code.replay import (
     Scheduler as Scheduler,
 )
 from verity_vllm.pipeline.advice_code.schedule import (
-    cdiv, Engine, BlockHashes as BlockHashes, RequestState as RequestState, RequestIO, Row as Row, RUNNING as RUNNING, Step, Tick,
+    cdiv, DraftEngine as DraftEngine, Engine, BlockHashes as BlockHashes, RequestState as RequestState, RequestIO, Row as Row,
+    RUNNING as RUNNING, Step, Tick,
 )
 
 STEP_TRACE = "verity-vllm/step-trace/v1"
@@ -75,6 +76,7 @@ class Trace:
     header: dict[str, Any] = field(default_factory=dict)
     output_t: list[list[float]] | None = None
     releases: Releases | None = None
+    passed: list[int] | None = None  # the empty schedules each request arrived after at its step (`replay`'s `passed`)
 
     def first_scheduled(self) -> list[int]:
         first = [-1] * len(self.requests)
@@ -138,7 +140,8 @@ class Certified:
 def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequence[int]] | None = None,
                     ingress_lag_s: float = 0.0, release_lag_s: float = 0.0) -> Trace:
     """A `Trace` from `verity_vllm.engine.step_trace` records. Output lengths and stops come from the trace's `emitted` and
-    `finished` (in a served run the committed sampled tokens and the certified egress say the same). An `arrive` or
+    `finished` (in a served run the committed sampled tokens and the certified egress say the same); with a draft (the
+    header's `speculative`), so do the drafts each row kept, its `emitted` less its own token. An `arrive` or
     `step` record's `t` is the engine's clock; a record's `ingress_t` / `release_t`, where the recorder has the
     certifier's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
     recs = list(records)
@@ -154,14 +157,17 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
     if [r["step"] for r in steps_recs] != list(range(len(steps_recs))):
         raise ValueError("the trace's steps are not 0..S-1 each once")
     emitted = [0] * len(ids)
+    kept: list[list[int]] = [[] for _ in ids]
     finish: list[str | None] = [None] * len(ids)
     steps = []
     for r in steps_recs:
         steps.append(Step(rows=[(index[a], int(b), int(c)) for a, b, c in r["rows"]], new=[index[a] for a in r.get("new", ())],
                           resumed=[index[a] for a in r.get("resumed", ())], preempted=[index[a] for a in r.get("preempted", ())],
-                          cache_hit={index[a]: int(k) for a, k in (r.get("cache_hit") or {}).items()}))
+                          cache_hit={index[a]: int(k) for a, k in (r.get("cache_hit") or {}).items()},
+                          drafts={index[a]: int(k) for a, k in (r.get("drafts") or {}).items()}))
         for a, k in (r.get("emitted") or {}).items():
             emitted[index[a]] += int(k)
+            kept[index[a]].append(int(k) - 1)
         for a, f in (r.get("finished") or {}).items():
             finish[index[a]] = f["reason"]
     for r in recs:
@@ -178,7 +184,8 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
         toks = tuple(tokens[ids[k]]) if tokens is not None and ids[k] in tokens else None
         requests.append(RequestIO(prompt_len=int(a["prompt_len"]), max_tokens=int(max_tokens) if max_tokens is not None
                                   else engine.max_model_len - int(a["prompt_len"]), output_len=emitted[k],
-                                  eos=finish[k] == "stop", tokens=toks))
+                                  eos=finish[k] == "stop", tokens=toks,
+                                  kept=tuple(kept[k]) if engine.num_speculative_tokens else None))
 
     def at(r: dict[str, Any], key: str, lag: float) -> float | None:
         if r.get(key) is not None:
@@ -186,6 +193,7 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
         return None if r.get("t") is None else float(r["t"]) + lag
 
     return Trace(engine=engine, ids=ids, requests=requests, before_step=[int(a["before_step"]) for a in arrivals], steps=steps,
+                 passed=[int(a.get("after_empty") or 0) for a in arrivals],
                  emits=[bool(r.get("emitted")) for r in steps_recs],
                  ingress_t=[at(a, "ingress_t", -ingress_lag_s) for a in arrivals],
                  release_t=[at(r, "release_t", release_lag_s) for r in steps_recs], header=recs[0])

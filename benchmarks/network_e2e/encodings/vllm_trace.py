@@ -6,10 +6,17 @@ virtual clock. The executor is a fake: a row samples iff the scheduler marked it
 at output index j is the job's (EOS at its stop index). The GPU runs steps in order, each for `StepTime` of its shape, and
 the engine core blocks only where it does: on an empty input queue, and on the oldest step's output.
 
+With a draft (a `DraftEngine`) the scheduler is built with K speculative tokens and reads `mtp`'s settings (`make_scheduler`),
+and the executor hands back what vLLM's runner does: for a row that samples, its token and then the drafts it kept, a
+seeded count from 0 to the drafts the scheduler put in the row (none of a new or resumed request's, which are padding);
+and, under sync scheduling, K draft ids for each request of a step once it has run, as the engine core passes them on.
+
 It writes `verity-vllm/step-trace/v1` records (`verity_vllm.engine.step_trace`): a `header`, an `arrive` per request with the
-schedules-with-tokens count it arrived before (`before_step`), and a `step` per executed step at the time its output was
-processed. Records carry the engine's clock `t`, and the certifier's: `ingress_t`, when the ingress certifier saw the request
-(its engine arrival less a frontend delay), and `release_t`, when the step's tokens left through the egress certifier.
+schedules-with-tokens count it arrived before (`before_step`) and how many schedules with none came after that
+(`after_empty`, when any), and a `step` per executed step at the time its output was processed, `drafts` the drafts each
+of its rows carried. Records carry the engine's clock `t`, and the certifier's: `ingress_t`, when the ingress certifier
+saw the request (its engine arrival less a frontend delay), and `release_t`, when the step's tokens left through the
+egress certifier.
 
 Needs vLLM importable (`VLLM_TARGET_DEVICE=cpu` without a GPU build) and a model config (`model`: a Hub id or a local
 directory); `python -P vllm_trace.py OUT_DIR` writes `CASES` (`-P`: this directory's `code.py` would shadow the stdlib's).
@@ -40,7 +47,7 @@ def _load(name: str) -> Any:
 
 
 _replay = _load("replay")
-STEP_TRACE, Engine = _replay.STEP_TRACE, _replay.Engine
+STEP_TRACE, Engine, DraftEngine = _replay.STEP_TRACE, _replay.Engine, _replay.DraftEngine
 
 EOS = 2
 FINISH = {0: "stop", 1: "length", 2: "abort", 3: "error", 4: "repetition"}
@@ -86,7 +93,7 @@ def make_scheduler(engine: Engine, model: str) -> Any:
     os.environ.setdefault("VLLM_ALLOW_LONG_MAX_MODEL_LEN", "1")   # the executor is a fake: the model's own limit is moot
     import torch
     import vllm.envs as envs
-    from vllm.config import CacheConfig, ModelConfig, ParallelConfig, SchedulerConfig, VllmConfig
+    from vllm.config import CacheConfig, ModelConfig, ParallelConfig, SchedulerConfig, SpeculativeConfig, VllmConfig
     from vllm.v1.core.sched.async_scheduler import AsyncScheduler
     from vllm.v1.core.sched.scheduler import Scheduler
     from vllm.v1.core.single_type_kv_cache_manager import register_all_kvcache_specs
@@ -110,6 +117,14 @@ def make_scheduler(engine: Engine, model: str) -> Any:
         KVCacheGroupSpec(["layer"], FullAttentionSpec(block_size=engine.block_size, num_kv_heads=1, head_size=1,
                                                       dtype=torch.float32))])
     cache_config.num_gpu_blocks = engine.num_gpu_blocks
+    if engine.num_speculative_tokens:
+        # built as vLLM's scheduler tests build one, with no draft model to load; then given the method whose settings
+        # the scheduler reads when it is made: `mtp`'s lookahead, drafting slots and trailing-block drop, which `header`
+        # records as the scheduler holds them
+        spec = SpeculativeConfig(model="ngram", num_speculative_tokens=engine.num_speculative_tokens)
+        spec.method = "mtp"
+        spec.disable_eagle_block_drop = not engine.eagle_block_drop
+        vllm_config.speculative_config = spec
     register_all_kvcache_specs(vllm_config)
     cls = AsyncScheduler if engine.async_scheduling else Scheduler
     sched = cls(vllm_config=vllm_config, kv_cache_config=kv_cache_config, block_size=engine.block_size, log_stats=False,
@@ -120,6 +135,13 @@ def make_scheduler(engine: Engine, model: str) -> Any:
 
 def header(sched: Any, engine: Engine) -> dict[str, Any]:
     sc, cc = sched.scheduler_config, sched.cache_config
+    spec = sched.vllm_config.speculative_config
+    draft = {} if spec is None else {
+        "speculative": {"method": spec.method, "num_speculative_tokens": int(spec.num_speculative_tokens),
+                        "parallel_drafting": bool(spec.parallel_drafting),
+                        "disable_eagle_block_drop": bool(spec.disable_eagle_block_drop)},
+        "num_lookahead_tokens": int(sched.num_lookahead_tokens), "num_prefill_lookahead": int(sched.num_prefill_lookahead),
+        "use_eagle_block_drop": bool(sched.use_eagle_block_drop), "draft_slots": int(spec.max_num_new_slots_for_drafting)}
     return {"kind": "header", "schema": STEP_TRACE, "source": "vllm-scheduler-fake-executor",
             "config": {"scheduler": type(sched).__name__, "max_num_batched_tokens": sc.max_num_batched_tokens,
                        "max_num_seqs": sc.max_num_seqs, "max_model_len": sched.max_model_len,
@@ -127,15 +149,28 @@ def header(sched: Any, engine: Engine) -> dict[str, Any]:
                        "long_prefill_token_threshold": sc.long_prefill_token_threshold, "policy": str(sc.policy),
                        "async_scheduling": engine.async_scheduling, "block_size": cc.block_size,
                        "enable_prefix_caching": bool(cc.enable_prefix_caching), "num_gpu_blocks": cc.num_gpu_blocks,
-                       "watermark": sc.watermark, "scheduler_reserve_full_isl": bool(sched.scheduler_reserve_full_isl)}}
+                       "watermark": sc.watermark, "scheduler_reserve_full_isl": bool(sched.scheduler_reserve_full_isl),
+                       **draft}}
 
 
-def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = StepTime()) -> list[dict[str, Any]]:
-    """The step trace of `jobs` (sorted by arrival) through vLLM's scheduler."""
+def kept_drafts(seed: int, request: str, j: int, d: int, accept: float) -> int:
+    """How many of the d drafts after output j of `request` the fake executor keeps: the drafts before the first one
+    rejected, each kept with probability `accept`, drawn from the seed, the request and j alone."""
+    rng = random.Random(f"{seed}:{request}:{j}")
+    k = 0
+    while k < d and rng.random() < accept:
+        k += 1
+    return k
+
+
+def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = StepTime(), accept: float = 0.7,
+        seed: int = 0) -> list[dict[str, Any]]:
+    """The step trace of `jobs` (sorted by arrival) through vLLM's scheduler; with a draft, each draft is kept with
+    probability `accept` (`kept_drafts`, from `seed`)."""
     from vllm.sampling_params import SamplingParams
     from vllm.utils.hashing import sha256
     from vllm.v1.core.kv_cache_utils import get_request_block_hasher, init_none_hash
-    from vllm.v1.outputs import ModelRunnerOutput
+    from vllm.v1.outputs import DraftTokenIds, ModelRunnerOutput
     from vllm.v1.request import Request
 
     if any(jobs[k].arrival > jobs[k + 1].arrival for k in range(len(jobs) - 1)):
@@ -148,8 +183,10 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
     t = 0.0
     gpu_free = 0.0
     scheduled = 0
+    empty = 0                       # schedules with no tokens since the last one with some
     nxt = 0
-    queue: deque[tuple[Any, float, dict[str, int | None], int | None]] = deque()
+    queue: deque[tuple[Any, float, dict[str, bool], int | None]] = deque()
+    K = engine.num_speculative_tokens
 
     def arrive() -> None:
         nonlocal nxt
@@ -160,23 +197,24 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
             prompt = list(job.tokens[:job.prompt_len]) if job.tokens is not None else [3 + (nxt + p) % 997 for p in range(job.prompt_len)]
             sched.add_request(Request(request_id=rid, prompt_token_ids=prompt, sampling_params=sp, pooling_params=None,
                                       arrival_time=job.arrival, block_hasher=hasher))
-            recs.append({"kind": "arrive", "request": rid, "before_step": scheduled, "prompt_len": job.prompt_len,
+            recs.append({"kind": "arrive", "request": rid, "before_step": scheduled,
+                         **({"after_empty": empty} if empty else {}), "prompt_len": job.prompt_len,
                          "eos_token_id": EOS, "sampling": {"max_tokens": job.max_tokens, "stop": [], "ignore_eos": False},
                          "t": round(job.arrival, 6), "ingress_t": round(job.arrival - job.ingress_delay, 6)})
             nxt += 1
 
-    def schedule() -> tuple[Any, dict[str, int | None], int | None]:
-        nonlocal t, scheduled
+    def schedule() -> tuple[Any, dict[str, bool], int | None]:
+        nonlocal t, scheduled, empty
         so = sched.schedule()
         t += timing.schedule
-        sample: dict[str, int | None] = {}
-        for rid in so.num_scheduled_tokens:
-            r = sched.requests[rid]
-            sample[rid] = None if r.is_prefill_chunk else by_id[rid].token(r.num_computed_tokens - r.num_prompt_tokens)
+        sample = {rid: not sched.requests[rid].is_prefill_chunk for rid in so.num_scheduled_tokens}
         step = None
         if so.total_num_scheduled_tokens > 0:
             step = scheduled
             scheduled += 1
+            empty = 0
+        else:
+            empty += 1
         return so, sample, step
 
     def execute(so: Any) -> float:
@@ -186,19 +224,30 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
         gpu_free = max(gpu_free, t) + timing.gpu(so.total_num_scheduled_tokens, len(so.num_scheduled_tokens))
         return gpu_free
 
-    def update(so: Any, sample: dict[str, int | None], step: int | None) -> None:
+    def sampled(so: Any, rid: str, fresh: set[str]) -> list[int]:
+        """What the executor returns for a row that samples: the request's next output token, as its outputs stand when
+        the step's output is processed, and then the drafts the row kept."""
+        r = sched.requests.get(rid)
+        j = 0 if r is None else r.num_output_tokens
+        d = 0 if rid in fresh else len(so.scheduled_spec_decode_tokens.get(rid, ()))
+        return [by_id[rid].token(j + m) for m in range(1 + kept_drafts(seed, rid, j, d, accept))]
+
+    def update(so: Any, sample: dict[str, bool], step: int | None) -> None:
         nonlocal t
         ids = list(so.num_scheduled_tokens)
+        cached = so.scheduled_cached_reqs
+        fresh = {r.req_id for r in so.scheduled_new_reqs} | set(getattr(cached, "resumed_req_ids", None) or ())
         mro = ModelRunnerOutput(req_ids=ids, req_id_to_index={r: k for k, r in enumerate(ids)},
-                                sampled_token_ids=[[] if sample[r] is None else [sample[r]] for r in ids], logprobs=None,
+                                sampled_token_ids=[sampled(so, r, fresh) if sample[r] else [] for r in ids], logprobs=None,
                                 prompt_logprobs_dict={}, pooler_output=[])
         starts = {}
         for r in so.scheduled_new_reqs:
             starts[r.req_id] = int(r.num_computed_tokens)
-        cached = so.scheduled_cached_reqs
         for k, rid in enumerate(cached.req_ids):
             starts[rid] = int(cached.num_computed_tokens[k])
         outs = sched.update_from_output(so, mro)
+        if K and not engine.async_scheduling and ids:
+            sched.update_draft_token_ids(DraftTokenIds(ids, [[3 + m for m in range(K)] for _ in ids]))
         t += timing.update
         if step is None:
             return
@@ -216,6 +265,7 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
                      "resumed": sorted(getattr(cached, "resumed_req_ids", None) or ()),
                      "cache_hit": {r.req_id: int(r.num_computed_tokens) for r in so.scheduled_new_reqs if r.num_computed_tokens},
                      "preempted": sorted(getattr(so, "preempted_req_ids", None) or ()), "emitted": emitted,
+                     **({"drafts": {r: len(v) for r, v in so.scheduled_spec_decode_tokens.items() if v}} if K else {}),
                      "finished": finished, "t": round(t, 6), "release_t": round(t + timing.release, 6)})
 
     while nxt < len(jobs) or sched.has_requests() or queue:
@@ -311,6 +361,50 @@ CASES: dict[str, tuple[Engine, dict[str, Any]]] = {
                                   enable_prefix_caching=True, async_scheduling=True),
                            dict(n=60, rate=50.0, prompt=(40, 300), output=(5, 150), shared_prefix=64, vocab=4)),
 }
+# with a draft of K = 1, 3 and 5 tokens, sync and async, with and without prefix caching: a token budget under the running
+# rows' (a row's drafts are cut, and a request is left out of a step), a KV pool under the requests' blocks and their
+# lookahead (preemption), prompts from one token (a new decode row, padded) and prompts whose output runs into the context
+# limit
+CASES |= {
+    f"{'async' if asy else 'sync'}-draft{k}{'-prefix-cache' if cache else ''}": (
+        DraftEngine(max_num_seqs=12, max_num_batched_tokens=48, max_model_len=160, num_gpu_blocks=72,
+                    enable_prefix_caching=cache, async_scheduling=asy, num_speculative_tokens=k),
+        dict(n=40, rate=60.0, prompt=(1, 120), output=(1, 60), **(dict(shared_prefix=48, vocab=4) if cache else {})))
+    for k in (1, 3, 5) for asy in (False, True) for cache in (False, True)}
+
+
+def check(recs: Sequence[dict[str, Any]], tokens: dict[str, Sequence[int]] | None = None) -> dict[str, Any]:
+    """The replay against a trace of this module: whether its steps are the trace's (`match`: every step's rows in order
+    and, with a draft, the drafts each row carried; else `first_mismatch` with both sides' rows, or `refused`), and what
+    the trace exercises."""
+    t = _replay.load_step_trace(recs, tokens=tokens)
+    K = t.engine.num_speculative_tokens
+    steps = [r for r in recs if r["kind"] == "step"]
+    rows = [(r, i, n) for r in steps for i, _, n in r["rows"]]
+    out: dict[str, Any] = {
+        "steps": len(steps), "requests": len(t.requests), "preemptions": sum(len(r["preempted"]) for r in steps),
+        "cache_hits": sum(len(r["cache_hit"]) for r in steps), "after_empty": sum(1 for p in t.passed or () if p),
+        "finish": {f: sum(q["reason"] == f for r in steps for q in r["finished"].values()) for f in ("stop", "length")}}
+    if K:
+        drafts = [d for r in steps for d in r["drafts"].values()]
+        kept = [k for q in t.requests for k in q.kept or ()]
+        out |= {"rows_with_drafts": len(drafts), "rows_with_fewer_drafts": sum(d < K for d in drafts),
+                "padded_new_rows": sum(i in r["drafts"] and (i in r["new"] or i in r["resumed"]) for r, i, _ in rows),
+                "kept": {str(k): kept.count(k) for k in range(K + 1)}}
+    try:
+        rp = _replay.replay(t.engine, t.requests, admit=t.before_step, passed=t.passed)
+    except (ValueError, RuntimeError, AssertionError) as e:
+        return out | {"match": False, "refused": f"{type(e).__name__}: {e}"}
+    m = _replay.compare(rp.steps, t.steps)
+    same = [k for k in range(min(len(rp.steps), len(t.steps)))
+            if rp.steps[k].rows != t.steps[k].rows or rp.steps[k].drafts != t.steps[k].drafts]
+    first = same[0] if same else m.first_mismatch
+    out |= {"match": first is None and m.ordered == m.steps, "matched": m.matched, "ordered": m.ordered,
+            "first_mismatch": first}
+    if first is not None:
+        side = lambda ss: None if first >= len(ss) else {"rows": ss[first].rows, "drafts": ss[first].drafts}  # noqa: E731
+        out |= {"replay": side(rp.steps), "trace": side(t.steps)}
+    return out
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -321,16 +415,28 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--case", action="append", choices=sorted(CASES))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--requests", type=int, help="override each case's request count")
+    ap.add_argument("--accept", type=float, default=0.7, help="with a draft, the probability each draft is kept")
+    ap.add_argument("--check", action="store_true", help="replay each trace (`check`) into OUT/check.json; exit 1 unless "
+                    "every replay's steps are its trace's")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
+    checks = {}
     for name in a.case or sorted(CASES):
         engine, kw = CASES[name]
         jobs = workload(seed=a.seed, **(kw | ({"n": a.requests} if a.requests else {})))
-        recs = run(engine, jobs, model=a.model)
+        recs = run(engine, jobs, model=a.model, accept=a.accept, seed=a.seed)
         (a.out / f"{name}.jsonl").write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in recs))
-        if engine.enable_prefix_caching:
-            (a.out / f"{name}.tokens.json").write_text(json.dumps(tokens_of(jobs, recs)))
+        toks = tokens_of(jobs, recs) if engine.enable_prefix_caching else None
+        if toks is not None:
+            (a.out / f"{name}.tokens.json").write_text(json.dumps(toks))
         print(name, sum(r["kind"] == "step" for r in recs), "steps")
+        if a.check:
+            checks[name] = c = check(recs, toks)
+            print(" ", "replay matches" if c["match"] else f"REPLAY DIFFERS: {c.get('refused') or c.get('first_mismatch')}")
+    if a.check:
+        (a.out / "check.json").write_text(json.dumps(checks, indent=1) + "\n")
+        if not all(c["match"] for c in checks.values()):
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":
