@@ -25,10 +25,10 @@ what it holds.
   `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`, `profiles.transport`,
   `profiles.admission_calibration`). Each of these lists in `__all__` the names that other packages, the
   benchmarks and the command line read from it. Five more modules that other packages or the benchmarks read
-  state no `__all__` yet: `build`, `env`, `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `served_seed`'s
-  does not yet list `DERIVED`, `UNSEEDED`, `param_of` and `rule_of`, nor `step_trace`'s `SERVED` and
-  `scheduler_config`, which other packages read; and `observe.fold.profiles.generic` reads one private name that
-  no `__all__` lists, `profiles.dense_generic._sha256`.
+  state no `__all__` yet: `build`, `env`, `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `step_trace`'s
+  does not yet list `SERVED` and `scheduler_config`, which other packages read; and
+  `observe.fold.profiles.generic` reads one private name that no `__all__` lists,
+  `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
   and `commit` packages, its `llm` and `glue`; and the benchmarks that build, serve or time the engine
   (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`, `benchmarks/vllm_encoded`
