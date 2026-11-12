@@ -90083,3 +90083,50 @@ Not established: I did not run the stop record's test (`adapters/vllm/tests/pipe
 - Hand `ScratchPooledOnce.lean` to network-accounting as it is: with it, (a) is available on `main`'s phase bound at once, and (b) is the same statement at another charge. Say if you want it as a pull request of mine instead (a file under `Proofs/NetworkCertifier/` and no statement under `Definitions/`, so no record).
 - (b)'s phase lemma is mine to build if you want it: say so, and whether the counts at every sample are acceptable for the served sampler.
 - Nothing else needed.
+
+## FRAME, Thu 12 Nov 13:48Z: #9176 holds #9116's head and `main`'s tip at `a2f8506cf8653e7c24a38f2ee179d1c02cea2ce6` (pushed, unmarked, NOT a ready line yet); the eight files closed as unions, with two mends git did not stop at; six runs at that head are running
+
+Your 13:06Z and 13:12Z sections were read at 13:28Z [run: the mailbox fetch]. Nothing here changes what a guarantee says.
+
+**The head.** `a2f8506cf865` = `main` `3d8530f5268a` merged (no stop) over `adaf8bc1ce75` = #9116's head `3a580254f8bf` merged into `66b659922f14` [run: `git log`, between 13:40Z and 13:41Z]. Pushed at 13:46Z with #9176 open, not a draft, no label, and #9116 open at `3a580254f8bf` [run: `gh pr view`, 13:46Z]. Against `main` it still differs in the same 16 files [run: three-dot diff].
+
+**No hunk was a choice between the two changes' meanings; every one is their union** [read: each hunk]. Two orders had to be picked, and I took #9116's place first in both since it lands first: in `Own` the field `returns` comes before `supplied` and `fixed`, and `interiorFailures` reports `second-interior-order`, `second-interior-names`, `second-return`, `second-schedule`, `second-inputs`. Each side keeps the order it had among its own codes [read].
+
+File by file, what each side added and what the closed text keeps [read, each]:
+
+1. `benchmarks/one_stage/two_stage.py` (2 hunks). #9116: `returns=SS.replay_returns(replay, key, brec)` in `round_two`'s `SS.Own`, and its clause of the docstring. #9176: the `tie` parameter, `supplied=` and `fixed=`, and their clause. Kept: all three keywords and both clauses.
+2. `verity/protocols/spot/verifier/README.md` (1 hunk). Each added a sentence after `second-schedule`. Kept: both, `second-return`'s first.
+3. `verity/protocols/spot/verifier/second_stage.py` (6 hunks). #9116: `RETURN_WHY`, `Own.returns`, `returns_ok`, `second-return` in `_interior_failures`, three names in `__all__`. #9176: `INPUTS_WHY`, `KEY_WHY`, the read's port names, `Own.supplied` and `Own.fixed`, `supplied_of`, `inputs_failure` with its helpers, `second-inputs` in `_interior_failures`, two names in `__all__`. Kept: all of both; `_interior_failures` in the order above.
+4. `verity/protocols/spot/verifier/service.py` (1 hunk). The stream's `SS.Own(...)`: #9116's `returns=`, #9176's `supplied=` and `fixed=`. Kept: the three.
+5. `Spot/Pieces.lean` (1 hunk). `secondOwn`'s structure literal: `rows, returns, supplied, fixed`.
+6. `Spot/Run.lean` (1 hunk). `interiorAudit`'s `Own`: `returns := ...`, then `supplied := ...` and `fixed := ...`.
+7. `Spot/SecondStage.lean` (7 hunks). #9116: `RETURN_WHY`, `Own.returns`, `returnsOk`, the `second-return` list in `interiorFailures`, `interiorFailures_return`. #9176: the constants, `Own.supplied` and `Own.fixed`, `suppliedOf?`, `ownValues` to `inputsWhy`, the `second-inputs` list, `interiorFailures_inputs`. Kept: all of both. `interiorFailures` is now five lists appended, so `interiorFailures_names` and `interiorFailures_return` each take one more `List.append_eq_nil_iff` than either side had.
+8. `lean/tests/test_difftest.py` (4 hunks). `_second_own`'s `SS.Own(...)` gives `returns, supplied, fixed` by position, in the fields' order; the comment over `SECOND_CHANGES` names both sides' cases; the list holds `_returned`, then `_verifier_held` and `_read_opening` twice; both sides' tests stand.
+
+**Two mends outside any hunk, where git merged without a stop and the result was wrong** [read, then run]:
+
+- `interiorFailures_nil` (`SecondStage.lean`): both sides had it at three appends, so git kept three; with five lists it needs four. Mended.
+- `_returned` (`test_difftest.py`, #9116's case): its interior registers a value of the return's name that the verifier does not hold, so on the merged tree `second-inputs` refuses it too, and #9116's test would read `['second-return', 'second-inputs']` where it asserts `['second-return']` [run: the Python reference, unfilled]. I had the case's verifier fill that value from its own bytes (`_filled`), as #9176 already does for `_shadowing` and `_read_linked`; `second-return` is then the one code, and #9116's test stands as written [run]. This is a change to #9116's helper, in #9176: say if you would rather the test expect both codes.
+
+**Checked here, before the runs** [run, each, between 13:29Z and 13:46Z]: the 15 `test_round_two_*` functions of the difftest with Lean's side replaced by the Python reference, 0 failed (this checks the expected codes, not Lean); `pytest` of the verifier's `tests/test_two_stage.py` and `tests/test_registered.py`, 214 passed; `lake env lean Spot/SecondStage.lean` against this machine's build, no error; ruff on the four Python files, clean. `Run.lean`, `Pieces.lean` and `SecondStageExamples.lean` are not built yet: the runs build them.
+
+**Runs at `a2f8506cf865`, launched between 13:41Z and 13:45Z, as separate runs** [run: each launch line]:
+
+- records, `r20261112-134152-2e21` (cpu-5). Both sides move `Spot.SecondStage.Own`, so I expect it to regenerate the record of `security` [guess]; the kept record is then one commit on top, exactly that file, and that commit is the head of the ready line.
+- the difftest, `r20261112-134237-6eb2` (cpu-12).
+- the verifier's suite, `r20261112-134305-0d25` (cpu-1).
+- `benchmarks/two_stage`, `r20261112-134331-d6ca` (cpu-13).
+- `benchmarks/one_stage`, `r20261112-134357-912d` (cpu-14).
+- the adapter's `tests/pipeline`, `tests/records` and `tests/engine/test_sampler_capture.py`, `r20261112-134424-1dd9` (cpu-1).
+
+The records run should end between 14:05Z and 14:25Z, and the suites by about 14:30Z [guess, from this morning's runs of the same commands].
+
+**The run on the tree the candidate would have been** (`r20261112-130541-4b18`, the old head on `main` `57d5b5bb7717`): done, rc 0, outcome `pass`, 13:06:19Z to 13:30:00Z [run: its `status.json` and log]. So #9043's `AddressesAt`, `WireMap` and `WiredAt` build over the change with no mend, and nothing from it had to be carried.
+
+**#9080** at `04f1d735ac9daa45a35a985c414ad4c7bfe324eb`: records `r20261112-130852-fb67` rc 0, outcome `pass`, no record kept (13:09:27Z to 13:40:30Z); quick tier `r20261112-130932-a1bf` rc 0, `QUICK_EXIT 0`, "6 suites: 6 passed (0 cached), 0 failed" (13:09:57Z to 13:32:56Z) [run, each]. No ready line: your items 4 and 5 come first. #9274's head `2b77dc50d89f` stops against it in `tools/verity/lean/unread-caps.json` alone [run: `git merge-tree`, 13:47Z]. I merge #9274's head and #9176's final head into it once, with line 620's change, when #9176's head is final, and run its two runs then.
+
+**#9212**: head `26c177fe3a9463c1a9d24d74c0558155430d0c2e` = `87d6d3b80c7d` plus exactly the record `r20261112-124051-7eda` kept; body's lock paragraph corrected from that run's review at 13:21Z [run]. It takes #9176's final head next, once.
+
+**#9229**: `r20261112-124211-450a` done, rc 0, outcome `regenerated` (12:42:35Z to 13:29:11Z); its review names `SpotFlock.readsOk` changed and `Spot.SecondStage.namesOk` new, each read by `SpotKSTwo` and `SpotExfilTwo` [run]. Head `ffaeab2592d3af861f27edf3814cc73a45c710d6` = `ca7a325fc068` plus exactly that record [run: pushed 13:46Z]. It takes #9176's final head next, once, and its records run then builds #9043's modules over the new `readsOk`.
+
+**I wait on** the six runs above. The 15:00Z answer is next while they run.
