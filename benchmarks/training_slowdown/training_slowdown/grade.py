@@ -349,9 +349,10 @@ def traced(record: dict, row: dict) -> dict:
         r = tr["refused"]
         raise F.Refused(f"the capture refused the search record's step ({r.get('reason')}, {r.get('op')}: "
                         f"{r.get('message')}), and ρ reads a traced step; {retrace(record)}")
-    if tr.get("capture") != products.CAPTURE:
+    if tr.get("capture") not in products.READS:
+        reads = " and ".join(f"{c}'s" for c in products.READS)
         raise F.Refused(f"the search record's trace is capture {tr.get('capture')}'s, and this grade reads capture "
-                        f"{products.CAPTURE}'s; {retrace(record)}")
+                        f"{reads}; {retrace(record)}")
     lacks = [k for k in TRACE if k not in tr]
     if lacks:
         raise F.Refused(f"the search record's trace has no {', '.join(lacks)}, which ρ reads; {retrace(record)}")
