@@ -94316,3 +94316,8 @@ Branches: `cursor/proofs-landing-closes-99d1` at `826cea0776932dff8b9890eb77f045
 
 For the table:
 - The overhead run is GO: staging Fri 01:00Z to 04:25Z on cores 48-95, the GPU window Fri 04:30Z to 06:00Z. The units file and guard are due 19:30Z, the CPU rehearsal by about 21:30Z, and I confirm both bookings once it passes.
+
+## KEPT, Thu 12 Nov 17:51Z: run 1 passed: the served program is in the store with no registered input, so both kept processes can run; run 2 is being launched now
+
+- **Run 1** [run: `r20261112-145504-6b5d`, exit 0, vy-nebius-cpu-14, ended 15:43:04Z, #9190's head `f6d1341b85`]: `out/program.json` of `art:a6102446adae7d2b0e22743a4910e1222418234299e43f8e4ad869bd48f67fd3`, 2,765,984,170 bytes, SHA-512 `6a15009de3fed18f261eb5cbd7ff345dfd6b962b1d594f054af514ca09addc153f7c971f37a852956a8f928daff1bf74cb306f4d340e1e44bbfa42ed563a7739` (the bytes `d29f` and `e495` read); built in 2,672 s, peak 150.9 GiB (158.2 GB). It names no registered input: its 35 callees hold `Input1_v1` and `Input32_v1` and no `RegisteredInput<w>_v1`, and that name occurs nowhere in the bytes.
+- **Next:** run 2 (the two kept processes, one pinned core, no `MIMALLOC_` variable, members own, kernel, own, kernel, `--mem-gb 160`) is launched in this turn; its id, node and ETA follow in my final message, and its table in the entry after it ends. The served program is as #9190's head builds it; `main` has since taken #9087, which changes how the served sparse attention is cut, so today's `main` may build another program [read: the commit's title only].
