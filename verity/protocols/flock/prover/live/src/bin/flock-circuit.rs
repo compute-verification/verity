@@ -3902,6 +3902,9 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
     }).collect()
 }
 
+/// The ZK server's refusal of a session whose witness is not the host's: its recheck is of a host witness.
+const FIREWALL_HOST_WITNESS: &str = "FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)";
+
 /// How a session builds its witness: on the device (inputs and host slots) or on the host, with the units' slots on the host,
 /// the host slots in mapped memory, and the hm96 slots built on the device natively (beside the compressions' native witness).
 fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool, bool) {
@@ -4096,6 +4099,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let tree = is_zk(st) || plain_tree(st);
     let mut commit: Vec<F128> = Vec::new();
     let (device, host_units, mapped, hm96) = witness_mode(st, plan);
+    // the ZK server rechecks a host witness: a session whose witness the device would build is refused by the recheck's own
+    // name, decided here from the witness mode alone, so no witness is built for it and a build without the device reaches
+    // the refusal too. It leaves where the recheck's own refusal does: after `Hello`, before anything of a table
+    let no_recheck = firewall_on(st) && device;
     // on the device, rep 1 proves from rep 0's level-0 commitment (the session's tag keys what rep 0 keeps) and builds its
     // witness again, under M1 too: both reps commit one level-0 codeword
     static SESSIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -4176,6 +4183,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut witness_prebuilt_s: Option<f64> = None;
     let mut wits = Vec::new();
     for (j, tb) in tabs.list.iter().enumerate() {
+        if no_recheck {
+            // a witness the pipeline built ahead of the session is waited for and dropped, never left building beside the refusal
+            if let Some(h) = plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()) {
+                let _ = h.join();
+            }
+            break;
+        }
         // a witness built beside the previous session: its wait counts as this session's witness time
         let tw = Instant::now();
         let pre = (tabs.list.len() == 1 && !plan.rep1_other_witness)
@@ -4264,6 +4278,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     else if tree { "the verifier's coin-tree root and session key" }
                                     else { "the verifier's seed commitment" })),
         }
+        if no_recheck {
+            return Err(FIREWALL_HOST_WITNESS.into());
+        }
         // under the ZK server every table's level 0 is the Lean session loop's, sampled once it has every table's witness, before
         // any rep's frame starts (its time counts in table 0's level 0)
         let tl = Instant::now();
@@ -4330,7 +4347,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 false => None,
                 true => {
                     let Some(WitData::Host((z, ..))) = wt0.as_ref() else {
-                        return Err("FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)".into());
+                        return Err(FIREWALL_HOST_WITNESS.into());
                     };
                     let l0 = match zk_pre.as_ref() {
                         Some(z) => z[0].as_ref().expect("rep 0's pads").0.level0.clone(),
@@ -6109,12 +6126,14 @@ fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, Strin
 /// `zk_firewall_refuses_device_witness` (live PROTOCOL.md §10.2, §10.4): the ZK server rechecks a host witness, so a
 /// session whose witness the device builds is refused by name before anything of its table leaves, with the device's level
 /// walk asked for (`FC_UNIT_WALK=1`, under which a deep unit's words are the device's and no host slots) as without it. One
-/// firewalled session on the GPU device in a process of its own, with no `FC_HOST_WITNESS`: the prover stops with the
-/// recheck's own refusal, the verifier gets no `Commit`, round or proof, and does not accept.
+/// firewalled session asked for the device (`--gpu`) in a process of its own, with no `FC_HOST_WITNESS`: the prover stops with
+/// the recheck's own refusal, the verifier gets no `Commit`, round or proof, and does not accept. The refusal is decided
+/// from the witness mode before any witness is built, so a build without the device holds it too (`device_build` false:
+/// the session's `--gpu` reaches nothing of a device before it is refused); a device build runs the case on the device.
 fn firewall_device_witness_case(gpu: bool) -> Value {
     let name = "zk_firewall_refuses_device_witness";
-    if !gpu {
-        return json!({"case": name, "pass": true, "skipped": "a device witness is the GPU device's"});
+    if cfg!(feature = "gpu") && !gpu {
+        return json!({"case": name, "pass": true, "skipped": "a device build runs the case on the device (--gpu)"});
     }
     let lean = flock_live::firewall::lean_frame_exe();
     if !lean.exists() {
@@ -6127,7 +6146,8 @@ fn firewall_device_witness_case(gpu: bool) -> Value {
     let left: Vec<String> = s.iter().map(kind).filter(|k| ["commit", "open", "round", "proof"].contains(&k.as_str())).collect();
     let stopped = v["prover_stopped"].as_str().unwrap_or("");
     json!({"case": name, "expect": "the session refused by the recheck's own name, nothing of the table sent, not accepted",
-           "gpu": true, "unit_walk_asked": "FC_UNIT_WALK=1", "accepted": v["accepted"], "prover_stopped": stopped, "why": v["why"],
+           "gpu": gpu, "device_build": cfg!(feature = "gpu"), "unit_walk_asked": "FC_UNIT_WALK=1", "accepted": v["accepted"],
+           "prover_stopped": stopped, "why": v["why"],
            "error": v["error"], "requests": s.iter().map(kind).collect::<Vec<_>>(), "sent_of_the_table": left,
            "pass": v["accepted"] == false && stopped == want && left.is_empty()})
 }
