@@ -1,11 +1,11 @@
 """served.py: the units a served H1 window's own sampling coin selects (vllm's `pouw_h1` window, its z table one leaf a
 unit of its ``tile``), as PoUW's verifier samples them (core's `credit.drawn`).
 
-    python served.py --calls CALLS.json --session DIR --draw-session DRAW --ledger windows.jsonl [--ledger ...]
-                     --pin SHA512 --pins LOG --main FILE --descriptor PROGRAM[.gz] [--out DRAWN.json]
+    python served.py --calls CALLS.json --session DIR --draw-session SAMPLE --ledger windows.jsonl [--ledger ...]
+                     --pin SHA512 --pins LOG --main FILE --descriptor PROGRAM[.gz] [--out SAMPLED.json]
 
 CALLS.json is the window's ``pouw-h1-calls.json``; DIR the challenger session's directory as the auditor's gate fetched it
-(``fetch/<session>/out``), never the prover's bundle, and DRAW its sample session's; each ``--ledger`` a published head of the auditor's signed ledger;
+(``fetch/<session>/out``), never the prover's bundle, and SAMPLE its sample session's; each ``--ledger`` a published head of the auditor's signed ledger;
 ``--pin`` the SHA-512 of the challenger's public key, the verifier's own configuration; ``--pins`` the challenger host's
 pins log as infra published it, a line a pin; ``--main`` the verifier's own ``git rev-list --first-parent origin/main``;
 PROGRAM the window Program's descriptor (the rehearsal's ``window-program.json.gz``), whose SHA-512 must be the circuit the
@@ -14,7 +14,7 @@ window's period-open signed.
 1. The window's sampling coin is the verifier's challenger's, or nothing is sampled: the session the signed ledger opens and
    ends for the window's root, under the pinned key (`remote.trusted_session`), run from a commit the pins log records
    on main's first-parent line (`challenger.pinned_session`: a session the log doesn't record is refused, though this
-   sample credits nothing), and the window's one sampling coin from its sampling session DRAW, the one the ledger opens
+   sample credits nothing), and the window's one sampling coin from its sampling session SAMPLE, the one the ledger opens
    withheld on its `draw_root` over its manifest, last receipts and every round's root and coin, opened after that root
    (`pouw_h1_challenger.draw_session_reason`), over a manifest whose ``calls_root`` binds its calls and served trees' entries
    (`pouw_h1_challenger.manifest_reason`). The window's salt and round coins are its served values' checks (vllm's
@@ -76,10 +76,10 @@ def main(argv=None) -> int:
         lines = ledger_head([remote.ledger_lines(p) for p in a.ledger], key, PHC.lms_verify)
         main = remote.main_lines(a.main)
         audited = pinned_session(lines, {"root": root}, key, pins, main, PHC.lms_verify)
-        draw_files = remote.session_files(a.draw_session)
+        sample_files = remote.session_files(a.draw_session)
     except CoinError as e:
         raise SystemExit(f"REFUSED: the challenger's session is not trusted: {e}") from e
-    if (why := PHC.draw_session_reason(commits, key, lines, pins, main, draw_files, PHC.lms_verify)) is not None:
+    if (why := PHC.draw_session_reason(commits, key, lines, pins, main, sample_files, PHC.lms_verify)) is not None:
         raise SystemExit(f"REFUSED: {why}")
     if (why := PHC.manifest_reason(doc)) is not None:
         raise SystemExit(f"REFUSED: {why}")
@@ -88,7 +88,7 @@ def main(argv=None) -> int:
         raise SystemExit("REFUSED: the calls' units are not the window's units in order")
     if audited.period is None:
         raise SystemExit("REFUSED: the window is in no period of the auditor's ledger, so no period-open committed its "
-                         "circuit and draw K")
+                         "circuit and sample K")
     raw = Path(a.descriptor).read_bytes()
     descriptor = gzip.decompress(raw) if a.descriptor.endswith(".gz") else raw
     if hashlib.sha512(descriptor).hexdigest() != audited.circuit:

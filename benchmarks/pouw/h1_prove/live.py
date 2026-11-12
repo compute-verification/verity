@@ -1,4 +1,4 @@
-"""live.py: a served H1 window's live units (``live@<s>``, `circuit.live`) through sampled proofs, the
+"""live.py: a served H1 window's live units (``live@<s>``, `circuit.live`) through SPOT, the
 verifier's side and the prover's staging; `live.sh` proves them by Flock --zk and has Lean verify them.
 
     python live.py prepare --live DIR --work W
@@ -304,7 +304,7 @@ def cmd_prepare(a) -> int:
 
 
 def live_stager(T: int, circuit: Path, part: dict, r: int | None = None):
-    """C-Flock's stager of `live.template_v2(T)`, or with `r` rows a piece `live.template_rows(T, r)`, bound to the live
+    """Flock's stager of `live.template_v2(T)`, or with `r` rows a piece `live.template_rows(T, r)`, bound to the live
     Program's partition, its circuit written once."""
     from verity_flock import class_statement as CS
     tmpl, rows = (L.template_v2(T), LR.statement_rows(T, v2=True)) if r is None else \
