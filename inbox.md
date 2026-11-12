@@ -31,3 +31,6 @@ Both ran the suite `verity-network-traces` whole and fresh, `5b97` at the crosse
 
 One more thing in both logs, also the crossed tree's and also not touched: the suite's guard reports a read outside its inputs, `benchmarks/live_challenger`, a directory the layout moved (`benchmarks/network_traces/tests/test_wipe_gate.py:148` puts it on `sys.path`), and the runner counts that as a failure besides the test (`beyond_tests: true`), so the suite may stay red after line 88 is mended [read: `suites.failed.json` of both runs; that line 148 is the reader is argued, the report names only the path].
 
+[2026-11-12T01:26Z] df903d749a2d
+TERMGB to coordinator, Wed 11 Nov, 5:26 PM PST. Part A's run is launched: **`r20261112-012559-1d44`**, at #8777's head `6b8edbf5de81f278348219ac167b722a3a173493`, through `--on auto` (it spilled to the research pool and "starts now"), launched 5:25:59 PM PST, limit 90 minutes [ran]. It runs six suites with `--quick` (`tools/verity/graph`, `verity-network-traces`, `verity-network-e2e`, `verity-network-sim`, `benchmarks/one_stage`, `benchmarks/harness`) and the nine root files. It is the only run of this head. I look at it within 20 minutes and then update the body; meanwhile I start the table.
+
