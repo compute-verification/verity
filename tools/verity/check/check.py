@@ -1654,19 +1654,33 @@ def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = No
 AFTER_LEAN = SUITES.AFTER_LEAN
 
 #: The opt-in tests a cold check runs by name (`--no-cache`, unsharded and without `--deferred`: the nightly `audit-main`), each
-#: suite's in a `suites.py` run of its own with its variable set, in the step that runs the suite, after the suite's own run
-#: (`opt_in`): suite -> (the variable, the tests by node id in the suite).  Each skips in every other check by a mark in its own
-#: file that reads the variable (tests/test_opt_in_tests.py), so no candidate's check pays for it and no suite's key holds the
-#: variable; a test the variable turns on that this doesn't name, circuit-check's serial-report test of about 2.5 h, stays off.
+#: suite's in a `suites.py` run of its own with its variables set, in the step that runs the suite, after the suite's own run
+#: (`opt_in`): suite -> each variable its opt-in tests read -> those tests by node id in the suite.  Each skips in every other
+#: check by a mark in its own file that reads its variable (tests/test_opt_in_tests.py), so no candidate's check pays for it and
+#: no suite's key holds a variable; a test a variable turns on that this doesn't name, circuit-check's serial-report test of
+#: about 2.5 h, stays off.
 OPT_IN = {
-    "tools/verity/circuit_check": ("VERITY_CIRCUIT_CHECK_SLOW", (
+    "tools/verity/circuit_check": {"VERITY_CIRCUIT_CHECK_SLOW": (
         "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
-        "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")),
-    "verity/protocols/remote/verifier/composition": ("VERITY_SLOW", (
+        "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
+    "verity/protocols/remote/verifier/composition": {"VERITY_SLOW": (
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
         "tests/test_composition_difftest.py::test_product_over_remotes_subprotocols_is_remote",
-        "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")),
+        "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
+    "adapters/vllm": {
+        "VERITY_VLLM_INTERIOR_TABLE": (
+            "tests/pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
+            "tests/pipeline/test_interior_table.py::test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs",
+            "tests/pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links",
+            "tests/pipeline/test_interior_table.py::test_a_table_round_1_did_not_register_is_refused",
+            "tests/pipeline/test_interior_table.py::test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length",
+            "tests/pipeline/test_interior_table.py::test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain",
+            "tests/pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
+            "tests/pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
+            "tests/pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
+        "VERITY_VLLM_HISTORY_E2E": (
+            "tests/pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
 OPT_IN_DIR = "opt-in"
@@ -1682,7 +1696,7 @@ def then_opt_in(argv: list[str], out: Path, step: str, args: list[str]) -> str:
 def opt_in(out: Path, step: str, args: list[str]) -> int:
     """`check.py --opt-in OUT STEP ARGS...`, a cold check's opt-in tests (`OPT_IN`) of the suites step STEP runs (pytest: those not
     in `AFTER_LEAN`; lean-suites: those in it; all: every one, on a tree without the verifier), each suite's in a `suites.py` run
-    of its own with ARGS, its variable set to 1 and its tests named, with its outcome and log in OUT's `OPT_IN_DIR`.  0 only when
+    of its own with ARGS, its variables set to 1 and its tests named, with its outcome and log in OUT's `OPT_IN_DIR`.  0 only when
     each named test passed: one that skipped, or that its suite doesn't have, fails the step."""
     if step not in ("pytest", "lean-suites", "all"):
         print(f"check: --opt-in OUT STEP: STEP is pytest, lean-suites or all, not {step!r}", file=sys.stderr)
@@ -1691,18 +1705,20 @@ def opt_in(out: Path, step: str, args: list[str]) -> int:
     d = out / OPT_IN_DIR
     d.mkdir(parents=True, exist_ok=True)
     rc = 0
-    for path, (var, tests) in OPT_IN.items():
+    for path, by_var in OPT_IN.items():
         if step != "all" and (names[path] in AFTER_LEAN) != (step == "lean-suites"):
             continue
+        tests, on = [t for of in by_var.values() for t in of], ", ".join(f"{var}=1" for var in by_var)
         j = d / f"{path.replace('/', '_')}.json"
         j.unlink(missing_ok=True)
-        print(f"check: opt-in: {path} with {var}=1: {', '.join(t.partition('::')[2] for t in tests)}", flush=True)
+        print(f"check: opt-in: {path} with {on}: {', '.join(t.partition('::')[2] for t in tests)}", flush=True)
         ran = subprocess.run([sys.executable, str(ROOT / "tools" / "verity" / "check" / "suites.py"), path, "--json", str(j),
-                              "--logs", str(d), *args, "--", *tests], cwd=ROOT, env={**os.environ, var: "1"}).returncode
+                              "--logs", str(d), *args, "--", *tests], cwd=ROOT,
+                             env={**os.environ, **dict.fromkeys(by_var, "1")}).returncode
         c = (next(iter(json.loads(j.read_text())), {}).get("counts") or {}) if j.exists() else {}
         if ran or c.get("passed", 0) < len(tests) or any(c.get(k) for k in ("failed", "error", "skipped")):
             why = ", ".join(f"{v} {k}" for k, v in c.items() if k != "passed" and v) or f"suites.py exited {ran}"
-            print(f"check: opt-in: {path}: {c.get('passed', 0)} of the {len(tests)} tests named with {var}=1 passed ({why}); "
+            print(f"check: opt-in: {path}: {c.get('passed', 0)} of the {len(tests)} tests named with {on} passed ({why}); "
                   f"its log is in {d}", flush=True)
             rc = 1
     return rc
