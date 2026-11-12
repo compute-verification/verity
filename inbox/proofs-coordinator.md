@@ -103493,3 +103493,145 @@ Earlier tries of mine that failed and were mended are not listed; each is in my 
 - The two lists' suites and records (the two runs above).
 
 **6. Where I would only wait.** From here the v2 pull request needs, in order: compute-research's branch merged whole, network-accounting's one commit merged, `main` merged, the records run, the body with the notice. The first two are not mine to hasten. Until they come I write the pull request's body (the notice in A2's words) and nothing that needs a slot; the two runs for the lists are in line and I only read them. If you want this worker's slot back, this is a clean place to end the turn: everything written is pushed.
+
+
+## TWOLEG, Thu 12 Nov 21:48Z: the map: a two-stage audit reaches the one soundness theorem through a third form of the sampled component and a leg shaped like the recursive leg, not the one-stage one; the leg is about 9,000 to 17,000 lines [guess] and cannot be compiled by Sat 02:00Z; what can be is the statements (out now), the form behind the switch, and the leg's bookkeeping
+
+**In plain words.** The soundness theorem speaks only of what the compiled verifier accepts, and for sampled proofs that is one component whose parameters name a form. Today it knows the one-stage form and refuses the recursive one; a two-stage run cannot even be written to it. Two things are needed. First, a third form of the component that runs the two-stage audit itself: it computes each second-stage session's verdict from the proof files, as the one-stage form does, and then runs the stream's two-stage check, whose last step already refuses every two-stage run until one switch is turned on. Second, a proof that connects SPOT's two-stage guarantee to the theorem's target. That proof does not look like the one-stage one, which runs through a different model of the session (V5's live audit game). It looks like the proof for the recursive form, which already goes from a guarantee of the same generic kind to the same target. Three pieces of it are new. The largest maps the period's game onto the two-stage verifier's run; it is unproved for the recursive form too. Then there is a fixed extractor of the boundary values, which the recursive form's majority vote gives. And the claim must be counted per replay block, not per proof block, because a proof block's interior values are committed only after the first sample. The leg's top statement and its bookkeeping are written and on a run now. The rest is several weeks of the kind of work the one-stage leg took, so I give no Friday date for it.
+
+Clock: `date -u` read 21:48Z. Trees: [main] is `origin/main` `5f0c008aa0`, [base] is `origin/cursor/proofs-two-round-base-84b5` `bb527fd2e2`. Tags as COMMON.md asks. My branch: `cursor/proofs-twoleg-c5e5` at `77e9649c94`.
+
+### a. The third form of the component
+
+What exists, [base] and [main] alike:
+- [read] `VStar.Recursive.Sampled` (`verity/protocols/recursion/verifier/recursive/VStarRecursive/Sampled.lean`, 109 lines): `Params := OneStageZk.Params ⊕ Recursive.Params`; `paramsOfJson` takes `one-stage`, throws `RECURSIVE_REFUSED` at `recursive`, throws at any other form (`:57-63`); `#guard` at `:97` checks `two-stage` is refused.
+- [read] `Spot.Run.run` ([base] `Spot/Run.lean:256`) reads the verdicts as inputs: `Service.checkVerdicts i.verdicts i.sessions i.outputs` (`:286`). That is one-stage v1's shape, which the component refuses (`V1_REFUSED`: "its verdicts are the evidence's"). So the third form cannot be `Run.run` on prover-sent JSON: it must compute the verdicts first, as v2 does (`Spot.OneStageZk`, "the verdicts computed here, from the statement's files").
+- [read] `Run.run`'s two-stage path ends in `interiorAudit`, which attaches `SecondStage.check SecondStage.FORM own it.statements` ([base] `Run.lean:250`). `check false` always has a code (`SecondStage.check_refused`, [base] `SecondStage.lean:1403`) and `attach` then sets `accepted` false (`:1337-1342`). [derived] So with `FORM = false`, a two-stage `Run.run` never ends `accept`, whatever else holds, and the refusal is last: `two-stage-form` appears only when nothing else failed (`failures`, `:1300-1303`).
+
+The form I propose, behind that one switch and no other:
+- **params**: `{"form": "two-stage", ...}`; the rest is the stream run's params as `Spot.Pieces.run` reads them ([base] `Pieces.lean:623-700`) less everything the prover sends: the boundary verifier's `OneStage.Params` under a two-stage rule (`Select.Rule.twoStage grain replay k`), its `challenger` named at the deployed LMS key (v2's `NO_CHALLENGER`, `KEY_PARAMS`); the interior registration's params; the replay block's program object; and `proofs`, per template `{circuit, header, registered}` (`Run.templateCircuits`). These are the auditor's copies, fixed before any coin, and they must determine every field of `SpotFlock.Held` ([main] `SpotFlock/Code.lean:128`): a definition `heldOf : Two.Params → Option SpotFlock.Held` is owed, and the leg reads it.
+- **commitment**: the boundary registration's record (`OneStage.commitmentOf`), as both other forms read it.
+- **evidence**: `{"form": "two-stage", ...}`; the stream run's input with no `verdicts` (its `values`, `public`, `received`, `source`, `coins`, `sessions`, `outputs`, `statement`, `delta`, `proved_units`, `instances`, `served`, `session_roots`, and `interior` with its own `values`, `record`, `received`, `source`, `coins`, `proved_units`, `instances`, `served`, `session_roots`, `statements`), plus `proofs`: `{"sessions": [{name, template, record, reps}]}`, one session a template, as v2's member form names a member's.
+- **check**, in order:
+  1. the parse, refusing evidence of the other forms as `checkBlobs` does today;
+  2. the coin trees: each session's coins one tree of the challenger's signed log, in the log's order: the first stage's coins after the boundary registration's digest, the second stage's after the interior registration's, each session's after the statements, no tree two sessions' (v2's member-form checks, `Challenger.memberTreeReason` and `Challenger.membersOrder`, at the two stages' extra releases);
+  3. each session's verdict, computed: `flock-verify verify --zk` on its blobs at its template's circuit file and header, as v2's `runMembers` runs one member's statement;
+  4. `Run.run` on the evidence with those verdicts in place of `verdicts`;
+  5. accept exactly when its `symbol` is `accept`.
+  With `FORM = false`, step 4 never accepts. [derived] So the form accepts nothing until the switch, and lifting the switch lifts it in `Run.run` and here at once.
+- **where it goes**: I propose two steps. (i) The form in a new file, `VStarRecursive/SampledTwo.lean`, with its Python twin and a difftest, imported by nothing the composite reads. It changes no accept and no lock record. (ii) The wiring into `Sampled.lean` as one go-gated commit: `Params` becomes `OneStageZk.Params ⊕ Two.Params ⊕ Recursive.Params`, `paramsOfJson` and `evidenceOf` dispatch on `two-stage`, the `#guard` at `:97` is replaced by one that the two-stage form is refused at `FORM = false`, and `checkBlobs` gets two more mismatch cases. Step (ii) moves the records of every listed guarantee that reads `Verity.Vocab.Target` or `SoundnessAt` through `component` [derived; not run], and it breaks `Verity.Sampled.paramsOfJson_ne_inr` (`Sampled/RecursiveRefused.lean:27`), which pattern-matches the two-way sum, and the composition difftest's `params-form-other` break, whose stand-in unknown form is the string `"two-stage"` (`verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py:153,161`). So (ii) is a STOP RULE item below. Step (i) waits only on your go for the parse and check above, which I write out exactly in my 03:00Z entry.
+
+### b. The leg, from `SpotKSTwo` to `Target k .sampled` at the two-stage form
+
+Why the one-stage leg's route does not carry over [read; derived]:
+- The one-stage leg (`security/Proofs/Properties/Verity/Sampled.lean` and `Sampled/`, [main] 71 files, 30,099 lines) runs through `Flock.SecurityProofs.SampledKSLiveV5`, the FlockSoundness live audit game at one session (`Live`, `Sampled.lean:130`), with `CouplingTarget` (`:617`) mapping the period's game into that game.
+- `SpotKSTwo` ([main] and [base] `SamplingGeneric/Guarantees.lean`) is `CompiledTwo.KS`: `KSLinOn`'s bound on `PrBad` (`Definitions/Core/Interaction.lean:378`) in the generic public-coin model (`Claims.run`). Its extractor reads the judged run's coins (`Extractor.ext x r₀`, `:215-221`), so its witness is per run. The target's claim reads one transcript per strategy (`Vocab.extract θ F c σ`, used so in `spotSound_of_targets`, `Sampled/Target.lean:194`).
+- The leg that already goes from a generic `PrBad` statement to `Target k .sampled` is the recursive one: `Verity.Recursive.spotRecursive` ([main] `Proofs/Properties/Verity/Recursive/Target.lean:714`; with `Recursive.lean` and `Recursive/`, 15 files, 6,582 lines [run: `wc -l`]). Its fixed extractor is a majority vote, "at each bit of each gate the value most often read off the witnesses `RecursiveKSAt`'s extractor returns" (`Recursive.lean:41-43`), with the averaging lemmas `units_bound`, `minority_le_majority`, `majority_le_coll`, `ex_off_le_bits` (`Target.lean:150-500`). It takes its coupling as a hypothesis (`SessionIn`), unproved there too.
+
+The statement, as Lean on my branch (`security/Proofs/Properties/Verity/SampledTwo/Leg.lean`, a new module nothing imports; elaborating on `r20261112-214217-2e5f`, which waits for a slot):
+
+~~~lean
+def TargetOn (V : Vocab d α) (k : Verity.Registration.Composite) (P : ByteArray → Prop) : Prop :=
+  ∀ θ F c (σ : Verity.Game.Strategy (V.game θ F c)), P θ →
+    Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
+      V.error .sampled θ F c σ
+
+theorem spotSound_of_forms (V : Vocab d α) (k) (P₁ P₂ : ByteArray → Prop)
+    (h₁ : TargetOn V k P₁) (h₂ : TargetOn V k P₂) (hoff : TargetOn V k fun θ => ¬ P₁ θ ∧ ¬ P₂ θ) :
+    V.SpotSound k
+
+structure Live₂ where   -- the two-stage session of record
+  h : SpotFlock.Held     -- the auditor's held copies (heldOf of the params)
+  x : Msg                -- the boundary registration's record
+  δ : ℝ                  -- the confidence KS is read at
+  ε : ℝ                  -- the claim's share
+
+Live₂.L A  := SamplingDeploy.compiledTwo (FlockDeploy.deployZk Flock.Readable.relation) (SpotFlock.code A.h)
+                SpotFlock.iroots (SpotFlock.two A.h) (SpotFlock.rs A.h) (SpotFlock.cap A.h)
+Live₂.KS A := A.L.KS FlockDeploy.sha512                         -- SpotKSTwo's conclusion at A.h
+Live₂.errAt A P := A.L.κ A.δ A.x + √(A.L.γ A.x · PrB sha512 A.L.V P A.x) + (Bext sha512 A.L.V A.L.E Ω P A.x).Pr sha512
+
+def CouplingTargetTwo (V) (k) (A : Live₂) (θ F) (terms : ∀ c, Strategy (V.game θ F c) → ℝ≥0∞) : Prop :=
+  ∀ c σ, ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
+    ∃ (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P : Prover Ω),
+      Verity.Game.prob (V.Verdict k .sampled ·) (V.game θ F c) σ ≤ ofReal (PrBad sha512 A.L.V A.R A.L.E A.x P) + terms c σ ∧
+      (V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
+        ofReal (A.errAt P) + terms c σ ≤ V.delta θ .sampled (V.cost θ F c σ))
+
+def CoversTwo (V) (k) (TwoAt : ByteArray → Prop) (S₂ : ByteArray → Array ByteArray → Option Live₂) : Prop :=
+  ∀ θ F, S₂ θ F = none → TwoAt θ → ∀ c σ, V.finderCR .sampled θ F c σ →
+    Verity.Game.prob (V.Verdict k .sampled ·) (V.game θ F c) σ ≤ V.delta θ .sampled (V.cost θ F c σ)
+
+def TwoLeg (V) (k) (TwoAt) (S₂) : Prop :=
+  (∀ θ F A, S₂ θ F = some A → A.KS ∧ A.L.Scope A.x ∧ 0 ≤ A.δ) → CoversTwo V k TwoAt S₂ →
+    (∀ θ F A, S₂ θ F = some A → ∃ terms, CouplingTargetTwo V k A θ F terms) → TargetOn V k TwoAt
+
+theorem twoLeg (V) (k) (TwoAt) (S₂) : TwoLeg V k TwoAt S₂     -- the bookkeeping; its proof is in the file
+~~~
+
+`TwoAt` is a predicate because the form's parse is not written; at the wiring it becomes `∃ p, ParamsTwoAt θ p`, as `ParamsAt` (`Sampled.lean:645`) is for one stage. `SpotFlock.code` is [main]'s; at [base] (#9357) the leg reads `codeConnected`, `twoConnected`, `rsConnected`, a change of three names.
+
+`CouplingTargetTwo` holds three pieces, which I propose as three statements of their own:
+- **B1, the projection**: the period's game, at a play the sampled verdict accepts, is a run of `(Live₂.L A).V` at a prover built from the strategy, with the device's coin trees' hiding, its log's read finder, its signature's forger and the messages' two-continuation finders in `terms`. The one-stage coupling's per-leaf hiding is reused; its play-to-moves projection into V5's game is not (table below).
+- **B2, the boundary values fixed at registration**: `V.extract` is the majority of the boundary values the KS extractor's witnesses open, and a play whose witness differs from it at a boundary bit of a sampled replay block is a binding collision (`Recursive/Target.lean`'s argument, at the boundary bits only).
+- **B3, the claim's units**: at the two-stage form, the units of `V.partsOf θ F` are the replay blocks, and an interior value is the evaluation of its replay block's boundary inputs. [derived] More than an `ε` share of replay blocks unbound then puts every interior's footprint at one or more incorrect proof blocks in each of them, so `RTwo` fails at `δ_ε := sup_{|U| > εN} P̄_a(1_U)` (`Design.Two.Pa`, `Definitions/Claims/SamplingTwo.lean:148`). That is question 1 below.
+
+The leg's premises, by name, and how each reads [derived from FRAME 21:10Z section f, which I checked against the files cited]:
+- From `SpotKSTwo` at `heldOf p`: [main] `SpotFlock.Built` (domain) and `SpotFlock.Addresses` (open); [base] `WiresFirst`, `WiresMove`, `SourcesNamed`, `AddressesConnected` (open) and `BuiltWired` (domain). FRAME's L1 and L2 discharge them; this leg only passes them through.
+- `RegisteredFiles` (`Sampled/Instance.lean:529`): reused in substance, over the form's digests (each template's circuit file, the replay program); its proof `registeredFiles_of` (`:534`) carries over.
+- `SessionRegistered` (`Sampled/SessionAt.lean:47`): restated per template. The proved verifier already holds a session statement to its template's reference statement except for its sample, registered reads and public file (`pinOk`, [main] `SpotFlock/Code.lean`), so most of it becomes a check; what stays is that `heldOf p` is the registered copies.
+- `SessionsReady` (`Sampled/OpensAt.lean:223`): restated per template, and at the two-stage form it is the address premise and `OpensReady` (`OpensAt.lean:115`) together.
+- `LogOpensRecorded` (`Sampled/Instance.lean:625`): restated over two records and three groups of coins (first stage after the boundary digest, second stage after the interior digest, the sessions after the statements).
+
+### c. Which one-stage files carry over, and the split by file
+
+The one-stage leg's 71 files, by what they become [read: each file's title; derived]:
+- **Reused as they are** (about 4,000 lines): `Binding.lean` (read finder and forger), the per-leaf hiding terms `Leaves`, `TreeMask`, `TreeGap`, `OpenEmpty`, `OpenGap`, `OpenErr`, `LeafErr`; `Place`; `OpensAt`'s `OpensReady` and `opens_rowLeaf`, applied per template; the file finders in `Instance.lean`.
+- **Restated for several sessions and the two stages' extra releases** (about 7,500 lines): `Instance`, `SessionAt`, `RecordRounds`, `Device`, `Lines`, `RoundsRead`, `LinkRead`, `LinkFirst`, `LinkTrees`, `Link`, `LinkPts`, `SpecTie`, `Trees`, `Counts`, `SampleNamed`, `Target` (now `SampledTwo/Leg.lean`), `RecursiveRefused`. `MemberForm/` (3 files, 915 lines) already reads several sessions one after another in the release log; it is reused and is the model for them.
+- **No two-stage counterpart** (about 17,500 lines): the projection into V5's live audit and V5's own facts, `Project`, `Moves`, `MovesReach`, `MovesReachAt`, `MovesLayout`, `Messages`, `Walk`, `Stops`, `CoinMap`, `Decoders`, `Coupling`, `CouplingAt`, `Assembled`, `Readings`, `Layout`, `CountsLayout`, `Event`, `Accepts`, `Held`, `RecordDraw`, `Unbound`, `UnboundBridge`, `Deployed`, `Digest`, `DigestTie`, `RootB`, `ParseBridge`, `Charge`, and `Record/` (one-stage v2 as a sampling record, which recursion reads). B1 is their analogue into the public-coin run, new.
+
+The split I suggest, each a new file unless named:
+| piece | file(s) | owner | can start tonight |
+|---|---|---|---|
+| the third form, unwired, with its Python twin and difftest | `VStarRecursive/SampledTwo.lean`; Python beside the composition's reference | proofs (me) | after your go on the parse and check |
+| the form refused while `FORM = false` (from `check_refused`, through `Run.run`) | `Proofs/Properties/Verity/SampledTwo/Refused.lean` | proofs (me) | yes, against the unwired form |
+| `heldOf` and "the form's accept is `SpotFlock.V (heldOf p)`'s" | `Proofs/Flock/SpotFlock/HeldOf.lean` | proofs (with FRAME's L3, which states the same of `Run.run`) | `heldOf` yes; the accept lemma after L1 |
+| the leg's statements and bookkeeping | `SampledTwo/Leg.lean` (on my branch) | proofs drafts, soundness adopts | done, on a run |
+| B3, the claim at replay blocks | `SampledTwo/Claim.lean` | proofs | after question 1 |
+| B2, the boundary values fixed at registration | `SampledTwo/Majority.lean`, after `Recursive/Target.lean`'s averaging lemmas are taken off `Dep` | soundness (it is their file to generalise); proofs can draft | after question 2 |
+| B1, the projection | `SampledTwo/` several files, after `MemberForm/Order.lean` | soundness | after question 2 |
+| the instance at both forms: `Deployed`'s `coinsRead` per form, `Covers` and `CoversTwo`, the four premises restated | `Sampled/Instance.lean`, `Sampled.lean`, `SessionAt.lean`, `OpensAt.lean`, `RecordRounds.lean` | soundness | no: their files |
+| the wiring, `RecursiveRefused.lean` restated, the records, `lean-audit.json` entries | `Sampled.lean` (the component), `Sampled/RecursiveRefused.lean`, the lock | lean | after your go and Daniel's word |
+
+### d. Size [guess, from the counts above]
+
+- The third form: 400 to 800 lines of Lean, mostly calls to `Run.run`, v2's member-form tree checks and `runMembers`; Python twin and difftest 300 to 600.
+- The refusal lemma: under 150 lines.
+- `heldOf` with its accept lemma: 400 to 1,000 (the accept lemma is most of FRAME's L3, 800 to 2,000, and should be written once for both).
+- B3: 300 to 600. B2: 600 to 1,500. B1: 6,000 to 12,000; the one-stage analogue it replaces is about 17,500 lines, and the public-coin target is simpler than V5's typed moves.
+- The instance restated: 1,000 to 2,000.
+- In all: about 9,000 to 17,000 lines.
+- **By Sat 14 Nov 02:00Z**, compiled through runs, I can hold: the statements; `twoLeg`; the third form unwired, with its difftest; the refusal lemma; B3's statement and, if question 1 comes back as I propose, its proof. Not B1, B2 or the instance.
+
+### e. The questions only soundness can answer
+
+1. **The claim's units at the two-stage form.** A proof block's interior values are committed only after the first sample, and `Vocab.Opens` opens only gates the commitment places, so under `Accounting.unbound` (`Definitions/Accounting/JointLive.lean:92`) every proof block that reads an interior value is unbound and the claim fails always. I propose that at the two-stage form the vocabulary's units are the replay blocks, the claim being that at most an `ε` share of replay blocks have committed boundary outputs other than the evaluation of their committed boundary inputs. That needs no change to `Game.lean` or `Accounting`, only the instance's `partsOf` at the two-stage parameters. The alternative is a claim at the proof blocks' least footprint, which changes `Holds` and is Daniel's. Which?
+2. **Where the projection lands.** I propose the public-coin run of `SpotFlock.V`, so that the leg reads `SpotKSTwo` as it stands, with the coin trees' hiding paid as the one-stage coupling pays it and the fixed extractor taken from the recursive leg's majority. The other route is a two-stage V5, a new live audit game in the Flock tree, which reuses more of the one-stage projection and redoes `SpotKSTwo` in another model. Do you take the first? If you do, may `Deployed.coinsRead` (`Sampled.lean:1079`) hold per form rather than at every message sent?
+
+### STOP RULE
+
+- **Before:** `VStar.Recursive.Sampled.Params := OneStageZk.Params ⊕ Recursive.Params`; `paramsOfJson` throws at `"two-stage"`; `#guard (paramsOfJson (Json.mkObj [("form", "two-stage")])).toOption.isNone`.
+- **After (step ii):** `Params := OneStageZk.Params ⊕ Two.Params ⊕ Recursive.Params`; `paramsOfJson` parses `"two-stage"`; the check refuses every two-stage case last while `Spot.SecondStage.FORM = false`. It accepts nothing new, but it changes the definition every listed guarantee reading `Verity.component` reads, and two proofs or tests named above. I do not do step (ii). Step (i) adds a file nothing reads; I start it only on your go.
+
+### To post
+
+To soundness and lean, unchanged: everything from "In plain words" to the end of section e.
+
+### Not established
+
+- That `Leg.lean` elaborates: `r20261112-214217-2e5f` was waiting for a slot on `vy-nebius-cpu-12` at 21:48Z.
+- That B3's claim gives `RTwo`'s failure as I derive it: I read `RTwo` and `footprint` (`SamplingTwo.lean:121-179`) but not how `footprint` reads a position the witness does not open.
+- That B2's majority argument carries over to the boundary bits a run's sample does not open: the recursive leg uses only sampled bits, and `KSLinOn`'s witness covers every replay block.
+- That every field of `SpotFlock.Held` can be read off the auditor's params as I list them; I read its docstring, not each field's use.
+- Which listed records step (ii) moves: not run.
+- Every size.
