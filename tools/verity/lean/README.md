@@ -1,7 +1,7 @@
 # tools/verity/lean: the Lean audit
 
 One audit for every Lake package (`python tools/verity/lean/check.py --all --build`), which `check` runs on the packages
-whose inputs changed (`check.py --build PKG...`), and Lean's jobs in `check`. This file is an outline: what the audit is,
+whose inputs changed (`check.py --build PKG...`), and Lean's job in `check`. This file is an outline: what the audit is,
 its commands, what it checks, the lock's sections, and one line per module. The detail is in the docstring each line
 names, and new detail goes there: here it gets one line at most.
 
@@ -271,11 +271,11 @@ The auditor:
 - `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
   never reads it. `run_daily.py`: its daily publish.
 
-Lean's jobs in `check` and the tools around the audit:
+Lean's job in `check` and the tools around the audit:
 
 - `lean_audit.py`: the lean-audit step: which packages miss (the key of a pass; `--explain PKG` says what a miss
   changed), their scratch tree, the warm dependencies and builds, the replay cache, the unread ratchet.
-- `lean_changed.py`: the lean-changed step, a lane's fast path to its records (`--records`) and the edit loop on a
+- `lean_changed.py`: no step of `check`: a lane's fast path to its records (`--records`) and the edit loop on a
   node (`--try`).
 - `lean-deps.json`: the pinned dependency bundles (`lean_audit.py --pin`).
 - `warm.py`: the Lean audit of a ready mark's merge, which builds a Lean change before a candidate holds it.

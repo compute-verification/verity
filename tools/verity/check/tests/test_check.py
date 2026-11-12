@@ -1024,9 +1024,9 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     lean = gs[2]
     assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-agreement"]
     assert [n for n, _, _ in gs[3]] == ["lean-audit"] and gs[3][0][1][4].endswith("tools/verity/lean/lean_audit.py")
-    assert [n for n, _, _ in gs[5]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
+    assert [n for n, _, _ in gs[4]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
     assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
-    argv = gs[5][0][1]
+    argv = gs[4][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
     assert "--timeouts" in pytest and " --timeouts " in argv[2], \
@@ -1307,18 +1307,6 @@ def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_ove
                                                             CHECK.STEP_BUDGET_S)
 
 
-def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
-    """`lean-changed` exits only once `slow` is running (the FIFO): under --keep-going its failure still stops `slow`."""
-    gate = _gate(tmp_path, monkeypatch)
-    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    changed = _py("import sys\nopen(sys.argv[1]).read(1)\nsys.exit(1)", gate)
-    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("lean-changed", changed, tmp_path)]])
-    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
-    by = {s["step"]: s for s in done}
-    assert not passed and by["lean-changed"]["status"] == "failed"
-    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: lean-changed failed"
-
-
 def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
     """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
     gate = _gate(tmp_path, monkeypatch)
@@ -1463,8 +1451,8 @@ def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_
     steps.end({"step": "pytest", "status": "failed"})
     steps.end({"step": "flock-circuit-build", "status": "failed"})
     assert not steps.stopping
-    steps.end({"step": "lean-changed", "status": "failed"})
-    assert steps.stopping and steps.halted == "lean-changed"
+    steps.end({"step": "flock-circuit-build", "status": "failed", "halts": True})
+    assert steps.stopping and steps.halted == "flock-circuit-build"
     steps = CHECK.Steps(tmp_path)
     steps.end({"step": "pytest", "status": "failed"})
     assert steps.stopping and steps.halted == "pytest"
@@ -1554,15 +1542,12 @@ def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_
     assert json.loads((tmp_path / "result.json").read_text())["passes"] == {}, "a stopped run has no verdict"
 
 
-def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
+def test_the_audit_is_a_group_of_its_own_and_a_tree_without_the_verifier_has_no_lean_group_but_a_skip(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 7 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
-    argv, audit = gs[4][0][1], gs[3][0][1]
-    assert argv[1].endswith("tools/verity/lean/lean_changed.py")
-    assert argv[argv.index("--cache") + 1] == audit[audit.index("--cache") + 1], "the audit's own passes"
-    assert argv[argv.index("--deps") + 1] == audit[audit.index("--deps") + 1], "and its kept dependencies"
-    assert CHECK.groups(out, 8, cache=False)[4][0][1].startswith("skipped: --no-cache")
+    assert len(gs) == 6 and [n for n, _, _ in gs[3]] == ["lean-audit"]
+    assert not any(str(a).endswith("lean_changed.py") for g in gs for _, argv, _ in g if not isinstance(argv, str) for a in argv), \
+        "no step runs the fast path's file: without a mode it runs nothing"
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "no-verifier")
     assert len(CHECK.groups(out, 8)) == 4
 
@@ -1582,7 +1567,6 @@ def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path,
     assert "--cache" not in cold["circuit-check"]
     for s in ("pytest", "lean-suites", "lean-audit"):
         assert "--fresh" in " ".join(after[s]) and "--fresh" not in " ".join(cached[s]), s
-    assert after["lean-changed"].startswith("skipped: --no-cache")
 
 
 def test_an_uncached_check_runs_its_steps_with_lakes_artifact_cache_off(tmp_path, monkeypatch):

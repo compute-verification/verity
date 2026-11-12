@@ -951,15 +951,10 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict, sealed: "Sealed
     return fails, read
 
 
-#: where `program` compiles (None: a temporary directory), one that `run` writes in and every package's `run` reads
-PROGRAMS: Path | None = None
-#: where `facts_of` makes the directory `Facts.lean` writes its document in, which it removes once read (None: the system's
-#: temporary directory); never the audit's output, which a recorded run publishes
-SCRATCH: Path | None = None
-#: {(directory, toolchain, the source's SHA-256): (the compiled program, its SHA-256)}
-_programs: dict[tuple[str, str, str], tuple[Path, str]] = {}
+#: {(toolchain, the source's SHA-256): (the compiled program, its SHA-256)}
+_programs: dict[tuple[str, str], tuple[Path, str]] = {}
 #: one lock per key of `_programs`, so one program's compile doesn't hold up another's
-_programs_locks: dict[tuple[str, str, str], threading.Lock] = {}
+_programs_locks: dict[tuple[str, str], threading.Lock] = {}
 _programs_lock = threading.Lock()
 
 
@@ -977,17 +972,13 @@ def program(pkg: Path, source: str) -> str:
     src = TOOL / source
     stem = src.stem
     toolchain = (pkg / "lean-toolchain").read_text().strip() if (pkg / "lean-toolchain").is_file() else ""
-    key = (str(PROGRAMS), toolchain, sha256(src))
+    key = (toolchain, sha256(src))
     with _programs_lock:
         lock = _programs_locks.setdefault(key, threading.Lock())
     with lock:
         if key not in _programs or not _programs[key][0].exists():
-            if PROGRAMS is None:
-                d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
-                atexit.register(shutil.rmtree, d, True)
-            else:
-                d = PROGRAMS / hashlib.sha256("\0".join(key[1:]).encode()).hexdigest()[:16]
-                d.mkdir(parents=True, exist_ok=True)
+            d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
+            atexit.register(shutil.rmtree, d, True)
             exe = d / stem.lower()
             for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
                          ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(d / f"{stem}.c"), "-o", str(exe)]):
@@ -1089,8 +1080,8 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     `lift` (`head`) that of its unfolded type under the old names (`unfolded_sha256`).  Each entry of `assumption_reads` (a
     named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`), and so does each definition and theorem
     of `constants` (the names of the lock's `shape.inline` texts, and those its premises print, that the build holds), for
-    `paired`, which reads ``moved`` as `moves`.  `Facts.lean` writes the document and its canonical forms under `SCRATCH`,
-    since a recorded run publishes ``work``; with ``keep``, ``work`` keeps the document only gzipped, as `FACTS` (read back
+    `paired`, which reads ``moved`` as `moves`.  `Facts.lean` writes the document and its canonical forms in a temporary
+    directory, since a recorded run publishes ``work``; with ``keep``, ``work`` keeps the document only gzipped, as `FACTS` (read back
     by `stored_facts`), and without it keeps none.  With ``sealed`` (the package's seal) `Facts.lean` runs against the
     seal's private copies, so the facts it reports are a function of the sealed bytes, which no dependent's build can
     change, and the `.olean` paths it reports name the copies."""
@@ -1098,7 +1089,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     for p in (kept, work / "facts.json", work / "canon.jsonl"):
         p.unlink(missing_ok=True)
     hashes, renamed_as, lifts = {}, {}, {}
-    with tempfile.TemporaryDirectory(prefix="lean-facts-", dir=SCRATCH) as scratch:
+    with tempfile.TemporaryDirectory(prefix="lean-facts-") as scratch:
         out, canon = Path(scratch) / "facts.json", Path(scratch) / "canon.jsonl"
         config.write_text(json.dumps(facts_config(policy, moved) | {"out": str(out), "canon": str(canon)}))
         prefix = sealed.env() if sealed else ["lake", "env"]
@@ -5060,7 +5051,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     (a seal's or a batch's mapped search path) and ``digest`` (`Sealed.digest` or `Pipeline.digest`) make the replay read
     private copies rather than the live `.lake`, so no dependent's build can change what the kernel replays or what its
     key is keyed on. ``prefix`` goes before the command and ``held`` says the caller holds `_HEAVY_REPLAY` already
-    (`Pipeline`'s batches). ``store`` is false for an unsealed audit (a control, a lean-changed scan, a stubbed test),
+    (`Pipeline`'s batches). ``store`` is false for an unsealed audit (a control, a stubbed test),
     whose keys are hashed from the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict
     can never poison a sealed run."""
     found = work / "replay.json"
@@ -5561,7 +5552,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.
     ``seals`` (the run's seals) is taken before ``built`` is called, so every reader after it reads the seal's private
     copies and no dependent's build changes what the facts, the replay, the scans or the digests see (`Seals`); without
-    one (a control, a lean-changed scan or a stubbed test, none of which runs a dependent's build beside the audit) the
+    one (a control or a stubbed test, neither of which runs a dependent's build beside the audit) the
     readers read the live `.lake`. `main` always provides one, so the run's gate is always sealed.
     ``bookkeeping`` (a due date:
     `--bookkeeping warn`, drive's lock run) regenerates a failing package's lock with its bookkeeping repaired (`repaired`,
@@ -6200,7 +6191,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--facts-cache", type=Path, metavar="DIR", help="while judging each named package as usual, also store "
                     "its sealed facts document into DIR, keyed by that build (`facts_key`), with a sidecar `<facts_key>.json` "
                     "so a later reuse looks the document up by the key the current tree computes and refuses a tampered or "
-                    "stale one (`read_cached_facts`).  lean_changed's records step passes it")
+                    "stale one (`read_cached_facts`).  `lean_changed.py --records` passes it")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):

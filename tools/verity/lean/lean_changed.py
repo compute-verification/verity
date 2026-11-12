@@ -1,10 +1,8 @@
-"""`lean_changed`: Lean's early job, which `check` runs as its lean-changed step. `lake build` of every Lake package whose Lean
-audit misses (`lean_audit.py`: its inputs changed since a pass kept on this machine), on the step tree (`lean-changed` under
-the check cache, or `--tree`), which this machine keeps built, so a module that no longer compiles (two merges git combines
-cleanly that Lean doesn't) fails the run in minutes rather than when the audit's cold build reaches it.  Its `--records`,
-`--try` and `--build` work on a slot tree instead, one per `build` slot (below).
+"""`lean_changed`: a lane's Lean runs beside the audit (`lean_audit.py`), none of them a Lean verdict: its records
+(`--records`), its edit loop (`--try`) and the ready mark's preflight's Lean step (`--build`), each on a slot tree this machine
+keeps built, one per `build` slot (below), and a package's inputs key (`--inputs-key`). It runs one of those: without one it
+prints its usage and exits 2.
 
-    python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
     python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]   a lane's records
                                              [--allow CODE:ENTRY]...   with --records: a failure it takes as known, which is no pass
     python tools/verity/lean/lean_changed.py --try FILE [--siblings]   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
@@ -53,7 +51,7 @@ descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) i
 another, only under `lean-records/` (a slot's tree there that is a link out of the check cache, onto another volume,
 too: `kept_tree`). A slot
 tree's fetched dependencies are its own copy of the audit's (taken once per
-manifest and toolchain, else fetched cold), never links (the step tree's are links, below), so what Lake writes there stays
+manifest and toolchain, else fetched cold), never links, so what Lake writes there stays
 out of what the audit keeps. That bounds Lake's own writes, not compile-time code: check.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
 included, as any build this user runs by hand can. `--update` writes the record back into this checkout, but not in a recorded
@@ -135,27 +133,6 @@ run they go into its `lean-audit/` in bundles (`lean_audit.LakeArtifacts.bundle_
 replays every declaration through the kernel. `research run` sends a records run the URLs of the newest such bundles and of
 the checks' (`research.cli.lean_records_urls`, `lean_audit.shared_bundles`), and where builds are sandboxed the run takes
 them into the node's artifact cache before its first build (`sent_urls`), so it restores what another node compiled.
-
-The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
-names under `proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
-what imports them. A package's fetched dependencies are hard links to the ones the audit keeps (`--deps`, `lean_audit.WarmDeps`),
-taken under their lock while the step tree has none for its manifest and toolchain; the build runs in the audit's sandbox
-(`tools/verity/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
-move them away without touching the links. The first build of a package here is cold; later ones are not.
-
-A package with guarantees then has its roots built (`lake build +ROOT`, as the audit does) and its guarantees' records
-compared with that build (`records`): `check.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
-judgment of the guarantees, without the kernel replay, so a record two merges left stale (a statement or a definition a
-guarantee reads changed, a guarantee gone, a `reads` digest no longer its definitions') fails the run before the audit's cold
-build reaches it.
-
-The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
-only on a Lean error at a position in one of the step tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
-failures whose code is under `guarantees.` or `assumptions.`). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
-yet, another check holding the step tree, a dependency the links lack) skips the package by name and drops its links, so the next
-run takes the audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its
-guarantees by name.
-`check.py` ends the run when this step fails, even under `--keep-going`. Delete the step tree to start it over.
 """
 from __future__ import annotations
 
@@ -190,12 +167,10 @@ def _module(path: Path, name: str):
 
 
 LA = _module(ROOT / "tools" / "verity" / "lean" / "lean_audit.py", "lean_audit_for_lean_changed")
-#: `tools/verity/lean/check.py`, this step's own copy: `records` runs its commands in the sandbox
+#: `tools/verity/lean/check.py`, the audit tool, loaded as this file's own copy
 AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_changed")
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
-#: where `Facts.lean` writes a package's facts: inside its `.lake`, which the sandbox leaves writable and `sync` leaves alone
-FACTS = Path(".lake") / "lean-changed-facts"
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 SANDBOX = ROOT / "tools" / "verity" / "lean" / "sandbox.sh"
@@ -216,13 +191,6 @@ REFUSED_WRITE = re.compile(r"^error: read-only file system \(error code: \d+\)\n
 ERROR = re.compile(r"^error: (?:\./)*(\S+?\.lean):\d+:\d+: ")
 #: {package: the dependencies' key its links were taken under}, beside the packages in the tree
 LINKS = "links.json"
-
-
-def missed(files: list[str], cache: Path) -> list[str]:
-    """The packages whose audit would run, those another requires by path first, and a spec after the packages its
-    `proved_in` names."""
-    pkgs = [p for p in LA.packages(files) if not (cache / f"{LA.key(p, files, LA.FLAGS)}.json").is_file()]
-    return sorted(pkgs, key=lambda p: (rank(p), p))
 
 
 def rank(pkg: str) -> int:
@@ -260,8 +228,8 @@ def provers(pkg: str, read=read_here) -> list[str]:
 
 
 def closure(pkg: str, read=read_here) -> list[str]:
-    """``pkg``, the packages it requires by path, and those its `proved_in` names with theirs, whose builds `records` reads;
-    its manifests and locks read through ``read`` (this checkout's by default)."""
+    """``pkg``, the packages it requires by path, and those its `proved_in` names with theirs, whose builds the audit of
+    ``pkg`` reads; its manifests and locks read through ``read`` (this checkout's by default)."""
     return list(dict.fromkeys([pkg, *path_deps(pkg, read),
                                *(d for q in provers(pkg, read) for d in (q, *path_deps(q, read)))]))
 
@@ -276,7 +244,7 @@ def lists_guarantees(pkg: str) -> bool:
 
 def requirers(pkg: str, pkgs: list[str]) -> list[str]:
     """The other packages among ``pkgs`` whose guarantees' records read ``pkg``'s build (``pkg`` is in their `closure`), each
-    after those it requires, as `missed` orders them."""
+    after those it requires (`rank`)."""
     return sorted((q for q in pkgs if q != pkg and pkg in closure(q) and lists_guarantees(q)), key=lambda p: (rank(p), p))
 
 
@@ -321,46 +289,42 @@ def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
     return n
 
 
-def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print, copy: bool = False) -> bool:
-    """``tree/pkg/.lake/packages`` as hard links to the audit's kept dependencies for its manifest and toolchain (``copy``: a
-    copy of them, taken after their lock is released from hard links made under it, `packages.snap` beside it, so that the
-    audit waits on the lock only as long as linking takes; where they can't be linked, the copy is taken under the lock);
-    False when this machine keeps none (another run holds them, or none has passed here yet)."""
+def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print) -> bool:
+    """``tree/pkg/.lake/packages`` as a copy of the audit's kept dependencies for its manifest and toolchain, taken after
+    their lock is released from hard links made under it (`packages.snap` beside it), so that the audit waits on the lock
+    only as long as linking takes; where they can't be linked, the copy is taken under the lock. False when this machine
+    keeps none (another run holds them, or none has passed here yet)."""
     if (k := LA.deps_key(tree / pkg)) is None:
         return True
     dst = tree / pkg / ".lake" / "packages"
     if links.get(pkg) == k and dst.is_dir():
         return True
     unlink(pkg, tree, links)
-    verb, how = ("copy", "copied") if copy else ("link", "linked")
     snap = dst.with_name("packages.snap")
     shutil.rmtree(snap, ignore_errors=True)
     try:
         with LA.WarmDeps(deps)._lock(k):
             src = deps / k
             if not src.is_dir():
-                log(f"lean-changed: {pkg}: this machine keeps no dependencies for it ({k[:12]}) to {verb}")
+                log(f"lean_changed: {pkg}: this machine keeps no dependencies for it ({k[:12]}) to copy")
                 return False
             t0 = time.monotonic()
             dst.parent.mkdir(parents=True, exist_ok=True)
             try:
-                shutil.copytree(src, snap if copy else dst, symlinks=True, copy_function=os.link)
+                shutil.copytree(src, snap, symlinks=True, copy_function=os.link)
             except (OSError, shutil.Error):
-                if not copy:
-                    raise
                 shutil.rmtree(snap, ignore_errors=True)
                 shutil.copytree(src, dst, symlinks=True, copy_function=shutil.copy2)
         if snap.is_dir():
             shutil.copytree(snap, dst, symlinks=True, copy_function=shutil.copy2)
     except (OSError, shutil.Error) as e:
         shutil.rmtree(dst, ignore_errors=True)
-        log(f"lean-changed: {pkg}: the dependencies ({k[:12]}) could not be {how} ({e})"
-            + ("" if copy else "; a link needs one filesystem"))
+        log(f"lean_changed: {pkg}: the dependencies ({k[:12]}) could not be copied ({e})")
         return False
     finally:
         shutil.rmtree(snap, ignore_errors=True)
     links[pkg] = k
-    log(f"lean-changed: {pkg}: dependencies {how} ({k[:12]}) in {time.monotonic() - t0:.0f} s")
+    log(f"lean_changed: {pkg}: dependencies copied ({k[:12]}) in {time.monotonic() - t0:.0f} s")
     return True
 
 
@@ -466,54 +430,6 @@ def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, san
             print(line, end="", flush=True)
         out.append(line)
     return p.wait(), "".join(out)
-
-
-def errors(text: str, pkg: str, files: list[str]) -> list[str]:
-    """Lake's Lean errors in ``text`` that sit in a `.lean` file of ``pkg`` or a package it requires by path."""
-    own = {f[len(p) + 1:] for p in closure(pkg) for f in LA.own_files(p, files) if f.endswith(".lean")}
-    return [line for line in text.splitlines() if (m := ERROR.match(line)) and m.group(1) in own]
-
-
-def guarantee_roots(pkg: str, tree: Path) -> list[str]:
-    """The roots of ``tree/pkg``'s policy when it lists a guarantee, which `records` reads; none otherwise."""
-    policy = AUDIT.load(tree / pkg)
-    return list(policy["roots"]) if policy.get("guarantees") else []
-
-
-def records(pkg: str, tree: Path, lake: str) -> list[str]:
-    """The audit's failures about the guarantees on the tree's build of ``pkg`` (`check.py`'s `facts_of` and `judge`, without
-    the kernel replay): a guarantee missing, no longer a theorem or with no record, using an axiom the policy does not allow or
-    assuming an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry
-    that no longer lists the modules the guarantees read or their definitions' digest, or a named assumption whose record
-    no longer matches the definition the guarantees read. A spec's
-    guarantees are read from the builds of the packages its `proved_in` names (`audit.proved`), built before it (`missed`).
-    Raises RuntimeError when `Facts.lean` cannot read a build."""
-    policy = AUDIT.load(tree / pkg)
-    work = tree / pkg / FACTS
-    work.mkdir(parents=True, exist_ok=True)
-    plain, tool, programs, scratch = AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH
-    # the sandbox mounts a private /tmp, where this checkout may be; the copy sits in the writable `.lake`, as the audit runs
-    # its tool from a copy
-    shutil.copy2(tool / "Facts.lean", work / "Facts.lean")
-
-    def lake_in_sandbox(argv: list[str], cwd: Path, *a, **kw) -> tuple[int, str]:
-        # the audit runs `lake env` unsandboxed on a tree of its own; here `.lake/packages` holds links to the files it keeps
-        return plain(in_sandbox(pkg, tree, [lake, *argv[1:]] if argv[:1] == ["lake"] else argv), cwd, *a, **kw)
-
-    # `Facts.lean`, in the sandbox, writes its document under `work` for the same reason
-    AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH = lake_in_sandbox, work, work, work
-    try:
-        facts = AUDIT.facts_of(tree / pkg, policy, work, keep=False)
-        cross: list[str] = []
-        if "proved_in" in policy:
-            cross, facts, _ = AUDIT.proved(tree / pkg, policy, facts, work, keep=False)
-    finally:
-        AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH = plain, tool, programs, scratch
-    # as the audit hands `judge` its facts: `assumptions_module` may name a module of a package ``pkg`` requires by path
-    # that none of its own modules imports, which only the source files show
-    facts["source_modules"] = sorted(AUDIT.module_files(tree / pkg))
-    fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
-    return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 
 
 def sandboxed() -> bool:
@@ -851,8 +767,7 @@ def made(tree: Path) -> Path:
 def kept_tree(tree: Path) -> bool:
     """Whether ``tree`` is one of the trees `--records` and `--try` keep: a directory under `RECORDS` in the check cache, or
     a link in `RECORDS` onto another volume, as a node makes a slot's (`made`). Such a link leads out of the check cache;
-    one that leads to another part of it is not kept, check's own `lean-changed` tree among them, whose dependencies are
-    links to the audit's."""
+    one that leads to another part of it is not kept."""
     cache, at, to = LA.COMMON.cache_dir().resolve(), Path(os.path.abspath(tree)), tree.resolve()
     base = (cache / RECORDS).resolve()
     return base in to.parents or (at.parent.resolve() == base and cache != to and cache not in to.parents)
@@ -1516,7 +1431,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         return refused(why)
     if tree is not None and not kept_tree(tree):
         return refused(f"{tree} is not under {(LA.COMMON.cache_dir() / RECORDS).resolve()}: the fast path builds only on its "
-                       "own trees, never on check's (lean-changed), whose dependencies are links to the audit's")
+                       "own trees")
     files = LA.COMMON.tracked_files(ROOT)
     if files is None:
         return refused("the tree's files cannot be listed")
@@ -1580,7 +1495,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 mark(tree, package=p, phase="deps")
                 for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
                     unlink(other, tree, links)
-                if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
+                if not link(p, tree, deps, links, log) and (k := LA.deps_key(tree / p)):
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
                 write_links(tree, links)
@@ -1820,7 +1735,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             packages = tree / pkg / ".lake" / "packages"
             # dependencies a `--records` run did not take (not in LINKS) are kept as they are, and stay out of LINKS, whose
             # packages the next `--records` run on another package drops
-            if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log, copy=True):
+            if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log):
                 if sandbox:
                     log(f"lean-try: {pkg}: no dependencies to take on this node, and the sandbox can't fetch them: nothing "
                         f"ran; run `lean_changed.py --records {pkg}` here once")
@@ -1957,7 +1872,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 write_links(tree, links)
                 mark(tree, package=pkg, phase="deps")
                 packages = tree / pkg / ".lake" / "packages"
-                if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log, copy=True):
+                if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log):
                     doc["skipped"][pkg] = "this node keeps no dependencies (Mathlib) for its manifest, and they aren't fetched cold"
                     continue
                 write_links(tree, links)
@@ -2113,93 +2028,11 @@ def write_back(p: str, record: Path, log=print) -> None:
         log(f"lean-records: wrote {mine}")
 
 
-def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
-    files = LA.COMMON.tracked_files(ROOT)
-    if files is None:
-        log("lean-changed: skipped: the tree's files cannot be listed")
-        return 0
-    todo = missed(files, cache)
-    if not todo:
-        log("lean-changed: every package's audit is reused here; nothing to build")
-        return 0
-    lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
-    if not Path(lake).is_file():
-        log("lean-changed: skipped: no `lake` here (lean-build installs it)")
-        return 0
-    if not sandboxed():
-        log("lean-changed: skipped: no build sandbox here (`unshare`), which keeps the audit's dependencies read-only")
-        return 0
-    made(tree)
-    with open(tree / ".lock", "w") as held:
-        try:
-            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            log("lean-changed: skipped: another check on this machine holds the tree")
-            return 0
-        carry_builds(tree, log)
-        links = read_links(tree)
-        failed: list[str] = []
-        built: list[str] = []
-        compared: list[str] = []
-        try:
-            for pkg in todo:
-                n = sync(closure(pkg), files, tree)
-                if not link(pkg, tree, deps, links, log):
-                    log(f"lean-changed: {pkg}: skipped; lean-audit builds it")
-                    continue
-                try:
-                    roots = guarantee_roots(pkg, tree)
-                except (OSError, ValueError, KeyError) as e:
-                    roots = []
-                    log(f"lean-changed: {pkg}: its {AUDIT.POLICY} cannot be read ({e!r}); its guarantees are not compared here")
-                t0 = time.monotonic()
-                rc, text = build(pkg, tree, lake)
-                if rc == 0 and roots:
-                    rc, more = build(pkg, tree, lake, [f"+{r}" for r in roots])
-                    text += more
-                took = time.monotonic() - t0
-                if rc and (bad := errors(text, pkg, files)):
-                    failed.append(pkg)
-                    log(f"lean-changed: {pkg}: FAILED in {took:.0f} s: a module does not compile:")
-                    log("\n".join(f"  {line}" for line in bad[:20]))
-                    break
-                if rc:
-                    unlink(pkg, tree, links)
-                    log(f"lean-changed: {pkg}: skipped: `lake build` exited {rc} without a Lean error in the tree's files; "
-                        "its links are dropped, and lean-audit builds it")
-                    continue
-                built.append(pkg)
-                log(f"lean-changed: {pkg}: built in {took:.0f} s ({n} files changed in the tree)")
-                if not roots:
-                    continue
-                t0 = time.monotonic()
-                try:
-                    stale = records(pkg, tree, lake)
-                except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
-                    log(f"lean-changed: {pkg}: its guarantees are not compared here: {str(e)[-2000:]}")
-                    continue
-                took = time.monotonic() - t0
-                if stale:
-                    failed.append(pkg)
-                    log(f"lean-changed: {pkg}: FAILED in {took:.0f} s: the audit fails its guarantees on this build:")
-                    log("\n".join(f"  {line}" for f in stale[:20] for line in f.splitlines()))
-                    break
-                compared.append(pkg)
-                log(f"lean-changed: {pkg}: its guarantees match their records ({took:.0f} s)")
-        finally:
-            write_links(tree, links)
-    log(f"lean-changed: {'FAIL (' + ', '.join(failed) + ')' if failed else 'PASS'}: built {len(built)} of the {len(todo)} "
-        f"package(s) whose audit misses; compared the guarantees of {len(compared)}")
-    return 1 if failed else 0
-
-
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="lean_changed.py", description=__doc__.split("\n\n")[0])
-    ap.add_argument("--cache", type=Path, default=LA.COMMON.cache_dir() / "lean-audit", help="the audit's kept passes")
     ap.add_argument("--deps", type=Path, default=LA.COMMON.cache_dir() / "lean-deps", help="the audit's kept dependencies")
-    ap.add_argument("--tree", type=Path, help="the step tree this step keeps built (default: lean-changed), or with --records, "
-                    f"--try or --build the slot tree ({RECORDS}/build-I, the Lean slot's), under the check cache; with those it "
-                    f"must be under {RECORDS}/")
+    ap.add_argument("--tree", type=Path, help=f"with --records, --try or --build: the slot tree (default: {RECORDS}/build-I, "
+                    f"the Lean slot's, under the check cache); it must be under {RECORDS}/")
     ap.add_argument("--records", metavar="PKG",
                     help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL}, "
                     f"else with check.py --dev-cache on this checkout (a {FAST_KIND} result, which no merge accepts)")
@@ -2262,7 +2095,7 @@ def main(argv: list[str]) -> int:
     if not a.records:
         if a.update or a.moved or a.out or a.dev_cache or a.rebuild:
             ap.error("--update, --moved, --out, --dev-cache and --rebuild go with --records")
-        return run(a.cache, a.deps, a.tree or LA.COMMON.cache_dir() / "lean-changed", log=lambda s: print(s, flush=True))
+        ap.error("one of --records, --try, --build and --inputs-key is required")
     if a.dev_cache and a.tree:
         ap.error("--dev-cache builds in this checkout, not in a --tree")
     return audit_records(a.records, a.deps, a.tree, a.update, a.moved, a.out, log=lambda s: print(s, flush=True),

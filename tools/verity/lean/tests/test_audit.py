@@ -2125,9 +2125,8 @@ def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, mon
 
 def test_the_program_writes_the_facts_outside_the_audit_s_output_and_they_are_kept_only_when_asked(tmp_path, monkeypatch):
     """`Facts.lean` writes its document and canonical forms (hundreds of MB for `security`) in a directory of their own
-    outside the work directory a recorded run publishes, under `SCRATCH` when it is set (`lean_changed.records`' sandbox
-    shows only the package's `.lake`), and that directory is gone once they are read, or the program failed. Without
-    ``keep`` the work directory keeps no document, and none an earlier run left there, gzipped or plain."""
+    outside the work directory a recorded run publishes, and that directory is gone once they are read, or the program
+    failed. Without ``keep`` the work directory keeps no document, and none an earlier run left there, gzipped or plain."""
     work, wrote, failing = tmp_path / "work", [], []
 
     def program(argv, cwd, log):
@@ -2152,10 +2151,8 @@ def test_the_program_writes_the_facts_outside_the_audit_s_output_and_they_are_ke
         A.facts_of(tmp_path, {"roots": ["C"]}, work)
     assert len(wrote) == 2 and not any(d.is_relative_to(work) or d.exists() for d in wrote)
     failing.clear()
-    monkeypatch.setattr(A, "SCRATCH", tmp_path / "scratch")
-    (tmp_path / "scratch").mkdir()
     A.facts_of(tmp_path, {"roots": ["C"]}, work)
-    assert wrote[-1].parent == tmp_path / "scratch" and not any((tmp_path / "scratch").iterdir())
+    assert len(wrote) == 3 and not wrote[-1].is_relative_to(work) and not wrote[-1].exists()
     assert sorted(p.name for p in work.iterdir()) == ["facts-config.json", A.FACTS]
 
 
@@ -7194,7 +7191,7 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
 
 
 def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkeypatch):
-    """An unsealed audit (a control, a lean-changed scan, a stubbed test) hashes its replay keys from the live `.lake`, so
+    """An unsealed audit (a control, a stubbed test) hashes its replay keys from the live `.lake`, so
     a stored verdict a dependent's build could have tampered with would poison a later sealed run. With ``store`` false it
     may reuse the shared cache but writes nothing: neither a new entry for a module it checked, nor a touch of a reused
     entry's mtime. With ``store`` true (a sealed audit) it stores and touches, so the test is not vacuous."""
