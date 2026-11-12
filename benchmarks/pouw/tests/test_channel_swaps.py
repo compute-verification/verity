@@ -141,3 +141,13 @@ def test_the_tokenizer_merges_by_rank_and_round_trips(tmp_path):
     assert tok.encode("abc ab, x") == [300, 258, 257, vocab[","], vocab[sp], vocab["x"]]
     with pytest.raises(ValueError):
         tok.encode("caf\u00e9")
+
+
+def test_the_search_moves_a_channel_inside_the_limit_but_within_the_margin():
+    sp = CS.Space("intermediate", 0, 512, 1, 1, 512)
+    x = _rows(64, 512, 3)
+    x[5, 77] = 150.0
+    x = torch.tensor(x).to(torch.bfloat16).float().numpy()
+    assert not CS.failing(x).any() and CS.failing(x, CS.MARGIN)[5]
+    swaps, before = CS.search(sp, x)
+    assert before == 0 and [u for _, u, _ in swaps] == [77]

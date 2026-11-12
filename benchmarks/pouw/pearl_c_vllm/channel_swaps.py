@@ -19,10 +19,14 @@ Three kinds of channel space, each swapped consistently:
   channel on the stride.
 
 The swaps come from a public calibration forward (`CALIBRATION`, public-domain text, BOS first, run in BF16 on the CPU),
-never from served values, by one pinned rule (`search`): while some calibration row of a space fails the per-row rules,
-take the off-stride unit with the largest |x|/ρ over the failing rows and swap it with the on-stride unit of that space
-that is quietest over all its rows; stop when every row passes (refuse past `MAX_SWAPS` a space). The rows are screened in
-float64, and a row within a band of a threshold is decided exactly (`pearl_c.s5_stats`, `pearl_c.live_row`).
+never from served values, by one pinned rule (`search`): while some calibration row of a space fails the per-row rules
+with the noise floor tightened by `MARGIN` (ρ·α ≥ `MARGIN`, about s ≤ 444·ρ/`MARGIN`), take the off-stride unit with the
+largest |x|/ρ over those rows and swap it with the on-stride unit of that space that is quietest over all its rows; stop
+when every row passes, or at `MAX_SWAPS` a space (refused if a row still fails the exact rules then). The margin is there because a served token can drive a massive
+channel several times past anything a short calibration text does (Llama-3.2-1B's L15 down channel 2590 reaches 89·ρ on
+`CALIBRATION` and past 444·ρ on a served decode token); once a channel is on the stride, ρ holds it, so a row whose largest
+entry is a swapped channel has s ≤ √(k/8)·ρ whatever its size. The rows are screened in float64, and a row within a band of
+a threshold is decided exactly (`pearl_c.s5_stats`, `pearl_c.live_row`).
 
     python channel_swaps.py make --out DIR [--checkpoint SNAPSHOT | --rev REV] [--report F]
         the swaps (DIR/channel_swaps.json), the permuted snapshot (DIR, a copy of the checkpoint's files with its
@@ -63,6 +67,7 @@ FILES = ("config.json", "generation_config.json", "model.safetensors", "special_
          "tokenizer_config.json")
 SCHEMA = "verity-pouw/pearl-plus-channel-swaps/v1"
 MAX_SWAPS = 32
+MARGIN = 8.0
 F64_TOL = 1e-9
 STRIDE = C.S5_STRIDE
 KINDS = ("qkv", "o", "gate_up", "down")  # a served pass's weights, four a layer in this order (weight index = 4·L + kind)
@@ -289,9 +294,9 @@ def exact_passes(row: np.ndarray) -> bool:
     return P.f32_of_bits(rho) * P.f32_of_bits(alpha) >= P.SIGMA_MIN and C.live_row(words)
 
 
-def failing(x: np.ndarray) -> np.ndarray:
+def failing(x: np.ndarray, margin: float = 1.0) -> np.ndarray:
     """Which rows of `x` (rows × k, BF16 values) fail the per-row rules: float64, the rows within 1e-6 of a threshold
-    decided by `exact_passes`."""
+    decided by `exact_passes`; with `margin` > 1, the noise floor tightened to ρ·α ≥ `margin` (no exact band)."""
     k = x.shape[1]
     d = x.astype(np.float64)
     rho2 = (d[:, ::STRIDE] ** 2).sum(1) / len(range(0, k, STRIDE))
@@ -300,7 +305,9 @@ def failing(x: np.ndarray) -> np.ndarray:
     sq, thr = d * d, 64 * rho2[:, None]
     dead = (sq >= thr).sum(1)
     band = (np.abs(sq - thr) <= 1e-6 * thr).sum(1)
-    fail = (ra < 1) | (64 * dead > k)
+    fail = (ra < margin) | (64 * dead > k)
+    if margin != 1.0:
+        return fail
     near = (np.abs(ra - 1) < 1e-6) | ((band > 0) & (64 * (dead - band) <= k) & (64 * (dead + band) > k))
     for r in np.nonzero(near)[0]:
         fail[r] = not exact_passes(x[r])
@@ -336,13 +343,14 @@ def perm_of(space: Space, swaps: list[tuple[int, int, int]]) -> np.ndarray:
 
 
 def search(space: Space, rows: np.ndarray) -> tuple[list[tuple[int, int, int]], int]:
-    """The pinned rule (module docstring) on `space`'s calibration rows: (its swaps, the rows failing before them)."""
+    """The pinned rule (module docstring) on `space`'s calibration rows: (its swaps, the rows failing the exact rules
+    before them)."""
     swaps: list[tuple[int, int, int]] = []
     moved: set[tuple[int, int]] = set()
     before = int(failing(rows).sum())
     for _ in range(MAX_SWAPS + 1):
         x = rows[:, perm_of(space, swaps)]
-        bad = failing(x)
+        bad = failing(x, MARGIN)
         if not bad.any():
             return swaps, before
         if len(swaps) == MAX_SWAPS:
@@ -353,15 +361,18 @@ def search(space: Space, rows: np.ndarray) -> tuple[list[tuple[int, int, int]], 
         quiet = d.max(0)
         best = max(((max(loud[c] for c in space.channels(g, u)), g, u) for g in range(space.groups)
                     for u in range(space.dims) if u % STRIDE and (g, u) not in moved), default=None)
-        if best is None:
+        targets = [] if best is None else [t for t in range(0, space.dims, STRIDE) if (best[1], t) not in moved]
+        if not targets:
             break
         _, g, u = best
-        _, t = min((max(quiet[c] for c in space.channels(g, t)), t) for t in range(0, space.dims, STRIDE)
-                   if (g, t) not in moved)
+        t = min(targets, key=lambda t: (max(quiet[c] for c in space.channels(g, t)), t))
         swaps.append((g, u, t))
         moved |= {(g, u), (g, t)}
-    raise RuntimeError(f"{space.kind} {space.layer}: {int(failing(rows[:, perm_of(space, swaps)]).sum())} calibration rows "
-                       f"still fail after {len(swaps)} swaps (MAX_SWAPS {MAX_SWAPS})")
+    left = int(failing(rows[:, perm_of(space, swaps)]).sum())
+    if not left:
+        return swaps, before
+    raise RuntimeError(f"{space.kind} {space.layer}: {left} calibration rows still fail after {len(swaps)} swaps "
+                       f"(MAX_SWAPS {MAX_SWAPS})")
 
 
 def spaces(shape: Shape) -> list[Space]:
@@ -392,12 +403,14 @@ def calibrate(w: dict, shape: Shape, tok: Tokenizer) -> dict:
             forward(w, shape, tok.encode(text), torch.bfloat16, cap)
     found = {}
     for sp in spaces(shape):
-        swaps, before = search(sp, rows_of(sp, cap))
+        rows = rows_of(sp, cap)
+        swaps, before = search(sp, rows)
         if swaps or before:
-            found[f"{sp.kind}:{sp.layer}"] = {"kind": sp.kind, "layer": sp.layer, "failing_before": before,
-                                              "swaps": [list(s) for s in swaps]}
+            found[f"{sp.kind}:{sp.layer}"] = {
+                "kind": sp.kind, "layer": sp.layer, "failing_before": before, "swaps": [list(s) for s in swaps],
+                "under_margin_after": int(failing(rows[:, perm_of(sp, swaps)], MARGIN).sum())}
     doc = {"schema": SCHEMA, "repo": REPO, "calibration_sha256": hashlib.sha256("\n".join(CALIBRATION).encode()).hexdigest(),
-           "tokens": sum(len(tok.encode(t)) for t in CALIBRATION), "max_swaps": MAX_SWAPS,
+           "tokens": sum(len(tok.encode(t)) for t in CALIBRATION), "max_swaps": MAX_SWAPS, "margin": MARGIN,
            "shape": shape.__dict__, "spaces": found}
     doc["swap_count"] = sum(len(s["swaps"]) for s in found.values())
     doc["screen"] = screen_calibration(cap, shape, doc)
