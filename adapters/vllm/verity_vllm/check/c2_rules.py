@@ -269,7 +269,7 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
         return None, None
     n = sum(gaps.values())
     cls = sorted({cls_of(k) for k in gaps})
-    tags = sorted({t for k in gaps for t in _table(codes, k).get("tags") or ()})
+    tags = sorted({t for k in gaps for t in codes[k].get("tags") or ()})       # a gap is a reason whose code names its class
     reasons = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(gaps.items(), key=lambda kv: -kv[1]))
     missing = _form_b_complete_over_values(oc)
     # plane-fed VUs are covered by neither form: FAIL by name, whatever form (B) says
@@ -424,7 +424,7 @@ def _batch_attribution_note(n_req: int, oc) -> str | None:
     if not isinstance(oc, dict):
         why = "form (B) not armed on this attempt (no --match-dir oracle compare: no Match record)"
     else:
-        att = oc.get("attribution") if isinstance(oc.get("attribution"), dict) else {}
+        att = _d(oc.get("attribution"))
         if att.get("complete") is True:
             return None
         why = (f"form (B) request attribution not complete (pairs {att.get('pairs')}, unverified {att.get('unverified_n')}, "
