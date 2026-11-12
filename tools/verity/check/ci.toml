@@ -113,8 +113,8 @@ group = 6
 # of each suite in parts and no other suite: it runs on as many xdist workers as its lane's memory holds (`suites.py`'s
 # `wide_workers`), less what each one-process suite beside it reserves. The other parallel suites (vLLM's, vstar_cli's and the
 # core evaluation's) and the three longest one-process ones go beside the security analysis's audit, whose shard has cores to
-# spare once its build narrows. The rest (`lean-suites:*`) goes with the Rust build, beside circuit-check, which has only what
-# `SIBLINGS_GB` leaves it until they end (`check.cc_mem_gb`, `grant_when_alone`), so the longer they run, the longer a cold
+# spare once its build narrows. The rest (`lean-suites:*`, but for the 5-pod plan's verity-lean-audit) goes with the Rust
+# build, beside circuit-check, which has only what `SIBLINGS_GB` leaves it until they end (`check.cc_mem_gb`, `grant_when_alone`), so the longer they run, the longer a cold
 # circuit-check. The suites in parts by test id (`[tool.verity.tests] parts`: verity-core-composition, verity-pouw-benchmarks)
 # put one part in each group, so that no shard runs either whole.
 
@@ -147,14 +147,16 @@ shards = [
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
 ]
 
-# 5 pods: each of those apart.
+# 5 pods: each of those apart, and the rest of the audit beside one suite of lean-suites' rest (lean_audit.py's own), so that a
+# candidate whose lean-audit another check lent (`--deferred` without it) still has a step on that shard: a shard holding none of
+# a `--deferred`'s steps is refused.
 [[plan]]
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "lean-suites:verity-vllm",
      "lean-suites:verity/protocols/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
      "lean-suites:verity/protocols/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
-    ["lean-audit:*"],
+    ["lean-audit:*", "lean-suites:verity-lean-audit"],
     ["lean-build", "lean-unit-cut", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
     ["pytest"],
