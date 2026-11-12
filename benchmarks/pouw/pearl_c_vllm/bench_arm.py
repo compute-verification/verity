@@ -105,7 +105,7 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
     """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor host when `gate` (infra's
     gate as an ssh command) and `peer` (this node in the challenger host's peers) are given: a salt-only session reserved
     now under lane `lane` (`_LiveSession`, `run` its gate's subprocess in tests), which the install opens on its salt
-    epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number) and draws its salt coin from
+    epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number) and takes its salt coin from
     (`pouw_h1_window.salt_session`), through the settings ``challenger`` (this node's 127.0.0.1, at the port the gate's open
     answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
     in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
@@ -123,15 +123,15 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
 
 
 class LiveDraw:
-    """`verify_run.verify_passes`' ``draw`` from a draw session of its own on the auditor host's challenger, through
+    """`verify_run.verify_passes`' ``draw`` from a sampling session of its own on the auditor host's challenger, through
     infra's gate (``gate``, ``peer`` and ``lane`` as `_LiveSession`'s; `run` its gate's subprocess in tests): called on
-    the run's commitment C, it reserves a session withheld with the draw coin alone (``reserve --withhold``,
-    `window.DRAW_FAMILIES`, `pouw_h1_window.reserve_draw` as H1's window draws), opens it on C and takes its
+    the run's commitment C, it reserves a session withheld with the sampling coin alone (``reserve --withhold``,
+    `window.DRAW_FAMILIES`, `pouw_h1_window.reserve_draw` as H1's window does), opens it on C and takes its
     ``pouw/draw`` coin after C (`pouw_h1_window.DrawSession`), whose full opening and commitment the session releases at
     its close.
     Refused (`CoinError`) before reserving while ``lane`` has a period open in the auditor's ledger, and before its open
-    when the reserve joined one, so the draw counts toward no period's sessions; and when the gate reserves it plain.
-    With ``period``, the Pearl-C period the run's salt session joined, the draw must be the lane's first reserve after
+    when the reserve joined one, so the session counts toward no period's sessions; and when the gate reserves it plain.
+    With ``period``, the Pearl-C period the run's salt session joined, the session must be the lane's first reserve after
     that period closed (`pouw_h1_window.after_close`, the compose's rule): refused before reserving unless the ledger
     closes it with no reserve of the lane since, and before its coin is asked unless the reserve is that first one.
     Returns (the coin's 64 bytes, the coin record's ``draw``: `verify_run`'s module docstring, "The coin record")."""
@@ -182,7 +182,7 @@ class LiveDraw:
 def live_draw(gate: str | None, peer: str | None, lane: str, run: Any = None,
               period: str | None = None) -> LiveDraw | None:
     """`LiveDraw` under ``gate`` and ``peer`` after the run's Pearl-C period ``period``, None when neither is given (the
-    node's draw); ValueError for one alone."""
+    node's coins); ValueError for one alone."""
     if (gate, peer) == (None, None):
         return None
     if gate is None or peer is None:
@@ -218,9 +218,9 @@ class PearlCArm:
     def engine_overrides(self, target: Any) -> dict[str, Any]:
         """Headroom for the run's own device memory, which sits beside vLLM's budget: B̃ about a byte per weight, the
         pass's leaf and flag buffers, and the per-shape ring buffers whose A (FP32) and C̃/U scale with the step's rows
-        times n. Without the utilization cap the block mode's 0.90 left nothing (OOM at 94.8 of 95 GiB);
-        without the step cap a 16,384-token prefill step's rings cost about 36 GiB and the full sweep's big points OOMed
-        in the gate (93.5 GiB torch-allocated). The step cap applies to
+        times n. Without the utilization limit the block mode's 0.90 left nothing (OOM at 94.8 of 95 GiB);
+        without the step limit a 16,384-token prefill step's rings cost about 36 GiB and the full sweep's big points OOMed
+        in the gate (93.5 GiB torch-allocated). The step limit applies to
         this arm's engine only, so its chunking differs from the controls'; the per-token ratio stays the metric."""
         return {"gpu_memory_utilization": settings.PEARLC_GPU_UTIL,
                 "max_num_batched_tokens": settings.PEARLC_STEP_TOKENS}

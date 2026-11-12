@@ -1,16 +1,16 @@
-"""V-EX's honest remedy on a retained Pearl-C pass (`pouw_pearl_c_device`'s), before its sampling coin: every tile's debit
-replayed word by word from the pass's own files, the rows that leave a tile or a credited row over its cap given up
-(`clear_work.volunteer_words`), and the manifest's records rewritten with them.
+"""V-EX's honest remedy on a retained Pearl-C pass (`pouw_pearl_c_device`'s), before its sampling coin: every tile's inert
+work replayed word by word from the pass's own files, the rows that leave a tile or a credited row over its inert-work
+bound given up (`clear_work.volunteer_words`), and the manifest's records rewritten with them.
 
   python benchmarks/pouw/pearl_c_vllm/volunteer_pass.py DIR/manifest.json --coins COINS.json [--jobs J]
-                                                         [--device DEBIT_CUBIN [--cross-check N]]
+                                                         [--device CUBIN [--cross-check N]]
 
-- **When it runs.** Exactly while the verdict rejects a run on a drawn tile whose credited debit, or a credited row's, is
-  over its cap, its over-cap rule ``reject`` (`served_passes.over_cap_rule`): the pipelines ask ``served_passes.py
-  volunteer-needed`` before they serve and refuse to skip the give-up then.  Under ``uncredited``, where the verdict
-  credits such a row nothing instead, the give-up is off the prover's path, and this module stays for whoever runs it by
-  hand.
-- **Why after the pass.** A row's debit is its words' (`pearl_c_debit`): it reads the tile's A′ and B̃ codes, which the
+- **When it runs.** Exactly while the verdict rejects a run on a sampled tile whose credited inert work, or a credited
+  row's, is over its inert-work bound, its rule on such a tile ``reject`` (`served_passes.over_cap_rule`): the
+  pipelines ask ``served_passes.py volunteer-needed`` before they serve and refuse to skip the give-up then.  Under
+  ``uncredited``, where the verdict credits such a row nothing instead, the give-up is off the prover's path, and this
+  module stays for whoever runs it by hand.
+- **Why after the pass.** A row's inert work is its words' (`pearl_c_debit`): it reads the tile's A′ and B̃ codes, which the
   salt's noise forms, so the screen's per-row rules on the activations can't decide it.  The prover knows the salt when it
   forms and commits, and replays every tile as the verifier will, before the challenger opens the sampling coin.
 - **What changes** is the records alone: each call's ``voluntary_a`` and each weight's ``voluntary_b`` (V-EX's ⌈m/64⌉ and
@@ -26,9 +26,9 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   decides it), and so is every Nth tile (``--cross-check``, default `CROSS_CHECK`): any difference from the device's
   counts stops the step.
 
-Writes ``volunteer.json`` beside the manifest (the rows over a cap before, the rows given up, what the count caps leave over,
-the records' root before and after, the credit kept, and on the device its counts' source and seconds) and exits 0 only
-when no tile is left over a cap.
+Writes ``volunteer.json`` beside the manifest (the tiles over their inert-work bound before, the rows given up, the tiles
+still over it after, the records' root before and after, the credit kept, and on the device its counts' source and
+seconds) and exits 0 only when no tile is left over its inert-work bound.
 """
 from __future__ import annotations
 
@@ -225,8 +225,8 @@ def _over(p: VR.Pass, records, counts) -> list[dict]:
 
 
 def volunteer(path: Path, coins: CoinCommitment, jobs: int, device: Path | None = None, cross_check: int = CROSS_CHECK) -> dict:
-    """Give up the pass's rows over a cap, rewriting its manifest at `path` (records and their root) when any are new; with
-    `device` (debit_sm90.cubin) the words' counts are the device's (`words_device`)."""
+    """Give up the pass's rows over their inert-work bound, rewriting its manifest at `path` (records and their root)
+    when any are new; with `device` (debit_sm90.cubin) the words' counts are the device's (`words_device`)."""
     p = VR.load(path, coins)
     counts, on = words_device(p, jobs, device, cross_check) if device is not None else (words(p, jobs), None)
     va, vb = CW.volunteer_words(p.scheme, p.records, counts)
