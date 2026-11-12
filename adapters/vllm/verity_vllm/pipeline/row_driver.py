@@ -41,6 +41,7 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline.row_json import load_json
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
@@ -69,13 +70,6 @@ def utc() -> str:
 def _stamp() -> str:
     ns = time.time_ns()
     return f"{ns // 10**9}.{ns % 10**9:09d}"
-
-
-def _read_json(path: str | Path) -> Any:
-    try:
-        return json.load(open(path))
-    except (OSError, ValueError):
-        return None
 
 
 def jit_key(py: str, cuda_home: str, row: str, tree: str) -> str | None:
@@ -245,7 +239,7 @@ class Row:
     def execution(self) -> str | None:
         """The row's execution label: its workload's ``execution`` (or ``sweep.execution``), else its id's last token; None without
         a workload file."""
-        doc = _read_json(self.path(self.wl))
+        doc = load_json(self.path(self.wl))
         if not isinstance(doc, dict):
             return None
         sw = doc.get("sweep")
@@ -258,7 +252,7 @@ class Row:
 
     def export_commit(self) -> str:
         """The shipped tree's commit (``EXPORT.json``), "" when absent."""
-        doc = _read_json(self.path("EXPORT.json"))
+        doc = load_json(self.path("EXPORT.json"))
         return (doc.get("commit") or "") if isinstance(doc, dict) else ""
 
     def serving_rows_request(self, ck: CommitConfig) -> str:

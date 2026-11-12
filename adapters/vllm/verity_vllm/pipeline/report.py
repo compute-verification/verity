@@ -28,7 +28,7 @@ from typing import Any
 from verity_vllm.check import gates as G
 from verity_vllm.check.gates import GateResult, RunArtifacts
 from verity_vllm.config import RowEngine
-from verity_vllm.pipeline.row_json import field_of
+from verity_vllm.pipeline.row_json import field_of, listed_of
 from verity_vllm.records.schema_ids import CONFIGURATION_CARD_SCHEMA
 
 CARD_SCHEMA = CONFIGURATION_CARD_SCHEMA
@@ -183,12 +183,6 @@ def log_header(path: str | Path) -> dict | None:
     return d if isinstance(d, dict) and d.get("$e") == "RunHeader" else None
 
 
-def _listed(block: dict, key: str) -> Any:
-    """What ``block`` lists under ``key``, to count or to walk; nothing where the list is absent, null or empty."""
-    xs = block.get(key)
-    return xs if xs else ()
-
-
 def _detail(gates: dict, gid: str) -> dict:
     """What gate ``gid`` recorded beside its status; the empty block for a gate that did not run or recorded nothing."""
     d = field_of(gates.get(gid), "detail")
@@ -205,7 +199,7 @@ def workload_summary(path: str | Path | None) -> dict:
         return {"path": str(path), "sha256": None, "n_requests": 0, "prompt_lens": [], "max_tokens": [], "requests": [], "error": "missing"}
     doc = json.loads(p.read_text())
     sha = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    reqs = [{"request_id": r.get("request_id"), "prompt_len": len(_listed(r, "prompt_token_ids")), "max_tokens": r.get("max_tokens"),
+    reqs = [{"request_id": r.get("request_id"), "prompt_len": len(listed_of(r, "prompt_token_ids")), "max_tokens": r.get("max_tokens"),
              "arrive_step": int(r.get("arrive_step") or 0)}
             for r in doc.get("requests", [])]
     return {"path": str(path), "sha256": sha, "n_requests": len(reqs), "prompt_lens": sorted({r["prompt_len"] for r in reqs}),
@@ -377,15 +371,15 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
     unknown = len(unknown_roots) if unknown_roots else 0
     classes = rp.get("classes")   # the root policy's classes, then its roots; a policy that lists neither leaves none unvalidated
     unvalidated = sum(int(c.get("failed") or 0) for c in classes.values() if isinstance(c, dict)) if classes else 0
-    unvalidated += sum(1 for r in _listed(rp, "roots") if isinstance(r, dict) and r.get("status") not in ("pass", "validated", "ok"))
+    unvalidated += sum(1 for r in listed_of(rp, "roots") if isinstance(r, dict) and r.get("status") not in ("pass", "validated", "ok"))
     residue = field_of(cr.get("totals"), "residue_kernels")
     prov = provenance or {}
     cov = ra.get("coverage")   # tier a's specs, each with what covered it; a run without tier a counts the resolution's specs and compares none
     if cov:
         n_specs = len(cov)
-        n_covered = len(cov) - len(_listed(ra, "uncovered_specs"))
+        n_covered = len(cov) - len(listed_of(ra, "uncovered_specs"))
     else:
-        n_specs, n_covered = len(_listed(res, "by_spec")), None
+        n_specs, n_covered = len(listed_of(res, "by_spec")), None
     diff = field_of(q, "differential")   # the quarantine's differential tests; a run without them prints n/a
     # G5 (D82): exhaustive operand provenance, sampled VUs (verifier seed), served tokens, chained slices: a part G5 did not reach is skipped
     pv = g5.get("provenance")
@@ -410,7 +404,7 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
     # D85: what the sampled population covers (vu_query; informational, never gates)
     vp = ra.get("vu_population")   # what the sampled population covers; a run whose tier a did not compute it says so
     if vp and vp.get("status") == "ok":
-        n_zero, n_partial = len(_listed(vp, "zero_mass_specs")), len(_listed(vp, "partial_tiling_specs"))
+        n_zero, n_partial = len(listed_of(vp, "zero_mass_specs")), len(listed_of(vp, "partial_tiling_specs"))
         vu_txt = (f"{vp.get('count')} VUs / {vp.get('instances')} instances, {vp.get('oversize_instances')} oversize; "
                   f"{vp.get('instances_without_units')} zero-mass instances ({n_zero} specs), {n_partial} partially tiled specs"
                   + ("" if not (n_zero or n_partial) else " -- SEE replay_a.vu_population"))
@@ -423,15 +417,15 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
         # G8: the VU-partition structural gate over query_use.json -- skipped / pass / fail + set count + max w_out
         "vu_partition": vu_partition_text(gates),
         # each provenance row counts what the sealed verifier's provenance lists; an unsealed card has none, and prints n/a
-        "protected_files_modified": len(_listed(prov, "protected_files_modified")) if prov else None,
-        "existing_primitives_modified": len(_listed(prov, "existing_primitives_modified")) if prov else None,
-        "new_root_classes": len(_listed(prov, "new_root_classes")) if prov else (len(_listed(rp, "new_root_classes")) if rp else None),
-        "new_allowlist_entries": len(_listed(prov, "new_allowlist_entries")) if prov else None,
-        "golden_digest_changes": len(_listed(prov, "golden_digest_changes")) if prov else None,
+        "protected_files_modified": len(listed_of(prov, "protected_files_modified")) if prov else None,
+        "existing_primitives_modified": len(listed_of(prov, "existing_primitives_modified")) if prov else None,
+        "new_root_classes": len(listed_of(prov, "new_root_classes")) if prov else (len(listed_of(rp, "new_root_classes")) if rp else None),
+        "new_allowlist_entries": len(listed_of(prov, "new_allowlist_entries")) if prov else None,
+        "golden_digest_changes": len(listed_of(prov, "golden_digest_changes")) if prov else None,
         "unsupported": unsupported, "ambiguous": ambiguous, "unknown_or_unvalidated_roots": unknown + unvalidated if (fs or res or rp) else None,
         "census_residue": residue,
-        "new_patterns": len(_listed(prov, "new_patterns")) if prov else None,
-        "new_definitions": len(_listed(prov, "new_definitions")) if prov else None,
+        "new_patterns": len(listed_of(prov, "new_patterns")) if prov else None,
+        "new_definitions": len(listed_of(prov, "new_definitions")) if prov else None,
         "differential_passed": field_of(diff, "passed"), "differential_total": field_of(diff, "total"),
         "specs_captured": n_specs, "specs_compared": n_covered,
         "operand_provenance": wiring_txt, "sampled_vus": sample_txt, "served_tokens": tokens_txt, "chained_slices": chain_txt,
@@ -461,13 +455,13 @@ def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, 
     fs = run.json("fold_summary") or {}
     prov = run.json("provenance")
     unsealed = not isinstance(prov, dict)
-    kernels = [k.get("kernel") for k in _listed(cr, "kernels") if isinstance(k, dict)]
+    kernels = [k.get("kernel") for k in listed_of(cr, "kernels") if isinstance(k, dict)]
     if not kernels and isinstance(run.json("census"), dict):
         histogram = run.json("census").get("run_histogram")   # a run without the reconcile's kernels names the census's own; a census without them names none
         kernels = list(histogram.keys()) if histogram else []
     missing = []
     seen = set()
-    for u in _listed(res, "unsupported_examples"):
+    for u in listed_of(res, "unsupported_examples"):
         key = (u.get("op"), u.get("reason"))
         if key not in seen:
             seen.add(key)
@@ -495,10 +489,10 @@ def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, 
                   **({"realized": man["realized"]} if isinstance(man.get("realized"), dict) else {})},
         kappa=versions, gates=gates, verdict=G.verdict(results), census_kernels=kernels,
         patterns_used=dict(by_pattern) if by_pattern else {}, patterns_missing=missing, roots_by_class=roots,
-        per_step_instances=[{"step": s.get("step"), "phase": s.get("phase"), "n_instances": s.get("n_instances")} for s in _listed(fs, "per_step")],
-        mechanism_notes=list(mechanism_notes if mechanism_notes is not None else _listed(man, "mechanism_notes")),
+        per_step_instances=[{"step": s.get("step"), "phase": s.get("phase"), "n_instances": s.get("n_instances")} for s in listed_of(fs, "per_step")],
+        mechanism_notes=list(mechanism_notes if mechanism_notes is not None else listed_of(man, "mechanism_notes")),
         spend={"pod_hours": spend.get("pod_hours"), "usd": spend.get("usd"), **{k: v for k, v in spend.items() if k not in ("pod_hours", "usd")}},
-        artifacts=_artifacts_of(run), notes=list(notes if notes is not None else _listed(man, "notes")),
+        artifacts=_artifacts_of(run), notes=list(notes if notes is not None else listed_of(man, "notes")),
         provenance=dict(prov) if isinstance(prov, dict) else {}, unsealed=unsealed, diagnostics=G.diagnostics(run),
         counts=counts_of(run, gates, prov if isinstance(prov, dict) else None),
         replay={"tier_a": {k: g4.get(k) for k in ("status", "k", "specs", "covered", "uncovered_specs", "pass", "fail", "skipped")},
