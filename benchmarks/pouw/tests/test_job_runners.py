@@ -13,7 +13,7 @@ import pytest
 
 POUW = Path(__file__).resolve().parents[1]
 #: each directory with a runner -> the scripts beside it its jobs source, never started
-RUNNERS = {"served_h1": {"arch"}, "served_zk": set()}
+RUNNERS = {"served_h1": {"arch"}, "served_zk": set(), "hidden_zk": set()}
 
 
 def jobs(d: str) -> list[str]:
