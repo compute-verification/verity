@@ -99,11 +99,13 @@ and a phase's own terms `3/2^202 + 2·q`. -/
 
 /-- A sample of one session: `k·γ_s ≤ 1212·10^12` and `Pr[B] ≤ 2^-351` are within `q = 49234135/2^176`. -/
 theorem forkSq_one : (1212 * 10 ^ 12 : ℚ) * (1 / 2 ^ 351) ≤ (49234135 / 2 ^ 176) ^ 2 := by
+  rw [mul_one_div, div_pow, div_le_div_iff₀ (by positivity) (by positivity)]
   norm_num
 
 /-- A sample of `4096` sessions: `k·γ_s ≤ 4096·1212·10^12` and `Pr[B] ≤ 2^-351` are within
 `q = 49234135/2^170`. -/
 theorem forkSq_4096 : (4096 * (1212 * 10 ^ 12) : ℚ) * (1 / 2 ^ 351) ≤ (49234135 / 2 ^ 170) ^ 2 := by
+  rw [mul_one_div, div_pow, div_le_div_iff₀ (by positivity) (by positivity)]
   norm_num
 
 /-- One session a sample, `59,100,000` phases: at most `2^-111`. -/
