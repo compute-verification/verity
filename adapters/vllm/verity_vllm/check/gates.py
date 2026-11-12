@@ -661,7 +661,8 @@ def gate_semantic_closure(run: RunArtifacts) -> GateResult:
                     {"unsupported": unsupported, "fold_unresolved": fold_unresolved})
     if amb:
         problems.append(f"{amb} ambiguous pattern matches ({amb_src})")
-    totals = res["totals"]   # stated: the counts above were read from it
+    stated = res.get("totals")
+    totals = stated if stated else {}
     detail = {"unsupported": unsupported, "resolution_errors": res_errors, "fold_unsupported": fold_unsupported,
               "fold_unresolved": fold_unresolved, "fold_errors": fold_errors, "fold_error_classes": fs.get("error_classes"),
               "ambiguous": amb, "ambiguity_source": amb_src, "steps": steps, "expected_steps": exp,
