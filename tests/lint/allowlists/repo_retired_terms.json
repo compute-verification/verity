@@ -3214,7 +3214,6 @@
     {"file": "benchmarks/pouw/filler/tests/test_pfill_ref.py", "count": 1},
     {"file": "benchmarks/pouw/filler/tests/test_share_fstep.py", "count": 3},
     {"file": "benchmarks/pouw/filler/tile_probe.sh", "count": 1},
-    {"file": "benchmarks/pouw/floored_gemm/eps.py", "count": 17},
     {"file": "benchmarks/pouw/floored_gemm/fgemm.cu", "count": 3},
     {"file": "benchmarks/pouw/floored_gemm/run.sh", "count": 1},
     {"file": "benchmarks/pouw/floored_gemm/tb_run.sh", "count": 1},
