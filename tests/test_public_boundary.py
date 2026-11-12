@@ -551,7 +551,7 @@ def _lock() -> dict:
         "default_owner": "@lane",
         "escapes": {"Lib.walk.go": "its loop", "Lib.walk.aside": "a partial def"},
         "layers": {"Lib": {"imports": ["Lib", "Mathlib", "Lib.Hidden", "Lib.Hidden.Deep"],
-                           "why": "all of it, since #1234"}},
+                           "why": "all of it"}},
         "four_names": ["Lib", "Lib.Inner"],
         "four_names_except": {"Lib.Twice": "named before the rule"},
         "guarantees": {"Lib.Rooted": _record(premises={"assumptions": [], "domain": [], "open": ["Lib.Kept"],
@@ -595,7 +595,7 @@ def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_facto
         "runs": {"Lib.Hidden.Open": {"why": "vectors"}},
         "open": {"Lib.Kept": {"digest": "01"}},
         "escapes": {"Lib.walk.go": "its loop"},
-        "layers": {"Lib": {"imports": ["Lib", "Mathlib", "Lib.Hidden"], "why": "all of it, since #1234"}},
+        "layers": {"Lib": {"imports": ["Lib", "Mathlib", "Lib.Hidden"], "why": "all of it"}},
         "four_names": ["Lib"],
         "four_names_except": {"Lib.Twice": "named before the rule"},
         "guarantees": {"Lib.Rooted": {k: v for k, v in source["guarantees"]["Lib.Rooted"].items() if k != "owner"}},
@@ -618,7 +618,7 @@ def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_facto
     assert report["undeclared"] == ["guarantees: Lib.Outgrown"] and report["witness_withheld"] == []
     assert report["also_withheld"] == ["four_names_except: Lib.Twice"]
     assert report["lane_fields"] == 3 + 2 * 3 + 1
-    assert report["sites"] == {"layers": 1} and report["site_list"] == [["layers", "Lib", "pr", "#1234"]]
+    assert report["sites"] == {} and report["site_list"] == []
     assert report["spelled"] == {} and report["spelled_list"] == []
     assert report["bytes"] == [len(PE.LEAN_CHECK.text(source)), len(wrote)]
 
@@ -716,15 +716,65 @@ def test_a_locks_leftovers_are_named_by_section_and_entry() -> None:
     assert sites[0][3] == "#4321" and sites[1][3].startswith("note:")
 
 
-def test_the_report_names_what_a_kept_reason_spells_that_the_export_leaves_out(tmp_path_factory) -> None:
-    """A reason is prose, so the export keeps it as it stands; the report says where one still spells a declaration, a
-    module or a path only the files left out have, and not where it spells what a copied file has."""
-    why = ("runs beside Lib.Withheld and Lib.Hidden.Deep (lean/Lib/Hidden.lean, lean/Lib/Hidden/); Lib.Kept, Lib.Twice, "
-           "Lib.Hidden.Open, Mathlib.Tactic and lean/Lib/Shown.lean are another matter.")
-    lock = {"format": 3, "roots": ["Lib"], "exempt": {"Lib.Hidden": why}, "shape": {"frozen": {"Lib.Kept": "as Lib.Withheld"}}}
+def _known(boundary, pattern: str):
+    """``boundary`` with the text of the package's lock that ``pattern`` matches as known residue."""
+    entry = PE.PB.Residue("known", re.compile(pattern), PE.PB.globs(["lean/lean-audit.json"]), "the change that removes it")
+    return boundary._replace(residue=(*boundary.residue, entry))
+
+
+#: a reason that spells what only the files left out have (a declaration, a module, a file), and what a copied file has
+SPELLS = ("runs beside Lib.Withheld and Lib.Hidden.Deep (lean/Lib/Hidden.lean, lean/Lib/Hidden/); Lib.Kept, Lib.Twice, "
+          "Lib.Hidden.Open, Mathlib.Tactic and lean/Lib/Shown.lean are another matter.")
+
+
+def test_the_export_refuses_a_lock_whose_kept_text_names_what_it_leaves_out(tmp_path_factory) -> None:
+    """A reason is prose, so the export never rewords it: one that still spells a declaration, a module or a path only
+    the files left out have refuses the export by file, section, entry and text, and not for what a copied file has."""
+    lock = {"format": 3, "roots": ["Lib"], "exempt": {"Lib.Hidden": SPELLS}, "shape": {"frozen": {"Lib.Kept": "as Lib.Withheld"}}}
     tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
     dest = tmp_path_factory.mktemp("export")
-    got = PE.export(tree, boundary, j, dest, {})
+    with pytest.raises(ValueError) as e:
+        PE.export(tree, boundary, j, dest, {})
+    said = str(e.value)
+    for named in ("4 place(s)", "lean/lean-audit.json: exempt[Lib.Hidden] holds declaration 'Lib.Withheld'",
+                  "lean/lean-audit.json: exempt[Lib.Hidden] holds module 'Lib.Hidden.Deep'",
+                  "lean/lean-audit.json: exempt[Lib.Hidden] holds path 'lean/Lib/Hidden.lean'",
+                  "lean/lean-audit.json: shape.frozen[Lib.Kept] holds declaration 'Lib.Withheld'",
+                  "reword each in the lock itself", "[[residue]]"):
+        assert named in said
+    for kept in ("Lib.Twice", "Lib.Hidden.Open", "Mathlib.Tactic", "Shown.lean"):
+        assert kept not in said
+    assert not (dest / ".git").exists(), "a refused export commits nothing"
+
+
+def test_the_export_refuses_a_lock_whose_kept_text_holds_lane_text(tmp_path_factory) -> None:
+    lock = _lock()
+    lock["layers"]["Lib"]["why"] = "all of it, since #1234"
+    lock["exempt"]["Lib.Hidden"] = "its runners (Daniel, 5 Oct)"
+    lock["exempt"]["Lib.Hidden.Deep"] = "a runner, since #99"
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    with pytest.raises(ValueError) as e:
+        PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
+    said = str(e.value)
+    assert "2 place(s)" in said and "lean/lean-audit.json: layers[Lib] holds pr '#1234'" in said
+    assert "lean/lean-audit.json: exempt[Lib.Hidden] holds attribution '(Daniel, 5 Oct)'" in said
+    assert "#99" not in said, "an entry the export drops is not its to refuse"
+
+
+def test_the_export_ships_what_the_boundary_lists_as_known_residue_and_reports_it(tmp_path_factory) -> None:
+    """A `[[residue]]` entry covers a lock's text by the lock's path and the text its pattern matches: the export ships
+    that and reports it, and still refuses what no entry covers."""
+    lock = {"format": 3, "roots": ["Lib"], "exempt": {"Lib.Hidden": SPELLS},
+            "shape": {"frozen": {"Lib.Kept": "as Lib.Withheld, since #1234"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    with pytest.raises(ValueError) as e:
+        PE.export(tree, _known(boundary, r"^Lib\.|^lean/"), j, tmp_path_factory.mktemp("export"), {})
+    assert "1 place(s)" in str(e.value) and "shape.frozen[Lib.Kept] holds pr '#1234'" in str(e.value)
+    elsewhere = boundary._replace(residue=(PE.PB.Residue("known", re.compile("."), PE.PB.globs(["other"]), "a change"),))
+    with pytest.raises(ValueError, match=r"5 place\(s\)"):
+        PE.export(tree, elsewhere, j, tmp_path_factory.mktemp("export"), {})
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, _known(boundary, r"^Lib\.|^lean/|^#1234$"), j, dest, {})
     assert json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8")) == lock
     report = got["locks"]["lean/lean-audit.json"]
     assert report["spelled"] == {"exempt": 3, "shape.frozen": 1}
@@ -732,7 +782,7 @@ def test_the_report_names_what_a_kept_reason_spells_that_the_export_leaves_out(t
         ["exempt", "Lib.Hidden", "declaration", "Lib.Withheld"], ["exempt", "Lib.Hidden", "module", "Lib.Hidden.Deep"],
         ["exempt", "Lib.Hidden", "path", "lean/Lib/Hidden.lean"],
         ["shape.frozen", "Lib.Kept", "declaration", "Lib.Withheld"]]
-    assert report["sites"] == {} and report["site_list"] == []
+    assert report["sites"] == {"shape.frozen": 1} and report["site_list"] == [["shape.frozen", "Lib.Kept", "pr", "#1234"]]
 
 
 def test_the_export_ships_the_fetched_fixtures_its_boundary_names(judged, tmp_path_factory, monkeypatch) -> None:

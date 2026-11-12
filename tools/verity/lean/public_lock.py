@@ -15,8 +15,8 @@ the lock it ships states only what the copied files hold:
   (`LANE_SECTIONS`);
 * everything else stays as it stands: a kept entry's record (its hashes, its reasons), a `reads` group, which is its
   module's whole, and the sections that name nothing of the repository's Lean (`OPAQUE`). A reason is never reworded
-  here: what a kept entry's text still holds that the public tree shouldn't is found (`leftovers`) and reworded in the
-  lock it comes from.
+  here: what a kept entry's text still holds that the public tree shouldn't is found (`leftovers`), and the export
+  refuses the lock by the entry that holds it (`refusal`) until the lock it comes from is reworded.
 
 What the copied files have is the caller's to say, one name at a time: ``has(kind, name)``, for the kinds below. A section
 no rule covers refuses the lock (`unruled`), so a section added to the lock's schema gets its rule here before a lock
@@ -211,6 +211,19 @@ def leftovers(lock: dict, find: Callable[[str], Iterable[tuple[str, str]]]) -> l
     holds the string (`entries`): what a kept entry's key, reason or record still spells. The caller says what counts."""
     return [(section, entry, kind, text) for section, entry, held in entries(lock)
             for s in _strings(held) for kind, text in find(s)]
+
+
+def refusal(left: list[tuple[str, str, str, str, str]]) -> str:
+    """What the export says of locks whose kept text still holds ``left``, each (the lock's file, section, entry, kind,
+    text) as `leftovers` names it: every one of the first `SHOWN`, and the fix."""
+    more = f"; and {len(left) - SHOWN} more" if len(left) > SHOWN else ""
+    shown = "; ".join(f"{file}: {section}{f'[{entry}]' if entry else ''} holds {kind} {text!r}"
+                      for file, section, entry, kind, text in left[:SHOWN])
+    return (f"public_lock: {len(left)} place(s) where a lock's kept text holds lane text, or names what the export leaves "
+            f"out: {shown}{more}. The export never rewords a lock, so reword each in the lock itself: drop the citation, "
+            "the attribution or the name and keep the sentence, saying what is true now. An entry that can't be stated "
+            "without what it names is made public with it or private with it (`public_boundary.toml`); one that a "
+            "change on its way removes is listed there under `[[residue]]`, with that change as its `until`")
 
 
 def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:
