@@ -11,7 +11,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `compiled` | stock vLLM, its defaults: CUDA graphs, with torch.compile on the architectures vLLM compiles (not those it captures breakable CUDA graphs for, GLM-5.3's among them), chunked prefill, prefix caching, async scheduling | — |
 | `compiled-again` | nothing: stock in a second server lifetime, for what two starts of one engine differ by | `compiled` |
 | `no-prefix-cache` | `--no-enable-prefix-caching` | `compiled` |
-| `published` | the server started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags, its speculative decoding among them, the job's context limit or else the recipe's, and vLLM's own cap on the requests it runs at once in place of the runner's 256 | `compiled` |
+| `published` | the server started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags, its speculative decoding among them, the job's context limit or else the recipe's, and vLLM's own limit on the requests it runs at once in place of the runner's 256 | `compiled` |
 | `eager` | `--enforce-eager` | `compiled` |
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
@@ -41,7 +41,7 @@ arm where one doesn't load, because vLLM logs such a plugin and serves on withou
 settings every other arm shares. Its data is the command of the model's recipe (`recipes/models/` in vLLM's
 repository, shown at recipes.vllm.ai) for the cards the runner serves the model on: the flags that command adds
 (`Model.published`) and the context limit it is served at where the job names none (`Model.published_context`). The
-arm adds the flags to `compiled`'s line and drops the runner's cap of 256 requests at once, which leaves vLLM's own
+arm adds the flags to `compiled`'s line and drops the runner's limit of 256 requests at once, which leaves vLLM's own
 for the cards. A model with no recipe here is refused.
 
 GLM-5.3's is the recipe's command "FP8 on 8xH200 (standard)": an FP8 KV cache, speculative decoding with five draft
@@ -57,7 +57,7 @@ that command in two things, each with the recipe's own alternative:
 - **The context limit.** The command names none, so vLLM takes the model's own, 1,048,576 tokens, and by the recipe's
   own note refuses to start on eight H200s, whose KV cache does not hold one request of that length. The arm serves
   at `--max-model-len auto`, vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves
-  when it starts and prints in its log. The recipe's command builder caps these cards at 262,144 instead; a job that
+  when it starts and prints in its log. The recipe's command builder sets 262,144 for these cards instead; a job that
   wants that, or any other limit, names it (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by
   their flags alone. The runner checks no load against `auto`: a request past the limit the engine resolved is
   refused by the server and counted as failed.

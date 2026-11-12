@@ -36,7 +36,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
   differ by, the noise floor of a cost (`cost_report`);
 - ``no-prefix-cache``: ``--no-enable-prefix-caching``;
 - ``published``: ``compiled`` started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags,
-  its speculative decoding among them, the context limit the job names or else the recipe's, vLLM's own cap on the
+  its speculative decoding among them, the context limit the job names or else the recipe's, vLLM's own limit on the
   requests it runs at once in place of `BASE_ARGS`'s, and behind the front end the job names (`FRONT_ENDS`). What
   stock vLLM serves under the settings its authors publish, where ``compiled`` is stock under the settings the other
   arms share;
@@ -215,7 +215,7 @@ ARMS = {
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
     "no-prefix-cache": Arm("compiled", "prefix caching off", ("--no-enable-prefix-caching",)),
     "published": Arm("compiled", "stock vLLM as its recipe for the model starts it: the recipe's flags, the job's "
-                     "context limit or else the recipe's, and vLLM's own cap on the requests it runs at once in place "
+                     "context limit or else the recipe's, and vLLM's own limit on the requests it runs at once in place "
                      "of this file's", published=True),
     "eager": Arm("compiled", "stock vLLM, eager", ("--enforce-eager",)),
     "bi-compiled": Arm("compiled", "+ vLLM's batch-invariant kernels", env=BATCH_INVARIANT),
@@ -335,7 +335,7 @@ class Model:
 #: cap (pinned, so that a saturated load hits the same cap on every vLLM build) and the seed
 BASE_ARGS = ("--max-model-len", "4096", "--max-num-seqs", "256", "--seed", "0", "--disable-uvicorn-access-log")
 #: the flags of `BASE_ARGS` no recipe of vLLM's sets, which the ``published`` arm leaves to vLLM's own defaults: the
-#: batch cap, so that its server runs as many requests at once as vLLM itself allows on the hardware
+#: batch limit, so that its server runs as many requests at once as vLLM itself allows on the hardware
 UNPUBLISHED = ("--max-num-seqs",)
 #: vLLM's word for the longest context limit the cards' KV cache holds, which the engine resolves when it starts
 AUTO = "auto"
@@ -374,7 +374,7 @@ MODELS = {
                    # own draft layer. The command's tokenizer mode is its Rust front end's, and the recipe names the
                    # other for a build without it. The command names no context limit and the model's own does not
                    # fit these cards' KV cache, so the limit is the longest that does (`AUTO`); the recipe's command
-                   # builder caps these cards at 262,144, which a job that wants it names
+                   # builder sets 262,144 for these cards, which a job that wants it names
                    published=("--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
                               "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
                               "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),

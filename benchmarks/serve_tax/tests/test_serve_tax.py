@@ -450,7 +450,7 @@ def test_max_model_len_replaces_the_base_context_limit():
 
 
 def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path, monkeypatch):
-    """The arm's line is stock's with the recipe's flags added and the runner's cap on the requests at once dropped,
+    """The arm's line is stock's with the recipe's flags added and the runner's limit on the requests at once dropped,
     and nothing else, at the job's context limit, and at the recipe's, not the runner's, where the job names none; a
     model with no recipe here is refused. Behind the Rust front end the same flags go to ``vllm serve`` with the
     recipe's own tokenizer mode, under the variable that starts it, and no other arm's server has it."""
@@ -460,9 +460,9 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     assert [S.published_context("published", "glm53", n) for n in (131072, 262144, "auto")] == [131072, 262144, "auto"]
     stock = S.server_argv(S.ARMS["compiled"], glm, Path("/ck"), 8000, max_model_len=context)
     argv = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context)
-    cap = stock.index("--max-num-seqs")
+    seqs = stock.index("--max-num-seqs")
     at = stock.index("--max-model-len")
-    assert argv == [*stock[:at], *glm.published, "--tokenizer-mode", "auto", *stock[at:cap], *stock[cap + 2:]]
+    assert argv == [*stock[:at], *glm.published, "--tokenizer-mode", "auto", *stock[at:seqs], *stock[seqs + 2:]]
     assert argv.count("--max-model-len") == 1 and argv[argv.index("--max-model-len") + 1] == "auto"
     # the recipe's command for the cards, flag for flag, with the front end's fallback for a build without it
     for flag, value in (("--served-model-name", "glm-5.3"), ("--tensor-parallel-size", "8"), ("--tokenizer-mode", "auto"),
