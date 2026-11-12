@@ -370,8 +370,7 @@ def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[
     """After a full build: every binding's record (`units.store`), once the suite its records give (`units.derive`) is this
     run's, target for target, with each one's units, whether it is a Call and its key; else why none was stored.  With
     ``manifest``, the records stored are listed there (`units.listing`).  Where ``cache`` held bindings' records of this
-    version before, of which a full build takes none, the names of the variables this process's keys hold (``keyed``,
-    `units.untaken`)."""
+    version and none under this process's keys, the names of the variables its keys hold (``keyed``, `units.untaken`)."""
     entries = UN.built_entries()
     if entries is None:
         return {"stored": 0, "why": "the registry grew while the catalog was built"}
@@ -935,10 +934,10 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None,
     the report says why; a run from the cache builds each binding it misses, as it would with no records.  Beside them the
     catalog's roots record (`units.store_roots`), from which a ``--binding`` run makes only its binding's roots.  The report: the
     bindings reused and built (`units.Plan.stats`), those built whose key held a record that did not count (``skipped``, when
-    there are any), the names of the variables this process's keys hold when it took no record though ``cache`` held some of
-    this version (``keyed``, `units.untaken`), the most bytes their builds' results held on disk at once (``scratch_bytes``, `units.built_apart`), the
-    records stored and the bytes every binding's records and the roots record take in ``cache`` (``bytes``), and why none
-    were stored.  With ``slices`` (``--slices DIR``), each binding's slice and the
+    there are any), the names of the variables this process's keys hold when ``cache`` held records of this version and none
+    under its keys (``keyed``, `units.untaken`), the most bytes their builds' results held on disk at once
+    (``scratch_bytes``, `units.built_apart`), the records stored and the bytes every binding's records and the roots record
+    take in ``cache`` (``bytes``), and why none were stored.  With ``slices`` (``--slices DIR``), each binding's slice and the
     part they share there too (`units.slices`, `units.write_slices`), from which a ``--binding --slice`` run reads no other
     binding's record, and the report's ``slices`` counts them; why there are none is why the run failed.  With ``manifest``
     (``--records-manifest FILE``), the records the catalog rests on, taken and built, listed there (`units.listing`), once
@@ -1603,8 +1602,8 @@ def _combine_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
 
 
 def _cache_lines(rep: dict) -> None:
-    """What the run reused: its catalog bindings' records (and, when it took none of those the cache held, the names of the
-    variables its keys hold, `units.untaken_note`), and its targets' cache entries."""
+    """What the run reused: its catalog bindings' records (and, when the cache held some and none under its keys, the names
+    of the variables its keys hold, `units.untaken_note`), and its targets' cache entries."""
     if u := (rep.get("cache") or {}).get("units"):
         note = UN.untaken_note(u)
         print("circuit-check: catalog bindings: " + (f"{u['reused']} reused, {len(u['rebuilt'])} built ({', '.join(u['rebuilt'][:8])}"

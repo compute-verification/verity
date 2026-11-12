@@ -317,7 +317,7 @@ def _listed(cache: Path, plan: UN.Plan) -> dict:
 
 def _how(got: dict) -> str:
     """The catalog's line for what the session's records gave (`_recorded`'s report, or `_listed`'s), with the names of the
-    variables the build's keys hold when it took no record though there were some (`units.untaken_note`)."""
+    variables the build's keys hold when the cache held records and none under its keys (`units.untaken_note`)."""
     built, skipped, note = got["rebuilt"], got.get("skipped", []), UN.untaken_note(got)
     how = f"from records: {got['reused']} of {got['reused'] + len(built)} bindings reused, {len(built)} built"
     if not built:
