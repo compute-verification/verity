@@ -114,6 +114,31 @@ def test_an_unhooked_buffer_is_refused(art: Path, tmp_path: Path) -> None:
         _build(art, inductor=ind)
 
 
+def test_a_piece_argument_of_no_known_source_is_refused(art: Path, tmp_path: Path) -> None:
+    graph = tmp_path / "computation_graph.py"
+    src = (art / "computation_graph.py").read_text()
+    assert "_weight_, l_positions_, " in src
+    graph.write_text(src.replace("_weight_, l_positions_, ", "_weight_, positions, ", 1))
+    with pytest.raises(Unmodelled, match=r"piece 0 argument 5 \(positions\): a unknown argument"):
+        _build(art, split_graph=str(graph))
+
+
+def test_a_launch_reads_a_view_at_the_views_width(art: Path, tmp_path: Path) -> None:
+    ind = _copy(art, tmp_path)
+    kernel = "triton_red_fused_fused_add_rms_norm_0"
+    old = f"{kernel}.run(buf0, arg4_1, arg3_1, buf2, s72, 2048, stream=raw_stream0)"
+    path = next(p for p in sorted(ind.rglob("*.py")) if old in p.read_text())
+
+    def launch() -> dict:
+        return next(la for la in C.parse_wrapper(str(path))["launches"] if la["kernel"] == kernel)
+
+    whole = launch()
+    assert whole["args"][0] == "buf0" and whole["widths"][0] == 2048
+    view = "reinterpret_tensor(buf0, (s72, 8, 64), (512, 64, 1), 0)"
+    _edit(ind, old, old.replace("buf0", view))
+    assert launch()["args"][0] == view and launch()["widths"] == [512, *whole["widths"][1:]]
+
+
 def test_batched_copy_flushes_are_no_calls(art: Path, tmp_path: Path) -> None:
     ind = _copy(art, tmp_path)
     flush = f"run_intermediate_hooks({FLUSH!r}, None)"

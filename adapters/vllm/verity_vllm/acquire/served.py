@@ -50,9 +50,12 @@ import hashlib
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
+from verity.definitions.registry import inductor as IR
 
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
@@ -62,12 +65,12 @@ from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
 from verity_vllm.program.frontend import targets as TG
-from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
-from verity.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
-from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
-from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
-from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
+from verity_vllm.query.manifest.format import SCHEMA, SERVED_FAMILY, manifest_digest
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS
+from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
+from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
 
 KIND = "verity/served-required-manifest/v1"
 FAMILY = SERVED_FAMILY
@@ -378,7 +381,7 @@ _GRAPH_RETURN = re.compile(r"^\s*return \((\w+),\)\s*$", re.M)
 
 
 def _graph_output(path: str) -> str:
-    top = open(path).read().split("\n    class submod_", 1)[0]
+    top = Path(path).read_text().split("\n    class submod_", 1)[0]
     m = _GRAPH_RETURN.search(top)
     if m is None:
         raise Unmodelled(f"{path}: the split graph returns no single value")
@@ -417,7 +420,7 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
     attention: list[dict[str, Any]] = []
     for p, (prog, wiring) in enumerate(zip(programs, graph["wiring"])):
         env = []
-        for k, (src, raw) in enumerate(zip(wiring["args"], wiring["raw_args"])):
+        for n, (src, raw) in enumerate(zip(wiring["args"], wiring["raw_args"])):
             kind = src["kind"]
             if kind == "piece_ret":
                 key = (src["piece"], src["ret"])
@@ -432,10 +435,10 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
             elif kind == "layer_name":
                 env.append({"layer_name": True})
             else:
-                raise Unmodelled(f"piece {p} argument {k} ({raw}): a {kind} argument")
+                raise Unmodelled(f"piece {p} argument {n} ({raw}): a {kind} argument")
         names = [f"c{p:02d}.{v['name']}" for v in prog["values"]]
 
-        def g(ref: dict[str, Any]) -> dict[str, Any]:
+        def g(ref: dict[str, Any], env: list[dict[str, Any]] = env, names: list[str] = names) -> dict[str, Any]:
             if "value" in ref:
                 out = {"value": names[ref["value"]], **{k: ref[k] for k in ("width", "cols") if k in ref}}
             elif "arg" in ref:
@@ -656,7 +659,7 @@ def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kerne
 def _final_value(split_graph: str, graph: dict[str, Any], wired: dict[str, Any]) -> dict[str, Any]:
     """The backbone's output: the split graph's return, a piece's return that is a value."""
     out = _graph_output(split_graph)
-    src = open(split_graph).read().split("\n    class submod_", 1)[0]
+    src = Path(split_graph).read_text().split("\n    class submod_", 1)[0]
     m = re.search(rf"^\s*{out} = (submod_\d+)\[(\d+)\]", src, re.M)
     pieces = [w["submod"] for w in graph["wiring"]]
     if m is None or m.group(1) not in pieces:

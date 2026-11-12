@@ -17,12 +17,18 @@ value reads, no synchronisation): the GPU gate's non-interference observer.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping
+from typing import Any
 
+from verity_vllm.acquire.plan import (
+    HOOK_KINDS,
+    AcquisitionPlan,
+    AcquisitionSite,
+    hooks_of_doc,
+)
 from verity_vllm.engine import hooks as engine_hooks
 from verity_vllm.observe.runtime_tree import RUNNER_PATH
-from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite, hooks_of_doc
 
 Sink = Callable[[tuple[str, str, str], Any], None]
 
@@ -219,8 +225,8 @@ def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str,
     committer._modules = [(m, mods[m]) for m in out_mods]
     committer.plan_inputs = set(in_mods)
     committer.name = f"{committer.name}+plan"
-    rec = {"engine": "v2", "modules_after": list(out_mods), "plan_inputs": list(in_mods),
-           "deferred_sites": [s.key() for s in deferred], "runner_return_sites": [s.key() for s in hooks if s.kind == "runner_return"]}
+    rec: dict[str, Any] = {"engine": "v2", "modules_after": list(out_mods), "plan_inputs": list(in_mods), "deferred_sites": [s.key() for s in deferred],
+                           "runner_return_sites": [s.key() for s in hooks if s.kind == "runner_return"]}
     if getattr(committer, "skip_classes", None):
         dropped = committer.apply_skip()
         gone = {n for names in dropped.values() for n in names}
