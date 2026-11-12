@@ -3101,31 +3101,55 @@ def test_a_lean_candidate_s_check_starts_only_after_its_records_run_and_on_its_r
     assert env.withdrawn == [] and env.posts == [] and len(records.started) == 1
 
 
-def test_a_staged_batch_whose_chain_top_changed_its_lean_inputs_is_staged_again_there_its_records_run_first(env):
-    """A batch built beside it that changes a Lean input (a file of a Lean package) leaves its records regenerated on a tree
-    whose Lean inputs aren't the chain top's: none are carried, and its members merged onto that top are staged again in its
-    place, a records run of their own started, and the staged batch is dropped for it."""
+def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_on_it_once_it_is_on_main_s_chain(env):
+    """`Ready.lean_input` is a PR's own change meeting the Lean inputs (`vqueue_slim.lean_inputs`) of `main`'s tree with the
+    ready PRs' changes in it: check's code, or a Python file of a Lake package, here the one the staged Lean PR adds.  Neither
+    is built beside the staged batch, which would change the Lean inputs of the top it goes onto and start its records run
+    again there; a PR touching none is.  Once the batch is on main's chain, its records carried onto that PR's candidate,
+    the two are built on it."""
     main = env.main()
     loop, records, sha, one, _ = _records_loop(env)
-    env.put(2, {"pkg/notes.txt": "2\n"})
-    (two,) = loop.tick()
-    assert (two["members"], two["base"], two["enqueued"]) == ([2], main, True)
+    env.put(2, {"pkg/notes.py": "2\n"})
+    env.put(3, {"tools/verity/check/notes.txt": "3\n"})
+    env.put(4, {"b.txt": "4\n"})
+    (four,) = loop.tick()
+    assert (four["members"], four["base"], four["enqueued"]) == ([4], main, True), four
+    assert {r.number: (r.lean, r.lean_input) for r in loop.world.ready(main)} == {
+        1: (True, True), 2: (False, True), 3: (False, True), 4: (False, False)}
+    assert loop.tick() == []
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, fixed = loop.tick()
+    assert (fixed["action"], fixed["base"], fixed["members"], fixed["repairs"], fixed["enqueued"]) == (
+        "build", four["sha"], [1], sha, True), fixed
+    drop, built = loop.tick()
+    assert (drop["action"], drop["sha"], built["members"], built["base"], built["enqueued"]) == (
+        "drop", sha, [2, 3], fixed["sha"], True), built
+    assert len(records.started) == 1
+
+
+def test_a_staged_batch_whose_chain_top_changed_its_lean_inputs_is_staged_again_there_its_records_run_first(env):
+    """`main` moved by another to a change of a Lean input (a file of the staged batch's Lean package) leaves its records
+    regenerated on a tree whose Lean inputs aren't the chain top's: none are carried, and its members merged onto that top are
+    staged again in its place, a records run of their own started, and the staged batch is dropped for it."""
+    main = env.main()
+    loop, records, sha, one, _ = _records_loop(env)
+    moved = _main_to(env, {"pkg/notes.txt": "2\n"})
     records.verdicts["regen-1"] = RecordsRun(PASS)
     judged, again, started = loop.tick()
     assert (judged["why"], again["action"], again["base"], again["members"], again["repairs"], again["records_first"],
-            again["enqueued"]) == ("judged pass", "build", two["sha"], [1], sha, True, False), again
+            again["enqueued"]) == ("judged pass", "build", moved, [1], sha, True, False), again
     assert again["why"] == (f"{sha[:12]}'s records were regenerated on {main[:12]}, and its Lean inputs aren't that tree's: "
                             "staged again, its records run first")
     assert (started["action"], started["sha"]) == ("regenerate", again["sha"]) and records.committed == []
-    assert records.started == [("drive", sha), ("drive", again["sha"])] and _checks(env) == [f"ready:{two['sha']}"]
+    assert records.started == [("drive", sha), ("drive", again["sha"])] and _checks(env) == []
     (drop,) = loop.tick()
     assert (drop["action"], drop["sha"], drop["why"]) == (
-        "drop", sha, f"it is staged again in {again['sha'][:12]}, on {two['sha'][:12]}, whose Lean inputs aren't those its "
+        "drop", sha, f"it is staged again in {again['sha'][:12]}, on {moved[:12]}, whose Lean inputs aren't those its "
                      "records were regenerated on: its records run first again")
     records.verdicts["regen-2"] = RecordsRun(PASS)
     judged, fixed = loop.tick()
     assert (fixed["base"], fixed["repairs"], fixed["members"], records.committed[-1]) == (
-        two["sha"], again["sha"], [1], ("drive", again["sha"], "regen-2", (1,))), fixed
+        moved, again["sha"], [1], ("drive", again["sha"], "regen-2", (1,))), fixed
 
 
 def test_a_lean_candidate_whose_records_run_regenerated_nothing_is_checked_as_built_and_lands(env):
