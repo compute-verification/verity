@@ -15,7 +15,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
@@ -99,10 +99,11 @@ def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dic
     return out
 
 
-def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: bool = False) -> list[dict[str, Any]]:
+def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: bool = False,
+          done: Callable[[dict[str, Any]], None] | None = None) -> list[dict[str, Any]]:
     """Generate every set of suite ``name``, each under ``<out>/n<n>/sets/<name>/``; with ``digests_only`` each set's port arrays
     are removed once written (its manifest, with every file's sha256, and index stay): enough to compare a regeneration byte
-    for byte."""
+    for byte.  ``done`` is called with each set's summary as the set finishes."""
     out_sets = []
     for tid, params, n in (workload_suite() if name == "workloads" else SUITES[name]):
         sub = TM.subcircuit(tid, **params)
@@ -114,7 +115,8 @@ def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: b
                 if f.name not in ("manifest.json", "index.json"):
                     f.unlink()
         out_sets.append(s)
-        print(json.dumps({k: s[k] for k in ("set", "subcircuit", "n", "content_digest", "draws", "rejected", "seconds")}), flush=True)
+        if done is not None:
+            done(s)
     return out_sets
 
 
@@ -146,6 +148,11 @@ def parse_value(v: str) -> Any:
     return v
 
 
+def _print_set(s: Mapping[str, Any]) -> None:
+    """One line of JSON for a suite's finished set: what ``--suite`` prints as it goes."""
+    print(json.dumps({k: s[k] for k in ("set", "subcircuit", "n", "content_digest", "draws", "rejected", "seconds")}), flush=True)
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="verity_numerical.bench.generate")
     ap.add_argument("--list", action="store_true", help="the templates, their parameters and an example binding")
@@ -165,7 +172,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     if a.suite:
         if a.seed is None or not a.out:
             ap.error("--suite needs --seed and --out")
-        sets = suite(a.suite, a.seed, a.out, a.procs, a.digests_only)
+        sets = suite(a.suite, a.seed, a.out, a.procs, a.digests_only, done=_print_set)
         if a.register:
             for s in sets:
                 s["art"] = register(s["path"])

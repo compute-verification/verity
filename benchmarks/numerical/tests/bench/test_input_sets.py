@@ -272,6 +272,17 @@ def test_suite_digests_only(tmp_path, monkeypatch):
     assert set(G.SUITES["101"][0][1]) == {"K", "semantics"} and len(G.SUITES["101"]) == 10
 
 
+def test_a_suite_reports_each_finished_set_to_its_caller_and_prints_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setitem(G.SUITES, "tiny", [("rope-head", {"D": 8}, 5), ("silu-mul", {"I": 8}, 3)])
+    seen = []
+    sets = G.suite("tiny", 9, tmp_path / "said", done=seen.append)
+    assert seen == sets and len(sets) == 2
+    assert capsys.readouterr().out == ""
+    assert G.main(["--suite", "tiny", "--seed", "9", "--out", str(tmp_path / "cli")]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [json.loads(line)["content_digest"] for line in lines[:2]] == [s["content_digest"] for s in sets]
+
+
 def test_cli(tmp_path, capsys):
     assert G.main(["--list"]) == 0
     listed = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
