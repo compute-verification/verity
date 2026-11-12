@@ -92,6 +92,8 @@ POUW_CIRCUIT_REPLAY_SCHEMA = "verity-vllm/pouw-ncp-v2-replay/v3"
 #: the boundary linkage's record (`check.replay.linkage.LINKAGE_SCHEMA`); `pipeline.c2_replay`, `pipeline.replay_bundle`
 #: and `pipeline.tp.rank_replay` write it for a linkage that did not run
 BOUNDARY_LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
+#: the stochastic recompute's report, which `check.replay.stoch_recompute.recompute_run` writes
+STOCH_RECOMPUTE_SCHEMA = "verity-r15/stoch-recompute/v2"
 
 # --- the TP row (`verity_vllm.pipeline.tp`)
 #: the TP Commit's record of the replays it left for `tp-commit-replay` (`pipeline.tp.c2.SCHEMA`), which `seal` writes

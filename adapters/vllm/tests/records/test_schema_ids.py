@@ -53,6 +53,7 @@ ON_DISK = {
     "SERVING_ROWS_INDEX_SCHEMA": "verity-vllm/serving-rows/index/v0",
     "SPEC_TOKENS_SCHEMA": "verity-gen/spec-tokens/v1",
     "STATIC_SCHEDULE_SCHEMA": "verity-vllm/static-schedule/v1",
+    "STOCH_RECOMPUTE_SCHEMA": "verity-r15/stoch-recompute/v2",
     "TIMELINE_SCHEMA": "verity-sweep/timeline/v1",
     "TP_FOLD_MATCH_SCHEMA": "verity/tp2/fold-match/v1",
     "TP_LINKS_SCHEMA": "cb-a/tp_links/v2",
