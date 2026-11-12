@@ -5,7 +5,6 @@ refuses each with one bit changed."""
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -21,20 +20,6 @@ def _load(path: Path, name: str):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def _derive():
-    """floored_gemm's derive.py, with the `ref` it imports by name bound to the one beside it (another suite module may
-    have imported a different `ref`)."""
-    saved = sys.modules.get("ref")
-    try:
-        sys.modules["ref"] = _load(POUW / "floored_gemm" / "ref.py", "floored_gemm_ref")
-        return _load(POUW / "floored_gemm" / "derive.py", "floored_gemm_derive")
-    finally:
-        if saved is None:
-            sys.modules.pop("ref", None)
-        else:
-            sys.modules["ref"] = saved
 
 
 def _thread_args(V, W, b, c, U, z, ks, ctid):
@@ -63,7 +48,7 @@ def _thread_args(V, W, b, c, U, z, ks, ctid):
 @pytest.mark.parametrize("ks,fold", [(2, "duo"), (4, "duo"), (4, "fx1"), pytest.param(130, "duo", marks=pytest.mark.slow)])
 def test_call_check_accepts_cgemm_refs_receipts(ks, fold):
     cs = _load(POUW / "theory" / "checked_strip.py", "checked_strip")
-    derive = _derive()
+    derive = _load(POUW / "floored_gemm" / "derive.py", "floored_gemm_derive")
     rng = np.random.default_rng(ks)
     k, T = 32 * ks, 128
     V, W = rng.integers(-127, 127, (T, k)), rng.integers(-60, 61, (T, k))
