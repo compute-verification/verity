@@ -1,7 +1,5 @@
-"""Generate the ``vllm-v1-sha512`` conformance vectors (``vectors_sha512.json`` beside this file) from the reference.
-
-    python -m verity_vllm.commitments.vllm_v1.vectors_sha512          # rewrite vectors_sha512.json
-    python -m verity_vllm.commitments.vllm_v1.vectors_sha512 --check  # exit 1 if it is stale
+"""The ``vllm-v1-sha512`` conformance vectors as the reference (``verity_vllm.commitments.vllm_v1``) generates them: ``render()``
+is the text of ``vectors_sha512.json``, the file beside the reference, and ``test_vllm_v1.py`` fails if the two drift apart.
 
 ``vllm-v1`` with SHA-512 for every hash the scheme computes (PROTOCOL.md §10): leaves, nodes, lifts, the empty root, the
 stream and thread contexts and every root binding are 64 bytes; the integration's identity digests (program, ctx, geo,
@@ -11,12 +9,13 @@ layout, template, names) stay 32 bytes.  Every byte is spelled out.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
-from ..leaves import EMPTY_TAG, LIFT_TAG, NODE_TAG, H
-from . import (
+from tests.commitments.vectors import digest_of, expand
+from verity_vllm.commitments import vllm_v1
+from verity_vllm.commitments.leaves import EMPTY_TAG, LIFT_TAG, NODE_TAG, H
+from verity_vllm.commitments.vllm_v1 import (
     NAME_SHA512,
     TREE_SHA512,
     SemanticDomain,
@@ -38,10 +37,11 @@ from . import (
     verify,
     weights_root,
 )
-from .vectors import digest_of, expand, write_or_check
 
-VECTORS = Path(__file__).with_name("vectors_sha512.json")
+VECTORS = Path(vllm_v1.__file__).with_name("vectors_sha512.json")
 S = "sha512"
+#: the file's ``generator`` field, kept as the pinned file has it (``vectors.GENERATOR``)
+GENERATOR = "python -m verity_vllm.commitments.vllm_v1.vectors_sha512"
 
 
 def _h(b: bytes) -> str:
@@ -139,7 +139,7 @@ def _opening_vectors() -> list[dict[str, Any]]:
 def build() -> dict[str, Any]:
     return {
         "scheme": NAME_SHA512,
-        "generator": "python -m verity_vllm.commitments.vllm_v1.vectors_sha512",
+        "generator": GENERATOR,
         "encoding": ("lowercase hex; vllm-v1 with SHA-512 for every hash the scheme computes (tags, framing and field order unchanged); "
                      "scheme-computed digests are 64 bytes, the integration's identity digests 32"),
         "hash": _hash_vectors(),
@@ -158,14 +158,3 @@ def render() -> str:
 
 def load() -> dict[str, Any]:
     return json.loads(VECTORS.read_text(encoding="utf-8"))
-
-
-def main(argv: list[str] | None = None) -> int:
-    if write_or_check(render(), VECTORS, sys.argv[1:] if argv is None else argv):
-        return 0
-    print(f"{VECTORS} is stale; rerun without --check", file=sys.stderr)
-    return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

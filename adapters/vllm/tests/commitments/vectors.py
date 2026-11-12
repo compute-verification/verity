@@ -1,22 +1,20 @@
-"""Generate the ``vllm-v1`` conformance vectors (``vectors.json`` beside this file) from the reference.
+"""The ``vllm-v1`` conformance vectors as the reference (``verity_vllm.commitments.vllm_v1``) generates them: ``render()`` is the
+text of ``vectors.json``, the file beside the reference, and ``test_vllm_v1.py`` fails if the two drift apart.
 
-    python -m verity_vllm.commitments.vllm_v1.vectors          # rewrite vectors.json
-    python -m verity_vllm.commitments.vllm_v1.vectors --check  # exit 1 if vectors.json is stale
-
-Every input is derived from a fixed label by SHA-256 counter expansion, so the file is a pure function of this
-module and the reference; ``adapters/vllm/tests/commitments/test_vllm_v1.py`` fails if they drift apart.
+Every input is derived from a fixed label by SHA-256 counter expansion, so the file is a pure function of this module and
+the reference.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
-from .. import leaves as tagged
-from . import (
+from verity_vllm.commitments import leaves as tagged
+from verity_vllm.commitments import vllm_v1
+from verity_vllm.commitments.vllm_v1 import (
     NAME,
     TREE,
     SemanticDomain,
@@ -43,9 +41,12 @@ from . import (
     weights_root,
 )
 
-VECTORS = Path(__file__).with_name("vectors.json")
+VECTORS = Path(vllm_v1.__file__).with_name("vectors.json")
 
 TREE_SIZES = (1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 17)
+#: the file's ``generator`` field: the command that wrote the vectors of record, which the package no longer has.  The file is
+#: pinned, so the field keeps its bytes
+GENERATOR = "python -m verity_vllm.commitments.vllm_v1.vectors"
 
 
 def expand(label: str, n: int) -> bytes:
@@ -335,7 +336,7 @@ def _layout_vectors() -> list[dict[str, Any]]:
 def build() -> dict[str, Any]:
     return {
         "scheme": NAME,
-        "generator": "python -m verity_vllm.commitments.vllm_v1.vectors",
+        "generator": GENERATOR,
         "encoding": "every byte string is lowercase hex; a path entry null means the node is lifted at that level",
         "hash": _hash_vectors(),
         "id_leaf": _id_leaf_vectors(),
@@ -356,23 +357,3 @@ def render() -> str:
 
 def load() -> dict[str, Any]:
     return json.loads(VECTORS.read_text(encoding="utf-8"))
-
-
-def write_or_check(text: str, path: Path, args: list[str]) -> bool:
-    """Write ``text`` to ``path``, or with ``--check`` among ``args`` write nothing; whether the file then holds ``text``
-    (a missing file holds none).  Both generators' ``main`` are this."""
-    if "--check" not in args:
-        path.write_text(text, encoding="utf-8")
-        return True
-    return path.exists() and path.read_text(encoding="utf-8") == text
-
-
-def main(argv: list[str] | None = None) -> int:
-    if write_or_check(render(), VECTORS, sys.argv[1:] if argv is None else argv):
-        return 0
-    print(f"{VECTORS} is stale; rerun without --check", file=sys.stderr)
-    return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
