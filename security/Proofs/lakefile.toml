@@ -75,6 +75,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Accounting.Remote.Shared", "Proofs.Properties.Accounting.Remote.SharedLink",
   "Proofs.Properties.Accounting.Remote.Live", "Proofs.Properties.Accounting.Remote.Subprotocol",
   "Proofs.Flock.Claims.Bridge.CustodyZkP", "Proofs.Properties.Verity.SampledCoins",
+  "Proofs.Flock.SpotFlock.RunsAs.Round2",
   "Proofs.Properties.Verity.Sampled.Deployed",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger.Limits",
