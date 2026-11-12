@@ -7,7 +7,7 @@
 # JOIN=0 leaves the summaries and the comparison to join.sh on a CPU node.
 # CORPORA's entries, apart by spaces or ";", are MODEL/VARIANT[:TRACE,...] (corpus.MODELS, corpus.VARIANTS, corpus.TRACES;
 # default llama32_1b/greedy, every trace). vLLM is the node's pinned venv (VENV, vLLM d9105ea80), as for
-# benchmarks/network_traces: the workspace's environment has torch but not vLLM (integrations/vllm/pyproject.toml).
+# benchmarks/network_traces: the workspace's environment has torch but not vLLM (adapters/vllm/pyproject.toml).
 # MAX_MIN bounds the lease; each corpus runs in
 # turn, into OUT/corpus/<model>-<variant>/, while more than a minute of it is left, and all stop 2 minutes before it ends.
 # After the lease each corpus is summarized, and OUT/compare/<sampling>/ compares the output ids of the corpora that sampled

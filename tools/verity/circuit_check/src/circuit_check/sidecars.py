@@ -1,6 +1,6 @@
 """Each Definition module's circuit-check bindings and pins, in sidecar files beside it.
 
-    fp8.py                    a Definition module (`verity.ml.definitions.registry.fp8`)
+    fp8.py                    a Definition module (`verity.definitions.registry.fp8`)
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
                               root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);
@@ -36,7 +36,7 @@ from . import entries as E
 
 REPO = Path(__file__).resolve().parents[5]
 #: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
-PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core", "verity_vllm", "verity_numerical",
+PACKAGES = ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core", "verity_vllm", "verity_numerical",
             "verity_flock")
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines, one file per pin
@@ -57,7 +57,7 @@ def discover() -> dict[str, dict[str, Path]]:
     """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name.  A file
     under two packages' roots (`verity_flock`'s tree is inside `verity`'s) is its module's once, named from the deeper root, and
     only through regular packages: a directory without ``__init__.py`` would name a namespace-package copy of a module that
-    another package's root owns (``verity.ml.flock.python.verity_flock.rec_open``), and importing it registers its
+    another package's root owns (``verity.protocols.flock.prover.python.verity_flock.rec_open``), and importing it registers its
     Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
     claimed: set[Path] = set()
@@ -225,13 +225,13 @@ def composite_lift(fid: str) -> Any | None:
     """`lifted.lift_composite` of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the lift a body calling it
     makes, or its hand lift), whatever version the id writes; None when the id wraps no registered composite.  The on-demand
     ``Lifted[...]`` families lift primitives only."""
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
+    from verity.circuits.defs import REGISTRY, CompositeDefinition
 
     m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)
     inner = REGISTRY.defs.get(m[1]) if m else None
     if not isinstance(inner, CompositeDefinition):
         return None
-    from verity.ml.definitions.registry import lifted as L
+    from verity.definitions.registry import lifted as L
 
     return L.lift_composite(inner)
 
@@ -239,11 +239,11 @@ def composite_lift(fid: str) -> Any | None:
 def named(fid: str) -> Any | None:
     """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else a
     registered composite's lift (`composite_lift`, when its id is ``fid``), else one an on-demand family makes from it
-    (`verity.ml.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
+    (`verity.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
     None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by nothing, built in this process
     or not."""
-    from verity.ml.circuits.codec import lookup_primitive
-    from verity.ml.circuits.defs import Registry
+    from verity.circuits.codec import lookup_primitive
+    from verity.circuits.defs import Registry
 
     if not _NAMED:
         _NAMED.update({v.id: v for v, _mod in _index().values()})
@@ -296,7 +296,7 @@ HANDED: dict[str, str] = {}
 def _index() -> dict[int, tuple[Any, str]]:
     """{id(Definition): (it, module)} for every Definition a loaded module of `PACKAGES` binds at its top level other than by
     import; where two do, the one its functions are defined in, else the first by name."""
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     from . import targets
 

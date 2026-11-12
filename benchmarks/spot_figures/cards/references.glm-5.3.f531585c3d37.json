@@ -4,7 +4,7 @@
  "model": "GLM-5.3",
  "status": "modeled",
  "provisional": false,
- "source": "GLM-5.3's weight sizes and the shares of them a weights claim names, for Figure 1's exfiltration panel beside the FP8 line figure1.py already draws from the workload card's weights_bytes. FP4 is 4 bits a parameter over the pinned checkpoint zai-org/GLM-5.3 at aca966e4e02791568aa6a4ced368624b3d897f42 (integrations/vllm/manifests/checkpoints.json, role GLM53): 753,329,940,480 parameters by the hub's safetensors metadata at that revision (751,226,191,872 F8_E4M3, 2,103,729,152 BF16, 19,456 F32). FP8 is the checkpoint's 755.7 GB. A 4-bit copy carries no scales, so it is the smallest copy that is the weights; NVFP4 with an E4M3 scale per 16 is 4.5 bits a parameter (423.8 GB)",
+ "source": "GLM-5.3's weight sizes and the shares of them a weights claim names, for Figure 1's exfiltration panel beside the FP8 line figure1.py already draws from the workload card's weights_bytes. FP4 is 4 bits a parameter over the pinned checkpoint zai-org/GLM-5.3 at aca966e4e02791568aa6a4ced368624b3d897f42 (adapters/vllm/manifests/checkpoints.json, role GLM53): 753,329,940,480 parameters by the hub's safetensors metadata at that revision (751,226,191,872 F8_E4M3, 2,103,729,152 BF16, 19,456 F32). FP8 is the checkpoint's 755.7 GB. A 4-bit copy carries no scales, so it is the smallest copy that is the weights; NVFP4 with an E4M3 scale per 16 is 4.5 bits a parameter (423.8 GB)",
  "runs": [],
  "owner": "@proofs",
  "value": {

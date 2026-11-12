@@ -31,7 +31,7 @@ done
 { echo "commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)"; date -u +%FT%TZ; hostname
   lscpu | grep -E "Model name|^CPU\(s\)"; free -g; uptime; } > "$O/env.txt" 2>&1
 uv sync -q --all-packages --extra torch-cpu
-L=verity/core/devices/memory_challenger/lean
+L=verity/protocols/pous/device/lean
 export PATH="$HOME/.elan/bin:$PATH"
 command -v lake >/dev/null 2>&1 || bash tools/verity/lean/setup.sh "$L" > "$O/lake-setup.log" 2>&1
 (cd "$L" && lake build streamed-wipe-verdict) > "$O/lake-build.log" 2>&1 \

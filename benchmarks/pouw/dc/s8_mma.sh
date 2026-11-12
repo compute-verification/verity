@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # s8_mma on one datacenter GPU (cwd = the source tree's root): the build, SASS dump and case files outside the lease, the
-# forms inside one short lease, the check against verity.ml.circuits.silicon.integer after it. The bulk words stay in
+# forms inside one short lease, the check against verity.definitions.silicon.integer after it. The bulk words stay in
 # scratch (their sha256 is kept; s8_mma.py gen rebuilds the cases from the seed).
 #
 #   research run --on H200 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \

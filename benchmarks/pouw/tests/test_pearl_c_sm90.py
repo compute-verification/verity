@@ -20,8 +20,8 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.audit import weights_root
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.pouw.verifier.audit import weights_root
+from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SM120_DIR = HERE.parent / "pearl_c_sm120"
@@ -162,9 +162,9 @@ def test_descriptors_are_the_layouts_staged():
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.ml.protocols.pouw.schemes import pearl_c as C
-    from verity.ml.protocols.pouw.schemes import pearl_kw as P
-    from verity.ml.protocols.pouw.schemes.pearl_c_device import H100
+    from verity.protocols.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.pouw.prover.schemes import pearl_kw as P
+    from verity.protocols.pouw.prover.schemes.pearl_c_device import H100
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)
@@ -377,8 +377,8 @@ def test_widening_fixture_is_the_silicon_model(small_fixture):
     """The fixture's widened B: BF16 words as their FP32 words, and each E4M3 code times its block's scale as
     `silicon.fp32.mul` of `silicon.cast.e4m3_to_f32_word` (every element, subnormal products among them), its block the
     row's and column's 128 x 128 one; the decode is the silicon model's on every finite code."""
-    from verity.ml.circuits.silicon import fp32
-    from verity.ml.circuits.silicon.cast import e4m3_to_f32_word
+    from verity.definitions.silicon import fp32
+    from verity.definitions.silicon.cast import e4m3_to_f32_word
 
     codes = np.array([c for c in range(256) if c & 0x7F != 0x7F], np.uint8)
     assert F.e4m3_values(codes).view(np.uint32).tolist() == [e4m3_to_f32_word(int(c)) for c in codes]

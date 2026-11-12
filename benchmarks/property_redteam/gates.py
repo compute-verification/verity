@@ -1,8 +1,8 @@
 """Model.lean's gates on the canonical circuit: the one Python statement of the gate model the red team's studies build in.
 
-A circuit of `Security/Definitions/Accounting/Gates/Model.lean` is a `verity.ml.circuits.program.Program` whose root body holds
+A circuit of `Security/Definitions/Accounting/Gates/Model.lean` is a `verity.circuits.program.Program` whose root body holds
 its gates in the order they were built, and its values on an input are the `Trace` that
-`verity.ml.circuits.evaluation.reference.evaluate_region` computes. What the IR has no place for stays in the `Builder` that
+`verity.circuits.evaluation.reference.evaluate_region` computes. What the IR has no place for stays in the `Builder` that
 makes the Program: each gate's declared interval `[lo, hi]`, each input's slot and binding, and the running counts a large
 circuit is measured with.
 
@@ -24,10 +24,10 @@ from __future__ import annotations
 
 from typing import Any, Callable, Hashable
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluation.reference import Trace, evaluate_region
-from verity.ml.circuits.program import REGISTRATION, RUN, Program, input_prim
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation.reference import Trace, evaluate_region
+from verity.circuits.program import REGISTRATION, RUN, Program, input_prim
+from verity.circuits.types import Array, Value
 
 WIDTH = 64
 WORD = Value(WIDTH)

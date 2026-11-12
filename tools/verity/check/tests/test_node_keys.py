@@ -36,10 +36,10 @@ TREE = {
     "lean/lib/Lib.lean": "def x := 1\n",
     "tools/verity/lean/lean_audit.py": "",
     "tools/verity/check/common.py": "",
-    "verity/ml/flock/check_build.sh": "set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}\n",
-    "verity/ml/flock/live/src/lib.rs": "fn a() {}\n",
-    "verity/ml/flock/verifier/ci.py": "print('agree')\n",
-    "verity/core/service/flock/lakefile.toml": 'name = "flock_verifier"\n',
+    "verity/protocols/flock/prover/check_build.sh": "set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}\n",
+    "verity/protocols/flock/prover/live/src/lib.rs": "fn a() {}\n",
+    "verity/protocols/flock/agreement/ci.py": "print('agree')\n",
+    "verity/protocols/flock/verifier/lakefile.toml": 'name = "flock_verifier"\n',
 }
 
 
@@ -179,7 +179,7 @@ def test_checks_step_keys_are_the_same_on_every_node_and_move_with_what_they_dec
     assert all(one.values()), one
     assert _step_keys(b, check, monkeypatch) == one, "the same tree and toolchains on another node"
     assert all(v != one[k] for k, v in _step_keys(b, check, monkeypatch, VERITY_SLOW="1").items()), "a switch the tests read"
-    b.write("verity/ml/flock/verifier/ci.py", "print('disagree')\n")
+    b.write("verity/protocols/flock/agreement/ci.py", "print('disagree')\n")
     two = _step_keys(b, check, monkeypatch)
     assert two["lean-agreement"] != one["lean-agreement"] and two["preflight-lints"] != one["preflight-lints"]
     assert two["flock-rust-tests"] == one["flock-rust-tests"], "not an input of the Rust tests"

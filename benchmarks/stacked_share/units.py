@@ -1,4 +1,4 @@
-"""The units a served Program spends under property/v1 (`verity.ml.circuits.stacking`), by callee and class: the honest budget
+"""The units a served Program spends under property/v1 (`verity.definitions.circuits.stacking`), by callee and class: the honest budget
 `share.py` multiplies by a served rate.
 
 `units(fn)` runs property/v1's pass over the body of `fn` (a Program's root, or a bound Definition) and sums each node's tally by
@@ -26,10 +26,10 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from verity.ml.circuits import stacking as P
-from verity.ml.circuits.census import census, family, step_ends
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import is_input
+from verity.definitions.circuits import stacking as P
+from verity.definitions.circuits.census import census, family, step_ends
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import is_input
 
 def charged(t: P.Tally) -> tuple[Counter, Counter]:
     """A tally's units by class, and its refused gates by ``code:primitive``."""
@@ -189,8 +189,8 @@ def components(rows: Mapping[str, dict], *, token: str, sample: Iterable[str], a
 
 def load(path: Path) -> Any:
     """A Build's descriptor (``.json`` or ``.json.gz``) decoded through vLLM's registry."""
-    from verity.ml.circuits.codec import decode_program
-    from verity.ml.definitions.registry.catalog import load as registry
+    from verity.circuits.codec import decode_program
+    from verity.definitions.registry.catalog import load as registry
 
     reg, errors = registry()
     for e in errors:

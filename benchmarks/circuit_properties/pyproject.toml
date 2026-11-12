@@ -3,7 +3,7 @@ name = "verity-circuit-properties"
 version = "0.1.0"
 description = "Structural properties of a circuit's counted operations, measured exactly: a_out, a_in, |J|, s_x, and which a partition computes whole."
 requires-python = ">=3.12"
-# The circuits are verity.ml.circuits' Programs; the reference layer is the served b1 registry's on bits.
+# The circuits are verity.circuits' Programs; the reference layer is the served b1 registry's on bits.
 dependencies = ["verity"]
 
 [build-system]
@@ -19,7 +19,7 @@ pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The constructed configurations' shapes are benchmarks/rho's (references.configs imports rho by path and loads its
+# The constructed configurations' shapes are verity/protocols/inference_only/rho's (references.configs imports rho by path and loads its
 # registry), and test_smollm2_layer holds its SmolLM2-135M shapes to the measured layer (run.rho_shapes). The registry
 # reads the inference-only policy's calibrations (rho/params.py).
-inputs = ["benchmarks/rho/rho", "benchmarks/rho/data", "benchmarks/nci/calibrations.json"]
+inputs = ["verity/protocols/inference_only/rho/rho", "verity/protocols/inference_only/rho/data", "verity/protocols/inference_only/nci/calibrations.json"]

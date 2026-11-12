@@ -8,7 +8,7 @@
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs
-L=$PWD/verity/core/protocols/network/nci/lean
+L=$PWD/verity/protocols/inference_only/verifier/nci/lean
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"

@@ -19,7 +19,7 @@ decode     x ↦ ρ⁻¹(x) − c_j − t(i), j = k − 1 … 0; a word decodes 
 word       y < p as `limbs` little-endian u32 limbs (4, 8, 17, 8, 16: 16, 32, 68, 32, 64 bytes)
 ~~~
 
-The fields, and ρ and ρ⁻¹ at p = 3 mod 4, are the store codec's (`verity.core.protocols.remote_bandwidth.codec`'s
+The fields, and ρ and ρ⁻¹ at p = 3 mod 4, are the store codec's (`verity.protocols.poub.verifier.codec`'s
 `Field`, `rho` and `rho_inv`); p255's ρ and the keys are this module's.
 
 The fused GEMM's layout is the word codec's (`codec.fragment_stream`): tasks of one 16-row block and 512 columns, in
@@ -41,7 +41,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.core.protocols.remote_bandwidth import codec as RB
+from verity.protocols.poub.verifier import codec as RB
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 

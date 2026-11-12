@@ -59,14 +59,14 @@ from collections.abc import Iterable, Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.ml.crypto import lms
-from verity.core.protocols.certifier import online
-from verity.core.protocols.certifier.lean_audit import Audit
-from verity.core.protocols.certifier.calibration import choose_syncs
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey, parameters_digest
-from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import GridParams, Record, Certifier
-from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
+from verity.commitments.crypto import lms
+from verity.protocols.certifier.verifier import online
+from verity.protocols.certifier.verifier.lean_audit import Audit
+from verity.protocols.certifier.verifier.calibration import choose_syncs
+from verity.protocols.certifier.verifier.certificate import Direction, Issuer, LmsKey, parameters_digest
+from verity.protocols.certifier.verifier.commitment import commit
+from verity.protocols.certifier.verifier.grid import GridParams, Record, Certifier
+from verity.protocols.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
 
 REPLAY_FRAME_BYTES = 8
 REPLAY_LMS = lms.Params(8, 2, 2, toy=True)

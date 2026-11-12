@@ -6,7 +6,7 @@ gate circuit `G`, and that `G` computes the unit's definition (`../ASSUMPTIONS.m
 rows that are `GateRows.rows G L` carry `G`'s outputs (`GateRows.rows_sound`). This file is the evidence for those
 premises.
 
-- **Evidence for every template:** the lowering comparison tests in `verity/ml/flock/tests/test_ir_lowering.py`, on sampled
+- **Evidence for every template:** the lowering comparison tests in `verity/protocols/flock/prover/tests/test_ir_lowering.py`, on sampled
   inputs.
   - They evaluate the pinned rows against the primitive circuits:
     - RoPE on 8000 inputs (`test_rope_unit_matches_its_primitives`);

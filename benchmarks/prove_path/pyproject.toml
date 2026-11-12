@@ -1,5 +1,5 @@
 # The prove path (prove_path.py). Not a package: the suite tests the advice's reading and the prover's and verifier's windows
-# on the CPU TP stand-in (integrations/vllm's tests.pipeline.served_tp), without proving.
+# on the CPU TP stand-in (adapters/vllm's tests.pipeline.served_tp), without proving.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -12,14 +12,14 @@ untraced = [
     "tests/test_records_audit.py",
     "tests/test_run_request_values.py",
 ]
-# `integrations/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `benchmarks/one_stage`:
+# `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `benchmarks/one_stage`:
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
 # imports; `leak_scan.py`: the received-pieces scan served_tie_zk and served_statics_zk import.
-inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
+inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
-          "verity/ml/flock/python/verity_flock/input_sets.py",
-          "verity/ml/flock/python/verity_flock/subcircuit_templates.py",
+          "verity/protocols/flock/prover/python/verity_flock/input_sets.py",
+          "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py",
           # the network certifier's run the certifier piece kept, which window-commit's scan reads (`kept_scan`):
           # certifier_piece and warden_chain, what they import, and the site.json and host.json that served_session and
           # auditor read on import
@@ -28,8 +28,8 @@ inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/net
           "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
           "benchmarks/network_traces/covert.py", "benchmarks/network_traces/replay.py",
           "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
-          "benchmarks/network_traces/site.json", "benchmarks/live_challenger/auditor.py",
-          "benchmarks/live_challenger/host.json"]
+          "benchmarks/network_traces/site.json", "verity/composite/device/live_challenger/auditor.py",
+          "verity/composite/device/live_challenger/host.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -40,4 +40,4 @@ paths = ["verity/core", "verity/ml"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_records_audit.py"]
-paths = ["verity/ml/circuits/ops"]
+paths = ["verity/definitions/ops"]
