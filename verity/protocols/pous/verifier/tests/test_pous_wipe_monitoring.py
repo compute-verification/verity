@@ -10,15 +10,15 @@ import json
 import math
 from fractions import Fraction
 
+import pous_test_signer as ts
 import pytest
 
-import pous_test_signer as ts
+from verity.protocols import reporting
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 from verity.protocols.pous.verifier import wipe_monitoring as WM
 from verity.protocols.pous.verifier import wipe_party as WP
 from verity.protocols.pous.verifier import wipe_period as W
-from verity.protocols import reporting
 
 HBM = sw.WipeParams(64, W.READS, 1, 1_000, ((WM.HBM, 64 * sw.LABEL_BYTES),))
 STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "nvml_total_bytes": 64 * 64,
@@ -27,7 +27,7 @@ LINK = WP.link("control", "n0", "outside", "eth0")
 
 
 def _answer(egress_bits: int) -> dict:
-    """An accepted HBM-only wipe of `HBM`, its egress signed as `egress_bits`, with the placement a GPU leg records."""
+    """An accepted HBM-only wipe of `HBM`, its egress signed as `egress_bits`, with the placement a wipe on a GPU records."""
     w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
               coin_secret=b"coins", egress_bits=egress_bits)
