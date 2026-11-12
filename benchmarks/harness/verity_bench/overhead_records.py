@@ -15,6 +15,10 @@ built in the run is development only), and its own point passed the door's rules
 interval within ±5%, the cross-check, the arm's reference verifier accepting every row). `table` refuses every other
 figure and says why; a reader of γ outside this package (the protocol table, the one-pager, a goal) takes it from
 `verity bench overhead table --json`, whose rows carry `of_record` and `why`.
+
+**What a figure says of itself**: the table states what every γ is over (`overhead.covers`, its `covers`), and each row
+carries the note of its own run (`overhead.y_note`: its `commits_y` and `note`, in both rendered tables' last column), so a
+γ whose arm timed no y tree is never quoted as one that did.
 """
 
 from __future__ import annotations
@@ -221,11 +225,13 @@ def gamma_rows(store: Any) -> list[dict]:
                                               "why": "; ".join(whys)})
             continue
         for name, p in (doc.get("points") or {}).items():
+            arm = doc.get("arm")
             row = {"scheme": doc.get("scheme"), "card": doc.get("card"), "point": name, "m": p.get("m"), "run": run,
                    "points_art": doc.get("points_art"), "gamma": p.get("gamma"), "gamma_least_sm": p.get("gamma_least_sm"),
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
-                   "linears": p.get("linears")}
+                   "linears": p.get("linears"), "commits_y": None if arm is None else bool(arm.get("commits_y")),
+                   "note": O.y_note(arm)}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], name)] = row
@@ -321,7 +327,7 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
         if row["of_record"] and g is not None and sch is not None and sch.arm:
             row["periods"] = O.periods(g, c["gpus"], c["window_s"], c["world_flop_per_year"], c["flop_per_s"][row["card"]],
                                        c["gates_per_flop"])
-    return {"schema": "verity-bench/overhead-table/v1", "census": c, "rows": rows}
+    return {"schema": "verity-bench/overhead-table/v1", "census": c, "covers": O.covers(), "rows": rows}
 
 
 def _g(x: Mapping | None) -> str:
@@ -343,8 +349,8 @@ def _eps(e: Mapping | None) -> str:
 
 def render(table: Mapping) -> str:
     c = table["census"]
-    lines = ["| Scheme | Card | Point | m | γ [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run |",
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    lines = ["| Scheme | Card | Point | m | γ [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     refused = []
     for r in table["rows"]:
         if not r["of_record"]:
@@ -353,21 +359,22 @@ def render(table: Mapping) -> str:
         gate = r.get("gate") or {}
         lines.append(f"| {r['scheme']} | {r['card']} | {r['point']} | {r['m']} | {_g(r['gamma'])} | {_g(r['gamma_least_sm'])} "
                      f"| {_g(r['gamma_weight_side_bound'])} | {_g(r['aa'])} | {_eps(r['epsilon'])} | "
-                     f"{'yes' if gate.get('passes') else 'no'} | {r['run']} |")
-    lines += ["", f"Per monitoring period, over all compute: the {c['datacenter']} datacenter's {c['gpus']:,} GPUs in "
+                     f"{'yes' if gate.get('passes') else 'no'} | {r['run']} | {r.get('note') or ''} |")
+    lines += ["", table["covers"],
+              "", f"Per monitoring period, over all compute: the {c['datacenter']} datacenter's {c['gpus']:,} GPUs in "
               f"{c['window_s']} s windows, spending the share γ/(1+γ) of its compute on proving, and the world's "
               f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "
               "γ is measured on one card at one operating point; every total is scaled from it, not proved. Gates at "
               f"{c['gates_per_flop']:g} a FLOP ({c['gates_basis']}); the datacenter's FLOP at its card's datasheet rate.", "",
-              "| Scheme | Card | Point | Share | Period | DC GPU-hours | DC gates | World FLOP | World gates |",
-              "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+              "| Scheme | Card | Point | Share | Period | DC GPU-hours | DC gates | World FLOP | World gates | Note |",
+              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for r in table["rows"]:
         if p := r.get("periods"):
             for n in ("window", *O.PERIODS_H):
                 q = p[n]
                 lines.append(f"| {r['scheme']} | {r['card']} | {r['point']} | {p['share']:.2%} | {n} | "
                              f"{q['datacenter_gpu_h']:.3g} | {q['datacenter_gates']:.3g} | {q['world_flop']:.3g} | "
-                             f"{q['world_gates']:.3g} |")
+                             f"{q['world_gates']:.3g} | {r.get('note') or ''} |")
     if refused:
         lines += ["", "Refused (not of record):", ""]
         lines += [f"- {r['scheme']} at {r['card']} {r['point']} (run {r['run']}): {r['why']}" for r in refused]
