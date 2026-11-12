@@ -134,8 +134,8 @@ def reason(kills: list[tuple[str, dict[str, str]]], listed: list[str] | str | No
             continue                                    # the one session there is the one it spares, or it finds none
         if but_one:
             spared = None if what else named(part, listed)
-            kept = "." if spared == NAME or NAME not in listed else f", {KEEPS}, {'is' if spared else 'may be'} among them. {WHY}"
-            return f"{typed} {BUT_ONE}: {len(listed) - 1} would end{kept} {BY_NAME}"
+            kept = "" if spared == NAME or NAME not in listed else f" {KEEPS}, {'is' if spared else 'may be'} among those it ends. {WHY}"
+            return f"{typed} {BUT_ONE} (the server has {len(listed)}).{kept} {BY_NAME}"
         if what and isinstance(listed, list) and len(listed) == 1:
             hit = listed[0]                             # the one session there is the one tmux picks
         elif what:

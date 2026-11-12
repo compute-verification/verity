@@ -208,10 +208,10 @@ def test_a_kill_that_names_no_session_the_hook_can_read_is_refused(vm, command):
 @pytest.mark.parametrize("command, spares_kept", ALL_BUT_ONE)
 def test_a_kill_of_every_session_but_one_is_refused_while_the_server_has_more_than_one(vm, command, spares_kept):
     said = vm.sessions(KEPT, "build", "mine").refused(
-        command, "ends every session on this VM's tmux server but one, and the hook can't tell other agents' sessions from yours",
-        "would end", "Close your own sessions by name instead: `tmux kill-session -t NAME`")
+        command, "ends every session on this VM's tmux server but one, and the hook can't tell other agents' sessions from yours "
+        "(the server has 3).", "Close your own sessions by name instead: `tmux kill-session -t NAME`")
     assert (f"`{KEPT}`, the session this VM keeps" in said) != spares_kept, said
-    vm.sessions("build", "mine").refused(command, "but one, and the hook can't tell other agents' sessions from yours: 1 would end.")
+    vm.sessions("build", "mine").refused(command, "from yours (the server has 2). Close your own sessions by name instead")
 
 
 @pytest.mark.parametrize("command, spares_kept", ALL_BUT_ONE)
@@ -223,10 +223,12 @@ def test_a_kill_of_every_session_but_one_passes_where_it_ends_none(vm, command, 
 
 def test_kills_in_one_command_are_judged_in_order_each_on_what_the_ones_before_it_leave(vm):
     both = "tmux kill-session -t build \\; kill-session -a -t mine"
-    vm.sessions(KEPT, "build", "mine").refused(both, "`tmux kill-session -a -t mine` ends every session", ": 1 would end")
+    vm.sessions(KEPT, "build", "mine").refused(both, "`tmux kill-session -a -t mine` ends every session", "(the server has 2)",
+                                               f"`{KEPT}`, the session this VM keeps so that its tmux server never ends, is among those")
     vm.sessions("build", "mine").allowed(both)          # `mine` is the one session left when `-a` runs
     vm.sessions(KEPT, "build").allowed(f"tmux kill-session -t build; tmux kill-session -a -t {KEPT}")
-    vm.sessions(KEPT, "build", "mine").refused(f"tmux kill-session -t build; tmux kill-session -a -t {KEPT}", ": 1 would end.")
+    vm.sessions(KEPT, "build", "mine").refused(f"tmux kill-session -t build; tmux kill-session -a -t {KEPT}",
+                                               "(the server has 2). Close your own")
 
 
 @pytest.mark.parametrize("command", ALLOWED)
