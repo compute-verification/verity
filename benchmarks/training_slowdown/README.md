@@ -145,21 +145,15 @@ whose step reads a value back, is refused. It prints, an entry:
   the run drops no row, which the rule checks in the record's program's arguments; and the average of the weights
   (`average`), where the record's program, its arguments stating one, averages every tensor of the model in one op,
   those it never trains too, and route `ema` each tensor it trains. AdamW's kernel is no rule's: an entry of a run
-  whose program asked torch for the fused kernel sets `fused`, and a step in torch's default is a difference. The
-  harness's (`HARNESS`):
-  the records' harness checked the model's position tables like θ's weights, where `run.Harness` takes them for
-  weights the route made (`tables`); the step is counted again as the records' harness counted it, that count is the
-  one compared, and the line says how many products and uses move and that the step's MACs are the same on both
-  counts;
+  whose program asked torch for the fused kernel sets `fused`, and a step in torch's default is a difference;
 - `named`: a line of the record's own program that the route rightly doesn't compute, which no rule knows: the
   entry's `record_only` in `of_record.toml` names the line, the count and MACs the record's step has of it over the
   config's, and why. A named line that the record's step does not have over the config's as named is a difference;
 - `DIFFERS`: anything else.
 
 The command exits 1 if any entry differs or is refused: one whose step the capture refuses or that reads a value
-back, and one whose record's fused attention rows `as_math` can't rewrite. `--out` keeps the comparisons (`DIR/of_record.json`) and each
-entry's counted records: the harness's own count (`DIR/ENTRY/run.json`) and the count compared
-(`DIR/ENTRY/tables/run.json`).
+back, and one whose record's fused attention rows `as_math` can't rewrite. `--out` keeps the comparisons
+(`DIR/of_record.json`) and each entry's counted record (`DIR/ENTRY/run.json`).
 
 ## Running an attack
 

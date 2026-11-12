@@ -41,11 +41,6 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   each one that fired with the MACs on both sides. Anything else is printed as a difference, and the command exits
   1: a route that steps AdamW otherwise than the record's program did, in torch's default step where the program
   asked for the fused kernel, differs, and its entry sets the route's dial for the kernel.
-- **The position tables.** One expected difference is the harness's (`HARNESS`): the records' harness checked the
-  model's buffers that θ doesn't hold, the position tables, like θ's weights, so a product with one is θ's, where
-  `run.Harness` takes such a buffer for a weight the route made. `tables` counts the step again as the records'
-  harness did, and that count is the one compared; the output says how many products and uses that moves and that
-  the step's MACs are the same on both counts.
 - **A line of the record's own program.** A product the record's program computes and a route rightly doesn't (a
   logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line, the
   count and MACs the record's step has of it over the config's, and why), and it is printed as named and taken out
@@ -54,8 +49,7 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
   checkpoint's.
 
-`--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted records: the harness's own count
-(`DIR/ENTRY/run.json`) and the count compared (`DIR/ENTRY/tables/run.json`).
+`--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted record (`DIR/ENTRY/run.json`).
 """
 from __future__ import annotations
 
@@ -87,8 +81,8 @@ FAIR = ("Each config's step was counted at the model's own initialisation on ran
         "CPU: the count reads operand shapes and which weights have left the start, never a value, and the capture "
         "traced the step as one fixed graph that reads no value back, so it is the step a job of the config takes on "
         "the start's weights and data. An expected difference is named by a rule that fires on its exact case "
-        "alone: the device's, the harness's, and the record's program's own arrangement of a computation the route "
-        "takes too. Not held: the weights, E's bytes and the loss, which only a run has.")
+        "alone: the device's, and the record's program's own arrangement of a computation the route takes too. "
+        "Not held: the weights, E's bytes and the loss, which only a run has.")
 #: the argument by which the records' programs drop rows from a step's loss: that share of a forward's rows, the ones
 #: of the highest loss, get no gradient
 DROPS_ROWS = "--trunc"
@@ -426,80 +420,18 @@ class Tokens:
         return torch.randint(0, self.vocab, (n // self.rows, self.ctx + 1), generator=self.generator)
 
 
-class AsRecorded(run.Harness):
-    """The harness as the records' was (`tables`): a buffer of the model that θ doesn't hold is checked like θ's
-    weights, so a product with one is θ's."""
-
-    def register(self, model: torch.nn.Module) -> torch.nn.Module:
-        tables = {k: b for k, b in model.named_buffers() if k not in self.theta}
-        self.counter.theta_cpu = self.theta | {k: b.detach().clone() for k, b in tables.items()}
-        self.counter.register(model.state_dict(keep_vars=True) | tables)
-        self.model = model
-        self._measure(model)
-        return model
-
-
-def counted(cfg: config.Config, rows: int, out: Path, harness=run.Harness, trace: dict | None = None) -> dict:
-    """The record of `cfg`'s first `STEPS` steps as a job counts them (`run.train` under `harness`, with the job's
-    trace, taken here unless `trace` is given), θ the model's own initialisation and the stream `Tokens` at the
-    record's `rows` a forward. Written to `out/run.json`."""
+def counted(cfg: config.Config, rows: int, out: Path) -> dict:
+    """The record of `cfg`'s first `STEPS` steps as a job counts them (`run.train` under `run.Harness`, with the
+    job's trace), θ the model's own initialisation and the stream `Tokens` at the record's `rows` a forward.
+    Written to `out/run.json`."""
     route, shape = config.route(cfg.route), cfg.start.shape
     torch.manual_seed(0)
     theta = {k: v.detach().clone() for k, v in LM.of(shape).state_dict().items()}
-    te = harness(theta, out, start={"shape": dict(shape)}, digests=False)
+    te = run.Harness(theta, out, start={"shape": dict(shape)}, digests=False)
     with te.counter:
         model, optimizers = route.build(shape, cfg.dials)
         run.train(te, cfg, route, Tokens(shape, rows), model, optimizers, steps=STEPS)
-    return te.finish({"trace": trace or run.trace_step(cfg, route, model, optimizers, "cpu")})
-
-
-def _log(rec: dict, weights_as_one: bool = False) -> dict:
-    """The log of a counted record's compared step as it was counted, no rows divided out: `{(phase, kind, op,
-    shapes): [count, MACs]}`, with the forward's products of an updated weight and of θ's as one kind if asked."""
-    out: dict[tuple, list] = {}
-    for phase, kind, op, shapes, count, macs in rec["structures"][rec["steps"][STEPS - 1]["struct"]]["log"]:
-        if weights_as_one and (phase, kind) in (("fwd", "updated"), ("fwd", "theta")):
-            kind = "weight"
-        e = out.setdefault((phase, kind, op, shapes), [0, 0])
-        e[0] += count
-        e[1] += macs
-    return out
-
-
-def tables(cfg: config.Config, rows: int, out: Path, own: dict) -> tuple[dict, dict | None, list[str]]:
-    """The position tables. `run.Harness` names θ's weights alone, so its counter takes a buffer of the model that θ
-    doesn't hold for a weight the route made, and a product with one for an updated weight's; the records' harness
-    checked such a buffer like θ's weights, so in a record that product is θ's. Counts the step again as the records'
-    harness did (`AsRecorded`, into `out/tables`): the count the comparison then reads, the expected difference if it
-    fired, and the differences. Fires when the two counts differ. Its exact case: they differ in the forward's
-    products alone, some an updated weight's in the harness's own count (`own`) that are θ's in the other, the same
-    op, shapes, count and MACs over the two kinds together, so the step's MACs are equal. The two counts are set side
-    by side as counted, both at the same rows a forward: a table is no token's, so the harness's own count of its
-    uses has no one number of rows to divide out."""
-    again = counted(cfg, rows, out / "tables", AsRecorded, own["trace"])
-    a, b = _log(own), _log(again)
-    uses = [c["structures"][c["steps"][STEPS - 1]["struct"]]["updated"] for c in (own, again)]
-    if a == b and uses[0] == uses[1]:
-        return again, None, []
-    macs = [c["steps"][STEPS - 1]["macs"] for c in (own, again)]
-    if _log(own, True) != _log(again, True) or macs[0] != macs[1]:
-        return again, None, [
-            "the position tables: the harness's own count and the count with them checked like θ's weights differ "
-            f"in more than which of the forward's products are an updated weight's (the step's MACs: {macs[0]:,} "
-            f"and {macs[1]:,})"]
-    moved = [(v[0] - b.get(k, [0, 0])[0], v[1] - b.get(k, [0, 0])[1])
-             for k, v in a.items() if k[:2] == ("fwd", "updated") and b.get(k) != v]
-    return again, {"rule": "tables", "what": (
-        "the model's position tables checked like θ's weights, as the records' harness checked them, where the "
-        f"harness takes them for weights the route made: {sum(n for n, _ in moved):,} of the forward's products "
-        f"({sum(m for _, m in moved):,} MACs a step at one row a forward) are an updated weight's in the harness's own "
-        f"count and θ's here, and its own count has {len(uses[0])} uses of an updated weight for these "
-        f"{len(uses[1])}; the step's MACs are {macs[0]:,} on both counts")}, []
-
-
-#: what `run.Harness` counts otherwise than the records' harness did. Each entry counts the config's step again as
-#: theirs did, and the comparison reads that count; an entry goes when `run.Harness` counts its case as the records do
-HARNESS = (tables,)
+    return te.finish({"trace": run.trace_step(cfg, route, model, optimizers, "cpu")})
 
 
 def refusal(rec: dict) -> str | None:
@@ -538,12 +470,6 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
                                 "rows a forward")
         return r
     mine = counted(cfg, rows, out)
-    for rule in HARNESS:
-        if refusal(mine):
-            break
-        mine, found, differences = rule(cfg, rows, out, mine)
-        r["expected"] += [found] if found else []
-        r["differences"] += differences
     if why := refusal(mine):
         return r | {"refused": why, "expected": [], "differences": []}
     start, cp, last = rec.get("start_record") or rec["start"], mine["checkpoints"][-1], rec["checkpoints"][-1]

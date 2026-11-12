@@ -363,39 +363,6 @@ def count(*more, updated=((D * D, D),), macs=None) -> dict:
             "steps": [{"struct": "s", "macs": total}] * of_record.STEPS, "structures": {"s": struct}}
 
 
-def test_the_position_tables_are_expected_where_the_two_counts_differ_in_the_weights_kind_alone(tmp_path, monkeypatch):
-    """The harness's rule on counts made up here: the harness's own count has a product with a table as an updated
-    weight's and more uses; the count as the records' harness took it has that product as θ's."""
-    cfg = config.load(write_config(tmp_path / "a.toml"), starts.registry(tiny_registry(tmp_path / "reg")))
-    rope = [[1, 2, CTX, 4], [CTX, 4]]
-    own = count(("fwd", "updated", "mul", rope, 8, 8 * CTX * 8), updated=((D * D, D), (8, 0), (8, D)))
-    own["structures"]["s"]["updated"][2][3] = 2 * CTX  # a table's use in a step's second forward: no row's tokens
-    as_recorded = count(("fwd", "theta", "mul", rope, 8, 8 * CTX * 8))
-    asked = []
-
-    def counted(cfg, rows, out, harness, trace):
-        asked.append((rows, out, harness, trace))
-        return as_recorded
-
-    monkeypatch.setattr(of_record, "counted", counted)
-    again, found, differences = of_record.tables(cfg, 1, tmp_path / "a", own)
-    assert again is as_recorded and differences == []
-    assert asked == [(1, tmp_path / "a" / "tables", of_record.AsRecorded, own["trace"])]
-    assert found["rule"] == "tables" and (
-        "8 of the forward's products (65,536 MACs a step at one row a forward) are an updated weight's in the "
-        "harness's own count and θ's here, and its own count has 3 uses of an updated weight for these 1; the step's "
-        "MACs are 2,162,688 on both counts") in found["what"]
-    # counts that agree: nothing to name; counts that differ in another product, or in the step's MACs: a difference
-    assert of_record.tables(cfg, 1, tmp_path / "a", as_recorded) == (as_recorded, None, [])
-    for other in (count(("fwd", "act", "mul", rope, 8, 8 * CTX * 8)),
-                  count(("fwd", "updated", "mul", rope, 8, 8 * CTX * 8), macs=1)):
-        again, found, differences = of_record.tables(cfg, 1, tmp_path / "a", other)
-        assert found is None and len(differences) == 1 and differences[0].startswith(
-            "the position tables: the harness's own count and the count with them checked like θ's weights differ in "
-            "more than which of the forward's products are an updated weight's (the step's MACs: ")
-    assert of_record.HARNESS == (of_record.tables,)
-
-
 def as_cuda(struct: dict, rows: int) -> dict:
     """A CPU step's structure as the records hold CUDA's step: attention one fused kernel a call at torch's formula
     (`fused`), the norm one fused kernel counted at its updated gains alone, the weights read at 16 bits. The step's
@@ -436,21 +403,20 @@ def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = N
 
 @pytest.mark.slow
 def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp_path, capsys):
-    """A made-up run of record: the config's own counted step at two rows a forward, counted as the records' harness
-    counted and written as the records hold CUDA's step, attention one fused row a kernel and no trace. With the
-    ask stated, the command writes that kernel as the counter does, divides the rows out, counts the config at one
-    row a forward and names the three expected differences. With no ask stated the entry is refused, naming the key;
-    with a wrong one, a call for q's alone where the step's every call asks for all three, it differs. A config that
-    trains another set, beside a record of another start and length, differs and exits 1. It counts and traces a
-    route's steps, so slow; what the rules' own tests can't show is that a route's real step produces the entries
-    each rule names, that the counter's rows of a fused kernel are the ones a rewritten record holds, and that the
-    command reads a record the way a job writes one."""
+    """A made-up run of record: the config's own counted step at two rows a forward, written as the records hold CUDA's
+    step, attention one fused row a kernel and no trace. With the ask stated, the command writes that kernel as the
+    counter does, divides the rows out, counts the config at one row a forward and names the two expected differences.
+    With no ask stated the entry is refused, naming the key; with a wrong one, a call for q's alone where the step's
+    every call asks for all three, it differs. A config that trains another set, beside a record of another start and
+    length, differs and exits 1. It counts and traces a route's steps, so slow; what the rules' own tests can't show is
+    that a route's real step produces the entries each rule names, that the counter's rows of a fused kernel are the
+    ones a rewritten record holds, and that the command reads a record the way a job writes one."""
     reg = tiny_registry(tmp_path / "reg")
     budget, dials = {"steps": 3, "batch": 4}, {"trainable": "blocks.*,norm", "opt": "muon", "lr": 1e-2,
                                                "micro_batches": 2, "fused": True}
     path = write_config(tmp_path / "a.toml", budget=budget, dials=dials)
     cfg = config.load(path, starts.registry(reg))
-    cpu = of_record.counted(cfg, 1, tmp_path / "count", of_record.AsRecorded)
+    cpu = of_record.counted(cfg, 1, tmp_path / "count")
     assert cpu["invalid"] == [] and cpu["checkpoints"][-1]["step"] == 1
     first, second = cpu["steps"]
     tables = [kind for _, kind, op, shapes, *_ in cpu["structures"][second["struct"]]["log"]
@@ -463,20 +429,17 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     argv = ["--records", str(records), "--held", str(held), "--starts", str(reg)]
     assert of_record.main([str(path), *argv, "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 3 expected differences\n")
-    for rule in ("tables: ", "width: ", "norm: "):
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 2 expected differences\n")
+    for rule in ("width: ", "norm: "):
         assert f"  expected  {rule}" in out
     assert "  attention the record holds a fused kernel as one row: compared as the ops the math kernel" in out
     assert "`none` at [4, 1024, 8], of_record.toml's word (`partial`) and not the record's" in out
-    assert "are an updated weight's in the harness's own count and θ's here" in out
     assert "2 forwards of one row" in out and "2 of its 3 steps have, 2 rows a forward divided out" in out
     assert "DIFFERS" not in out and out.rstrip().endswith(of_record.FAIR) and "1 entry: 1 equal, 0 differ" in out
     kept = json.loads((tmp_path / "out" / "of_record.json").read_text())
     assert kept["schema"] == of_record.SCHEMA and kept["rows"][0]["differences"] == []
-    own, compared = (json.loads((tmp_path / "out" / "a" / at / "run.json").read_text()) for at in ("", "tables"))
-    assert own["trace"] == compared["trace"] and own["trace"]["tokens"] == 4 * CTX
-    own, compared = own["steps"][1], compared["steps"][1]
-    assert own["macs"] == compared["macs"] and own["by"] != compared["by"]
+    own = json.loads((tmp_path / "out" / "a" / "run.json").read_text())
+    assert own["trace"]["tokens"] == 4 * CTX and own["steps"][1] == second
 
     records, held = held_to(tmp_path / "unsaid", "a", rec)
     assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 1
