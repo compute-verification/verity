@@ -7,6 +7,11 @@ verdict on both sides, and each other row changes one thing and reads Lean's rea
 accepts, which Lean refuses for its form alone (`members.ALL_PASSED`), is a whole audit's, which
 `benchmarks/one_stage` runs with the twin beside it.
 
+The twin decides the sessions' trees by `challenger.members_tree_reason` (with `member_tree_reason`, `closes` and
+`members_order`), and the rows hold it to Lean's `Challenger.membersTreeReason` on each of its refusals: a tree closed
+after other evidence or never closed, a tree the log does not show, one tree for two sessions, a tree no session
+records, and trees opened in another order or before the one before is closed.
+
 Two rows are where the twin is not Lean's step for step (the module's docstring). One is here: a circuit file whose
 META names another ``vus_per_block`` than the parameters' and that does not parse, which Lean leaves to its session's
 reject and the twin refuses. The other is not run: a session whose link's ``root_B`` is not the length its statement
@@ -54,9 +59,12 @@ class Audit:
     """A window of the members `A` and `B` (two instances of `PAIR`, three of `TRIPLE`), its registration's two roots
     named `ports`, audited on a challenger session that releases the sample and then opens one coin tree a member, in
     the order `opened`, each tree's link, its rounds and its closing round after its session's evidence (its record and
-    one proof file) before the next tree's first round: the per-member parameters and evidence, and the files."""
+    one proof file) before the next tree's first round: the per-member parameters and evidence, and the files. Only
+    the members of `closed` have their tree's closing round opened, and with `together` those rounds are opened after
+    every tree's other rounds."""
 
-    def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, str] = (A, B)):
+    def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, str] = (A, B),
+                 closed: tuple[str, ...] = (A, B), together: bool = False):
         rng = random.Random(seed)
         s = self.s = Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
@@ -65,15 +73,27 @@ class Audit:
         ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
         self.files: dict[str, bytes] = {}
         sessions = {}
+
+        def close(t: TreeSession, after: bytes) -> list[str]:
+            t.open(CT.SESSION, 0, after)
+            return t.lines[-1:]
+
+        late = []
         for name in opened:
             t = TreeSession(rng, ch.s.ch, V2_TABLES)
             while t.spec["rounds_log"] < 1:
                 t = TreeSession(rng, ch.s.ch, V2_TABLES)
             record, rep = D.canonical(t.record).encode(), f"proof of {name}".encode()
-            t.open(CT.SESSION, 0, hashlib.sha512(CL.session_evidence(record, [("circuit.rep0.bin", rep)])).digest())
+            after = hashlib.sha512(CL.session_evidence(record, [("circuit.rep0.bin", rep)])).digest()
             ch.s.lines += t.lines
+            if name in closed and together:
+                late.append((t, after))
+            elif name in closed:
+                ch.s.lines += close(t, after)
             sessions[name] = {"name": f"s{(A, B).index(name)}", "record": self.put(record),
                               "reps": {"circuit.rep0.bin": self.put(rep)}}
+        for t, after in late:
+            ch.s.lines += close(t, after)
         ch.s.close = ch.s.signed(None)
         ch.ledger = Ledger(rng, ch.s, withheld=True)
         ch.pins, ch.main = _pinned(rng, ch.ledger, "honest")
@@ -193,6 +213,30 @@ def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_r
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert why == ("proofs: roots: the registration's root zzz/out is no member's: a member's roots are named "
                    "<member>/<port>")
+
+
+def test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees(tmp_path):
+    """The trees' check the twin decides by (`challenger.members_tree_reason`, with `member_tree_reason`, `closes` and
+    `members_order`) against Lean's (`Challenger.membersTreeReason`), on the refusals the other rows leave: a session
+    whose tree is never closed (`NO_CLOSING`), a session whose record names a tree the log does not show (`NO_TREE`),
+    two sessions on one tree (`SHARED_TREE`), and a log that opens the second tree before the first is closed
+    (`MEMBERS_ORDER`). With the other rows' changed proof file, unused tree and trees opened in the other order, every
+    refusal of that check is run on both sides."""
+    def same(x: Audit, k: str, reason: str, **ask) -> None:
+        why, (run, refused) = x.ask(tmp_path / k, **ask)
+        assert run is None and why == M.run_reason(run, refused) == f"proofs: {reason}", (k, why, refused)
+
+    same(Audit("members-twin-open", closed=(A,)), "open", f"session s1's coins are not the challenger's: {Ch.NO_CLOSING}")
+    same(Audit("members-twin-together", together=True), "together", Ch.MEMBERS_ORDER)
+    a = Audit("members-twin-trees")
+    first, last = a.evidence["proofs"]["statements"]
+    s0, s1 = first["sessions"][0], last["sessions"][0]
+    record = json.loads(a.files[s1["record"]])
+    elsewhere = a.put(D.canonical(record | {"coin_tree": record["coin_tree"] | {"root": "00" * 64}}).encode())
+    same(a, "no-tree", f"session s1's coins are not the challenger's: {Ch.NO_TREE}",
+         evidence=a.proofs([first, {**last, "sessions": [{**s1, "record": elsewhere}]}]))
+    same(a, "shared", f"two sessions' coins are one tree's: {Ch.SHARED_TREE}",
+         evidence=a.proofs([first, {**last, "sessions": [{**s1, "record": s0["record"], "reps": s0["reps"]}]}]))
 
 
 def test_the_one_row_run_here_where_the_twin_is_not_leans(tmp_path):
