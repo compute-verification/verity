@@ -4048,6 +4048,8 @@ struct Proved {
     tp0: Instant,
     /// how long the reps waited for the previous session's ([`Turn`]); inside `e2e_s`
     device_wait_s: f64,
+    /// each step's seconds from the instant before `Register` to the reps' start, laps of one clock, and their `total`
+    steps: Vec<(&'static str, f64)>,
 }
 
 /// [`session`] up to its proofs; `Err` is a session the prover stopped before proving (its record).
@@ -4068,8 +4070,17 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
+    // `t0`'s clock up to the reps, a lap a step: each lap ends where the next begins, so the laps leave nothing of it unnamed
+    let mut steps: Vec<(&'static str, f64)> = Vec::new();
+    let mut lap_from = t0;
+    let mut lap = |step: &'static str| {
+        let now = Instant::now();
+        steps.push((step, (now - lap_from).as_secs_f64()));
+        lap_from = now;
+    };
     // registration done: the verifier samples the units (or none), and the statement is the sampled proof blocks', in the session's tables
     let reg = call(&t, Req::Register);
+    lap("register");
     let draw = match &reg {
         Ok(Resp::Draw(d)) if !plan.ignore_draw => d.clone(),
         _ => "null".to_string(),
@@ -4090,6 +4101,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         Ok(x) => x,
         Err(e) => return Err((json!({"accepted": false, "why": e, "prover_stopped": format!("the drawn statement: {e}")}), Vec::new())),
     };
+    lap("tables");
     let st = &tabs.list[0].st;
     // the ZK server's proof files of record: the Lean session loop's finish on the session's statement, at the verifier's sample
     let lean_fin = match firewall_on(st).then(|| {
@@ -4099,6 +4111,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         Ok(f) => f.map(|f| Arc::new(Mutex::new(f))),
         Err(e) => return Err((json!({"accepted": false, "why": e, "prover_stopped": format!("the firewall's Lean finish: {e}")}), Vec::new())),
     };
+    lap("lean_finish");
     let sig = session_sigma(&tabs.parts());
     // under the ZK server the Lean session loop sends its own Hello, at a nonce it samples, in place of whatever the prover sends
     let hello = if plan.lean_session {
@@ -4185,6 +4198,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let (t, h) = (t.clone(), hello.clone());
         flock_live::spawn(move || call(&t, Req::Hello(h)))
     });
+    lap("config");
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
     let mut witness_s = 0.0;
@@ -4221,6 +4235,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     if after {
         salts_ahead = start_ahead();
     }
+    lap("witness");
     let tj = Instant::now();
     // level 0's salts read beside the previous session's reps, for the device's level-0 tree
     let l0_held = match l0_salts.map(|h| h.join()) {
@@ -4232,6 +4247,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         None => Vec::new(),
     };
     let t_l0_wait = tj.elapsed().as_secs_f64();
+    lap("level0_wait");
     if l0_on {
         let hiding = zk_pre.is_some() && l0_hiding_read;
         for (n, took) in LEVEL0_TAKEN.iter().zip([l0_read, hiding]) {
@@ -4249,12 +4265,15 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     // the preparation's time past the witness build (what it adds to the session)
     let t_zk_pre_wait = tj.elapsed().as_secs_f64();
+    lap("zk_pads_wait");
     // the next session's level 0 beside this session's reps
     if let Some(next) = plan.next_seed.filter(|_| l0_on && (ahead_salts || ahead_hiding)) {
         Level0Ahead::start(st, plan, next, lig, ahead_salts, ahead_hiding);
     }
+    lap("level0_next");
     // everything above is host work and the session's own; the device's reps wait for the previous session's
     let device_wait_s = plan.turn.as_ref().map_or(0.0, |t| t.take());
+    lap("device_wait");
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
@@ -4264,6 +4283,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     #[cfg_attr(not(feature = "seed-injection"), allow(unused_mut))]
     let mut early = 0;
     let tp0 = Instant::now();
+    steps.push(("total", (tp0 - t0).as_secs_f64()));
     let res: Result<(), String> = (|| {
         let hello_got = match hello_ahead {
             Some(h) => h.join().unwrap_or_else(|e| Err(format!("hello: {}", panic_msg(e)))),
@@ -4656,12 +4676,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     }
     give_level0_bufs(l0_held);
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
-                prove_s, buckets, tp0, device_wait_s })
+                prove_s, buckets, tp0, device_wait_s, steps })
 }
 
 fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let Proved { t, log, tabs, plan, hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s, prove_s,
-                 buckets, tp0, device_wait_s } = p;
+                 buckets, tp0, device_wait_s, steps } = p;
     let (st, inst) = (&tabs.list[0].st, &tabs.list[0].inst);
     if let Err(e) = res {
         let v = match call(&t, Req::Finish) {
@@ -4706,6 +4726,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     // past json!'s recursion limit in the literal above
     live["public_file_sha512"] = json!(hex(&inst.public_file_sha512));
     live["device_wait_s"] = json!(device_wait_s);
+    live["steps_s"] = Value::Object(steps.into_iter().map(|(step, s)| (step.to_string(), json!(s))).collect());
     (live, proofs)
 }
 
@@ -7155,13 +7176,19 @@ fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
     let index = Mutex::new(());
-    let one = |i: usize, conn: std::net::TcpStream, mut s: Server, tag: Value| {
+    let one = |i: usize, conn: std::net::TcpStream, mut s: Server, tag: Value, build_s: f64| {
+        // the session's seconds on this thread past its server's build, and those of them it waited for the prover's next frame
+        let served = Instant::now();
+        let mut prover_wait_s = 0.0;
         conn.set_nodelay(true).unwrap();
         let mut r = BufReader::new(conn.try_clone().unwrap());
         let mut w = BufWriter::new(conn);
         let id = format!("l{:04}-{}", i, std::process::id());
         loop {
-            let Ok(b) = read_frame(&mut r) else { break };
+            let waited = Instant::now();
+            let frame = read_frame(&mut r);
+            prover_wait_s += waited.elapsed().as_secs_f64();
+            let Ok(b) = frame else { break };
             let resp = match (Req::decode(&b), log) {
                 (Ok(req), Some(log)) => log.handle(&mut s, &id, req),
                 (Ok(req), None) => s.handle(req),
@@ -7172,6 +7199,7 @@ fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::
                 break;
             }
         }
+        let recorded = Instant::now();
         let rec = s.record_json();
         let out = tag.get("out").and_then(Value::as_str).map_or_else(|| out.to_path_buf(), std::path::PathBuf::from);
         let d = out.join(&id);
@@ -7191,14 +7219,25 @@ fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::
         if let (Value::Object(line), Value::Object(tag)) = (&mut line, tag) {
             line.extend(tag);
         }
+        // where the session's thread spent its seconds: building its server, writing its record and proofs, waiting for the
+        // prover's frames, and busy, which is all of it but that wait (`handle_s` and `verify_s` are inside it)
+        line["build_s"] = json!(build_s);
+        line["record_s"] = json!(recorded.elapsed().as_secs_f64());
+        line["prover_wait_s"] = json!(prover_wait_s);
+        line["busy_s"] = json!(build_s + served.elapsed().as_secs_f64() - prover_wait_s);
         let _whole_lines = index.lock().unwrap_or_else(PoisonError::into_inner);
         let mut idx = std::fs::OpenOptions::new().create(true).append(true).open(out.join("index.jsonl")).unwrap();
         // one write per line: servers sharing `out` append to the same index
         idx.write_all(format!("{line}\n").as_bytes()).unwrap();
         println!("SESSION\t{line}");
     };
-    flock_live::serve_sessions(l, max, concurrency, || make().map(|(build, tag)| move || (build(), tag)),
-                               |i, conn, (s, tag): (Server, Value)| one(i, conn, s, tag));
+    let timed = |(build, tag): (B, Value)| move || {
+        let t = Instant::now();
+        let s = build();
+        (s, tag, t.elapsed().as_secs_f64())
+    };
+    flock_live::serve_sessions(l, max, concurrency, || make().map(timed),
+                               |i, conn, (s, tag, build_s): (Server, Value, f64)| one(i, conn, s, tag, build_s));
 }
 
 /// `replay [--zk] [--session-tables J] --sessions DIR...`: the verifier's offline verdict on each recorded session
