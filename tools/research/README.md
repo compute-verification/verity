@@ -161,14 +161,11 @@ regression's manifest rebuilds, which label the landing's check attempt.
 
 `research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`, whose
 policy is `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
-checks each (graph2's tasks by default), and fast-forwards `main` only to a candidate with no new failure; a failure its
-base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
-without them. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
+checks each (graph2's tasks by default), and fast-forwards `main` only to a candidate with no new failure. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
 its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
 LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
-there (`research queue review`) or changes nothing drive.toml's `lowrisk_excludes` names. `ready` and `open` only warn of a
-body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes from KEY's goal label, nor `Issue:
-none: REASON`. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
+there (`research queue review`), or changes nothing drive.toml's `lowrisk_excludes` names, or is a move's PR whose move
+the loop certifies. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
 (`lock_drops`). `research queue status` says what each PR waits for.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
@@ -302,7 +299,8 @@ what is in use (page cache excluded), minus the not-yet-used part of every live
 reservation in the fleet's `/workspace/ramlock/*.json` (machines.toml
 `ramlock = DIR` overrides it), is at least N. They count against the machine's
 outermost limited cgroup (a node's user slice), not the run's. A reservation is live unless its
-pid is gone or its run is terminal. The run then writes
+pid is gone, its run is terminal, or it names no pid and a run directory that
+is gone. The run then writes
 `research-<run id>.json` there, and the runner removes it at exit. Otherwise the
 run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
 `--mem-wait S` polls for up to S seconds instead. job.json records the
