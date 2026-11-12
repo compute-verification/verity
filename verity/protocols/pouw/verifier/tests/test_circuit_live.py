@@ -8,6 +8,7 @@ import random
 
 import pytest
 
+from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.protocols.pouw.prover.circuit import h1window as W
@@ -37,7 +38,7 @@ def _valid(rng, T, n=None, s=None):
     req = []
     for q in range(T):
         if q >= n:
-            req.append([0] * L.HEADER)
+            req.append([0] * LR.HEADER)
             continue
         r = rng.choice([s, s, max(s - 1, 0), rng.randrange(s + 1)])
         cap = min(M32, rng.choice([0, 1, 2, s - r, s - r + 1, s - r + 1, rng.randrange(1 << 32)]))
@@ -67,7 +68,7 @@ def _mutate(rng, slot, req, m, s):
     elif k == 6:
         slot[i] = slot[rng.randrange(T)]                                     # a request named once more
     else:
-        req[i] = [0] * L.HEADER
+        req[i] = [0] * LR.HEADER
     return slot, req, m, s
 
 
@@ -92,7 +93,7 @@ def test_an_accepted_round_counts_m_admitted_slots(T):
 
 def _round():
     """T = 8, round 0: requests 0, 1 and 2 live, admitted there with prompts of 3, 4 and 5 tokens, slots [0, 4) theirs."""
-    req = [[q, 0, q, 16, 3 + q] for q in range(3)] + [[0] * L.HEADER] * 5
+    req = [[q, 0, q, 16, 3 + q] for q in range(3)] + [[0] * LR.HEADER] * 5
     return [1, 3, 3, 2, 0, 0, 0, 0], req, 4, 0
 
 
@@ -104,7 +105,7 @@ def _round():
     (lambda x, r, m, s: (x[:2] + [4] + x[3:], r, m, s), 0),                   # slot names request 3, not an entry
     (lambda x, r, m, s: (x[:6] + [1, 0], r, m, s), 0),                        # an assigned slot past m
     (lambda x, r, m, s: (x[:2] + [3 + (1 << 31)] + x[3:], r, m, s), 0),        # a high bit on a named slot
-    (lambda x, r, m, s: (x, r[:1] + [[0] * L.HEADER] + r[2:], m, s), 0),      # a gap in the request table
+    (lambda x, r, m, s: (x, r[:1] + [[0] * LR.HEADER] + r[2:], m, s), 0),      # a gap in the request table
     (lambda x, r, m, s: (x, r[:2] + [[7] + r[2][1:]] + r[3:], m, s), 0),      # an entry at another index
     (lambda x, r, m, s: (x, r[:3] + [[3, 0, 0, 0, 1]] + r[4:], m, s), 1),     # one more live request, never named
     (lambda x, r, m, s: (x, r[:3] + [[9, 9, 9, 9, 0]] + r[4:], m, s), 1),     # a dead leaf's other words are not read
@@ -136,7 +137,7 @@ def test_ok_iff_exactly_the_first_m_slots_name_admitted_requests(edit, want):
 def _mixed():
     """T = 8, round 2 of a per-round execution phase: requests 0 and 1 admitted in round 0 (cap 4) and decoding, request 2 admitted in
     round 2 with a 4-token prompt and prefilling, request 3 admitted in round 0 with cap 2 and so done."""
-    req = [[0, 0, 0, 4, 6], [1, 0, 6, 4, 2], [2, 2, 2, 8, 4], [3, 0, 8, 2, 1]] + [[0] * L.HEADER] * 4
+    req = [[0, 0, 0, 4, 6], [1, 0, 6, 4, 2], [2, 2, 2, 8, 4], [3, 0, 8, 2, 1]] + [[0] * LR.HEADER] * 4
     return [1, 2, 3, 3, 3, 3, 0, 0], req, 6, 2
 
 
@@ -160,7 +161,7 @@ def test_m_reaches_the_leaf_count_not_the_window_slot():
     """T is the tables' leaf count (the pouw setting ``rows``), below the execution phase's slot M when it isn't a power of two: at
     T = 96 (M = 128) every slot may be served, and an m past T is refused though it is within M."""
     assert W.slot(96, (32, 32)) == 128
-    req = [[q, 0, 20 * q, 16, 20] for q in range(5)] + [[0] * L.HEADER] * 91
+    req = [[q, 0, 20 * q, 16, 20] for q in range(5)] + [[0] * LR.HEADER] * 91
     slot = [i // 20 + 1 for i in range(96)]
     assert L.live_ok(slot, req, 96, 0) == _bits(slot, req, 96, 0) == 1
     for m in (97, 128):
@@ -171,7 +172,7 @@ def test_ok_reads_every_slot_and_every_header_word_it_checks():
     """Its ports are T slots, T five-word headers, m and s, in that order, to one bit; its circuit grows as T², a count of
     each request's slots."""
     params, ret = bind(L.PouwLiveSlots, T=8).signature()
-    assert [n for n, _ in params] == list(L.PORTS) and ret == L.BL.BIT
+    assert [n for n, _ in params] == list(L.PORTS) and ret == BL.BIT
     assert [t.leaves for _, t in params] == [8 * 32, 8 * 5 * 32, 32, 32]
     a8, a16 = L.traced(8).counts["and"], L.traced(16).counts["and"]
     assert a16 < 4 * a8
@@ -193,7 +194,7 @@ def test_the_live_program_is_one_unit_a_round_of_its_one_template(T, S):
     tp = P.evaluate(prog, L.query(T))
     assert tp.population == S
     rng, n = random.Random(T * S), max(T // 2, 1)
-    req = [[q, 0, q, S + 1, 1] if q < n else [0] * L.HEADER for q in range(T)]
+    req = [[q, 0, q, S + 1, 1] if q < n else [0] * LR.HEADER for q in range(T)]
     rounds = []
     for _s in range(S):
         m = rng.randrange(1, n + 1)
@@ -325,7 +326,7 @@ def test_v2_bits_are_the_word(T):
 def _fixed():
     """T = 8, a fixed length of max_tokens [3, 1, 2], every request admitted in round 0: round 0 their prompts (3, 4 and 5
     tokens), round 1 one decode row for requests 0 and 2 (max_tokens past 1), round 2 one for request 0."""
-    req = [[q, 0, q, cap, 3 + q] for q, cap in enumerate((3, 1, 2))] + [[0] * L.HEADER] * 5
+    req = [[q, 0, q, cap, 3 + q] for q, cap in enumerate((3, 1, 2))] + [[0] * LR.HEADER] * 5
     return req, [3, 1, 2, 0, 0, 0, 0, 0]
 
 
@@ -371,7 +372,7 @@ def test_the_live_requests_are_exactly_the_public_caps(cap):
 def test_v2_reads_v1s_ports_and_the_public_caps():
     """v2's ports are v1's and then T public caps, its one output the ok bit; v1's Definition is unchanged."""
     params, ret = bind(L.PouwLiveSlotsV2, T=8).signature()
-    assert [n for n, _ in params] == list(L.PORTS_V2) == [*L.PORTS, "cap"] and ret == L.BL.BIT
+    assert [n for n, _ in params] == list(L.PORTS_V2) == [*L.PORTS, "cap"] and ret == BL.BIT
     assert [t.leaves for _, t in params] == [8 * 32, 8 * 5 * 32, 32, 32, 8 * 32]
     assert bind(L.PouwLiveSlots, T=8).id == "PouwLiveSlots_v1{T=8}" and bind(L.PouwLiveSlotsV2, T=8).id == "PouwLiveSlots_v2{T=8}"
     assert [n for n, _ in bind(L.PouwLiveSlots, T=8).signature()[0]] == list(L.PORTS)
@@ -386,7 +387,7 @@ def test_the_v2_live_program_is_one_unit_a_round_that_reads_the_caps(T, S):
     assert [n for n, _ in params] == [f"h1/{r}" for r in LR.ROLES_V2] and ret.leaves == S
     assert P.evaluate(prog, L.query_v2(T)).population == S
     n = max(T // 2, 1)
-    req = [[q, 0, q, S + 1, 1] if q < n else [0] * L.HEADER for q in range(T)]
+    req = [[q, 0, q, S + 1, 1] if q < n else [0] * LR.HEADER for q in range(T)]
     cap = [S + 1 if q < n else 0 for q in range(T)]
     rounds = [([q + 1 for q in range(n)] + [0] * (T - n), n) for _s in range(S)]
     args = (sum((_b(v) for slot, _m in rounds for v in slot), []), sum((_b(x) for h in req for x in h), []),
@@ -442,7 +443,7 @@ def _prefill(rng, T, R):
         x += p
     n = len(prompts)
     cap = [rng.randrange(1, 4) for _q in range(n)]
-    req = [[q, 0, firsts[q], cap[q], prompts[q]] for q in range(n)] + [[0] * L.HEADER] * (T - n)
+    req = [[q, 0, firsts[q], cap[q], prompts[q]] for q in range(n)] + [[0] * LR.HEADER] * (T - n)
     slot = [q + 1 for q in range(n) for _ in range(prompts[q])]
     m = len(slot)
     return slot + [0] * (T - m), req, m, 0, cap + [0] * (T - n)
@@ -499,7 +500,7 @@ def test_a_round_whose_pieces_all_accept_is_one_v2_accepts_and_counts_m_admitted
             slot[rng.randrange(T)] = rng.randrange(R + 2)
         if all(_pieces_ok(T, R, slot, req, m, s, cap)):
             accepted += 1
-            head = [h if q < R else [0] * L.HEADER for q, h in enumerate(req)]
+            head = [h if q < R else [0] * LR.HEADER for q, h in enumerate(req)]
             assert L.live_ok_v2(slot, head, m, s, [c if q < R else 0 for q, c in enumerate(cap)]) == 1
             assert L.admitted(slot, req) == L.admitted(slot, head) == m
     assert accepted > 20
@@ -508,7 +509,7 @@ def test_a_round_whose_pieces_all_accept_is_one_v2_accepts_and_counts_m_admitted
 def test_an_honest_prefill_round_cut_into_pieces_is_accepted_piece_by_piece():
     """T = 16 in pieces of 4: requests 0, 1 and 2 with prompts of 5, 6 and 3 tokens from slots 0, 5 and 11, so request 0
     spans pieces 0 and 1 and request 1 pieces 1 and 2; row 14 and on are empty."""
-    req = [[0, 0, 0, 2, 5], [1, 0, 5, 1, 6], [2, 0, 11, 1, 3]] + [[0] * L.HEADER] * 13
+    req = [[0, 0, 0, 2, 5], [1, 0, 5, 1, 6], [2, 0, 11, 1, 3]] + [[0] * LR.HEADER] * 13
     cap = [2, 1, 1] + [0] * 13
     slot = [1] * 5 + [2] * 6 + [3] * 3 + [0] * 2
     assert _pieces_ok(16, 4, slot, req, 14, 0, cap) == _pieces_ok(16, 4, slot, req, 14, 0, cap, bits=True) == [1] * 4
@@ -527,7 +528,7 @@ def test_an_honest_prefill_round_cut_into_pieces_is_accepted_piece_by_piece():
     (lambda x, r, m, s: (x[:8] + [5] + x[9:], r, m, s), [2]),                   # a row naming a request past the first R
 ])
 def test_a_piece_refuses_a_row_outside_its_requests_interval_or_round(edit, bad):
-    req = [[0, 0, 0, 2, 5], [1, 0, 5, 1, 6], [2, 0, 11, 1, 3]] + [[0] * L.HEADER] * 13
+    req = [[0, 0, 0, 2, 5], [1, 0, 5, 1, 6], [2, 0, 11, 1, 3]] + [[0] * LR.HEADER] * 13
     cap = [2, 1, 1] + [0] * 13
     slot, req, m, s = edit([1] * 5 + [2] * 6 + [3] * 3 + [0] * 2, req, 14, 0)
     got = _pieces_ok(16, 4, slot, req, m, s, cap)
@@ -538,7 +539,7 @@ def test_a_piece_refuses_a_row_outside_its_requests_interval_or_round(edit, bad)
 def test_a_decode_row_is_refused_by_its_piece():
     """A request decoding in round 1 (admitted in round 0, cap 2) is named in a later round than its header's: v2 takes the
     row, and a piece has no interval for it and refuses it."""
-    req = [[0, 0, 0, 2, 5]] + [[0] * L.HEADER] * 7
+    req = [[0, 0, 0, 2, 5]] + [[0] * LR.HEADER] * 7
     cap = [2] + [0] * 7
     slot = [1] + [0] * 7
     assert L.live_ok_v2(slot, req, 1, 1, cap) == 1
@@ -557,7 +558,7 @@ def test_a_pieces_circuit_grows_with_its_rows_not_with_t():
     """A piece reads R slots, R headers, m, s, base and R caps, to one bit; T enters only as the m ≤ T constant, so a
     piece of T = 8,192's round is a piece of T = 128's."""
     params, ret = bind(L.PouwLiveRows, T=16, R=4).signature()
-    assert [n for n, _ in params] == list(L.PORTS_ROWS) and ret == L.BL.BIT
+    assert [n for n, _ in params] == list(L.PORTS_ROWS) and ret == BL.BIT
     assert [t.leaves for _, t in params] == [4 * 32, 4 * 5 * 32, 32, 32, 32, 4 * 32]
     a, b = L.traced_rows(128, 8).counts["and"], L.traced_rows(1 << 13, 8).counts["and"]
     assert abs(a - b) <= 64 and L.traced_rows(128, 16).counts["and"] < 5 * a
