@@ -42,6 +42,7 @@ public import Spot.ChallengerDraw
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
 public import Spot.Period
+public import Spot.PeriodAudit
 public import Spot.Wires
 public import Spot.HistoryTable
 public import Spot.WiresSpan
