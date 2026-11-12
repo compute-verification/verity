@@ -13,7 +13,10 @@ with its source:
             day with no hour is its end, Pacific), the net (days earlier less days later), open and off track now, and the
             stalls: a goal with a step past its hour and not updated since, or with no step due within STEP_H hours
             (`stalls`). Two columns: the window, and since the baseline.
-  LANDING   the share of marked changes on `main` within two hours of the mark, and the median (`research queue stats`).
+  LANDING   the share of marked changes on `main` within two hours of the mark, and the mark-to-`main` times with their
+            median, over the window: the table of `research queue stats`, its long window started at the reading's start.
+            It gathers the hours to the window's end from the queue's loop, the store and GitHub, which takes over a
+            minute, and a window longer than its own is not read.
   AGENTS    the agents running against LIMIT, by lane, from --agents FILE.json, the saved output of the cursor-cloud
             `list-cloud-agents` tool: a worker's name starts with its issue key, whose team's lane it is, a coordinator's
             is its handle, and the rest are `unnamed`.
@@ -33,7 +36,6 @@ from __future__ import annotations
 import argparse
 import functools
 import gzip
-import inspect
 import json
 import re
 import subprocess
@@ -265,17 +267,23 @@ def save(goals: list[dict], taken: datetime) -> tuple[str | None, str]:
 
 # ---- the other rows ---------------------------------------------------------------------------------------------------------
 
-def landing(until: datetime | None) -> dict:
-    """The share on `main` within two hours of the mark and the mark-to-`main` times, as `research queue stats` reads them
-    over its long window ending at `until` (None: now). Read only by a `research queue stats` that takes a window's end."""
+def landing(since: datetime, until: datetime, live: bool) -> dict:
+    """The share on `main` within two hours of the mark and the mark-to-`main` times over the window, as the table of
+    `research queue stats` gives them for its long window: its document is gathered to `until` (`live`: nothing after it
+    is cut, for it is now) and its long window started at `since`. The document holds queue_table.WINDOW_H hours, so a
+    longer window is not read, and neither is one whose document lacks the queue's loop."""
     from . import queue_table
 
-    if "until" not in inspect.signature(queue_table.collect).parameters:
-        raise Unread("`research queue stats` can't yet end its windows at a given time (queue_table.collect takes no "
-                     "`until`); this row reads its table once it can")
-    doc = queue_table.collect(until=until.timestamp() if until else None)
-    cells = {r["name"]: r["day"] for r in queue_table.table(doc)}
-    return {"share": cells[SHARE], "mark_to_main": cells[MEDIAN], "hours": queue_table.WINDOW_H}
+    hours = (until - since).total_seconds() / 3600
+    if hours > queue_table.WINDOW_H:
+        raise Unread(f"`research queue stats` gathers the {queue_table.WINDOW_H} hours to a window's end, and this window "
+                     f"is {hours:.1f} h: --since gives a shorter one")
+    doc = queue_table.collect(**{"now" if live else "until": until.timestamp()})
+    if not doc.get("control"):
+        raise Unread("`research queue stats` didn't read the queue's loop (" + "; ".join(doc["errors"]) + ")")
+    cells = {r["name"]: r["day"] for r in queue_table.table(doc | {"day": f"{since.astimezone(UTC):%Y-%m-%dT%H:%M:%SZ}"})}
+    return {"share": cells[SHARE], "mark_to_main": cells[MEDIAN],       # a node's run directories are no part of these rows
+            "unread": [e for e in doc["errors"] if e.split(":")[0] not in queue_table.CPU_NODES]}
 
 
 def agents(text: str, reg: dict) -> dict:
@@ -391,7 +399,7 @@ def read(ns: argparse.Namespace, since: datetime | None, until: datetime | None,
             raise Unread("Linear gives people's asks as they stand now, and this window ends in the past; "
                          "`research msg linear audit --asks` reads them now")
         return asks(read_asks(now.timestamp()), now.timestamp())
-    out |= {"landing": row(lambda: landing(None if live else end)), "agents": row(agents_row),
+    out |= {"landing": row(lambda: landing(start, end, live)), "agents": row(agents_row),
             "machines": row(lambda: machines(start, end)), "asks": row(asks_row), "notes": notes}
     return out
 
@@ -420,8 +428,9 @@ def _rest(r: dict) -> list[tuple[str, str]]:
         return f"not read: {r[key]['not_read']}" if "not_read" in r[key] else text(r[key])
     hours = f"the {r['hours']:g} h to {pst(r['until'])}"
     return [
-        ("LANDING", cell("landing", lambda x: f"{x['share']}; mark to `main` {x['mark_to_main']} (`research queue stats`, the "
-                                              f"{x['hours']} h to {pst(r['until'])})")),
+        ("LANDING", cell("landing", lambda x: f"within 2 h of the mark, {x['share']}; mark to `main` {x['mark_to_main']} "
+                                              f"(`research queue stats`, {hours})"
+                                              + (f"; it didn't read: {'; '.join(x['unread'])}" if x["unread"] else ""))),
         ("AGENTS", cell("agents", lambda x: f"{x['running']}{' or more' if x['more'] else ''} running of {x['limit']}: "
                                             + ", ".join(f"{k} {n}" for k, n in x["lanes"].items()) + f" ({x['source']})")),
         ("MACHINES", cell("machines", lambda x: f"${x['usd']:,} spent, ${x['idle_usd']:,} of it on idle hours, {x['vms']} VMs, {hours}"
@@ -477,7 +486,7 @@ def line(r: dict) -> str:
                  f"{score(g['window'])}; {g['now']['off_track']} of {g['now']['open']} open off track; "
                  f"{'stalls not read' if 'not_read' in s else str(len(s['goals'])) + ' stalled'}"
                  + ("" if "not_read" in g["baseline"] else f". Since the baseline ({pst(d['baseline']['taken'])}): {score(g['baseline'])}"))
-    rest = [short("landing", lambda x: f"landing: {x['share']}"),
+    rest = [short("landing", lambda x: f"landing within 2 h of the mark: {x['share'].split(';')[0]}"),
             short("agents", lambda x: f"{x['running']}{' or more' if x['more'] else ''} of {x['limit']} agents running"),
             short("machines", lambda x: f"machines ${x['usd']:,}, ${x['idle_usd']:,} of it idle"),
             short("asks", lambda x: f"{x['off_track']} of {x['open']} asks off track")]

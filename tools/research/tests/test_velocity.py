@@ -29,7 +29,7 @@ def offline(monkeypatch, tmp_path):
     def no_pod(cmd, timeout=0):
         raise V.Unread("a test has no pod")
 
-    def no_landing(until):
+    def no_landing(since, until, live):
         raise V.Unread("a test has no queue table")
     data = tmp_path / "velocity.json"
     data.write_text(json.dumps({"baseline": str(A), "dumps": {}}))
@@ -150,22 +150,38 @@ def test_asks_off_track_are_the_audits_findings_on_the_asks_not_delivered():
     assert V.asks(rows, NOW.timestamp()) == {"open": 3, "off_track": 2, "kinds": {"parked": 1, "repeated": 1}, "issues": ["TOP-1", "TOP-4"]}
 
 
-def test_landing_is_read_only_from_a_queue_table_that_takes_a_windows_end(monkeypatch):
+def test_landing_is_the_queue_tables_long_window_started_at_the_readings_start(monkeypatch):
     from research import queue_table
 
-    monkeypatch.setattr(queue_table, "collect", lambda store_root=None: pytest.fail("a table with no window's end is not read"))
-    with pytest.raises(V.Unread, match="can't yet end its windows"):
-        V.landing(NOW)
+    def stamp(t: datetime) -> str:
+        return f"{t:%Y-%m-%dT%H:%M:%SZ}"
+
+    def landed(t: datetime, pr: int, head: str) -> dict:
+        return {"action": "advance", "at": stamp(t), "sha": head * 40, "shadow": False, "done": True, "members": [pr], "heads": [head]}
+
+    def marked(t: datetime) -> list[dict]:
+        return [{"key": "ready", "value": True, "by": "x", "ts": stamp(t)}]
+    # two landings in the table's 24 hours: one 8 h ago, 30 min after its mark, and one 2 h ago, 5 h after its mark
+    early, late = NOW - timedelta(hours=8), NOW - timedelta(hours=2)
+    doc = {"day": stamp(NOW - timedelta(hours=24)), "errors": ["vy-nebius-cpu-3: no answer in 100 s", "gh pr list: no list of open PRs"],
+           "check_nodes": [], "off_gate": [], "nodes": {}, "open": {}, "lean": {},
+           "control": {"decisions": [landed(early, 1, "a"), landed(late, 2, "b")], "ticks": [], "args": "", "executor": []},
+           "labels": {"1@a": marked(early - timedelta(minutes=30)), "2@b": marked(late - timedelta(hours=5))}}
     asked = []
 
-    def collect(store_root=None, until=None):
-        asked.append(until)
-        return {"now": until}
+    def collect(store_root=None, now=None, until=None):
+        asked.append((now, until))
+        return doc | {"now": until or now}
     monkeypatch.setattr(queue_table, "collect", collect)
-    monkeypatch.setattr(queue_table, "table", lambda doc: [{"name": V.SHARE, "day": "9 of 10 landed (90%)"},
-                                                           {"name": V.MEDIAN, "day": "p50 40, p90 110 min (n=10)"}])
-    assert V.landing(NOW) == {"share": "9 of 10 landed (90%)", "mark_to_main": "p50 40, p90 110 min (n=10)", "hours": queue_table.WINDOW_H}
-    assert V.landing(None)["share"] and asked == [NOW.timestamp(), None]
+    six = V.landing(NOW - timedelta(hours=6), NOW, live=False)                # the table's own rows, over the reading's window
+    assert six == {"share": "0 of 1 landed (0%)", "mark_to_main": "p50 300, p90 300 min (n=1)", "unread": ["gh pr list: no list of open PRs"]}
+    assert V.landing(NOW - timedelta(hours=12), NOW, live=True)["share"] == "1 of 2 landed (50%)"
+    assert asked == [(None, NOW.timestamp()), (NOW.timestamp(), None)]         # a window that ended is cut there; one to now is not
+    with pytest.raises(V.Unread, match="gathers the 24 hours to a window's end, and this window is 40.3 h"):
+        V.landing(NOW - timedelta(hours=40.3), NOW, live=False)
+    monkeypatch.setattr(queue_table, "collect", lambda **kw: {"control": {}, "errors": ["vy-control-verity: no answer in 100 s"]})
+    with pytest.raises(V.Unread, match=r"didn't read the queue's loop \(vy-control-verity: no answer in 100 s\)"):
+        V.landing(NOW - timedelta(hours=6), NOW, live=False)
 
 
 def test_the_command_compares_two_dumps_and_exits_0_with_the_rows_it_cant_read_saying_so(offline, capsys):
@@ -215,6 +231,16 @@ def test_a_reading_now_saves_the_page_and_starts_from_the_newest_known_dump_at_t
     assert goals(st.fetch(saved["art"])) == goals(B) and st.get_manifest(saved["art"]).meta["taken"] == "20261110T0200Z"
     assert r["agents"]["lanes"] == {"top": 1} and r["asks"] == {"open": 0, "off_track": 0, "kinds": {}, "issues": []}
     assert any("the sweep's dumps not read" in n for n in r["notes"])
+    # the queue table's cells as the landing row and in the chat line
+    monkeypatch.setattr(V, "landing", lambda since, until, live: {
+        "share": "7 of 10 landed (70%); counting the 2 marked in the window and waiting over 2 h as misses, 58%",
+        "mark_to_main": "p50 95, p90 200 min (n=10)", "unread": []})
+    assert V.main(["--agents", str(listing), "--no-save"], now=NOW) == 0
+    out = capsys.readouterr().out
+    assert ("LANDING   within 2 h of the mark, 7 of 10 landed (70%); counting the 2 marked in the window and waiting over 2 h as "
+            "misses, 58%; mark to `main` p50 95, p90 200 min (n=10) (`research queue stats`, the 6 h to Mon 9 Nov 6:00 PM PST)\n") in out
+    assert V.main(["--agents", str(listing), "--no-save", "--line"], now=NOW) == 0
+    assert "Landing within 2 h of the mark: 7 of 10 landed (70%); 1 of 100 agents running; " in capsys.readouterr().out
     # a window that ended: the newest known dump at or before each end, and nothing saved
     assert V.main(["--since", "2026-11-09T06:00-08:00", "--until", "2026-11-09T12:05-08:00", "--json"], now=NOW) == 0
     r = json.loads(capsys.readouterr().out)
