@@ -5614,7 +5614,7 @@
     {"file": "verity/protocols/certifier/prover/served_statics.py", "count": 1},
     {"file": "verity/protocols/certifier/prover/window_charge.py", "count": 54},
     {"file": "verity/protocols/pouw/prover/circuit/__init__.py", "count": 16},
-    {"file": "verity/protocols/pouw/prover/circuit/anchors.py", "count": 15},
+    {"file": "verity/protocols/pouw/prover/circuit/anchors.py", "count": 13},
     {"file": "verity/protocols/pouw/prover/circuit/cap.circuit-check.py", "count": 16},
     {"file": "verity/protocols/pouw/prover/circuit/cap.py", "count": 270},
     {"file": "verity/protocols/pouw/prover/circuit/compile.py", "count": 3},
