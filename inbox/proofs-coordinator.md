@@ -96922,3 +96922,95 @@ the bound are premises. The two new statements have not been through Lean yet.
 
 - [run] `r20261112-191822-3496`, launched 19:18Z on vy-nebius-2 (a slot of the GPU pool, `--mem-gb 64`, GPU leases of at most 10 minutes, timeout 90 minutes, tree `cursor/circuits-cir265-scratch-6f04` at `e39ad449a67a`). Still circuits' scratch branch, zero rows, one instance and one `--zk` session a unit. Each unit is staged as in the first run except that its circuit binds its own partition object (`verity/partition/v1`: the query `Q_template_instance` v0 over the unit's Definition) and its own program digest (the Program of one instance of that Definition), so both pins are new. After both leases are released, off the card and inside a memory scope of 58 GiB, the Lean verifier runs once on each kept session (`verity bench prove lean-verify`), handed the circuit, the public file, the partition object and that Program; its seconds and peak memory are recorded beside the Rust session verifier's.
 - [run] A rehearsal of the same job on small units and the CPU prover, no GPU (`r20261112-191300-acbb`: the whole mask at 64 keys, positions at 512 keys), ended with the Lean verifier accepting both forms: this one under the label "accepted at --zk, the circuit's partition under verity/partition/v1" (its finding: units derived by `Q_template_instance` v0 over the verifier's Program), and the provisional unit cover under "accepted on the provisional unit cover, units as stated, the Program not held to the circuit". The run takes the first, the stronger. [guess] ETA about 19:50Z: staging about 9 minutes, both sessions about 3, then the Lean verifier, whose seconds on a 0.9 GB and a 4.2 GB circuit nobody has measured; the timeout is 20:48Z. If the Lean verifier's process passes 58 GiB on the whole mask its scope stops it, and the entry will say that (a stop, not a refusal).
+
+## MEMBERS, Thu 12 Nov 19:19Z: PRF-371 for top: (i-a) is proved and is already on soundness's branch, so nothing of it starts Mon 16 Nov; the 15 named, none a listed guarantee, five listed guarantees are proved through them and one of those must change its statement; `da94c22ec0` moves one rule of the closing round's Python; Fri 27 Nov stands
+
+Clock: `date -u` read 19:19Z before posting. Read only: no build, no run, nothing written to Linear or Slack. Refs fetched this hour [run]: `origin/main` `0582899c4392`; soundness's `cursor/soundness-multileg-8fb2` at `da94c22ec025` (merge base with `main`: `1a3eadc9c5b4`, Thu 07:01Z); lean's `cursor/lean-remote-merge-onmain-fc8d` at `e209a56847d4`. Tags: [run] a `git`, `gh`, `wc` or `grep` command of this hour; [read]; [derived]; [relayed]; [guess].
+
+### 1. (i-a): the size held, and the work is done, not waiting to start
+
+- [run] **(i-a) is proved, and your record of it is one commit behind.** `354001af85dd` holds the statement and its proof (my 08:01Z entry: both elaborate, three axioms only, runs `5e93` and `4f53`). It came out at 3 files, 514 lines, 17 theorems (`Window/Unbound.lean` 248 and 4, `UnboundMember.lean` 122 and 6, `UnboundLaid.lean` 144 and 7; `wc -l`, `grep -c`). The size on record was 2 files, 400 to 600 lines, 12 to 18 theorems: the lines and theorems held, one file more. With `Window/UnboundChecked.lean` (66 lines, 3 theorems, at `f9f1d7b2f7f6`, elaborated in `34da`) it is 4 files, 580 lines, 20 theorems.
+- [run] **It is on soundness's branch at `main`'s paths already.** At `da94c22ec025`, `security/Proofs/Properties/Verity/Sampled/Window/UnboundMember.lean` and `UnboundLaid.lean` are my bytes; `Unbound.lean` differs in 9 lines (it imports `Window.Read` and `Sampled.Instance`, reads `ConstsOpen (.one r)`, and casts by `Fin.append_left` and `Fin.append_right`). `UnboundChecked.lean` is not there; soundness took moving it (my mailbox, 13:49Z) and I am content with that [relayed].
+- [read] **(i-b) is done on it too**: `WindowInstance.claimTransfers : I.ClaimReads K → I.ClaimTransfers K` (`Window/Instance.lean:455`), on `UnboundWrong.card_le`. [relayed] It passes `check.py` with the committed records there (soundness's notes, run `de45`, not rerun by me).
+- **What it waits on today** [read]: nothing of its own. Its conclusion is used only under `ClaimReads` (`Window/Instance.lean:440-447`), one of four hypotheses left on `remote_soundness_window`; that is section 7 and S7 of my 05:46Z entry, not (i-a). It waits on a pull request: [run] no pull request has `cursor/soundness-multileg-8fb2` as its head (`gh pr list --head`), and its files import `Window/Read.lean` and `Properties/Verity/WindowFiles.lean`, which are not on `main`.
+- **The date, if I start Mon 16 Nov** [guess]: Mon 16 Nov, the same day, and only as a pull request stacked on soundness's window head: the day is one merge, `UnboundChecked.lean` moved, one records run and the suites. It cannot open against `main` alone before the window's files are there. I advise against a pull request of its own: three of its four files are already in soundness's branch and land with it.
+
+### 2. The 15 proofs through `checkBlobsAt_accept`
+
+[run] On `main` and at `da94c22ec025` alike: 15 uses in 11 files of `security/Proofs/Properties/` (`git grep -c`). **None of the 15 is a guarantee listed in a lock** (each name grepped over every `lean-audit.json` of the tree: no hit). Each is a lemma; lines are the declaration's on `main`.
+
+| # | theorem | file, lines | what it concludes of an accept | form |
+|---|---|---|---|---|
+| 1 | `Properties.Remote.SecurityProofs.stage_zk_at` | `Remote.lean` 299-321 | v1's `checkAt` accepts on a run's verdicts | A |
+| 2 | `Verity.Sampled.checkBlobsAt_popHeld` | `Verity/Sampled/Event.lean` 145-164 | `popHeld` passed | A |
+| 3 | `Verity.Sampled.popHeld_of_checkBlobsAt` | `Verity/SampledRead.lean` 866-884 | the same statement as 2 | A |
+| 4 | `Verity.Sampled.checkBlobsAt_orderHeld` | `Verity/Sampled/LinkFirst.lean` 43-59 | `orderHeld` passed | A |
+| 5 | `Verity.Sampled.checkBlobsAt_checkAt` | `Verity/SampledDraw.lean` 353-368 | v1's `checkAt` accepts on some verdicts | A |
+| 6 | `Properties.Spot.Credited.credited_of_checkBlobsAt` | `Spot/Credited.lean` 240-343 | one session; its proved units are the draw's | B |
+| 7 | `Properties.Spot.Credited.population_of_checkBlobsAt` | `Spot/Credited.lean` 427-472 | the record's population is `p.own.pub`'s | B |
+| 8 | `Properties.Spot.Credited.units_of_checkBlobsAt` | `Spot/Credited.lean` 512-537 | `p.own.pub`'s units are `0 … n − 1` | B |
+| 9 | `Properties.Spot.SecurityProofs.checkBlobsAt_run` | `Spot/Tables.lean` 74-92 | `run p.own e.sessions …` returned | B |
+| 10 | `Verity.Sampled.checkBlobsAt_trees` | `Verity/Sampled/Link.lean` 113-132 | `treesHeld p.own` passed | B |
+| 11 | `Verity.Sampled.trees_of_checkBlobsAt` | `Verity/SampledRead.lean` 1243-1260 | the same statement as 10 | B |
+| 12 | `Verity.Sampled.Trees.accepted_trees` | `Verity/Sampled/Trees.lean` 375-395 | as 10, from `checkBlobs` | B |
+| 13 | `Verity.Sampled.checkBlobsAt_run` | `Verity/Sampled/Moves.lean` 367-407 | one session, `publicHeld`, `run p.own …` returned, all accepted | B |
+| 14 | `Verity.Sampled.Record.verdict_of_accepts` | `Verity/Sampled/Record/Accepts.lean` 257-346 | the one session's `verdictOf` is `.ok` | B |
+| 15 | `Verity.Sampled.Record.lengths_of_accepts` | `Verity/Sampled/Record/Accepts.lean` 347-406 | the one statement's files' lengths are under `2^64` | B |
+
+- [read] **Form A, five theorems: the statement holds of a per-member accept as written.** `checkMembersAt` and `membersRun` run the same `treesOf`, `orderHeld`, `popHeld` and v1's `checkAt` on the run's verdicts (`OneStageZk.lean:1232-1258` on `main`). Each gains a second case by the same unfolding.
+- [read] **Form B, ten theorems: the statement reads the one statement's own files, and a per-member accept has none.** The per-member parameters' `own` names no file (`membersParamsOfJson`: `circuit := ""`, `pub := ""`, `:825-831`). So each keeps its statement only under `p.members = none` (`checkBlobsAt_one`, `:1299`), and what a per-member accept gives in its place is another statement: S7's (`WindowAt`, `WindowReads`) and the walk for `runMembers` PRF-371's description names.
+- [derived: a walk of names over the text of `security/`, namespaces resolved by `namespace` and `open` lines; not the kernel's dependencies, so a lower bound] **Five listed guarantees are proved through them today**, with their `_honest` and `_nontrivial` forms; none is in a `deployed` list:
+  - `Properties.Remote.SecurityProofs.acceptComplies` and `acceptInferenceOnly` (lock `security/Properties`), through 1. Form A: they need the second case of `stage_zk_at` and nothing else.
+  - `Properties.Spot.SecurityProofs.tablesRegistered` (lock `security/Properties`), through 9. **Its statement must change before the lift** [read]: `TablesRegistered`'s second clause (`security/Properties/Spot/Tables.lean:36-40`) is over every `Params` and every accept of `checkBlobsAt`, and concludes `HoldsRegisteredTables p.own bs`, a circuit file on the blobs under `p.own.circuit`. At a per-member accept that name is empty, so the clause is false there [derived]. This is PRF-591, and it is a changed statement of a listed guarantee and its two witnesses.
+  - `Verity.Sampled.remote_soundness_deployedReady` and its `_honest` (lock `security`, on `main` since #8569), through 5, 9, 12 and 13. Its instance's parameters parse by `OneStageZk.paramsOfJson` today (`Verity/Sampled/Binding.lean:551-554`), which sets `members := none`. Once the deployed parse reads either form, where the one-statement chain gets `p.members = none` is soundness's to say, with whether the window theorem replaces this one or stands beside it.
+  - The other ten end, by that walk, at lemmas no listed guarantee uses yet: they are toward the one-statement form's open premises.
+- **Size of the whole** [guess, on these counts]: 14 to 16 files, 250 to 450 lines, 15 theorems proved again and 5 to 8 new lemmas.
+  - One new file of the per-member accept's shape (the case split of `checkBlobsAt` by form; `checkMembersAt`'s accept gives `membersRun … = .ok r`, `r.all` and v1's accept): 60 to 100 lines, 4 to 6 theorems. `OneStageZk.lean` has no room for it (1,936 of 2,000 lines at the lever's head).
+  - Form A: 10 to 20 lines each in 5 files.
+  - Form B: one hypothesis each, and [derived, the same walk] 24 lemmas above them in 11 files take an accept of `checkBlobsAt` and must pass it on, two to six lines each, up to where the parse gives it.
+  - `TablesRegistered` and its witnesses: 2 files, 60 to 120 lines (PRF-591's).
+  - Not in this size: the per-member statements that stand in for form B. They are S7, on record at 3 to 4 files, 700 to 1,200 lines, 30 to 50 theorems [guess, my 05:46Z].
+
+### 3. Soundness's window branch at `da94c22ec025`, read against `main`
+
+[run] 108 files, +16,852 −1,064 against its merge base; 15 files outside `security/Proofs`. The three fixes (`38343c38e4..da94c22ec0`) are 12 files, +554 −302.
+
+- **(i-a): not moved.** [run] The three fixes touch none of `Window/Unbound*.lean`. [read] They change what stands around it: `ClaimReads.reads` is now asked only where every member's roots fix their domains (`Window.RootsFix`), and the window's δ pays each member's roots term, drawn or not (`Window.rootsErr`). That closes the second half of question 2 of my 08:01Z comment. `sha512Msg_eq` is proved, by definition, and the two definitions stay.
+- **The 15: not moved.** [run] The same 15 in the same 11 files. The branch changes two of the 11 (`SampledDraw.lean`, `SampledRead.lean`, 12 lines), in no hunk of a theorem of the table.
+- **The closing round outside Lean: moved, by one rule.** [read] `Challenger.membersOrder` now reads every line of a tree, the `coin-tree` line that samples it as well as each `tree-open` line (`memberLine`), and a tree is closed by round `CLOSING_ROUND` of its stream `session`, not by any later round of that stream. On `main` the rule is #9199's older one, in Lean and in Python (`challenger.py:1118-1152`, `_open_of`).
+  - [run] So their branch stops against `main` in `verity/protocols/spot/device/challenger.py` (and in `verity/protocols/pous/lean/TRUSTED.sha256`); `ChallengerTrees.lean` merges.
+  - [derived, not run] The driver need not change: it runs one session at a time and asks each closing round before it submits the next (`member_trees.py`, `a5.py:913-926`, `verify_ahead=0`), so a session's tree is sampled after the closing round before it.
+  - [derived] **Nobody has run #9199's fixture or its `members_order` rows on a tree that holds both**: soundness's suites ran at a merge base before #9199 landed. That run is owed before their branch is marked.
+- [run] **It stops against PRF-585's head, the lever's and the statement's in one file**, `Spot/OneStageZk.lean`: one hunk of the module docstring, where both reword the per-member paragraph. Whoever lands second merges text only.
+- [run] `gh` shows #9375 open with no label at 19:13Z, and #9230 (the twin) open at `7528097f5ff7`.
+
+### 4. The closing round outside Lean: CLOSEROUND's size
+
+[run] Nothing I know changes it going forward except section 3's rule; the size itself is overtaken. It is on `main` as #9199 (`aad6c48487`): 23 files, +1,481 −63. Of that, 745 changed lines of Python in 10 files outside tests, 641 of tests in 7 files, and the Lean command `Spot/MembersRefusal.lean` at 143 lines. The size on record was 8 to 10 files, 800 to 1,000 lines of Python and a Lean command of 60 to 100 lines. What section 3 adds [guess]: 40 to 80 lines in `challenger.py` and the two `test_member_trees.py` files, and the fixture's run on the merged tree.
+
+### 5. Fri 27 Nov
+
+[guess] Yes, Fri 27 Nov is still the earliest day I can name for a first accept, because S7 (the form's acceptance giving `WindowAt`, `WindowReads` and `ClaimReads`) is not started and sits behind PRF-585, the lever, PRF-586 and PRF-591 in my one queue; the one thing that would move it earlier is a second worker of ours starting S7 now, on a branch that merges `da94c22ec025` with PRF-585's head, without waiting for either to land.
+
+### 6. Your ruling on PRF-586: refused, one value one tree
+
+[read] It breaks no honest case I know. Read at lean's head `e209a56847d4`:
+- The scan's record has `roots` and no `registered` list at all: `R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, …)` with no `registered=` (`benchmarks/network_traces/scan_zk.py:1478`).
+- One-stage's own-root reads are named `committed/<member>/<port>`, never a port's own name (`verity/commitments/windows/rows.py:935-939`, `own_value`).
+- The certifier's services' records are not registration records: `boundary.py:136` and `served_rows.py:122` write neither list.
+- The adapter's registration log writes `registered` with `roots: []` (`adapters/vllm/verity_vllm/pipeline/registration_log.py:88`).
+- [run] The tree's three JSON files that hold a registration record (`git grep -l '"leaf_layer"'`) hold none with both lists.
+- Not read: a served window's record at a real program (`rows.write`), where `registered` holds the program's parameters' names and `roots` the members' `<member>/<port>`. A clash there needs a parameter named as a member's port.
+
+[derived] So `Named` in `Spot/MembersNamed.lean` becomes "a port of `roots` or a value of `registered`, not both", and the check refuses a record with a value in both by its name. I change the statement with PRF-586's code, after PRF-585's and the lever's pull requests.
+
+### 7. For PRF-490: `read`, `consts` and `trace` are not the acceptance theorem's
+
+[read, at `da94c22ec025`] I see them otherwise. None of the three reads a session's transcript, and none can follow from `MemberForm.Accepted`, which is a fact of one accepted play's log: `ClaimReads.reads` has no play among its hypotheses. It is asked at every strategy `σ`, wherever `I.windows θ F = some W` and `W.RootsFix` (`Window/Instance.lean:444-447`). Acceptance enters only through `SetsUp`, which `WindowAt` gives from an accepting play (`:499-503`).
+- **`read`** (`r = m.fileRead`): a consequence of `SetsUp`, once `SetsUp` says it. The one-statement `SetsUp` has the clause as a field (`read : V.read θ F = A.fileRead`, `Sampled.lean:693`). The window's `SetsUp` is a bare field of `WindowInstance` with two consequences, `lb` and `members` (`Window/Instance.lean:127-135`), so nothing written gives it. It reads the base's `Vocab.read` at `θ` and `F` and each member's tags, circuit file, tables and public file. It is the port's, ours, with `WindowAt`: PRF-585's `membersRun_files` gives that every member's statement reads on the blobs, which is what that clause needs of an accept.
+- **`consts`** (`ConstsOpen (.one r) op`): a consequence of something written, and of no acceptance. `Vocab.Opens` is defined to hold of a registered constant exactly at its constant (`security/Properties/Verity/Game.lean:784-790`; `Vocab.opens_const`, `Proofs/Properties/Verity/Soundness.lean:342`). At a window it needs only that a member's part of the window's read keeps its constants (`constsWith`, `security/Properties/Verity/WindowFiles.lean:148-150`): one lemma over soundness's `WindowFiles`.
+- **`trace`** (`HEq tr (m.transcript Xv)`): a consequence of nothing written. Its "transcript" is the trace the extractor gives a strategy, not what a session sent. The one-statement form makes it true by definition: its deployed vocabulary sets `extract := I.extractOf K` (`Sampled/Instance.lean:404-412`), and `Deployed.extract` is that. `WindowInstance.vocab` sets no `extract` (`Window/Instance.lean:340-353`), so `reads` asks it of the base's, a variable. It closes by defining the window vocabulary's `extract` as the members' transcripts at `memberX (K.project …)`, side by side: soundness's definition, question 5 of my 08:01Z comment.
+
+### Next
+
+Item 2 of your 19:00Z turn: the four runs, then PRF-585's merge, both merge-trees against `main` and `origin/cursor/lean-remote-merge-onmain-fc8d`, its pull request and ready line; then the lever's.
