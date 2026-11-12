@@ -31,15 +31,23 @@ or expiry. No directory above it is named as a run id: a run inside another run'
 is the newest mtime of the directory and of every directory and file under it (`_last_write`: one scandir and lstat walk that
 follows no symlink). The record never expires before the custody key its runner publishes with does (`<request
 dir>/custody/cred.json`, which the runner deletes when it is done), so not while that runner may still be publishing, which it
-does after the status is final. A run that waits in a slot line is `running`, and one still queued has no job.json, so neither
-has a record. A run directory whose status, files or custody key can't be read has no record either: it is listed as invalid
-with what could not be read, since whether it may go is unknown, and is never deleted.
+does after the status is final. A run that waits in a slot line is `running`, and one still queued has neither a job.json nor
+a refused.json, so neither has a record. A run directory whose status, files or custody key can't be read has no record either:
+it is listed as invalid with what could not be read, since whether it may go is unknown, and is never deleted.
+A launch that was refused before it ran gets the same record, though it wrote no job.json and no status.json. Its directory
+is named as a run id and holds a refused.json that names it, which a refusal writes last. What shows that it is a run directory
+of this machine is the request beside its runs root, `<runs root>/../REQUESTS/<run id>/request.json`, which names the run id and
+that runs root; so the record's node is this host, and its owner is `runner`. Where its launch.json records a runner, that
+host is this one and no process of this host's table has the runner's pid: launch.json records no start time, so a pid that
+some process has now is not known gone, and the directory has no record until it is. The custody key is looked for in that
+request's directory. A directory that holds nothing is a claim, whose launch may still be starting, and never has a record; nor
+does one whose refused.json or request is missing, names another run or another runs root, or is not a JSON object.
 gc deletes these runs only with --unpreserved-runs: without it a pass lists them apart and leaves them, so a machine's first pass
 can be read before anything goes. It never takes one whose clone still stands (CLONES: `<runs root>/../scratch/<run id>`, where
 `research run --cwd clone` ran it on a machine): what removes a run's clone decides that its run is over from the run directory's
 launch.json and status.json, so the clone goes first and the run directory at a pass after; until then gc lists the run with that
 reason. `research keep RUNDIR ...` before the 7 days are over keeps a run, and so does preserving it
-(`research data custody RUN --publish`).
+(`research data custody RUN --publish`), which a refused launch, having run nothing, has no way to.
 
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
@@ -118,9 +126,12 @@ UNPRESERVED = "unpreserved"
 IMPLICIT = {"custody": ".custody", UNPRESERVED: "unpreserved run"}
 #: The directory beside a machine's runs root that holds its runs' clones, `<CLONES>/<run id>` (`clone.home`).
 CLONES = "scratch"
+#: The directory beside a machine's runs root that holds its launches' requests, `<REQUESTS>/<run id>/request.json`
+#: (`remote.stage_request`).
+REQUESTS = "requests"
 #: The line the report and gc print above the unpreserved runs, which they list after every other path.
-UNPRESERVED_HEAD = (f"unpreserved runs (ended, and custody did not preserve them: each directory is its run's only copy, and expires "
-                    f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write):")
+UNPRESERVED_HEAD = (f"unpreserved runs (ended, or refused before they ran, and custody did not preserve them: each directory is its "
+                    f"run's only copy, and expires {UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write):")
 DEFAULT_ROOT = Path("/workspace")
 DEFAULT_JOBS_DIRS = (Path("/workspace/pouw/fill/queue"), Path("/workspace/pouw/fill/running"))
 POLICY = "default/v0"
@@ -323,19 +334,52 @@ def _ended(run_dir: Path, host: Any) -> str | None:
     return state if state in EV.ENDED else None
 
 
+def _in_runs_root(d: Path, runs_root: Any) -> bool:
+    """Whether `runs_root`, as a record of the run of `d` names it, is the directory `d` lies in."""
+    return isinstance(runs_root, str) and os.path.isabs(runs_root) and os.path.realpath(runs_root) == os.path.realpath(d.parent)
+
+
+def _refused_launch(d: Path) -> tuple[str, str] | None:
+    """(this host, its request file) when `d`, which holds no job.json, is the directory of a launch that was refused before
+    it ran (module docstring); None for any other. `evict.Unestablished` or OSError when one of the records that say so can't
+    be read."""
+    request = d.parent.parent / REQUESTS / d.name / "request.json"
+    if not ids.is_run_id(d.name) or os.path.lexists(d / "status.json"):
+        return None
+    if EV._get(EV._doc(EV._text(d / "refused.json")), "run_id") != d.name:
+        return None
+    req = EV._doc(EV._text(request))
+    if EV._get(req, "run_id") != d.name or not _in_runs_root(d, EV._get(req, "runs_root")):
+        return None
+    host, launch = socket.gethostname(), EV._doc(EV._text(d / "launch.json"))
+    if launch is not None:
+        pid = launch.get("runner_pid")
+        if launch.get("hostname") != host or not isinstance(pid, int) or isinstance(pid, bool) or not (PROC / "1" / "stat").is_file():
+            return None
+        if EV._quiet(lambda: os.lstat(PROC / str(pid))) is not None:
+            return None
+    return host, str(request)
+
+
 def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
-    """The record of an ended run that custody did not preserve (module docstring), given that `.custody` doesn't say preserved;
-    None for a directory that is not such a run's. RecordError when it is a run directory and what decides whether it may go
-    can't be read: its status, something under it, or its runner's custody key."""
-    run_id, runs_root, host = EV._get(job, "run", "id"), EV._get(job, "run", "runs_root"), EV._get(job, "environment", "hostname")
-    if run_id != d.name or not ids.is_run_id(run_id) or not isinstance(host, str) or not host:
-        return None
-    if not isinstance(runs_root, str) or not os.path.isabs(runs_root) or os.path.realpath(runs_root) != os.path.realpath(d.parent):
-        return None
+    """The record of an ended run that custody did not preserve, or of a launch refused before it ran (module docstring), given
+    that `.custody` doesn't say preserved; None for a directory that is neither's. RecordError when it is a run directory and
+    what decides whether it may go can't be read: its status, the records of its launch, something under it, or its runner's
+    custody key."""
+    run_id, host, request = EV._get(job, "run", "id"), EV._get(job, "environment", "hostname"), EV._get(job, "run", "remote", "request")
     above = d.parents[:rel.count("/")]
     if os.path.lexists(d / CU.LAUNCHER_RECORD) or any(ids.is_run_id(a.name) or any(map(os.path.lexists, _places(a))) for a in above):
         return None
+    refused = None
     try:
+        if not os.path.lexists(d / "job.json"):
+            if (refused := _refused_launch(d)) is None:
+                return None
+            host, request = refused
+        elif run_id != d.name or not ids.is_run_id(run_id) or not isinstance(host, str) or not host:
+            return None
+        elif not _in_runs_root(d, EV._get(job, "run", "runs_root")):
+            return None
         if CU.has_custody(d)[0] or (state := _ended(d, host)) is None:
             return None
     except EV.Unestablished as e:
@@ -346,7 +390,6 @@ def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
         expires = datetime.fromtimestamp(math.ceil(_last_write(d)), UTC) + UNPRESERVED_RUN_EXPIRY
     except (OSError, OverflowError, ValueError) as e:
         raise RecordError(f"when {d} was last written can't be read ({e})") from None
-    request = EV._get(job, "run", "remote", "request")
     if isinstance(request, str):
         key = Path(request).parent / CU.DIR_NAME / CU.CRED_FILE
         try:
@@ -359,7 +402,7 @@ def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
                 raise RecordError(f"the expiry of the custody key {key} can't be read, so whether the runner of {d} still publishes is unknown")
             expires = max(expires, key_expires)
     created = _utc_or_none(EV._get(job, "run", "created_utc"))
-    ended = "its runner is gone" if state == EV.LOST else f"it ended {state}"
+    ended = "its launch was refused before it ran" if refused else "its runner is gone" if state == EV.LOST else f"it ended {state}"
     return {"schema": SCHEMA, "path": rel, "node": host, "owner": owner, "by": None, "created": fmt_utc(created) if created else None,
             "expires": fmt_utc(expires), "priority": PRIORITIES[0], "preserved": None, "regenerate": None,
             "why": f"no run custody ({ended}): this directory is the run's only copy, and it expires "
@@ -846,9 +889,10 @@ def _why_deletable(row: Row, found: Stored | None) -> str:
 
 
 def keeping(run_dir: Path) -> str:
-    """The two ways its lane keeps an unpreserved run's directory, as gc prints them for a run it has not deleted."""
-    return (f"to keep it: `research keep {run_dir} --owner @LANE --expires DATE --priority P`, or preserve it: `research data custody "
-            f"{run_dir.name} --publish`")
+    """The two ways its lane keeps an unpreserved run's directory, as gc prints them for a run it has not deleted; the first
+    alone for a refused launch, which has no job.json: it ran nothing that custody could preserve."""
+    keep = f"to keep it: `research keep {run_dir} --owner @LANE --expires DATE --priority P`"
+    return keep if not os.path.lexists(run_dir / "job.json") else f"{keep}, or preserve it: `research data custody {run_dir.name} --publish`"
 
 
 def _clone_first(run_dir: Path) -> str | None:
@@ -1471,9 +1515,9 @@ def main(argv: list[str]) -> int:
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
         ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store that says what became of a preserved path's "
                         "stored copy (default $RESEARCH_STORE or ~/.research/store; on a node, the node's: /workspace/research/store)")
-        ap.add_argument("--unpreserved-runs", action="store_true", help="take the unpreserved runs too: ended runs that custody did not "
-                        f"preserve, each directory its run's only copy, expired {UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its "
-                        "last write. Without it they are listed, apart, and left")
+        ap.add_argument("--unpreserved-runs", action="store_true", help="take the unpreserved runs too: ended runs, and launches refused "
+                        "before they ran, that custody did not preserve, each directory its run's only copy, expired "
+                        f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write. Without it they are listed, apart, and left")
         ap.add_argument("--json", action="store_true")
         ap.add_argument("--apply", action="store_true", help="delete; without it nothing is deleted and no remote is read. Exit 1 "
                         "when a deletion failed or a stored copy could not be asked about")
