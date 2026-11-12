@@ -7,7 +7,8 @@ the id `TokenSelect_v4{V}` selects from it, which is the id the class's egress r
 ``--units K`` makes the check the greedy select in K units, `GreedySelect_v1{V, N=V / K}`, which selects the same id.
 ``expect`` reads a ``two_stage.py second`` summary and says whether the run held, check by check: round 2 accepting
 the statements, the return's read at round 1's rows among them, and the stream's outcome accepted or refused by the
-two-stage form alone. ``--inline`` writes the class as a served vocabulary's is, its replay block the check's body
+two-stage form alone; ``expect --inputs`` holds a linked run whose interior registers the select's ``logits``, which
+the prover gives after the first stage's sample, to round 2's refusal by ``second-inputs`` alone. ``--inline`` writes the class as a served vocabulary's is, its replay block the check's body
 inlined. `TokenSelect_v4`'s body is chunks and a combine a token, which round 2 derives no wires from and whose record
 commits no return: ``second --unlinked`` runs it, and ``expect --unlinked`` holds that run to round 2's refusal of the
 wires. `GreedySelect_v1`'s body is one unit of each of its K templates a token, each wired row one chunk's output row,
@@ -17,12 +18,13 @@ check selects at the first request's second token, every request ends at its fir
 as an engine ends it, and all of them are the one stop class's, (P, T); ``first`` and ``second`` take the rule as
 ``--stop``. ``--logits`` (with ``--inline --units K``) commits the select's inputs beside the ids
 (`boundary_rows.Layout.logits`): each span's capture rows as rank 0's builder lays them out
-(`boundary_logits.Builder`), kept under ``private/`` beside the class, which `boundary_logits.load` opens.
+(`boundary_logits.Builder`), kept under ``private/`` beside the class, which `boundary_logits.load` opens and
+``second`` takes as ``--kept``: the interior then registers no value, and ``expect`` holds the run to no code.
 The window's run is the serve nonce's (``--serve``, `SERVE` unless given): a challenger host opens a run's root once,
 ever, so a first stage on one takes a nonce no run has used.
 
     python two_stage_small.py serve --out DIR [--v 128] [--outputs 4] [--spans 6] [--inline] [--units K] [--stop] [--logits] [--serve NONCE]
-    python two_stage_small.py expect SUMMARY.json [--unlinked]
+    python two_stage_small.py expect SUMMARY.json [--unlinked | --inputs]
 """
 from __future__ import annotations
 

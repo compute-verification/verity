@@ -72,6 +72,15 @@ gives its outcome (`prove`, `outcome_of`).
   sampled block reading row ``sample[i]·per + at[j]``, and so do the params. Where the record commits none, the
   return's port is verified at the interior's own root and round 2 refuses that read (``second-read``): the run
   reports it and exits 1. The serve's salts of those rows go to the prover's commitment alone: round 2 is handed none.
+* **The block's inputs.** A value the interior registers for a replay block's input is one the prover gives after
+  the first stage's sample, and round 2 refuses it (``second-inputs``) unless the verifier filled it or it is a table
+  read's opened row. Where round 1's record commits a parameter as a port (the select's ``logits``,
+  `boundary_rows.Layout.logits`), the design holds it as an input and no link (`interior_rows.inputs`): the interior
+  registers no value for it, the replay side opens the port from the rows and salts the serve kept (``--kept``,
+  `kept_port`, held to the record's root) and commits each port that reads it under the serve's salts at the rows
+  its units read, and the verifier's reads and the params name round 1's entry for it, as for the return. Where the
+  record commits none, the parameter is a link whose value the interior registers, and round 2 refuses the run by
+  ``second-inputs``.
 
 Until the class's request Definition lands, the replay block is `boundary_rows`' stand-in (one check template's
 instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this draws. An inlined
@@ -86,7 +95,7 @@ Usage::
         [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] [--rids IDS.json] [--firewall F] \\
-        [--unlinked] [--stop RULE]
+        [--unlinked] [--stop RULE] [--kept PRIVATE]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
 files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
@@ -95,7 +104,8 @@ registration registers as values, ``[[name, rows a sampled span, leaf type], ...
 REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows name; CAPTURE the replay's
 capture of the sampled spans; PARAMS.json the auditor's params; IDS.json the capture's request id for a span's engine
 id, where they differ; RULE the stop rule as JSON, ``{"ids": [...], "max_model_len": n, "outputs": T}``
-(`boundary_stop.Stop.of`). ``second`` writes under OUT2 the interior window (``interior/``, its private files too), the
+(`boundary_stop.Stop.of`); PRIVATE the directory the serve kept the select's inputs in, for a class whose record commits
+them. ``second`` writes under OUT2 the interior window (``interior/``, its private files too), the
 params (``proofs.json``, ``references/``), a5's records (``audit/``), the sessions' statements (``statements.json``),
 its challenger session's records (``challenger/``), both stages' coin evidence (``coins.json``) and ``summary.json``;
 it exits 0 when the second stage held (`held`). A ``local`` session's challenger reads its coins through
@@ -125,7 +135,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
 from verity.commitments.windows import links as LK, rows as CS
-from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, interior_rows as IR
+from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
+from verity_vllm.pipeline import interior_rows as IR
 
 HERE = Path(__file__).resolve().parent
 FORMAT = "verity-vllm/two-stage/stage1/v0"
@@ -499,9 +510,11 @@ class Design:
     block (``cells``, the stream's); the block's parameters its templates' ports read, as the interior registers their
     values (``links``, `interior_rows.links`); its wires (`second_stage.replay_wires`); its returns (``returns``,
     `interior_rows.returns`: a template's output port, the name round 2 gives the block's return it writes, the row
-    each unit writes, and whether round 1's record commits it); and the rows its links' and wires' ports read
+    each unit writes, and whether round 1's record commits it); the rows its links' and wires' ports read
     (``rows``, `second_stage.replay_rows`), which say which of a writer's units a block each unit of a wired port
-    reads. The interior never registers a return: round 2 reads one only at a port round 1's record commits."""
+    reads; and its parameters round 1's record commits as ports (``inputs``, `interior_rows.inputs`: the port that
+    reads one and the row of round 1's port each unit reads), which are none of ``links``. The interior never registers
+    a return or such a parameter: round 2 reads each only at a port round 1's record commits."""
 
     key: str
     members: tuple[CS.Member, ...]
@@ -510,6 +523,7 @@ class Design:
     wires: tuple[SS.Wire, ...]
     returns: tuple[IR.Return, ...]
     rows: tuple[SS.Rows, ...] = ()
+    inputs: tuple[IR.Input, ...] = ()
 
     def window(self, boundary: str, sample: Sequence[int]) -> CS.Binding:
         """The interior window of the replay sample ``sample`` after the boundary registration ``boundary``
@@ -536,15 +550,16 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
                          f"{SS.WIRES_WHY}")
     links = IR.links(layout.program, key, record, members, cells)
     return Design(key, members, cells, links, tuple(wires), IR.returns(layout.program, key, record, members, cells),
-                  SS.replay_rows(layout.program, key))
+                  SS.replay_rows(layout.program, key), IR.inputs(layout.program, key, record, members, cells))
 
 
 def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
             proof_deadline: float = PROOF_DEADLINE_S) -> Rule:
     """The class's rule from its `design`: the interior values the replay side commits (its templates' ports as an
     interior window lays them out) and the replay block's parameters its interior registers as values
-    (`interior_rows.span_values`, sized by the class: its rows a sampled span). A class round 2 derives no wires from
-    has its templates' ports alone (`design`'s ``unlinked``): its first stage samples as any class's does."""
+    (`interior_rows.span_values`, sized by the class: its rows a sampled span), which are none where the class's record
+    commits every parameter its templates read. A class round 2 derives no wires from has its templates' ports alone
+    (`design`'s ``unlinked``): its first stage samples as any class's does."""
     d = design(layout, unlinked=True)
     w = d.window("00", [0])
     return Rule(replay, k, tuple(v for m in w.members for v in interior_values(m)), proof_deadline,
@@ -588,6 +603,26 @@ def spans_of(c: BR.Committed, capture: Path, sample: Sequence[int],
     return per, launches
 
 
+def kept_port(c: BR.Committed, value: str, kept: Path | None) -> LK.Port:
+    """The port ``value`` of the class's record as the serve kept its rows and salts under ``kept``
+    (`boundary_logits.load`, which recommits them), held to the root the class committed for it: the class's own
+    files hold that value's root alone. ValueError where the class commits no such value of the select's inputs, no
+    directory is given, or the kept rows are of another width or domain, or under another root, than the class's."""
+    L = c.layout
+    if not L.logits or value != L.logits_port:
+        raise ValueError(f"{value!r} is not the select's inputs the class's record commits: nothing keeps its rows")
+    if kept is None:
+        raise ValueError(f"the class's record commits {value}: the replay side opens its rows from the directory the "
+                         "serve kept them in (--kept)")
+    port = BL.load(kept, c.window, L.run, L.prompt, L.outputs, L.held if L.stop is not None else None)
+    if (port.value, port.words, port.domain) != (value, L.words(value), L.domain(value)):
+        raise ValueError(f"{value}: the kept rows are {port.value!r}'s, {port.leaves} of {port.words} words, not the "
+                         f"class's {L.leaves(value)} of {L.words(value)} in its domain")
+    if port.root != c.roots[value]:
+        raise ValueError(f"{value}: the kept rows and salts recommit to another root than the class's")
+    return port
+
+
 @dataclass
 class Replayed:
     """A class's interior, registered on its stream and sampled: its first stage (`resume`), the class's design, the
@@ -611,20 +646,25 @@ class Replayed:
 
 
 def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, window_root: str | None = None,
-             rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False) -> Replayed:
+             rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False,
+             kept: Path | None = None) -> Replayed:
     """The replay side's half of the second stage, on the class's stream at the end of its first stage (``again``,
     `resume`): the sampled spans' proof blocks from ``capture`` (`spans_of`), committed as the interior
     (`interior_rows.interior`: each replay-block parameter a port reads registered as a value, under ``window_root``;
     each output that writes a return round 1's record commits under the serve's salts at round 1's rows, opened from
-    ``c``), written under ``directory`` as the one-stage audit reads a window (`interior_rows.write`), registered on the stream
+    ``c``; each port that reads a parameter round 1's record commits the same way, opened from ``kept``), written under
+    ``directory`` as the one-stage audit reads a window (`interior_rows.write`), registered on the stream
     after the boundary registration, and sampled: ``k`` proof blocks in each (replay block, template) cell, on the
     stream's coins committed to the registration's digest. ``c``: the class's commitment, reopened from its files
     (`boundary_rows.reopen`), whose spans say which requests were sampled and what the serve emitted for them, and
     whose salts open the return's rows.
     ``window_root``: the open root of the challenger session the second stage's coins come from. ``salt_key``: tests
     only. ``unlinked``: a class round 2 derives no wires from is committed with no link and no wire (`design`).
-    ValueError where the class has no second stage (`design`), the capture isn't the sampled spans', or a replayed
-    unit returns another row than round 1 committed for it. `service.Refused` as the stream refuses the registration."""
+    ``kept``: the directory the serve kept the rows and salts of the select's inputs in (`boundary_logits.load`'s),
+    for a class whose record commits them: the rows are held to the record's root before anything is committed.
+    ValueError where the class has no second stage (`design`), the capture isn't the sampled spans', the class's record
+    commits a parameter and ``kept`` doesn't hold it at that root, or a replayed unit takes or returns another row than
+    round 1 committed for it. `service.Refused` as the stream refuses the registration."""
     if {k: v for k, v in c.public().items() if k != "seconds"} != {k: v for k, v in again.pub.items() if k != "seconds"}:
         raise ValueError("the class's files are not the commitment its first stage registered")
     d = design(again.layout, again.record, unlinked=unlinked)
@@ -632,7 +672,8 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
                      wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key,
-                     returns=[(x, c.port(x.value)) for x in d.returns if x.held])
+                     returns=[(x, c.port(x.value)) for x in d.returns if x.held],
+                     inputs=[(x, kept_port(c, x.value, kept)) for x in d.inputs])
     record = IR.write(it, directory)
     tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
            **({} if window_root is None else {"window_root": window_root})}
@@ -646,14 +687,15 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
     (``interior`` and ``boundary``), the class's design, the verifier's window and its own replay sample alone: a port
     a link names reads the value the interior registers under the link's name, at the root, leaves and domain the
     record gives it, unit j of sampled span s its row ``s·per + at[j]``; an output that writes a return round 1's
-    record commits reads that port of ``boundary``, at the root, leaves and domain that record gives it, unit j of the
-    i-th sampled block its row ``sample[i]·per + at[j]`` (`interior_rows.Return.rows`); a wired port its writer's
+    record commits, and a port that reads a parameter it commits, reads that port of ``boundary``, at the root, leaves
+    and domain that record gives it, unit j of the i-th sampled block its row ``sample[i]·per + at[j]``
+    (`interior_rows.Return.rows`, `interior_rows.Input.rows`); a wired port its writer's
     output port of the interior record, and any other its own, each unit its own leaf (`rows.Binding.held`). A return
     round 1's record doesn't commit is read at its own port too: round 2 refuses that read (``second-read``), and
     nothing here stands in for the port."""
     values = {e["value"]: e for e in interior.get("registered", ())}
     linked = {(x.template, x.port): x for x in d.links}
-    back = {(x.template, x.port): x for x in d.returns if x.held}
+    back = {(x.template, x.port): x for x in (*(x for x in d.returns if x.held), *d.inputs)}
     q, out = window.population // sum(d.cells), {}
     if len(sample) != q:
         raise ValueError(f"a replay sample of {len(sample)} for a window of {q} sampled spans")
@@ -687,15 +729,15 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     under a run of its own, whose fields round 2 places or blanks), bound to that window's partition and program as the
     sessions' circuits are, on zero rows, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its
     ``circuit.txt`` beside it, and its prover file is deleted. Its registered reads name none of the run's fields: each
-    port the value it reads (`verifier_reads`: a link's value, a return's that round 1 commits, else the port holding
-    it), its words and schema. Both are
+    port the value it reads (`verifier_reads`: a link's value, a return's or a parameter's that round 1 commits, else
+    the port holding it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
     first-stage law can draw; this command builds them after the sample, which is why its run is a development run."""
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
     bind = {"partition": window.partition_digest, "program": window.partition["program"]}
-    linked = {(x.template, x.port): x.value for x in (*d.links, *(x for x in d.returns if x.held))}
+    linked = {(x.template, x.port): x.value for x in (*d.links, *(x for x in d.returns if x.held), *d.inputs)}
     named = []
     for k, m in enumerate(window.members):
         at, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
@@ -1088,7 +1130,8 @@ def _second(a: argparse.Namespace) -> int:
             coins.plan(second_need(again.stream, len(sample)))
             again.coins.then = coins
             r = replayed(again, c, Path(a.capture), out / "interior", window_root=root,
-                         rids=json.loads(Path(a.rids).read_text()) if a.rids else None, unlinked=a.unlinked)
+                         rids=json.loads(Path(a.rids).read_text()) if a.rids else None, unlinked=a.unlinked,
+                         kept=Path(a.kept) if a.kept else None)
         except (S.Refused, Ch.CoinError, ValueError, OSError) as e:
             return done(1, refused=e.verdict.to_json() if isinstance(e, S.Refused) else f"{type(e).__name__}: {e}")
         finally:
@@ -1159,6 +1202,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--capture", required=True, help="the replay's capture of the sampled spans' sampler inputs "
                                                     "(engine.sampler_capture.write)")
     g.add_argument("--rids", help="a JSON object: the capture's request id for a span's engine id, where they differ")
+    g.add_argument("--kept", help="the directory the serve kept the select's inputs' rows and salts in "
+                                  "(boundary_logits.load), for a class whose record commits them")
     g.add_argument("--unlinked", action="store_true",
                    help="a class whose replay block gives round 2 no wires (refused without this): commit and prove its "
                         "sampled proof blocks with no link and no wire, each port at its own rows. Nothing then ties a "

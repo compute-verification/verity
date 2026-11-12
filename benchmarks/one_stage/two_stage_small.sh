@@ -4,9 +4,10 @@
 # then `first` (the boundary registration and the first stage on a local challenger session) and `second` (the interior,
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
 # Exit 0 when the second stage is what the class's record gives (two_stage_small.py expect). Round 1 commits the ids the
-# block returns as a port and the return's sessions read it at round 1's rows. The select's logits are a value the
-# prover registers after the first stage's sample, so everything holds but round 2's second-inputs, by which it refuses
-# the statements. Records under $OUT (never a circuit, a prover file, a
+# block returns as a port and the return's sessions read it at round 1's rows. Where it commits the select's logits
+# too (SMALL_ARGS with --logits), the interior registers no value, the sessions read them at round 1's rows and round 2
+# has no code. Where it doesn't, they are a value the prover registers after the first stage's sample, and everything
+# holds but round 2's second-inputs, by which it refuses the statements. Records under $OUT (never a circuit, a prover file, a
 # private body or salts, or a challenger's key or secret); a record over 63 MiB (a served vocabulary's public bodies and
 # written window, a challenger host's ledger) is not kept, and large.txt lists its SHA-512, size and path.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh
@@ -18,7 +19,8 @@
 #   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
 #   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances;
 #   adding --stop serves it under a stop rule, a stop class, which `first` and `second` take as --stop; adding --logits
-#   commits the select's inputs beside the ids, kept in the scratch serve's private/ (boundary_logits.load)
+#   commits the select's inputs beside the ids, kept in the scratch serve's private/ (boundary_logits.load), which
+#   `second` takes as --kept
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
 # RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
 # SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.
@@ -61,9 +63,10 @@ CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["chec
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
 RULE=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop", ""))' "$O/serve.json")
 STOP=(); [ -z "$RULE" ] || STOP=(--stop "$RULE")
-# a linked run whose record of round 1 doesn't commit the select's logits is refused by round 2's second-inputs
+# a linked run whose record of round 1 doesn't commit the select's logits is refused by round 2's second-inputs; one
+# whose record commits them opens the kept rows
 LOGITS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("logits", ""))' "$O/serve.json")
-INPUTS=(); [ -n "$LOGITS" ] || [ -n "${SMALL_INLINE:-}" ] || INPUTS=(--inputs)
+INPUTS=(); KEPT=(); if [ -n "$LOGITS" ]; then KEPT=(--kept "$LOGITS"); elif [ -z "${SMALL_INLINE:-}" ]; then INPUTS=(--inputs); fi
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --main "$O/main.txt" --out "$W/first" "${STOP[@]}" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
@@ -72,7 +75,7 @@ rc=0
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-  --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
+  --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
 RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -name index.json
