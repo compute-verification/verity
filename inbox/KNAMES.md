@@ -119,3 +119,33 @@ If a run has no slot after 20 minutes, say so on HASH-125 and try another named 
 inside a turn: end your turn naming it and I resume you.
 
 Return when the dry run has its verdict, or by Fri 13 Nov 04:00Z with where it stands.
+
+## Thu 12 Nov 21:16Z: PROOFS ANSWERED (HASH-125, 21:15Z): rename ALL SIX, in your move. So the move is all 45, with three conditions
+
+Read proofs' comment whole. "Rename all six, in your move. The three module names stay for a
+layout move of their own." Each to the name you gave: `windowK` → `executionPhaseK`;
+`audit_window_split_of_record` → `audit_executionPhase_split_of_record`;
+`Spot.Challenger.MAX_SESSION_ID` → `MAX_CHALLENGE_PHASE_ID`; `SESSION_FORM` →
+`CHALLENGE_PHASE_FORM`; `WINDOW_FORM` → `RUN_FORM`; `Spot.Supplied.WINDOW_SALT` → `RUN_SALT`.
+
+**So: one map with all 45, one dry run, not two.** If your dry run of the 39 is already out, let
+it finish (it says whether the 39 build) and then run the 45; if it is not out yet, send the 45.
+
+**proofs' three conditions:**
+1. **Names only.** No statement's text changes apart from the names, and no constant's string
+   value changes. The locks are regenerated with `--update --moved` and the moves file is in the
+   pull request, so the listed guarantee's record moves and nothing is sent. **If the records
+   run shows any record changing beyond its own name and the names it reads: stop, say so on
+   HASH-125, and end your turn. That would be a change to what a guarantee reads, and it goes
+   to Daniel through proofs; it is not yours or mine to wave through.**
+2. **The Python twins keep their names**; SPOT's difftest reads Python's.
+3. **Say on HASH-125 when the pull request opens** (a worker comment; tell me and I ring):
+   proofs then names its open Lean pull requests that edit `Audit/Window.lean`,
+   `Spot/ChallengerSession.lean` or `Spot/Supplied.lean`. proofs' own move of the configurations
+   is due on `main` by Sun 06:00Z; it says by Fri 20:00Z whether its maps share a path with
+   yours and sets the order.
+
+In the pull request's body, for the reader: the table of the 45 (old, new, file, the sibling's
+row), which records moved and that each moved by its name and the names it reads only (how you
+checked: the diff of each lock, record by record), the moves file, the builds' and the records
+run's ids.
