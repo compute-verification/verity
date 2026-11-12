@@ -30,4 +30,6 @@ inputs = ["verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verif
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
           "verity/commitments/randomness", "verity/commitments/lms/lean", "verity/commitments/attest/lean",
           "verity/protocols/interface",
-          "verity/difftest/lean", "verity/protocols/pous/verifier/tests/pous_test_signer.py"]
+          "verity/difftest/lean", "verity/protocols/pous/verifier/tests/pous_test_signer.py",
+          "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/commitments/attest/__init__.py",
+          "verity/protocols/pous/__init__.py", "verity/protocols/pous/device/__init__.py"]
