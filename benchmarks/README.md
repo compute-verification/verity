@@ -26,6 +26,7 @@ says. These are the directories that have one:
 | `verity bench flock_s8_block` | Flock `--zk`'s price for proof blocks of adjacent cells of one int8 GEMM output row, on one GPU node |
 | `verity bench int8_class_rate` | one card's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 |
 | `verity bench kv_filler` | the filler top-up beside vLLM serving on one GPU, and what it costs inference |
+| `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
 | `verity bench moe_align` | the canonical `moe_align_block_size` on one GPU: its outputs run to run, the plugin as vLLM loads it, and its cost |
 | `verity bench network_e2e` | network certification end to end on a served model, as one report with its negatives |
 | `verity bench network_sim` | the device graph's demo, and the mock datacenter of network namespaces running the real network certifier |
@@ -226,6 +227,14 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR, or a Boolean version (`F32Sqrt_v2`) against its word, on all 2^32 binary32 words | maintained |
 | `definitions/` | the GPU probes behind the numerics Definitions: the approximate instructions FlashAttention-2 and the RMSNorm kernel run (`MUFU` exp2, reciprocal, square root and tanh), measured on every 32-bit input | maintained |
 | `numerical/` | the bench spine (`verity_numerical.bench`) that Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
+
+### Landing
+
+How long the team's own changes take to reach `main`: measured on the verified queue's records, not on a protocol.
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `landing/` | mark to `main`: for each PR the verified queue landed in the last 7 days, the hours from its ready mark at the head that landed to the move of `main` that holds it, split as the queue batches (plain, Lean), each class's p90, median, count and share within 2 h | maintained |
 
 ### Census data
 
