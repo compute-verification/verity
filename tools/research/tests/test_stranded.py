@@ -432,3 +432,21 @@ def test_the_watch_raises_with_the_fix_only_when_no_machine_could_be_read(tmp_pa
     ctx = M.Ctx(now=T0, run=lambda argv, **kw: subprocess.CompletedProcess(argv, 0, json.dumps(one_down[argv[0]]).encode(), b"")
                 if isinstance(one_down[argv[0]], dict) else subprocess.CompletedProcess(argv, 1, b"", b"down"))
     assert [f.key for f in stranded.findings(ctx)] == [f"shut|{C}|*"], "one machine not read is a shut finding, never a raise"
+
+
+def test_a_machine_that_answers_too_late_is_one_shut_finding_and_the_other_machines_are_still_judged():
+    """Every machine is read at once, each under READ_S: a slow one costs a pass READ_S at most and holds no other finding."""
+    docs = quiet(**{A: machine(check=pool(slot("t", "0-95", held=True, trains=True, mem=520), waiters=(shard(),))),
+                    B: machine(check=pool(slot("t", "0-95", trains=True, mem=400)))})
+    asked = []
+
+    def run(argv, input=None, capture_output=True, timeout=None):
+        asked.append(timeout)
+        if argv[0] == C:
+            raise subprocess.TimeoutExpired(argv, timeout)
+        return subprocess.CompletedProcess(argv, 0, json.dumps(docs[argv[0]]).encode(), b"")
+
+    found = {f.key: f for f in stranded.findings(M.Ctx(now=T0, run=run))}
+    assert sorted(found) == ["check|r-shard", f"shut|{C}|*"] and asked == [stranded.READ_S] * 3
+    late = found[f"shut|{C}|*"]
+    assert late.for_s == stranded.SHUT_S and f"no answer in {stranded.READ_S} s" in late.text
