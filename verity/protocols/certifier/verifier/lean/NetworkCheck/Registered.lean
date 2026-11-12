@@ -1,9 +1,7 @@
 module
 
 public import CoreProtocol.Site
-import CoreProtocol.Registration
 meta import CoreProtocol.Site
-meta import CoreProtocol.Registration
 
 /-!
 # The network certifier's link and key, read from the registered hardware
@@ -107,11 +105,13 @@ def registered (S : Core.Site) (head link key : String) : V Registered := do
   if let some why := keyRefusal x key then throw s!"link {link}: {why}"
   pure { head, link := k.id, host, certifier := c, key := x.key, β := k.β }
 
-/-! ## The registration's example -/
+/-! ## The registration's example
+
+The locations and links of the registration's example (`Core.Registration.Example`), restated: this module reads the
+Site and not the registration. -/
 
 section Example
 
-open Core.Registration (Example.locs Example.links Example.sheet)
 open Core.Site (Loc Link outside)
 
 /-- A key in the registered form: 48 bytes in lower-case hex. -/
@@ -120,14 +120,29 @@ private def key0 : String := String.ofList (List.replicate 96 'a')
 /-- Another network certifier's. -/
 private def key1 : String := String.ofList (List.replicate 96 'b')
 
+/-- The example's locations, its certifier registering `key`: a host with a device and its memory, behind a network
+certifier, and a memory challenger. -/
+private def exampleLocs (key : String) : List Loc :=
+  [{ id := "site0", kind := .site }, { id := "node0", kind := .host, parent := some "site0" },
+   { id := "gpu0", kind := .device, parent := some "node0", sheet := "sheet0" },
+   { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := 1 <<< 30 },
+   { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key },
+   { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor, key := "k1" }]
+
+/-- The example's links: the host's uplink, which the certifier splits, and the memory challenger's link. -/
+private def exampleLinks : List Link :=
+  [{ id := "up0", ends := ("node0", "cert0"), β := 100, latency := 1 },
+   { id := "up1", ends := ("cert0", outside), β := 100, latency := 1 },
+   { id := "mc0", ends := ("chal0", "node0"), β := 10, latency := 1 }]
+
 /-- The example's site with its certifier's key in the registered form, and beside it a second host behind a second
 network certifier, a link between the two hosts and the second host's bare uplink. -/
 private def site : Core.Site :=
-  ⟨[Example.sheet],
-   Example.locs.map (fun x => if x.id == "cert0" then { x with key := key0 } else x) ++
+  ⟨[],
+   exampleLocs key0 ++
      [{ id := "node1", kind := .host, parent := some "site0" },
       { id := "cert1", kind := .certifier, parent := some "site0", owner := .auditor, key := key1 }],
-   Example.links ++
+   exampleLinks ++
      [{ id := "up2", ends := ("cert1", "node1"), β := 40, latency := 1 },
       { id := "up3", ends := ("cert1", outside), β := 40, latency := 1 },
       { id := "hh0", ends := ("node0", "node1"), β := 400, latency := 1 },
@@ -173,14 +188,14 @@ private def links : String := "the network certifiers' links there are [up0, up2
   some s!"link up0: the key {key1} is not network certifier cert0's registered key, {key0}"
 #guard refusal site "up2" "00" == some s!"link up2: the key 00 is not network certifier cert1's registered key, {key1}"
 -- a registered key that is not lower-case hex: the example's own, an upper-case one, an odd one, none
-#guard refusal ⟨[], Example.locs, Example.links⟩ "up0" "k0" ==
+#guard refusal ⟨[], exampleLocs "k0", exampleLinks⟩ "up0" "k0" ==
   some "link up0: network certifier cert0 registers the key k0, which is not lower-case hex; a network certifier \
     registers its LMS public key in lower-case hex"
 #guard ["AB", "abc", "", "0g"].all fun bad =>
-  (refusal ⟨[], Example.locs.map fun x => { x with key := bad }, Example.links⟩ "up0" bad).isSome
+  (refusal ⟨[], exampleLocs bad, exampleLinks⟩ "up0" bad).isSome
 #guard lowerHex "00ff19ae" && !lowerHex "00FF" && !lowerHex "0" && !lowerHex "" && !lowerHex "0x"
 -- the site as the log's view writes it: its locations and links, no sheet
-#guard (siteOf site.toJson).toOption == some { site with sheets := [] }
+#guard (siteOf site.toJson).toOption == some site
 #guard (siteOf (Json.mkObj [("links", .arr #[]), ("locs", .arr #[])])).toOption.isNone
 #guard (siteOf (Json.mkObj [("links", .arr #[]), ("locs", .arr #[]), ("sheets", .null)])).toOption.isNone
 
