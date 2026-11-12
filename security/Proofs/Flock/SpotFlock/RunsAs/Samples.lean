@@ -11,7 +11,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 
 A sample reads the bytes it is given in order (`Draw.take`) and stops when its law's draw ends, so a stage `Run.run`
 accepted on the challenger's bytes `ξ` samples the same on `ξ` followed by anything (`select_append`,
-`selectSecond_append`). The play's coins are the run's bytes followed by zeros (`PlayCoins`), so the model's replay sample
+`selectSecond_append`). The play's coins start with the run's bytes (`PlayCoins`), so the model's replay sample
 on round 0's coin is the units the run's first stage proves (`sample_pad`), and the model's second draw on the second
 stage's coins is the run's second draw (`secondDraw_pad`).
 -/

@@ -30,8 +30,6 @@ What the run does not decide, each a named premise of `SpotRunAcceptsPlay`:
   verdict of record (`flock-verify`'s) says, taken as given;
 * `ScopeHolds`: the held copies are in the two-stage scope the model decides (`two`: `scopeOk`, `filesOk`,
   `templateOk`), a property of the registration that `Run.run` does not check;
-* `Fits`: the challenger's bytes the run holds for each stage fit the model's coins for it (round 0's one coin, and
-  the second stage's `stage` coins).
 -/
 
 @[expose] public section
@@ -84,12 +82,6 @@ structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) :
 `Run.run` makes none of these checks; they read the members' circuits and the reference statements, which it does not
 hold. -/
 def ScopeHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
-
-/-- **Each stage's bytes fit the model's coins**: the challenger's bytes the run holds for the first stage
-(`i.source`) are at most `L`, the model's round-0 coin's, and those for the second stage (`it.source`) at most
-`stage · L`, its `stage` rounds' coins'. `Run.run` bounds neither. -/
-def Fits (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) : Prop :=
-  i.source.size ≤ L ∧ it.source.size ≤ h.stage * L
 
 /-! ## Round 2: the hand-off -/
 
@@ -147,14 +139,14 @@ def SessionsAccept (h : Held) (H : Msg → Msg) (ss : Array Json) (m₂ : Msg) (
 
 /-! ## The coins -/
 
-/-- **The play's coins are the bytes the run read**: round 0's coin is the challenger's bytes the first stage read
-(`i.source`) and then zeros, and the second stage's coins, coin by coin, those of the interior's (`it.source`) and then
-zeros. `RunCoinsFromDevice` says those bytes are the device's coins released after the boundary record's
-digest and after the interior record's, or a break. -/
+/-- **The play's coins start with the bytes the run read**: round 0's coin's bytes start with the challenger's bytes
+the first stage holds (`i.source`), and the second stage's coins', coin by coin, with the interior's (`it.source`).
+What follows is never read: each stage's select read only a prefix of its bytes. `RunCoinsFromDevice` says the bytes
+read are the device's coins released after the boundary record's digest and after the interior record's, or a
+break. -/
 def PlayCoins (h : Held) (i : Spot.Run.Input) (it : Spot.Run.Interior) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
     Prop :=
-  src c₀ = i.source ++ ⟨Array.replicate (L - i.source.size) 0⟩ ∧
-    stageSrc c₁ = it.source ++ ⟨Array.replicate (h.stage * L - it.source.size) 0⟩
+  (∃ t, src c₀ = i.source ++ t) ∧ ∃ t, stageSrc c₁ = it.source ++ t
 
 /-- **`b` is the start of `ξ`.** -/
 def Starts (b ξ : ByteArray) : Prop := b.size ≤ ξ.size ∧ ξ.extract 0 b.size = b
@@ -203,20 +195,20 @@ def RunCoinsFromDevice (key : Spot.Challenger.ChallengerKey) : Prop :=
 /-! ## The top statement -/
 
 /-- **A two-stage run `Run.run` accepts is a play `SpotFlock.V h` accepts** (the inner statement: the form's check,
-`VStar.Recursive.SampledTwo.checkBlobsAt`, computes the sessions' verdicts and then runs `Run.run`). At every held copy `h` that agrees with
-what the run reads, is in the model's scope and whose stages fit the model's coins (`Fits`): if `Run.run` accepted the
-two-stage run `i` with interior `it` (`AcceptedTwo`), `x` and `m₁` are the boundary and interior records' bytes, round
-2's check gives the model's checks (`RoundTwo`, part 3) and Flock accepts each template's session at the statement `m₂`
-states for it (`SessionsAccept`, part 4), then there are coins, round 0's and the second stage's the bytes the run read
-(`PlayCoins`), on which `SpotFlock.V h` accepts the play that sends `m₁`, then `m₂`, then each session's messages
+`VStar.Recursive.SampledTwo.checkBlobsAt`, computes the sessions' verdicts and then runs `Run.run`). At every held copy
+`h` that agrees with what the run reads and is in the model's scope: if `Run.run` accepted the two-stage run `i` with
+interior `it` (`AcceptedTwo`), `x` and `m₁` are the boundary and interior records' bytes, round 2's check gives the
+model's checks (`RoundTwo`, part 3) and Flock accepts each template's session at the statement `m₂` states for it
+(`SessionsAccept`, part 4), then on every round-0 coin and second-stage coins that start with the bytes the run read
+(`PlayCoins`), `SpotFlock.V h` accepts the play that sends `m₁`, then `m₂`, then each session's messages
 (`proverSeq`), each session on its own coins (`seqCoins`). -/
 def SpotRunAcceptsPlay : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (h : Held) (H : Msg → Msg) (x m₁ m₂ : Msg)
-    (P' : ℕ → Prover Unit) (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin),
-    AcceptedTwo i it j → HeldMatches i it h → ScopeHolds h → Fits i it h →
+    (P' : ℕ → Prover Unit) (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin)
+    (c₀ : FlockDeploy.Coin) (c₁ : Stage h),
+    AcceptedTwo i it j → HeldMatches i it h → ScopeHolds h →
     jsonMsg x = some i.record → jsonMsg m₁ = some it.record →
-    RoundTwo h → SessionsAccept h H ((it.statements).getD #[]) m₂ P' r' →
-    ∃ (c₀ : FlockDeploy.Coin) (c₁ : Stage h), PlayCoins h i it c₀ c₁ ∧
+    RoundTwo h → SessionsAccept h H ((it.statements).getD #[]) m₂ P' r' → PlayCoins h i it c₀ c₁ →
       (Claims.run H (proverSeq h [] m₁ m₂ P') (V h) x (fun _ => ()) (seqCoins h (x := x) c₀ c₁ r')).out = .acc
 
 end SpotFlock.RunsAs
