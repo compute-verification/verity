@@ -230,6 +230,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
                       "registered": reads[m.key]})
     links = SS.replay_links(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY), brec)
     wires = SS.replay_wires(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY))
+    rows = SS.replay_rows(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY))
     assert wires == tuple(SS.Wire(m.template, T.LAYOUT[t][0][0][0], win.members[w].template, "o0")
                           for t, (m, w) in enumerate(zip(win.members, T.WRITERS)) if w is not None)
     refs = tuple((e["template"], e["header"]) for e in proofs["templates"])
@@ -247,9 +248,9 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
         "session_tables": 1, **({} if s["registered"] is None else {"registered_sha512": sha512(s["registered"])})}
         for k, s in enumerate(stmts)})
 
-    def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires) -> dict:
+    def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires, rows=rows) -> dict:
         own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts),
-                     verified=verified, refs=refs, ref_reads=ref_reads, wires=wires)
+                     verified=verified, refs=refs, ref_reads=ref_reads, wires=wires, rows=rows)
         return SS.check(True, own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
     assert check(SAMPLE, ())["codes"] == ["second-header"]
@@ -258,6 +259,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     assert check(SAMPLE, refs, ())["codes"] == ["second-verified"]
     assert check(SAMPLE, refs, wires=())["codes"] == ["second-header", "second-read"]
     assert check(SAMPLE, refs, wires=None)["codes"] == ["second-wires"]
+    assert check(SAMPLE, refs, rows=())["codes"] == ["second-links", "second-wires"]
     assert "second-interior-order" in check(SAMPLE[::-1], refs)["codes"]
 
 

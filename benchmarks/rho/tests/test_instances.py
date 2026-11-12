@@ -1,7 +1,7 @@
 import math
 
 import pytest
-from rho import instances
+from rho import instances, params
 from rho.instances import RUN_KINDS, Run
 from rho.params import Registry
 
@@ -23,6 +23,28 @@ def test_the_matrices_add_up_to_the_stated_sizes(model):
 def test_legs_and_fanout_are_derived_from_the_matrices(m):
     assert m.legs == instances.derived_legs(m)
     assert m.fanout == instances.derived_fanout(m)
+
+
+@pytest.mark.parametrize("m", [m for m in shaped() if m.attention], ids=lambda m: m.name)
+def test_the_attention_matrices_are_the_ones_the_attention_table_implies(m):
+    assert tuple((x.d_in, x.d_out) for x in m.matrices["attention"]) == instances.attention_matrices(m)
+    assert {(x.copies, x.active) for x in m.matrices["attention"]} == {(m.layers, m.layers)}
+
+
+def test_models_are_every_model_of_the_registry():
+    models = instances.models()
+    assert sorted(models) == REG.names("model")
+    assert all(m == instances.model(REG, n) for n, m in models.items())
+    # only DeepSeek-V4-Pro's attention is of neither kind
+    assert [n for n, m in models.items() if not m.attention] == ["deepseek-v4-pro"]
+
+
+def test_the_widths_at_hand():
+    kimi, dense = instances.model(REG, "kimi-k2"), instances.model(REG, "dense-100b")
+    assert [instances.width(kimi, g) for g in ("dense", "experts", "shared", "router")] == [18432, 2048, 2048, 384]
+    # a GELU MLP has one matrix reading d_model, so its input's reach is its width
+    assert instances.width(dense, "dense") == instances.derived_fanout(dense) == 4 * 12288
+    assert instances.width(dense, "experts") == 0
 
 
 def test_the_per_layer_shape_at_hand():
@@ -70,6 +92,15 @@ def test_a_run_of_an_unknown_kind_or_no_size_is_refused():
     with pytest.raises(ValueError, match="tokens or compute"):
         Run("x", "kimi-k2", "pretrain")
     assert Run("x", "kimi-k2", "pretrain", tokens=1e12).target(instances.model(REG, "kimi-k2")) == 6 * 3.2e10 * 1e12
+
+
+def test_the_reference_run_is_the_census_models_and_the_work_reference_is_that_run():
+    """`run.v4-pretrain`'s ruled size is `6 · n_active · tokens` at the census's active parameters, to the digits it
+    is stated at, and the work reference `work.v4-pretrain` is the same run."""
+    run = instances.run(REG, "v4-pretrain")
+    assert run.model == params.WORLD_MODEL
+    whole = 6 * REG[f"model.{params.WORLD_MODEL}.n_active"] * REG["run.v4-pretrain.tokens"]
+    assert math.isclose(run.compute, whole, rel_tol=1e-3) and run.compute == REG["work.v4-pretrain.flops"]
 
 
 def test_every_instance_number_says_where_it_comes_from_and_how_sure_it_is():

@@ -1,11 +1,16 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Reg
+public import Proofs.Flock.Claims.Sampling.SessionSlots
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.ZkDecodeFlock
 public import Definitions.Claims.SamplingTwo
+public import Proofs.Flock.SpotFlock.ScopeFast
 public import Properties.Spot.Members
 public import Proofs.Flock.SpotFlock.Reveals
+public import Flock.Desc
+public import Flock.Comp
+public import Spot.SecondStage
 
 /-!
 # SPOT[Flock]'s two-stage verifier
@@ -17,49 +22,68 @@ registration's roots (`iroots`). This is the deployment layer: the compiler's th
 these definitions from the premises it names, and nothing here imports a proof. A running verifier is this one only
 where it makes every check below.
 
-**The auditor's copies** (`Held`), fixed before the run and never the prover's: the descriptor's bytes; the templates'
-circuit files and units (`ms`), whose lowerings side by side are the statement's program (`bitsProgs`) and whose units
-are its proof blocks (`membersPart`); the statement's partition query; the two-stage registration the samples read
+**The auditor's copies** (`Held`), fixed before the run and never the prover's: the descriptor's bytes; each template's
+units (`vus`), over which the members (`Held.ms`) put template `t`'s reference statement's circuit, whose lowerings side
+by side are the statement's program (`bitsProgs`) and whose units are its proof blocks (`membersPart`); the statement's
+partition query; the two-stage registration the samples read
 (`RegTwo`), whose proof block `blockOf ρ t p` the verifier checks is request `ρ`'s unit `p` of template `t`
 (`filesBlockOf`); the second
-stage's count per stratum; the registered reads the session must open against at a run's roots and interior roots
-(`registered`); the reference session statement (`xS₀`), in Flock's masked scope, which every session's statement is
-but for its sample and its registered reads; and the commitment's layout and the reference prover's framing (`frame`,
-a code whose verifier, samples and reveal count are unread).
+stage's count per stratum; the templates' names and the design's links, as round 2's statement check reads them
+(`names`, `links`); template `t`'s reference session statement (`xS₀ t`), in Flock's masked scope, which template
+`t`'s session statement is but for what the run sets (`pinOk`); template `t`'s reference registered reads (`refReads`),
+which its statement's are but for the run's fields; and the commitment's layout and the reference prover's framing
+(`frame`, a code whose verifier, samples and reveal count are unread).
 
-**The run's statement** (`Roots`): the roots the boundary values are committed under, as canonical bytes
-(`Roots.encode`, read back by `decode`, which keeps only bytes that encode back to themselves).
+**The run's statement** (`Roots`): the boundary registration's record, as JSON (`decode`), whose ports' roots are the
+roots the boundary values are committed under (`portRoots`).
 
-**The run**, `3 + k₀` rounds, `k₀` Flock's at `xS₀`:
+**The run**, one session per template, template `t`'s on `k₀ t` rounds (Flock's at `xS₀ t`) from round `off t`, and
+`off T + 1` rounds in all at `T` templates:
 
 * round 0: the verifier's coin is the first stage's bytes (the replay sample, `RegTwo.sample`);
-* round 1: the prover's message is the interior registration, the roots of each sampled replay block's interior
-  (`Interiors.encode`); the verifier's coin is the second stage's bytes (`Select.selectSecond`);
-* round 2: the prover's message is the session's statement `xS`, which the verifier checks (`stmtOk`): the run's
-  statement decodes and its partition and design evaluate, `xS` sets up as a masked Flock statement with `k₀` rounds,
-  in Flock's masked scope, in the scope Flock's soundness proof covers and with hidden outputs, and with `xS₀`'s table
-  shapes (`sessionOk`), its sample is the second stage's, its
-  registered reads are the auditor's at the run's roots and the interior registration's, and it is `xS₀` in every other
-  field (`pinOk`); it refuses `xS` otherwise;
-* rounds 3 on: Flock's masked verifier at `xS`, message for message, whose decision is the run's.
+* round 1: the prover's message is the interior registration's record, as JSON (`jsonMsg`): the roots of its ports,
+  whose cells hold the sampled replay blocks' interiors, and those blocks in the order its cells lay them out
+  (`window.replay_sample`, `blocksOf`); replay block `ρ`'s interior roots are its place in that order and the number
+  of blocks, then those roots (`irootsOf`); the verifier's coin is the second stage's bytes (`Select.selectSecond`);
+* round 2: the prover's message is the session statements, one per template in template order (`stmtsOf`), which the
+  verifier checks (`stmtOk`): the run's statement decodes and its partition and design evaluate, and template `t`'s
+  statement sets up as a masked Flock statement with `k₀ t` rounds, in Flock's masked scope, in the scope Flock's
+  soundness proof covers and with hidden outputs, and with `xS₀ t`'s table shapes (`sessionOk`); round 1's record lists
+  the replay sample in its order (`SecondStage.interiorOrderOk`); round 2's statement check passes the statement against
+  template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public file's header is `xS₀ t`'s placed in the run
+  (`SecondStage.atRun`) but for the run's fields, names
+  the part's slots and the interior record's roots, its sample is the second stage's draw within the part, each
+  registered read is one it may read, and its registered reads are its template's reference reads (`refReads`) but for
+  the run's fields,
+  the code itself the verifier of record of the session it checks (`codesOk`));
+  and it is `xS₀ t` but for its sample, its registered reads and its public file (`pinOk`); it refuses the message
+  otherwise;
+* rounds `off t` to `off t + k₀ t − 1`: template `t`'s session, Flock's masked verifier at its statement on the
+  session's messages, its acceptance answered with the message `[]`, which Flock never answers, and the session's rounds
+  after a decision (`decidedAt`) answered `[]` too;
+* the last round accepts where each session's messages have a prefix Flock decides, and refuses otherwise. A session
+  Flock refuses ends the run there, so a run accepts only where Flock accepted every session.
 
 The design's replay partition is the members' (`filesReplay`: each request's units of every template together), and
 it evaluates (`two`) only where the verifier decides the two-stage scope (`scopeOk`: the program ordered, the
 proof-block partition a partition of it, each proof block in one replay block and the design well formed) and that the
 replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
-each member has room for its units, and the registration's blocks are theirs); every check is a decision, so the
-verifier refuses every statement out of scope.
+each member has room for its units, and the registration's blocks are theirs), and that each template's reference
+statement reads as a member's (`templateOk`: hidden outputs, untyped tags, a circuit file `Desc.parseStmt` reads, at
+most `2^32` rows a unit, one table, every port a `v2Row`); every check is a decision, so the verifier refuses every
+statement out of scope.
 
 **What a session reveals** for a checked unit is the program's (`Reveal.reveal`): one opening for each value its proof
 block's correctness reads (`Prog.needsList`), at that gate, under the interior roots of its replay block where the
 value is one of that block's interior values and under the run's roots otherwise, holding the frame's opening there
 (`Reveal.frameAt`); so at most `reveals` openings, the most one of the partition's proof blocks needs.
 
-So every checked unit has the one session (`sessions = 1`) on rounds 3 on (`session`), and at a run refused before them,
-the session is `xS₀`'s run of a prover whose first message Flock refuses (`refusedSeen`). The coins are the verifier's own
-here; that the deployed challenger's bytes are such coins is the assumptions' (`ChallengerLogsCoins`,
-`FlipsAfterRecorded`, `VerifierReadsLog`), and `Run.run`'s registration and outcome steps, which read the challenger's
-logs and the sessions' verdicts, are not in this verifier: it accepts every run they accept whose session Flock accepts.
+So every checked unit has its template's session (`templateOf`) on that session's rounds (`session`), and at a run
+refused before them, the session is `xS₀ t`'s run of a prover whose first message Flock refuses (`refusedSeen`). The
+coins are the verifier's own here; that the deployed challenger's bytes are such coins is the assumptions'
+(`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`), and `Run.run`'s registration and outcome steps,
+which read the challenger's logs and the sessions' verdicts, are not in this verifier: it accepts every run they accept
+whose sessions Flock accepts.
 -/
 
 @[expose] public section
@@ -79,69 +103,98 @@ def zkOk (xS : Msg) : Bool :=
       sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
   | none => false
 
-/-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), the templates' circuit
-files and units (`ms`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
-stage's count per stratum (`k`), the registered reads a session
-opens against at a run's roots and interior roots (`registered`), the reference session statement (`xS₀`) in Flock's
-masked scope (`xS₀_ok`), and the commitment's layout and the reference prover's framing (`frame`). -/
+/-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), each template's units
+(`vus`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
+stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`), wires (`wires`) and
+the rows their units read (`rows`) round 2's statement check reads, template `t`'s reference session statement
+(`xS₀ t`) in Flock's masked scope (`xS₀_ok`), template `t`'s reference registered reads as round 2 reads a statement's,
+null for none (`refReads t`), and the commitment's layout and the reference prover's framing
+(`frame`). Template `t`'s circuit is its reference statement's (`Held.ms`). The reference reads are a copy of their own,
+not `xS₀ t`'s: Flock's setup reads a statement's registered reads as a registration's, roots included, which reference
+reads, staged before any run, can't name. -/
 structure Held where
   desc : Msg
-  ms : Spot.Bits.Members
+  vus : List (Array ℕ)
   query : Query
   reg : RegTwo
   k : List ℕ
-  registered : List Msg → List (ℕ × List Msg) → ByteArray
-  xS₀ : Msg
-  xS₀_ok : zkOk xS₀ = true
+  names : List String
+  links : Option (Array Spot.SecondStage.Link)
+  wires : Option (Array Spot.SecondStage.Wire)
+  rows : Array Spot.SecondStage.Rows
+  xS₀ : ℕ → Msg
+  xS₀_ok : ∀ t, zkOk (xS₀ t) = true
+  refReads : ℕ → Json
   frame : Code
 
-/-- **The run's statement**: the roots the boundary values are committed under. -/
+/-- **A session statement's circuit**: its reading's statement circuit (`Read.stmt`, a templated statement's
+unrolled); `default` where it doesn't read. -/
+def stmtOf (xS : Msg) : _root_.Flock.Circuit :=
+  ((FlockDeploy.readOf true xS).map _root_.Flock.Readable.Read.stmt).getD default
+
+/-- **The members**: template `t`'s circuit is its reference statement's (`stmtOf (xS₀ t)`), over its units
+`vus[t]`. -/
+def Held.ms (h : Held) : Spot.Bits.Members :=
+  (List.range h.vus.length).map fun t => (stmtOf (h.xS₀ t), h.vus.getD t #[])
+
+/-- **A message read as JSON**, as Flock's verifier reads a file (`FlockDeploy.jsonOf`); none where it isn't. -/
+def jsonMsg (m : Msg) : Option Json := (FlockDeploy.jsonOf "message" ⟨m.toArray⟩).toOption
+
+/-- **The bytes a JSON hex string names**; empty where it names none. -/
+def hexMsg : Json → Msg
+  | .str r => ((_root_.Flock.unhex r).toOption.map (·.data.toList)).getD []
+  | _ => []
+
+/-- **A number's bytes**, little-endian, as many as it needs and at least one. -/
+def natMsg (n : ℕ) : Msg := (List.range (n.log2 / 8 + 1)).map fun i => (n / 256 ^ i).toUInt8
+
+/-- **An entry of a record**, of kind `k` (`0` a port, `1` a registered value): four messages, its name behind its
+kind, its root and its domain id (the bytes their hex names, empty where it names none), and its leaf count
+(`natMsg`, `0` where it names none). These are what the deployed check reads of a registered port besides its
+schema, which is the port's row format, so a frame fixed before the run reads the port off the roots. -/
+def portEntry (e : UInt8 × String × Json) : List Msg :=
+  [e.1 :: e.2.1.toUTF8.data.toList, hexMsg (Spot.getD e.2.2 "root"), hexMsg (Spot.getD e.2.2 "domain"),
+    natMsg ((Spot.nat? (Spot.getD e.2.2 "leaves")).getD 0)]
+
+/-- **A record's registered values**, each under its value's name, as round 2 finds a registered read's value among
+them (`SecondStage.registeredEntry`). -/
+def regList (rec : Json) : List (String × Json) :=
+  (match Spot.getD rec "registered" with | .arr es => es.toList | _ => []).filterMap fun e =>
+    match Spot.getD e "value" with
+    | .str v => some (v, e)
+    | _ => none
+
+/-- **A record's entries, each with its kind**: its ports (`0`), in its port order (`Record.byPort`), then its
+registered values (`1`). -/
+def tagged (rec : Json) : List (UInt8 × String × Json) :=
+  (Spot.Record.byPort rec).toList.map (0, ·) ++ (regList rec).map (1, ·)
+
+/-- **A record's roots**: whether it names its ports by template (`SecondStage.byTemplate`, as round 2 names a
+template's port), then its entries (`portEntry`). -/
+def portRoots (rec : Json) : List Msg :=
+  [if Spot.SecondStage.byTemplate rec then 1 else 0] :: (tagged rec).flatMap portEntry
+
+/-- **The run's statement**: the boundary registration's record, and the roots the boundary values are committed
+under, the record's (`portRoots`). -/
 structure Roots where
+  record : Json
   roots : List Msg
 
-/-- The run's statement's format string, its first field. -/
-def FORMAT : String := "spot-flock-statement/v1"
+/-- **The run's statement's decoder**: the boundary registration's record, `x` read as JSON. -/
+def decode (x : Msg) : Option Roots := (jsonMsg x).map fun rec => ⟨rec, portRoots rec⟩
 
-/-- **The run's statement's encoding**: its format string, then its roots, each as a byte string. -/
-def Roots.encode (st : Roots) : Msg :=
-  FlockDeploy.encStr FORMAT ++ FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) st.roots
+/-- **The replay blocks the interior record lists**, in its order (`window.replay_sample`, which round 2's
+`second-interior-order` holds to the replay sample); none where it lists none. -/
+def blocksOf (rec : Json) : List ℕ :=
+  match Spot.getD (Spot.getD rec "window") "replay_sample" with
+  | .arr bs => bs.toList.map fun b => (Spot.nat? b).getD 0
+  | _ => []
 
-/-- **The run's statement's reader**: the format string, failing at any other, then the roots, each a byte string. -/
-def Roots.read : FlockDeploy.Rd Roots := do
-  if (← FlockDeploy.rdStr) ≠ FORMAT then failure
-  let roots ← FlockDeploy.rdList FlockDeploy.rdBytes
-  pure ⟨roots.map fun b => b.data.toList⟩
-
-/-- **The run's statement's decoder**: `Roots.read` on all of `x`, kept only when its encoding is `x`. -/
-def decode (x : Msg) : Option Roots :=
-  match Roots.read.run x with
-  | some (st, []) => if st.encode = x then some st else none
-  | _ => none
-
-/-- **The interior registration**: each sampled replay block's interior roots, by replay block. -/
-structure Interiors where
-  roots : List (ℕ × List Msg)
-
-/-- **The interior registration's encoding**: for each replay block, its number, then its interior roots, each as a
-byte string. -/
-def Interiors.encode (it : Interiors) : Msg :=
-  FlockDeploy.encList (fun p => FlockDeploy.encNat p.1 ++
-    FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) p.2) it.roots
-
-/-- **The interior registration's reader**: for each replay block, its number, then its interior roots, each a byte
-string. -/
-def Interiors.read : FlockDeploy.Rd Interiors := do
-  let roots ← FlockDeploy.rdList do
-    let ρ ← FlockDeploy.rdNat
-    let rs ← FlockDeploy.rdList FlockDeploy.rdBytes
-    pure (ρ, rs.map fun b => b.data.toList)
-  pure ⟨roots⟩
-
-/-- The interior registration a prover's message states, kept only when it encodes back to the message. -/
-def interiorsOf (m : Msg) : Option Interiors :=
-  match Interiors.read.run m with
-  | some (it, []) => if it.encode = m then some it else none
-  | _ => none
+/-- **Replay block `ρ`'s interior roots** as the round-1 message `m₁` states them: `ρ`'s place among the interior
+record's replay blocks and their number (`natMsg`), then the record's roots (`portRoots`); none where `m₁` isn't
+JSON. -/
+def irootsOf (m₁ : Msg) (ρ : ℕ) : List Msg :=
+  ((jsonMsg m₁).map fun rec => natMsg ((blocksOf rec).idxOf ρ) :: natMsg (blocksOf rec).length :: portRoots rec).getD []
 
 /-! ## The scope the verifier decides -/
 
@@ -179,6 +232,49 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
     (d.replay.rules.zip d.part.classes).all (fun p => oneStageOk (strataSizes p.2) p.1) &&
     d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
 
+/-! ## The scope, compiled in passes over the program
+
+`topoOk`, `partitionsOk` and `scopeOk` compile as `topoFast`, `partitionsFast` and `scopeOkFast`
+(`SpotFlock.ScopeFast`), each proved equal to the check as stated (`@[csimp]`), so the verifier decides the scope in
+passes over the program. -/
+
+theorem constAt_eq_arr (C : Prog) (g : ℕ) : constAt C g = constArr C.gates.toArray g := by
+  simp only [constArr, List.getElem?_toArray]
+  rfl
+
+@[csimp] theorem topoOk_eq_fast : @topoOk = @topoFast := by
+  funext C
+  exact (topoFast_eq C).symm
+
+@[csimp] theorem partitionsOk_eq_fast : @partitionsOk = @partitionsFast := by
+  funext P C
+  rw [partitionsFast_eq, partitionsOk]
+  simp only [constAt_eq_arr]
+
+/-- `scopeOk` with the replay partition's `Nodup` and the replay check read from marks (`nodupFast`, `replaysFast`),
+equal to it (`scopeOk_eq_fast`) and compiled in its place, as `topoOk` and `partitionsOk` compile as `topoFast` and
+`partitionsFast`; as stated, `Nodup` compares every pair and the replay check finds each proof block's replay block by
+position. -/
+def scopeOkFast (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
+  topoOk C && partitionsOk Pt C && nodupFast d.part.gates && replaysFast Pt d.part C.gates.length &&
+    d.replay.rules.length == d.part.classes.length &&
+    (d.replay.rules.zip d.part.classes).all (fun p => oneStageOk (strataSizes p.2) p.1) &&
+    d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
+
+@[csimp] theorem scopeOk_eq_fast : @scopeOk = @scopeOkFast := by
+  funext C Pt d
+  unfold scopeOk scopeOkFast
+  rw [nodupFast_eq]
+  cases hp : partitionsOk Pt C
+  · simp only [Bool.and_false, Bool.false_and]
+  · cases hn : decide d.part.gates.Nodup
+    · simp only [Bool.and_false, Bool.false_and]
+    · have hlt : ∀ g ∈ Pt.gates, g < C.gates.length := by
+        unfold partitionsOk at hp
+        simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at hp
+        exact hp.1.1.1.2
+      rw [replaysFast_eq (of_decide_eq_true hn) hlt]
+
 /-- **The replay layout fits the members' files**, decided: the registration's templates are the members, each with
 the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, each member `t` has room for its `n_t` units,
 `ρ·n_t` to `(ρ + 1)·n_t`, and the registration's block `blockOf ρ t p` is the members' (`filesBlockOf`). One check
@@ -211,11 +307,25 @@ def hiddenOf (xS : Msg) : Bool :=
   | some r => r.tags.hiddenOutputs
   | none => false
 
-/-- **The session's statement is in scope**: in Flock's masked scope, with the reference statement's table shapes, in
-the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any other), and with
-hidden outputs (`hiddenOf`), as the deployed session circuit has. -/
-def sessionOk (xS : Msg) : Bool :=
-  zkOk xS && shapeOf xS == shapeOf h.xS₀ && FlockDeploy.scopeCheck true xS && hiddenOf xS
+/-- **Template `t`'s session statement is in scope**: in Flock's masked scope, with template `t`'s reference statement's
+table shapes, in the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any
+other), and with hidden outputs (`hiddenOf`), as the deployed session circuit has. -/
+def sessionOk (t : ℕ) (xS : Msg) : Bool :=
+  zkOk xS && shapeOf xS == shapeOf (h.xS₀ t) && FlockDeploy.scopeCheck true xS && hiddenOf xS
+
+/-- **Template `t`'s reference statement reads as a member's**, decided: it reads with hidden outputs and untyped tags,
+its circuit file's descriptor reads (`Desc.parseStmt`), its statement circuit's unit has at most `2^32` rows, it sets
+up in one table, and each of its ports is a `sha512/row/v2` row (`ProvedScope.v2Row`), one leaf a row. -/
+def templateOk (t : ℕ) : Bool :=
+  match FlockDeploy.readOf true (h.xS₀ t) with
+  | some r =>
+    r.tags.hiddenOutputs && !r.tags.typed &&
+      (match _root_.Flock.Desc.parseStmt r.tags r.I.circuitFile r.I.tables with
+        | .ok _ => true
+        | .error _ => false) &&
+      decide (r.stmt.unit.unitLog ≤ 32) && (shapeOf (h.xS₀ t)).length == 1 &&
+      r.stmt.ports.all _root_.Flock.ProvedScope.v2Row
+  | none => false
 
 /-- **The first stage's design**: the one `Select.select` samples on the boundary registration (`slotDesign`). -/
 def replayDesign : Option Design :=
@@ -233,21 +343,24 @@ def partition (_ : AuditStatement) : Option Partition :=
   some (membersPart h.ms)
 
 /-- **The two-stage design**: the members' replay partition over the boundary registration's layout (`filesReplay`),
-the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`) and the layout
-fits the members' files (`filesOk`). -/
+the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`), the layout
+fits the members' files (`filesOk`) and every template's reference statement reads as a member's (`templateOk`). -/
 def two (_ : AuditStatement) : Option Design.Two :=
   match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
   | some l, some d =>
     if scopeOk (bitsProgs h.ms) (membersPart h.ms) ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ &&
-        filesOk h.reg h.ms l h.k then
+        filesOk h.reg h.ms l h.k && (List.range h.ms.length).all (templateOk h) then
       some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩
     else none
   | _, _ => none
 
 /-! ## The run -/
 
-/-- **The session's rounds**: Flock's masked verifier's at the reference session statement. -/
-def k₀ : ℕ := (FlockDeploy.V true).k h.xS₀
+/-- **Template `t`'s session's rounds**: Flock's masked verifier's at template `t`'s reference statement. -/
+def k₀ (t : ℕ) : ℕ := (FlockDeploy.V true).k (h.xS₀ t)
+
+/-- **Template `t`'s session's first round**: after rounds 0 to 2 and the sessions of the templates before `t`. -/
+def off (t : ℕ) : ℕ := sessOff 3 (k₀ h) t
 
 /-- A coin's bytes, as the challenger's are read: `2^20` of them. -/
 def L : ℕ := 65536 * 16
@@ -266,78 +379,223 @@ def secondDraw (c₀ c₁ : FlockDeploy.Coin) : Option Json :=
 
 deriving instance DecidableEq for FlockDeploy.Raw
 
-/-- **The session's statement is the reference one** but for its sample and its registered reads: decoded as `w`, it is
-`xS₀`'s in every other field, its circuit, public file, tables and program among them. -/
-def pinOk (w : FlockDeploy.Raw) : Bool :=
-  match FlockDeploy.decode h.xS₀ with
-  | some w₀ => decide ({ w with draw := none, registered := none } = { w₀ with draw := none, registered := none })
+/-- **A public file's header**: its first line's JSON (`Public.load`); none where it has no line or doesn't parse. -/
+def headerOf (file : ByteArray) : Option Json := do
+  let nl ← _root_.Flock.findByte file 10
+  (_root_.Flock.JsonParse.parse (← String.fromUTF8? (file.extract 0 nl))).toOption
+
+/-- **Template `t`'s session statement is its reference one** but for what the run sets: decoded as `w`, it is
+`xS₀ t`'s in every field but its sample, its registered reads and its public file, its circuit, tables and program
+among them. Round 2's statement check holds its public file's header to `xS₀ t`'s but for the run's fields
+(`SecondStage.headerOk` at `refsOf`). -/
+def pinOk (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
+  match FlockDeploy.decode (h.xS₀ t) with
+  | some w₀ =>
+    decide ({ w with draw := none, registered := none, publicFile := .empty } =
+      { w₀ with draw := none, registered := none, publicFile := .empty })
   | none => false
 
-/-- **The session's statement reads the run's**, at the statement `s`, the round-1 message `m₁` and the coins of rounds
-0 and 1: its sample is the second stage's, its registered reads are the auditor's at the run's roots and the interior
-registration's, and it is otherwise the reference statement (`pinOk`). -/
-def readsOk (s : AuditStatement) (m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
-  match interiorsOf m₁, secondDraw h c₀ c₁, FlockDeploy.setupOf true xS, FlockDeploy.decode xS with
-  | some it, some draw, some (ins, _, _), some w =>
-    FlockDeploy.drawEq ins.read.draw (some (Flock.norm draw)) &&
-      w.registered.map ByteArray.data == some (h.registered s.roots it.roots).data && pinOk h w
+/-- **Template `t`'s part of the second stage's population** in a replay sample of `q` blocks: its `q · n_t` slots from
+`q · Σ_{t' < t} n_{t'}`, as `Select.secondLaw` lays out the cells, template by template. -/
+def partAt (q t : ℕ) : Spot.SecondStage.Part :=
+  ⟨h.names.getD t "", q * (h.reg.ns.toList.take t).sum, h.reg.ns.getD t 0⟩
+
+/-- **Template `t`'s statement as round 2's statement check reads it** (`SecondStage.Stmt`), from its session statement
+decoded as `w`: the template's name, its public file's header, its sample and its registered reads (null where it has
+none); none where one of them doesn't read as JSON or they make no statement. -/
+def stmtJsonOf (t : ℕ) (w : FlockDeploy.Raw) : Option Spot.SecondStage.Stmt := do
+  let header ← headerOf w.publicFile
+  let draw ← (FlockDeploy.jsonOf "draw" (← w.draw)).toOption
+  let registered ← match w.registered with
+    | some b => (FlockDeploy.jsonOf "registered reads" b).toOption
+    | none => some .null
+  Spot.SecondStage.Stmt.ofJson? (Json.mkObj
+    [("draw", draw), ("header", header), ("registered", registered), ("template", .str (h.names.getD t ""))])
+
+/-- **The reference headers** round 2's statement check holds each template's statement to (`SecondStage.Own.refs`):
+template `t`'s name with its reference statement's public file's header, for each template whose header reads. -/
+def refsOf : Array (String × Json) :=
+  ((List.range h.ms.length).filterMap fun t =>
+    ((FlockDeploy.decode (h.xS₀ t)).bind fun w₀ => headerOf w₀.publicFile).map fun r => (h.names.getD t "", r)).toArray
+
+/-- **The reference reads** round 2's values check holds each template's statement to (`SecondStage.Own.refReads`):
+template `t`'s name with its reference reads (`Held.refReads`), for each template. -/
+def refRegisteredOf : Array (String × Json) :=
+  ((List.range h.ms.length).map fun t => (h.names.getD t "", h.refReads t)).toArray
+
+/-- **The second stage's parts** in a replay sample of `q` blocks, one per template in template order (`partAt`). -/
+def partsAt (q : ℕ) : Array Spot.SecondStage.Part := ((List.range h.ms.length).map (partAt h q)).toArray
+
+/-- **What the verifier holds of the run** as round 2's statement check reads it (`SecondStage.Own`), at the run's
+statement `st`, round 1's record `rec`, the second stage's draw and round 0's coin: the replay sample and the parts in
+it (`partsAt`, where a wired read finds its writer's), the interior and boundary registrations' records, the second
+draw's units, the design's links and wires and the rows their units read, and the templates' reference headers and
+registered reads, which the registration fixes before the run. -/
+def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.SecondStage.Own :=
+  { sample := h.reg.sample (src c₀), parts := some (partsAt h (h.reg.sample (src c₀)).size), interior := rec,
+    boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
+    rows := h.rows, refs := refsOf h, refReads := refRegisteredOf h }
+
+/-- **Round 2's statement check passes template `t`'s statement `S`** against the template's part, with what the
+verifier holds of the run (`own`): no failing check (`SecondStage.stmtCodes` at `partAt`, the header placed at the
+template's position among the parts as `stmtFailures` places it (`posOf`), the interior record's port names as
+`stmtFailures` reads them). The code checks each session itself, so it is the verifier of record of the one it reads
+at `S`: the verdict round 2 holds `S` to is its own (`Stmt.checked`), and `second-verified` asks only that `S`'s
+header and registered reads have digests. -/
+def codesOk (own : Spot.SecondStage.Own) (t : ℕ) (S : Spot.SecondStage.Stmt) : Bool :=
+  (Spot.SecondStage.stmtCodes { own with verified := S.checked.toArray } (Spot.SecondStage.byTemplate own.interior)
+    (Spot.SecondStage.posOf (partsAt h own.sample.size) (h.names.getD t "")) (partAt h own.sample.size t) S).isEmpty
+
+/-- **Template `t`'s session statement reads the run's**, at the run's statement `x`, the round-1 message `m₁` and the
+coins of rounds 0 and 1: round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`, round
+2's `second-interior-order`); round 2's statement check passes the statement against template `t`'s part (`codesOk`:
+its public file's header is `xS₀ t`'s placed in the run but for the run's fields, names the part's slots and the
+interior record's roots, its sample is the second stage's draw within the part, and each registered read is one it may
+read); and it is otherwise template `t`'s reference statement (`pinOk`). -/
+def readsOk (t : ℕ) (x m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
+  match decode x, jsonMsg m₁, secondDraw h c₀ c₁, FlockDeploy.decode xS with
+  | some st, some rec, some draw, some w =>
+    let own := ownOf h st rec draw c₀
+    Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
-/-- **The session's statement is the run's**, at the round-1 message `m₁` and the coins of rounds 0 and 1: the run's
-statement decodes and its partition and design evaluate; `xS` sets up as a masked Flock statement with `k₀` rounds,
-in scope (`sessionOk`); its sample is the second stage's; its registered reads are the auditor's at the run's roots
-and the interior registration's; and it is otherwise `xS₀` (`readsOk`). -/
-def stmtOk (x m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
+/-- **The round-2 message's session statements**, one per template in template order, each a byte string; kept only
+where they encode back to the message. -/
+def stmtsOf (m : Msg) : Option (List Msg) :=
+  match (FlockDeploy.rdList FlockDeploy.rdBytes).run m with
+  | some (bs, []) =>
+    if FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) (bs.map fun b => b.data.toList) = m then
+      some (bs.map fun b => b.data.toList)
+    else none
+  | _ => none
+
+/-- **Template `t`'s session statement** as the round-2 message `m₂` states it; `xS₀ t` where it states none. -/
+def stmtAt (m₂ : Msg) (t : ℕ) : Msg :=
+  match stmtsOf m₂ with
+  | some xs => xs.getD t (h.xS₀ t)
+  | none => h.xS₀ t
+
+/-- **The session statements are the run's**, at the round-1 message `m₁`, the round-2 message `m₂` and the coins of
+rounds 0 and 1: the run's statement decodes and its partition and design evaluate; `m₂` states one session statement
+per template; and template `t`'s sets up as a masked Flock statement with `k₀ t` rounds, in scope (`sessionOk`), and
+passes round 2's statement check against round 1's record and the second stage's draw, and is otherwise `xS₀ t`
+(`readsOk`). -/
+def stmtOk (x m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
+  match parse h x, stmtsOf m₂ with
+  | some s, some xs =>
+    (partition h s).isSome && (two h s).isSome && xs.length == h.ms.length &&
+      (List.range h.ms.length).all fun t =>
+        (FlockDeploy.V true).k (xs.getD t (h.xS₀ t)) == k₀ h t && sessionOk h t (xs.getD t (h.xS₀ t)) &&
+          readsOk h t x m₁ (xs.getD t (h.xS₀ t)) c₀ c₁
+  | _, _ => false
+
+/-- **What the round-2 check establishes of template `t`'s session statement `xS`**: the run's statement decodes and
+its partition and design evaluate, and `xS` has `k₀ t` rounds, is in scope (`sessionOk`) and reads the run's
+(`readsOk`). -/
+def stmtOkAt (x m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) (t : ℕ) : Bool :=
   match parse h x with
   | some s =>
-    (partition h s).isSome && (two h s).isSome && (FlockDeploy.V true).k xS == k₀ h && sessionOk h xS &&
-      readsOk h s m₁ xS c₀ c₁
+    (partition h s).isSome && (two h s).isSome && (FlockDeploy.V true).k xS == k₀ h t && sessionOk h t xS &&
+      readsOk h t x m₁ xS c₀ c₁
   | none => false
 
+/-- **Flock decides the first `j` of a session's messages**: its masked verifier's step there is not a coin. -/
+def decidedAt (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (j : ℕ) : Bool :=
+  match FlockDeploy.act true xS (as.take j) (cs.take j) with
+  | .coin _ => false
+  | _ => true
+
+/-- **The session the `n`-th round is in**: the template `t` whose session's rounds hold it; none outside the
+sessions. -/
+def slotOf (n : ℕ) : Option ℕ :=
+  (List.range h.ms.length).find? fun t => decide (off h t < n ∧ n ≤ off h t + k₀ h t)
+
+/-- **A round of template `t`'s session**, at its statement `xS` and the run's messages and coins: `[]` where Flock
+decided a shorter prefix of the session's messages, else Flock's masked verifier on the session's messages, its
+acceptance answered `[]`. -/
+def sessStep (t : ℕ) (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) : OC Out :=
+  if (List.range (as.length - off h t)).any fun j =>
+      decide (0 < j) && decidedAt xS (as.drop (off h t)) (cs.drop (off h t)) j
+  then .ret (.msg [])
+  else (FlockDeploy.next true xS (as.drop (off h t)) (cs.drop (off h t))).bind fun o => .ret (markOut [] o)
+
+/-- **The verdict**, at the round-2 message `m₂` and the run's messages and coins: every template's session's messages
+have a prefix Flock decides. -/
+def verdict (m₂ : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (List.range (k₀ h t + 1)).any fun j =>
+      decide (0 < j) && decidedAt (stmtAt h m₂ t) (as.drop (off h t)) (cs.drop (off h t)) j
+
 /-- **The verifier's step** at the prover's messages `as` and the coins `cs`, one per message: rounds 0 and 1 answer
-their coins, round 2 answers nothing when the session's statement is the run's (`stmtOk`) and refuses otherwise, and
-rounds 3 on are Flock's masked verifier at that statement. -/
+their coins; round 2 answers nothing when the session statements are the run's (`stmtOk`) and refuses otherwise; a
+session's rounds answer as `sessStep` at its statement; and the round after the sessions accepts on the verdict. -/
 def next (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) : OC Out :=
   match as, cs with
   | [_], [c₀] => .ret (.msg c₀.bytes)
   | [_, _], [_, c₁] => .ret (.msg c₁.bytes)
-  | [_, m₁, xS], [c₀, c₁, _] => .ret (if stmtOk h x m₁ xS c₀ c₁ then .msg [] else .rej)
-  | _ :: _ :: xS :: as', _ :: _ :: _ :: cs' => FlockDeploy.next true xS as' cs'
+  | [_, m₁, m₂], [c₀, c₁, _] => .ret (if stmtOk h x m₁ m₂ c₀ c₁ then .msg [] else .rej)
+  | a₀ :: a₁ :: m₂ :: a₃ :: as', c₀ :: c₁ :: c₂ :: c₃ :: cs' =>
+    match slotOf h (as'.length + 4) with
+    | some t => sessStep h t (stmtAt h m₂ t) (a₀ :: a₁ :: m₂ :: a₃ :: as') (c₀ :: c₁ :: c₂ :: c₃ :: cs')
+    | none =>
+      .ret (if as'.length + 4 == off h h.ms.length + 1 &&
+          verdict h m₂ (a₀ :: a₁ :: m₂ :: a₃ :: as') (c₀ :: c₁ :: c₂ :: c₃ :: cs') then .acc else .rej)
   | _, _ => .ret .rej
 
-/-- **The sampled verifier in public-coin form**: `3 + k₀` rounds. -/
+/-- **The sampled verifier in public-coin form**: rounds 0 to 2, the templates' sessions, and the verdict's round. -/
 def V : Verifier FlockDeploy.Coin where
-  k _ := 3 + k₀ h
+  k _ := off h h.ms.length + 1
   next := next h
 
-/-- **The run's round order**: the first stage reads round 0's coin, the second round 1's. -/
-def order (x : Msg) : Order ((V h).k x) := ⟨⟨0, by show 0 < 3 + k₀ h; omega⟩, ⟨1, by show 1 < 3 + k₀ h; omega⟩,
-  by simp [Fin.lt_def]⟩
+theorem three_le_off (t : ℕ) : 3 ≤ off h t := le_sessOff 3 (k₀ h) t
 
-/-- **A run refused before its session, as a Flock run**: `xS₀`'s run of a prover whose first message, empty, Flock
-refuses. -/
+/-- **The run's round order**: the first stage reads round 0's coin, the second round 1's. -/
+def order (x : Msg) : Order ((V h).k x) :=
+  ⟨⟨0, by have := three_le_off h h.ms.length; show 0 < off h h.ms.length + 1; omega⟩,
+    ⟨1, by have := three_le_off h h.ms.length; show 1 < off h h.ms.length + 1; omega⟩, by simp [Fin.lt_def]⟩
+
+/-- **A run refused before its session, as a Flock run**: the reference statement's run of a prover whose first
+message, empty, Flock refuses. -/
 def refusedSeen : Seen := ⟨[([], .rej)], .rej⟩
 
-/-- **The session at a run's transcript**: the round-2 statement, where it is in scope (`sessionOk`), and the transcript
-from round 3 on, where the verifier answered rounds 0 to 2; `xS₀` and `refusedSeen` at a run refused before its
-session. -/
-def session (v : Seen) : Option (Msg × Seen) :=
-  match v.msgs with
-  | (_, .msg _) :: (_, .msg _) :: (xS, .msg _) :: rest =>
-    if sessionOk h xS then some (xS, ⟨rest, v.out⟩) else some (h.xS₀, refusedSeen)
-  | _ => some (h.xS₀, refusedSeen)
+/-- An answer is a message. -/
+def answered : Out → Bool
+  | .msg _ => true
+  | _ => false
 
-/-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them; none where it
-doesn't decode or names no such block. -/
+/-- **Proof block `u`'s template**: the first whose units end past `u`, the members' units being template-major
+(`unitBase`); the number of templates past them all. -/
+def templateOf (ms : Spot.Bits.Members) (u : ℕ) : ℕ :=
+  ((List.range ms.length).find? fun t => decide (u < unitBase ms (t + 1))).getD ms.length
+
+/-- **Unit `u`'s session at a run's transcript**: its template `t`'s statement as round 2 states it, where it is in
+scope (`sessionOk`), and the transcript from round `off t` on cut at the session's decision (`cutSeen`), where the
+verifier answered every round before `off t` with a message; `xS₀ t` and `refusedSeen` at a run refused before the
+session. -/
+def session (u : ℕ) (v : Seen) : Option (Msg × Seen) :=
+  if off h (templateOf h.ms u) ≤ v.msgs.length ∧ (v.msgs.take (off h (templateOf h.ms u))).all (answered ·.2) then
+    if sessionOk h (templateOf h.ms u) (stmtAt h (v.msgs.getD 2 ([], .rej)).1 (templateOf h.ms u)) then
+      some (stmtAt h (v.msgs.getD 2 ([], .rej)).1 (templateOf h.ms u),
+        cutSeen [] (k₀ h (templateOf h.ms u)) (v.msgs.drop (off h (templateOf h.ms u))))
+    else some (h.xS₀ (templateOf h.ms u), refusedSeen)
+  else some (h.xS₀ (templateOf h.ms u), refusedSeen)
+
+/-- Template `t`'s reference statement's masked level-0 lengths, summed. -/
+noncomputable def n₀ (t : ℕ) : ℝ := ((shapeOf (h.xS₀ t)).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+
+/-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them (`irootsOf`); none
+before it. -/
 def iroots (_ : Msg) (v : Seen) (ρ : ℕ) : List Msg :=
   match v.msgs with
-  | (_, _) :: (m₁, _) :: _ => ((interiorsOf m₁).bind fun it => (it.roots.find? (·.1 == ρ)).map (·.2)).getD []
+  | (_, _) :: (m₁, _) :: _ => irootsOf m₁ ρ
   | _ => []
 
-/-- **The code before its samples**: the verifier, the statement and its evaluation, the session on rounds 3 on, what a
-session reveals (one opening per value a checked unit's proof block needs, under its roots, holding `frame`'s opening
-there) and the reveal count, its tables and `N₀` the reference statement's shapes', and the commitment's layout and
-reference prover's framing `frame`'s. The interior roots don't read the run's statement (`iroots`). -/
+/-- **The code before its samples**: the verifier, the statement and its evaluation, each unit's session on its
+template's session's rounds, one session per template, what a session reveals (one opening per value a checked unit's
+proof block needs, under its roots, holding `frame`'s opening there) and the reveal count, its tables the most any
+template's reference statement has (the template past the last, a unit past the members', included), each unit's `N₀`
+its template's (`unitN₀`) and the statement's template 0's, and the commitment's layout and reference prover's framing
+`frame`'s. The interior roots don't read the run's statement (`iroots`). -/
 noncomputable def base : Code :=
   { h.frame with
     V := V h
@@ -346,24 +604,27 @@ noncomputable def base : Code :=
     partition := partition h
     stage2 := fun _ => univ
     checked := fun _ _ => []
-    rounds := fun _ _ => univ.filter fun t => 2 < t.val
-    session := fun _ _ v => session h v
+    rounds := fun _ u => univ.filter fun t =>
+      off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)
+    session := fun _ u v => session h u v
     reveal := Reveal.reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)
     reveals := Reveal.reveals (partition h) (parse h)
-    sessions := fun _ => 1
-    tables := fun _ => (shapeOf h.xS₀).length
-    unitN₀ := fun _ _ => ((shapeOf h.xS₀).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
-    innerN₀ := fun _ => ((shapeOf h.xS₀).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum }
+    sessions := fun _ => h.ms.length
+    tables := fun _ => ((List.range (h.ms.length + 1)).map fun t => (shapeOf (h.xS₀ t)).length).foldr max 0
+    unitN₀ := fun _ u => n₀ h (templateOf h.ms u)
+    innerN₀ := fun _ => n₀ h 0 }
 
 /-- The registration the samples read, at a statement that decodes. -/
 def reg (x : Msg) : Option RegTwo := (decode x).map fun _ => h.reg
 
 /-- **SPOT[Flock]'s two-stage code**: the code at its round order, its checked units the two stages' on the
 auditor's registration, each stage's bytes its own coin's. -/
-noncomputable abbrev code : Code := codeTwoAt (base h) (reg h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte) (fun _ => coinByte)
+noncomputable abbrev code : Code :=
+  codeTwoAt (base h) (reg h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte) (fun _ => coinByte)
 
 /-- **The replay sample of record**: the first stage's checked slots on the replay layout. -/
 noncomputable def rs : (x : Msg) → (Fin ((code h).V.k x) → FlockDeploy.Coin) → List ℕ :=
-  replayTwo ((base h).atOrder (order h)) (reg h) (fun _ => L) (bytesFirst (base h) (fun _ => L) (order h) fun _ => coinByte)
+  replayTwo ((base h).atOrder (order h)) (reg h) (fun _ => L)
+    (bytesFirst (base h) (fun _ => L) (order h) fun _ => coinByte)
 
 end SpotFlock

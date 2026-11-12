@@ -2,8 +2,8 @@
 
 A served model's proof blocks proved one type at a time, from synthetic values at the model's served statics, through the path the
 one-stage audit takes: the proof block's Boolean lowering, its `verity/flock-circuit` statement with hidden outputs, a loopback
-`serve --zk --draw subset:N` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with
-`verity/ml/flock`'s patches), and the Lean verifier (`flock-verify verify --zk`, built from `verity/core/service/flock`), which must
+`serve --zk` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with `verity/ml/flock`'s
+patches) whose sample is every unit, and the Lean verifier (its `verify --zk`, built from `verity/core/service/flock`), which must
 pass the honest run through every check and reject the selftest build's forgeries (a committed false output word, a false
 output claim, a flipped internal bit). The verifier holds no program for a proof block (`stage.py` says why), so it then
 refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`), which is what `summarize.py` passes it on.
@@ -18,7 +18,10 @@ Three kinds of type (`stage.py`'s docstring has each):
   own `sha512/row/v1` rows; the circuit binds the Q_word partition, and Lean gets its own copy of the partition object
   (`--partition`) and takes the proof blocks as stated;
 - a block type of the serving rows by its census name (`CENSUS`: the FP8 group quantization, `gq:K=384` a column block of
-  K = 6144), one whole Definition a proof block, staged like a `UNITS` type on bf16 rows, held to the Program's reference.
+  K = 6144; any other by `census:NAME`, the name verbatim), one whole Definition a proof block, staged like a `UNITS`
+  type on bf16 rows, held to the Program's reference; FlashInfer's FP8 linear and its quantisation part, the MoE router
+  and DSA's indexer query (`fi`, `fi-quant`, `router-row`, `router-slots`, `dsa-q-row`) are their Boolean `_v2`
+  templates as served, flat, their MUFU reads in gates.
 
 Files:
 
@@ -33,7 +36,20 @@ Files:
   `+packed-weights` for those arms)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
   fixed seconds a statement and seconds a block, and on a GPU gives its proof overhead (seconds a block × the card's peak MACs
-  a second ÷ the block's MACs), marginal and amortized at each size.
+  a second ÷ the block's MACs), marginal and amortized at each size. A unit may carry its own sizes (`UNIT@N,N`), and a
+  census type's size may be `full` or `full/D` (the most instances a statement holds at the block's k_log, over D).
+- `window.py stage|prove UNITS_FILE`: `prove_time.sh`'s stage and prove steps for many types on a shared node, inside
+  host limits the job enforces itself (cores, niceness, host memory, disk, a deadline, device memory a GPU); its
+  docstring has the file's format and each limit. `prove` keeps what a Lean verifier on another node reads of each
+  statement it proves (`out/kept/`: the public files, every session's records and the prover's exit status, not the
+  circuit or the witness) and each statement's seconds (`out/seconds.tsv`, finished only where the prover exited 0),
+  which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
+  default.
+- `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `settings.py`, `ks_form.py` on synthetic circuit heads,
+  `stage.py`'s `census:NAME` and `full/D` on a stub stager, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s.
+- `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
+  the Lean verifier's `ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
+  doesn't apply it, so a statement it refuses is proved and timed but not verified by the Lean verifier under `--zk`.
 
 From the source tree's root on a CPU node with 160 GB for the job (results go to `$RESEARCH_RUN_DIR/out`; `SU_CACHE` keeps
 builds and stagings between runs):

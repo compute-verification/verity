@@ -1,19 +1,32 @@
 """``cuda/sha512.cuh``'s leaf hashing on the device against hashlib's SHA-512: ``launch_merkle512``'s leaves and tree, its
 staged kernel for every ``leaf_size % 16 == 0`` (every tail ``leaf_size % 128``, on both sides of the padding's one-block
 limit, and level 0's leaves: ``(w + 4) * 16`` bytes under M1 and ``w * 16`` under M0), and its byte kernel, the path of
-unaligned data. ``sha512_leaves.cu`` runs them, built by nvcc where a GPU is present."""
+unaligned data. ``sha512_leaves.cu`` runs them, built by nvcc where a GPU is present.
+
+And the header's way into a Flock checkout, which needs no GPU: ``cuda_sha512_patch.py``'s first step copies the GPU's one
+SHA-512 (``verity.ml.kernels.SHA512``) there as ``kernels_sha512.cuh`` and installs ``cuda/sha512.cuh`` beside it, its
+include of that header pointed at the copy. Only a pod runs the script, with a bare ``python3``, so a move of either header
+that the script doesn't follow fails here first."""
 from __future__ import annotations
 
+import ast
 import ctypes
 import hashlib
+import re
+import runpy
 import shutil
 import subprocess
+import sys
 from functools import cache
 from pathlib import Path
 
 import pytest
 
+from verity.ml.kernels import SHA512
+
 SOURCE = Path(__file__).resolve().with_name("sha512_leaves.cu")
+SCRIPT = Path(__file__).resolve().parents[1] / "cuda_sha512_patch.py"
+HEADER = Path(__file__).resolve().parents[1] / "cuda" / "sha512.cuh"
 #: every tail from none to 112 bytes past zero, one and two chunks, and level 0's leaves for w = 2^k lanes, k = 0..7
 LEAF_SIZES = sorted({*range(16, 400, 16), *((2**k + 4) * 16 for k in range(8)), *(2**k * 16 for k in range(8))})
 COUNTS = (1, 31, 33, 257)
@@ -88,3 +101,36 @@ def test_the_tree_is_sha512_aligned_or_not(lib: ctypes.CDLL, leaf_size: int, off
     """Slow for its nvcc build: the dispatcher on aligned data (the staged kernel) and unaligned (the byte kernel)."""
     data, want = _leaves(64, leaf_size)
     assert _run(lib, "launch_merkle512", data, 64, leaf_size, offset) == _tree(want)
+
+
+def _includes(text: str) -> list[str]:
+    return re.findall(r'^#include "([^"\n]+)"$', text, re.MULTILINE)
+
+
+def test_the_patch_installs_the_gpus_sha512_and_the_header_including_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ghash = tmp_path / "cuda-ghash"
+    ghash.mkdir()
+    (ghash / "merkle_open.hpp").write_text("")              # upstream's, not yet patched
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(FileNotFoundError) as stopped:       # at the first of upstream's files this stand-in lacks
+        runpy.run_path(str(SCRIPT), run_name="__main__")
+    assert Path(stopped.value.filename).parent == Path("cuda-ghash"), stopped.value
+    assert (ghash / "kernels_sha512.cuh").read_bytes() == SHA512.read_bytes()
+    ours, installed = HEADER.read_text(), (ghash / "sha512.cuh").read_text()
+    (theirs,) = [name for name in _includes(ours) if name not in _includes(installed)]
+    assert (HEADER.parent / theirs).resolve() == SHA512.resolve()
+    assert installed == ours.replace(f'#include "{theirs}"', '#include "kernels_sha512.cuh"')
+
+
+def test_the_patch_reaches_the_tree_from_its_root() -> None:
+    """A move of the tree carries a path written from the repository's root, and not a join from the script's directory."""
+    anchors = set(re.findall(r"__file__\)((?:\.\w+(?:\(\))?|\[\d+\])*)", SCRIPT.read_text()))
+    assert len(anchors) == 1 and re.fullmatch(r"\.resolve\(\)\.parents\[\d+\]", *anchors), sorted(anchors)
+
+
+def test_the_patch_imports_only_the_standard_library() -> None:
+    """A pod runs it with ``python3`` from the Flock checkout, where no package of this tree is installed."""
+    imports = [node for node in ast.walk(ast.parse(SCRIPT.read_text())) if isinstance(node, ast.Import | ast.ImportFrom)]
+    names = {alias.name.split(".")[0] for node in imports if isinstance(node, ast.Import) for alias in node.names}
+    names |= {"." if node.level else (node.module or ".").split(".")[0] for node in imports if isinstance(node, ast.ImportFrom)}
+    assert names <= sys.stdlib_module_names, sorted(names - sys.stdlib_module_names)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import random
+from collections.abc import Mapping
 from fractions import Fraction
 from math import comb
 
@@ -91,21 +92,26 @@ def _stream(spec=None, clock=None, **kwargs) -> S.Stream:
                                                "challenger": "challenger-test", "clock": clock or Clock(), **kwargs})
 
 
-def _ports(program: Program, query, names, n: int) -> dict:
+def _ports(program: Program, query, names, n: int | Mapping[str, int]) -> dict:
+    """The ports `names` of a registration over `program`, port `v` of ``n[v]`` leaves (each of `n` for a number)."""
     part = P.partition(program, query)
-    return {v: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), v, SCHEMA, n, RUN)} for v in names}
+    leaves = n if isinstance(n, Mapping) else dict.fromkeys(names, n)
+    return {v: {"leaves": leaves[v],
+                "domain": R.window_domain(part["program"], P.digest(part), v, SCHEMA, leaves[v], RUN)} for v in names}
 
 
-def _record(program: Program, query, names, n: int, law, window, previous) -> dict:
+def _record(program: Program, query, names, n: int | Mapping[str, int], law, window, previous) -> dict:
     ports = _ports(program, query, names, n)
     roots = [{"port": v, "root": f"{i + 1:02x}" * 64, **ports[v]} for i, v in enumerate(names)]
     return R.record(program, query, law, S.SCHEME, roots, window, previous=previous)
 
 
 def _boundary(n=N, row=0, previous=None, q=Q) -> tuple[dict, dict]:
-    program = P.population_program(BLOCK, n)
-    return (_record(program, GRAIN, BOUNDARY, n, {"law": "subset", "k": q}, {"kind": "served", "run": RUN, "row": row},
-                    previous), _ports(program, GRAIN, BOUNDARY, n))
+    """The boundary registration over `n` replay blocks: BLOCK's `x` and output, each of N_RHO rows a block, one for
+    each of its PAIR instances' `x` and `o0` (`second_stage.replay_rows`)."""
+    program, leaves = P.population_program(BLOCK, n), dict.fromkeys(BOUNDARY, n * N_RHO)
+    return (_record(program, GRAIN, BOUNDARY, leaves, {"law": "subset", "k": q},
+                    {"kind": "served", "run": RUN, "row": row}, previous), _ports(program, GRAIN, BOUNDARY, leaves))
 
 
 def _interior(m: int, previous: str, sample, row=0, **change) -> tuple[dict, dict]:
@@ -188,8 +194,9 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     each sampled replay block on the coins after the interior registration; and one outcome holds both audit records, each
     by both verifiers and the whole run by the Lean's. Round 2 holds the session's statement to the interior registration
     and the second stage's cells, its ports the replay block's Definition links (PAIR's `x` and `o0`) read at the
-    boundary, and passes it; while the two-stage form is refused (`second_stage.FORM`) that refusal is the outcome's one
-    failure, a reject. The profile an accepted one carries is at the footprint."""
+    boundary, each unit at its own row of its replay block's N_RHO, and passes it; while the two-stage form is refused
+    (`second_stage.FORM`) that refusal is the outcome's one failure, a reject. The profile an accepted one carries is at
+    the footprint."""
     stream = _stream()
     assert stream.n_rho == N_RHO and stream._params["two_stage"] is True
     assert stream.cells == (N_RHO,) and stream.counts == (K,)
@@ -209,7 +216,8 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
         [(template, D.proved(second.draw), list(range(Q * N_RHO)))]
     reads = statements[0]["registered"]["ports"]
     assert {p: (e["value"], e["reads"]) for p, e in reads.items()} == {
-        p: (v, [D.proved(first.draw)[u // N_RHO] for u in range(Q * N_RHO)]) for p, v in (("x", BX), ("o0", BOUT))}
+        p: (v, [D.proved(first.draw)[u // N_RHO] * N_RHO + u % N_RHO for u in range(Q * N_RHO)])
+        for p, v in (("x", BX), ("o0", BOUT))}
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     assert not SS.FORM and not out.accepted and out.profile is None and stream.symbols == ("reject",)
@@ -287,10 +295,19 @@ def test_the_run_of_record_holds_the_form_switch(monkeypatch):
 
 
 def _linked(s: dict, shift: int = 0, **ports) -> dict:
-    """Statement `s`'s registered reads, the honest prover's (PAIR's linked `x` and `o0` read at the boundary, one row a
-    replay block, each slot its cell's), each read the replay block `shift` on, with `ports` more."""
-    linked = {p: {**e, "reads": [(r + shift) % N for r in e["reads"]]} for p, e in s["registered"]["ports"].items()}
+    """Statement `s`'s registered reads, the honest prover's (PAIR's linked `x` and `o0` read at the boundary, N_RHO
+    rows a replay block, each slot its unit's of its cell's), each read the replay block `shift` on, with `ports`
+    more."""
+    linked = {p: {**e, "reads": [(r + shift * (e["leaves"] // N)) % e["leaves"] for r in e["reads"]]}
+              for p, e in s["registered"]["ports"].items()}
     return {**s["registered"], "ports": {**linked, **ports}}
+
+
+def _at_rows(s: dict, row) -> dict:
+    """Statement `s`'s registered reads, each linked read moved to row ``row(j)`` of its replay block's N_RHO, `j` its
+    own."""
+    return {**s["registered"], "ports": {p: {**e, "reads": [r - r % N_RHO + row(r % N_RHO) for r in e["reads"]]}
+                                         for p, e in s["registered"]["ports"].items()}}
 
 
 def _own(second: S.Draw, shift: int = 0, port: str = "out") -> dict:
@@ -341,6 +358,8 @@ def _frame(key: str, f):
     (_restated(draw=lambda d: {**d, "units": [0, 3] if d["units"] != [0, 3] else [1, 4]}), ["second-sample"]),
     (_restated(draw=lambda d: {**d, "population": N * N_RHO}), ["second-sample"]),
     (lambda s, second: [{**s, "registered": _linked(s, shift=1)}], ["second-read"]),
+    (lambda s, second: [{**s, "registered": _at_rows(s, lambda j: 0)}], ["second-read"]),
+    (lambda s, second: [{**s, "registered": _at_rows(s, lambda j: 1 - j if j < 2 else j)}], ["second-read"]),
     (lambda s, second: [{**s, "registered": _linked(s, out=_own(second, shift=1))}], ["second-read", "second-values"]),
     (lambda s, second: [{**s, "registered": _linked(s, out=s["registered"]["ports"]["x"])}],
      ["second-read", "second-values"]),
@@ -352,8 +371,9 @@ def _frame(key: str, f):
 ])
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, its linked ports reading the boundary at each slot's
-    cell's replay block (the form's refusal their one failure), under the auditor's params whose reference statement
-    reads those ports (`fake_challenger.Stream.proofs`), so one reading its own `out` too is refused (`second-values`),
+    unit's row of its cell's replay block (the form's refusal their one failure), under the auditor's params whose
+    reference statement reads those ports (`fake_challenger.Stream.proofs`), so one reading its own `out` too is
+    refused (`second-values`),
     and refuses, each statement's session checked as it states by a verifier of record: none (`second-statements`), none
     for a part's template (`second-cover`), a template twice or one of no part (`second-template`), one that isn't a
     statement (`second-statement`, and `second-reported` when its session's reads are reported, since no statement makes
@@ -362,8 +382,9 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     (`second-header`; the `registered` it names is the reads' business and its `units.blocks` the session verifier's,
     not the header's), and one that isn't the run's: another population of slots (`second-population`), a scheme, root
     or domain the interior registration's isn't or a port of it it neither roots nor reads (`second-roots`), another
-    sample (`second-sample`), or a read of another cell's replay block, another slot's rows, a boundary port by a port
-    no link names, another port's own, or a linked port's own, or a linked port not read (`second-read`), and
+    sample (`second-sample`), or a read of another cell's replay block, another unit's row of its own (the block's
+    first, or two units' swapped), another slot's rows, a boundary port by a port no link names, another port's own,
+    or a linked port's own, or a linked port not read (`second-read`), and
     `second-values` beside it where the reads differ from the reference's but for the run's fields: a port more or
     fewer, another value, or none. Neither audit record refuses the reads of its own ports at their own roots, which
     round 2 holds."""
@@ -813,10 +834,12 @@ def _window_stream(spec=None, window=WINDOW, replay=MIXED) -> S.Stream:
 
 
 def _window_boundary(stream: S.Stream) -> S.WindowCommitmentRecord:
-    boundary = P.population_program(MIXED, N)
-    return stream.register(_record(boundary, MIXED_GRAIN, MIXED_BOUNDARY, N, {"law": "subset", "k": Q},
+    """MIXED's boundary registration over N replay blocks: its `x` and its first output two rows a block, one for each
+    of its PAIR instances' `x` and `o0`, and its `y` and second output one, TRIPLE's (`second_stage.replay_rows`)."""
+    boundary, leaves = P.population_program(MIXED, N), dict(zip(MIXED_BOUNDARY, (2 * N, N, 2 * N, N)))
+    return stream.register(_record(boundary, MIXED_GRAIN, MIXED_BOUNDARY, leaves, {"law": "subset", "k": Q},
                                    {"kind": "served", "run": RUN, "row": 0}, None),
-                           _ports(boundary, MIXED_GRAIN, MIXED_BOUNDARY, N))
+                           _ports(boundary, MIXED_GRAIN, MIXED_BOUNDARY, leaves))
 
 
 def _window_interior(program: Program, previous: str, first: S.Draw) -> tuple[dict, dict]:

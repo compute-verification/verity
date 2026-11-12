@@ -214,7 +214,7 @@ def period : (n : ℕ) → WindowPlay Bool Ω1 (Fin 144) circuit.rounds n
 def prm : Params := h1Params ""
 
 /-- Every window's registration: the loop's honest one. -/
-def reg : PouwCheck.Registration := h1Reg "" "" "" "" ByteArray.empty
+def reg : PouwCheck.WindowCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
 
 /-- The units of the model's sample at permutation coin `β`, ascending. -/
 noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=

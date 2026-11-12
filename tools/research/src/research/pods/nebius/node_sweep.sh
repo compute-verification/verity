@@ -130,7 +130,8 @@ fi
 LK_OLD="verity/core/service/flock verity/core/service/flock/level3 verity/core/service/flock/soundness"
 LK_NEW="verity/core/protocols/verification/flock/lean security_proofs/flock/level3 security_proofs/flock/soundness"
 LK_LEAN="Security Security/Proofs"
-LK="$LK_OLD $LK_NEW $LK_LEAN"
+LK_DIR="security security/Proofs"
+LK="$LK_OLD $LK_NEW $LK_LEAN $LK_DIR"
 [ $LAKE = 1 ] && [ $DRY = 0 ] && for k in $LK; do for p in $SRC/*/$k/.lake/packages.rs-trash-*; do
   [ -d "$p" ] && gone "$p" $(age_h "$p") "$p (left by an interrupted sweep)"; done; done
 : > $T/lk

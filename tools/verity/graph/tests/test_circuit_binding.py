@@ -49,6 +49,12 @@ TOY = {f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", 
        "verity/ml/flock/python/verity_flock/__init__.py": "",
        "verity/ml/flock/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
        "other/__init__.py": "", "other/z.circuit-check.py": NEVER_RUN + "def _z_roots(): ...\n",
+       "tools/config/pyproject.toml": "[project]\n", "integrations/vllm/pyproject.toml": "[project]\n",
+       **{f"{F.READS}/{part}": json.dumps({"schema": F.READS_SCHEMA, **doc}) for part, doc in (
+           ("registries.json", {"registries": {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": [
+               "tools/config/verity_vllm", "tools/config/verity_vllm.py", "tools/config/verity_vllm/__init__.py"]}}),
+           ("loaded.json", {"loaded": ["integrations/vllm/numpy.py"]}),
+           ("bindings.json", {"bindings": {}, "groups": [{"probes": ["verity/ml/y.py"]}]}))},
        **{f"{graph.RUNNERS}/{m}.py": "" for m in ("circuit_binding", "circuit_catalog", "circuit_coverage")}}
 X, FLOCK = "verity/ml/x.circuit-check.py", "verity/ml/flock/python/verity_flock/rec.circuit-check.py"
 BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TARGETS, "TEMPLATE_PARAMS"),
@@ -76,15 +82,18 @@ def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_s
                                  *(f"circuit-binding:{f}:{e}" for f, e in BINDINGS.values())])
     base = sorted(f for f in files if f.startswith(("verity/", f"{F.CHECKER}/")) and not f.startswith(f"{F.CHECKER}/tests/")
                   and not f.endswith(".md") or f == "uv.lock")
+    seen = F.lookups(root, files)
     for name, (f, e) in BINDINGS.items():
         t = by[f"circuit-binding:{f}:{e}"]
-        assert t["vars"] == {"binding": name, "slice": F.slice_of(name)["path"], "shared": F.SHARED["path"]}, name
+        assert t["vars"] == {"binding": name, "slice": F.slice_of(name)["path"], "shared": F.SHARED["path"],
+                             "lookups": seen}, name
         assert t["reads"] == [{"task": F.CATALOG, "output": "shared"}, {"task": F.CATALOG, "output": f"slice {name}"}]
         assert t["inputs"] == sorted({*base, *graph.runner_sources("circuit-binding")}) and t["key"] is None, name
         assert t["about"] == f"circuit-check --binding {name}" and t["outputs"] == [F.failures(name)]
     cat, cov = by[F.CATALOG], by["circuit-coverage:catalog"]
     assert cat["outputs"] == [F.RECORDS, F.SHARED, *sorted((F.slice_of(n) for n in BINDINGS), key=lambda o: o["name"])]
     assert cat["reads"] == [] and cat["key"] and cov["reads"] == reads
+    assert cat["vars"] == {"lookups": seen} and cov["vars"]["lookups"] == seen
     pieces = [F.slice_of(name)["path"] for name in BINDINGS]
     assert len(set(pieces)) == len(pieces) and F.SHARED["path"] not in pieces
     assert all(p.rpartition("/")[0] == F.SLICES for p in [*pieces, F.SHARED["path"]])
@@ -104,12 +113,47 @@ def test_the_listing_is_the_same_bytes_in_another_checkout_of_the_commit(tmp_pat
     assert contract.canonical(graph.listing(other, {"circuit-binding"}, LISTERS)) == first
 
 
+def _keys(root: Path) -> dict[str, str]:
+    """Each task's key on the tree at ``root``, every artifact it reads at one digest."""
+    doc = graph.listing(root, {"circuit-binding"}, LISTERS)
+    made = {t["id"]: {o["name"]: contract.digest(o["name"].encode()) for o in t["outputs"]} for t in doc["tasks"]}
+    return {t["id"]: contract.key(t, doc["files"], made, doc["envs"][t["env"]]["digest"]) for t in doc["tasks"]}
+
+
+@pytest.mark.parametrize(("change", "moves"), [
+    ({"tools/config/verity_vllm.py": ""}, True),
+    ({"tools/config/verity_vllm/__init__.py": ""}, True),
+    ({"integrations/vllm/numpy.py": ""}, True),
+    ({"queue.py": ""}, True),
+    ({"pynvml/__init__.py": ""}, True),
+    ({"pynvml/README.txt": ""}, True),
+    ({"other/notes.txt": ""}, True),
+    ({"tools/config/pyproject.toml": "[project]\nname = 'x'\n"}, False),
+    ({"other/__init__.py": "x = 1\n"}, False),
+    ({"tools/config/helper.py": ""}, False),
+    ({"NOTES.md": "", "setup.cfg": "", ".hidden/m.py": ""}, False)])
+def test_a_module_file_added_where_a_run_looks_moves_every_task_s_key_and_an_edit_moves_none(tmp_path, change, moves):
+    """A run looks for modules outside the files that key it: where circuit-check's read sets say its runs probed or listed,
+    and at the root, which a run from there searches first.  A file appearing there moves every task's key; an edit to a file
+    no run reads, or a file where no run looks, moves none."""
+    root = _toy(tmp_path / "tree")
+    before = _keys(root)
+    for p, text in change.items():
+        (root / p).parent.mkdir(parents=True, exist_ok=True)
+        (root / p).write_text(text)
+    after = _keys(root)
+    assert sorted(after) == sorted(before)
+    assert [i for i in before if after[i] == before[i]] == ([] if moves else list(before))
+
+
 @pytest.mark.parametrize(("files", "error"), [
     ({X: "TEMPLATE_PARAMS = dict(t={})\n"}, "TEMPLATE_PARAMS is a dict literal"),
     ({X: "TEMPLATE_PARAMS = {KEY: {}}\n"}, "TEMPLATE_PARAMS is a dict literal"),
     ({f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["uv.lock"]\n'}, "outside what circuit-check's suite"),
     ({f"{F.CHECKER}/pyproject.toml": "[project]\n"}, "no [tool.verity.tests] inputs"),
-    ({F.SIDECARS: "ROOTS = ()\n"}, "no PACKAGES tuple")])
+    ({F.SIDECARS: "ROOTS = ()\n"}, "no PACKAGES tuple"),
+    ({f"{F.READS}/loaded.json": '{"loaded": []}'}, "isn't circuit-check-reads/v1"),
+    ({f"{F.READS}/bindings.json": "{"}, f"{F.READS}/bindings.json: ")])
 def test_a_tree_the_listing_can_t_read_bindings_from_is_refused_by_name(tmp_path, files, error):
     root = _toy(tmp_path / "tree", **files)
     with pytest.raises(graph.GraphError, match=error.replace("[", r"\[")):
@@ -135,7 +179,11 @@ def test_on_the_tree_the_binding_files_are_the_sidecars_circuit_check_discovers_
 
 
 def test_the_runners_say_what_circuit_check_and_check_say():
-    assert f'NO_BINDING = "{CB.NO_BINDING}"' in (ROOT / F.SOURCE / "cli.py").read_text()
+    cli = (ROOT / F.SOURCE / "cli.py").read_text()
+    assert f'NO_BINDING = "{CB.NO_BINDING}"' in cli
+    assert 'READS = Path(__file__).resolve().parents[2] / "reads"' in cli and F.READS == f"{F.CHECKER}/reads"
+    assert f'READS_SCHEMA = "{F.READS_SCHEMA}"' in cli
+    assert f"for part in ({', '.join(json.dumps(p) for p in F.READS_PARTS)}):" in cli
     check = (ROOT / "tools" / "verity" / "check" / "check.py").read_text()
     assert f'CC_RECORDS = "{F.RECORDS["path"]}"' in check and f't.add(d / "cache", "{CB.TOP}")' in check
     assert f'print(f"{CB.REFUSED}{{e}}", file=sys.stderr)' in (ROOT / F.SOURCE / "cli.py").read_text()

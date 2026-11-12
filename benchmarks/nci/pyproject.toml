@@ -9,6 +9,11 @@ untraced = ["tests/test_statement.py"]
 # falsification test (test_tiers.py) checks the parameters its Lean statements state against tiers.py's, with the
 # Dot width read from the BF16 GEMM's step (gemm.py's GEMM_HOPPER).
 inputs = [
+  # the output bits an incorrect proof block injects are the widest public size class of a block's outputs (tiers.py
+  # reads verity.ml.circuits.partition_v2, which imports its package)
+  "verity/__init__.py",
+  "verity/ml/__init__.py",
+  "verity/ml/circuits",
   "Security/lean-audit.json",
   "Security/Definitions/Nci/Assumptions/Layered.lean",
   "Security/Definitions/Nci/Guarantees/Layered.lean",
@@ -19,4 +24,15 @@ inputs = [
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
   "benchmarks/rho/rho/__init__.py",
   "benchmarks/rho/rho/theorem.py",
+  # a model's shape is the slowdown calculator's (kappa.py reads its models, imported by path), whose registry reads
+  # core's monitoring periods and per-window delta
+  "benchmarks/rho/rho/instances.py",
+  "benchmarks/rho/rho/params.py",
+  "benchmarks/rho/data",
+  "verity/__init__.py",
+  "verity/errors.py",
+  "verity/core/__init__.py",
+  "verity/core/protocols/__init__.py",
+  "verity/core/protocols/reporting.py",
+  "verity/core/protocols/profile.py",
 ]

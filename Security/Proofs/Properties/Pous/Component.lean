@@ -5,7 +5,7 @@ public import Proofs.Properties.Pous.RunAt
 public import Proofs.Properties.Pous.MemoryChallenger
 public import Proofs.Properties.NetworkCertifier.Device.Lms
 public import Mathlib.Tactic.SplitIfs
-public import Proofs.Core.QSort
+public import Proofs.Core.CanonUtf8
 import all Init.Data.Array.QSort.Basic
 import all Init.Data.String.Defs
 import all Lean.Data.Json.Basic
@@ -52,6 +52,7 @@ open Pous.EndToEnd.SecurityProofs
 open PousCheck.Properties.SecurityProofs (append_cancel mth_binds leaves_entry root_mth)
 open MemoryChallenger.Properties.SecurityProofs (forIn'_measure_eq)
 open Lean (Json)
+open Verity.CanonUtf8 (canonUtf8_flat eq_ok_of)
 
 local instance instLawfulBEqByteArray_component : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
@@ -683,77 +684,6 @@ answered at once with block 0. The kernel evaluates every check on it (`decide +
 HM96 opening included, but `Flock.canon`'s `Array.qsort`, which it does not unfold (core's sort is well-founded and
 private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves as
 they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
-
-private def jsonLeaf : Json → Bool
-  | .null | .bool _ | .num _ | .str _ => true
-  | .arr _ | .obj _ => false
-
-/-- `Flock.canonUtf8` of a leaf. -/
-private def canonLeaf : Json → V String
-  | .null => pure "null"
-  | .bool b => pure (if b then "true" else "false")
-  | .num n => if n.exponent == 0 then pure (toString n.mantissa) else throw "canonical JSON: a non-integer number"
-  | .str s => pure (canonStrUtf8 s)
-  | .arr _ | .obj _ => throw "canonical JSON: not a leaf"
-
-/-- `Flock.canonUtf8` of an object of leaves. -/
-private def canonObj (kvs : Std.TreeMap.Raw String Json) : V String := do
-  let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canonLeaf p.1.2)
-  let items := vals.qsort (fun a b => a.1 < b.1)
-  pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStrUtf8 kv.1 ++ ":" ++ kv.2) ++ "}")
-
-private def KeysSorted (as : Array (String × String)) : Prop :=
-  ∀ i (hi : i < as.size) j (hj : j < as.size), decide (as[i].1 < as[j].1) = decide (i < j)
-
-private instance instDecidableKeysSorted (as : Array (String × String)) : Decidable (KeysSorted as) := by
-  unfold KeysSorted; infer_instance
-
-/-- `canonObj`, sorting only items whose keys are out of order, so that the kernel evaluates it on sorted keys. -/
-private def canonObjInOrder (kvs : Std.TreeMap.Raw String Json) : V String := do
-  let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canonLeaf p.1.2)
-  let items := if KeysSorted vals then vals else vals.qsort (fun a b => a.1 < b.1)
-  pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStrUtf8 kv.1 ++ ":" ++ kv.2) ++ "}")
-
-private theorem canonObj_inOrder (kvs : Std.TreeMap.Raw String Json) : canonObj kvs = canonObjInOrder kvs := by
-  unfold canonObj canonObjInOrder
-  congr 1
-  funext vals
-  split
-  · rename_i h; rw [Verity.QSort.qsort_sorted vals (fun a b => decide (a.1 < b.1)) h]
-  · rfl
-
-private def jsonFlat (j : Json) : Bool := match j with
-  | .obj kvs => kvs.toArray.all fun p => jsonLeaf p.2
-  | _ => false
-
-private def canonFlat (j : Json) : V String := match j with
-  | .obj kvs => canonObjInOrder kvs
-  | _ => throw "not an object"
-
-private theorem canonUtf8_leaf (j : Json) (h : jsonLeaf j = true) : Flock.canonUtf8 j = canonLeaf j := by
-  cases j <;> first
-    | (simp [jsonLeaf] at h; done)
-    | simp only [Flock.canonUtf8, canonLeaf]
-
-private theorem canonUtf8_obj (kvs : Std.TreeMap.Raw String Json)
-    (h : (kvs.toArray.all fun p => jsonLeaf p.2) = true) : Flock.canonUtf8 (.obj kvs) = canonObj kvs := by
-  have hc : ∀ p : {x // x ∈ kvs.toArray}, Flock.canonUtf8 p.1.2 = canonLeaf p.1.2 :=
-    fun p => canonUtf8_leaf _ (Array.all_eq_true_iff_forall_mem.1 h p.1 p.2)
-  rw [Flock.canonUtf8, canonObj]
-  simp only [hc]
-
-private theorem canonUtf8_flat (j : Json) (h : jsonFlat j = true) : Flock.canonUtf8 j = canonFlat j := by
-  cases j
-  case obj kvs => exact (canonUtf8_obj kvs h).trans (canonObj_inOrder kvs)
-  all_goals simp [jsonFlat] at h
-
-private theorem eq_ok_of {α : Type} [DecidableEq α] {x : Except String α} {a : α}
-    (h : (match x with | .ok b => decide (b = a) | .error _ => false) = true) : x = .ok a := by
-  cases x with
-  | error e => simp at h
-  | ok b =>
-    simp only [decide_eq_true_eq] at h
-    rw [h]
 
 private theorem ok_of_matches {x : Except String Unit} (h : (x matches .ok ()) = true) : x = .ok () := by
   cases x with

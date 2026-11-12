@@ -136,13 +136,13 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **The deployed check accepts the window**: `protocol.check` at the verifier's parameters `p`, on the window's
 registration `c` and the proof system's answer `e`, accepts with some public items and profile. -/
-def Accepts (p : Params) (c : Registration) (e : Evidence) : Prop :=
+def Accepts (p : Params) (c : WindowCommitmentRecord) (e : Evidence) : Prop :=
   ∃ (pub : Public) (prof : Core.Integrity), protocol.check p c e = .accept pub prof
 
 /-- **The executions of a period's windows as the check reads them**: on the period's coins `x`, window `w`'s
 registration and the proof system's answer to it, each any function of the coins. -/
 structure Executions (Ω : Type) (n : ℕ) where
-  reg : Paths Ω n → Fin n → Registration
+  reg : Paths Ω n → Fin n → WindowCommitmentRecord
   ev : Paths Ω n → Fin n → Evidence
 
 namespace Executions

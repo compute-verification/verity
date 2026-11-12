@@ -301,6 +301,7 @@ theorem verdict_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
     all_goals rw [hl] at hsz
     all_goals first | (simp at hsz; done) | exact ⟨s, rfl⟩
   unfold _root_.Spot.OneStageZk.run at hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   simp only [hn.tags] at hR
   obtain ⟨_, hpl, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
@@ -361,6 +362,7 @@ theorem lengths_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   unfold _root_.Spot.OneStageZk.run at hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   simp only [hn.tags] at hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR

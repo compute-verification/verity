@@ -45,10 +45,12 @@
   "Proofs.Properties.Spot.Interval",
   "Proofs.Properties.Spot.FactorUpper",
   "Proofs.Properties.Spot.TwoStageCheck",
+  "Proofs.Properties.Spot.HistoryTable",
   "Proofs.Properties.Spot.PlanCheck",
   "Proofs.Properties.Spot.Wires",
   "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited",
+  "Proofs.Properties.Spot.Tables",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Attest",
@@ -235,7 +237,7 @@
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "8c25658ddef81ef4560f6184b4272ec7f4ab7e2c4b0567e8a13410d46c83c52e"
+   "digest": "68161b2e468dd0509c8ee6c345e27b5930837246b884fc4999cb26da93f04881"
   }
  },
  "layers": {

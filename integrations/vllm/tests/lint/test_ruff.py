@@ -59,14 +59,19 @@ def violation(finding: dict) -> R.Violation:
     return R.Violation(R.rel(path), code, symbol, LINE_REF.sub("", finding["message"]), line)
 
 
-@lru_cache(maxsize=None)
-def scan() -> tuple[R.Violation, ...]:
-    cmd = [sys.executable, "-m", "ruff", "check", "--config", str(CONFIG), "--no-cache", "--exit-zero",
-           "--output-format", "json", ".", str(R.DEFINITIONS)]
+def findings(config: Path, *paths: str) -> tuple[R.Violation, ...]:
+    """Each finding of ``ruff check --config config`` on ``paths``, run from ``integrations/vllm``."""
+    cmd = [sys.executable, "-m", "ruff", "check", "--config", str(config), "--no-cache", "--exit-zero",
+           "--output-format", "json", *paths]
     r = subprocess.run(cmd, cwd=R.ROOT, capture_output=True, text=True)
     assert r.returncode == 0, (f"{' '.join(cmd[1:])} exited {r.returncode} (no ruff? `uv sync --all-packages`: the root `dev` "
                                f"group pins it):\n{r.stderr[-2000:]}")
     return tuple(violation(f) for f in json.loads(r.stdout))
+
+
+@lru_cache(maxsize=None)
+def scan() -> tuple[R.Violation, ...]:
+    return findings(CONFIG, ".", str(R.DEFINITIONS))
 
 
 def test_no_new_findings() -> None:

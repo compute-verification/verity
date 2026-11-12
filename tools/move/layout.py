@@ -24,7 +24,11 @@ A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the 
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
-no dotted name and no lone quoted word in one is rewritten. A tracked file that a `.gitignore` matches stays tracked where
+no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
+unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
+its name alone between quotes or backticks is rewritten in every file but Rust and Lean. Where a key is made of another
+word and a package's path (`"INLINE Security"`), [rewrite] word_ends lists the file (`{glob = [directories]}`): there the
+name is rewritten also as the last word of a double-quoted string. A tracked file that a `.gitignore` matches stays tracked where
 it moves. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
 moves recorded there.
 
@@ -73,6 +77,8 @@ SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*
                      r'(?:\$\(cd\s+"\$\(dirname\s+"(?P<a>\$0|\$\{BASH_SOURCE\[0\]\})"\)"\s+&&\s+pwd\)/\$\(basename\s+"(?P=a)"\)'
                      r'|\$\((?:realpath|readlink\s+-f)\s+"(?:\$0|\$\{BASH_SOURCE\[0\]\})"\))(?P=q)\s*$', re.M)
 SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
+#: what stands before a shell variable's default (`${DEFS:-verity/x.json}`): the `-` there is no part of a longer word
+SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
 
 
 def is_shell(path: str, text: str) -> bool:
@@ -118,6 +124,11 @@ class Layout:
         self.keep = rw.get("keep", [])
         self.keep_in = rw.get("keep_in", {})
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
+        #: moved directories whose name alone, between quotes or backticks, is ours wherever it is written ([rewrite] words)
+        self.words = {w.rstrip("/") for w in rw.get("words", [])}
+        #: per file glob, moved directories whose name is ours there also as the last word of a double-quoted string
+        #: ([rewrite] word_ends: `"INLINE Security"`, a key made of another word and the package's path)
+        self.word_ends = {g: {w.rstrip("/") for w in ws} for g, ws in rw.get("word_ends", {}).items()}
         self.merged = set(data.get("distributions", {}).get("merged", []))
         self.retired = tuple(data.get("retired", {}).get("paths", RETIRED))
         self.drop = set(data.get("drop", {}).get("paths", []))
@@ -185,6 +196,10 @@ class Layout:
         pats = [*self.keep, *(q for g, qs in self.keep_in.items() if where and fnmatch.fnmatchcase(where, g) for q in qs)]
         return any(fnmatch.fnmatchcase(p, pat) for pat in pats)
 
+    def ends(self, word: str, where: str) -> bool:
+        """Whether file `where` is one in which `word`, a moved directory's name, is ours as a string's last word too."""
+        return any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.word_ends.items())
+
     def excluded(self, *paths: str) -> bool:
         def hit(pats, p):
             return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:]))
@@ -210,6 +225,14 @@ def module_name(path: str, roots: dict[str, str]) -> str | None:
     return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
 
 
+def braces(token: str) -> list[str]:
+    """Each path a brace list names: `a/{x,y/z}.py` is `a/x.py` and `a/y/z.py`; a token with no list is itself."""
+    m = re.search(r"\{([^{}]*)\}", token)
+    if not m:
+        return [token]
+    return [e for alt in m.group(1).split(",") for e in braces(token[:m.start()] + alt + token[m.end():])]
+
+
 def derived_modules(layout: Layout) -> dict[str, str]:
     """The module renames that [paths] and [roots] imply: one per path entry whose old and new names differ."""
     out = {}
@@ -223,6 +246,27 @@ def derived_modules(layout: Layout) -> dict[str, str]:
             if b and r != b:
                 out[r] = b
     return out
+
+
+def alternation(words) -> str:
+    """A regex for any one of `words`, the longest that matches first, as `"|".join(map(re.escape, sorted(words, key=len,
+    reverse=True)))` is. `re` tries that list word by word at every character of every file, which with a map of hundreds
+    of rows is most of a run; this is the same set as a trie, one branch for each next character."""
+    trie: dict = {}
+    for w in words:
+        node = trie
+        for c in w:
+            node = node.setdefault(c, {})
+        node[""] = {}                               # a word ends here
+
+    def regex(node: dict) -> str:
+        longer = [re.escape(c) + regex(sub) for c, sub in node.items() if c]
+        if not longer:
+            return ""
+        if "" in node:
+            return "(?:" + "|".join(longer) + ")?"  # greedy: a longer word before the one that ends here
+        return "(?:" + "|".join(longer) + ")" if len(longer) > 1 else longer[0]
+    return regex(trie)
 
 
 # ------------------------------------------------------------------------------------------------------------- the run
@@ -490,7 +534,7 @@ class Run:
 
     def _paths(self, path: str, old: str, text: str) -> str:
         if not hasattr(self, "_path_re"):
-            alts = "|".join(re.escape(p) for p in self.L.prefixes())
+            alts = alternation(self.L.prefixes())
             self._path_re = re.compile(rf"(?P<pre>[}})>]/|\$\{{?\w+\}}?/|~/(?:verity/)?|/workspace/)?(?P<p>{alts})(?![\w\-]|\.\w)"
                                        rf"(?P<rest>(?:/[\w.\-*{{}},]*)*)")
             self._rel_re = re.compile(r"(?<![\w.\-/$}])(?P<v>)(?P<p>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?)"
@@ -503,15 +547,18 @@ class Run:
             pre, p, rest = m.group("pre") or "", m.group("p"), m.group("rest")
             start = m.start("p") if not pre else m.start()
             before = text[start - 1] if start > 0 else ""
-            if not pre and before and (before.isalnum() or before in "_.-/"):
+            if not pre and before and (before.isalnum() or before in "_.-/") and not SH_DEFAULT.search(text, 0, start):
                 return m.group(0)
             token = p + rest
             trail = ""
-            while token and token[-1] in ".,":
-                token, trail = token[:-1], token[-1] + trail
+            while token and (token[-1] in ".," or (token[-1] == "}" and token.count("}") > token.count("{"))):
+                token, trail = token[:-1], token[-1] + trail    # a `}` no `{` of the token opens closes what holds the path
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
-                if not (before in "\"'" and after == before) or path.endswith((".py", ".rs", ".lean")):
+                ours = token in self.L.words            # [rewrite] words: a name no key or run directory shares
+                lone = before in ("\"'`" if ours else "\"'") and after == before
+                last = before == " " and after == '"' and self.L.ends(token, path)      # [rewrite] word_ends
+                if not last and (not lone or path.endswith((".rs", ".lean")) or path.endswith(".py") and not ours):
                     return m.group(0)                   # in code a lone quoted word is a name ("census": a key); joins are `_joins`'s
             new = self._map_token(token, path)
             if new is None or new == token:
@@ -590,6 +637,8 @@ class Run:
             if not head:
                 return None
             new, approx = self.L.path(head, True)
+            if "{" in tail and "*" not in t and (each := self._brace_list(t, tail, new, path)):
+                return each + ("/" if slash else "")
             if new is None:
                 if approx:
                     self.note("unmapped directory paths", f"{path}: {token}")
@@ -608,6 +657,21 @@ class Run:
         if approx:
             self.split_reference(path, t, f"{path}: {token} -> {new}")
         return new + ("/" if slash else "")
+
+    def _brace_list(self, t: str, tail: str, new: str | None, path: str) -> str | None:
+        """Brace list `t` (`flock/{tool.py,verifier/tool.py}`) as a list of its paths, each mapped alone, where every one
+        is in the old tree and they don't all go where the directory before the list goes (`new`); else None, and that
+        directory's row carries the list as written: so does a pattern, one path of which names nothing. Each path is
+        written whole, so a later map still finds one that this map leaves where it is."""
+        olds = braces(t)
+        if not all(o in self.known_old or o in self.old_dirs for o in olds):
+            return None
+        news = [self._map_token(o, path) or o for o in olds]
+        if news == braces(f"{new}/{tail}" if new is not None else t):
+            return None
+        out = "{" + ",".join(news) + "}"
+        self.note("brace lists split", f"{path}: {t} -> {out}")
+        return out
 
     def _map_relative(self, token: str, path: str, old: str, plain: bool = False, from_member: bool = False) -> str | None:
         slash = token.endswith("/")

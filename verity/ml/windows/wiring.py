@@ -8,7 +8,7 @@ are not its Definition's on its writers' committed outputs), so the verifier hol
 (`check_drawn`, `Spot.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
 sampled proof blocks); `check`, every unit's, is the reference.  A member may be wired and read registered rows (a GEMM slice: its
 ``x`` its writer's output, its ``w`` a weight row): it is then a shared-row member, its wired port a table of its units' own
-rows, and a unit's string is the row its ref names (`_strings`), the one its statement reads."""
+rows, and a unit's string is the row its ref names (`strings`), the one its statement reads."""
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
@@ -70,7 +70,7 @@ def salts(members: Sequence[Any], rows: Mapping[str, np.ndarray], ys: dict[str, 
             ys[m.port(p)] = y.tobytes()
 
 
-def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | None:
+def strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | None:
     """Each of member ``m``'s units' ``b || c`` of its row ``port``, from its public body (`rows.Committed.public_body`): a
     shared-row member's, the row of the port's table its ref names, the row its statement reads. None for a body that is
     not the member's or a port it lacks."""
@@ -98,12 +98,12 @@ def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str
     at = bases(members)
     for m in members:
         for p, o, ws in m.wired:
-            mine = _strings(publics, m, p)
+            mine = strings(publics, m, p)
             if mine is None:
                 bad[m.key] = f"its public body is not {m.n} units of {len(m.all_rows)} strings"
                 break
             for wm, sel, theirs in _writers(members, ws, at):
-                got = _strings(publics, wm, o)
+                got = strings(publics, wm, o)
                 if got is None or not np.array_equal(mine[sel], got[theirs]):
                     bad[m.key] = f"its {p} strings are not the {o} strings of {wm.key}'s units that wrote them"
                     break
@@ -123,12 +123,12 @@ def check_drawn(members: Sequence[Any], publics: Mapping[str, bytes], units: Any
         if not m.wired or not len(local):
             continue
         for p, o, ws in m.wired:
-            mine = _strings(publics, m, p)
+            mine = strings(publics, m, p)
             if mine is None:
                 bad[m.key] = f"its public body is not {m.n} units of {len(m.all_rows)} strings"
                 break
             for wm, sel, theirs in _writers(members, np.asarray(ws, dtype=np.int64)[local], at):
-                got = _strings(publics, wm, o)
+                got = strings(publics, wm, o)
                 if got is None or not np.array_equal(mine[local][sel], got[theirs]):
                     bad[m.key] = f"a drawn unit's {p} strings are not the {o} strings of the {wm.key} units that wrote them"
                     break

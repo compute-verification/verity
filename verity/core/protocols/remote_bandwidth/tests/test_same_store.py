@@ -23,7 +23,7 @@ from verity.core.protocols.remote_bandwidth import p2, p2_case, p2_party
 from verity.core.protocols.remote_bandwidth import period as P
 
 HERE = Path(__file__).resolve().parent
-SIGNER = HERE.parents[1] / "pous" / "tests" / "pous_test_signer.py"
+SIGNER = Path(__file__).resolve().parents[5] / "verity/core/protocols/pous/tests/pous_test_signer.py"
 FIXTURES = HERE / "fixtures"
 SOURCE = b"the verifier's secret"
 COINS = hashlib.sha512(b"the period's live coins").digest()

@@ -50,6 +50,10 @@ An opening at `rank` is the leaf digest and the path's siblings from the leaf le
 `rank < count`, the path has `merkle_depth count` siblings, and the climb reaches the committed root (`Tree.accepts`).
 Leaf, node and root are 64-byte digests, which the verifier's size checks (`root.size`, each sibling's) refuse otherwise;
 `Digest` carries that in its type. `Tree.hashed` lists the node messages the climb hashed, bottom first.
+
+A tree whose every leaf someone can compute is `nodeAt` over its leaf digests: `rootOf` its root at the domain's depth,
+and `sibsAt` the path the honest opening at a rank carries. At a count that is a power of two it is the served tree over
+those leaves, which pads nothing.
 -/
 
 @[expose] public section
@@ -96,5 +100,20 @@ def accepts (H : Msg → Digest) (D : Domain) (root : Digest) (rank : ℕ) (leaf
 /-- The node messages the verifier hashed checking that opening, bottom first. -/
 def hashed (H : Msg → Digest) (D : Domain) (rank : ℕ) (leaf : Digest) (sibs : List Digest) : List Msg :=
   (climb H D 0 rank leaf sibs).1
+
+/-- The index beside `c` at its level: `c + 1` for an even `c`, `c - 1` for an odd one. -/
+def sib (c : ℕ) : ℕ := if c % 2 = 0 then c + 1 else c - 1
+
+/-- **The tree over the leaf digests `leaf`**: its node at level `lv` and index `i`, level 0 the leaves. -/
+def nodeAt (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) : ℕ → ℕ → Digest
+  | 0, i => leaf i
+  | lv + 1, i => H (nodeMsg D lv i (nodeAt H D leaf lv (2 * i)) (nodeAt H D leaf lv (2 * i + 1)))
+
+/-- The root of the tree over `leaf` at the domain's depth. -/
+def rootOf (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) : Digest := nodeAt H D leaf (depth D.count) 0
+
+/-- The siblings of the path at `rank` in the tree over `leaf`, from the leaf level up. -/
+def sibsAt (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) (rank : ℕ) : List Digest :=
+  List.ofFn fun j : Fin (depth D.count) => nodeAt H D leaf j (sib (rank / 2 ^ j.val))
 
 end Hash.Tree
