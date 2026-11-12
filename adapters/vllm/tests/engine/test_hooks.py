@@ -6,6 +6,7 @@ import importlib
 import sys
 import types
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -52,7 +53,7 @@ def test_inherited_method_is_inherited_again() -> None:
 
 def test_own_attribute_is_the_same_object_again() -> None:
     orig = Runner.sample
-    mod = types.ModuleType("fake_vllm_layer")
+    mod: Any = types.ModuleType("fake_vllm_layer")
     fn = mod.tensor_model_parallel_all_reduce = lambda x: x
     with hooks.Hooks() as h:
         h.patch(Runner, "sample", lambda self, x: None)
@@ -64,7 +65,7 @@ def test_own_attribute_is_the_same_object_again() -> None:
 
 
 def test_stacked_patches_unwind_to_the_original() -> None:
-    r = Runner()
+    r: Any = Runner()
     r.sample = own = lambda x: ("own", x)
     h = hooks.Hooks()
     h.wrap(r, "sample", lambda o: (lambda x: ("outer", o(x))))
@@ -116,11 +117,20 @@ def test_appended_hook_leaves_the_list() -> None:
 
 def test_a_service_stops_before_the_patches_it_serves_and_keeps_its_counters() -> None:
     log: list[str] = []
+
+    def start() -> int:
+        log.append("start")
+        return 7
+
+    def stop(handle: int) -> dict[str, int]:
+        log.append(f"stop {handle}")
+        return {"answered": 3}
+
     r = Runner()
     before = hooks.live()
     with hooks.Hooks(tag="pous:band-chain/d12/v1") as h:
         h.wrap(r, "sample", lambda o: (lambda x: ("decoded", o(x))))
-        s = h.service("responder", lambda: log.append("start") or 7, lambda handle: log.append(f"stop {handle}") or {"answered": 3})
+        s = h.service("responder", start, stop)
         assert log == ["start"] and s.handle == 7 and s.tag == h.tag
         assert hooks.live(h.tag) == (h.entries[0], s) and hooks.live("pouw:ncp-v1") == ()
         assert r.sample(1) == ("decoded", ("sample", 1))

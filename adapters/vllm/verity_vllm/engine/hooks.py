@@ -310,7 +310,9 @@ class Hooks:
         component's patch sits on top of one of these (`Patch.uninstall`)."""
         mine = frozenset(map(id, self._entries))
         for e in self._entries:
-            top = _covering(e, mine) if isinstance(e, Patch) and e.installed else None
+            if not (isinstance(e, Patch) and e.installed):
+                continue
+            top = _covering(e, mine)
             if top is not None:
                 raise RuntimeError(f"refused to uninstall Hooks(tag={self.tag!r}): the {_describe(top)} was installed on its "
                                    f"{_describe(e)} later and is still on; uninstall that one first (nothing was uninstalled)")

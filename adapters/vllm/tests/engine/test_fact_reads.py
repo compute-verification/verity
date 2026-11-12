@@ -165,6 +165,7 @@ def test_versions_doc_keeps_the_facts_it_reads(monkeypatch, tmp_path, props, gpu
         (tmp_path / "EXPORT.json").write_text(export)
     doc = run_facts.versions_doc()
     assert (doc["triton"], doc["vllm"], doc["flashinfer"], doc["transformers"]) == ("t", "v", None, "4.0")
+    assert doc["python"] == sys.version.split()[0]
     assert doc.get("gpu") == gpu
     assert doc.get("export") == want_export
     assert doc["host"] == {}

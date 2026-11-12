@@ -10,6 +10,7 @@ import hashlib
 import importlib.metadata as md
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -218,7 +219,7 @@ def versions_doc(engine: Engine | None = None) -> dict:
     import vllm
 
     doc = {"torch": torch.__version__, "cuda": torch.version.cuda, "triton": triton.__version__, "vllm": vllm.__version__,
-           "python": os.sys.version.split()[0], "numpy": np.__version__, "flashinfer": ver("flashinfer-python"),
+           "python": sys.version.split()[0], "numpy": np.__version__, "flashinfer": ver("flashinfer-python"),
            "transformers": ver("transformers")}
     try:
         props = torch.cuda.get_device_properties(0)
