@@ -6,6 +6,7 @@ import json
 from dataclasses import replace
 
 import pytest
+
 from verity_machine_model import headline as H
 from verity_machine_model.cli import main
 from verity_machine_model.eps import design, eps, machine, uniform_issue_charged

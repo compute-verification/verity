@@ -260,7 +260,10 @@ def test_decode_hides_the_edit_under_dram_and_the_zero_weight_gap_is_reported():
         assert E.decode_dram(m, c) > 1
 
 
+@pytest.mark.slow
 def test_main_writes_both_tables(tmp_path):
+    """`main` end to end: both tables, every design on every device, written as Markdown and JSON. The tests above each
+    hold one figure; only this one renders the tables and runs the command line."""
     assert E.main(["--md", str(tmp_path / "t.md"), "--json", str(tmp_path / "t.json")]) == 0
     text = (tmp_path / "t.md").read_text()
     assert "| dither-1s (Dither-1S) |" in text and "dither-2s: ε_skip MAC / time, γ" in text and "| **whole** |" in text
