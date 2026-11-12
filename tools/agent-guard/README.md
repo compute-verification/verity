@@ -44,15 +44,17 @@ than git. On a git before 2.31 a push is judged but runs no other pre-push hook.
 The tmux rule (`kept_session.py`) covers the VM's own tmux server, the one a `tmux` with no `-L NAME` or `-S PATH` talks
 to; a server of a command's own passes whatever it ends there. `tmux kill-server` is refused always. A `tmux
 kill-session` is refused when it would end `vm-secrets` (named exactly, by the start of its name or by a pattern, as
-tmux reads a target), when it would end the server's last session, when it names no session the hook can read (no `-t`,
-a variable, a window or a pane), and when it ends every session but the one it names (`-a`) and `vm-secrets` is among
-those ended; any other passes, as does `kill-session -C`, which ends nothing. For a `kill-session` the hook asks tmux
-which sessions there are; where tmux gives no answer it refuses what the command's text could mean for `vm-secrets`.
-Each refusal says to close your own sessions by name. It can't see which server a pane's own tmux talks to (a kill typed
-into a pane is judged as the VM's), a `TMUX` or `TMUX_TMPDIR` the command sets, or a session ended some other way (its
-last window killed, its shell's `exit`, a signal). `kept_session.py start` starts the session only where the server it
-would start holds every secret the VM injects; a server it starts gives each later session the `CURSOR_*` variables and
-`PATH` of the shell that starts that session, since the boot's environment names no agent.
+tmux reads a target), when it would end the server's last session, and when it names no session the hook can read (no
+`-t`, a variable, a window or a pane). A `tmux kill-session -a` ends every session but one, and the hook can't tell
+other agents' sessions from the caller's: it is refused whatever its target, `vm-secrets` included, while the server has
+more than one session. Any other kill passes, as does `kill-session -C`, which ends nothing. For a `kill-session` the
+hook asks tmux which sessions there are; where tmux gives no answer it refuses what the command's text could mean for
+`vm-secrets`, and every `-a`. Each refusal says to close your own sessions by name. It can't see which server a pane's
+own tmux talks to (a kill typed into a pane is judged as the VM's), a `TMUX` or `TMUX_TMPDIR` the command sets, or a
+session ended some other way (its last window killed, its shell's `exit`, a signal). `kept_session.py start` starts the
+session only where the server it would start holds every secret the VM injects; a server it starts gives each later
+session the `CURSOR_*` variables and `PATH` of the shell that starts that session, since the boot's environment names no
+agent.
 
 ## Commands
 

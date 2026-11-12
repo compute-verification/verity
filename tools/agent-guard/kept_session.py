@@ -19,13 +19,14 @@ not as nobody: the boot's environment names no agent. The kept session itself ha
 
 `reason` is the shell hook's rule (`shell_hook.kept_session_reason` reads the command; this judges it). On the VM's own
 server it refuses `tmux kill-server`, and a `tmux kill-session` that would end NAME (named exactly, by the start of its name
-or by a pattern, as tmux reads a target), that would end the server's last session, that names no session the hook can read
-(no `-t`, a variable, a window or a pane), or that ends every session but one (`-a`) while NAME is among them. For a
-`kill-session` it asks tmux which sessions there are (`sessions`), once; where tmux gives no answer it judges by the
-command's text alone and refuses what could name NAME. `kill-session -C` ends nothing and passes, as does a kill that finds
-no session. What it can't see: which server a pane's own tmux talks to (a `tmux kill-server` typed into a pane is judged as
-the VM's), a `TMUX` or `TMUX_TMPDIR` the command sets, a script's contents, and a session ended any other way (its last
-window or pane killed, its shell's `exit`, a signal).
+or by a pattern, as tmux reads a target), that would end the server's last session, or that names no session the hook can
+read (no `-t`, a variable, a window or a pane). A `kill-session -a` ends every session but one, whoever's they are, and the
+hook can't tell other agents' sessions from the caller's: it is refused whatever its target while the server has more than
+one session. For a `kill-session` it asks tmux which sessions there are (`sessions`), once; where tmux gives no answer it
+judges by the command's text alone and refuses what could name NAME, and every `-a`. `kill-session -C` ends nothing and
+passes, as does a kill that finds no session. What it can't see: which server a pane's own tmux talks to (a `tmux
+kill-server` typed into a pane is judged as the VM's), a `TMUX` or `TMUX_TMPDIR` the command sets, a script's contents, and
+a session ended any other way (its last window or pane killed, its shell's `exit`, a signal).
 """
 from __future__ import annotations
 
@@ -53,6 +54,7 @@ WHY = ("This VM's tmux server holds in its environment the secrets it started wi
        "back from it (`research` does, before every command); the server ends with its last session.")
 BY_NAME = "Close your own sessions by name instead: `tmux kill-session -t NAME` (`tmux list-sessions` names them)."
 KEEPS = f"`{NAME}`, the session this VM keeps so that its tmux server never ends"
+BUT_ONE = "ends every session on this VM's tmux server but one, and the hook can't tell other agents' sessions from yours"
 
 
 def tmux(*args: str) -> subprocess.CompletedProcess | str:
@@ -64,14 +66,14 @@ def tmux(*args: str) -> subprocess.CompletedProcess | str:
         return f"tmux gave no answer ({type(e).__name__})"
 
 
-def sessions() -> list[tuple[str, str]] | str:
-    """Each session of the VM's own tmux server as (id, name), none where no server runs; or why tmux couldn't say."""
-    p = tmux("list-sessions", "-F", "#{session_id} #{session_name}")
+def sessions() -> list[str] | str:
+    """The name of each session of the VM's own tmux server, none where no server runs; or why tmux couldn't say."""
+    p = tmux("list-sessions", "-F", "#{session_name}")
     if isinstance(p, str):
         return p
     if p.returncode:
         return [] if NO_SERVER.search(p.stderr) else f"`tmux list-sessions` exits {p.returncode}"
-    return [(line.split(" ", 1)[0], line.split(" ", 1)[1]) for line in p.stdout.splitlines() if " " in line]
+    return [line for line in p.stdout.splitlines() if line]
 
 
 def session_part(target: str) -> str:
@@ -80,12 +82,10 @@ def session_part(target: str) -> str:
     return target.split(":", 1)[0] if ":" in target else "" if "." in target else target
 
 
-def named(part: str, listed: list[tuple[str, str]]) -> str | None:
-    """The one session `part` names among `listed`, as tmux finds it: by id (`$3`), by its whole name after `=`, else by its
-    name, by the start of its name, or as a pattern. None when it names none or more than one: tmux then ends nothing."""
-    names = [n for _, n in listed]
-    if part.startswith("$"):
-        return next((n for i, n in listed if i == part), None)
+def named(part: str, names: list[str]) -> str | None:
+    """The one session `part` names among `names`, as tmux finds it: by its whole name after `=`, else by its name, by the
+    start of its name, or as a pattern. None when it names none or more than one: tmux then ends nothing. (tmux also takes
+    a session's id, `$3`; the hook reads no `$`, so `unread` refuses one before it gets here.)"""
     if part.startswith("="):
         return part[1:] if part[1:] in names else None
     if part in names:
@@ -112,7 +112,7 @@ def unread(given: dict[str, str]) -> str:
     return ""
 
 
-def reason(kills: list[tuple[str, dict[str, str]]], listed: list[tuple[str, str]] | str | None = None) -> str | None:
+def reason(kills: list[tuple[str, dict[str, str]]], listed: list[str] | str | None = None) -> str | None:
     """Why the command giving the VM's own tmux server these commands may not run, or None. `kills`: each `kill-server` and
     `kill-session` it gives, in order, with the options it has (a letter to its value); `listed`: `sessions()`'s answer, asked
     for when a `kill-session` first needs it."""
@@ -128,36 +128,32 @@ def reason(kills: list[tuple[str, dict[str, str]]], listed: list[tuple[str, str]
         but_one, what = "a" in given, unread(given)
         typed = f"`tmux kill-session{' -a' if but_one else ''}{' -t ' + given['t'] if given.get('t') else ''}`"
         part = session_part(given.get("t", ""))
+        if but_one and isinstance(listed, str):
+            return f"{typed} {BUT_ONE}, nor ask tmux which are there ({listed}). {BY_NAME}"
+        if but_one and len(listed) == 1:
+            continue                                    # the one session there is the one it spares, or it finds none
+        if but_one:
+            spared = None if what else named(part, listed)
+            kept = "." if spared == NAME or NAME not in listed else f", {KEEPS}, {'is' if spared else 'may be'} among them. {WHY}"
+            return f"{typed} {BUT_ONE}: {len(listed) - 1} would end{kept} {BY_NAME}"
         if what and isinstance(listed, list) and len(listed) == 1:
-            hit = listed[0][1]                          # the one session there is the one tmux picks
-        elif what and but_one:
-            return (f"{typed} ends every session but one and doesn't say which ({what}): {KEEPS}, may be among those it ends, "
-                    f"with other agents'. {WHY} {BY_NAME}")
+            hit = listed[0]                             # the one session there is the one tmux picks
         elif what:
             return (f"{typed} doesn't say which session it ends ({what}), and that may be {KEEPS}, or another agent's. {WHY} "
                     f"{BY_NAME}")
         elif isinstance(listed, str):
-            if but_one and part.removeprefix("=") != NAME:
-                return (f"{typed} would end every session but one, and the hook can't tell that {KEEPS}, is not among them "
-                        f"({listed}). {WHY} {BY_NAME}")
-            if not but_one and could_name(part):
+            if could_name(part):
                 return (f"{typed} may end {KEEPS}: tmux takes the start of a name, or a pattern, for a session, and the hook "
                         f"can't ask it which are there ({listed}). {WHY} Leave it there. {BY_NAME}")
             continue
         elif (hit := named(part, listed)) is None:
             continue
-        names = [n for _, n in listed]
-        if but_one:
-            if NAME in names and hit != NAME:
-                return f"{typed} would end every session but `{hit}`: {KEEPS}, and other agents'. {WHY} {BY_NAME}"
-            listed = [(i, n) for i, n in listed if n == hit]
-        elif hit == NAME:
+        if hit == NAME:
             return f"{typed} would end {KEEPS}. {WHY} Leave it there. {BY_NAME}"
-        elif len(names) == 1:
+        if len(listed) == 1:
             return (f"{typed} would end `{hit}`, the last session on this VM's tmux server, and the server with it. {WHY} "
                     f"Start the session this VM keeps first, `{START}`; this command then passes.")
-        else:
-            listed = [(i, n) for i, n in listed if n != hit]
+        listed = [n for n in listed if n != hit]
     return None
 
 
@@ -166,7 +162,7 @@ def start() -> tuple[int, str]:
     listed = sessions()
     if isinstance(listed, str):
         return 1, f"no tmux session started: {listed}"
-    if any(n == NAME for _, n in listed):
+    if NAME in listed:
         return 0, f"tmux session `{NAME}` is already there"
     if not listed and (INJECTED_UNSET or not INJECTED):
         lacks = f"lacks {len(INJECTED_UNSET)} of the {len(INJECTED)} secrets this VM injects" if INJECTED else "holds no secret Cursor injects"

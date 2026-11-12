@@ -1,6 +1,7 @@
 """A VM keeps one tmux session, `vm-secrets`, so that its tmux server, whose environment holds the secrets it started with,
 never ends (`kept_session.py`). The shell hook refuses `tmux kill-server` and a `tmux kill-session` that would end that session
-or the server's last one, and lets every other kill through; `kept_session.py start`, which boot.sh runs, starts the session
+or the server's last one, and a `kill-session -a` while the server has more than one session, and lets every other kill
+through; `kept_session.py start`, which boot.sh runs, starts the session
 only where the server it starts would hold the secrets.
 
 The hook's tests give it a stand-in `tmux` that lists the sessions a test names; the one test of a real tmux runs it on a
@@ -66,16 +67,26 @@ KILL_KEPT = [
 #: what doesn't say, in words the hook can read, which session it ends or spares
 UNNAMED = [
     "tmux kill-session",
-    "tmux kill-session -a",
     'tmux kill-session -t "$SESSION"',
     "tmux kill-session -t $(tmux display-message -p '#S')",
-    'tmux kill-session -a -t "$SESSION"',
     "tmux kill-session -t '$0'",                                # a session's id: the hook reads no `$`
     "tmux kill-session -t build.0",                             # a window and a pane, in a session tmux picks
     "tmux kill-session -t :1",
 ]
-#: what ends every session but one that is not the kept one
-ALL_BUT_ONE = ["tmux kill-session -a -t build", "tmux kill-session -at build", "tmux kill-session -a -t =mine"]
+#: what ends every session but one, whoever's they are: (the command, whether the one it spares is the kept session)
+ALL_BUT_ONE = [
+    ("tmux kill-session -a -t build", False),
+    ("tmux kill-session -at build", False),
+    ("tmux kill-ses -a -t =mine", False),
+    ("tmux kill-session -a", False),                            # tmux spares the session used last
+    ('tmux kill-session -a -t "$SESSION"', False),
+    ("tmux kill-session -a -t nosuch", False),                  # refused whatever its target
+    ("bash -c 'tmux kill-session -a -t build'", False),
+    ("tmux send-keys -t build 'tmux kill-session -a' Enter", False),
+    (f"tmux kill-session -a -t {KEPT}", True),                  # the server stays, and other agents' sessions end
+    (f"tmux kill-session -a -t ={KEPT}", True),
+    ("tmux kill-session -a -t vm", True),
+]
 #: what ends neither the kept session nor the server
 ALLOWED = [
     "tmux kill-session -t build",
@@ -90,7 +101,7 @@ ALLOWED = [
     "tmux kill-session -t nosuch",                              # tmux finds no such session and ends nothing
     "tmux kill-session -t 'm*' ; tmux kill-session -t '*i*'",   # one name each, neither the kept one's (`build`, `mine`)
     f"tmux kill-session -C -t {KEPT}",                          # -C clears alerts and ends nothing
-    f"tmux kill-session -a -t {KEPT}",                          # every session but the kept one
+    "tmux kill-session -C -a -t build",
     f"tmux has-session -t {KEPT} || tmux new-session -d -s {KEPT}",
     "tmux list-sessions",
     "tmux kill-window -t build:1",
@@ -125,7 +136,7 @@ def vm(tmp_path):
 
     class VM:
         def sessions(self, *names):
-            Path(f"{tmux}.sessions").write_text("".join(f"${i} {n}\n" for i, n in enumerate(names)))
+            Path(f"{tmux}.sessions").write_text("".join(f"{n}\n" for n in names))
             return self
 
         def broken(self):
@@ -194,11 +205,28 @@ def test_a_kill_that_names_no_session_the_hook_can_read_is_refused(vm, command):
                                                "Close your own sessions by name instead")
 
 
-@pytest.mark.parametrize("command", ALL_BUT_ONE)
-def test_a_kill_of_every_session_but_one_is_refused_while_the_kept_session_is_among_them(vm, command):
-    vm.sessions(KEPT, "build", "mine").refused(command, "would end every session but `", f"`{KEPT}`, the session this VM keeps",
-                                               "and other agents'", "Close your own sessions by name instead")
-    vm.sessions("build", "mine").allowed(command)       # no kept session there: the one spared keeps the server
+@pytest.mark.parametrize("command, spares_kept", ALL_BUT_ONE)
+def test_a_kill_of_every_session_but_one_is_refused_while_the_server_has_more_than_one(vm, command, spares_kept):
+    said = vm.sessions(KEPT, "build", "mine").refused(
+        command, "ends every session on this VM's tmux server but one, and the hook can't tell other agents' sessions from yours",
+        "would end", "Close your own sessions by name instead: `tmux kill-session -t NAME`")
+    assert (f"`{KEPT}`, the session this VM keeps" in said) != spares_kept, said
+    vm.sessions("build", "mine").refused(command, "but one, and the hook can't tell other agents' sessions from yours: 1 would end.")
+
+
+@pytest.mark.parametrize("command, spares_kept", ALL_BUT_ONE)
+def test_a_kill_of_every_session_but_one_passes_where_it_ends_none(vm, command, spares_kept):
+    vm.allowed(command)                                 # no server runs
+    vm.sessions(KEPT).allowed(command)                  # the kept session alone: spared, or tmux finds no such session
+    assert all(asked.startswith("list-sessions") for asked in vm.asked())
+
+
+def test_kills_in_one_command_are_judged_in_order_each_on_what_the_ones_before_it_leave(vm):
+    both = "tmux kill-session -t build \\; kill-session -a -t mine"
+    vm.sessions(KEPT, "build", "mine").refused(both, "`tmux kill-session -a -t mine` ends every session", ": 1 would end")
+    vm.sessions("build", "mine").allowed(both)          # `mine` is the one session left when `-a` runs
+    vm.sessions(KEPT, "build").allowed(f"tmux kill-session -t build; tmux kill-session -a -t {KEPT}")
+    vm.sessions(KEPT, "build", "mine").refused(f"tmux kill-session -t build; tmux kill-session -a -t {KEPT}", ": 1 would end.")
 
 
 @pytest.mark.parametrize("command", ALLOWED)
@@ -245,17 +273,19 @@ def test_where_tmux_gives_no_answer_the_command_s_text_decides(vm):
                     "tmux kill-session -t '*'"):
         vm.refused(command, f"may end `{KEPT}`, the session this VM keeps", cant, "Leave it there.")
     vm.refused("tmux kill-session", "doesn't say which session it ends")
-    vm.refused("tmux kill-session -a -t build", "would end every session but one, and the hook can't tell that",
-               "(`tmux list-sessions` exits 1)")
-    for command in ("tmux kill-session -t build", "tmux kill-session -t =vm", f"tmux kill-session -a -t {KEPT}",
-                    f"tmux kill-session -a -t ={KEPT}", "tmux kill-session -t 'an unbalanced quote"):
+    for command in ("tmux kill-session -a -t build", f"tmux kill-session -a -t {KEPT}", f"tmux kill-session -a -t ={KEPT}",
+                    "tmux kill-session -a"):
+        vm.refused(command, "ends every session on this VM's tmux server but one",
+                   "nor ask tmux which are there (`tmux list-sessions` exits 1)", "Close your own sessions by name instead")
+    for command in ("tmux kill-session -t build", "tmux kill-session -t =vm", f"tmux kill-session -C -a -t {KEPT}",
+                    "tmux kill-session -t 'an unbalanced quote"):
         vm.allowed(command)
 
 
 def test_the_hook_asks_tmux_once_a_command_and_only_for_a_kill_session_on_the_vms_server(vm):
     vm.sessions(KEPT, "a", "b", "c")
     vm.allowed("tmux kill-session -t a \\; kill-session -t b; tmux kill-session -t c")
-    assert vm.asked() == ["list-sessions -F #{session_id} #{session_name}"]
+    assert vm.asked() == ["list-sessions -F #{session_name}"]
     for command in ("tmux new-session -d -s x", "tmux send-keys -t a ls Enter", "tmux kill-window -t a:1", "ls", "echo kill-session"):
         vm.allowed(command)
     assert len(vm.asked()) == 1
@@ -269,13 +299,11 @@ def test_the_hook_asks_tmux_once_a_command_and_only_for_a_kill_session_on_the_vm
     ("*", ["build", "mine"], None),                             # a pattern two match
     ("=bui", ["build"], None),                                  # `=`: the whole name only
     ("=build", ["build", "builder"], "build"),
-    ("$1", ["build", "mine"], "mine"),                          # an id
-    ("$7", ["build", "mine"], None),
     ("nosuch", ["build"], None),
     ("vm", ["vm-secrets", "build"], "vm-secrets"),
 ])
 def test_a_target_names_the_session_tmux_would_find(kept, target, sessions, hit):
-    assert kept.named(target, [(f"${i}", n) for i, n in enumerate(sessions)]) == hit
+    assert kept.named(target, sessions) == hit
 
 
 def test_the_session_part_of_a_target_is_what_stands_before_its_colon(kept):
@@ -329,9 +357,10 @@ def test_start_starts_the_kept_session_once_and_only_on_a_server_that_would_hold
         assert tmux("show-environment", "-t", f"={KEPT}:", "CURSOR_CONVERSATION_ID")[0] == 1, "the kept session is no agent's"
 
         assert [hook(c) for c in ("tmux kill-server", f"tmux kill-session -t {KEPT}", "tmux kill-session -t vm", "tmux kill-session",
-                                  "tmux kill-session -a -t work")] == ["deny"] * 5
+                                  "tmux kill-session -a -t work", f"tmux kill-session -a -t {KEPT}")] == ["deny"] * 6
         assert hook("tmux kill-session -t work") == "allow"
         assert tmux("kill-session", "-t", "=work")[0] == 0 and tmux("list-sessions", "-F", "#{session_name}") == (0, KEPT)
+        assert hook(f"tmux kill-session -a -t {KEPT}") == "allow", "the kept session alone: there is no other to end"
 
         assert tmux("new-session", "-d", "-s", "other")[0] == 0 and tmux("kill-session", "-t", f"={KEPT}")[0] == 0
         assert hook("tmux kill-session -t other") == "deny", "the last session"

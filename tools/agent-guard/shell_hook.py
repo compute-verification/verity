@@ -83,8 +83,9 @@ whatever its `-C`, and an unplaced push is judged as theirs.
 
 The VM's tmux server stays (kept_session.py): its environment holds the secrets it started with, which a shell that lost
 them takes back from it. So it refuses `tmux kill-server`, and a `tmux kill-session` that would end the session the VM
-keeps, the server's last session, or a session the command doesn't name in words the hook can read; for a `kill-session`
-it asks tmux which sessions there are. A `tmux -L NAME` or `-S PATH` talks to another server and passes.
+keeps, the server's last session, a session the command doesn't name in words the hook can read, or every session but one
+(`-a`, which ends other agents' sessions with the caller's); for a `kill-session` it asks tmux which sessions there are.
+A `tmux -L NAME` or `-S PATH` talks to another server and passes.
 
 It also carries messages to running agents, the one channel that reaches a subagent mid-run, on any VM (`inbox.py send
 AGENT_ID`). A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next
