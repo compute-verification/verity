@@ -97643,3 +97643,34 @@ the replay step, and section 2.5's tie.
 Published as you ordered: this entry is one commit of `inbox/proofs-coordinator.md` alone on
 `cursor/verity-proofs-84b5`, appended at the end, no force. It is also the last section of `inbox/replay.md` on
 `cursor/proofs-replay-136d` and in my note. Nothing is posted to Linear or Slack.
+
+## FRAME, Thu 12 Nov 19:33Z: #9229 at `7cab9aeb4422`: the Lean tries and the build pass (`c222`); the records run, the quick suites and the guard have had no slot for 45 minutes, so there is NO ready line by 20:00Z; I end my turn on the three
+
+Head unchanged: `7cab9aeb44229bd32c7ec8379b47b7fb08bc5602`, as in my 18:51Z entry, which has the merge, the stop, the other meets and the lock's nine keys. Mailbox newest section 16:44Z [run].
+
+**Passed: `r20261112-184628-c222`** (vy-nebius-cpu-7, at the head, rc 0, launched 18:46Z, done by 19:21Z) [run: its own lines]:
+- `Code.lean`: `lean exit 0`; "none of its 15 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `Pin.lean`: `lean exit 0`; the same line for its 14 theorems.
+- The build of the seven files that hold the two checks or take them apart (`Code`, `Pin`, `Facts`, `Sessions`, `EntriesAt`, `Cap`, `Opens`): "Build completed successfully (11093 jobs)", `BUILD_EXIT 0`.
+- So #9208's proofs take `stmtOk` apart, and #9229's take `readsOk` apart, in the merged file, as I read they would. That is a build, with the tries' axiom probe on two files; it is not the kernel replay.
+
+**Still waiting for a slot, each since its launch** [run: each run's `slot.json` at 19:32Z; `research status --refresh` at 19:33Z still shows all three waiting]:
+
+| run | what | machine | why it waits |
+|---|---|---|---|
+| `r20261112-184437-c197` | records, `security/Proofs` with `--update` | cpu-3 | "every check slot is taken": memory reserved by live runs there |
+| `r20261112-184654-0f98` | the quick suites the change reaches over `main` `30d6fcc92ff7` | cpu-1 | 4 checks ahead in line |
+| `r20261112-184729-4d7b` | the two-stage guard, `guard_node.py --pytest` | cpu-6 | 1 check ahead in line |
+
+I launched none twice. Ends [guess, each from when its slot comes, which I cannot tell]: the guard about 15 minutes after its start, the suites about 30, the records 25 to 45.
+
+**What the three decide, so what you can and cannot take from this entry:**
+- The lock: whether the digest the merge driver wrote for `Proofs.Flock.SpotFlock.Code` is the one the check writes, and so whether any record is regenerated. Until `c197` ends I can say only what I said at 18:51Z: the merged lock differs from `main`'s in nine keys under `reads`, and in no guarantee's record, assumption or `deployed` entry [run: the comparison; not a check's verdict].
+- The guard: whether the copy of `readsOk` I mended elaborates, and its six tests. It is the only run that reads that file.
+- The suites: nothing I expect to fail [guess]; the change over `main` is the 18 files of #9176 and #9229 and the guard's script.
+
+**When you resume me:** if `c197` regenerated a lock, I commit exactly the file it kept, push, and name that head; then the ready line with the four runs, and the pull request's body, which still describes `9e075516baff`. If the guard fails, that is mine to mend first: resume me on it at once. The new head needs a new mark and a new review whatever the runs say (its own diff changed, my 18:51Z entry).
+
+For CROSSCLOSE, as at 18:51Z: #9229's head is `7cab9aeb4422`, not `9e075516baff`, so its row is to be read again. I did not touch `cursor/proofs-landing-closes-99d1`.
+
+#9357: answered at 19:12Z (yes to each of the three; its body has its `Lane proofs` line).
