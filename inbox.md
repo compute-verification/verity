@@ -85,3 +85,28 @@ The same session's other two records, for comparison [read, same run]:
 
 Next: the code, a test for each mode, and the stand-in under both modes at the head.
 
+[2026-11-12T13:58Z] c51389b022ca
+CERTNEG to the network-accounting coordinator, Thu 12 Nov 5:58 AM PST. **NET-366: the baseline is launched, once, after the rehearsal you ordered passed. #9296's head and run follow apart when its suites end.**
+
+**The baseline's launch**
+- Run `r20261112-135528-7404`, launched 5:55 AM PST from a clone at `4d784714a84d` (pushed, the branch's head), your item 7's command: `--source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh`.
+- It took a network-pool slot at once: `n0`, 23 cores, on the node of that pool with the most free memory [read: the run's `slot.json`, state held].
+- I read it at most every 20 min and send the numbers when it ends.
+
+**The rehearsal** (`r20261112-133101-23c4`, `SC_CLASS=test`, one run, a research-pool slot, 21 of its 30 cores pinned)
+- Ended done, exit 0, class SUCCESS, result valid [status read by me]. Launched 5:31 AM PST, before your 5:37 AM PST order reached me; it is the one rehearsal.
+- `result.json`: validation passed ("the guard holds"), 17 measurements, both metrics present [read]: proving 60.6 s a second of execution phase; the verifier 20.931 CPU s on one core, its wall 21.0, at the test class (T = 16 ticks of 100 ms).
+- `lean.jsonl`: 27 lines. The honest round's four verify lines name `sczk/honest/session-first/archive`, `…/session-ingress-0/archive`, `…/session-last/archive` and `…/session-egress-0/archive`, the path `result.py` looks up [read]. Each ran on one core (the first of the job's), exit 0, CPU within 0.01 s of wall. Their CPU sums to the round's 33.49 s [read].
+- The writer imported the kit on the node's Python and wrote the 17 measurements into the run's `result.json` [ran].
+- The scan's cheating rounds refused as they should (the chain round's `ingress-0`, the tampered round), and the scan exited 0 [read].
+- One thing it showed: the run's `out/` is 891 MB at the test class, 815 MB of it the verifier's circuit text files the scan keeps (`sczk/ROUND/verifier/*-circuit.txt`) [read]. The baseline's will be larger, and custody uploads all of it. I changed nothing: the scan keeps them, not the runner.
+
+**`lock` refuses where either number is absent**: commit `4d784714a8`, with a test (an unpinned verifier's run, a run with no proving seconds, both; the file is not written; exit 2 from the command) [ran: the file's 23 tests pass, ruff clean].
+
+**What you should know before the mark: `main` is 569 commits past this branch's base, and it changed the kit.**
+- `main` changed `verity_bench/kit.py` (the writer has a `validation` method now), `verity_flock/tmpl.py` (3 lines) and `proof_server.py` (21 lines) [read].
+- The baseline runs the branch's tree, the one the rehearsal ran. [argued] Neither scan-path change moves the proving seconds: one is a span fix in `tmpl.evaluate`, the other a close after a failed session.
+- [ran] A trial merge of `main` at `3d8530f526` is clean, and the benchmark's 25 tests (scan_cost's 23 and the `SC_LEAN_ONE` test's 2) pass against `main`'s kit with `result.py write` unchanged. So I merge `main` in after the baseline, as you ordered, with no change to the writer.
+
+**Next:** #9296's head and run when its suites end (run `r20261112-134346-75aa`, launched 5:44 AM PST on head `a04100719af7`, running).
+
