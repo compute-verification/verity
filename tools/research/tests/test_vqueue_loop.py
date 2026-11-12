@@ -4332,6 +4332,35 @@ def test_under_gate_check_with_the_graph2_shadow_off_no_graph2_verdict_is_read_a
     assert loop.tick() == [] and not [r for r in env.lines() if r["action"] in ("compare", "graph2")]
 
 
+@pytest.mark.parametrize("check", [PASS, FAIL])
+def test_under_gate_check_with_the_graph2_shadow_off_a_candidate_dropped_after_its_check_ended_has_its_graph2_check_cancelled(
+        env, monkeypatch, check):
+    """--no-graph2-shadow follows nothing (`_followed`), so a drop follows nothing either: a candidate dropped once its check
+    passed (`main` advanced to it) or failed (its member ejected) has its graph2 check cancelled at the drop, which keeps no
+    `follow`, and no later tick follows it, however long graph2's check would have run."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"} if check == FAIL else {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, policy if check == FAIL else vqueue.decide, graph2_shadow=False)
+    script = env.graph2_script(loop, {"state": PENDING, "pending": 1})
+    cancelled: list[str] = []
+    cancel = loop.world.cancel
+    monkeypatch.setattr(loop.world, "cancel", lambda sha, *a, **k: cancelled.append(sha) or cancel(sha, *a, **k))
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    runs.end(sha, *((3, "pytest") if check == FAIL else ()), **({"rows": (_row(NEW),)} if check == FAIL else {}))
+    logged = loop.tick()
+    assert _acts(logged)[-2:] == (["eject", "drop"] if check == FAIL else ["on_main", "drop"]) and env.main() == (
+        main if check == FAIL else sha)
+    drop = logged[-1]
+    assert (drop["sha"], drop["cancel"], "follow" in drop, cancelled) == (sha, "cancelled", False, [sha])
+    assert Path(f"{script}.cancel").read_text() == f"ready:{sha}\n"
+    for at in (T0 + 600, T0 + L.FOLLOW_S):
+        env.clock = at
+        assert loop.tick() == [] and cancelled == [sha]
+    assert not L.Past.read(env.log, 0).followed() and not [r for r in env.lines() if r["action"] == "compare"]
+
+
 @pytest.mark.parametrize("base", ["passed", "failed"])
 def test_under_gate_check_a_ratchet_gate_naming_no_merge_it_fails_rings_its_owner_unless_its_base_failed_it_so(
         env, monkeypatch, base):

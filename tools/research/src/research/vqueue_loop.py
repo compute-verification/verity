@@ -2976,10 +2976,10 @@ class Loop:
         """What a later tick compares graph2's verdict of ``c`` with (`_followed`), where the check gates and ``c`` is dropped
         with its check ended in a pass or a fail (`_ended`: not an early red; on `main`, or failed) and graph2's, in shadow,
         not: the check's reading and what it failed as this drop reads them, how long it took (`_check_s`), and when graph2's
-        check was enqueued.  None for any other drop: its graph2 check is cancelled, and it gets no compare line it hasn't
-        had."""
+        check was enqueued.  None for any other drop, and for every drop while the shadow is off (`--no-graph2-shadow`, under
+        which `_followed` follows nothing): its graph2 check is cancelled, and it gets no compare line it hasn't had."""
         j, mine = t.judged.get(c.sha), _ended(c.verdict)
-        if (self.gate != CHECK_GATE or j is None or j.shadow is None or _ended(j.shadow) is not None
+        if (self.gate != CHECK_GATE or not self.graph2_shadow or j is None or j.shadow is None or _ended(j.shadow) is not None
                 or mine not in (PASS, FAIL) or c.enqueued is None):
             return None
         return {"check": mine, "said": _brief(c.verdict), "check_s": self._check_s(t, c.sha, j.record),
