@@ -306,12 +306,8 @@ A spec-level reference for network accounting's timing channel:
   (`content_rows`: its request, response and end rows), all committed as the cells' rows are and listed under one
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
   `--registered` port of the proof blocks that read a table, one a row (`port`);
-- how an execution phase's class is charged (`class_charge.charge`), from that head and the class's verdict records:
-  below its schedule only where the head states a count above 0 for it and four verdicts on it are there, the stop
-  record, the response tie, the certified read of the request's three words and the compute audit's second stage,
-  each accepted, complete and from a run on the head's serve; with one missing, refused, not complete or of another
-  serve, its whole schedule on every row, that verdict named. A record without `complete` reads as not complete,
-  and a class with a count of 0 owes no verdict;
+- how an execution phase's class is charged (`class_charge.charge`): below its schedule only with a count above 0
+  in that head and its four verdicts, each accepted, complete and naming the head; else its whole schedule;
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the

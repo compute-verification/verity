@@ -14,18 +14,21 @@ length is no one's choice:
 - the compute audit: its second stage over the class's sample, that the committed ids are the outputs of the
   request's Program.
 
-**A verdict record** is an object with the fields `FIELDS`: which of the four it is (`kind`), the serve it was run on
-(`serve`), the execution phase and the class it is of (`link`, `window`, `class`, as the head and the schedule name
-them), the run that produced it and the verifier that judged it (`run`, `verifier`), what the verifier said
-(`verdict`, `ACCEPT` or anything else), whether what it accepted is the whole of what the verdict is of (`complete`)
-and what proves the verifier (`proved_by`). `charge` reads the first eight but `run` and `verifier`, which it only
-hands on with the record.
+**A verdict record** is an object with the four fields `FIELDS`: the run that produced the verdict (`run`), the
+verifier that judged it (`verifier`), the verdict (`verdict`) and what proves the verifier (`proved_by`). The verdict
+is the verifier's own object, and whichever of the four it is it says what it is of and how it went, in the fields
+`READ`: the execution phase and the class (`link`, `window`, `class`, as the head and the schedule name them), the
+digest of the signed head it was decided under (`head`), and two bits, `accepted` and `complete`, the second saying
+that what was accepted is the whole of what the verdict is of. `charge` reads those six and the run, and nothing
+else of a record. Which of the four a record is is its caller's to say: `charge` takes the records by verdict.
 
-**All four or none.** A verdict counts where a record of its kind is of the class, in the head's execution phase, on
-the serve the head is of, and every such record accepts and is complete. `complete` is a field of the record and no
-default: a record without it reads as not complete. One verdict that is missing, refused, not complete or only of
-another serve leaves every connection of the class at its whole schedule, and `charge` names each such verdict with
-what it lacks. No verdict of one class, execution phase or serve counts for another.
+**All four or none.** A verdict counts where a record of it is of the class, in the head's execution phase, names
+this head's digest, and every such record is accepted and complete. Naming the head is what holds a verdict to the
+serve the head was signed on: a verdict decided under another head, another run's or another serve's, names another
+digest. `complete` is a field of the verdict and has no default: a verdict without it reads as not complete. One
+verdict that is missing, not on this head, refused or not complete leaves every connection of the class at its
+whole schedule, and `charge` names each such verdict with what it lacks. No verdict of one class or head counts for
+another.
 
 **The count.** A class's count is its three tables' rows as the head states them, one number. A class whose count is
 0 has no connection to charge and owes no verdict. Where the schedule fixes a class's rows whatever the load, the
@@ -43,30 +46,29 @@ from typing import Any
 from verity.protocols.certifier.verifier import content_rows as CT
 from verity.protocols.certifier.verifier.connection_rows import Head
 
-#: the four verdicts a class owes before it is charged below its schedule, as a record's `kind` names them
+#: the four verdicts a class owes before it is charged below its schedule
 STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT = "stop record", "response tie", "certified read", "compute audit"
 VERDICTS = (STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT)
-#: a verdict record's fields, and the verdict that accepts
-KIND, SERVE, LINK, WINDOW, CLASS, RUN, VERIFIER, VERDICT, COMPLETE, PROVED_BY = FIELDS = (
-    "kind", "serve", "link", "window", "class", "run", "verifier", "verdict", "complete", "proved_by")
-ACCEPT = "accept"
+#: a verdict record's fields, and the fields of its verdict that `charge` reads
+RUN, VERIFIER, VERDICT, PROVED_BY = FIELDS = ("run", "verifier", "verdict", "proved_by")
+LINK, WINDOW, CLASS, HEAD, ACCEPTED, COMPLETE = READ = ("link", "window", "class", "head", "accepted", "complete")
 #: what a verdict that doesn't count lacks
-MISSING, ANOTHER_SERVE, REFUSED, NOT_COMPLETE = "missing", "of another serve", "refused", "not complete"
+MISSING, ANOTHER_HEAD, REFUSED, NOT_COMPLETE = "missing", "not on this head", "refused", "not complete"
 
 
 @dataclass(frozen=True, slots=True)
 class ClassCharge:
     """How an execution phase's class is charged. `count`: its count in the head. `below`: whether its connections
     are charged below their schedule, which takes a count above 0 and all four verdicts. `owed`: each verdict that
-    doesn't count, in `VERDICTS`' order, as (its kind, what it lacks, the runs of the records that lack it); empty
-    where `below` and where the count is 0. `read`: the class's records on the head's serve and execution phase,
-    by kind in `VERDICTS`' order, counted or not."""
+    doesn't count, in `VERDICTS`' order, as (the verdict, what it lacks, the runs of the records that lack it);
+    empty where `below` and where the count is 0. `read`: the class's records on this head, counted or not, each
+    with the verdict it is of, in `VERDICTS`' order."""
 
     cls: int
     count: int
     below: bool
     owed: tuple[tuple[str, str, tuple[str, ...]], ...]
-    read: tuple[Mapping[str, Any], ...]
+    read: tuple[tuple[str, Mapping[str, Any]], ...]
 
     @property
     def schedules(self) -> int:
@@ -77,7 +79,7 @@ class ClassCharge:
         """One line: how the class is charged and, at its whole schedule, each verdict that doesn't count."""
         if self.below:
             return (f"class {self.cls}: charged below its schedule, its {len(VERDICTS)} verdicts "
-                    f"({', '.join(VERDICTS)}) each accepted and complete on the head's serve")
+                    f"({', '.join(VERDICTS)}) each accepted and complete on this head")
         if not self.count:
             return f"class {self.cls}: a count of 0, so no connection is charged and no verdict is owed"
         lacks = "; ".join(f"the {kind} is {lack}" + (f" ({', '.join(runs)})" if runs else "")
@@ -99,37 +101,42 @@ def count(head: Head, cls: int) -> int:
     return rows.pop()
 
 
-def _is(record: Mapping[str, Any], key: str, value: object) -> bool:
-    return type(record.get(key)) is type(value) and record[key] == value
+def _is(verdict: Mapping[str, Any], key: str, value: object) -> bool:
+    return type(verdict.get(key)) is type(value) and verdict[key] == value
 
 
 def _runs(records: Iterable[Mapping[str, Any]]) -> tuple[str, ...]:
     return tuple(sorted({str(r.get(RUN)) for r in records}))
 
 
-def charge(head: Head, cls: int, serve: str, records: Iterable[Mapping[str, Any]]) -> ClassCharge:
-    """How class `cls` of the execution phase `head` is signed for is charged, from the verdict records given
-    (the module docstring's "All four or none"). `serve`: the serve the head is of. ValueError for a head without
-    the class, a serve that is no name, or a record that is no object."""
+def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any]]]) -> ClassCharge:
+    """How class `cls` of the execution phase `head` is signed for is charged, from the verdict records given, by
+    verdict: a map from each of `VERDICTS` to its records, a verdict with none left out (the module docstring's
+    "All four or none"). ValueError for a head without the class, a key that is none of the four, or a record
+    that is no object or whose verdict is none."""
     n = count(head, cls)
-    if type(serve) is not str or not serve:
-        raise ValueError(f"the head's serve is its name, not {serve!r}")
-    records = list(records)
-    if off := [r for r in records if not isinstance(r, Mapping)]:
-        raise ValueError(f"a verdict record is an object with the fields {', '.join(FIELDS)}, not {off[0]!r}")
+    other = [k for k in records if k not in VERDICTS] if isinstance(records, Mapping) else [type(records).__name__]
+    if other:
+        raise ValueError(f"the records are given by verdict, each one of {', '.join(VERDICTS)}, not {other[0]!r}")
+    given = {kind: list(records.get(kind, ())) for kind in VERDICTS}
+    for kind, its in given.items():
+        if off := [r for r in its if not (isinstance(r, Mapping) and isinstance(r.get(VERDICT), Mapping))]:
+            raise ValueError(f"a verdict record is an object with the fields {', '.join(FIELDS)}, its verdict an "
+                             f"object with {', '.join(READ)}; the {kind}'s is {off[0]!r}")
     if not n:
         return ClassCharge(cls, 0, False, (), ())
-    here = [r for r in records if _is(r, LINK, head.link) and _is(r, WINDOW, head.window) and _is(r, CLASS, cls)]
+    digest = head.digest().hex()
     owed: list[tuple[str, str, tuple[str, ...]]] = []
-    read: list[Mapping[str, Any]] = []
-    for kind in VERDICTS:
-        of_kind = [r for r in here if _is(r, KIND, kind)]
-        ours = [r for r in of_kind if _is(r, SERVE, serve)]
-        read += ours
+    read: list[tuple[str, Mapping[str, Any]]] = []
+    for kind, its in given.items():
+        here = [r for r in its if all(_is(r[VERDICT], key, value) for key, value in
+                                      ((LINK, head.link), (WINDOW, head.window), (CLASS, cls)))]
+        ours = [r for r in here if _is(r[VERDICT], HEAD, digest)]
+        read += [(kind, r) for r in ours]
         if not ours:
-            owed.append((kind, ANOTHER_SERVE if of_kind else MISSING, _runs(of_kind)))
-        elif refused := [r for r in ours if not _is(r, VERDICT, ACCEPT)]:
+            owed.append((kind, ANOTHER_HEAD if here else MISSING, _runs(here)))
+        elif refused := [r for r in ours if r[VERDICT].get(ACCEPTED) is not True]:
             owed.append((kind, REFUSED, _runs(refused)))
-        elif partial := [r for r in ours if r.get(COMPLETE) is not True]:
+        elif partial := [r for r in ours if r[VERDICT].get(COMPLETE) is not True]:
             owed.append((kind, NOT_COMPLETE, _runs(partial)))
     return ClassCharge(cls, n, not owed, tuple(owed), tuple(read))
