@@ -147,29 +147,30 @@ def test_the_watermark_stream_is_opened_at_the_runs_start_with_no_admission_and_
     server = Streamed([])
     certifier, clients, _ = run(server, {}, watermark=server.watermark, release=server.row,
                                 run_nonce=lambda n: run_id[:n])
+    assert server.unread.touched == []
     assert server.opened_after == [0] and server.rows == 3 * PARAMS.window
     assert clients == [] and (certifier.ordinals, certifier.refused, certifier.log) == (0, 0, [])
     assert server.conns == []
     _, _, lines, ended, _ = tick_engine(server.events, run_id)
     assert lines == [(t, 0, ()) for t in range(PARAMS.window)] and ended and server.closed
-    assert certifier.watermark_error is None and server.unread.touched == []
+    assert certifier.watermark_error is None
 
 
 def test_the_watermark_stream_is_written_and_never_read():
-    """Five requests released over a run with the watermark on (`tick_traffic`): the network certifier writes the
-    stream its head, a line a tick and its end, and uses the stream's reader half in no way, where a `StreamReader`'s
-    every method and iteration is kept (`Unread`). Each response a client gets was read on the connection `connect`
-    opened for it."""
-    answers, arrivals, hold = tick_traffic()
+    """Five requests released over a run with the watermark on (`tick_traffic`'s, each server connection opening at
+    once): the network certifier writes the stream its head, a line a tick and its end, and uses the stream's reader
+    half in no way, where a `StreamReader`'s every method and iteration is kept (`Unread`). Each response a client
+    gets was read on the connection `connect` opened for it, one a client."""
+    answers, arrivals, _ = tick_traffic()
     run_id = bytes(range(32))
-    server = Streamed(answers, hold=hold)
+    server = Streamed(answers)
     certifier, clients, _ = run(server, arrivals, watermark=server.watermark, release=server.row,
                                 run_nonce=lambda n: run_id[:n])
+    assert server.unread.touched == [] and server.opened_after == [0]
     _, _, lines, ended, early = tick_engine(server.events, run_id)
     assert [t for t, _, _ in lines] == list(range(PARAMS.window)) and ended and server.closed and early == []
     assert certifier.watermarked == (PARAMS.window - 1, 5) and certifier.watermark_error is None
-    assert server.opened_after == [0] and server.unread.touched == []
-    assert len(server.conns) == 5
+    assert len(server.conns) == len(clients) == 5
     assert [bytes(c.shim().data) for c in clients] == [b"r0", b"r1", b"r2", b"r3", b"r4"]
 
 
