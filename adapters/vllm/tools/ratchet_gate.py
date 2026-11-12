@@ -112,7 +112,9 @@ Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR 
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check).  Nothing runs it before a PR lands: it is the check's ``ratchet-gate`` step
+and BASE's move_check, beside the scripts it loads).  The ready mark's preflight runs it on the PR's merge, as BASE has it,
+and only warns (``research.queue``'s ``PREFLIGHT_RATCHET``), since a moved line or a module the PR adds can read as a new
+violation; what judges a PR is the check's ``ratchet-gate`` step
 (``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
 drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
 change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge
@@ -215,6 +217,9 @@ INTEGRATION_RUFF = (RUFF_LINT, RUFF_VLLM_LINT)
 #: where a ruff lint runs ruff, when that isn't its first config's directory: its config's paths are relative to there
 RUFF_FROM = {RUFF_VLLM_LINT: INTEGRATION}
 MOVE_CHECK = "tools/verity/check/move_check.py"
+#: what move_check imports from its own checkout, as `research.queue`'s `move_scripts` lists it: the move scripts (the
+#: directory's own files) and the pins list
+MOVE_CHECK_READS = ("tools/move/", "tools/verity/check/pins.py")
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
 #: a comment ruff reads as a ``noqa``: the hash, then ``noqa`` or ``noqa: CODE, ...``, or a file's ``ruff: noqa`` (or ``flake8:``)
@@ -451,14 +456,21 @@ def is_revert(c: Change) -> bool:
 
 
 def is_pure_move(c: Change, base: str) -> bool:
+    """Whether ``base``'s move_check certifies the change. It runs from a copy of ``base``'s scripts written at their paths
+    (``MOVE_CHECK_READS``), since it finds the root, and from it what it imports, by where its own file is."""
     try:
-        script = git("show", f"{base}:{MOVE_CHECK}")
+        listed = git("ls-tree", "-z", "--name-only", base, "--", MOVE_CHECK, *MOVE_CHECK_READS).split("\0")
     except GitError:
         return False
+    scripts = tree_files(base, {p for p in listed if p.endswith(".py")})
+    if MOVE_CHECK not in scripts:
+        return False
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
-        p = Path(d) / "move_check.py"
-        p.write_text(script)
-        return subprocess.run([sys.executable, str(p), c.lo, c.hi], capture_output=True).returncode == 0
+        for path, data in scripts.items():
+            f = Path(d) / path
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(data)
+        return subprocess.run([sys.executable, str(Path(d) / MOVE_CHECK), c.lo, c.hi], capture_output=True).returncode == 0
 
 
 def kind(entry: object) -> object:

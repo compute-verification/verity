@@ -1,4 +1,5 @@
-"""capacity_of.py: the certified share σ of a measured window, from a scored run's entries and from dcap's lfill lines."""
+"""capacity_of.py: the share σ of a measured window that is verified compute, from a scored run's entries and from
+dcap's lfill lines."""
 from __future__ import annotations
 
 import json
@@ -7,9 +8,8 @@ from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(HERE))
-import capacity_of as CO  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import capacity_of as CO
 
 PI = CO.E.machine("VF3r-16")  # the vector of record the readings below are taken on
 GHZ = 2.092e9
@@ -66,10 +66,10 @@ def test_dfill_reads_split_and_co_alike():
 
 def fstep(pump_share=0.58, fused_ms=7.0, fused0_ms=7.0):
     """an fstep co line at B 1: the pump at `pump_share` of the whole GPU's tensor peak beside the flin step"""
-    cap = 1024 * 188 * GHZ
+    peak = 1024 * 188 * GHZ
     return {"mode": "fstep", "place": "co", "B": 1, "L": 2048, "M": 32, "step_sms": 188, "fill_sms": 188, "mhz": 2092.0,
             "pump": {"share": pump_share, "alone_share": 0.57, "rec_bad": 0}, "fill_share_lin": 0.0, "fill_share_att": 0.0,
-            "step_share_fused": 8.04e9 / (fused_ms * 1e-3) / cap, "slowdown": fused_ms / 6.0, "fused_ms": fused_ms,
+            "step_share_fused": 8.04e9 / (fused_ms * 1e-3) / peak, "slowdown": fused_ms / 6.0, "fused_ms": fused_ms,
             "fused0_ms": fused0_ms, "fused0_vs_base": fused0_ms / 6.0, "lin": {"rec_bad": 0}, "att": {"rec_bad": 0},
             "out_mismatches": 0, "lm_mismatches": 0}
 

@@ -1718,7 +1718,7 @@ print(json.dumps(rep["cache"]))
 
 
 def test_a_check_that_raised_or_read_another_trees_module_is_not_stored(tmp_path):
-    """A check that raised is no verdict (T11: an ImportError from a tree a concurrent run was rewriting, replayed on the next
+    """A check that raised is no verdict (such as an ImportError from a tree a concurrent run was rewriting, replayed on the next
     tree); a module imported from outside the tree is a read no key holds, so that result and later ones are not stored."""
     import subprocess
     import sys

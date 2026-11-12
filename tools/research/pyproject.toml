@@ -79,6 +79,7 @@ untraced = [
     "tests/test_pyspy.py",
     "tests/test_pythonpath.py",
     "tests/test_queue.py",
+    "tests/test_queue_cross.py",
     "tests/test_queue_moves_carry.py", "tests/test_queue_flags.py",
     "tests/test_queue_open.py",
     "tests/test_queue_ported.py",
@@ -101,6 +102,7 @@ untraced = [
     "tests/test_run_env.py",
     "tests/test_run_launched.py",
     "tests/test_run_on_fixes.py",
+    "tests/test_run_preserve.py",
     "tests/test_scopemem.py",
     "tests/test_secret_hint.py",
     "tests/test_slack.py",
@@ -111,9 +113,12 @@ untraced = [
     "tests/test_store_prov.py",
     "tests/test_store_vllm_tools.py",
     "tests/test_telemetry.py",
+    "tests/test_tool_rules.py",
+    "tests/test_treelock.py",
     "tests/test_undeclared_derivation.py",
     "tests/test_vqueue_compare.py",
     "tests/test_vqueue_loop.py",
+    "tests/test_vqueue_moves.py",
     "tests/test_vqueue_records.py",
     "tests/test_vqueue_slim.py",
 ]
@@ -217,6 +222,7 @@ tests = [
     "tests/test_remote_version.py",
     "tests/test_run_custody.py",
     "tests/test_run_launched.py",
+    "tests/test_run_preserve.py",
     "tests/test_store_prov.py",
 ]
 paths = ["tools/research/src/research"]
