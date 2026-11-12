@@ -199,3 +199,54 @@ uv run -q research run --on NODE --pool network --mem-gb 650 --project verity \
 
 **I wait on two things:** your word, with the hour, on the rehearsal, and the suites' slot. I read the suites' verdict when the run ends and send it in one line.
 
+[2026-11-12T13:11Z] 9426fb8b4c4d
+CERTNEG to the network-accounting coordinator, on your order of Thu 12 Nov 4:26 AM PST (the lost release). Sent Thu 12 Nov 5:11 AM PST. All four items. Lines are `main`'s at `1885cf1fe0`; the six files I cite are unchanged on `main` since.
+
+**In one line: none of our six deviations can make a release lost; the job now stops at a try whose device log names one, with nothing under `verity/` changed; and of the two forms I would end the watermark at the first lost release.**
+
+**1. What makes a release lost in the six tries**
+
+- **The rule.** [read] A release is lost only where `warden.py` `_written` (898-907) answers False: the request was not written whole with the transport's buffer emptied, and the server connection's writer is closing, or its connect or read raised `OSError` (`c.upstream`, 780-783), or the connection ended first (`_end`, 953-957).
+- **When it is decided.** [read] The request is one `write` at its release (819-827), and `_tick` asks `_written` in the same tick (650-652). With the server connection open and a request of a few cells, the answer is True at once and stays True (`c.written` is set once, 902-906).
+- **The server in these tries is our own process.** [read] `deviations.py` 687-691 hands the relay the deviating process's loopback address as its upstream, and `warden_serve.py` 778-781 opens the request connections and the watermark's stream to it. vllm's front is behind it.
+- **No class can cause it.** [read] The deviating process accepts every connection and reads the request's head before anything else (`deviate` 252-254, no timeout). Only then does it open the front (255-260). All six classes act on the response alone (`Deviation` 176-229, `send` 267-271, `down` 280-288); `fail` withholds and keeps the connection open (295-297). None closes the relay's connection before the request is written.
+- **What does cause it.** [read] The relay's connection to the deviating process failing before the write: the deviating process gone or not listening, or the relay out of descriptors. [ran] I killed the deviating process of one try, by PID, once that try's relay listened (real processes, stand-in front, `--watermark`): the device's log named all 8 releases lost, each connection `ConnectionRefusedError`.
+- **A front that fails is not seen as lost.** [read] If the front takes no connection, the deviating process closes the relay's connection after it read the head (257-260), so the relay had already written the request and `_written` is True. The device then says written for a request the server never got. vllm's gate holds for it `hold_s` and skips it; no line names it.
+- **One narrow path where the device can call a written request lost.** [read, argued] `_flush_watermark` (909-922) asks `_written` only for the first line still held. If an earlier release is still on its way and a later connection is reset after its request was written, the later one is asked after its writer is closing and is called lost. It needs a release held behind an unopened or unflushed connection, which the loopback does not give; I did not see it.
+- **What ran.** [ran] At tonight's command with the stand-in (`r20261112-100351-b4d2`), each of the six device logs has no lost release and no error; the last line is `239 8` (`479 64` for `bucket`). [ran] A smaller schedule today, real processes: six tries, none lost, none in error.
+
+**2. The build: done, benchmarks only**
+
+- **The pull request:** https://github.com/compute-verification/verity/pull/9296, open, unmarked, on `main`. Branch `cursor/network-accounting-lost-release-stop-06b2`, head `09e8f2b58bc5`. 4 files, all under `benchmarks/network_traces/`: `deviations.py`, `deviations.sh` (its header), `README.md`, `tests/test_deviations.py`.
+- **The job reads the log with no change under `verity/`.** [read] Each try's run directory is `$W/tries/CLASS` in the job's scratch (`deviations.sh` 150), and `serve` writes `warden.json` there at the run's end with the watermark's last line, lost releases and error (`warden_serve.py` 803-810).
+- **What it does.** After each try, with a check or without, it reads that log. If it names a lost release, no later class is tried. It prints the try, the lost release numbers and the classes left, and exits 5 whatever the rows say; `deviations.sh` exits the same. The line it prints:
+  `tokens: STOPPED at a lost release: its network certifier's log names 8 lost on the watermark (0, 1, 2, 3, 4, 5, 6, 7), a line a server that reads `t n` alone stops ordering at; not tried: length, fail, extra, bucket`
+- **Suites** on its head, launched once: `r20261112-130144-fcca`, done, exit 0 [status read by me]: 6 suites, 6 passed, 0 failed (`verity-network-traces` 599, `benchmarks/one_stage` 571, `verity-network-e2e` 70, `verity-network-sim` 21, `verity-graph` 215, `repository` 346).
+- **Tests.** [ran] Three new ones on the relay itself on a virtual clock: a refused server connection loses its release, the watermark's bytes hold the line naming it, and the tries stop there with exit 5. `test_deviations.py`: 59 passed here. The ratchet gate passes: no count of a file grew.
+- **Real processes.** [ran] The kill run of item 1: exit 5 after the second try, and no run directory for a later class.
+
+**For tonight.** The job has the stop only where it runs from a tree that holds this change: `main` once #9296 has landed, or this branch's head (`main` at `1885cf1fe0` plus these 4 files). Say which I launch from. If a try stops the job tonight, its exit is 5 and its last line names the try; I send you that line at once.
+
+**Three choices in it that you did not order. Say if any should be otherwise.**
+
+1. **A missing log stops the tries too.** If the rehearsal ran with `--watermark`, the relay listened, and it left no log, the job stops the same way: what its watermark named is not known. A try whose relay never started sent nothing and stops nothing.
+2. **An error with no lost release does not stop the tries.** The log's `error` is kept and shown in the try's row, and that is all. [read] It probably should stop them: a stream the server closed is `error: "closed"` in the log, and a watermark that breaks opens vllm's gate for good (`serve_admit.py` 411-412, 547-553), the same harm as the lost line. I held back because you ordered the lost release only, and I cannot test what vllm's server does to the stream at a clean end. It is three lines if you want it.
+3. **Each try keeps the watermark's state.** `CLASS.json` gains `watermark`: the last line, the lost releases, the error's first word (its text can hold an address). So a run's kept files show for each try that the watermark ran clean to its last bucket.
+
+**3. The device's change, sized, not built**
+
+[read] Nothing of ours reads the lost names from the line. `read_watermark` is called only in the certifier's tests; the stand-in endpoint reads the stream to its end unparsed (`warden_serve.py` 397-402); the device's log takes the lost releases from the relay's own state (`warden.py` 921), not from the line. No Lean, lock record or circuit names the watermark. vllm's `serve_admit.py` has no word for a lost release.
+
+| | A: the line is `t n` only | B: the watermark ends at the first lost release |
+|---|---|---|
+| Code | `release.py`: `watermark_chunk`, `read_watermark`, `_LINE`, `_rising`, the docstring, about 25 lines. `warden.py`: `_flush_watermark` sends `watermark_chunk(t, n)` and keeps the lost for its log, and two docstrings, about 10. `warden_serve.py`: its docstring and `--watermark`'s help, 4. | A's wire change, and in `_flush_watermark` about 8 more: at the first line with a lost release, send the terminating chunk in its place and close the stream. |
+| Docs | The line's format in the certifier's `PROTOCOL.md` (2198-2199) and `README.md` (291-292). | The same, and the sentence on when the stream ends. |
+| Tests | `test_network_certifier_release.py` (98-144), `test_network_certifier_warden.py` (the model server 911-936, and 985, 1014-1016, 1030-1049), `test_warden_serve.py` (454-455). About 45 lines rewritten. | The same, and one new test: the stream ends at the lost release's bucket and the relay sends no line after it. |
+| Size | About 85 lines in 4 code files, 3 test files, 2 docs. | About 110 lines, the same files. |
+| What vllm's gate does | [read] No error. The lost release is below a line's n and never comes, so the gate holds the later ones `hold_s` behind it, then skips it (`serve_admit.py` 497-504, counted `skipped`). If its bytes come later it is added at once (`late`, 426-433). The order goes on for the run and the next. | [read] A clean end (`ended`, 408-409). Releases below the last line's n are ordered as before. The rest of that run is added without order once the gate reaches the end (`_past_end`, 515-520, counted `past_end`), with no wait. The gate does not open, and the next run id starts ordered (374-381). |
+| What it costs | A line `t n` then claims every release below n was sent when one was not. The server can no longer tell lost from late, so each lost release is a wait timed by the server's own clock. | The rest of that one run is unordered, and says so in the server's own counts. |
+
+**4. The form I would take:** B, the watermark ends at the first lost release: every line the server reads stays exact, the run that lost a release is visibly unordered from there instead of resting on a timed skip, and the next try starts ordered.
+
+**Also, on job H:** the scan_cost pull request is open and unmarked: https://github.com/compute-verification/verity/pull/9290, head `744e2a501e`, the changed suites at that head 11 of 11 passed (`r20261112-122555-effd`, done, exit 0, status read by me). `research queue open` warned that NET-366's label names the goal `network/certifier-term-zero`, not `network/period-bound-checked`; I kept your line. Two slips in my earlier plan line: its header said 3:55 AM PST and it went out about 3:33 AM PST, and it said 20 tests; the suite has 22. The rehearsal and the baseline are not launched: not before 5:30 AM PST, and I report the launch.
+
