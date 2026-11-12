@@ -55,7 +55,7 @@ def test_a_record_as_main_writes_it_holds_the_sessions_seconds_and_names_what_it
     timer, same = R.read(as_main_writes(tmp_path), run="r1", seconds="prove_total_s")
     assert [e["seconds"] for e in timer["prove"]] == [38.25, 31.5] and same == absent
     assert {k: v for k, v in timer.items() if k != "prove"} == {k: v for k, v in record.items() if k != "prove"}
-    with pytest.raises(ValueError, match="one of session_s, prove_total_s"):
+    with pytest.raises(ValueError, match="one of busy_gpu_s, session_s, prove_total_s"):
         R.read(as_main_writes(tmp_path), seconds="e2e_s")
     # the command claims no share from it, and names each field the reader named
     share = E.served_share(record)
@@ -96,6 +96,40 @@ def test_a_record_whose_files_hold_every_field_gives_the_share(tmp_path):
     served = 600.0 * 8
     audit = (50.0 + 80.0) + 10.0 + 96.0 + 24.0 + (served - 540.0 * 8)
     assert share["missing"] == [] and share["mark"] == "measured" and share["value"] == pytest.approx(audit / served)
+
+
+def test_the_busy_seconds_of_a_sessions_cards_are_taken_wherever_every_session_holds_them(tmp_path):
+    """A session's entry is its cards' busy GPU-seconds over its GPUs, on those GPUs, so the share counts the busy
+    GPU-seconds; one session without them, and every session is read on the audit's clock, never a mix."""
+
+    busy = {"m0": session(50.0, 38.25, gpus=2, busy_gpu_s=60.0), "m1": session(40.0, 31.5, gpus=1, busy_gpu_s=25.0)}
+    assert R.reading(busy) == R.BUSY and R.reading(busy, "session_s") == "session_s"
+    record, _ = R.read(second(tmp_path, {"audit": {"timing": busy}}), run="r3")
+    assert record["prove"] == [{"seconds": 30.0, "gpus": 2}, {"seconds": 25.0, "gpus": 1}]
+    assert E._gpu_s(record["prove"], "prove", "r3") == (85.0, [])
+    mixed = {**busy, "m1": session(40.0, 31.5, gpus=1)}
+    assert R.reading(mixed) == "session_s" and R.reading({}) == "session_s"
+    record, _ = R.read(second(tmp_path, {"audit": {"timing": mixed}}), run="r3")
+    assert record["prove"] == [{"seconds": 50.0, "gpus": 2}, {"seconds": 40.0, "gpus": 1}]
+
+
+def test_a_served_runs_published_summary_and_its_replays_own_are_read(tmp_path):
+    """A served run publishes its summary as `second.json`, read as `summary.json` is, by the directory or the file;
+    the replay of the sampled spans is a run of its own, whose `summary.json` holds its seconds and not its GPUs."""
+
+    d = as_main_writes(tmp_path)
+    (d / R.SUMMARY).rename(d / R.PUBLISHED)
+    assert R.summary_file(d) == d / R.PUBLISHED == R.summary_file(d / R.PUBLISHED)
+    record, absent = R.read(d, run="r1")
+    assert record["prove"] == [{"seconds": 50.0, "gpus": None}, {"seconds": 40.0, "gpus": None}]
+    replay = tmp_path / "replay.json"
+    replay.write_text(json.dumps({"replay_wall_s": 0.5, "engine_ready_s": 130.0, "bit_exact": True}))
+    record, absent = R.read(d, run="r1", replay=replay)
+    assert record["replay"] == [{"seconds": 0.5, "gpus": None}]
+    assert [(g["field"], g["file"]) for g in absent if g["field"].startswith("replay")] == [("replay.gpus", str(replay))]
+    replay.write_text(json.dumps({"replay_wall_s": 0.5, "gpus": 8}))
+    record, absent = R.read(d, run="r1", replay=replay)
+    assert record["replay"] == [{"seconds": 0.5, "gpus": 8}] and not [g for g in absent if g["field"].startswith("replay")]
 
 
 def test_a_directory_that_is_no_second_stages_is_refused(tmp_path):
