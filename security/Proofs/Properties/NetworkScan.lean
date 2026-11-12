@@ -65,7 +65,7 @@ theorem scanScopeAcc_of_scanFits (h : ScanFits) : ScanScopeAcc := by
 /-- The empty Program's scan layout, at one slot and a window of one step, doesn't fit the empty flattening: step 0's
 egress presence gate isn't returned. -/
 theorem empty_not_fits :
-    ¬ (scanLayout default ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩).Fits ⟨[], []⟩ 1 := by
+    ¬ (scanLayout default ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, none⟩).Fits ⟨[], []⟩ 1 := by
   rintro ⟨h, -, -⟩
   have := h 0 (by decide) 0 ⟨0, by decide⟩ _ (List.mem_cons.2 (Or.inl rfl))
   simp at this
@@ -78,7 +78,7 @@ definitions, so its root is the default definition, of no gates and no return, a
 theorem scanFits_nontrivial :
     ∃ (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) (s : NetworkCheck.Period.Schedule),
       Flattens P C ∧ ¬ (scanLayout P s).Fits C s.window := by
-  refine ⟨default, ⟨[], []⟩, ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩,
+  refine ⟨default, ⟨[], []⟩, ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, none⟩,
     ⟨rfl, fun g hg => absurd hg (Nat.not_lt_zero g), fun g => ⟨fun h => by simp at h, ?_⟩⟩, empty_not_fits⟩
   rintro ⟨j, hj, -⟩
   exact absurd hj (Nat.not_lt_zero j)
@@ -91,7 +91,7 @@ theorem scanScopeAcc_nontrivial_of {Coin : Type} [Fintype Coin] [Nonempty Coin] 
     {A : Claims.SamplingGeneric.Arg Coin} {D : Claims.SamplingGeneric.Compiled Coin A} {x : Claims.Msg}
     {st : Claims.Sampling.AuditStatement} (hx : D.parse x = some st)
     (hP : Flock.Program.decode ⟨st.desc.toArray⟩ = .ok default) (hC : st.prog = ⟨[], []⟩) :
-    ¬ NetTiming.ScopeAcc D (layOf ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩) (fun _ => 1) x := by
+    ¬ NetTiming.ScopeAcc D (layOf ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, none⟩) (fun _ => 1) x := by
   rintro ⟨-, st', hx', hF⟩
   obtain rfl := Option.some.inj (hx.symm.trans hx')
   unfold layOf at hF
