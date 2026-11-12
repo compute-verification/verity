@@ -2,12 +2,22 @@
  "format": 1,
  "roots": ["NetworkCheck"],
  "exempt": {
+  "NetworkCheck.ConnectionRowsDifftestMain": "the difftest against connection_rows.py, under `runs`: compiled evaluation of NetworkCheck.ConnectionRowsDifftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
   "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
   "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), of the client's check of a window's served certificates (certificates, NetworkCheck.LinkWindow.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn, in NetworkCheck.Clocks), audited under NetworkCheck"
  },
  "runs": {
+  "NetworkCheck.ConnectionRowsDifftestMain": {
+   "why": "240 random instances on which NetworkCheck.ConnectionRows gives what verity/protocols/certifier/verifier/connection_rows.py and content_rows.py give: tables_of of a schedule with lengths rows of either form and content classes, or the refusal of one WardenParams or content_rows.classes refuses; request_room, request_bytes and response_bytes; a table's domain id; a head's encoding and digest; and check_registration's head under an LMS key in the session, on honest registrations (under form 2 at counts from none to the most) and on ones changed in one place, those that change what the head lists signed again (a count past an execution phase's releases, a class's tables of two counts, a table of no row with a root), with each ValueError a refusal",
+   "args": ["{connection-rows/instances.jsonl}", "{connection-rows/python.jsonl}", "240"],
+   "data": {
+    "connection-rows/instances.jsonl": "79f1cf917f96602132c341612aaf8b2ee36d690016f2d19908e6dd42a69a42d1",
+    "connection-rows/python.jsonl": "1340cc2b757a952173ad1af8073184665c42b6b31755b60f23ad0bfa40cb6a01"
+   },
+   "generate": ["python3", "scripts/connection_rows_vectors.py", "{repo}", "--out", "{out}"]
+  },
   "NetworkCheck.DifftestMain": {
    "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/protocols/certifier/verifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],

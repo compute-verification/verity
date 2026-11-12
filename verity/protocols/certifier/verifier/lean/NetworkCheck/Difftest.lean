@@ -124,8 +124,9 @@ def fields : List String :=
   ["depth", "empty", "real_frames", "leaves", "root", "opens", "verifies", "manifest", "parameters", "record_head",
    "heads", "digests", "messages", "nodes"]
 
-/-- How the Lean side's results for instance line `i` differ from Python's, one line per field that differs. -/
-def differences (i : Nat) (inst python : String) : List String :=
+/-- How `evaluate`'s results for instance line `i` differ from Python's, one line per field of `fields` that differs. -/
+def differencesOf (evaluate : Json → Except String Json) (fields : List String) (i : Nat) (inst python : String) :
+    List String :=
   match Json.parse inst >>= evaluate, Json.parse python with
   | .error e, _ => [s!"instance {i}: the Lean side rejects it: {e}"]
   | _, .error e => [s!"instance {i}: Python's results don't parse: {e}"]
@@ -136,10 +137,14 @@ def differences (i : Nat) (inst python : String) : List String :=
       if a == b then none else some s!"instance {i}: {k}: Lean {a.compress}, Python {b.compress}"
     if found.isEmpty && lean != py then [s!"instance {i}: Python's results have fields Lean doesn't give"] else found
 
-/-- `lake env lean --run NetworkCheck/DifftestMain.lean INSTANCES PYTHON N`: every instance line of `INSTANCES` evaluated,
-each compared with the same line of `PYTHON`. Fails unless both files have `N` lines and none differs. -/
-def main (args : List String) : IO UInt32 := do
-  let [insts, py, n] := args | IO.eprintln "usage: NetworkCheck/DifftestMain.lean INSTANCES PYTHON N"; return 2
+/-- How the Lean side's results for instance line `i` differ from Python's. -/
+def differences (i : Nat) (inst python : String) : List String := differencesOf evaluate fields i inst python
+
+/-- A difftest's run on `INSTANCES PYTHON N`: every instance line of `INSTANCES` evaluated, each compared with the same
+line of `PYTHON` in `fields`. Fails unless both files have `N` lines and none differs. -/
+def mainOf (evaluate : Json → Except String Json) (fields : List String) (file : String) (args : List String) :
+    IO UInt32 := do
+  let [insts, py, n] := args | IO.eprintln s!"usage: {file} INSTANCES PYTHON N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines insts
@@ -147,10 +152,14 @@ def main (args : List String) : IO UInt32 := do
   if n.toNat? != some a.size ∨ a.size != b.size then
     IO.eprintln s!"difftest: {a.size} instances and {b.size} results, not {n}"
     return 1
-  let tasks := (a.zip b).toList.zipIdx.map fun ((x, y), i) => Task.spawn fun _ => differences i x y
+  let tasks := (a.zip b).toList.zipIdx.map fun ((x, y), i) =>
+    Task.spawn fun _ => differencesOf evaluate fields i x y
   let found := tasks.flatMap Task.get
   for d in found.take 50 do IO.eprintln d
   IO.println s!"difftest: {a.size} instances compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
+
+/-- `lake env lean --run NetworkCheck/DifftestMain.lean INSTANCES PYTHON N`: `mainOf` of the certificate's encodings. -/
+def main (args : List String) : IO UInt32 := mainOf evaluate fields "NetworkCheck/DifftestMain.lean" args
 
 end NetworkCheck.Difftest

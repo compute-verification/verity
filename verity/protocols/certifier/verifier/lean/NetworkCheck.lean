@@ -9,6 +9,8 @@ public import NetworkCheck.RecordsGrid
 public import NetworkCheck.RecordsBytes
 public import NetworkCheck.Period
 public import NetworkCheck.LinkWindow
+public import NetworkCheck.ConnectionRows
+public import NetworkCheck.ConnectionRowsDifftest
 
 /-!
 # The network certificate's checks
@@ -36,4 +38,10 @@ by `tests/test_network_period_protocol.py`. Code: it imports only Lean, Flock's 
 `NetworkCheck.LinkWindow` is N2's verdict of record on one execution phase from its proof (`service.LinkWindows.verify`,
 the `link-window` function of `network-records verdicts`). Beyond the above it imports Flock's `Flock.Hm96` and core's
 identity hash (`Identity.Tagged`).
+
+`NetworkCheck.ConnectionRows` is the head the network certifier signs for an execution phase's connection rows and the
+verifier's read of its registration (`connection_rows.py`): the tables of a schedule with lengths rows and content
+classes, each one's domain, the head's encoding and digest, and under the lengths rows' form 2 the rules on a class's
+count of held rows; `NetworkCheck.ConnectionRowsDifftest` is its difftest against the Python. It imports the period
+check and what that imports.
 -/
