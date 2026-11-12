@@ -379,7 +379,8 @@ def test_the_mask_units_as_calls_stay_small_at_the_served_statics(N: int, AT: in
 def test_the_selects_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each piece of the pass and of the valid bits carries a builder, as the merge's do: the circuit Flock's flat lowering
     makes of a pass over two chunks and a rest, of the valid bits of 13 keys, of a block's mask past the row's start and of
-    the mask whole is the one their gates lower to, AND for AND."""
+    the mask whole is the one their gates lower to, AND for AND.  The count sums in those units keep their builder on both
+    sides, and with it the rows that commit them (`test_the_ties_builders_lower_to_their_gates`)."""
     units = [bind(BM.DsaRadixPassV2, N=2 * BM.PASS_CHUNK + 88, TOPK=16), bind(BM.DsaRowValidV2, N=13),
              bind(X.DsaTopKMaskBlockV2, N=13, AT=16, TOPK=4), bind(X.DsaTopKMaskWholeV2, N=13, TOPK=4)]
     names = {p.name for p in SELECT_PIECES}
