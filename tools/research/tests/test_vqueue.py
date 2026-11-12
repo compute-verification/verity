@@ -2159,7 +2159,7 @@ class World:
 
     def batched(self, s: Snapshot, a: Build, acts: list, where: str) -> None:
         """What a batch holds and where it goes: Lean PRs only or none, in rank order from the first of its kind a batch may
-        take, on the chain's top as the tick's rebuilds leave it or, in a tick that commits a staged batch, on that batch there
+        take, a move last (`vqueue._moves_last`), on the chain's top as the tick's rebuilds leave it or, in a tick that commits a staged batch, on that batch there
         (`Build.after`); a rebuild staged again stays staged.  A Lean batch
         holds the pinned Lean PRs alone while one waits, else at most `lean`, a wide one alone, on no chain holding a wide one
         in flight; with records runs it is staged, only while no other batch stays staged, on no chain holding a PR set aside
@@ -2181,7 +2181,15 @@ class World:
         top = by[a.after].members if a.after else self.top(s, acts, a.base)
         leans = [m for m in a.members if ready[m].lean]
         assert 1 <= len(a.members) <= s.batch and not any(ready[m].conflict for m in a.members), where
-        assert list(a.members) == sorted(a.members, key=lambda m: (ready[m].rank, m)), f"{where}: a batch out of rank order"
+        ranked = sorted(a.members, key=lambda m: (ready[m].rank, m))
+
+        def opens(first: list[int]) -> set[int]:
+            """What may open the batch: the PR first in rank, or, that one a move, which goes last or waits for a batch with
+            no other move and no change to the move scripts, what the batch takes after it."""
+            return {first[0], *a.members[:1]} if ready[first[0]].move else {first[0]}
+
+        assert list(a.members) == [*(m for m in ranked if not ready[m].move), *(m for m in ranked if ready[m].move)], (
+            f"{where}: a batch out of rank order, but for its move last")
         assert not leans or len(leans) == len(a.members), f"{where}: a batch mixes Lean PRs and PRs with no Lean"
         assert a.records == (s.records and bool(leans)), f"{where}: a Lean batch with no records run first, or another with one"
         gone = {b.sha for b in acts if isinstance(b, (Drop, Commit))}
@@ -2193,7 +2201,7 @@ class World:
             assert not pinned or set(leans) <= s.pinned, f"{where}: a Lean PR built while a pinned Lean PR waited"
             assert pinned or len(leans) <= s.lean or not first and set(leans) <= s.pinned, (
                 f"{where}: a Lean batch over the `lean` cap")
-            assert not first or a.members[0] == first[0], f"{where}: a Lean batch not opened by the Lean PR first in rank"
+            assert not first or a.members[0] in opens(first), f"{where}: a Lean batch not opened by the Lean PR first in rank"
             plain = [r for r in waiting if not r.lean]
             assert first or not plain, f"{where}: a Lean PR set aside built while a PR with no Lean change waited"
             ahead = [r.number for r in plain if r.lean_input] if s.records else []
@@ -2217,7 +2225,7 @@ class World:
         else:
             beside = bool(staged) or any(b.records for b in acts if isinstance(b, Build))
             first = [r.number for r in waiting if not r.lean and not (beside and r.lean_input)]
-            assert not first or a.members[0] == first[0], f"{where}: a batch not opened by the PR first in rank"
+            assert not first or a.members[0] in opens(first), f"{where}: a batch not opened by the PR first in rank"
             assert not beside or not any(ready[m].lean_input for m in a.members), (
                 f"{where}: a PR changing a Lean input built beside a staged batch")
             assert first or not beside, f"{where}: a PR set aside built beside a staged batch"

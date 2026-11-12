@@ -170,13 +170,14 @@ def test_land_into_takes_checked_or_main_and_only_drives_app_pushes_checked(tmp_
 
 
 def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_agents_credentials():
-    """A change to infra, the research tool, the agent guard and its hooks, or the environment runs on the control pod or on
-    every agent once it is on main, so it lands only on a review, never on a ready mark alone."""
+    """A change to infra, the research tool, the move scripts and maps (which the loop runs, and certifies a move against), the
+    agent guard and its hooks, or the environment runs on the control pod or on every agent once it is on main, so it lands
+    only on a review, never on a ready mark alone."""
     import tomllib
 
     root = Path(__file__).resolve().parents[3]
     excludes = tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["lowrisk_excludes"]
-    for path in ("infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
+    for path in ("infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
         assert path in excludes, f"drive.toml's lowrisk_excludes lacks {path}"
 
 

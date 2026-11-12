@@ -540,7 +540,8 @@ def _main_to(env: Env, files: dict[str, str]) -> str:
 
 
 def test_a_move_pr_with_a_land_verdict_is_built_by_its_merge_and_advances_main_as_any_pr(env):
-    """A move PR's head is merged onto `main` as it is, no move regenerated: the loop builds it as it builds any PR."""
+    """A move PR with a land verdict whose move can't be regenerated (its map isn't on `main`) has its head merged onto `main`
+    as it is: the loop builds it as it builds any PR."""
     main = env.main()
     head = _move(env, 1, {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"})
     loop = env.loop(policy)
@@ -582,14 +583,16 @@ def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_r
     recs = (loop := env.loop(policy)).tick()
     assert [r["members"] for r in recs if r["action"] == "build"] == ([[1]] if lowrisk else []), recs
     assert loop.world.left == {**({} if lowrisk else {1: (one, "no land verdict, and it isn't low-risk")}),
-                               2: (two, "no land verdict, and a move lands only with one")}, loop.world.left
+                               2: (two, "no land verdict, and a move lands on its mark alone only once its map "
+                                       "tools/move/x_map.toml is on `main`")}, loop.world.left
 
 
 @pytest.mark.parametrize("shadow", [False, True])
 def test_a_ready_pr_that_doesnt_merge_onto_main_is_told_its_files_once_a_head_keeping_its_mark_and_with_shadow_only_logged(
         env, shadow):
-    """A ready PR whose head doesn't merge onto `main` (`Ready.conflict`), a move's as any other's, is in no build: its owner is
-    told the files and to rebase it, once a head and again at a new head that doesn't merge either."""
+    """A ready PR whose head doesn't merge onto `main` (`Ready.conflict`), a move's as any other's while its move isn't
+    regenerated, is in no build: its owner is told the files and to rebase it, once a head and again at a new head that
+    doesn't merge either."""
     base = env.main()
     _main_to(env, {"a.txt": "main\n"})
     one = env.o.change({"a.txt": "one\n"}, base=base)
