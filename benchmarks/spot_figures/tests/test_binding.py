@@ -2,6 +2,7 @@
 replay block is the one stated at each design the options are compared at, with every run at 2^80 calls of SHA-512,
 in calls and converted to compressions, and every line the command prints says what it covers."""
 import json
+from dataclasses import replace
 from fractions import Fraction
 
 import binding as b
@@ -14,7 +15,7 @@ SMALL, TABLE = 1507, 12343986
 TABLES = 200
 #: the most sessions holding one gate the designs are compared at
 SESSIONS = 167
-#: GLM-5.3's K at one proof block a stratum, the design with no cap on a stratum's sample
+#: GLM-5.3's K at one proof block a stratum, the design with no limit on a stratum's sample
 UNCAPPED = 27191776
 #: K at the two ends of the designs the cost rows price, 2^40.23 and 2^43.23 rounded up
 LEAST, MOST = b.natural("2^40.23"), b.natural("2^43.23")
@@ -29,6 +30,8 @@ YEAR = 52560
 #: the priced design per sampled replay block with every block's input bits counted, each an upper bound: its
 #: gates, its classes and its sessions
 GATES, CLASSES, MOST_SESSIONS = b.natural("2^41.81"), b.natural("2^26.24"), 15694
+#: the blocks that sample checks, one session each, and the most gates one of its blocks needs
+CHECKED, LARGEST = 10046500, 632128
 
 
 def tenths(p: Fraction) -> Fraction:
@@ -196,7 +199,7 @@ def test_a_run_has_its_first_stages_replay_blocks_sessions_and_gates():
     assert b.terms(one)["rewinding"] < b.terms(six)["rewinding"] < 6 * b.terms(one)["rewinding"]
 
 
-def test_the_waits_term_at_each_cap():
+def test_the_waits_term_at_each_limit():
     assert b.CAPS == (128, 192) and [b.bits(b.waits(cap)) for cap in b.CAPS] == ["2^-125.99", "2^-183.64"]
     e_128 = 1 / b.E_LOW ** 128
     exact = [(1 + b.INNER) * (Fraction(2, 2 ** cap) + e_128) for cap in b.CAPS]
@@ -211,7 +214,7 @@ def test_the_waits_term_at_each_cap():
 
 # The designs the options are compared at, per sampled replay block, a run at 2^80 compressions.
 
-def test_no_cap_on_a_stratums_sample_at_the_smallest_session():
+def test_no_limit_on_a_stratums_sample_at_the_smallest_session():
     assert tenths(at(UNCAPPED, SMALL)) == Fraction("132.0")
     assert b.bits(at(UNCAPPED, SMALL)) == "2^-132.03"
 
@@ -452,7 +455,7 @@ def test_the_command_prints_by_position_each_term_with_its_premise_and_what_it_c
         ["sum", "2^-105.03", "2^-96.03!"], ["sum", "2^-47.68!", "2^-43.18!"], ["sum", "2^-102.45", "2^-93.45!"]]
     assert covered(out) and len(out) == 21
     premise = ["not given, counted as 0", "`ExpectedCR` at B", "`StrictBirthday` at B",
-               "`ExpectedCR` at the conflict finder", "`ExpectedCR` at the two first-hit finders, at every cap"]
+               "`ExpectedCR` at the conflict finder", "`ExpectedCR` at the two first-hit finders, at every limit"]
     assert all(text in line for text, line in zip(premise, out[2:7]))
     assert all("per run at a padded first stage of K0 = 6 replay blocks" in line for line in out[9:19])
     assert [line.split()[0] for line in out[11:19]] == ["week", "week", "month", "month", "year", "year", "waits",
@@ -490,3 +493,64 @@ def test_the_command_prints_four_columns_when_the_classes_are_stated(capsys):
     assert out[16].split()[:5] == ["year", "2^-82.65!", "2^-73.64!", "2^-98.22!", "2^-89.21!"]
     assert covered(out) and len(out) == 23 and [line.split(",")[0] for line in out[-4:]] == [
         "by gates", "by gates", "by classes", "by classes"]
+
+
+def test_the_gates_as_a_count_gives_them_are_the_checked_blocks_times_the_largest_blocks_needs():
+    """Counted as checked blocks times the largest block's needs, the priced design's gates are 2^42.53 where their
+    mean is 2^41.81, and the first-hit term is 0.72 bits weaker: under 2^-100 a sampled replay block, above it a
+    run."""
+    mean = b.Design(K=GATES, k=TABLE, sessions=CHECKED)
+    counted = b.as_counted(mean, LARGEST)
+    assert counted.K == CHECKED * LARGEST == 6350673952000 and b.log2(counted.K) == "42.53"
+    assert b.as_counted(replace(mean, sessions=MOST_SESSIONS), LARGEST, CHECKED).K == counted.K
+    assert b.as_counted(replace(mean, Km=2 * GATES), LARGEST).Km is None
+    goal = Fraction(1, 2 ** 100)
+    assert b.bits(b.terms(counted)["first hit"]) == "2^-100.19" and b.terms(counted)["first hit"] <= goal
+    assert [b.bits(b.bound(b.at_run(counted, n))) for n in (4, 6)] == ["2^-98.19", "2^-97.61"]
+    assert b.bits(b.bound(b.at_run(b.converted(counted), 6))) == "2^-88.61"
+    assert [b.bits(b.bound(b.at_run(mean, n))) for n in (4, 6)] == ["2^-98.91", "2^-98.33"]
+    with pytest.raises(ValueError, match="by position"):
+        b.as_counted(b.Design(K=GATES, k=TABLE), LARGEST)
+    with pytest.raises(ValueError, match="positive"):
+        b.as_counted(mean, 0)
+
+
+def test_the_report_gives_each_count_as_given_and_as_counted():
+    mean = b.Design(K=GATES, k=TABLE, sessions=CHECKED)
+    out = b.report(mean, first_stage=6, classes=CLASSES, largest=LARGEST, largest_classes=132)
+    assert out["columns"] == [f"{count}, {unit}" for count in ("gates", "gates as counted", "classes",
+                                                               "classes as counted")
+                              for unit in ("calls", "compressions")]
+    assert out["design"]["counted"] == {
+        "gates as counted": {"checked": CHECKED, "largest": LARGEST, "K": CHECKED * LARGEST},
+        "classes as counted": {"checked": CHECKED, "largest": 132, "K": CHECKED * 132}}
+    run = {column: c["bound"] for column, c in out["run"][-1]["columns"].items()}
+    assert run["gates as counted, calls"] == "2^-97.61" and run["gates, calls"] == "2^-98.33"
+    assert run["classes as counted, calls"] == b.bits(b.bound(b.at_run(b.by_classes(mean, CHECKED * 132), 6)))
+    assert list(out["most_gates"]) == ["gates, calls", "gates, compressions", "classes, calls",
+                                       "classes, compressions"]
+    assert b.report(mean)["design"]["counted"] == {} and len(b.report(mean)["columns"]) == 2
+
+
+def test_the_command_prints_the_gates_as_counted_beside_the_mean(capsys):
+    b.main(["--K", "2^41.81", "--sessions", str(CHECKED), "--largest", str(LARGEST), "--symbols", "2^23",
+            "--first-stage", "6"])
+    out = capsys.readouterr().out.splitlines()
+    assert out[1] == ("gates as counted, per sampled replay block: K_s = K_m = 10046500 checked blocks times the "
+                      "632128 gates the largest block needs = 6350673952000 gates (2^42.53); as given, K_s and K_m "
+                      "are means over the coins")
+    assert "in 4 columns: by gates, calls; by gates, compressions; by gates as counted, calls; by gates as counted, " \
+           "compressions." in out[2]
+    assert out[7].split()[:6] == ["first", "hit", "2^-100.91", "2^-91.91!", "2^-100.19", "2^-91.19!"]
+    assert out[11].split()[:5] == ["sum", "2^-98.33!", "2^-89.33!", "2^-97.61!", "2^-88.61!"]
+    assert covered(out) and len(out) == 22 and [line.split(",")[0] for line in out[-2:]] == ["by gates", "by gates"]
+
+
+@pytest.mark.parametrize("argv, message", [
+    (["--K", "2^41.81", "--symbols", "2^23", "--largest", "632128"], "--largest counts a design by position"),
+    (["--K", "2^41.81", "--symbols", "2^23", "--sessions", "5", "--checked", "7"], "--checked is the count"),
+])
+def test_the_command_refuses_a_count_it_cannot_place(argv, message, capsys):
+    with pytest.raises(SystemExit):
+        b.main(argv)
+    assert message in capsys.readouterr().err

@@ -10,9 +10,9 @@ import socket
 import struct
 import threading
 
+import deploy_example as X
 import pytest
 
-import deploy_example as X
 from verity.configuration.deploy import manifest as M
 from verity.configuration.deploy.channels import Playback, dial
 from verity.configuration.deploy.runtime import ARRIVED, RUNTIME, run
@@ -186,7 +186,7 @@ def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_res
     t = threading.Thread(target=reset)
     t.start()
     r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
-            verify=X.verify, seed=SEED, dial_to={"responder": "%s:%d" % server.getsockname()[:2]})
+            verify=X.verify, seed=SEED, dial_to={"responder": "{}:{}".format(*server.getsockname()[:2])})
     t.join()
     server.close()
     how = r.ended["challenger"]["responder"]
@@ -200,7 +200,7 @@ def test_a_connect_that_fails_is_recorded_not_raised(tmp_path):
     """A dial whose connect fails (nothing listens at the address) is a channel that ended on connecting: the challenger
     is told `Closed` with it, and the run's result names it, as for a stream that fails later."""
     server = socket.create_server(("127.0.0.1", 0))
-    address = "%s:%d" % server.getsockname()[:2]
+    address = "{}:{}".format(*server.getsockname()[:2])
     server.close()
     r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
             verify=X.verify, seed=SEED, dial_to={"responder": address})

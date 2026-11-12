@@ -141,7 +141,7 @@ def test_uninstall_leaves_the_scheduler_as_it_was():
 
 def test_a_multiprocess_engine_core_is_refused_by_name():
     with pytest.raises(RuntimeError, match="VLLM_ENABLE_V1_MULTIPROCESSING=0"):
-        ST.scheduler_of(SimpleNamespace(llm_engine=SimpleNamespace(engine_core=SimpleNamespace())))
+        ST.StepTrace().install(SimpleNamespace(llm_engine=SimpleNamespace(engine_core=SimpleNamespace())))
 
 
 def test_a_trace_without_its_header_is_refused(tmp_path):
@@ -161,3 +161,78 @@ def test_max_model_len_is_the_schedulers_where_its_scheduler_config_no_longer_ho
     sched.vllm_config = SimpleNamespace(model_config=SimpleNamespace(max_model_len=1024))
     del sched.scheduler_config.max_model_len
     assert ST.scheduler_config(sched)["max_model_len"] == 1024
+
+
+def test_an_arrival_after_an_empty_schedule_says_how_many():
+    """A replay puts such a request back after an empty schedule or into an idle engine, so the step in flight has finished its
+    requests and cached their blocks first; an arrival right after a step, or before any, says nothing more than its step."""
+    class Sched:
+        def __init__(self):
+            self.requests, self.tokens = {}, 0
+
+        def add_request(self, request):
+            self.requests[request.request_id] = request
+
+        def schedule(self):
+            return SimpleNamespace(total_num_scheduled_tokens=self.tokens)
+
+        def update_from_output(self, so, mro):
+            return {}
+
+        def finish_requests(self, request_ids, finished_status):
+            return []
+
+    sched = Sched()
+    trace = ST.StepTrace().install(sched)
+
+    def arrive(rid: str, schedules: tuple[int, ...] = ()) -> None:
+        for sched.tokens in schedules:
+            sched.schedule()
+        sched.add_request(SimpleNamespace(request_id=rid, prompt_token_ids=[1, 2], sampling_params=None))
+
+    arrive("a")
+    arrive("b", (3, 0, 0))                      # a step, then two schedules that held every request back
+    arrive("c", (2,))
+    sched.requests.clear()
+    arrive("d", (0,))                           # the engine drained: the schedule that held its last request back still counts
+    assert [(r["request"], r["before_step"], r.get("after_empty")) for r in trace.records if r["kind"] == "arrive"] == [
+        ("a", 0, None), ("b", 1, 2), ("c", 2, None), ("d", 2, 1)]
+
+
+def test_the_header_says_where_the_launch_left_the_context_limit_to_vllm():
+    """vLLM keeps the launch's -1 beside the limit it fitted to the KV pool (its model config's ``original_max_model_len``).
+    A replay's engine is then launched at -1 on the header's block count, so its model is built at the length the served one
+    was; a launch that stated a length, and a vLLM without the entry, write a header as before."""
+    sched = SimpleNamespace(scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=4),
+                            cache_config=SimpleNamespace(block_size=16, num_gpu_blocks=64, cache_dtype="auto"), max_model_len=1008,
+                            vllm_config=SimpleNamespace(speculative_config=None, model_config=SimpleNamespace(
+                                max_model_len=1008, original_max_model_len=-1)))
+    stated = {"scheduler": "SimpleNamespace", "max_num_batched_tokens": 2048, "max_num_seqs": 4, "block_size": 16,
+              "num_gpu_blocks": 64, "max_model_len": 1008}
+    assert ST.scheduler_config(sched) == {**stated, "max_model_len_auto": True}
+    for launch in (None, 1008, 1048576):
+        sched.vllm_config.model_config.original_max_model_len = launch
+        assert ST.scheduler_config(sched) == stated
+    del sched.vllm_config.model_config.original_max_model_len
+    assert ST.scheduler_config(sched) == stated
+
+
+def test_the_header_holds_the_cache_format_and_speculative_settings_an_engine_was_built_with():
+    """A replay's engine takes them as its ``kv_cache_dtype`` and ``speculative_config``; an engine with vLLM's default cache
+    format and no draft writes neither entry, so its header is what it was."""
+    sched = SimpleNamespace(scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=4),
+                            cache_config=SimpleNamespace(block_size=16, num_gpu_blocks=100, cache_dtype="auto"),
+                            max_model_len=512, vllm_config=SimpleNamespace(speculative_config=None))
+    assert ST.scheduler_config(sched) == {"scheduler": "SimpleNamespace", "max_num_batched_tokens": 2048, "max_num_seqs": 4,
+                                          "block_size": 16, "num_gpu_blocks": 100, "max_model_len": 512}
+    sched.cache_config.cache_dtype = "fp8_ds_mla"
+    assert ST.scheduler_config(sched)["kv_cache_dtype"] == "fp8_ds_mla"
+    sched.vllm_config.speculative_config = SimpleNamespace(
+        method="mtp", num_speculative_tokens=3, model="/a/checkpoint", draft_sample_method="greedy",
+        rejection_sample_method="synthetic", synthetic_acceptance_rates=[0.8, 0.6, 0.4], synthetic_acceptance_length=None,
+        index_share_for_mtp_iteration=None, num_speculative_tokens_per_batch_size=[(1, 8, 3)], disable_eagle_block_drop=False,
+        draft_model_config=object())
+    assert ST.scheduler_config(sched)["speculative"] == {
+        "method": "mtp", "num_speculative_tokens": 3, "num_speculative_tokens_per_batch_size": [[1, 8, 3]],
+        "draft_sample_method": "greedy", "rejection_sample_method": "synthetic", "synthetic_acceptance_rates": [0.8, 0.6, 0.4],
+        "disable_eagle_block_drop": False}

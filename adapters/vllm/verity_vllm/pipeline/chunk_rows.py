@@ -1,7 +1,7 @@
 """A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows Flock's `UnitStager` stages: their rows
-(`unit_rows`), table reads (`reads`) and statement (`statement`), the most of them one flock-circuit statement holds
-(`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's
-chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
+(`unit_rows`), a chunk's member (`unit_member`), table reads (`reads`) and statement (`statement`), the most of them one
+flock-circuit statement holds (`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into
+its chunks (`split`).  The window's chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
 (``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
 `serving_rows.template` reads it.  `zk_refusal` is why ``verify --zk`` refuses a statement's form, and `zk_check` refuses a
 partition file whose ``zk`` says its window is for such sessions and that names a template of that form."""
@@ -33,20 +33,20 @@ SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5
 
 
 def reads(tp: Any) -> str:
-    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: flat for a ``STAGES`` stage on bits (its Boolean
-    version, `boolean_topp_stages`: its MUFU operations are gates, so it reads no table and its unit returns its own outputs,
-    the one form `verify --zk` takes, `one_stage.proofs.ks_form_why`); else in lookup slots (`read_slots`, each table folded
-    once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN: inline, step 16's 64-key split part's EX2 reads
-    were 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole attention row (``SLOT_ROWS``:
-    inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
-    622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB; in slots, 314M nonzeros for 8,473,952 ANDs, 37 an AND,
-    k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
-    five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
-    an AND inline) at their served shapes; a ``CHAINS`` end, column end and combine inline as that combine. A ``STAGES`` stage
-    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A Boolean template's reads are
-    inline whatever its layout, a key block's Boolean body (``SparseMlaHeadBlock_v2``) at every key count among them: a body
-    whose MUFU is gates has no table to read, and one that still read a table would keep it in its own rows, so its unit
-    returns its own outputs, the one form ``verify --zk`` takes (`zk_refusal`, `one_stage.proofs.ks_form_why`)."""
+    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: flat for a ``STAGES`` stage on bits (its
+    Boolean version, `boolean_topp_stages`: its MUFU operations are gates, so it reads no table and its unit returns its
+    own outputs, the one form `verify --zk` takes, `one_stage.proofs.ks_form_why`); else in lookup slots (`read_slots`,
+    each table folded once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN), for a whole attention
+    row (``SLOT_ROWS``) and for its heads' per-key-block Calls: inline, their EX2 and RCP reads outnumber the rest of
+    their nonzeros, so the build and the prover's memory grow with the reads, while in slots each table is folded once.
+    Everything else that reads a table reads it inline, with fewer reads than a whole block's: a key block of fewer keys
+    than BN (a read a key), a ``CHAINS`` end and column end (one read each) and combine (seven for five splits). The
+    RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``) read inline at their served shapes. A ``STAGES`` stage
+    reads in slots: a top-p stats part or a probabilities block reads EX2 a lane, thousands of them; a greedy select's
+    stage reads no table, so it lowers flat either way. A Boolean template's reads are inline whatever its layout, a key
+    block's Boolean body (``SparseMlaHeadBlock_v2``) at every key count among them: a body whose MUFU is gates has no
+    table to read, and one that still read a table would keep it in its own rows, so its unit returns its own outputs,
+    the one form ``verify --zk`` takes (`zk_refusal`, `one_stage.proofs.ks_form_why`)."""
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -171,6 +171,16 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
 
     in_rows, out_rows = IF.unit_rows(tp.fn, CH.cuts(tp) if tp.layout == "chain" else None)
     return [(port(p), *rest) for p, *rest in in_rows], out_rows
+
+
+def unit_member(tp: Any, n: int, base: int = 0, name: str = "", seg: bool = False) -> CS.Member:
+    """``n`` units of chunked template ``tp`` from unit ``base`` on bit rows, as `UnitStager` stages a unit: its `unit_rows`
+    in, its outputs' v2 rows out, or, ``seg`` (a history table's writer), its table's ``hm96-sha512/row-seg/v1`` leaves."""
+    in_rows, _outs = unit_rows(tp)
+    outs = (("o0", 1),) if tp.layout == "s8" else IF.layout(tp.fn).outs
+    out_schema = CS.SCHEMA_HM96_SHA512_ROW_SEG if seg else CS.SCHEMA_HM96_SHA512_ROW_V2
+    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, out_schema) for p, _w in outs)
+    return CS.Member(tp.id, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, n, base, name=name, schemas=schemas)
 
 
 def chunk_cap(tp: Any) -> int:

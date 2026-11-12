@@ -41,8 +41,8 @@ side (`main`): it reads one JSON line on stdin, a salt request or the session's 
 `challenger_session.setup_of` checks against them), and answers the salt request with its source, or prints
 `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log (`sessions`) and salt log
 (`salts`) are in `DIR`. Each session it completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the
-file 0600: `keep`), the request and the id it designated: the auditor's record of that window's setup, from which the
-remote bandwidth audit's verifier on the same host builds its registration (`remote_bandwidth.p2_party --pous-record`),
+file 0600: `keep`), the request and the id it designated: the auditor's record of that window's setup, from which
+PoUB's verifier on the same host builds its registration (`verity.protocols.poub.verifier.p2_party --pous-record`),
 never from a file the prover sends.
 """
 
@@ -63,32 +63,44 @@ from typing import Any, BinaryIO
 from verity.configuration.deploy import stream
 from verity.configuration.deploy.party import Finish, Identity, Received, Send
 from verity.configuration.deploy.runtime import ProtocolDef
+from verity.configuration.wire import Message, Phase, Refused
 from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.device.challenger_session import (
+    CHALLENGER,
+    MANIFEST,
+    MODULE,
+    PROVER,
+    SETUPS,
+    WARMUP_INDEX,
+    WARMUPS,
+    Frames,
+    Polled,
+    Prover,
+    coin_session_id,
+    session_id,
+    setup_of,
+)
 from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier import setup as pous_setup
-from verity.protocols.pous.device.challenger_session import (CHALLENGER, MANIFEST, MODULE, PROVER, SETUPS, WARMUP_INDEX,
-                                                           WARMUPS, Frames, Polled, Prover, coin_session_id, session_id,
-                                                           setup_of)
-from verity.configuration.wire import Message, Phase, Refused
 
 COIN_BYTES = 64
-"""The session's coins, which the challenger draws first (`main`'s `secrets.token_bytes(64)`), before its coin tree's
+"""The session's coins, which the challenger flips first (`main`'s `secrets.token_bytes(64)`), before its coin tree's
 hiding key and salts."""
 SOURCE_BYTES = 64
-"""The setup salt's source, which the challenger draws from its OS for an audit (`give_salt`)."""
+"""The setup salt's source, which the challenger samples from its OS for an audit (`give_salt`)."""
 
 
 class Refusal(RuntimeError):
     """A request the challenger's side refuses; the message is why."""
 
 
-def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], draw: Callable[[int], bytes] = os.urandom) -> bytes:
-    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source sampled from `draw` after the
+def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], entropy: Callable[[int], bytes] = os.urandom) -> bytes:
+    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source sampled from `entropy` after the
     commitment, its salt (`setup.draw_salt`) logged under the audit in `salts` before the source is returned. Refused
     (`Refusal`) when the audit has a salt already."""
     audit, commitment = bytes.fromhex(request["audit"]), bytes.fromhex(request["commitment"])
-    source = draw(SOURCE_BYTES)
+    source = entropy(SOURCE_BYTES)
     try:
         salts.record(audit, commitment, pous_setup.draw_salt(source, commitment))
     except (mc.SessionLogError, ValueError) as e:
@@ -133,20 +145,20 @@ class Challenger:
         self.domain, self.warmups, self.resolution_ns = domain, warmups, resolution_ns
         self.c: mc.MemoryChallenger | None = None
         self.sid: bytes | None = None
-        self._drawn: list[bytes] = []
+        self._sampled: list[bytes] = []
         self.session: R.ChallengePhaseRecord | None = None
         self._reading: int | None = None
         self._block: bytes | None = None
         self._warm = 0
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
-        self.request, caps = dict(params), identity.capabilities
-        self.signer, self.log = caps["signer"], caps["log"]
+        self.request, held = dict(params), identity.capabilities
+        self.signer, self.log = held["signer"], held["log"]
         if "audit" in self.request:
             try:
-                if caps.get("salts") is None:
+                if held.get("salts") is None:
                     raise Refusal("the memory challenger keeps no salt log, so it runs no audit's session")
-                self.sid = designate(self.request, caps["salts"], self.log)
+                self.sid = designate(self.request, held["salts"], self.log)
             except (Refusal, mc.SessionLogError) as e:
                 return [Finish(None, str(e), kind="private")]
         self.phase = Phase("Coins")
@@ -181,12 +193,12 @@ class Challenger:
     def _coins(self, body: bytes) -> list[Any]:
         """The session's coins, then the coin tree's hiding key, then each round's salt, each sampled in turn; once all
         are in, the session's challenger."""
-        q, self._drawn = self.request, [*self._drawn, body]
-        if len(self._drawn) < q["k"] + 2:
+        q, self._sampled = self.request, [*self._sampled, body]
+        if len(self._sampled) < q["k"] + 2:
             self.phase.expect("Coins")
-            n = mc.HM96.key_bytes if len(self._drawn) == 1 else mc.HM96.salt_bytes
+            n = mc.HM96.key_bytes if len(self._sampled) == 1 else mc.HM96.salt_bytes
             return [Send("coins", Message("CoinsDraw", {"n": n}))]
-        coins, key, *salts = self._drawn
+        coins, key, *salts = self._sampled
         binding = bytes.fromhex(q["binding"])
         if self.sid is None:
             self.sid = coin_session_id(coins, self.domain, q["node"], binding)
@@ -228,17 +240,17 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger, PROVER: Prover})
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
           domain: str, salts: mc.SaltLog | None = None, clock: Callable[[], int] = time.perf_counter_ns,
-          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.ChallengePhaseRecord]:
+          warmups: int = WARMUPS, entropy: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.ChallengePhaseRecord]:
     """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
     audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
-    and salts from `draw`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
+    and salts from `entropy`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
     (`memory_challenger.collector_paused`); its id and record. `Refusal` when the party refuses the session."""
     party, given = Challenger(domain, warmups, mc.resolution_of(clock)), [coins]
     with mc.collector_paused():
         done, _ = stream.run(party, request,
                              Identity(CHALLENGER, capabilities={"signer": signer, "log": log, "salts": salts}), f,
                              Frames(request["block_bytes"]), peer=PROVER, clock=clock,
-                             coins=lambda n: given.pop() if given else draw(n))
+                             coins=lambda n: given.pop() if given else entropy(n))
     if done.refused is not None:
         raise Refusal(done.refused)
     return party.sid, party.session
@@ -276,8 +288,14 @@ def _logs(device: Path) -> tuple[mc.SaltLog, mc.SessionLog]:
     return mc.SaltLog(device / "salts"), mc.SessionLog(device / "sessions")
 
 
+def _reply(line: str) -> None:
+    """One line of the side's stdout, which the party that started it reads (`stream.Side.talk`)."""
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
 def _refused(e: BaseException) -> int:
-    print(json.dumps({"refused": str(e)}), flush=True)
+    _reply(json.dumps({"refused": str(e)}))
     return 1
 
 
@@ -292,7 +310,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         salts, sessions = _logs(device)
         if "salt" in request:
             source = give_salt(salts, request["salt"])
-            print(json.dumps({"source": source.hex()}), flush=True)
+            _reply(json.dumps({"source": source.hex()}))
             return 0
         if "audit" in request:
             designate(request, salts, sessions)
@@ -302,19 +320,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:
-        print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+        _reply(json.dumps({"listening": srv.getsockname()[1]}))
         conn, _ = srv.accept()
         with conn:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sid, s = serve(Polled(conn), request, signer=signer, log=sessions, salts=salts,
                            coins=secrets.token_bytes(COIN_BYTES), domain=period.SESSION_DOMAIN)
     keep(device, sid, request)
-    print(json.dumps(report(sid, s, signer.public_key), sort_keys=True), flush=True)
+    _reply(json.dumps(report(sid, s, signer.public_key), sort_keys=True))
     return 0
 
 
-__all__ = ["COIN_BYTES", "PROTOCOL", "SOURCE_BYTES", "Challenger", "Refusal", "designate", "give_salt", "keep",
-           "main", "report", "serve"]
+__all__ = ["PROTOCOL", "SOURCE_BYTES", "Refusal", "designate", "give_salt", "keep", "report", "serve"]
 
 if __name__ == "__main__":
     sys.exit(main())

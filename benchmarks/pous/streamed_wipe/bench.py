@@ -245,7 +245,7 @@ def rtt(binary: str, key: bytes, scratch: Path, port: int) -> dict:
             reps = 20 if batch == sw.DEPLOYED_K else 1
             sessions = []
             for rep in range(reps):
-                idx = sw.draw_indices(os.urandom(32), SERVER, SESSION, TABLE_LABELS, sw.DEPLOYED_K)
+                idx = sw.sample_indices(os.urandom(32), SERVER, SESSION, TABLE_LABELS, sw.DEPLOYED_K)
                 expect = [sw.label(key, i) for i in idx]
                 per, wrong = [], 0
                 t0 = time.perf_counter_ns()
@@ -268,7 +268,7 @@ def rtt(binary: str, key: bytes, scratch: Path, port: int) -> dict:
                 store[o]
             looks = []
             for _ in range(5):
-                idx = sw.draw_indices(os.urandom(32), SERVER, SESSION, TABLE_LABELS, sw.DEPLOYED_K)
+                idx = sw.sample_indices(os.urandom(32), SERVER, SESSION, TABLE_LABELS, sw.DEPLOYED_K)
                 a = time.perf_counter_ns()
                 b"".join(store[64 * i:64 * i + 64] for i in idx)
                 looks.append(time.perf_counter_ns() - a)

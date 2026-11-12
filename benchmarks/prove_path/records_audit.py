@@ -18,7 +18,8 @@ to the run root the run published (``--run``) and, for a compiled circuit, to th
 opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
-registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
+registered (``--circuit``). Then `a5.audit`, its stream's rule the rate of the window's design in its population (`rule_of`):
+the registration checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the sampled members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) would be
@@ -643,7 +644,12 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
     """A template's circuit from its Definition and its statement in the circuit record (Flock's `UnitStager` on the record's
     ``in_rows``, ``out_rows`` and a flat statement's ``reads`` or a templated one's ``layout`` and ``structural``), bound to the
-    window's partition and program: a5's composer for its members."""
+    window's partition and program: a5's composer for its members. a5's compose cache keys it by its ``inputs``
+    (`a5.compose_key`; a composer without them is never cached): the stager's label, the statement and, for a table read, the
+    executable whose template its unit is (`read_tmpl.digest`), as `compose_circuit.template_inputs` keys a ``--template``
+    compose, so a circuit kept under another build of the verifier's read is not taken."""
+    from verity_flock import read_tmpl as RT
+
     form = {"layout": st["layout"], "structural": bool(st["structural"])} if st.get("layout") else {"reads": st["reads"]}
 
     def compose(out: Path, partition: str, program: str) -> dict[str, Any]:
@@ -656,7 +662,7 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
         if form.get("reads") == "slots":
             FC.IL.write_tables(Path(out).parent / "tables")
         return {"subcircuit": s.meta.get("subcircuit"), "pin": s.pin, "class_sha512": s.class_sha512, "k_log": s.meta["k_log"]}
-    compose.inputs = ["unit/window", st]  # a5's compose cache keys a composer by these (a5.compose_key), else never caches it
+    compose.inputs = ["unit/window", st, *([RT.digest()] if RT.is_read(fn) else [])]
     return compose
 
 
@@ -783,6 +789,19 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
+def rule_of(law: Mapping[str, Any], population: int) -> str:
+    """The rule the audit's stream states for a window registered under the fixed design ``law`` over ``population`` proof
+    blocks. A selection rule's law is a rate (`service.Law` refuses a fixed count), so the rule is the rate of the
+    design's K in the window's N: ``rate:K/N`` for a subset design, ``stratified-rate:K/N`` for a stratified one (at K = 1,
+    one proof block a stratum) and ``work-rate:K/N`` for a work one. The stream holds the registration to the design its
+    rule names over the window (R1), so a design its rate doesn't reproduce is refused there, by name; a Bernoulli design
+    states its own text."""
+    kind = {"subset": "rate", "stratified": "stratified-rate", "work": "work-rate"}.get(law.get("law"))
+    if kind is None:
+        return f"bernoulli:{law.get('p')}"
+    return f"{kind}:{min(law['k'], population)}/{population}"
+
+
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
@@ -839,7 +858,7 @@ def audit(a: argparse.Namespace) -> int:
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
-    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
+    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, rule_of(mine.law, mine.population)
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
     a.tie = tied

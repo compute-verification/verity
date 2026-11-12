@@ -13,12 +13,23 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.pous.verifier import dense, setup
-from verity.protocols.pous.verifier.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed, simulate
+from verity.protocols.pous.verifier.audit import (
+    HonestResponder,
+    UnsignedRounds,
+    challenge_key,
+    run_timed,
+    simulate,
+)
 from verity.protocols.pous.verifier.codec import encode_segments, split
 from verity.protocols.pous.verifier.labels import salt_value, tag
 from verity.protocols.pous.verifier.layout import Layout, decode_tensor
 from verity.protocols.pous.verifier.oracle import run
-from verity.protocols.pous.verifier.primitives import OverwriteStepper, Primitives, pad_block
+from verity.protocols.pous.verifier.primitives import (
+    OverwriteStepper,
+    Primitives,
+    pad_block,
+)
+from verity.protocols.pous.verifier.scheme import Encoding
 from verity.protocols.pous.verifier.verifier import VerifierKey
 
 PARAMS = dense.DenseParams(8, 64, 3)
@@ -106,8 +117,6 @@ def test_end_to_end_with_the_parameters_codec():
     assert run_timed(timed, blocks.__getitem__).accepted
     wrong = run_timed(UnsignedRounds(vk, key, k=5, clock=itertools.count(0, 1000).__next__), lambda i: blocks[(i + 1) % len(blocks)])
     assert not wrong.accepted
-    from verity.protocols.pous.verifier.scheme import Encoding
-
     enc = Encoding(params, salt, tuple(int.from_bytes(b, "little") for b in blocks))
     result = simulate(vk, HonestResponder(enc), prims, key)
     assert result.accepted and len(result.answers) == 111

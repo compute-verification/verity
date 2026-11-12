@@ -49,6 +49,7 @@ rows also keep the scheduler's order, so a step's new rows are in admission orde
 ``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
 buckets the network certifier's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
 engine class's registered step times (``--tick-sat-ms``, ``--tick-free-ms``), the rows kept as under ``release-order``.
+No compile slice replays that admission, so its windows' served rows name none (`no_slice`, `serve_commit.NO_TICK_SLICE`).
 The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
 (`serve_row`).
 
@@ -69,7 +70,9 @@ shape's plans in a learn-only pass (`serve_learn`).
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
-whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
+whose rows and salts go to ``served_rows/w<k>.json``; the record's ``slice`` names that slice, `serve_commit.SERVED_SLICE`, and
+under ``--admit tick`` is null, with why in its ``no_slice`` and once in ``serve.json``'s ``served_rows_no_slice``),
+``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
@@ -129,8 +132,8 @@ from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h
                                    serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, RUN_HEADER, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
-from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, param_of, records_mirror,
-                                               served_statics, user_of)
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, disk_record, param_of,
+                                               records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
@@ -225,7 +228,8 @@ class Options:
     admit: str = option("--admit", choices=ADMIT, default="arrival",
                         help="arrival (default): each request to the engine once parsed; release-order: in the network certifier's release "
                              "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
-                             "the step whose logical time its release bucket has closed by (serve_admit.TickGate)")
+                             "the step whose logical time its release bucket has closed by (serve_admit.TickGate), its windows' "
+                             "served rows naming no compile slice (serve_commit.NO_TICK_SLICE)")
     admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
                                 help="release-order, tick: skip a missing earlier release once a later request has waited this long; "
                                      "tick: open the gate once the watermark has stalled this long")
@@ -535,6 +539,19 @@ def served_class(opts: Options) -> dict[str, int]:
             **{k: int(v) for k, v in given.items()}}
 
 
+def no_slice(opts: Options) -> str | None:
+    """Why the windows' served rows name no compile slice: under ``--admit tick``, `serve_commit.NO_TICK_SLICE`. None
+    under any other admission, whose windows name `serve_commit.SERVED_SLICE`."""
+    return NO_TICK_SLICE if opts.admit == "tick" else None
+
+
+def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
+    """serve.json's ``served_rows_no_slice``, why the windows' served rows name no slice (`CommitWindows.no_slice`); no
+    field where they name `serve_commit.SERVED_SLICE`, or where nothing is committed."""
+    why = windows.no_slice if windows is not None else None
+    return {} if why is None else {"served_rows_no_slice": why}
+
+
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
               usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
     """What would fail after the model has loaded, refused before it."""
@@ -621,13 +638,18 @@ def main(opts: Options) -> int:
                                  f"{(len(tok) - 1).bit_length()} bits")
             pool_block = trace.sched.block_size
             PR.install_keys(ctw, pool_block)
-            pool = lambda: trace.sched.kv_cache_manager.block_pool   # noqa: E731
+
+            def live_pool() -> Any:
+                return trace.sched.kv_cache_manager.block_pool
+
+            pool = live_pool
             PR.genesis_reset(pool())                         # the learn pass cached its blocks under vLLM's own keys
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
-                                served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
+                                served=served_statics(scheduler_config(trace.sched), served_class(opts)),
+                                no_slice=no_slice(opts), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm, release=draws, pool=pool, pool_block=pool_block)
         if arm is not None:
@@ -642,15 +664,14 @@ def main(opts: Options) -> int:
     served = opts.served_model_name or opts.model
     order = rows = ticked = None
     if opts.admit in ("release-order", "tick"):
-        from verity_vllm.engine.handle import model_runner
-        from verity_vllm.engine.step_trace import scheduler_of
-        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler_of(engine))
+        from verity_vllm.engine.handle import model_runner, scheduler
+        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler(engine))
     if opts.admit == "release-order":
         order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
     elif opts.admit == "tick":
         from verity_vllm.engine.engine_driver import external_id
         from verity_vllm.pipeline.serve_admit import install
-        loop.sched = scheduler_of(engine)
+        loop.sched = scheduler(engine)
         loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
         ticked = install(loop.sched, loop.gate, key=external_id)      # over the advice trace's wrappers, which see admissions
         order = TickAdmit(loop.submit, loop.abort, loop.tick)
@@ -680,7 +701,7 @@ def main(opts: Options) -> int:
               "commit": opts.commit, "scheme": com.commit_scheme if com is not None else None,
               "learn_warmup": getattr(com, "learn_warmup", None),
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
-              "served_rows_statics": windows.served if windows is not None else None,
+              "served_rows_statics": windows.served if windows is not None else None, **no_slice_record(windows),
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
               "seal_process": sealer.summary()["process"] if sealer is not None and sealer.process is not None else None,
               "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,

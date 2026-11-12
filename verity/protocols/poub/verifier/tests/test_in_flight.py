@@ -8,10 +8,10 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
-
-from test_ledger import DOWN_NS, PASS_NS, UP_NS, paced
 from remote_bandwidth_fakes import Clock, Entropy
+from test_ledger import DOWN_NS, PASS_NS, UP_NS, paced
 from test_remote_bandwidth import A, N, challenger, finish, params, store  # noqa: F401
+
 from verity.protocols.poub.verifier import audit, coins
 from verity.protocols.poub.verifier.audit import AuditRun, Pace, SessionError
 

@@ -1,6 +1,6 @@
 """The count of `(c, k)`-inference blocks (`NciCheck.Count`) against the Python reference: the Python half.
 
-`verity/protocols/inference_only/verifier/nci/lean/scripts/count_difftest_vectors.py` writes 1,669 instances of the count (1,500
+`verity/protocols/inference_only/verifier/nci/lean/scripts/count_difftest_vectors.py` writes 1,687 instances of the count (1,500
 random, 6 on each distinct descriptor of the circuits fixtures, 7 worked by hand) and, on each,
 `scripts/nci_reference.py`'s `check_count_detail` (the whole verdict, for the private record) and `check_count` (what
 the count publishes, the judgment against n). `check` runs the Lean half in its Lean audit (`runs` in that package's
@@ -39,7 +39,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.Count
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 1,669 instances and the reference's results, byte for byte as the record pins them."""
+    """All 1,687 instances and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{count_difftest/instances.jsonl}", "{count_difftest/detail.jsonl}",

@@ -99,7 +99,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
   replay block's Definition makes no links (`linksOf`) or one names a template of no part or one whose units its rows
   don't place (`placed`), `second-wires` when it makes no wires (`wiresOf`) or one names a template of no part, one
-  whose units its rows don't place, or a writer of other units a block than its rows, `second-statements` when no
+  whose units its rows don't place, a writer of other units a block than its rows, a writer's port a link names (an
+  output the replay block returns, which the boundary commits: the interior's port of it is another tree, and nothing
+  holds the two to each other), or a writer whose part is not before its reader's (`wiresOk`), `second-statements`
+  when no
   statements are given, `second-order` for each statement for a part other than the one at its position (round 2 reads
   the statements by position, the `i`-th the `i`-th part's, in the parts' order, the interior program's strata's),
   `second-cover` for each part no statement is for (every part has one, drawn by the second draw or not), and
@@ -159,7 +162,8 @@ def LINKS_WHY : String :=
 def WIRES_WHY : String :=
   "the replay block's Definition reads a node other than as a template's parameter that is one field of one " ++
   "instance of another template, alike at every caller, or a wire names a template of no part, or its rows don't " ++
-  "place its part's units or its writer's"
+  "place its part's units or its writer's, or it reads an output the replay block returns, or its writer's part " ++
+  "is not before its reader's"
 
 def INTERIOR_ORDER_WHY : String :=
   "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
@@ -624,13 +628,22 @@ def linksOk (ps : Array Part) (own : Own) : Bool :=
   | some ls => ls.all fun l => ps.any fun p => p.template == l.template && placed own p l.port
   | none => false
 
+/-- Template `t`'s position among the parts `ps`, its first part's: the index of its member in the interior window,
+whose members are the parts in order (the interior program's strata's); `ps.size`, no member's, for none. -/
+def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
+
 /-- The wires are derived, each between templates parts `ps` are of, its reader's units placed by its rows (`placed`),
-whose rows a block are its writer's units a block. -/
+whose rows a block are its writer's units a block, whose writer's port no link names, and whose writer's part is before
+its reader's (`posOf`). Each wire names one writer port, so both hold of every writer a wired port reads. An output the
+replay block returns is committed at the boundary, and no unit inside it reads that output off the interior record.
+With each writer's part before its reader's, the members' circuits with every wired read sent to its writer's output
+read only earlier gates, and no unit reads its own output. -/
 def wiresOk (ps : Array Part) (own : Own) : Bool :=
   match own.wires with
   | some ws => ws.all fun w =>
     ps.any (fun p => p.template == w.template && placed own p w.port) &&
-      ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)
+      (ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)) &&
+      (linkOf own w.writer w.wport).isNone && decide (posOf ps w.writer < posOf ps w.template)
   | none => false
 
 /-- The wire that names template `t`'s session port `port`. -/
@@ -689,6 +702,18 @@ def runOf (rec : Json) : Option String :=
   match getD (getD rec "window") "run" with
   | .str r => some r
   | _ => none
+
+/-- The tag `interiorRoot` hashes under, a zero byte after it. -/
+def INTERIOR_ROOT : String := "verity-vllm/interior-run/v1"
+
+/-- **The interior window's open root**, for the boundary registration of digest `boundary` (lowercase hex) and the
+replay sample `sample`, in order: SHA-512 over `INTERIOR_ROOT`, a zero byte and the canonical JSON
+`{"boundary", "replay_sample"}`, in lowercase hex. The verifier computes it, so a second stage sampled on a session of
+its own is sampled on the one window its boundary registration and replay sample name (`Run.interiorWindowOk`). None
+where `Flock.canon` fails. -/
+def interiorRoot (boundary : String) (sample : Array Nat) : Option String := do
+  let m ← (Flock.canon (Json.mkObj [("boundary", .str boundary), ("replay_sample", Lean.toJson sample)])).toOption
+  pure (sha512Hex (INTERIOR_ROOT.toUTF8.push 0 ++ m.toUTF8))
 
 /-- The input set of the `k`-th part's session in run `run`, as the served path names it: `served/<run>/m<k>`, the
 interior's `k`-th member being the `k`-th part. -/
@@ -948,10 +973,6 @@ def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJso
 
 /-- The templates statements `ss` are for, those that are statements. -/
 def templates (ss : List Json) : List String := ss.filterMap fun j => (Stmt.ofJson? j).map (·.template)
-
-/-- Template `t`'s position among the parts `ps`, its first part's: the index of its member in the interior window,
-whose members are the parts in order (the interior program's strata's); `ps.size`, no member's, for none. -/
-def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
 
 /-- Statement `i` of `ss`'s failures, `(code, detail)` each: `second-statement` for one that is not a statement,
 `second-template` for one for no part's template or an earlier statement's, else its failing checks, its header placed

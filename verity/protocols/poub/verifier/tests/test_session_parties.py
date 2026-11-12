@@ -54,7 +54,7 @@ window 0 closed once window 1's root is in, and the last window just past its de
 @pytest.mark.parametrize("cheat, verdict, log", [(None, "accept", WINDOWS + [("close", 700 * MS + 1), ("verify", None)]),
                                                  (dropping, "reject", WINDOWS)], ids=["honest", "dropping"])
 def test_the_parties_session_is_the_periods(tmp_path, monkeypatch, cheat, verdict, log) -> None:
-    """The verifier draws the period's secret and the registration's nonce from its coins: on those, and on the clock
+    """The verifier samples the period's secret and the registration's nonce from its coins: on those, and on the clock
     readings its log holds, `period.session` makes the same answer and case."""
     r = simulated(tmp_path, cheat=cheat)
     assert r.status == "completed", r.outcomes
@@ -64,8 +64,8 @@ def test_the_parties_session_is_the_periods(tmp_path, monkeypatch, cheat, verdic
     got = out["outcome"]["case"]
     assert [(e["kind"], e.get("now")) for e in events(got)] == log
 
-    drawn = S.seeded(SEED, SP.VERIFIER, "coins").draw(SP.SECRET_BYTES + audit.NONCE_BYTES)
-    coins, nonce = drawn[:SP.SECRET_BYTES], drawn[SP.SECRET_BYTES:]
+    entropy = S.seeded(SEED, SP.VERIFIER, "coins").draw(SP.SECRET_BYTES + audit.NONCE_BYTES)
+    coins, nonce = entropy[:SP.SECRET_BYTES], entropy[SP.SECRET_BYTES:]
     monkeypatch.setattr(audit, "register", functools.partial(audit.register, nonce=nonce))
     c = Readings([got["params"]["not_before_ns"]] + [now or 0 for _, now in log])
     period = P.session("n0", P.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts")), coins, clock=c,

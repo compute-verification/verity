@@ -9,13 +9,13 @@ import hashlib
 import itertools
 import math
 
-import pytest
-
 import pous_test_signer as ts
+import pytest
 from pous_fakes import Clock
+
+from verity.commitments.randomness import derive
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
-from verity.commitments.randomness import derive
 
 SECRET, SERVER = b"auditor secret", b"server-7"
 SESSION = hashlib.sha512(b"wipe session").digest()[:32]
@@ -60,11 +60,11 @@ def test_label_format():
         sw.label(key, 1 << 64)
 
 
-def test_draws_are_uniform_indices_from_the_coin_secret():
-    idx = sw.draw_indices(b"coins", SERVER, SESSION, N, K)
+def test_the_sampled_indices_are_uniform_and_come_from_the_coin_secret():
+    idx = sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     key = derive(b"coins", sw.COIN_DOMAIN, {"server": SERVER, "session": SESSION, "n": N})
     assert idx == tuple(key.uniform(N, j) for j in range(K))
-    assert all(0 <= i < N for i in idx) and idx != sw.draw_indices(b"other", SERVER, SESSION, N, K)
+    assert all(0 <= i < N for i in idx) and idx != sw.sample_indices(b"other", SERVER, SESSION, N, K)
 
 
 @pytest.mark.parametrize("batch", [1, 2, 8, K])
@@ -81,7 +81,7 @@ def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
     uncovered = f"batch size {batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
     assert v.reasons == (() if batch == 1 else (uncovered,))
     assert v.public() == {"accepted": batch == 1, "egress_mib": 1}
-    assert c.coins() == sw.draw_indices(b"coins", SERVER, SESSION, N, K)
+    assert c.coins() == sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     assert c.params.covered == (batch == 1)
 
 
@@ -163,6 +163,13 @@ def test_verdict_fails_closed():
     r = signed.batches[0]
     forged = dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt_ns=r.receipt_ns + 1), *signed.batches[1:]))
     assert "the signature does not verify" in sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons
+
+    def raises(*_):
+        raise ValueError("a malformed signature")
+
+    for verify in (raises, lambda *_: False, lambda *_: None):  # a scheme that raises, refuses or says nothing
+        got = sw.verdict(signed, c.commitment, trusted=trusted, schemes={signed.scheme: verify})
+        assert not got.accepted and got.reasons == ("the signature does not verify",)
     more = dataclasses.replace(signed, egress_bits=0)
     assert not sw.verdict(more, c.commitment, trusted=trusted, schemes=ts.SCHEMES).accepted
 
@@ -223,11 +230,11 @@ def test_h200_at_5GB() -> None:
     """`StreamedWipeMeets141GB5`: at 141·10^9 bytes with 2.3 GB of driver reserve, `r = 59` is the least ratio whose
     threshold is at most 5 GB, `k = 5231` the least read count for it, and the threshold `39,721,768,854` bits; the
     family's own point, `r = 24` and `k = 2152`, is `512·(⌈n/24⌉ − 1) + n + 141`."""
-    n, reserve, cap = 2_203_125_000, 23 * 10**8 * 8, 5 * 10**9 * 8
+    n, reserve, most = 2_203_125_000, 23 * 10**8 * 8, 5 * 10**9 * 8
     assert least_reads(59) == 5231 and least_reads(24) == 2101
-    assert reads_threshold(n, 59, 5231, reserve) == 39_721_768_854 <= cap
-    assert reads_threshold(n, 59, 5231) == 21_321_768_854 <= cap - reserve
-    assert reads_threshold(n, 58, least_reads(58), reserve) > cap
+    assert reads_threshold(n, 59, 5231, reserve) == 39_721_768_854 <= most
+    assert reads_threshold(n, 59, 5231) == 21_321_768_854 <= most - reserve
+    assert reads_threshold(n, 58, least_reads(58), reserve) > most
     assert reads_threshold(n, 24, 2152) == sw.LABEL_BITS * (-(-n // 24) - 1) + n + 141
     q, _ = sw.retained_bits(n, 5231, n * sw.LABEL_BITS + reserve, 0, -128)
     assert q <= reads_threshold(n, 59, 5231, reserve)  # the exact count needs less

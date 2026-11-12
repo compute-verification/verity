@@ -81,7 +81,7 @@ open Flock FlockDeploy
 open Lean (Json JsonNumber)
 open FlockSoundness FlockSoundness.Refine
 
-open private stratumOfJson from Flock.Draw
+open private stratumOfJson from Commitments.Draw
 
 /-! ## The statement's inputs -/
 

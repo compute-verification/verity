@@ -12,7 +12,7 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 - X = s/E + β, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's
   squarings a block (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links' β_l;
 - B = B_r + B_d, what can come back at once beyond that rate, in blocks: one maximal rebuild batch and one maximal
-  disk read (plus, link-charged, one link window B_l), `Node`'s bursts (X and B: `line.charges_of`);
+  disk read (plus, link-charged, one link burst B_l), `Node`'s bursts (X and B: `line.charges_of`);
 - snapshot: `planned − W − (X·span + B) − P·S` blocks over the passes, `span` the record's;
 - paced, with each window a group g ≤ C and the credited span Σ = [e_0, s_C): time-held is
   `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, the line's stretch held over time with the whole session
@@ -66,7 +66,7 @@ class Node:
     prover's compressions over a session at most F times the node's), and the read ceilings of its own disks and of
     its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
     beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
-    maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
+    maximal rebuild batch, one maximal disk read and one link burst.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
     the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes `timing`'s, which a reported read rate
@@ -88,7 +88,7 @@ class Node:
 
     def __post_init__(self) -> None:
         for name in ("spec_bytes_per_s", "read_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s"):
-            if not 0 < _rate(getattr(self, name), name):
+            if not _rate(getattr(self, name), name) > 0:
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
             raise ValueError("chip_bytes is a nonnegative integer")
@@ -153,9 +153,9 @@ row digest."""
 
 
 def rejection(record: audit.Record) -> float:
-    """The sample's rejection, `PooledSample`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
+    """The sample's rejection, `PooledSample`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt sample t
     requested, k_t the record's `samples` in every sample (the k at which `DrawsOfRecord` holds), one sample a window, or
-    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts sampled (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
+    ⌈W/g⌉ samples at `groups_per_coin` g.  Not the receipts sampled (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
     that opens all its receipts): the statement's error is a constant, and a sample's U_t is the prover's.  Refused for a
     record that states no `samples`.  Exact: the samples are an integer."""
     if record.samples is None:
@@ -194,7 +194,7 @@ def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max
 
 
 def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float:
-    """`binding` over a session of `draws` draws, at most `receipts` receipts a sample (`window_receipts` times the
+    """`binding` over a session of `draws` samples, at most `receipts` receipts a sample (`window_receipts` times the
     windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
     the span."""
     s = min(samples, receipts)
@@ -231,7 +231,7 @@ def binding(record: audit.Record, node: Node) -> float:
 @dataclass(frozen=True, slots=True)
 class SamplingTerms:
     """`PooledSample`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
-    (`binding`), what reading the record's openings as the deployed draw over receipts its roots hold costs.  `total`
+    (`binding`), what reading the record's openings as the deployed sample over receipts its roots hold costs.  `total`
     is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the third term, which `PRF_CLAIM` prices with no
     numeric value: `to_json` names it, and `total` holds none of it."""
 
@@ -249,7 +249,7 @@ class SamplingTerms:
 
 
 def draw(record: audit.Record, node: Node) -> SamplingTerms:
-    """The record's draw terms on `node`."""
+    """The record's sampling terms on `node`."""
     return SamplingTerms(rejection(record), binding(record, node))
 
 
@@ -268,7 +268,7 @@ class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.GammaTerms`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the draw's (`draw`: `PooledSample`'s rejection and binding terms, the PRF
+    ledger's with the sketch's term and the sample's (`draw`: `PooledSample`'s rejection and binding terms, the PRF
     advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float
@@ -470,3 +470,7 @@ def declared(record: audit.Record, node: Node, *,
     once = lambda p: bounds[id(p)]  # noqa: E731
     return Declared(len(record.windows), gamma(record, node, node.spec_bytes_per_s, wrong=once),
                     gamma(record, node, node.read_bytes_per_s, wrong=once), memory(record, node))
+
+
+__all__ = ["DELTA_PARTS", "FORMS", "Node", "PRF_CLAIM", "REJECTION_LOG2", "SNAPSHOT", "TIME_HELD", "binding_over",
+           "hiding_over", "window_receipts"]

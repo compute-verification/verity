@@ -30,13 +30,10 @@ so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `enc
 over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
 a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
-`point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory challenger is a party
-of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
-parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
-node.
-`trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
-when the challenger host isn't the node, and the leg says which (`challenger_session.placement`). The setup's salt is
+With `party`, `audit` runs the memory challenger as a party of its own (`challenger_party`), with its own coins and a
+key at S1's deployed parameters (`memory_challenger.LMS`) that `challenger` makes once on its host; the prover and the
+verifier run on the node. `trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't
+control, holds only when the challenger's host isn't the node (`challenger_session.placement`). The setup's salt is
 still sampled on the node.
 """
 
@@ -57,12 +54,12 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.configuration.deploy.stream import Side
-from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.crypto import lms
-
+from verity.commitments.identity import canonical_json_bytes
+from verity.configuration.deploy.stream import Side
 from verity.protocols.pous.device import challenger_session
 from verity.protocols.pous.device import memory_challenger as mc
+
 from . import protocol as pous_protocol
 from . import run as R
 from . import setup
@@ -71,7 +68,6 @@ from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity/pous/p2/v4/run"
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_challenger.TEST_PREFIX` + it."""
-SETUP_PROTOCOL = "verity/pous/p2/v4/setup"
 SESSION_DOMAIN = "verity/pous-period/session/v1"
 W, C0 = 1024, 105
 """The small point's width: a 1,024-bit prime `2^w − c0` of P2's ladder, 126 payload bytes a 128-byte block."""
@@ -251,10 +247,6 @@ class Run:
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
 
 
-Period = Run
-"""`Run`, under the name some of its readers still use; it goes when none does."""
-
-
 @dataclass(frozen=True)
 class Store:
     """What a node's setup leaves: the point, what setup published, `C*` (which the prover keeps), the memory challenger's
@@ -327,7 +319,7 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: Side | None = None) -> Period:
+          party: Side | None = None) -> Run:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
     under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the tie on
     the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of its own
@@ -358,7 +350,7 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: Side | None = None) -> Period:
+        party: Side | None = None) -> Run:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
@@ -458,10 +450,10 @@ def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
                 keep.add(i)
         elif e["session"] in sessions:
             keep.add(i)
-            if kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b):
-                if (o := current.get(b.get("for") or b.get("by"))) is not None:
-                    keep.add(o)
-                    held.add(o)
+            reserves = kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b)
+            if reserves and (o := current.get(b.get("for") or b.get("by"))) is not None:
+                keep.add(o)
+                held.add(o)
     opened = {e["session"] for e in entries if e["kind"] == "open"}
     if missing := sorted(set(sessions) - opened):
         raise ValueError(f"the auditor's ledger opens no session {missing[0]}, which a challenger close record beside it "
@@ -542,68 +534,11 @@ def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",))
 
 
 SETUP_WORKERS = 32
-"""The processes the leg encodes a node's `C*` in, and the memory challenger's side makes its key in, at most, within the
-CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)."""
+"""The processes a setup encodes a node's `C*` in (`setup_store`'s `workers`), and the memory challenger's side makes its
+key in (`challenger`, from `challenger_party.main`), at most, within the CPUs each may run on."""
 
 
-def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
-    set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records at its
-    first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up to
-    `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
-    audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With
-    `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
-    instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
-    (`challenger_session.side_of`; on this node by default, a process whose key and session log are beside the periods)
-    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
-    answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
-    `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
-    whether `trusted-host`'s premise holds (`challenger_session.placement`), go in `pous.json` and in an accepted
-    answer's profile (`placement`)."""
-    doc = json.loads((Path(period_dir) / "period.json").read_text())
-    tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
-    workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
-    party = challenger_session.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
-    where = challenger_session.placement(node, party.host)
-    kept = Path(period_dir).parent / "pous-store"
-    t = time.monotonic()
-    if small or not (kept / "store.json").exists():
-        store = records(period_dir)
-        point = point_for(len(store), W, C0) if small else point_for(len(store))
-        held = setup_store(store, secrets.token_bytes(64), point, workers=1 if small else workers)
-        if not small:
-            held.save(kept)
-        fresh = True
-    else:
-        held, fresh = Store.load(kept), False
-    setup_s = round(time.monotonic() - t, 2)
-    t = time.monotonic()
-    period = audit(node, held, secrets.token_bytes(64), party=party)
-    seconds = round(time.monotonic() - t, 2)
-    answer, lean = period.answer, {}
-    if "pous-run-protocol" in tools:
-        lean["run"] = serve(tools["pous-run-protocol"], [period.case])[0]
-        if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
-            raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
-        answer = lean["run"]
-    if fresh and "pous-setup" in tools:
-        lean["setup"] = serve(tools["pous-setup"], [period.setup_case])[0]
-        if lean["setup"]["verdict"] != "accept":
-            raise RuntimeError(f"pous-setup refused the setup the Python accepted: {lean['setup']}")
-    if answer["profile"] is not None:
-        answer = answer | {"profile": answer["profile"] | {"placement": where}}
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "pous.case.json").write_text(json.dumps(period.case, sort_keys=True))
-    if fresh:
-        (out / "pous-setup.case.json").write_text(json.dumps(period.setup_case, sort_keys=True))
-    q = held.point.params
-    (out / "pous.json").write_text(json.dumps({
-        "answer": answer, "blocks": q.blocks, "eps": str(period.eps), "lean": lean, "placement": where,
-        "s_bits": period.public("s_bits"), "seconds": seconds,
-        "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0}, "w_bytes": q.w_bytes}, sort_keys=True, indent=1))
-    return answer
-
-
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "Run", "SetupInputs", "Store", "answer",
-           "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg",
-           "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
+__all__ = ["C0", "K", "LEDGER_SCHEMAS", "LIMIT_NS", "PROTOCOL", "SESSION_DOMAIN", "SETUP_WORKERS", "W",
+           "Prover", "Run", "SetupInputs", "Store", "answer", "audit", "case", "certificate", "certify", "challenger",
+           "cite", "cited", "decided_by", "encode", "gaps", "honest", "point_for", "point_json", "point_of", "profile",
+           "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
