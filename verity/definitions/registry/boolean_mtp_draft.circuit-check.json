@@ -1,0 +1,31 @@
+{
+ "definitions": {
+  "MtpEhZero_v2{H=16}": {
+   "and": 320,
+   "type": "3e18a43a662f061915f0bd9725c30b7a4184d27d2cd585f01c49a40cba18a83ea8ef5e82438367b0b0757e5f44d233067627747e7d54e13a006b3329b24c39ee"
+  },
+  "MtpEhZero_v2{H=256}": {
+   "and": 4160,
+   "type": "9205863bf9df51078b179b11353228522b6924076933cd1559267d4acb7c98450a19492e5c8de293ebaa2156222898b0842a5f3e46ef4d7241a7155cd99ac0c7"
+  },
+  "TritonBlockRMSNormMeanRsqrt_v1{N=256,EPS=1e-05}": {
+   "and": 4128,
+   "type": "cf5b71f155b78191bbbd33a253b850a69f96f2881b6b3dff9f9bd8a81b62ad36b7c0708cfb5bbcb20c32fe8250cd123463f75b05f2c1d1232330ff138df10e93"
+  },
+  "TritonBlockRMSNormMeanRsqrt_v1{N=6144,EPS=1e-05}": {
+   "and": 4502,
+   "type": "a12a27514ec77d69b20f3323bd4cef323fba9a4ac30fe9b58f89873673144cb3e3c69c156d219f65634768787538d6fd8f9d66bae8f47d310f0fa4217611b813"
+  }
+ },
+ "digests": {
+  "MtpEhNorm_v2{H=6144,BLOCK=8192,WARPS=4,EPS=1e-05}": {
+   "sha512": ""
+  },
+  "MtpEhZero_v2{H=6144}": {
+   "sha512": ""
+  },
+  "TritonBlockRMSNormSumSq_v2{N=6144,BLOCK=8192,WARPS=4,EPS=1e-05}": {
+   "sha512": ""
+  }
+ }
+}
