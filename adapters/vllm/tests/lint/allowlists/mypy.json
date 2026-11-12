@@ -329,7 +329,6 @@
     {"file": "verity_vllm/check/replay/fork.py", "kind": "attr-defined", "symbol": "dead_worker", "detail": ""},
     {"file": "verity_vllm/check/replay/fork.py", "kind": "attr-defined", "symbol": "fork_pool", "detail": ""},
     {"file": "verity_vllm/check/replay/replay_dump.py", "kind": "arg-type", "symbol": "dump_row_words", "detail": ""},
-    {"file": "verity_vllm/commit/challenge.py", "kind": "arg-type", "symbol": "stratum_picks", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "arg-type", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "assignment", "symbol": "NativeCollectCommitter._commit_step", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "assignment", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": "", "count": 2},
