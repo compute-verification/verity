@@ -73,7 +73,14 @@ def templates(nodes) -> tuple[Counter, dict]:
     return c, names
 
 
+SKIP = set(filter(None, os.environ.get("SKIP", "").split(",")))
+
+
 def stage(label: str, f):
+    if label in SKIP:
+        rec[label] = {"skipped": True}
+        say(label, rec[label])
+        return rec[label]
     t0 = time.perf_counter()
     try:
         v = f()
