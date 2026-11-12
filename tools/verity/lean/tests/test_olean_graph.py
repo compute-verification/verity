@@ -1,6 +1,7 @@
-"""`olean_graph.differs`, the sampled recompile's comparison of a module's `.olean` parts (`check.sampled_recompile`): on
-regions written here as Lean's compactor lays them out, and with a toolchain, on a module built at two paths, where only
-the path of its source in a message differs, and with one declaration or attribute changed, which it refuses."""
+"""`olean_graph.differs`, the sampled recompile's comparison of a module's `.olean` parts (`check.sampled_recompile`), and
+`olean_graph.canonical`, the digest of them a replay key reads (`check.replay_keys`): on regions written here as Lean's
+compactor lays them out, and with a toolchain, on a module built at two paths, where only the path of its source in a
+message differs, and with one declaration or attribute changed, which each tells apart."""
 from __future__ import annotations
 
 import importlib.util
@@ -100,6 +101,77 @@ def test_a_module_built_at_another_path_is_one_build_and_nothing_else_may_differ
     assert "parts" in G.differs(x, {p: f for p, f in y.items() if p != "olean.private"}, SOURCE)
 
 
+def module_data(d: Path, path: str = "/a/P/M.lean", text: str = "unused variable", literal: str = "lit",
+                scalar: bytes = b"\x01" + bytes(7), header: bytes = HEADER, declared_path: bool = False) -> dict[str, Path]:
+    """A module's three parts with Lean's layout of their roots, each a `ModuleData` (`MODULE_DATA`): the public part
+    declares the name, the server part's entries hold a message (its source's ``path`` and its ``text``), and the private
+    part declares a constant holding ``literal`` and ``scalar`` (or, ``declared_path``, the message's path string itself),
+    and its entries point at the server part's entry, past the message, so a longer path moves what they point at."""
+    d.mkdir(parents=True, exist_ok=True)
+    pub, srv, prv = Region(0x1000_0000, header), Region(0x2000_0000), Region(0x3000_0000)
+    name, scalars = pub.string("P.M"), b"\x01" + bytes(7)
+
+    def root(r: Region, consts: list[int] = (), names: list[int] = (), entries: list[int] = ()) -> int:
+        return r.ctor(0, [r.array([]), r.array(list(names)), r.array(list(consts)), r.array([]), r.array(list(entries))],
+                      scalars)
+
+    pub_root = root(pub, names=[name])
+    msg = srv.ctor(1, [where := srv.string(path), srv.string(text), name])
+    entry = srv.ctor(2, [srv.string("declRangeExt"), msg])
+    srv_root = root(srv, entries=[entry])
+    decl = prv.ctor(3, [name, where if declared_path else prv.string(literal)], scalar)
+    prv_root = root(prv, consts=[decl], names=[name], entries=[entry])
+    return {"olean": pub.write(d / "M.olean", pub_root), "olean.server": srv.write(d / "M.olean.server", srv_root),
+            "olean.private": prv.write(d / "M.olean.private", prv_root)}
+
+
+def test_a_module_built_at_another_path_has_one_canonical_digest_and_nothing_else_keeps_it(tmp_path):
+    """`canonical` leaves out the source's path where only the entries reach it (a message's file), so the build at a
+    longer path, whose private part's pointer into the server part moved, shares the digest. Every other difference
+    changes it, a path a declaration holds among them, and a part whose root isn't a `ModuleData` has none."""
+    x = module_data(tmp_path / "x")
+    y = module_data(tmp_path / "y", path="/a/much/longer/checkout/elsewhere/P/M.lean")
+    assert x["olean.private"].read_bytes() != y["olean.private"].read_bytes(), "the pointer into the server part moved"
+    assert G.differs(x, y, SOURCE) is None
+    assert G.canonical(x, SOURCE) is not None
+    assert G.canonical(x, SOURCE) == G.canonical(y, SOURCE)
+    changed = {
+        "another module's source": module_data(tmp_path / "other", path="/b/P/N.lean"),
+        "a relative path": module_data(tmp_path / "rel", path="b/P/M.lean"),
+        "the message's text": module_data(tmp_path / "text", text="unused variablE"),
+        "a declaration's string": module_data(tmp_path / "literal", literal="lis"),
+        "a declaration's scalar": module_data(tmp_path / "scalar", scalar=b"\x02" + bytes(7)),
+        "the header": module_data(tmp_path / "header", header=HEADER[:-1] + b"1"),
+        "a parts list": {p: f for p, f in x.items() if p != "olean.server"},
+    }
+    for what, z in changed.items():
+        assert G.canonical(z, SOURCE) != G.canonical(x, SOURCE), what
+    held = [module_data(tmp_path / f"held{i}", path=p, declared_path=True) for i, p in enumerate(("/a/P/M.lean", "/b/P/M.lean"))]
+    assert G.differs(*held, SOURCE) is None, "the sampled recompile allows it"
+    assert G.canonical(held[0], SOURCE) != G.canonical(held[1], SOURCE), "a declaration reads the path, so it counts"
+    assert G.canonical(x, "Q/M.lean") != G.canonical(x, SOURCE), "only the module's own source is left out"
+    assert G.canonical(module(tmp_path / "old"), SOURCE) is None
+    assert G.canonical(module(tmp_path / "stray", stray=0x4000_0000), SOURCE) is None
+
+
+def test_a_module_s_replay_key_is_the_same_at_another_path_and_moves_with_its_declarations(tmp_path):
+    """`check.replay_keys` keys a module whose server part holds its source's path by `canonical`, so the module and every
+    module importing it keep their keys when the package is built elsewhere, and a changed declaration moves both."""
+    spec = importlib.util.spec_from_file_location("lean_check", HERE.parent / "check.py")
+    check = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(check)
+
+    def keys(m: dict[str, Path], name: str) -> dict[str, str]:
+        top = tmp_path / name / "Top.olean"
+        top.write_text("Top")
+        graph = {"P.M": {"olean": str(m["olean"]), "imports": []}, "Top": {"olean": str(top), "imports": ["P.M"]}}
+        return check.replay_keys({"graph": graph, "modules": ["Top"]}, "t")
+
+    here = keys(module_data(tmp_path / "x"), "x")
+    assert keys(module_data(tmp_path / "y", path="/a/much/longer/checkout/elsewhere/P/M.lean"), "y") == here
+    assert all(k != here[m] for m, k in keys(module_data(tmp_path / "z", literal="lis"), "z").items())
+
+
 def test_an_address_in_no_part_or_in_two_is_malformed(tmp_path):
     x, y = module(tmp_path / "x", stray=0x4000_0000), module(tmp_path / "y", stray=0x4000_0000)
     assert G.differs(x, y, SOURCE).startswith("malformed: address 0x40000000")
@@ -164,14 +236,20 @@ def parts(lib: Path, mod: str) -> dict[str, Path]:
 def test_lean_s_output_at_two_paths_differs_only_in_the_path_and_a_changed_declaration_is_refused(tmp_path):
     """Lean 4.34 writes `Lab`'s warning, with its source's absolute path, into its server part, and the private part points
     past it, so the two builds' bytes differ; `Lab.Basic` logs nothing and is byte-identical. A private theorem changed,
-    or an `implemented_by` pointed at another function of the same length, is refused."""
+    or an `implemented_by` pointed at another function of the same length, is refused. `canonical` agrees: one digest for
+    each module's two builds, another for each change."""
     a, b = built(tmp_path / "a" / "pkg"), built(tmp_path / "elsewhere" / "b" / "pkg")
     assert (a / "Lab.olean.server").read_bytes() != (b / "Lab.olean.server").read_bytes()
     assert (a / "Lab.olean").read_bytes() == (b / "Lab.olean").read_bytes()
     assert G.differs(parts(a, "Lab"), parts(b, "Lab"), "Lab.lean") is None
     assert G.differs(parts(a, "Lab/Basic"), parts(b, "Lab/Basic"), "Lab/Basic.lean") is None
     assert G.differs(parts(a, "Lab"), parts(b, "Lab"), "Other.lean") is not None, "the path must be the module's source"
+    assert G.canonical(parts(a, "Lab"), "Lab.lean") is not None
+    assert G.canonical(parts(a, "Lab"), "Lab.lean") == G.canonical(parts(b, "Lab"), "Lab.lean")
+    assert G.canonical(parts(a, "Lab/Basic"), "Lab/Basic.lean") == G.canonical(parts(b, "Lab/Basic"), "Lab/Basic.lean")
     proof = built(tmp_path / "c" / "pkg", lab=LAB.replace("1 + 1 = 2", "2 + 0 = 2"))
     assert G.differs(parts(a, "Lab"), parts(proof, "Lab"), "Lab.lean") is not None
+    assert G.canonical(parts(a, "Lab"), "Lab.lean") != G.canonical(parts(proof, "Lab"), "Lab.lean")
     impl = built(tmp_path / "d" / "pkg", basic=BASIC.replace("@[implemented_by fastId]", "@[implemented_by fastIe]"))
     assert G.differs(parts(a, "Lab/Basic"), parts(impl, "Lab/Basic"), "Lab/Basic.lean") is not None
+    assert G.canonical(parts(a, "Lab/Basic"), "Lab/Basic.lean") != G.canonical(parts(impl, "Lab/Basic"), "Lab/Basic.lean")
