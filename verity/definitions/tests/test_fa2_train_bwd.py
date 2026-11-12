@@ -24,6 +24,7 @@ from verity.definitions.registry.prims import BF16, F32
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fa2_train_bwd_sm120.npz"
 BM, BN = 64, 128
+SEED_ORDERS = 4207
 
 
 def _ints(a) -> list[int]:
@@ -45,17 +46,23 @@ def test_train_sdpa_backward_binds_each_captured_shape() -> None:
     assert W.Fa2TrainBwdRow.refuse({"D": 64, "BN": 128, "NVIS": 128}) is None
 
 
-def _loop(q, k, v, do, o, lse, bm: int, bn: int):
+#: the order of a key block's accumulation: (its query blocks first to last, each block's k16 steps last to first)
+KERNEL, BLOCKS_ASCENDING, STEPS_REVERSED = (False, False), (True, False), (False, True)
+
+
+def _loop(q, k, v, do, o, lse, bm: int, bn: int, orders=(KERNEL,)):
     """The kernel's loop over rows q, do, o, lse against keys k, v, the first key at the first row's key block's start and the
-    last key block ending at the last row: each row's dQ parts in the key blocks' order, and each key's (dK, dV)."""
+    last key block ending at the last row: each row's dQ parts in the key blocks' order, and each key's (dK, dV) under each of
+    `orders`, the kernel's query blocks from the last down to the key block's first and each block's k16 steps over its rows in
+    turn, or another order."""
     T, D = q.shape
     first = T - len(k)
     pre = [evaluate(bind(W.Fa2TrainBwdPre, D=D), _ints(do[r]), _ints(o[r]), [int(lse[r])]) for r in range(T)]
     parts: list[list[int]] = [[] for _ in range(T)]
-    dk, dv = [], []
+    tiles = []
     for n in range(len(k) // bn):
         keys = slice(n * bn, (n + 1) * bn)
-        acc: list[list[int]] = []
+        tiles.append([])
         for m in range(T // bm - 1, (first + n * bn) // bm - 1, -1):
             p, ds = [], []
             for r in range(m * bm, (m + 1) * bm):
@@ -64,18 +71,27 @@ def _loop(q, k, v, do, o, lse, bm: int, bn: int):
                 p.append(out[:bn])
                 ds.append(out[bn:2 * bn])
                 parts[r] += out[2 * bn:]
-            block = (_ints(do[m * bm:(m + 1) * bm]), _ints(q[m * bm:(m + 1) * bm]))
+            tiles[-1].append((m, p, ds))
+    grads = []
+    for ascending, reversed_steps in orders:
+        rows = [i for s in range(0, bm, 16)[::-1 if reversed_steps else 1] for i in range(s, s + 16)]
+        dk, dv = [], []
+        for blocks in tiles:
+            acc: list[list[int]] = []
+            for m, p, ds in (blocks[::-1] if ascending else blocks):
+                block = tuple(_ints(x[[m * bm + i for i in rows]]) for x in (do, q))
+                for c in range(bn):
+                    col = ([p[i][c] for i in rows], [ds[i][c] for i in rows])
+                    if len(acc) < bn:
+                        acc.append(_ints(evaluate(bind(W.Fa2TrainBwdKeyFirst, D=D, BM=bm), *col, *block)))
+                    else:
+                        acc[c] = _ints(evaluate(bind(W.Fa2TrainBwdKey, D=D, BM=bm), *col, *block, acc[c]))
             for c in range(bn):
-                col = ([x[c] for x in p], [x[c] for x in ds])
-                if len(acc) < bn:
-                    acc.append(_ints(evaluate(bind(W.Fa2TrainBwdKeyFirst, D=D, BM=bm), *col, *block)))
-                else:
-                    acc[c] = _ints(evaluate(bind(W.Fa2TrainBwdKey, D=D, BM=bm), *col, *block, acc[c]))
-        for c in range(bn):
-            out = _ints(evaluate(bind(W.Fa2TrainBwdDkDv, D=D), acc[c]))
-            dk.append(out[:D])
-            dv.append(out[D:])
-    return parts, dk, dv
+                out = _ints(evaluate(bind(W.Fa2TrainBwdDkDv, D=D), acc[c]))
+                dk.append(out[:D])
+                dv.append(out[D:])
+        grads.append((dk, dv))
+    return parts, grads
 
 
 def _parts(d, case: str, i: int, r: int) -> list[int]:
@@ -111,11 +127,16 @@ def test_each_row_s_dq_is_the_captured_kernels_words() -> None:
 
 @pytest.mark.slow
 def test_a_key_block_s_dk_and_dv_are_the_captured_kernels_words() -> None:
+    """The only check of dK and dV on the card's words: the fixture's key block, through its two query blocks, gives them in
+    the kernel's order, and words of them are others with the query blocks first to last or a block's k16 steps reversed."""
     d = np.load(FIXTURE)
     case = "block/l16/unit"
-    _, dk, dv = _loop(*(d[f"{case}/{f}"] for f in ("q", "k", "v", "do", "o", "lse")), BM, BN)
-    assert dk == [_ints(x) for x in d[f"{case}/dk"]]
-    assert dv == [_ints(x) for x in d[f"{case}/dv"]]
+    card = ([_ints(x) for x in d[f"{case}/dk"]], [_ints(x) for x in d[f"{case}/dv"]])
+    _, grads = _loop(*(d[f"{case}/{f}"] for f in ("q", "k", "v", "do", "o", "lse")), BM, BN,
+                     orders=(KERNEL, BLOCKS_ASCENDING, STEPS_REVERSED))
+    assert grads[0] == card
+    assert grads[1][0] != card[0] and grads[1][1] != card[1]
+    assert grads[2][0] != card[0] and grads[2][1] != card[1]
 
 
 def _bf16(rng, shape, scale=1.0):
@@ -127,20 +148,32 @@ def _f32(rng, shape, scale=1.0):
     return (rng.standard_normal(shape) * scale).astype(np.float32).view(np.uint32)
 
 
+def _bf16_scaled(words, e: int):
+    """bf16 words times 2^e, exactly (the exponents stay in range)."""
+    return (words.astype(np.int32) + (e << 7)).astype(np.uint16)
+
+
 def test_a_head_is_its_rows_and_keys_in_the_kernels_order() -> None:
     """A head of 64 rows at D = 32, BM = 16, BN = 32 and two dQ buffers, against the kernel's loop written out here (`_loop`):
     key block n's query blocks from the last down to its own first, in each the rows and then the keys, then the keys' ends;
-    a row's parts in the key blocks' order into its buffers."""
+    a row's parts in the key blocks' order into its buffers.  Query block 0 repeats block 3's q and O with dO negated, block
+    3's dO is scaled by 2^8 and the middle blocks' by 2^-12, k by 2^-12 so that every visible P rounds to bf16 1, and LSE is 0:
+    a key of key block 0 adds terms that cancel across its query blocks, and with them first to last its dK and dV are
+    others.  (Each block is one k16 step here; the steps' order is the fixture's key block's.)"""
     T, D, bm, bn, NS = 64, 32, 16, 32, 2
-    rng = np.random.default_rng(4207)
+    rng = np.random.default_rng(SEED_ORDERS)
     do, q, k, v, o = (_bf16(rng, (T, D)) for _ in range(5))
-    lse = _f32(rng, (T,), 2.0)
+    k = _bf16_scaled(k, -12)
+    do[48:] = _bf16_scaled(do[48:], 8)
+    do[16:48] = _bf16_scaled(do[16:48], -12)
+    do[:16], q[:16], o[:16] = do[48:] ^ 0x8000, q[48:], o[48:]
+    lse = np.zeros(T, np.uint32)
     head = _ints(evaluate(bind(W.Fa2TrainBwdHead, T=T, D=D, BM=bm, BN=bn, NS=NS), *map(_ints, (do, q, k, v, o, lse))))
-    parts, dk, dv = _loop(q, k, v, do, o, lse, bm, bn)
+    parts, grads = _loop(q, k, v, do, o, lse, bm, bn, orders=(KERNEL, BLOCKS_ASCENDING))
     dq = [x for r in range(T) for x in _ints(evaluate(bind(W.Fa2TrainBwdDq, D=D, NP=r // bn + 1, NS=NS), parts[r]))]
-    assert head[:T * D] == dq
-    assert head[T * D:2 * T * D] == [x for row in dk for x in row]
-    assert head[2 * T * D:] == [x for row in dv for x in row]
+    dk, dv, dk_up, dv_up = ([x for row in rows for x in row] for g in grads for rows in g)
+    assert head == dq + dk + dv
+    assert dk_up != dk and dv_up != dv
 
 
 def test_the_head_at_a_stand_in_shape_keeps_its_signature_and_builds(monkeypatch) -> None:
@@ -159,7 +192,7 @@ def test_the_head_at_a_stand_in_shape_keeps_its_signature_and_builds(monkeypatch
     rng = np.random.default_rng(4207)
     do, q, k, v, o = (_bf16(rng, (T, D)) for _ in range(5))
     lse = _f32(rng, (T,), 2.0)
-    parts, dk, dv = _loop(q, k, v, do, o, lse, bm, bm)
+    parts, [(dk, dv)] = _loop(q, k, v, do, o, lse, bm, bm)
     want = [x for r in range(T) for x in _ints(evaluate(bind(W.Fa2TrainBwdDq, D=D, NP=1, NS=1), parts[r]))]
     assert _ints(evaluate(head, *map(_ints, (do, q, k, v, o, lse)))) == want + [x for row in dk + dv for x in row]
 

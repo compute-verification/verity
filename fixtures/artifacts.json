@@ -145,7 +145,7 @@
   "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5": "verity/definitions/silicon/discrepancy_log.json",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "benchmarks/network_e2e/encodings/tests/fixtures_draft",
-  "art:cf13269bc59422f20c20c1a664879559b050c88054bba8b0d1e5b2e81bcbbedd": "verity/definitions/tests/fixtures/fa2_train_bwd_sm120.npz",
+  "art:253bd5f4d35790a0f729bb2be897f0a72ca690e9a78c18b3aafa28b1c7d0a494": "verity/definitions/tests/fixtures/fa2_train_bwd_sm120.npz",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -218,6 +218,9 @@
       "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941",
       "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58",
       "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903"
+    ],
+    "art:253bd5f4d35790a0f729bb2be897f0a72ca690e9a78c18b3aafa28b1c7d0a494": [
+      "art:cf13269bc59422f20c20c1a664879559b050c88054bba8b0d1e5b2e81bcbbedd"
     ]
   }
 }

@@ -12,7 +12,8 @@ It keeps, of one head each:
     rows/xl/wide     B 2, H 24 (4 buffers), q and k N(0, 9): rows 0, 5 and 127 (one key block, of which they see 1, 6 and all
                      128 keys), 130 (two) and 621 (five, so one buffer holds two parts: its word 2 is another under the sum
                      in the key blocks' order)
-    block/l16/unit   B 2, H 16, q and k N(0, 1): keys and rows 896 to 1,023, two query blocks
+    block/l16/unit   B 2, H 16, q and k N(0, 1): keys and rows 896 to 1,023, two query blocks, of a head whose dK and dV
+                     both have words that are others with the query blocks first to last or a block's k16 steps reversed
 
 The archive's members are written in order with one fixed date, so the same capture gives the same bytes.
 """
@@ -30,7 +31,7 @@ from verity.definitions.registry.fa2_train_bwd import train_sdpa_backward
 #: name -> (capture case, which of its heads, (B, H), rows)
 ROWS = {"xl/wide": ("bwd/xl/det/wide", 0, (2, 24), (0, 5, 127, 130, 621))}
 #: name -> (capture case, which of its heads, (B, H))
-BLOCK = {"l16/unit": ("bwd/l16/det/unit", 1, (2, 16))}
+BLOCK = {"l16/unit": ("bwd/l16/det/unit", 3, (2, 16))}
 
 
 def _head(d, case: str, bh: tuple[int, int]) -> dict:
