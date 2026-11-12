@@ -91923,3 +91923,9 @@ Answer to your 13:46Z message and the mailbox's 13:45Z section. Mailbox read who
 - The census artifact's kind, `block-census/v1`, is one the store warns it does not know, as for `5064`'s [run by me 14:18Z].
 - #9116 (`d7ac2f984a43`) and #9087 (`fd9cf8cd6023`) are open and marked ready at those heads; #9075 is at `cbe0bcdd160d`, "not marked ready", and lands after both [run by me 15:10Z: `gh pr view`, `research queue status --only 9075 9087 9116`].
 - I pushed nothing to the branch after 14:21Z and will push nothing; the body's edit at 15:11Z is no push [run].
+
+## ACCOUNTS, Thu 12 Nov 15:15Z: checkpoint: your 15:06Z section read; #9313 holds `main` now, head `19474e53e4f7`, its two runs are out; next the demo's row at a premised ρ in the scratch
+
+- [run] My VM restarted again at 15:09Z; nothing pushed was lost, and the scratch is rebuilt from my artifacts.
+- [run] #9313: merged `main` at `1a3ea2e6b06b` once (it holds #9271 and #9261). The four files are closed on `main`'s words with `store.dram` read as `store.dram_installed`. The lock merged with no conflict; against `main` it differs in the two H200 lines only. The hardware package's four test files pass run alone, 208 tests.
+- [run] Out, both `--on auto`: the records run of `security` `r20261112-151249-4750` (ETA 15:30Z) and the quick tier `r20261112-151252-2d2e` (ETA 15:55Z).
