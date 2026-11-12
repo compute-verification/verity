@@ -2,7 +2,8 @@
 it, with their line rates, and what each NVIDIA card's firmware says it gives a program. One Attempt on the node (cwd =
 the source tree), which writes nothing to a device:
 
-    research run --on NODE --project verity --source . --cwd source -- python3 benchmarks/bandwidth/node.py
+    research run --on NODE --project verity --source . --cwd source -- \
+      bash -c 'python3 benchmarks/bandwidth/node.py --out "$OUT"'
 
 **Interfaces** (`net.json`, and the commands' own text in `net.txt`). For every interface under `/sys/class/net`: its
 `operstate`, `speed` (Mb/s; a virtual interface often reads -1 or refuses the read), `type` and driver, and `ethtool
@@ -28,8 +29,8 @@ records the refusal), at the addresses NVIDIA's open kernel modules give at the 
   `NV_PFB_PRI_MMU_WPR1_ADDR_LO`, 0x001FA81C, sits in, and `--range-at 0x00100CE0`, Pascal's
   (`pascal/gp102/dev_fb.h`), which the driver reads up to GA100 (`kmemsysReadUsableFbSize_GP102`).
 
-`--regs must` exits 3 unless every card was read; the default records a refusal and goes on. Outputs under `$OUT`
-(`--out`): `net.txt`, `net.json`, `regs.json`, `nvidia-smi.txt`.
+`--regs must` exits 3 unless every card was read; the default records a refusal and goes on. Outputs under `--out`,
+the run's `$OUT`: `net.txt`, `net.json`, `regs.json`, `nvidia-smi.txt`.
 """
 
 from __future__ import annotations
@@ -198,7 +199,7 @@ def registers(range_at: list[int]) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", default=os.environ.get("OUT") or os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "out"))
+    ap.add_argument("--out", help="the directory the outputs go in; not needed with --regs-json")
     ap.add_argument("--regs", choices=("try", "must", "no"), default="try")
     ap.add_argument("--range-at", type=lambda s: int(s, 16), action="append", default=[],
                     help="read the MMU's local memory range at this address on a chip whose header defines none")
@@ -209,6 +210,8 @@ def main() -> int:
     if args.regs_json:
         print(json.dumps(registers(args.range_at)))
         return 0
+    if not args.out:
+        ap.error("--out DIR: where the outputs go (a run's \"$OUT\")")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     net, text = interfaces()
