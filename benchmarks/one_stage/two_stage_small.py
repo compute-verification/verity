@@ -16,10 +16,15 @@ which round 2 derives its wires and its return link from: its record commits the
 check selects at the first request's second token, every request ends at its first stop id or at its ``max_tokens``,
 as an engine ends it, and all of them are the one stop class's, (P, T); ``first`` and ``second`` take the rule as
 ``--stop``.
+``--tables`` commits each request's history table at one layer beside the class's values, as a serve with no stop rule
+does (`boundary_tables`): rank 0's latent rows are random bf16 bits, built into each table on the host
+(`verity.commitments.history.HistoryTable`), and the class lists their roots after its parts and return. No unit of the
+select reads a table, so round 2 opens none: the run shows the two stages carry a class whose record holds both.
 The window's run is the serve nonce's (``--serve``, `SERVE` unless given): a challenger host opens a run's root once,
 ever, so a first stage on one takes a nonce no run has used.
 
-    python two_stage_small.py serve --out DIR [--v 128] [--outputs 4] [--spans 6] [--inline] [--units K] [--stop] [--serve NONCE]
+    python two_stage_small.py serve --out DIR [--v 128] [--outputs 4] [--spans 6] [--inline] [--units K] [--stop | --tables]
+        [--serve NONCE]
     python two_stage_small.py expect SUMMARY.json [--unlinked]
 """
 from __future__ import annotations
@@ -34,8 +39,9 @@ from typing import Any
 import numpy as np
 
 from verity.circuits.evaluation.reference import evaluate
+from verity.commitments import history as HT
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS
+from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
 
 SERVE = "two-stage-small"
 PROMPT = (1, 2, 3)
@@ -43,6 +49,8 @@ GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_token
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 #: the model length a stop rule registers here
 MAX_MODEL_LEN = 4096
+#: ``--tables``: the one layer a request's history table is at, and a table's leaves
+TABLE_LAYER, TABLE_LEAVES = 0, 16
 #: the stream's code for the two-stage form, which it refuses every run by, last, until the form's proof lands
 FORM = "two-stage-form"
 #: round 2's code for a replay block it derives no wires from: an inlined class's
@@ -62,21 +70,25 @@ def token(out: Sequence[int]) -> int:
 
 
 def layout(v: int, outputs: int, spans: int, inline: bool = False, nonce: str = SERVE, units: int = 0,
-           stop: BS.Stop | None = None) -> BR.Layout:
-    """The class's layout, a stop class of ``stop`` where given. Its record commits the ids its replay block returns
-    wherever round 2 derives that return's link: a class of whole instances, and an inlined class of the greedy select
-    in units (``units``)."""
+           stop: BS.Stop | None = None, tables: bool = False) -> BR.Layout:
+    """The class's layout, a stop class of ``stop`` where given, with each span's history table at `TABLE_LAYER`
+    where ``tables``. Its record commits the ids its replay block returns wherever round 2 derives that return's link: a
+    class of whole instances, and an inlined class of the greedy select in units (``units``)."""
     return BR.Layout(BR.check_template(template(v, units)), 0, 1, BR.cap(len(PROMPT)), outputs, spans, BR.run_root(nonce, 0),
-                     inline, ids=bool(units) or not inline, stop=stop)
+                     inline, (TABLE_LAYER,) if tables else (), TABLE_LEAVES if tables else HT.CAPACITY,
+                     ids=bool(units) or not inline, stop=stop)
 
 
 def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int = 1108, inline: bool = False,
-          nonce: str = SERVE, units: int = 0, stop: bool = False) -> dict[str, Any]:
+          nonce: str = SERVE, units: int = 0, stop: bool = False, tables: bool = False) -> dict[str, Any]:
     """The class's directory and the capture under ``out``: ``spans`` requests ``r<i>`` of ``outputs`` tokens over a
     vocabulary of ``v``, each captured under a launch of its own, in the window of the serve ``nonce``. ``units``: K,
     the check the greedy select in K units (`template`). ``stop``: under a stop rule whose one id is the first request's
-    second id, each request ended at its first stop id. -> the check template's id, the two directories, the rule (or
-    None), and each request's rows and ids."""
+    second id, each request ended at its first stop id. ``tables``: each request's history table, refused beside a
+    rule as the serve refuses it. -> the check template's id, the two directories, the rule (or None), and each
+    request's rows and ids."""
+    if stop and tables:
+        raise ValueError(BR.TABLES_UNDER_A_RULE)
     check = BR.check_template(template(v, units))
     rng = np.random.default_rng(seed)
     rows = {f"r{i}": rng.integers(0, 1 << 16, (outputs, v), dtype=np.uint16) for i in range(spans)}
@@ -88,16 +100,29 @@ def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int =
             if rule.ids[0] in t:
                 toks[r], finish[r] = t[:t.index(rule.ids[0]) + 1], "stop"
                 rows[r] = rows[r][:len(toks[r])]
-    L = layout(v, outputs, spans, inline, nonce, units, rule)
+    L = layout(v, outputs, spans, inline, nonce, units, rule, tables)
     directory = out / "w0" / f"p{L.prompt}-o{L.outputs}"
     spans_ = [BR.Span(r, PROMPT, sampling, tuple(toks[r]), finish[r]) for r in rows]
     if rule is not None and any(rule.word(s) is None for s in spans_):
         raise ValueError("a request the stop rule doesn't end as it was served: it would be filed without a stop block")
-    BR.write(BR.commit(spans_, L, 0), directory)
+    BR.write(BR.commit(spans_, L, 0, tables=_tables(spans_, L, rng) if tables else None), directory)
     SC.write(out / "capture", template(v, units), {r: {"logits": rows[r], "tokens": toks[r], "steps": list(range(len(toks[r]))),
                                                  "program": f"launch:{r}"} for r in rows})
     return {"check": template(v, units), "class": directory, "capture": out / "capture", "stop": rule, "rows": rows,
             "tokens": toks}
+
+
+def _tables(spans: Sequence[BR.Span], L: BR.Layout, rng: np.random.Generator) -> dict[str, bytes]:
+    """The class's history tables' roots as rank 0 answers them (`boundary_rows.table_roots`): each span's latent rows
+    at every position the model ran, its prompt's and all but its last served id's, random finite bf16 bits."""
+    latents = BT.Latents(L.layers)
+    for s in spans:
+        n = len(s.prompt) + len(s.served) - 1
+        latents.add(s.engine_id, 0, {x: rng.integers(0x3F00, 0x4000, (n, BT.WORDS), dtype=np.uint16) for x in L.layers})
+    answer = BT.Builder(latents, HT.HistoryTable).build(BT.assignment(
+        0, L.run, L.partition["program"], L.prompt, L.outputs, L.layers, L.capacity,
+        [(s.engine_id, len(s.prompt), len(s.served), s.finish) for s in spans]))
+    return BR.table_roots(answer, L)
 
 
 def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, bool]:
@@ -136,13 +161,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--inline", action="store_true")
     s.add_argument("--units", type=int, default=0, help="K: the check is GreedySelect_v1{V, N=V / K}, the greedy select in K units")
     s.add_argument("--stop", action="store_true", help="under a stop rule (T the outputs), printed as stop for first and second's --stop")
+    s.add_argument("--tables", action="store_true", help="each request's history table at one layer, with no stop rule")
     s.add_argument("--serve", default=SERVE, help="the serve's nonce, which the window's run is of")
     e = sub.add_parser("expect")
     e.add_argument("summary", type=Path)
     e.add_argument("--unlinked", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "serve":
-        got = serve(a.out, a.v, a.outputs, a.spans, inline=a.inline, nonce=a.serve, units=a.units, stop=a.stop)
+        got = serve(a.out, a.v, a.outputs, a.spans, inline=a.inline, nonce=a.serve, units=a.units, stop=a.stop,
+                    tables=a.tables)
         print(json.dumps({**{k: str(got[k]) for k in ("check", "class", "capture")},
                           **({"stop": json.dumps(got["stop"].to_json())} if got["stop"] else {})}))
         return 0

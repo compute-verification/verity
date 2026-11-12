@@ -326,6 +326,33 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert got["detail"]["second-read"] == {"statement": k - 1, "template": combine}
 
 
+def test_an_inlined_class_of_the_greedy_select_beside_history_tables_takes_both_rounds(tmp_path):
+    """The two-stage serve's shape with no stop rule: the greedy select in units inlined, the ids served committed as
+    its replay block's return, and each span's history table beside them (``two_stage_small --tables``). The record
+    lists the tables' roots after the return, which a record of tables names ``<block>/o0`` (`boundary_rows.return_port`);
+    the first stage registers and samples the class, the replay side commits its interior linked, and round 2 takes the
+    hand-over with no code, the return read at round 1's rows. No unit reads a table, so round 2 opens none. Slow
+    (about 16 s): it lowers the K templates for the references and the sessions' files."""
+    v, k = 256, 4
+    got, check = SM.serve(tmp_path, v, O, N, inline=True, units=k, tables=True), BR.check_template(SM.template(v, k))
+    c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
+    names, ret = list(c.layout.tables), c.layout.returned
+    assert len(names) == N and list(pub["values"]) == [*BR.PORTS, ret, *names] and ret.endswith("/o0") and pub["ids"]
+    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
+    r = TS.replayed(again, c, got["capture"], tmp_path / "interior")
+    d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
+    assert [x["port"] for x in brec["roots"]] == [*BR.PORTS, ret, *names]
+    assert [x.value for x in d.returns] == [ret] and [x.value for x, _v in r.interior.returns] == [ret]
+    mine = d.window(again.registration.digest, sample)
+    reads = TS.verifier_reads(d, mine, r.record, brec, sample)
+    proofs = TS.references(d, Q, tmp_path / "references")
+    S.template_circuits(proofs, again.stream.spec.check.query)
+    stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served", mine, reads, drawn)
+    args = (c.layout.program, d.key, sample, mine, r.record, brec, drawn)
+    assert TS.round_two(*args, stmts, {"verdicts": verdicts}, proofs) == {"ok": True, "codes": [], "detail": {}}
+
+
 def _engine(v: int, spans: int, outputs: int, lengths: dict[str, int] | None = None) -> tuple[dict, list[dict], list[dict]]:
     """A greedy engine's steps over ``spans`` requests of ``outputs`` tokens each at a vocabulary of ``v`` (request
     ``r<i>`` of ``lengths[r<i>]`` where given, leaving the batch after it): each step's bf16 logits rows (one a request
