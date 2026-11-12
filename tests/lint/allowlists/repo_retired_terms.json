@@ -3143,7 +3143,7 @@
     {"file": "benchmarks/pouw/hidden_zk/send_check.sh", "count": 17},
     {"file": "benchmarks/pouw/lean_headline.py", "count": 7},
     {"file": "benchmarks/pouw/lean_headline_dc.py", "count": 10},
-    {"file": "benchmarks/pouw/machine_model/data/table.toml", "count": 1},
+    {"file": "benchmarks/machine_model/data/table.toml", "count": 1},
     {"file": "benchmarks/pouw/masked_gemm/egemm.cu", "count": 3},
     {"file": "benchmarks/pouw/masked_gemm/lpgemm.cu", "count": 3},
     {"file": "benchmarks/pouw/masked_gemm/mgemm.cu", "count": 2},

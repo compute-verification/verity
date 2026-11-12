@@ -15,7 +15,7 @@ every served output and everything derived from it free unless a check recompute
   memory-bound, the cheater's transcript is not (B̃ = S is generated from U, and the zero instance streams no weights),
   so decode's time ratio is a bandwidth gap no noise design closes; it is reported (`decode_dram`), not optimized.
 
-The designs are the registry's (benchmarks/pouw/machine_model/data/designs/, `machine-model designs`): each product is
+The designs are the registry's (benchmarks/machine_model/data/designs/, `machine-model designs`): each product is
 noised as its design's `[noise]` names, a leaf of the registry's NOISE, and priced per component in executed int8
 products and honest seconds, with γ (`products`, `parts`, `summary`, `skip_table`, `component_table`). A checked leaf's
 vector work that only the served output needs is priced in checked_strip's tensor–scalar model (`TS_EPS`, `pv_ts`), and
@@ -269,7 +269,7 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
 # ------------------------------------------------- the tensor–scalar model: checked leaves' vector work, pv's units
 
 #: The tensor–scalar (TS) model's facets in SMSP-cycles, (MMA coefficient, coefficient of every other vector-pipe warp
-#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv (checked_strip's
+#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/machine_model/data/rows.csv (checked_strip's
 #: TS_FACETS).
 TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
 #: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, as the checked kernels
