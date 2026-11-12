@@ -18,7 +18,8 @@ A protocol's check (`Core.Protocol`) publishes its amounts under its own keys an
 value beside a protocol, never a field of it: for each amount the protocol publishes (`Account.Amount`) it states
 
 * the part of the registered hardware the amount is about (`Part`: the devices' compute, the memory of some tiers, the
-  read rate of some tiers' memory, a link), whose capacity is a function of the Site (`Part.capacity`), so a row's
+  read rate of some tiers' memory, a link's egress), whose capacity is a function of the Site (`Part.capacity`), so a
+  row's
   capacity is read from the registration and never copied from an answer;
 * the form the amount is published in: its key, its unit, which side of the capacity it bounds (`Side`: the verified
   amount from below, or the free amount from above), a moment or the keys of its span (`Time`), the key of its
@@ -27,12 +28,13 @@ value beside a protocol, never a field of it: for each amount the protocol publi
   answer holds when nothing is certified (`Uncertified`);
 * the terms the error names beside it and does not price (`unpriced`);
 
-and, for the protocol, the key under which an accepted answer names the registration's head (`Account.head`).
+and, for the protocol, the key under which an accepted answer names the registration's head (`Account.head`), and the
+answers its own rest on (`Account.rests`): those its check read as given and did not verify.
 
 `rows` reads a site, the head of its registration, the protocols' answers and their accounts into the accounting rows.
-An answer counts only when it accepts and names that head. Each amount certified of a registered resource gets a row,
-at each reading of the registration its capacity can be read at: the capacity, the certified amount with its error,
-and the other, which follows.
+An answer counts only when it accepts, names that head, and rests only on accepted answers `rows` is given. Each amount
+certified of a registered resource gets a row, at each reading of the registration its capacity can be read at: the
+capacity, the certified amount with its error, and the other, which follows.
 
 * A flow (compute, reads, a link's bits) has one row for the period. Two answers' amounts add only where both name
   their spans (`Steps`), in one series of steps, and the spans share no step: a verified amount is the largest total
@@ -73,13 +75,36 @@ def Key.read (k : Key) (a : Answer) : Option Json :=
   | .published key => a.published.bind fun j => (j.getObjVal? key).toOption
   | .profile key => a.profile.bind fun j => (j.getObjVal? key).toOption
 
+/-- The tag an answer's name is hashed under. -/
+def ANSWER : String := "verity/account/answer/v1"
+
+/-- **An answer's name**: SHA-512 of the tag and its canonical JSON (`Answer.canonical`), in hex. -/
+def nameOf (a : Answer) : Option String :=
+  a.canonical.toOption.map fun s => Flock.hexOf (Flock.Sha512.hash (ANSWER.toUTF8.push 0 ++ s.toUTF8))
+
+/-- **What an answer rests on**: answers its check read as given and did not verify. An accepted answer lists the name
+(`nameOf`) of each under `key`, and each is to be an accepted answer of one of `protocols`. -/
+structure Rests where
+  key : Key
+  protocols : List String
+  deriving DecidableEq, Repr
+
+/-- Every answer `a` rests on is among `answers`, accepted, and of a protocol `r` names. False when `a` holds no list
+of names under `r`'s key. -/
+def Rests.held (r : Rests) (a : Answer) (answers : List Answer) : Bool :=
+  match (r.key.read a).bind fun j => j.getArr?.toOption.bind fun xs => xs.toList.mapM fun x => x.getStr?.toOption with
+  | none => false
+  | some names => names.all fun n => answers.any fun b =>
+      b.verdict == .accept && r.protocols.contains b.protocol && nameOf b == some n
+
 /-- A part of the registered hardware an amount is about: the devices' compute, in tensor-core MACs; the memory of some
-tiers, in bits held; the read rate of some tiers' memory, in bits read from it; a link, in bits sent over it. -/
+tiers, in bits held; the read rate of some tiers' memory, in bits read from it; a boundary link's egress, in bits sent
+over it out of the Site, whose capacity is the link's `β`, which is each way. -/
 inductive Part where
   | compute
   | memory (tiers : List Tier)
   | read (tiers : List Tier)
-  | link
+  | egress
   deriving DecidableEq, Repr
 
 namespace Part
@@ -98,18 +123,18 @@ def name : Part → String
   | .compute => "compute"
   | .memory ts => "memory/" ++ "+".intercalate (ts.map fun t => t.name)
   | .read ts => "read/" ++ "+".intercalate (ts.map fun t => t.name)
-  | .link => "link"
+  | .egress => "egress"
 
 /-- Every part a site can hold, tier by tier. -/
 def all : List Part :=
-  [.compute, .memory [.hbm], .memory [.dram], .memory [.disk], .read [.hbm], .read [.dram], .read [.disk], .link]
+  [.compute, .memory [.hbm], .memory [.dram], .memory [.disk], .read [.hbm], .read [.dram], .read [.disk], .egress]
 
-/-- Two parts are of one resource: both compute, both memory, both a read rate, or both a link. -/
+/-- Two parts are of one resource: both compute, both memory, both a read rate, or both a link's egress. -/
 def same : Part → Part → Bool
   | .compute, .compute => true
   | .memory _, .memory _ => true
   | .read _, .read _ => true
-  | .link, .link => true
+  | .egress, .egress => true
   | _, _ => false
 
 /-- The tiers a part names, where it names tiers. -/
@@ -129,14 +154,14 @@ def leaves (p : Part) (S : Site) : List String :=
   | .compute => S.units
   | .memory ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
   | .read ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
-  | .link => (S.boundary none).map (·.id)
+  | .egress => (S.boundary none).map (·.id)
 
 /-- The part's leaves at `place`: all of them when an answer names no place, a link by its id, and otherwise the leaves
 at or under the location. -/
 def leavesAt (p : Part) (S : Site) (place : Option String) : List String :=
   match place, p with
   | none, _ => p.leaves S
-  | some i, .link => (p.leaves S).filter (· == i)
+  | some i, .egress => (p.leaves S).filter (· == i)
   | some i, _ => (p.leaves S).filter fun x => (S.loc? x).any (S.within i (S.locs.length + 1))
 
 /-- Device `d`'s tensor-core MACs a tick, the device model's (`Site.device`) under auditor `A`. -/
@@ -163,7 +188,7 @@ def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registr
     let rates : Option (List Nat) := parents.bind fun ds =>
       ds.eraseDups.mapM fun d => (S.sheetOf digest d).map fun k => k.bw
     (rates.map fun ns => ("registered", ns.sum)).toList
-  | .link => [("registered", (xs.filterMap fun i => (S.links.find? (·.id == i)).map fun k => k.β).sum)]
+  | .egress => [("registered", (xs.filterMap fun i => (S.links.find? (·.id == i)).map fun k => k.β).sum)]
 
 end Part
 
@@ -254,12 +279,14 @@ instance Amount.instDecidableFormed (m : Amount) : Decidable m.Formed := by unfo
 end Account
 
 /-- **What a protocol accounts for**: its id, the key under which an accepted answer names the registration's head (none
-while the protocol names no registration: `Account.rows` then holds its answers to none), and the form of each amount it
-publishes. -/
+while the protocol names no registration: `Account.rows` then holds its answers to none), the form of each amount it
+publishes, and the answers its own rest on (`rests`, none for a protocol whose check verifies all it reads): an answer
+that rests on one `Account.rows` was not given, or on one that does not accept, counts for nothing. -/
 structure Account where
   protocol : String
   head : Option Account.Key
   amounts : List Account.Amount
+  rests : Option Account.Rests := none
   deriving DecidableEq, Repr
 
 namespace Account
@@ -497,14 +524,15 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
         [certifiedRow m at_ reading total worst error rs.length none]
 
 /-- **What the accepted answers certify**, amount by amount. An answer counts for an account when it names the
-account's protocol, accepts, and names `head` under the account's key; of such an answer, each amount of a form `rows`
-reads that the answer holds. -/
+account's protocol, accepts, names `head` under the account's key, and rests only on accepted answers among `answers`
+(`Rests.held`); of such an answer, each amount of a form `rows` reads that the answer holds. -/
 def readings (head : String) (tick : Figure) (accounts : List Account) (answers : List Answer) :
     List (Amount × Reading) :=
   accounts.flatMap fun c =>
     let named : List Answer := answers.filter fun a =>
       a.protocol == c.protocol && a.verdict == .accept &&
-        (c.head.bind fun k => (k.read a).bind fun j => j.getStr?.toOption) == some head
+        (c.head.bind fun k => (k.read a).bind fun j => j.getStr?.toOption) == some head &&
+        c.rests.all fun r => r.held a answers
     (c.amounts.filter fun m => m.Formed).flatMap fun m => named.filterMap fun a => (m.read tick a).map fun r => (m, r)
 
 /-- The rows of what no accepted answer covers: for each part, the leaves under no reading's place, charged at capacity
@@ -587,8 +615,9 @@ private def passed : Answer :=
     { protocol := Core.Example.protocol.id, verdict := .reject, reason := none, digest := none, published := none,
       profile := none }
 
-private def accept (protocol : String) (published profile : List (String × Json)) : Answer :=
-  { protocol, verdict := .accept, reason := none, digest := none, published := some (Json.mkObj published),
+private def accept (protocol : String) (published profile : List (String × Json)) (head : String := "h") : Answer :=
+  { protocol, verdict := .accept, reason := none, digest := none,
+    published := some (Json.mkObj (("registration_head", .str head) :: published)),
     profile := some (Json.mkObj profile) }
 
 /-- Toy accounts in the shapes a row takes: memory held, at a moment, from below; memory after a wipe, at a moment,
@@ -596,77 +625,74 @@ from above, with its own capacity and a flag; a link's bits, over a span named b
 above, summed; work, over a span that is only counted, from below, with a share, pooled once; and work over a span
 named by its first and last steps, from below. -/
 private def held : Account :=
-  { protocol := "toy/held", head := some (.profile "registration")
+  { protocol := "toy/held", head := some (.published "registration_head")
     amounts := [{ metric := "held", part := .memory [.hbm], place := some (.profile "device"),
                   key := .published "s_bits", unit := bits, side := .verified, time := .moment,
                   error := .published "eps", uncertified := .flagged (.published "certified") }] }
 
 private def wiped : Account :=
-  { protocol := "toy/wiped", head := some (.profile "registration")
-    amounts := [{ metric := "after a wipe", part := .memory [.hbm], key := .published "foreign_bits", unit := bits,
-                  side := .free, time := .moment, error := .published "eps",
+  { protocol := "toy/wiped", head := some (.published "registration_head")
+    amounts := [{ metric := "after a wipe", part := .memory [.hbm, .dram, .disk], key := .published "foreign_bits",
+                  unit := bits, side := .free, time := .moment, error := .published "eps",
                   capacity := some (.published "memory_bits"), uncertified := .flagged (.published "certified"),
                   unpriced := ["the keyed stream's PRF advantage"] }] }
 
 private def sent : Account :=
-  { protocol := "toy/sent", head := some (.profile "registration")
-    amounts := [{ metric := "sent", part := .link, place := some (.profile "link"), key := .published "K",
+  { protocol := "toy/sent", head := some (.published "registration_head")
+    amounts := [{ metric := "sent", part := .egress, place := some (.profile "link"), key := .published "K",
                   unit := bits, side := .free,
                   time := .steps (.run (.published "start_ns") (.published "span_ns")) ⟨1, 1000000000⟩,
                   error := .published "eps", uncertified := .refused }] }
 
 private def worked : Account :=
-  { protocol := "toy/worked", head := some (.profile "registration")
+  { protocol := "toy/worked", head := some (.published "registration_head")
     amounts := [{ metric := "work", part := .compute, key := .published "work", unit := macs, side := .verified,
                   time := .span (.published "windows") ⟨1, 1000000⟩, share := some (.published "eps"),
                   error := .published "delta", pool := .once, uncertified := .safe }] }
 
 private def ranged : Account :=
-  { protocol := "toy/ranged", head := some (.profile "registration")
+  { protocol := "toy/ranged", head := some (.published "registration_head")
     amounts := [{ metric := "audited", part := .compute, key := .published "work", unit := macs, side := .verified,
                   time := .steps (.range (.published "first") (.published "last")) ⟨1, 1000000⟩,
                   series := some (.profile "session"), error := .published "delta", uncertified := .safe }] }
 
 /-- A read rate bounded from above over two tiers, one of them a host's, whose rate no sheet states. -/
 private def spare : Account :=
-  { protocol := "toy/spare", head := some (.profile "registration")
+  { protocol := "toy/spare", head := some (.published "registration_head")
     amounts := [{ metric := "unread", part := .read [.hbm, .dram], key := .published "K", unit := bits, side := .free,
                   time := .span (.published "span_ns") ⟨1, 1000000000⟩, error := .published "eps",
                   uncertified := .refused }] }
 
-private def at_ (head : String) (more : List (String × Json) := []) : List (String × Json) :=
-  ("registration", .str head) :: more
-
 private def session (n : Nat) (eps : String) (certified : Bool := true) : Answer :=
   accept "toy/held" [("certified", .bool certified), ("eps", .str eps), ("s_bits", Lean.toJson n)]
-    (at_ "h" [("device", .str "gpu0")])
+    [("device", .str "gpu0")]
 
 private def wipe (foreign memory : Nat) (certified : Bool := true) : Answer :=
   accept "toy/wiped" [("certified", .bool certified), ("eps", .str "1/1000"), ("foreign_bits", Lean.toJson foreign),
-    ("memory_bits", Lean.toJson memory)] (at_ "h")
+    ("memory_bits", Lean.toJson memory)] []
 
 private def check (k ns : Nat) (eps : String) (head : String := "h") (start : Option Nat := some 0) : Answer :=
   accept "toy/sent" ([("K", Lean.toJson k), ("eps", .str eps), ("span_ns", Lean.toJson ns)] ++
-    (start.map fun s => ("start_ns", Lean.toJson s)).toList) (at_ head [("link", .str "up0")])
+    (start.map fun s => ("start_ns", Lean.toJson s)).toList) [("link", .str "up0")] head
 
 /-- An audit of `work` MACs over the steps `span` names, first and last, numbered in `session`; over no named span
 where it is none. -/
 private def audit (work : Nat) (span : Option (Nat × Nat)) (session : String := "s0") : Answer :=
   accept "toy/ranged" ([("delta", .str "1/1000"), ("work", Lean.toJson work)] ++
     (span.map fun s => [("first", Lean.toJson s.1), ("last", Lean.toJson s.2)]).getD [])
-    (at_ "h" [("session", .str session)])
+    [("session", .str session)]
 
 private def firstVerified (rs : List Row) : List (Option Nat × String) :=
   (rs.take 1).map fun r => (r.verified, r.error.toString)
 
 private def unread (k ns : Nat) : Answer :=
-  accept "toy/spare" [("K", Lean.toJson k), ("eps", .str "1/1000"), ("span_ns", Lean.toJson ns)] (at_ "h")
+  accept "toy/spare" [("K", Lean.toJson k), ("eps", .str "1/1000"), ("span_ns", Lean.toJson ns)] []
 
 private def credit : Answer :=
   accept "toy/worked" [("delta", .str "1/100"), ("eps", Json.arr #[.str "1/4", .null]),
     ("windows", Json.arr #[Json.arr #[], Json.arr #[]]),
     ("work", Json.arr #[Lean.toJson (1000 : Nat), Lean.toJson (500 : Nat)])]
-    (at_ "h")
+    []
 
 private def table (accounts : List Account) (answers : List Answer) (A : Site.Registration.Auditor := auditor)
     (ticks : Nat := 1000) : List Row :=
@@ -787,9 +813,46 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
   [("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
    ("not audited", "gpu0", "registered", some (8 * 63 * 2 ^ 30), some 0, some (8 * 63 * 2 ^ 30), "0")]
 #guard ((table [sent] [check 3000 400 "1/1000"]).take 1).map (fun r => (r.toJson.compress)) ==
-  ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"link\"," ++
+  ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"egress\"," ++
    "\"place\":\"up0\",\"reading\":\"registered\",\"session\":null,\"sessions\":1,\"status\":\"certified\"," ++
    "\"unit\":\"bits\",\"unpriced\":[],\"verified\":37000}"]
+
+/-- A read rate verified from below, in bytes, by an answer that names no span. -/
+private def reads : Account :=
+  { protocol := "toy/reads", head := some (.published "registration_head")
+    amounts := [{ metric := "reads", part := .read [.hbm], key := .published "q_bytes", unit := bytes,
+                  side := .verified, time := .unstated, error := .published "eps", uncertified := .safe }] }
+
+private def read (q : Nat) : Answer := accept "toy/reads" [("eps", .str "1/1000"), ("q_bytes", Lean.toJson q)] []
+
+-- reads verified from below: the bytes in bits, and the rest of the registered rate over the period is free; of two
+-- answers that name no span the larger counts once
+#guard reads.Formed
+#guard cells ((table [reads] [read 1000]).take 1) ==
+  [("reads", "", "registered", some 3200000, some 8000, some 3192000, "1/1000")]
+#guard firstVerified (table [reads] [read 1000, read 700]) == [(some 8000, "1/500")]
+
+/-- A link's bits whose check reads audits as given: its answer lists their names under `rests`. -/
+private def resting : Account :=
+  { sent with protocol := "toy/resting", rests := some ⟨.published "rests", ["toy/ranged"]⟩ }
+
+private def rested (audits : List Answer) : Answer :=
+  accept "toy/resting" [("K", Lean.toJson (3000 : Nat)), ("eps", .str "1/1000"), ("span_ns", Lean.toJson (400 : Nat)),
+    ("start_ns", Lean.toJson (0 : Nat)),
+    ("rests", Json.arr (audits.filterMap fun b => (nameOf b).map Json.str).toArray)] [("link", .str "up0")]
+
+-- an answer that rests on an audit counts beside it; it counts for nothing without it, beside another audit, beside
+-- the audit refused, or where it lists no names; one that rests on none counts
+#guard cells ((table [resting] [rested [audit 300 none], audit 300 none]).take 1) ==
+  [("sent", "up0", "registered", some 100000, some 37000, some 63000, "1/1000")]
+#guard cells (table [resting] [rested [audit 300 none]]) == cells (table [] [])
+#guard cells (table [resting] [rested [audit 300 none], audit 301 none]) == cells (table [] [])
+#guard cells (table [resting] [rested [audit 300 none], { audit 300 none with verdict := .reject }]) ==
+  cells (table [] [])
+#guard cells (table [resting] [{ check 3000 400 "1/1000" with protocol := "toy/resting" }]) == cells (table [] [])
+#guard cells ((table [resting] [rested []]).take 1) ==
+  [("sent", "up0", "registered", some 100000, some 37000, some 63000, "1/1000")]
+#guard (nameOf (audit 300 none)).map (·.length) == some 128
 
 end Example
 
