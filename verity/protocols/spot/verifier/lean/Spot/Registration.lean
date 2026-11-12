@@ -258,8 +258,9 @@ def tiedGates (v : Verifier) : Array (Nat × Nat) := v.tied.filterMap (tiedGate 
 def tiedBad (v : Verifier) : Array String := v.tied.filter fun t => (tiedGate v t).isNone
 
 /-- The tied names R8 let through: each whose gates hold a run Input node the proof blocks don't each read alone outside
-the registered parameters' gates (`Partition.shared?`). The registration piece publishes them beside the fan-out:
-acceptance rests on the later check that ties their rows. -/
+the registered parameters' gates (`Partition.shared?`). The registration piece publishes them beside the fan-out, and
+the audit's acceptance among its public outputs (`OneStage.Public`): acceptance rests on the later check that ties
+their rows. -/
 def tiedThrough (v : Verifier) : Array String :=
   let shared := Partition.shared? v.program v.query (heldGates v)
   v.tied.filter fun t => match tiedGate v t with

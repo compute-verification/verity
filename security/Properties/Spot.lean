@@ -27,7 +27,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
 
-and it then publishes the sampled and proved units with the exact bounds at δ (`publicOf`), and the profile of one level
+and it then publishes the sampled and proved units with the exact bounds at δ and the tied values R8 let through
+(`publicOf`), and the profile of one level
 `unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). That the check accepts every such commitment and
 evidence is completeness, `Properties.Spot.acceptMeans_complete`.
 
@@ -128,8 +129,9 @@ registered or lists as tied (`Partition.readAlone`, of `Partition.sharedInputs`,
 `Registration.tiedGates`): no batch of more than one member broadcasts one or reads a leaf of one twice, and no two
 instance nodes read one leaf. A value one proof block computes that the program takes as an Input joins no proof
 blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read could hold rows one of them computed.
-R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names each one it
-let through (`Registration.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
+R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece and an
+acceptance's public outputs (`publicOf`) name each one it let through (`Registration.tiedThrough`, published as
+`rests_on_period_check`). The network period check holds them:
 `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
 port, and `Properties.NetworkPeriod.RowsTiedSampled` has that audit sample every unit. That the rows under that root are
 the outputs of the proof blocks that computed them (one-stage's ports and the commitment's binding) is not composed
@@ -398,14 +400,16 @@ def drawnNats (draw : Json) : Array Nat :=
   | _ => #[]
 
 /-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
-ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
+ones, the tied values R8 let through (`Registration.tiedThrough`), on whose later check the acceptance rests, the exact
+bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
 for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
-      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
+      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
+    restsOnPeriodCheck := Registration.tiedThrough p.verifier }
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
 `d`; and the number of units sampled. -/

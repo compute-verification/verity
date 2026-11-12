@@ -717,15 +717,17 @@ def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool | Valu
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject when the sample's coins don't read
-    (`_coins_of`), on R1-R7, the sample's checks (with coins, that they sample it: `_coins_problem`), the record's checks or a
+    (`_coins_of`), on R1-R8, the sample's checks (with coins, that they sample it: `_coins_problem`), the record's checks or a
     verdict that ran and did not accept; undecided when only the verifier is missing or has not run; accept
-    exactly when `audit_record` accepts, with the sampled and proved units, the bounds and the profile."""
+    exactly when `audit_record` accepts, with the sampled and proved units, the bounds, the tied values the registration
+    let through when there are any (`Verdict.rests_on_period_check`, under that key) and the profile."""
     rec, _ = c
     try:
         coins = _coins_of(p, c, e)
     except CoinError:
         return "reject", "coins"
-    if _registration(p, rec):
+    registration_ = _registration_verdict(p, rec)
+    if registration_.codes:
         return "reject", "registration"
     mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
     if not DR.check_draw(e["draw"], rec, mine).ok:
@@ -742,8 +744,10 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return ("undecided", "verifier of record") if all(v["accepted"] is True for v in ran) else ("reject", "verdict")
     profile = audit.profile(rec, e["draw"], p["delta"]).to_json()
     wrong = out["wrong_units"]
+    through = registration_.rests_on_period_check
     public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
-              "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
+              "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"]),
+              **({"rests_on_period_check": list(through)} if through else {})}
     return "accept", public, {**profile, "delta": str(profile["delta"])}
 
 
@@ -2341,6 +2345,57 @@ def test_an_accepted_case_is_compared_whole(server):
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (law, line)
 
 
+def _tied_case(s: Setup, tied: list | None) -> dict:
+    """A case every unit of `s` is sampled and proved in, whose verifier names `tied` (None: no `tied` at all)."""
+    named, expanded = service.params_law({"k": s.population, "law": "subset"}, s.program, s.query, None)
+    mine = DR.derive(s.program, s.query, named, expanded)
+    rec = _record_of(s, None, named, WINDOW, leaf_layer=LEAF, work_table=expanded)
+    d = {**mine, "population": s.population, "units": list(range(s.population))}
+    proved = DR.proved(d)
+    evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+    params = {"anchors": [], "delta": "1/20", "law": {"k": s.population, "law": "subset"}, "leaf_layer": LEAF, "log": [],
+              "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
+              "scheme": SCHEME, "work_table": None}
+    if tied is not None:
+        params |= {"parameters": [[name, t.to_json()] for name, t in s.program.fn.signature()[0]], "tied": tied}
+    return _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+
+
+def test_an_acceptance_names_the_tied_values_it_rests_on(server):
+    """The answer's public outputs name the tied values the registration let through (`rests_on_period_check`), the Lean's
+    as the Python's, and carry no such key when there is none. With `prog` and `state` each read by two proof blocks, an
+    acceptance names both, in the verifier's order, and a verifier that leaves one out refuses the registration
+    (`R8-shared-input`); with `prog` alone read by two, it names `prog`, whether or not the verifier names `state` too;
+    with neither, or with no `tied` at all, the public outputs are the four they are without tied values."""
+    both, prog, neither = TIED_SETUPS
+    for s, tied, want in ((both, ["prog", "state"], ["prog", "state"]), (both, ["state", "prog"], ["state", "prog"]),
+                          (both, ["prog"], "reject"), (both, None, "reject"),
+                          (prog, ["prog"], ["prog"]), (prog, ["prog", "state"], ["prog"]), (prog, ["state"], "reject"),
+                          (neither, ["prog", "state"], None), (neither, [], None), (neither, None, None)):
+        case = _tied_case(s, tied)
+        verdict_, line = D.replay(ONE_STAGE, case, server)
+        mine = answer(case)
+        if want == "reject":
+            assert verdict_ == mine["verdict"] == "reject" and mine["reason"] == "registration", (tied, line)
+            continue
+        got = json.loads(line)
+        assert verdict_ == "accept" and got == mine | {"reason": None}, (tied, line)
+        assert got["public"].get("rests_on_period_check") == want, (tied, got["public"])
+        assert set(got["public"]) == {"bound", "drawn", "per_template", "proved"} | (
+            {"rests_on_period_check"} if want else set()), (tied, got["public"])
+
+
+def test_the_one_stage_audit_agrees_on_tied_values(server):
+    """The whole audit, Lean's answer held to Python's, on verifiers that name tied values (`TIED`'s changes) over the
+    programs whose run Inputs several proof blocks read (`READER_SETUPS`, `TIED_SETUPS`)."""
+    port = D.ProtocolPort("sampled-proofs-one-stage", answer,
+                          changed_audits([TIED], 1, 1, (*READER_SETUPS, *TIED_SETUPS)).map(_case), package=PACKAGE)
+    stats = D.run(port, examples=200, server=server)
+    assert min(stats.counts.get(v, 0) for v in ("accept", "reject")) > 30, stats
+
+
 ONE_STAGE_V2 = D.ProtocolPort("sampled-proofs-one-stage-zk", answer, CASES, package=PACKAGE)
 server_v2 = D.server_fixture(ONE_STAGE_V2)
 
@@ -2925,6 +2980,29 @@ def _readers(rows: int, plan: tuple, registered: bool) -> Program:
                                                body, register=False)), registered=("x",) if registered else ())
     PROGRAMS[PO.program_sha512(program)] = program
     return program
+
+
+@functools.cache
+def _tied_readers(shared: tuple) -> Program:
+    """A root over `prog` and `state`, two pairs of bytes each, of two instances of `PAIR` per parameter: both on its
+    first pair where `shared` names it, a run Input two proof blocks read, else one on each of its pairs. Put among
+    `PROGRAMS`."""
+    def body(B, S, prog, state):
+        return tuple_of(*(B.call(PAIR, array_of([x[i][0], x[i][1]]))
+                          for name, x in (("prog", prog), ("state", state))
+                          for i in ((0, 0) if name in shared else (0, 1))))
+    pairs = Array(2, Array(2, Value(8)))
+    definition = CompositeDefinition("CoreSpotTiedReaders" + "".join(n.capitalize() for n in shared), 0, (),
+                                     lambda S: ((("prog", pairs), ("state", pairs)), Tuple(*[Value(8)] * 4)), body,
+                                     register=False)
+    program = Program(bind(definition))
+    PROGRAMS[PO.program_sha512(program)] = program
+    return program
+
+
+#: Programs of two run Inputs a verifier may name tied: both read by two proof blocks each, `prog` alone, and neither.
+TIED_SETUPS = [Setup(_tied_readers(shared), P.template_instance_query(PAIR.id))
+               for shared in (("prog", "state"), ("prog",), ())]
 
 
 @st.composite

@@ -69,7 +69,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   a verdict that ran did not accept; it is undecided when they all hold but no verifier accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the sampled and proved units with the exact bounds on incorrect proof blocks at δ (`Bound.boundOf`,
-  and each template's own under a stratified or work sampling design), and the **profile** is `audit.profile`'s `IntegrityProfile`:
+  and each template's own under a stratified or work sampling design), with the tied values R8 let through when there
+  are any (`rests_on_period_check`, `Registration.tiedThrough`): such an acceptance rests on the later check that ties
+  their rows, and is none on its own. The **profile** is `audit.profile`'s `IntegrityProfile`:
   one level `unit`, the partition's units, sampled by the verifier's law.
 -/
 module
@@ -119,6 +121,9 @@ structure Public where
   proved : Array Nat
   bound : Nat
   perTemplate : Option (Array (String × Nat))
+  /-- the tied values R8 let through (`Registration.tiedThrough`), in the verifier's order: with any, the acceptance
+  rests on the later check that ties their rows to the registrations that computed them -/
+  restsOnPeriodCheck : Array String
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
@@ -533,7 +538,8 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-        bound := Bound.boundOf population draw p.delta, perTemplate }
+        bound := Bound.boundOf population draw p.delta, perTemplate,
+        restsOnPeriodCheck := Registration.tiedThrough v }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
@@ -558,12 +564,15 @@ def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence)
 def checkLive (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   Core.atCoins (coinsOf p c e) (fun ξ => checkAt p c ξ e)
 
+/-- The public outputs: `drawn`, `proved`, `bound` and `per_template`, and `rests_on_period_check`, the key the
+registration piece writes the tied values R8 let through under, only when there are any: a missing key says none was. -/
 def publicJson (x : Public) : Json :=
-  Json.mkObj [("drawn", natsJson x.drawn), ("proved", natsJson x.proved),
+  Json.mkObj ([("drawn", natsJson x.drawn), ("proved", natsJson x.proved),
     ("bound", Lean.toJson x.bound),
     ("per_template", match x.perTemplate with
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
       | none => Json.null)]
+    ++ (if x.restsOnPeriodCheck.isEmpty then [] else [("rests_on_period_check", Lean.toJson x.restsOnPeriodCheck)]))
 
 def protocol : Core.Protocol where
   id := Registration.PROTOCOL
