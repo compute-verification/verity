@@ -264,8 +264,11 @@ through one of its GPU slots, which gives the run its cores, by the harness's on
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
 `VERITY_BENCH_STEADY_BIN` (the prover) and `VERITY_BENCH_STEADY_PY` (a Python the stager, the timing script and the
-harness run under), with the CUDA toolkit the prover was built with first on `PATH`. A point whose row names its
-statement in the store is launched with a read-only key to it (`research run --store-read`). The node side:
+harness run under), with the CUDA toolkit the prover was built with first on `PATH`.
+`benchmarks/harness/setup/flock_prover.sh` is that setup for this tree's prover: it builds it with the prover's own
+build script, which keeps the binary on the node by a hash of its sources, makes the Python, and exports a scratch on
+the node's disk. A point whose row names its statement in the store is launched with a read-only key to it
+(`research run --store-read`). The node side:
 
 1. before any card is asked for, refuses a tree that gives the point another identity than the one it was launched with,
    an environment that isn't the spec's, a run whose CPUs aren't exactly the spec's `cores`, and a statement (staged
