@@ -267,7 +267,9 @@ def report(out: Path, arm=None, version: str | None = None, coins: float = S.PRE
     if arm is None:
         try:
             arm = A.load(doc.get("spec") or doc["name"])
-        except (A.ArmError, OSError, AttributeError):
+        except (A.ArmError, OSError, AttributeError) as ex:
+            print(f"report: arm {doc['name']} can't be loaded ({type(ex).__name__}: {ex}); its placement goes unchecked",
+                  file=sys.stderr)
             arm = None
     drows = rows(out / "dscore.jsonl")
     has_filler = doc["filler"] is not None

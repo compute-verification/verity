@@ -32,6 +32,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import math
 import re
 import statistics
@@ -40,6 +41,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import share  # CAP's constants: MACs a token, non-GEMM times, FA2, the int8 peak
+
+log = logging.getLogger(__name__)
 
 V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "filler-scorer/v5"
 #: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
@@ -1861,7 +1864,7 @@ def clock_gate(stats: dict, smi: list[dict]) -> dict:
 def parse_smi(text: str) -> list[dict]:
     """nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,power.draw,power.limit,clocks.applications.graphics,
     clocks.default_applications.graphics,clocks_event_reasons.active --format=csv,noheader,nounits rows."""
-    out = []
+    out, unread = [], []
     for ln in text.splitlines():
         f = [x.strip() for x in ln.split(",")]
         if len(f) < 7:
@@ -1871,7 +1874,9 @@ def parse_smi(text: str) -> list[dict]:
                         "app_mhz": None if f[4] in ("[N/A]", "N/A") else float(f[4]),
                         "default_app_mhz": None if f[5] in ("[N/A]", "N/A") else float(f[5]), "reasons": f[6]})
         except ValueError:
-            continue
+            unread.append(ln)
+    if unread:
+        log.warning("parse_smi: %d row(s) with a field that is no number are left out, the first %r", len(unread), unread[0])
     return out
 
 
