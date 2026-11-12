@@ -40,3 +40,40 @@ Each eight-request try released at most 849 ids in one bucket and in one second,
 
 Both scripts and the run's `load.json` are in the notes, `tools/net340-load/` (`dry-240.sh`, `relay_load.py`). Back to the proposal, due 3 PM PST.
 
+[2026-11-12T10:28Z] 136cfc068006
+NETSEATS to the coordinator, Thu 12 Nov 2:28 AM PST. **Network's account value is drafted in both forms and compiles against proofs' tip. One key of the answer gates K, and four things do not fit the form.** Marks: [ran], [read], [argued]. No figures.
+
+- **Note:** `note:network-accounting/20261112T1027Z-report-network-account-value-draft`.
+- **Branch:** `cursor/na-account-draft-56db`, head `29447a3e255ac5cfca3a994efe565a2c30cf6f08`, pushed, no pull request, nothing marked. Proofs' file is untouched.
+- **Proofs' tip read:** `e28f52c10a7d` (10:16Z). It moved four times while I worked; the last two commits are text only. My branch holds it by merges. [ran]
+- **Try** [ran]: `r20261112-102546-3bff`, exit 0, on the head: both forms and 21 guards elaborate against proofs' `Account.lean`. It builds the file's imports and writes no record. A value written at `c45a492ab640` compiled unchanged at `c962872c9231` (`r20261112-095221-9346`, exit 0).
+
+**The value** (`NetworkCheck/Account.lean`, ours)
+- **Form 1, the value:** K on a link, free, in bits; `.span (.published "windows") seconds`; error `eps`, `pool := .sum`; `unpriced`: ε_ks, the commitment's binding, the certifier's openings.
+- **Form 2, beside it:** `.steps (.run (.published "first") (.published "windows")) seconds`, `series := some (.published "session")`.
+- **Keys that exist** [read]: `K`, `eps`, `windows` (`Period.lean:1278-1279`, `period_case.py:1004`) and `link` in the profile (`:1284`, `:1044`).
+- **The count's key is `"windows"`.** Its word is retired, kept in records "until a format version" (`GLOSSARY.md:203-204`). Not renamed.
+- **Keys missing:** the head (the change that first passes the check a site), `first`, `session`, and `certified`, the gate.
+
+**Where it lives** [ran]: a private file beside `Period.lean`, imported by the private root, with one line in `public_boundary.toml`. Left public, the boundary check fails with two edges: the export does not copy `CoreProtocol/Account.lean`.
+
+**K on answers read as given**
+- Today's answer makes no row, but by accident: it names no head, and `link` is not a registered id. [ran]
+- With both, and no flag, `rows` prints the K's summed against the link's capacity, standing "certified". [ran]
+- **The gate: `uncertified := .flagged (.published "certified")`, a key no answer holds.** Absent gives no reading, so the link reads "not audited". A guard breaks the build in the change that first writes the key. [ran]
+- The label for "read as given" must not be this key as false: false makes a row that still reads "certified". [ran]
+
+**What does not fit**
+1. **The form has no tie.** After the switch K is certified only inside an accepted composite; `rows` reads answers one by one. To ask of proofs. [read; argued]
+2. **`egress_mediated`:** `.refused` and `.safe` do not fit. `.flagged` fits only by omission: the check writes `certified` only when answers are verified and egress is mediated. No standing carries "rehearsal: egress not mediated, no bound". [ran]
+3. **The seconds of one step** are an execution phase's, per schedule and not per protocol: `window × bucket_ms`, published nowhere (`Period.lean:287-300`). The draft takes them as a parameter. Our fix: publish the span in milliseconds. [read]
+4. **Neither form adds cover across sessions:** the certifier counts execution phases from its own start (`warden.py:473`, `:706`). That needs a clock its sessions share, a change of the device. [ran for two sessions]
+
+**Form 2 needs of us**
+- `first` and `session` in the public output. Both are parameters today (`Period.lean:340`, `:345`), signed in every certificate (`certificate.py:44-51`) and held in the chain's record; neither is in the public output, the profile or the registration. [read]
+- **A week on one link** [argued]: form 1 covers the longest single certification period, form 2 the longest session. With S sessions of n periods each, form 1 charges 1 − 1/(S·n) of the week at capacity and form 2 charges 1 − 1/S. Today's driver makes each period one execution phase.
+
+**Our other amounts:** none is a row of ours. The certifier's marks are ours to publish and memory's wipe to account for; the one-stage facts are sampled proofs'. [read]
+
+**Slips, in my own shell only, nothing sent:** one machine name in an unmasked comment excerpt and one in a commit subject; twice a run's waiting output listed other runs' command lines. Section 6 of the note.
+
