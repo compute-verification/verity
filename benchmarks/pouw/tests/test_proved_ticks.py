@@ -9,15 +9,10 @@ from __future__ import annotations
 
 import importlib.util
 import re
-import sys
 from pathlib import Path
 
+import proved_ticks as P
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[1] / "proved_ticks.py")
-P = importlib.util.module_from_spec(spec)
-sys.modules["pouw_proved_ticks"] = P
-spec.loader.exec_module(P)
 
 S = P.sheet()
 #: 4096 int8 products a cycle on every SMSP of one GPU for one second at f_max
