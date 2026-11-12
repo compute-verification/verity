@@ -6,9 +6,9 @@ two rows of such an operand are equal there, naming the Definition, the node, th
 is the claim's own worst case: whoever submits the circuit also picks the data. So every word of an input
 (`Input<w>`) is one word, sampled generic, nonzero and, as a float, positive, repeated through every array it fills
 (all tokens are one token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
-binades about 1, every sign and mantissa; `held` the bits that leaves it), or any nonzero word at a width no float
-has. An input's word is positive because an input is data or a state the step carries in, which an honest step
-reads under a square root, a logarithm or a divide: a positive word is inside each such domain, and one word repeated
+binades about 2^`CENTRE`, every sign and mantissa; `held` the bits that leaves it), or any nonzero word at a width no
+float has. An input's float is about 1 and positive, because an input is data or a state the step carries in, which an
+honest step reads under a square root, a logarithm or a divide: a positive word is inside each such domain, and one word repeated
 says nothing about rows by its sign. `θ` keeps every sign, the generic part of the point. A NaN and equal rows are
 refused, so the sign passes no claim; it decides only which honest circuits pass. The sample is seeded by SHA-512 of
 the Program's digest, with no other randomness, so two reads agree.
@@ -59,6 +59,9 @@ from . import work as WK
 
 #: the sampled bits a row must hold
 ROW_BITS = 64
+#: the binade `θ`'s and a registered input's floats are sampled about: an operand made of two weights (a SiLU's or an
+#: exponential's) goes as its square, and must stay inside f32's range for an honest step's values to be finite
+CENTRE = -3
 #: the bits a word of each rounding's format holds at the point: its sign, its mantissa and two of its exponent
 ROUNDED = {"F32ToBf16Rn": 10, "F32ToF16Rn": 13, "F32ToE4m3Sat": 6, "F32ToE2m1Sat": 4}
 F32_NAN, F32_NAN_PTX = 0x7FC00000, 0x7FFFFFFF
@@ -75,16 +78,16 @@ def points(K: int, b: int) -> int:
     return max(1, math.ceil(ROW_BITS / (K * b)))
 
 
-def sample(rng: np.random.Generator, w: int, shape, positive: bool = False) -> np.ndarray:
-    """Words of width ``w``, each generic and nonzero: a finite float of four binades about 1 at 32, 16 and 8 bits
-    (f32, bf16, e4m3), of every sign unless ``positive``, any nonzero word at every other width."""
+def sample(rng: np.random.Generator, w: int, shape, positive: bool = False, centre: int = 0) -> np.ndarray:
+    """Words of width ``w``, each generic and nonzero: a finite float of four binades about 2^``centre`` at 32, 16 and
+    8 bits (f32, bf16, e4m3), of every sign unless ``positive``, any nonzero word at every other width."""
     def bits(n: int) -> np.ndarray:
         return rng.integers(0, 1 << n, size=shape, dtype=np.uint64)
 
     floats = {32: (8, 23, 125), 16: (8, 7, 125), 8: (4, 3, 6)}
     if w in floats:
         e, m, lo = floats[w]
-        exp = rng.integers(lo, lo + 4, size=shape, dtype=np.uint64)
+        exp = rng.integers(lo + centre, lo + centre + 4, size=shape, dtype=np.uint64)
         sign = bits(1) * np.uint64(not positive)
         return (sign << np.uint64(e + m)) | (exp << np.uint64(m)) | bits(m)
     return rng.integers(1, (1 << w) if w < 64 else (1 << 64) - 1, size=shape, dtype=np.uint64)
@@ -307,7 +310,7 @@ class Walk:
             if is_input(nd.fn):
                 w = _leaf_width(nd)
                 if is_registered(nd.fn) or k in theta:
-                    env["n", k] = sample(rng, w, (self.P, nd.out.leaves))
+                    env["n", k] = sample(rng, w, (self.P, nd.out.leaves), centre=CENTRE)
                 else:
                     env["n", k] = np.repeat(sample(rng, w, (self.P, 1), positive=True), nd.out.leaves, axis=1)
         return env

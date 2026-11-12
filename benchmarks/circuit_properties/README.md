@@ -63,9 +63,10 @@ shift or a rounding to a narrower float (`work.ROUNDINGS`) whatever else it read
 multiply or a divide only where every other argument is one no input reaches, one word every member of every enclosing
 batch reads, or one whose own rows are shown distinct (a weight times a weight); any other carried rows may repeat, and
 a multiply by a stated 0 reaches nothing. Each charged operand whose rows these rules show distinct is tested at a
-point (`points.check`): the Program evaluated once, θ's words generic and every input's one positive word repeated,
-the submitter's worst case, and refused (`work.RepeatedRows`) where two rows are equal at enough points to hold 64
-sampled bits a row, or where a row holds a NaN, which no comparison shows distinct. So a weight combined with its own words whose rows are equal whatever the weight is refused: cancelled
+point (`points.check`): the Program evaluated once, θ's words generic (four binades about 2^-3, every sign) and every
+input's one positive word repeated, the submitter's worst case, and refused (`work.RepeatedRows`) where two rows are
+equal at enough points to hold 64 sampled bits a row, compared by their words, so two rows that are one inf are
+equal, or where a row holds a NaN, which no comparison shows distinct. So a weight combined with its own words whose rows are equal whatever the weight is refused: cancelled
 against itself (M plus -1 times M; W times v plus -1 times v), or times its own rows in another order (M times
 swap(M)), and so is a weight times a difference of an input's words. The pass is about one evaluation of the step,
 where the reading is in the description's size. One more premise holds the reading below the work, its parts each
