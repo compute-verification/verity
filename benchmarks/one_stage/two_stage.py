@@ -753,17 +753,19 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
               record: Mapping[str, Any], proofs: Mapping[str, Any]) -> dict[str, Any]:
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links and wires the
     replay block ``replay`` defines under descriptor id ``key`` makes (`second_stage.replay_links`, at the boundary
-    record's ports, and `second_stage.replay_wires`, as the stream derives them) and their rows
-    (`second_stage.replay_rows`), the reads the audit record's verdicts of record report, what they name of each
-    session they accepted (`second_stage.verified_of`), and each template's reference header and registered reads the
-    params ``proofs`` give."""
+    record's ports, and `second_stage.replay_wires`, as the stream derives them), their rows
+    (`second_stage.replay_rows`) and the names of what the block returns (`second_stage.replay_returns`), the reads
+    the audit record's verdicts of record report, what they name of each session they accepted
+    (`second_stage.verified_of`), and each template's reference header and registered reads the params ``proofs``
+    give."""
     verdicts = record.get("verdicts") or {}
     own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
                  SS.replay_links(replay, key, brec), A.session_registered(verdicts),
                  verified=SS.verified_of(verdicts),
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
-                 wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key))
+                 wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key),
+                 returns=SS.replay_returns(replay, key, brec))
     return SS.check(True, own, stmts).to_json()
 
 
