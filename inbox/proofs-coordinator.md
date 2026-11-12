@@ -106758,3 +106758,42 @@ Nothing.
 - Nothing of mine has compiled. `-d1fd` is waiting for a slot; until it ends, the claims of "used as stated" above are argued, not checked.
 - Whether the base's `Projection.lean` and `Reading.lean` elaborate is unchecked by any run I know of. My try builds `Projection` as an import, but not `Reading`.
 - Sizes: two files, 118 and 68 lines. Two theorems are left to compile, plus the helper `projection_core`. I expect them compiled within an hour of the run's slot, or one fix-and-retry later if Lean refuses a step. That depends only on the slot.
+
+
+## RUNCOINS, Thu 22:52Z: the whole chain from an accepted run to an accepting play is written, at part 4's pointwise statement; not yet compiled
+
+Every step from "`Run.run` accepts a two-stage run" to "`SpotFlock.V h` accepts the play on the challenger's coins" is now written as Lean on my branch (`RunsAs/Top.lean`, `spotRunAcceptsPlay`). It takes one premise, `SeqAccepts`, which is `accepts_seq` in `Honest.lean` cut before it takes the probability. Four tries are building it on nodes. Nothing below counts as proved until a try passes.
+
+What is new since 22:05Z, on `cursor/proofs-runcoins-2d88` at `24a8221963`:
+- `RunsAs/Coins.lean` (try5, r20261112-223622-d553, cpu-5): `runCoinsFromDevice key : RunCoinsFromDevice key`. For each stage whose read is nonempty, an accepted run's coins come from the device's log or `Break` holds. Its one hypothesis is `CheckReadsDraw key`: an empty `coinsReason` means `drawCoins` under the verifier's key gives bytes starting with the read. That is REDRAW's lemma, the one I wait on. The device side is `Properties.Challenger.Drawn.drawnByDevice`, used and not restated. `EvidenceIsLog` is gone. [derived]
+- `RunsAs/Proved.lean` (try6, r20261112-224228-01ca, cpu-11): `proved_select`. Where the rule is not `all` and the closure is none, the units the draw proves are the select's units, in order. [derived]
+- `RunsAs/Steps.lean` (try4, r20261112-223154-7e2e, cpu-9): `accepted_steps`, which is part 5. An accepted two-stage run has an empty closure, both selects, both coin checks and round 2's check with no code. [derived]
+- `RunsAs/Top.lean` (try7, r20261112-224934-5cb1, cpu-1) has four pieces. [derived]
+  - `statements_some`: round 2's check has no code only when the run had statements.
+  - `resolve_ne_all`.
+  - `SeqAccepts h`, a named Prop.
+  - `spotRunAcceptsPlay (h4 : ∀ h, SeqAccepts h) : SpotRunAcceptsPlay`. This is the assembly: `HeldMatches` gives the model's replay sample as the run's (`sample_pad`, `proved_select`) and the second draw as the run's (`secondDraw_pad`). That gives `OwnAgrees`, then `RegHolds` from `ScopeHolds`, then `RoundTwo` (part 3, RUNSAS's), then `SeqAccepts` with `SessionsAccept`.
+
+Confirmations owed:
+- TWOLEG: yes, the outer `RunAcceptsPlay` reads `VStar.Recursive.SampledTwo.checkBlobsAtWith true` (not `checkBlobsAt`, which `FORM = false` refuses, so a statement over it would be vacuous). [read] My inner statement takes `Run.run (inputOf …)` accepting. The meeting lemma is `acceptedTwo_of_check`: from `checkBlobsAtWith form p c ξ e bs = .accept pub prof`, get `∃ c₂ ξ₂ r i j, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ AcceptedTwo i it j`, where `it` is `inputOf`'s interior. It needs `jeq` to give equality, and `p.rule` to be two-stage. I write it in my files once `SampledTwo.lean` is on my base; until then it is unwritten. The sessions' coins tie through `OneStageZk.membersRun`, which is inside `inputAt`. [read]
+- CUT: its `LogIsDevice o := Logged reads o` (`SampledTwo/Cut.lean:200`) is a property of the whole play's log. My `FromDevice` is the one-stage fact that `Run.run`'s accepted coin check gives. Proposal: CUT holds the play-level definition, and its cut cites my `runCoinsFromDevice` for each stage's read, so there is one text and I define nothing of my own about the log. [guess: whether CUT's `reads` can take my per-stage form needs CUT's reading]
+
+NEEDS:
+- `Honest.lean` (owner not named): split `accepts_seq` at `refine Pr_pos_of (seqCoins …) ?_` into a pointwise `accepts_seqCoins` of exactly `SeqAccepts`'s shape, so `h4` is discharged and not copied. The alternative is copying about 200 lines into my files.
+- REDRAW: `CheckReadsDraw key`, at the run's one key (`i.key = some key`), with the label argument.
+
+STOP RULE: before and after, no `lean-audit.json` touched, and no verifier change. My files are all new.
+
+Size: 7 files, about 1,250 lines. Left after the tries pass:
+- `acceptedTwo_of_check`, about 60 lines, after TWOLEG's base;
+- FRAME's five clauses, one lemma each, about 150 lines;
+- the bridge from universal coins (`PlayCoins`) to the outer statement's coins;
+- fixing whatever the tries report.
+Part 5 and part 2 compiled is a [guess] for 01:00Z.
+
+To post: nothing.
+
+Not established:
+- Nothing above has compiled yet. Steps, Coins, Proved and Top are in tries 4 to 7.
+- `SeqAccepts` and `CheckReadsDraw` are open premises until `Honest.lean` and REDRAW land.
+- A replayed earlier period's genuine signature counts as a forgery under `Break`: the break branch of `runCoinsFromDevice` reads it the same way, so the error is ⊤ there until the key pins.
