@@ -2508,12 +2508,13 @@ def parse_stop_at(text: str | None) -> float | None:
     """``--stop-at``: a time with its zone, as ``2030-01-01T00:00:00Z``, in seconds since the epoch."""
     if text is None:
         return None
+    no = SystemExit(f"--stop-at {text!r}: a time with its zone, as 2030-01-01T00:00:00Z (run.sh: STOP_AT)")
     try:
         at = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
-        at = None
-    if at is None or at.tzinfo is None:
-        raise SystemExit(f"--stop-at {text!r}: a time with its zone, as 2030-01-01T00:00:00Z (run.sh: STOP_AT)")
+        raise no from None
+    if at.tzinfo is None:
+        raise no
     return at.timestamp()
 
 
