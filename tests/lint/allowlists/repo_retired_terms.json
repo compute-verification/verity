@@ -3715,7 +3715,6 @@
     {"file": "adapters/vllm/tests/pipeline/test_vu_export.py", "count": 8},
     {"file": "adapters/vllm/tests/pipeline/test_vu_store_budget.py", "count": 2},
     {"file": "adapters/vllm/tests/pipeline/test_workload.py", "count": 2},
-    {"file": "adapters/vllm/tests/program/crosscheck.py", "count": 2},
     {"file": "adapters/vllm/tests/program/predict/test_aot.py", "count": 4},
     {"file": "adapters/vllm/tests/program/predict/test_batch.py", "count": 1},
     {"file": "adapters/vllm/tests/program/predict/test_block_counts.py", "count": 3},

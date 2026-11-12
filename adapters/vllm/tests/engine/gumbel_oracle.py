@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 from verity.definitions.numerics.libdevice import F32, nv_log1pf, nv_logf
 
-from verity_vllm.program import sampling_rng as R
+from tests.program import sampling_rng as R
 
 
 def gumbel_noise_exact(seed: int, pos: int, vocab_size: int, *, is_drafting: bool = False) -> np.ndarray:

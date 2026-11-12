@@ -1,5 +1,4 @@
-"""Torch-free recomputation of the uniforms behind vLLM d9105ea80's Gumbel-max sampler noise, and readers of a sampler
-launch's snapshotted arguments.
+"""Torch-free recomputation of the uniforms behind vLLM d9105ea80's Gumbel-max sampler noise.
 
 vLLM's sampler (`vllm/v1/worker/gpu/sample/gumbel.py::_gumbel_sample_kernel`) samples no random tensor from a torch
 generator: for every logits row it evaluates, inside the kernel, a *pure function* of three integers --
@@ -15,7 +14,7 @@ generator: for every logits row it evaluates, inside the kernel, a *pure functio
 numpy integers and one IEEE fp32 multiply (Triton's `python/triton/language/random.py`, v3.7.1, transcribed line by line):
 Philox, the int32 -> fp32 conversion and the `* 2**-31` scaling are exact.  The clamp, the logs and the argmax are the sampler
 Definition's (`verity/definitions/registry/sampling.py`), which the value check of a stochastic row evaluates
-(`check.replay.stoch_recompute`) with the snapshot readers at the end of this module.
+(`check.replay.stoch_recompute`).
 """
 
 from __future__ import annotations
@@ -92,41 +91,3 @@ def gumbel_seed_of(seed: int, pos: int, *, is_drafting: bool = False) -> int:
     """`gumbel_seed = tl.randint(seed, pos)` (vLLM `gumbel_noised_argmax`): the per-(request seed, position) stream key."""
     p = int(pos) + (DRAFT_NOISE_SALT if is_drafting else 0)
     return int(tl_randint(int(seed), np.asarray([p], dtype=np.int64))[0])
-
-
-# --- a sampler launch's snapshotted arguments --------------------------------------------------------------------------------
-
-def _as_f32(words: np.ndarray, dtype: str) -> np.ndarray:
-    if dtype == "bfloat16":
-        return (words.astype(np.uint32) << np.uint32(16)).view(np.float32)
-    if dtype == "float16":
-        return words.view(np.float16).astype(np.float32)
-    if dtype == "float32":
-        return words.view(np.float32)
-    if dtype == "float64":
-        return words.view(np.float64).astype(np.float32)
-    raise ValueError(dtype)
-
-
-def _small_arg(store, launch, name: str, dtype):
-    from verity_vllm.observe.events import ViewDesc
-    v = launch.args.get(name)
-    if not isinstance(v, ViewDesc):
-        return None
-    snap = store.find(v, at=launch.id) or store.find(v, before=launch.id + 1)
-    if snap is None:
-        return None
-    w = store.extract(snap, v)
-    if dtype is np.float32:
-        return _as_f32(w, v.dtype).reshape(-1)
-    return w.reshape(-1)
-
-
-def _small_int_arg(store, launch, name: str):
-    from verity_vllm.observe.events import ViewDesc
-    v = launch.args.get(name)
-    w = _small_arg(store, launch, name, None)
-    if w is None or not isinstance(v, ViewDesc):
-        return None
-    np_dt = {"int64": np.int64, "int32": np.int32, "uint32": np.uint32, "int16": np.int16, "uint8": np.uint8}.get(v.dtype)
-    return w.view(np_dt).astype(np.int64) if np_dt is not None else None
