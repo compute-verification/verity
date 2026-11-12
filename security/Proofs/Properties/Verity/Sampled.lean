@@ -101,8 +101,8 @@ files and at the strategy a strategy of the period's game projects to. This modu
     open: the leaf's coins against fresh ones, at the mean over the device's fresh tree key of hm96's hiding gap
     (`CROnly.hidingGap`), which the leftover hash lemma bounds by `2^-257` a leaf, so `Claims.Hm96Hiding` holds at it
     with no premise (`CROnly.hm96Hiding_gap`). The device refuses every tree past its caps, so every run of a play
-    samples trees of at most `maxLeaves` (`2^46`) leaves in all (`Leaves.play_leaves_le`), and the term is the closed
-    `2 · 2^46/2^257 = 2^-210` (`Live.hidingTerm`);
+    samples trees of at most `maxLeaves` (`2^49`) leaves in all (`Leaves.play_leaves_le`), and the term is the closed
+    `2 · 2^49/2^257 = 2^-207` (`Live.hidingTerm`);
   * the circuit file's and the public file's finders (`Vocab.fileFinder`, `Vocab.publicFinder`), `2²/2^513` each;
   * the read finder's collision bound at `t`, its budget over `2^256` (`cr`, `Vocab.crBound`).
 -/
@@ -261,7 +261,7 @@ abbrev Reg (_ : Live) : Type := ByteArray
 hash lemma's bound on the mean over the device's fresh tree key of hm96's hiding gap at one leaf. The prover sees every
 leaf before it chooses what to open, so the term counts the leaves the device samples, not the rounds the session
 opens; the device refuses every tree past its caps (`Verity.releases`), so every run of a play samples trees of at most
-`maxLeaves` (`2^46`) leaves in all (`Leaves.play_leaves_le`, with no premise), and the term is `2 · 2^46/2^257 = 2^-210`
+`maxLeaves` (`2^49`) leaves in all (`Leaves.play_leaves_le`, with no premise), and the term is `2 · 2^49/2^257 = 2^-207`
 at every session. -/
 noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
 
