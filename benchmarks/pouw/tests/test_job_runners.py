@@ -1,7 +1,7 @@
 """Each directory's runner, `run.sh JOB [ARGS...]`: a job is a script beside it, named without `.sh`, every one but those
-the jobs source, and the directory's README has a table row a job, but a job whose name holds a term the Glossary
-retires, which it describes under the table, and a cost job that is ahead of the README (`AHEAD`).  A name that is no job
-is refused with the usage, before anything starts."""
+the jobs source, and the directory's README has a table row a job, but the jobs `NO_ROW` counts, which it describes
+under the table, and a cost job that is ahead of the README (`AHEAD`).  A name that is no job is refused with the usage,
+before anything starts."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ RUNNERS = {"served_h1": {"arch"}, "served_zk": set(), "hidden_zk": set(), "h1_pr
 #: each directory whose jobs run a Python step that sits beside the runner -> that step's file
 STEP_BESIDE = {"h1_prove": "recorded.py", "h1_lanes": "leaf.py"}
 #: each directory -> how many of its jobs the README describes without a row
-NO_ROW = {"served_h1": 1, "h1_prove": 1}
+NO_ROW = {"h1_prove": 1}
 #: the directories where a job named `*_cost` may be beside the runner before the README describes it: a branch that adds
 #: one need not hold the README.  The README's test fails once it describes a job this still excuses
 AHEAD = ("h1_prove", "h1_lanes")
