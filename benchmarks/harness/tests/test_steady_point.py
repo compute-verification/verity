@@ -1010,7 +1010,7 @@ class Node:
         self.ran.append(argv)
         log.write_text("log\n")
         if argv[1:2] == [SP.STAGER]:
-            stage = Path(argv[-1])
+            stage = Path(argv[4])
             stage.mkdir(parents=True)
             (stage / "circuit.txt").write_text(self.circuit)
             (stage / "pin.txt").write_text(self.said + "\n")
@@ -1073,7 +1073,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     stager, lease_argv, timer = node.ran
     scratch = Path(lease_argv[-1])
     assert scratch.parent == node.scratch_root and not scratch.exists(), "the scratch is removed"
-    assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage")]
+    assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage"), "--unbound"]
     assert kit.lease(1, 90) == ["gpu-lease", "1", "--wait", "--max-min", "90", "--"], "the kit's lease, and beside it:"
     assert lease_argv == ["gpu-lease", "1", "--wait", "--max-min", "90", "--preemptible", "--mem-gb", "80", "--",
                           sys.executable, "-m", "verity_bench.steady_node", "--spec", node.spec, "--point", POINT,

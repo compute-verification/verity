@@ -51,7 +51,7 @@ def stage(spec: str, out: Path, ns: list[int]) -> None:
         return got
 
     S.CS.UnitStager.stage = with_prefixes
-    sys.argv = ["stage.py", spec, "full", str(out)]
+    sys.argv = ["stage.py", spec, "full", str(out), "--unbound"]
     S.main()
 
 

@@ -214,7 +214,7 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner,
                           f"({', '.join(STAGED)})")
         shutil.copytree(given, stage)
     else:
-        rc = run([sys.executable, steady_spec.STAGER, row.type, str(row.n), str(stage)], out / "stage.log")
+        rc = run([sys.executable, steady_spec.STAGER, row.type, str(row.n), str(stage), "--unbound"], out / "stage.log")
         if rc or not all((stage / name).is_file() for name in STAGED):
             raise Refused(f"staging {row.type!r} at {row.n} units failed (exit {rc}): out/stage.log")
     pin = _digest(stage / "circuit.txt", "sha512")
