@@ -100293,3 +100293,52 @@ Mailbox: no file of mine on `cursor/proofs-inbox` at `f1ae2b6d3e64`.
 And in the parse rule's first bullet, drop "hence at most 65,535". To vllm: "its first port is three u32 (`words`), was 14 u32 (`request`)".
 
 **Not established:** as in the map; nothing was run.
+
+## STOPDRIVER, Thu 12 Nov 20:31Z: Job A's code is whole at `dbc6264f22d7` and its proof file elaborates; the pull request is NOT open yet (GitHub's rate limit, four tries); your 20:07Z, 20:11Z, 20:18Z and 20:26Z messages read, the dates taken
+
+**Dates.** Read: Job A's ready line by Fri 13 Nov 23:00Z and the second build's first entry by Fri 13 Nov 18:00Z (your 20:07Z and 20:18Z messages). Both hold. I mark nothing; the PR is opened unmarked and you mark on your word.
+
+**The branch.** Run: `cursor/proofs-stopdriver-answer-complete-ffc6` is at `dbc6264f22d75eab3718b2fdab32b78e1e5795dd`, six commits on `origin/main` `5f0c008aa040`, pushed.
+
+- Run: `e9f5151c2a` Lean and the reference: `Spot.Record.allRan` (new, the one definition), `Spot.OneStage.Public.complete`, `check`, `publicJson`, `Properties.Spot.publicOf`; `audit.answer`, `audit.answer_complete`, `audit.COMPLETE`; `replay.py`; the difftest's test and `test_one_stage.py`'s two.
+- Run: `d2fcf3862c` the writers: `served_integrity.answer`, `scan_zk.window_answer`, the scan cost's pin and guard.
+- Run: `8f9a022aed` the two moves that keep off #9375's lines (no behaviour).
+- Run: `5997444f0b` `stop_audit.answer_of` and `answer.json` beside `audit.json`: an accept whose `complete` is the record's own, so false today (two entries null, `benchmarks/one_stage/stop_audit.py:425-426` on `origin/main`); a reject of the stop registration otherwise.
+- Run: `b884ead370` `second_stage.complete(form, request_definition, records)` beside `FORM`, and `two_stage.outcome_of` reports `complete` with `REQUEST_DEFINITION = False` (the stand-in), so false on every outcome; the condition is written in both docstrings.
+- Run: `dbc6264f22` the verifier's README, one paragraph.
+
+**The hunks of `security/Properties/Spot.lean` I touch** (you asked, for RELAX). Run: `git diff -U0 origin/main dbc6264f22 -- security/Properties/Spot.lean` gives three hunks, by main's line numbers:
+
+1. Line 30, the module docstring: one line becomes two ("and whether every verdict ran, those not of record too").
+2. Line 400, the first line of `publicOf`'s docstring: one line becomes two. Its last line, the one above `def publicOf`, is as on main.
+3. Line 408, the last line of `publicOf`'s body: a comma, then `complete := Record.allRan e.verdicts }`.
+
+Read: I touch nothing of `ExpectsV2`, `R1`, `R7`, `PinnedHeld`, `Registered` or `AcceptMeans`' own text; the statement moves through `publicOf` alone. Run: RELAX's branch (`origin/cursor/proofs-r7-certified-b6a0` at `77414839aa`) has 14 hunks in that file against its base `30d6fcc92f`, the nearest to mine at main's lines 17 to 21 (the header) and the `def publicOf` and `def profileOf` signature lines (the rename to `Core.SamplingDesign`, as #9375 has it).
+
+**Merges.** Run, `git merge-tree --write-tree --name-only`:
+
+- Onto #9375's head `bafae2eaec2e`: no conflict (rc 0, tree `00191df50d3e`). No stop.
+- Onto RELAX's `77414839aa`: rc 1, three files, none mine: `pyproject.toml` and two specs under `benchmarks/harness/specs/`. Run: `origin/main` alone against that branch gives the same three, so they are that branch against main, not against me. The ten files we both change merge by themselves: `security/Properties/Spot.lean`, `Spot/OneStage.lean`, `Spot/Record.lean`, `audit.py`, `replay.py`, `scan_zk.py`, `test_scan_zk.py`, `test_difftest.py`, `test_one_stage.py`, `test_two_stage.py`.
+- Derived: whichever of RELAX and me opens second merges the first's head and reruns the records, as you say. Neither PR is open as I write (run: `gh pr list --head` for mine is empty; for RELAX's the call hit the rate limit).
+
+**Lean.** Run: `r20261112-200757-8298`, `verity lean try security/Proofs/Properties/Spot.lean --on auto` on the tree of `8f9a022aed` (run: no `.lean` file differs between it and the head): exit 0 in 1,115 s wall, most of it in the line. It built `Spot.Record`, `Spot.OneStage`, `Properties.Spot`, `Spot.OneStageZk` and the proofs' parts, and its last line is "axiom probe: none of its 78 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". So `acceptMeans_iff` closes unedited, as I said it should. Derived: this is the edit loop, not a Lean verdict; no kernel replay yet.
+
+**Not a new accepted form.** Read: `check`'s accept and reject branches are the ones on main; the accept's record gains one field (`verity/protocols/spot/verifier/lean/Spot/OneStage.lean`, the `.accept` at main's line 539). Derived: the accepted set and every reason are unchanged; every accept's canonical bytes gain the key `complete` in `public`.
+
+**Runs out.**
+
+- `r20261112-203018-c8f1`: the records of `verity/protocols/spot/verifier/lean` and its requirers (`lean_changed.py --records ... --update`, `--cwd clone`), at the head, on cpu-10's proofs pool (`--pool proofs --as proofs --mem-gb 32`), launched 20:30Z. Run: it replaces `r20261112-200538-b6f3`, the same job, which waited 23 minutes in cpu-11's research line without starting; I cancelled that one by its id at 20:30Z, as your 20:11Z message allows.
+- `r20261112-202017-e6ff`: `suites.py --changed 5f0c008aa040 --quick` at the head, on cpu-12's proofs pool (`--mem-gb 32`), waiting on memory since 20:20Z (run, its `slot.json`: "16 GB of memory free ... under the 30 GB a check here may peak at" on each of p0 to p3). If it has not started by 20:41Z I cancel it and launch it on cpu-8's or cpu-10's.
+- Run, done: `r20261112-202813-a597`, `verity lean try verity/protocols/spot/verifier/lean/Spot/Record.lean --siblings` on cpu-10's proofs pool, for the new name `allRan`: exit 0 in 39 s wall; "siblings: no built module of its package that doesn't import Spot.Record declares a name it does (38 imported ...); 1 unchecked ...: Spot.Bound"; the axiom probe clean on its 4 theorems.
+- Run, local, each a named file or `-k` selection under a minute: `test_one_stage.py -k 'answer or needs_every_check'` 3 passed; `test_two_stage.py -k complete_only_on_the_form` 1 passed; `test_two_stage_driver.py -k stand_in_replay_block_says` 1 passed; `test_stop_audit.py -k names_what_refused_it` 1 passed; earlier at `d2fcf3862c`, `test_served_integrity.py` 44 passed, `test_scan_cost.py` 27 passed. The stop audit's fixture test and the Lean difftest do not run here (they call the Lean verifier): they are in the suites run.
+
+**The pull request.** Run: `research queue open --head cursor/proofs-stopdriver-answer-complete-ffc6 --sha dbc6264f22... --issue PRF-608 --by proofs` failed at 20:25Z, 20:26Z, 20:27Z and 20:29Z with "GraphQL: API rate limit already exceeded for installation ID 171128908" (once in `gh pr create`, three times in `gh pr list`); its dry run at 20:24Z was accepted. I retry every few minutes and write one line here when it is open. The body is ready, in public words: what an accept's canonical bytes gain, that the accepted set is unchanged, the statement that changes (`AcceptMeans` through `publicOf`), and the lock records I expect to move, marked as from reading until the records run prints them:
+
+- `security/Properties/lean-audit.json`: `Properties.Spot.acceptMeans`; under `reads`, `Properties.Spot.publicOf`, `Spot.OneStage.Public` (with the new field), `Spot.OneStage.check`, `Spot.OneStage.publicJson`.
+- `security/lean-audit.json`: under `reads`, the same `Spot.OneStage` definitions.
+
+**Three things you should know.**
+
+1. Run: the command warns that PRF-608 carries no label naming a live goal, so the body will have `Refs PRF-608` and no `Goal` line. The command links the PR to PRF-608 through the Linear app, as it did for #9337; I write nothing else to Linear.
+2. Derived, not run: `benchmarks/scan_cost/public.json` gains `"complete": true` for both classes, by reading the scan's audit (every verdict entry there is a boolean). No scan was run. The body says so.
+3. Read: `stop_audit.boundary_audit` and Lean's `Record.across` still read the boundary stream's audit record's own `complete`, not an answer's. That read is the second build's, and the body says it is not here.
