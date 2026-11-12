@@ -449,8 +449,9 @@ def write_realized(plan: Plan) -> dict | None:
         return None
     reqs = []
     for r in src.get("requests", []):
-        reqs.append({"request_id": r.get("request_id"), "prompt_len": r.get("prompt_len", len(r.get("prompt_token_ids") or [])),
-                     "max_tokens": r.get("max_tokens"), "n_generated": r.get("n_generated", len(r.get("generated_token_ids") or [])),
+        prompt, generated = r.get("prompt_token_ids"), r.get("generated_token_ids")   # counted where the record states no count
+        reqs.append({"request_id": r.get("request_id"), "prompt_len": r.get("prompt_len", len(prompt) if prompt else 0),
+                     "max_tokens": r.get("max_tokens"), "n_generated": r.get("n_generated", len(generated) if generated else 0),
                      "arrive_step": r.get("arrive_step", 0), "arrive_step_realized": r.get("arrive_step_realized"),
                      "first_step": r.get("first_step"), "finish_step": r.get("finish_step"), "finish_reason": r.get("finish_reason")})
     snaps = None
@@ -458,12 +459,12 @@ def write_realized(plan: Plan) -> dict | None:
     if sp.exists():
         try:
             sj = json.loads(sp.read_text())
-            snaps = sorted({int(s) for s in (sj.get("steps") or sj.get("snapshot_steps") or [])}) or None
+            kept = sj.get("steps") or sj.get("snapshot_steps")   # the capture's list of the steps it kept, under either name
+            snaps = (sorted({int(s) for s in kept}) or None) if kept else None
         except (OSError, ValueError, AttributeError, TypeError):
             snaps = None
     real = {"requests": reqs, "prompt_lens": [r["prompt_len"] for r in reqs], "n_generated": [r["n_generated"] for r in reqs],
-            "engine_steps_capture": (cap or {}).get("engine_steps") or ((cap or {}).get("timing") or {}).get("engine_steps"),
-            "engine_steps_control": (ctl or {}).get("engine_steps") or ((ctl or {}).get("timing") or {}).get("engine_steps"),
+            "engine_steps_capture": _engine_steps(cap), "engine_steps_control": _engine_steps(ctl),
             "expected_engine_steps_declared": src.get("expected_engine_steps"), "serving_profile": src.get("serving_profile"),
             "context_class": src.get("context_class"), "snapshot_steps_realized": snaps,
             "max_concurrent_requests": _max_concurrent(reqs)}
@@ -472,6 +473,12 @@ def write_realized(plan: Plan) -> dict | None:
     man["realized"] = real
     p.write_text(json.dumps(man, indent=1, default=str) + "\n")
     return real
+
+
+def _engine_steps(tokens: dict | None) -> Any:
+    """The engine steps a tokens record states, at its top or under its `timing`; None with no record, or one that states neither."""
+    timing = tokens.get("timing") if tokens else None
+    return (tokens.get("engine_steps") if tokens else None) or (timing.get("engine_steps") if timing else None)
 
 
 def _max_concurrent(reqs: list[dict]) -> int | None:
@@ -762,7 +769,8 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
     --snapshot-max-bytes-op contract is unchanged; OLMoE stays at the 32 MiB floor).  Returns (cap, derivation) -- the derivation
     goes into run.json so a reader sees why the record's cap is what it is."""
     doc = doc or {}
-    reqs = doc.get("requests") or []
+    stated = doc.get("requests")   # a workload read for its engine arguments alone states no requests
+    reqs = stated if stated else []
     ea = {**dict(RowEngine.of(doc).args), **dict(engine_args or {})}
     rows_src = None
     mnbt = ea.get("max_num_batched_tokens")
@@ -1010,11 +1018,12 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     # (`fold._attribution`; X-09's `meta` channel reads exactly these keys -- without them here the record never carried them and the
     # decomposition always fell through to the data-flow / row-count channels).
     reqs_tab = []
+    sampled = getattr(result, "sampled", None)   # request id -> its served samples; a fold of no sampler has none
     for i, r in enumerate(getattr(result, "requests", None) or []):
         rid = r.get("request_id")
-        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": len(r.get("prompt_token_ids") or []),
-                         "served_samples": len((getattr(result, "sampled", None) or {}).get(rid) or []),
-                         "max_tokens": r.get("max_tokens")})
+        prompt, served = r.get("prompt_token_ids"), sampled.get(rid) if sampled else None
+        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": len(prompt) if prompt else 0,
+                         "served_samples": len(served) if served else 0, "max_tokens": r.get("max_tokens")})
     _form = instances_form()
     if _form == "progressions":
         from verity_vllm.program.compact import file_items_from_refs as _file_items
@@ -1035,8 +1044,9 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
             if m.get("collective"):
                 rec["collective"] = m["collective"]           # kind/step/k/site/rank/world + the peers field the row reads
             rec = _jsonable(rec)                              # the meta fields only (small; may carry tuples / numpy scalars / objects)
-            rec["operand_views"] = [view(v) for v in m.get("operand_views") or []]
-            rec["output_views"] = [view(v) for v in m.get("output_views") or []]
+            operand_views, output_views = m.get("operand_views"), m.get("output_views")   # an instance may list no view of a side
+            rec["operand_views"] = [view(v) for v in operand_views] if operand_views else []
+            rec["output_views"] = [view(v) for v in output_views] if output_views else []
             if node is not None:
                 if _form == "progressions":   # from the fold's own Refs objects: no runs() expansion, no to_json() tree
                     rec["operand_refs"] = [_file_items(arg.refs) for arg in node.args]   # (== file_items_from_refs_json(refs.to_json()))
