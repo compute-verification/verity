@@ -41,6 +41,7 @@ from verity_vllm.acquire.sources.hidden_source import (
     fa3_tile,
     mat_total_words,
 )
+from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.pipeline.telemetry import admission as plan
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
@@ -76,10 +77,10 @@ def per_token_bytes_of(sizing: dict[str, Any]) -> tuple[int, str | None]:
     if sizing.get("rope_per_layer"):
         return pt, None
     widths, model = sizing.get("widths"), sizing.get("model")
-    rope = 0 if widths is None else int(widths.get("RotaryEmbedding") or 0)
+    rope = 0 if widths is None else int(widths.get(LC.ROTARY) or 0)
     layers = 1 if model is None else int(model.get("layers") or 1)
     if rope and layers > 1:
-        return pt + rope * (layers - 1), f"RotaryEmbedding width {rope} B counted once in the sizing record: x{layers} layers (+{rope * (layers - 1)} B/token)"
+        return pt + rope * (layers - 1), f"{LC.ROTARY} width {rope} B counted once in the sizing record: x{layers} layers (+{rope * (layers - 1)} B/token)"
     return pt, None
 
 
