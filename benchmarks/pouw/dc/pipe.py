@@ -271,9 +271,9 @@ def text(res: dict) -> str:
         lines.append(line)
     e = res.get("eps_L32")
     if e:
-        lines += ["", f"eps_tensor at L = 32, honest's measured TMEM stage {e['honest_TMEM_stage']:.2f} words/SM/clk "
-                  f"({e['honest_fraction']:.4f} of rho_T5; the probes' LP assumed {e['region_balanced_probes']:.4f} and "
-                  f"gave {e['eps_probes_lp']:.4f}): T1 {e['T1']:.4f}"]
+        lines += ["", (f"eps_tensor at L = 32, honest's measured TMEM stage {e['honest_TMEM_stage']:.2f} words/SM/clk "
+                       f"({e['honest_fraction']:.4f} of rho_T5; the probes' LP assumed "
+                       f"{e['region_balanced_probes']:.4f} and gave {e['eps_probes_lp']:.4f}): T1 {e['T1']:.4f}")]
         for name in ("bandwidth", "round_trip"):
             c = e.get(name)
             if c:
