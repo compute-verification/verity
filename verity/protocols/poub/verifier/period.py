@@ -43,7 +43,9 @@ from . import coins as C
 
 PROTOCOL = "verity/remote-bandwidth/v0"
 DELTA = WINDOW_DELTA
-"""`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`)."""
+"""`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`).  An accepted session's `eps` is this
+δ and its samples' rejected first words, and leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): it
+reads δ + Σ_t adv_t (`ledger.DELTA_FORM`)."""
 WORD_BYTES = 64
 DATA_BYTES = WORD_BYTES - 1
 """Each 64-byte little-endian piece of a block carries 63 bytes of the store under a zero top byte, so every word is below

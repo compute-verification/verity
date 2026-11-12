@@ -449,6 +449,8 @@ def _pct(x: float) -> str:
 
 
 def _grid() -> None:
+    from . import ledger  # here, not above: ledger imports this module
+
     gap, jitter = 50 * US, _ns(0.05)
     print(f"# receipts: {DEFAULT} by default, of the block alone; {', '.join(k for k in KINDS if k != DEFAULT)} kept for "
           "comparison.  The schedule and openings below are the same under either kind, with no tile evidence unless "
@@ -472,7 +474,8 @@ def _grid() -> None:
     t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
     quarter = samples_for(0.0025, audit.DELTA)
     openings = {1: samples_for(0.01, audit.DELTA), 20: quarter, t_s: s, 90: quarter}
-    print(f"# openings at the stated T = {t_s} s, δ = 2^-40: s = {s} from the window's coin ({s / t_s:.0f} a second, "
+    print(f"# openings at the stated T = {t_s} s, δ = 2^-40 (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
+          f"coin ({s / t_s:.0f} a second, "
           f"ε_s = ln(2^40)/s = {math.log(2.0 ** 40) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
           f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
           "transcripts, needs s(δ/Q) = ⌈s·(40 + log2 Q)/40⌉")
@@ -496,7 +499,8 @@ def _grid() -> None:
           "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
           f"the whole γ, on one node of {GPUS} RTX PRO 6000s and their host (R = {READ_BYTES_PER_S / 1e12:.4f} TB/s "
           f"measured, {SPEC_BYTES_PER_S / 1e12:.4f} at spec, S_chip = {CHIP_BYTES:,} B), the default codec at the node's "
-          "stated ceiling, δ = 2^-40, g = 50 µs, J = 0.05 ms.  Over every tier, the store is GB a GPU of each GPU's HBM "
+          f"stated ceiling, δ = 2^-40 (it reads {ledger.DELTA_FORM}), g = 50 µs, J = 0.05 ms.  Over every tier, the "
+          "store is GB a GPU of each GPU's HBM "
           "and host DRAM's share (`spanning`), and a pass its read at R; in HBM, the same GB a GPU and nothing on host "
           f"DRAM, a pass its read at the GPUs' {hbm_rate / 1e12:.3f} TB/s")
     print("| T s | openings | GB a GPU | tiers | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ "

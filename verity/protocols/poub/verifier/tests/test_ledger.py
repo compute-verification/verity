@@ -6,6 +6,7 @@ paced ones refused for an unpaced session, a record of one window or a pass that
 from __future__ import annotations
 
 import dataclasses
+import json
 import math
 from fractions import Fraction
 
@@ -236,9 +237,49 @@ def test_the_coin_commitments_hiding_is_charged(store) -> None:
 
 
 def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part_of_delta() -> None:
-    """`LineHeld`'s Σ_t Adv(prf t) has no numeric value, so the ledger names it by the claim that prices it
-    (`PRF_CLAIM`, an assumption of the registry) and puts it in no part of δ."""
+    """`LineHeld`'s Σ_t adv_t has no numeric value: nothing prices it and the line doesn't assume it.  The ledger names
+    it by its claim (`PRF_CLAIM`, which the registry holds as an assumption of the protocols that do take it) and puts
+    it in no part of δ."""
     assert claims.get(ledger.PRF_CLAIM).kind == "assumption" and ledger.PRF_CLAIM not in ledger.DELTA_PARTS
+
+
+def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1) -> None:
+    """A δ of PoUB's is never read alone: it reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed),
+    in those words (`DELTA_FORM`).  So every object of the declared outputs that carries a δ or an error (a memory
+    line's `delta`, γ's `error`) names the term in itself, with its claim, no value, in no total, and its status."""
+    assert ledger.DELTA_FORM == "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
+    term = {"claim": "prf/sha-512", "term": "Σ_t adv_t", "value": None, "in_total": False,
+            "status": "SHA-512 stream as PRF: not priced, not assumed"}
+    assert ledger.NAMED_TERMS == {"prf_advantage": term}
+
+    def names(x: object) -> bool:
+        """Whether `x` or an object inside it names the term."""
+        return isinstance(x, dict) and (x.get("named") == ledger.NAMED_TERMS or any(names(v) for v in x.values()))
+
+    def bare(x: object, at: str = "declared") -> list[str]:
+        """The objects under `x` that carry a δ without the term beside it, or an error that names it nowhere."""
+        if isinstance(x, list):
+            return [p for i, v in enumerate(x) for p in bare(v, f"{at}[{i}]")]
+        if not isinstance(x, dict):
+            return []
+        mine = [at] if "delta" in x and x.get("named") != ledger.NAMED_TERMS else []
+        mine += [f"{at}.error"] if "error" in x and not names(x["error"]) else []
+        return mine + [p for k, v in x.items() for p in bare(v, f"{at}.{k}")]
+
+    def unnamed(x: object) -> object:
+        """`x` with the term taken out of every object under it."""
+        return {k: unnamed(v) for k, v in x.items() if k != "named"} if isinstance(x, dict) else x
+
+    r, _ = k1
+    out = ledger.declared(r, node()).to_json()
+    lines = [x for x in out["memory"].values() if "delta" in x]
+    assert len(lines) == len(ledger.FORMS) and all(x["named"] == ledger.NAMED_TERMS for x in lines)
+    assert len(out["gamma"]) == 2 and all(names(g["error"]) for g in out["gamma"].values())
+    assert bare(out) == []
+    stripped = json.loads(json.dumps(out))
+    del stripped["memory"][ledger.SNAPSHOT]["named"]
+    stripped["gamma"]["spec"]["error"] = unnamed(stripped["gamma"]["spec"]["error"])
+    assert bare(stripped) == ["declared.gamma.spec.error", f"declared.memory.{ledger.SNAPSHOT}"]
 
 
 def test_the_draws_terms_are_charged_by_name(store) -> None:
@@ -267,9 +308,7 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
     with pytest.raises(ValueError, match="session's bounds"):
         ledger.binding(dataclasses.replace(r, samples=None), n)
     assert d.total == d.rejection + d.binding
-    assert d.to_json() == {"binding": d.binding, "rejection": d.rejection,
-                           "named": {"prf_advantage": {"claim": "prf/sha-512", "term": "Σ_t Adv(prf t)",
-                                                       "value": None, "in_total": False}}}
+    assert d.to_json() == {"binding": d.binding, "rejection": d.rejection, "named": ledger.NAMED_TERMS}
     g = ledger.gamma(r, n, n.spec_bytes_per_s)
     assert g.draw == d and g.error == g.ledger.error + g.sketch + d.total
 
