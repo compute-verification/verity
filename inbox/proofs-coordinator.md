@@ -92366,3 +92366,61 @@ In plain words: the step network's half reads, `FlockSoundness.Audit.Periods.ex_
 - **Note for you:** `research queue open` warned that PRF-599 has no label naming a live goal of the Goals page (its labels: `from:proofs`); the issue is yours to label.
 
 Next: the phase lemma. Its first two files elaborate on a node (29 theorems, axioms clean); the checkpoint line follows.
+
+## PERIODREAD, Thu 12 Nov 15:45Z: part 1's reads: no reader holds the answer's `public` to a fixed key set, but on `main` no audit writes a case naming a challenger, so the source the brief names for the key is not there; I build from what the audit's own check verified unless you say otherwise; nothing built yet
+
+Mailbox read at `5e66ab93fb00` (your 15:24Z, nothing beyond the brief) [run]. `main` is `99f1b414a647`; no file cited below differs from `5c0ae25d6c28`, my branch's base [run: `git diff --stat` over `benchmarks`, `verity/protocols/spot`, `verity/protocols/pouw`, `verity/composite`, `security`, empty]. Read only; no run launched; nothing committed on `cursor/proofs-prf600-coins-59c6`.
+
+### 1. A new key in `public` is refused by nobody [read, each at `main`]
+
+- `verity/protocols/pouw/verifier/core_check.py:109`, `:465-485` (`answer_of`): the six top-level keys, and that an accept has a `public` and a `profile`. `public` is opaque to it. `served_verdicts.py:826-836` (`check_answer`) is that call.
+- `benchmarks/one_stage/served_verdicts.py:839-847` (`epsilon`) reads `public.bound`; `:850-858` (`row_of`) copies `public` whole as the row's `quantity`.
+- `benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py:143-160` (`leg`) copies `public` whole; its `_quantity` reads `bound`. Its `answer_of` (`:185-193`) is the composite's own answer, not the leg's. The schema (`schemas/block-record.v2.schema.json`) has the leg's `"public": {}`, any value.
+- `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean:1057-1065` (`factsOf`) reads `bound` alone.
+- `benchmarks/prove_path/records_audit.py:696-697` (`period`) compares the answer's `commitment`. `interfaces/verity_e2e_demo/report.py:667` reads `per_template`.
+- Network's `onsite_record.py` at `1aba053782b2`: `:1347` reads `public.bound` and the profile; `:1484-1491` (`coins`) is the regex on the `COINS` lines. No key set.
+- Tests that state the whole `public` and so change with it: `benchmarks/one_stage/tests/test_served_integrity.py:54` (mine to change). Three more build one by hand and are not held to `served_integrity`: `test_served_verdicts.py:490`, `network_traces/tests/test_certifier_piece.py:159`, `certifier/verifier/network/tests/period_case.py:1135`.
+- One thing changes its meaning: the file's docstring says its `public` is "the ones `Spot.OneStage.check` makes public", and the Lean writes exactly `{drawn, proved, bound, per_template}` (`Spot/OneStage.lean:561-566`). A fifth key makes the Python answer's `public` a superset of the Lean's. I found no test that compares the two [read: none found].
+
+So the brief's stop condition is not met.
+
+### 2. The premise that fails: on `main` no audit's case names a challenger
+
+- `a5.write_case` (`benchmarks/one_stage/a5.py:1118-1161`) builds every case's params with `RP.params(...)` (`replay.py:505-514`: `anchors, delta, law, leaf_layer, log, partition, ports, program, query, registered, scheme, work_table`), and `case_v2` (`:1164-1185`) adds `proofs` alone. No `challenger`, no `window_root`, no `coins` in the evidence [read]. `v2_case.py` on `main` names none either [run: `rg`, no hit].
+- So `Spot.OneStageZk` refuses every case a5 writes on `main` on its parameters: `paramsOfJson` throws `NO_CHALLENGER` (`Spot/OneStageZk.lean:253`) [read, derived; I ran no case through it]. Only `verity/protocols/spot/verifier/lean/tests/test_difftest.py:2453` and on build such params [read].
+- Where the challenger is written: network's line only. `drawn_by` (their `a5.py:1357-1365`, from #7303, merged into `cursor/onsite-demo-061a` on 5 Nov and never into `main` [run: `gh pr view 7303`, `git merge-base --is-ancestor`]) puts `challenger {key, label}`, `window_root` and `evidence.coins` in the one-member case. #9199's `case_coins` (its `a5.py:1261-1273`) does it for the per-member file only, which v2 still answers `MULTI_REFUSED` at #9199 and #9237 [read]. Lean's merge `f3837f57d113` has neither [run: `git grep`].
+- REDRAW's line "The audit's driver writes those parameters with the case (`a5.py:1118-1160`)" holds for the params as a whole and not for `challenger` [read].
+- What a check did verify on `main`: `coins_outcome` (`a5.py:402-462`) runs `coins_reason` on `{key, ledger, main, pins, segment, session}` under the evidence's own key (`verity/protocols/spot/device/coins.py:307-329`), and hands the same evidence to the Lean stream's run, whose `select` refuses with `coins` [read]. The key is the session's: a local one's own, or the deployment's key record under `gate:` (`a5_coins.py:546-554`, `:557-618`) [read]. Neither the key, its digest nor the session's id reaches `summary.json` or `audit.json`: the record keeps `trusted {commitment, released, close, ledger_sha512, pin, pins_lines, main, pinned_session}` (`a5_coins.py:732-738`; `a5.py:460-461`; `records_audit.py` `coins_session`) [read]. The id is in `plan.session`, the gate's reply, which nothing verified [read].
+
+### 3. Which audits have a case for the compiled check at all (`window/case-v2.json`), on `main`
+
+- One `--zk` member sampled: yes (`a5.v2_proof`, `a5.py:1229-1243`). The served run's own audit is that: one template, `subset:2` (`benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step0.json`; `prove_path/run.sh:172-187`), and its answer is the window report's integrity row (`served_verdicts.sh:1013`, `:1040`; `served_verdicts.py:861-870`) [read; no run traced].
+- Several members sampled: no. `case-v2-error.txt` says "this audit drew N members", and the tree's own real audit asserts it (`tests/test_audit_two_members.py:150-151`) [read]. V3c's audit under `H1_TIE` is always this: the preflight requires `stratified:K` (`served_verdicts.sh:286`, `:778-782`) [read]. Its answer is the one `records_audit.py period` hands the network certifier's period (`records_audit.py:673-699`), which takes accepted answers only [read; REDRAW's item 7].
+- Plain sessions: no ("v2 verifies --zk sessions; this audit's are plain") [read].
+
+So "no `accept` without a case for the compiled check" turns two answers that accept today into non-accepts: every H1-tied V3c audit's (the certifier's period then has no accepted compute audit) and every plain audit's (the plain path's rule in `AGENTS.md` is "works end to end") [derived]. I think that is what you asked for and what is true; I say it because the brief reads as if every audit had such a case.
+
+### 4. What I will build, unless you say otherwise (the pull request is unmarked until you mark it)
+
+1. **The key and the session, from the audit's own check.** `a5.coins_outcome` records, beside `coins_reason`, the SHA-512 of the public key it verified the evidence under and the id of the session the ledger opens on the window's root under that key (`challenger.pinned_session`'s `Audited.session`, `verity/protocols/spot/device/challenger.py:1762-1779`, the read `coins_reason` makes through `trusted_session_of`), only where `coins_reason` is None. About 8 lines in `a5.py` at `:460`, 11 lines below #9237's nearest hunk (`@@ -442,7`) [run: `git diff origin/main origin/cursor/proofs-redraw-cc71`]. `served_integrity.answer` copies the two into `public.coins`, `{key_sha512, session}`, and does not accept without them. This is "what a check verified", never a flag: the check is the audit's Python and the Lean stream's run, not `OneStageZk`, because on `main` `OneStageZk` is handed no challenger.
+2. **No accept without the compiled check's case.** Where the audit accepted and wrote no `window/case-v2.json`, the answer is `undecided` with a5's own reason (`case-v2-error.txt`), not `reject`: `Core.Verdict.undecided` "does not reject the prover. The evidence doesn't settle the question" (`verity/protocols/interface/CoreProtocol/Protocol.lean:29-34`), and `answer_of` takes it with a reason and no `public` (`core_check.py:110`, `:467-482`). The window report names it `pending` (`served_verdicts.py:144-145`, `:1029-1033`) [read].
+3. Tests beside the file. No fixture holds a real audit's case files [run: `ls` of the four fixture directories, `rg` over `fixtures/artifacts.json`]; the one real audit in the tree is `test_audit_two_members.py` (slow, about 150 s), where I add one assertion on `served_integrity.answer` of its out directory: `undecided`, naming "this audit drew 2 members".
+
+**Your word wanted on three points; I go on with the default of each meanwhile.**
+- (a) The source. Default: 1 above. The other reading: read `params.challenger.key` from `case-v2.json` and refuse where it names none, which on `main` accepts nothing until someone lands `drawn_by` or extends `case_coins` to the one-member case. If you want that, say whose that a5 change is; it is in the lines #9199 and #9237 rewrite.
+- (b) `undecided` or `reject` for the missing case. Default: `undecided`.
+- (c) Whether the H1-tied V3c answer and the plain path going non-accept on `main` is wanted now, or the second half waits for a per-member case v2 accepts. Default: build it as briefed, say it in the pull request's body, and you decide at the mark.
+
+### Not established
+
+- That `OneStageZk` answers `params: NO_CHALLENGER` on a real `case-v2.json` from `main`: read from the Lean and the params' writer, no case run.
+- Which sessions the served run's own audit and V3c's audit sample in a run of record: read from the scripts, no run's files opened.
+- What the network certifier's period does with an `undecided` compute audit beyond "takes accepted answers": REDRAW's reading, not mine.
+- Whether network's record wants `public.coins` under that name; nothing of theirs reads it yet.
+- The design (task 1): nothing yet. Its reads start now.
+
+### To post
+
+Nothing.
+
+Next entry by 16:40Z.
