@@ -9,30 +9,38 @@ meta import NetworkCheck.Period
 # What the network certifier's period check accounts for
 
 The account (`Core.Account`) of `verity/certifier/v0`: one amount, `K`, the bits a covert sender in the server can move
-through the network certifier over a certification period, a bound from above on the free bits of the link the period
-is on, at the error `eps`. A value beside the protocol, which `Core.Account.rows` reads the period check's accepted
-answers by.
+through the network certifier over a certification period, a bound from above on the free bits of the link the
+certification period is on, at the error `eps`. A value beside the protocol, which `Core.Account.rows` reads the period
+check's accepted answers by.
 
-The keys it names, and where the period check writes each:
+The keys it names. The period check writes three of them:
 
-* `K`, `eps` and `windows`, in the public output (`publicJson`): the bound, the probability it fails (the sum of its
-  audits' δ over the period's execution phases) and the count of execution phases the period spans;
-* `link`, in the profile (`profileJson`): the link the period is on;
-* `registration`, in the profile: the registration's head. No answer holds it yet. The period check writes it once it
-  takes the registered hardware as a parameter, and `link` is then a registered link's id;
-* `certified`, in the public output: that the answer certifies its `K`. No answer holds it yet. The period check
-  writes it, and only as true, once the one-stage answers its `K` rests on are verified, which it takes as given until
-  then, and only for a site whose network certifier mediates the link's egress. An answer that certifies nothing
-  holds no `certified`, and says why under a key of its own.
+* `K` and `eps`, in the public output (`publicJson`): the bound, and the probability it fails, the sum of its audits'
+  δ over the certification period's execution phases;
+* `link`, in the profile (`profileJson`): the link the certification period is on.
 
-An answer that holds no `registration` counts for nothing, and one that holds no `certified` gives no reading, so until
-the period check writes both the link's row reads "not audited: charged at capacity" (the guards below).
+It writes none of the other five, and the link's row reads "not audited: charged at capacity" until an answer holds
+all of them (the guards below):
 
-The answer states its span as a count of execution phases, neither their length nor which they are. The length is a
-parameter here: `Schedule.phaseSeconds` in the rows form. A count alone shows no two spans disjoint, so of two
-certification periods on one link only the longer covers its ticks; `accountNamed` is the account once the period
-check publishes the certifier session and the session's index of its first execution phase, which its parameters hold
-(`session`, `first`) and its public output does not.
+* `registration`, in the profile: the registration's head. The period check writes it in the change that passes it the
+  registered site and holds `link` to a registered link's id, and in no other;
+* `session`, in the public output: the certifier session, which the period check's parameters hold (`session`);
+* `start_ms` and `span_ms`, in the public output: the certification period's span on that session's clock, its first
+  millisecond and its length in milliseconds. The clock is the network certifier's count of its own ticks: millisecond
+  0 is the start of the session's first execution phase, an execution phase is T ticks, and a tick is a whole number of
+  milliseconds (the schedule's `window` and `bucket_ms`). So the certification period of the parameters' `windows`
+  execution phases from the session's `first` has `start_ms = first · T · bucket_ms` and
+  `span_ms = windows · T · bucket_ms`, and a step of the account is a millisecond under every schedule;
+* `certified`, in the public output: that the answer certifies its `K`. The period check writes it only as true, and
+  only when both hold: the one-stage answers its `K` rests on are verified, which it takes as given, and the site's
+  network certifier mediates the link's egress. An answer that certifies nothing holds no `certified`, and says why
+  under a key of its own. A configuration verifies the one-stage answers and ties them to the period check's answer by
+  key, while `Core.Account.rows` reads each answer alone and holds none to a configuration's acceptance.
+
+The series of the account's steps is the session. The network certifier counts each session's ticks from that
+session's start, so two sessions' spans are on two clocks, and no span of one is shown disjoint from a span of the
+other: two certification periods of one session that share no millisecond both cover their time, and of two sessions
+on one link the one that covers more covers alone.
 -/
 
 @[expose] public section
@@ -43,31 +51,20 @@ namespace NetworkCheck.Period
 
 open Lean (Json toJson)
 
-/-- The seconds of one execution phase under schedule `s`: its `window` buckets, of `bucketMs` milliseconds each. -/
-def Schedule.phaseSeconds (s : Schedule) : Core.Ratio := (Core.Ratio.mk' (s.window * s.bucketMs) 1000).getD ⟨0, 1⟩
-
-/-- **The period check's account**, at execution phases of `seconds` seconds: `K`, in bits, bounds the link's free
-bits from above over the answer's `windows` execution phases, at the error `eps`; a monitoring period's error is its
-answers' summed. `eps` holds the audits' δ alone: the error of the bound it is the union of names three terms more,
-which it does not price. -/
-def account (seconds : Core.Ratio) : Core.Account :=
+/-- **The period check's account**: `K`, in bits, bounds the link's free bits from above over the answer's span, the
+`span_ms` milliseconds from `start_ms` on the clock of the certifier session `session`, at the error `eps`; a monitoring
+period's error is its answers' summed. `eps` holds the audits' δ alone: the error of the bound it is the union of names
+three terms more, which it does not price. -/
+def account : Core.Account :=
   { protocol := protocolId
     head := some (.profile "registration")
     amounts := [{ metric := "K", part := .link, place := some (.profile "link"), key := .published "K",
-                  unit := Core.Account.bits, side := .free, time := .span (.published "windows") seconds,
-                  error := .published "eps", pool := .sum, uncertified := .flagged (.published "certified"),
+                  unit := Core.Account.bits, side := .free,
+                  time := .steps (.run (.published "start_ms") (.published "span_ms")) ⟨1, 1000⟩,
+                  series := some (.published "session"), error := .published "eps", pool := .sum,
+                  uncertified := .flagged (.published "certified"),
                   unpriced := ["each sampled audit's knowledge soundness error", "the commitment's binding",
                                "the network certifier's openings"] }] }
-
-/-- The account once an answer names its span, by two keys more of its public output: the certifier session its
-execution phases are counted in (the parameter `session`, under `session`) and the session's index of the first (the
-parameter `first`, under `first`), beside their count. Two certification periods of one session that share no
-execution phase then both cover their ticks. The network certifier counts each session's execution phases from that
-session's start, so of two sessions on one link the one that covers more covers its ticks alone. -/
-def accountNamed (seconds : Core.Ratio) : Core.Account :=
-  { account seconds with amounts := (account seconds).amounts.map fun m =>
-      { m with time := .steps (.run (.published "first") (.published "windows")) seconds,
-               series := some (.published "session") } }
 
 /-! ## The rows of one link -/
 
@@ -76,12 +73,11 @@ namespace AccountExample
 open Core.Registration.Example (sheet locs links auditor fig)
 
 /-- The registration's example site: its one boundary link is `up0`, between the host and the network certifier, at
-100 bits a tick. -/
+100 bits a unit of the Site's time. -/
 private def site : Core.Site := ⟨[sheet], locs, links⟩
-/-- A tick of a millisecond, and a period of an hour. -/
+/-- The Site's unit of time, a millisecond, and a monitoring period of an hour of them. -/
 private def tick : Core.Site.Figure := fig 1 1000
 private def ticks : Nat := 3600000
-private def minute : Core.Ratio := defaultSchedule.phaseSeconds
 
 /-- What the period check publishes on accepting one execution phase in the rows form: `K` = 9088 at `eps` = 1/100. -/
 private def pub : Public :=
@@ -100,9 +96,20 @@ private def answer (link : String) (published profile : List (String × Json) :=
 
 private def registered : List (String × Json) := [("registration", .str "h")]
 
-/-- A certified answer on `up0` that names its span: its first execution phase's index, in `session`. -/
-private def named (first : Nat) (session : String := "s0") : Core.Answer :=
-  answer "up0" [("certified", .bool true), ("first", toJson first), ("session", .str session)] registered
+/-- The span of the `windows` execution phases from a session's `first` under schedule `s`, in milliseconds on the
+session's clock. -/
+private def span (first windows : Nat) (s : Schedule := defaultSchedule) : List (String × Json) :=
+  [("start_ms", toJson (first * s.window * s.bucketMs)), ("span_ms", toJson (windows * s.window * s.bucketMs))]
+
+/-- An answer on `up0` that names the head, its `session` and its span, and holds no `certified`. -/
+private def spanned (first : Nat) (session : String := "s0") (windows : Nat := 1) (s : Schedule := defaultSchedule) :
+    Core.Answer :=
+  answer "up0" (("session", .str session) :: span first windows s) registered
+
+/-- The same answer certified. -/
+private def named (first : Nat) (session : String := "s0") (windows : Nat := 1) (s : Schedule := defaultSchedule) :
+    Core.Answer :=
+  answer "up0" (("certified", .bool true) :: ("session", .str session) :: span first windows s) registered
 
 /-- The account without its flag: the form of an answer that certifies its amount whenever it accepts. -/
 private def unflagged (c : Core.Account) : Core.Account :=
@@ -119,56 +126,68 @@ private def linkRows (c : Core.Account) (answers : List Core.Answer) :
 private def notAudited : List (String × String × String × Option Nat × Option Nat × Option Nat × String × Nat) :=
   [("not audited", "up0", "not audited: charged at capacity", some 360000000, some 0, some 360000000, "0", 0)]
 
-#guard defaultSchedule.phaseSeconds == ⟨60, 1⟩
-#guard ({ defaultSchedule with window := 32 } : Schedule).phaseSeconds == ⟨16, 5⟩
-#guard (account minute).Formed ∧ (accountNamed minute).Formed
--- the keys the account reads that the period check writes: `K`, `eps` and `windows` in its public output, `link` and
--- `windows` in its profile
-#guard (["K", "eps", "windows"].map fun k => ((publicJson pub).getObjVal? k).toOption) ==
-  [some (toJson (9088 : Nat)), some (.str "1/100"), some (toJson (1 : Nat))]
-#guard (["link", "windows"].map fun k => ((profileJson prof).getObjVal? k).toOption) ==
-  [some (.str "up0"), some (toJson (1 : Nat))]
--- and those it does not write yet, in neither. `certified` goes into the public output in the change after which the
+#guard account.Formed
+-- the keys the account reads that the period check writes: `K` and `eps` in its public output, `link` in its profile
+#guard (["K", "eps"].map fun k => ((publicJson pub).getObjVal? k).toOption) ==
+  [some (toJson (9088 : Nat)), some (.str "1/100")]
+#guard ((profileJson prof).getObjVal? "link").toOption == some (.str "up0")
+-- and those it does not write, in neither. `certified` goes into the public output in the change after which the
 -- one-stage answers the period check reads are verified, and in no other: this guard then goes with it
-#guard ["certified", "first", "registration", "session"].all fun k =>
+#guard ["certified", "registration", "session", "span_ms", "start_ms"].all fun k =>
   ((publicJson pub).getObjVal? k).toOption.isNone && ((profileJson prof).getObjVal? k).toOption.isNone
--- so the answer as the period check writes it counts for nothing, flagged or not: it names no registration's head
-#guard linkRows (account minute) [] == notAudited
-#guard linkRows (account minute) [answer "up0"] == notAudited
-#guard linkRows (unflagged (account minute)) [answer "up0"] == notAudited
--- an answer that names the head and holds no `certified` gives no reading: the link stays not audited
-#guard linkRows (account minute) [answer "up0" [] registered] == notAudited
--- without the flag it would make the link's row: `K` beside the capacity of the ticks the period does not cover, set
--- against the link's capacity, and two answers' `K` and `eps` summed, the longer span alone covering its ticks
-#guard linkRows (unflagged (account minute)) [answer "up0" [] registered] ==
+-- the span is in milliseconds whatever the schedule: an execution phase of 600 ticks of 100 ms, and one of 32
+#guard span 1 2 == [("start_ms", toJson (60000 : Nat)), ("span_ms", toJson (120000 : Nat))]
+#guard span 1 2 { defaultSchedule with window := 32 } ==
+  [("start_ms", toJson (3200 : Nat)), ("span_ms", toJson (6400 : Nat))]
+-- the answer as the period check writes it counts for nothing, flagged or not: it names no registration's head
+#guard linkRows account [] == notAudited
+#guard linkRows account [answer "up0"] == notAudited
+#guard linkRows (unflagged account) [answer "up0"] == notAudited
+-- the gate: an answer that names the head, its session and its span and holds no `certified` gives no reading, so the
+-- link stays not audited
+#guard linkRows account [spanned 0] == notAudited
+#guard linkRows account [spanned 0, spanned 1, spanned 0 "s1"] == notAudited
+-- without the flag it would make the link's row: `K` beside the capacity of the time its span does not cover, set
+-- against the link's capacity
+#guard linkRows (unflagged account) [spanned 0] ==
   [("K", "up0", "certified", some 360000000, some 5990912, some 354009088, "1/100", 1)]
-#guard linkRows (unflagged (account minute)) [answer "up0" [] registered, answer "up0" [] registered] ==
-  [("K", "up0", "certified", some 360000000, some 5981824, some 354018176, "1/50", 2)]
 -- a link the registration does not hold makes no row, and the site's boundary link stays not audited
-#guard linkRows (unflagged (account minute)) [answer "warden" [] registered] == notAudited
--- `certified` true: the row. False: `K` is dropped and every tick is charged at capacity, but in a row whose standing
--- still reads "certified", at the answers' error, so the period check never writes false. Anything but a boolean: no
--- reading
-#guard linkRows (account minute) [answer "up0" [("certified", .bool true)] registered] ==
+#guard linkRows (unflagged account) [answer "up9" (("session", .str "s0") :: span 0 1) registered] == notAudited
+-- `certified` true: the row. False: `K` is dropped and all the time is charged at capacity, but in a row whose
+-- standing still reads "certified", at the answers' error, so the period check never writes false. Anything but a
+-- boolean: no reading
+#guard linkRows account [named 0] ==
   [("K", "up0", "certified", some 360000000, some 5990912, some 354009088, "1/100", 1)]
-#guard linkRows (account minute) [answer "up0" [("certified", .bool false)] registered] ==
+#guard linkRows account [answer "up0" (("certified", .bool false) :: ("session", .str "s0") :: span 0 1) registered] ==
   [("K", "up0", "certified", some 360000000, some 0, some 360000000, "1/100", 1)]
-#guard linkRows (account minute) [answer "up0" [("certified", .str "answers read as given")] registered] == notAudited
--- spans named by their session and first execution phase: two of one session that share no execution phase both
--- cover their ticks, and two of one span cover it once
-#guard linkRows (accountNamed minute) [named 0, named 1] ==
+#guard linkRows account
+    [answer "up0" (("certified", .str "answers read as given") :: ("session", .str "s0") :: span 0 1) registered] ==
+  notAudited
+-- one account reads both schedules: an execution phase of 32 ticks covers its 3200 ms
+#guard linkRows account [named 0 "s0" 1 { defaultSchedule with window := 32 }] ==
+  [("K", "up0", "certified", some 360000000, some 310912, some 359689088, "1/100", 1)]
+-- two certification periods of one session that share no millisecond both cover their time; two of one span cover it
+-- once, as do the milliseconds two spans share; and each answer's `K` and `eps` count every time
+#guard linkRows account [named 0, named 1] ==
   [("K", "up0", "certified", some 360000000, some 11981824, some 348018176, "1/50", 2)]
-#guard linkRows (accountNamed minute) [named 0, named 0] ==
+#guard linkRows account [named 0, named 0] ==
   [("K", "up0", "certified", some 360000000, some 5981824, some 354018176, "1/50", 2)]
--- two sessions' execution phases are counted from each one's own start, so no two of their spans are shown disjoint:
--- both `K` count, and one session's span alone covers its ticks
-#guard linkRows (accountNamed minute) [named 0, named 1 "s1"] ==
+#guard linkRows account [named 0 "s0" 2, named 1] ==
+  [("K", "up0", "certified", some 360000000, some 11981824, some 348018176, "1/50", 2)]
+-- two sessions do not add: each counts its ticks from its own start, so no span of one is shown disjoint from a span
+-- of the other. Both `K` count, and one session's span alone covers its time
+#guard linkRows account [named 0, named 1 "s1"] ==
   [("K", "up0", "certified", some 360000000, some 5981824, some 354018176, "1/50", 2)]
--- an answer that names no first execution phase, or no session, covers no tick
-#guard linkRows (accountNamed minute) [answer "up0" [("certified", .bool true), ("session", .str "s0")] registered] ==
+#guard linkRows account [named 0, named 1, named 2 "s1"] ==
+  [("K", "up0", "certified", some 360000000, some 11972736, some 348027264, "3/100", 3)]
+-- an answer that names no start, no length or no session covers no time
+#guard linkRows account
+    [answer "up0" [("certified", .bool true), ("session", .str "s0"), ("span_ms", toJson (60000 : Nat))] registered] ==
   [("K", "up0", "certified", some 360000000, some 0, some 360000000, "1/100", 1)]
-#guard linkRows (accountNamed minute)
-    [answer "up0" [("certified", .bool true), ("first", toJson (0 : Nat))] registered] ==
+#guard linkRows account
+    [answer "up0" [("certified", .bool true), ("session", .str "s0"), ("start_ms", toJson (0 : Nat))] registered] ==
+  [("K", "up0", "certified", some 360000000, some 0, some 360000000, "1/100", 1)]
+#guard linkRows account [answer "up0" (("certified", .bool true) :: span 0 1) registered] ==
   [("K", "up0", "certified", some 360000000, some 0, some 360000000, "1/100", 1)]
 
 end AccountExample
