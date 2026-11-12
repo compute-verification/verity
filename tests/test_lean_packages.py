@@ -78,7 +78,7 @@ def test_one_mathlib():
 #: (`check.py`'s `witness_failures`)
 # security's 233: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"security": 247, "security/Properties": 191, "verity/protocols/flock/verifier": 7}
+UNWITNESSED = {"security": 232, "security/Properties": 186, "verity/protocols/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -304,7 +304,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 915, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
+INLINE = {"security": 890, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():

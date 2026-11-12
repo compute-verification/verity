@@ -310,7 +310,7 @@ class Lever:
     change: dict
 
 
-DRAWS = (4, 8, 16, 32, 64, 128, 256)
+K_D_SCAN = (4, 8, 16, 32, 64, 128, 256)
 ROUNDS_SCAN = (9, 18, 36, 72)
 
 LEVERS = [
@@ -324,7 +324,7 @@ LEVERS = [
     Lever("draws per window", "compute-accounting", 1,
           "the service challenger's K_d (H1_DRAW), the best of 4 to 256: a larger sample means fewer windows and so fewer "
           "statements' fixed costs, but more sampled proof blocks a period once x = K_d/(r·M) is not small",
-          dict(draws=DRAWS)),
+          dict(draws=K_D_SCAN)),
     Lever("Lean: one process checks many windows", "proofs", 2,
           "the Lean verifier takes many windows' public inputs and sessions in one process, so a circuit is parsed once in "
           "64 windows instead of once a statement",
@@ -426,7 +426,7 @@ def single_levers(base: Config = TODAY) -> list[dict]:
     return sorted(rows, key=lambda r: (-max(r["days_factor"], r["node_days_factor"]), r["work"]))
 
 
-LONG_DRAWS = (1.05, 1.1, 1.25, 1.5, 2, 3, 4, 8)
+LONG_K_D = (1.05, 1.1, 1.25, 1.5, 2, 3, 4, 8)
 
 
 def least_one_window_k_d(c: Config) -> int:
@@ -436,10 +436,10 @@ def least_one_window_k_d(c: Config) -> int:
 
 
 def long_window(base: Config) -> Config:
-    """One window long enough on its own: of K_d at `LONG_DRAWS` times `least_one_window_k_d`, each at the least
+    """One window long enough on its own: of K_d at `LONG_K_D` times `least_one_window_k_d`, each at the least
     rounds that bring it under 1% (n falls with M), whichever ends soonest."""
     best, k0 = None, least_one_window_k_d(base)
-    for k in sorted({math.ceil(k0 * f) for f in LONG_DRAWS}):
+    for k in sorted({math.ceil(k0 * f) for f in LONG_K_D}):
         hi = 1
         while windows(replace(base, draws=k, rounds=hi)) > 1:
             hi *= 2
@@ -504,7 +504,7 @@ def report() -> dict:
         lanes_per_unit=lanes_per_unit(), statement_lanes={k: statement_lanes(v) for k, v in RATES.items()},
         node_gb=NODE_GB, configurations=[period(c) for c in configs], near_term=[period(c) for c in near_term()],
         levers=single_levers(), route_end=end.name,
-        draws_scan=scan(end, "draws", DRAWS), rounds_scan=scan(end, "rounds", ROUNDS_SCAN),
+        draws_scan=scan(end, "draws", K_D_SCAN), rounds_scan=scan(end, "rounds", ROUNDS_SCAN),
         long_windows=[period(long_window(c)) for c in (configs[1], configs[3], end)],
         sensitivity=sensitivity(),
     )

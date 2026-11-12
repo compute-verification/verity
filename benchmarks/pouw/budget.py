@@ -79,7 +79,7 @@ FILL_PROOF = 1 / 16
 #: R = 128's is cost-model/v1's commitment floor too.
 HASH_LEAVES = {64: 0.101, 128: 0.060}
 HASH_RECEIPTS = 0.016
-DRAWS = 0.019
+HASH_SAMPLES = 0.019
 
 
 def hash_leaves(r: int) -> float:
@@ -271,10 +271,10 @@ def _loglog(xs, ys, x: float) -> float:
     return math.exp(math.log(ys[i - 1]) + t * (math.log(ys[i]) - math.log(ys[i - 1])))
 
 
-def spend_for(draws: float, regime: str = "plain") -> float:
-    """The spend (an RTX PRO 6000's week) at which the regime's plan samples `draws` units a week."""
+def spend_for(units: float, regime: str = "plain") -> float:
+    """The spend (an RTX PRO 6000's week) at which the regime's plan samples `units` units a week."""
     xs, _, ds, _, _ = curve(regime)
-    return _loglog(ds, xs, draws)
+    return _loglog(ds, xs, units)
 
 
 @dataclass(frozen=True)
@@ -341,7 +341,7 @@ def point(f: Family, c: Config, b_s: float, *, leaf: int = 128, p: float = P_PAS
     sigma_w = luck_full / DEFICIT
     luck = s.eps * sigma_w / (1 - p)
     served = -f.served * skip if c.served else 0.0
-    hashing = hash_leaves(leaf) + HASH_RECEIPTS + DRAWS
+    hashing = hash_leaves(leaf) + HASH_RECEIPTS + HASH_SAMPLES
     return Point(c, skip + served + machine + luck + s.eps, skip, served, machine, luck, s.eps,
                  gamma - 1 + hashing + b_s, gamma - 1, hashing, b_s, s.draws, s.cut, gamma, sigma_w)
 
@@ -349,7 +349,7 @@ def point(f: Family, c: Config, b_s: float, *, leaf: int = 128, p: float = P_PAS
 def fixed_b(f: Family, c: Config, leaf: int = 128) -> float:
     """B without sampling: the transform and the hashing."""
     gamma = next(q for q in f.fill[c.mix] if q[0] == c.y)[1]
-    return gamma - 1 + hash_leaves(leaf) + HASH_RECEIPTS + DRAWS
+    return gamma - 1 + hash_leaves(leaf) + HASH_RECEIPTS + HASH_SAMPLES
 
 
 def today(f: Family, **kw) -> Point:
