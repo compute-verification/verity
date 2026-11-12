@@ -30,6 +30,7 @@ untraced = [
     "tests/test_control_door.py",
     "tests/test_deploy.py",
     "tests/test_drive_sh.py",
+    "tests/test_fixtures_export.py",
     "tests/test_keeper.py",
     "tests/test_vqueue_unit.py", "tests/test_nightly_check.py",
     "tests/test_watchers.py",
@@ -65,7 +66,12 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
           "tools/research/src/research/store/labels_sync.py",
           # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)
-          "infra/control/vy-control-gate", "infra/control/door_setup.sh"]
+          "infra/control/vy-control-gate", "infra/control/door_setup.sh",
+          # the fixture export's loop and its passes over pull requests, tested here with the export they run
+          # (`research data export`) and the ready marks they read as the queue does
+          "infra/control/fixtures_export.sh", "infra/control/fixtures_export.py",
+          "tools/research/src/research/store/fixtures.py", "tools/research/src/research/store/fetchset.py",
+          "tools/research/src/research/at_main.py", "tools/research/src/research/guard_notice.py"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -76,5 +82,5 @@ tests = ["tests/test_keeper.py"]
 paths = ["tools/research/src/research/pods/nebius"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_top_watch.py", "tests/test_nightly_check.py"]
+tests = ["tests/test_top_watch.py", "tests/test_nightly_check.py", "tests/test_fixtures_export.py"]
 paths = ["tools/research/src/research"]
