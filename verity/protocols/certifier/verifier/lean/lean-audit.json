@@ -5,6 +5,7 @@
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
   "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
+  "NetworkCheck.RowsMain": "the network-rows executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.RowsAudit.protocol, audited under NetworkCheck",
   "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), of the client's check of a window's served certificates (certificates, NetworkCheck.LinkWindow.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn, in NetworkCheck.Clocks), audited under NetworkCheck"
  },
  "runs": {
@@ -48,6 +49,11 @@
    "imports": ["NetworkCheck.Check", "Difftest"],
    "except": [],
    "why": "the check over raw, committed and certified records is code: v2's check, and the difftest server's line protocol for its verdicts, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.RowsAudit": {
+   "imports": ["NetworkCheck.Period", "NetworkCheck.Records", "NetworkCertifier.Rows"],
+   "except": [],
+   "why": "the audit of the active network certifier's run over its certified records is code: the period's schedule and its digest, the records' encoding and the certificate check, and the certifier program's rows audit, no Mathlib and nothing of Security"
   },
   "NetworkCheck.LinkWindow": {
    "imports": ["NetworkCheck.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],

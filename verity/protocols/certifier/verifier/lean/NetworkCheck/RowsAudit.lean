@@ -1,6 +1,8 @@
-import NetworkCheck.Period
-import NetworkCheck.Records
-import NetworkCertifier.Rows
+module
+
+public import NetworkCheck.Period
+public import NetworkCheck.Records
+public import NetworkCertifier.Rows
 
 /-!
 # The network certifier's run audited as rows over its certified records, a core protocol: `verity/network-rows/v1`
@@ -8,7 +10,7 @@ import NetworkCertifier.Rows
 The audit of a run of the active network certifier (`warden_serve`) over the records it signed: each of the run's `W`
 windows' requests (the link's ingress), responses (its egress) and fails (`<link>-fails`, egress) records, each held to its
 certified record, then the certifier program's `NetworkCertifier.Rows.audit` over their grids, the executable form of
-`Security/Definitions/NetworkCertifier/RecordRows.lean`. That audit accepts only when the egress record is the schedule
+`security/Definitions/NetworkCertifier/RecordRows.lean`. That audit accepts only when the egress record is the schedule
 it shows rendered over the lanes, so a run whose cells the network certifier cut, clocked or ordered otherwise than the
 schedule is refused here, not taken on trust.
 
@@ -42,6 +44,10 @@ What it reads is witness, the traffic's records and the heads and salts the cert
 **Public** `{}`, and the **profile** the link and `W`. Its work is linear in the records: each grid is hashed once into
 its head and read once by the audit.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.RowsAudit
 
