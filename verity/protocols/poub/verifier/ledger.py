@@ -22,9 +22,11 @@ The memory line counts registered blocks only.  δ is the horizon's (the record'
 pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`), under sketch-sha512
 `timing.sketch_failure` over the session, and the sample's rejection (`rejection`): the statements' δc and δs, and
 `LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries the
-windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledSample`'s terms beyond
-δ by name (`draw`), which have no hiding term since the prover is sent the coin commitment only at the end, the
-advantages named with their claim and priced in neither."""
+windows' PRF advantages Σ_t adv_t, which no δ here holds: SHA-512's stream as a PRF is not priced and not assumed, so
+a δ of this module is never read alone.  It reads `DELTA_FORM`, δ + Σ_t adv_t, and a record names the term in the
+object that carries its δ (`NAMED_TERMS`, under `PRF_CLAIM`).  γ's errors carry `PooledSample`'s terms beyond δ by
+name (`draw`), which have no hiding term since the prover is sent the coin commitment only at the end, the advantages
+named the same way and in neither."""
 from __future__ import annotations
 
 import math
@@ -46,9 +48,17 @@ REJECTION_LOG2 = 64
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
 PRF_CLAIM = "prf/sha-512"
-"""The claim that prices `PooledSample`'s and `LineHeld`'s Σ_t Adv(prf t), one oracle-access distinguisher a window
-reading its k_t first blocks: a term with no numeric value, so it is named beside δ and γ's errors and in none of
-them."""
+"""The claim that names `PooledSample`'s and `LineHeld`'s Σ_t adv_t, adv_t = Adv(prf t): window t's openings are
+sampled from SHA-512's keyed stream under its coin, and adv_t is the PRF advantage of one oracle-access distinguisher
+reading the stream's k_t first blocks.  The statements carry the term in their error.  Nothing prices it and no
+guarantee assumes it, so it has no numeric value and is in no δ and no error of γ's: it is named beside each."""
+NAMED_TERMS = {"prf_advantage": {"claim": PRF_CLAIM, "term": "Σ_t adv_t", "value": None, "in_total": False,
+                                 "status": "SHA-512 stream as PRF: not priced, not assumed"}}
+"""The terms of an error that have no numeric value, as a record carries them in the object that holds the δ or the
+error they qualify: the term, its claim, that no total holds it, and why it has no value."""
+DELTA_FORM = "δ + {term} ({status})".format(**NAMED_TERMS["prf_advantage"])
+"""How a δ of PoUB's reads wherever a person reads it, "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not
+assumed)": the number printed is δ, and the text says the term it leaves out."""
 
 
 def _rate(x: object, what: str) -> float:
@@ -262,8 +272,8 @@ def binding(record: audit.Record, node: Node) -> float:
 class SamplingTerms:
     """`PooledSample`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
     (`binding`), what reading the record's openings as the deployed sample over receipts its roots hold costs.  `total`
-    is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the third term, which `PRF_CLAIM` prices with no
-    numeric value: `to_json` names it, and `total` holds none of it."""
+    is their sum.  The windows' PRF advantages Σ_t adv_t are the third term, which nothing prices and no guarantee
+    assumes (`PRF_CLAIM`): `to_json` names it (`NAMED_TERMS`), and `total` holds none of it."""
 
     rejection: float
     binding: float
@@ -273,9 +283,7 @@ class SamplingTerms:
         return self.rejection + self.binding
 
     def to_json(self) -> dict:
-        return {"binding": self.binding, "rejection": self.rejection,
-                "named": {"prf_advantage": {"claim": PRF_CLAIM, "term": "Σ_t Adv(prf t)", "value": None,
-                                            "in_total": False}}}
+        return {"binding": self.binding, "rejection": self.rejection, "named": NAMED_TERMS}
 
 
 def draw(record: audit.Record, node: Node) -> SamplingTerms:
@@ -298,8 +306,9 @@ class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.GammaTerms`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the sample's (`draw`: `PooledSample`'s rejection and binding terms, the PRF
-    advantages named) added: both readings read the record's openings, each window's or pooled."""
+    ledger's with the sketch's term and the sample's (`draw`: `PooledSample`'s rejection and binding terms) added: both
+    readings read the record's openings, each window's or pooled.  Neither holds the PRF advantages: each reads
+    `DELTA_FORM`, and `to_json` names the term in its `error` (`draw`'s `named`)."""
 
     capacity_bytes_per_s: float
     ledger: audit.GammaTerms
@@ -384,9 +393,10 @@ def gamma(record: audit.Record, node: Node, capacity_bytes_per_s: float, *,
 @dataclass(frozen=True, slots=True)
 class Line:
     """One form of the memory line: the registered bytes the session shows held in node memory are at least
-    `held_bytes` = (1 − ε)·N·b, except with probability `delta`.  `lost_blocks` is the blocks of N it charges, on
-    average over the passes (snapshot) or over the credited span (the paced forms), and ε their share of N; or
-    `refused`, why the session has no line of this form."""
+    `held_bytes` = (1 − ε)·N·b, except with probability `delta` + Σ_t adv_t (`DELTA_FORM`: `delta` is the number, and
+    `to_json` names the term it leaves out beside it).  `lost_blocks` is the blocks of N it charges, on average over
+    the passes (snapshot) or over the credited span (the paced forms), and ε their share of N; or `refused`, why the
+    session has no line of this form."""
 
     form: str
     blocks: int
@@ -407,7 +417,7 @@ class Line:
         if self.refused is not None:
             return {"form": self.form, "refused": self.refused}
         return {"delta": self.delta, "epsilon": self.epsilon, "form": self.form, "held_bytes": self.held_bytes,
-                "lost_blocks": self.lost_blocks}
+                "lost_blocks": self.lost_blocks, "named": NAMED_TERMS}
 
 
 def _arrivals(record: audit.Record) -> str | None:
@@ -446,7 +456,7 @@ def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
     """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its six parts: the
     windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
     (`hiding`), the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
-    sample's rejection (`rejection`)."""
+    sample's rejection (`rejection`).  The windows' PRF advantages are no part of it (`DELTA_FORM`)."""
     return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
             "hiding": hiding(record), "binding": binding(record, node), "sketch": sketch(record, node),
             "rejection": rejection(record)}

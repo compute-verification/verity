@@ -86,14 +86,16 @@ SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 *
 """The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
 (`benchmarks/pous/held_bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
-δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13."""
+δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
+assumed)."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
 CHUNK = 64
 #: what an accepted session's `eps` sums (`core_answer`)
 EPS_TERMS = ("δ and the draws' rejected first words, δ + Σ draws/2^64, the terms `RemoteAudit.Protocol.certify` sums; "
-             "not the sketch's term at units (`SketchBoundP2`, drafted)")
+             "not the sketch's term at units (`SketchBoundP2`, drafted), and not Σ_t adv_t (SHA-512 stream as PRF: "
+             "not priced, not assumed)")
 #: what an accepted session's `gamma` is against, and what it and `q_bytes` are before (`core_answer`)
 GAMMA_TERMS = ("μ_timing + μ_sample only, 1 − q_bytes/(R · span), R the read rate `r_bytes_per_s`; q_bytes and γ are "
                "before μ_chip, λ, μ_rebuild, μ_host, μ_link and μ_carrier, which `audit.ledger` does not take off a P2 "

@@ -3,7 +3,9 @@ of record (`line.line`) reads: computed here and in its Lean, `lean/RemoteAudit/
 difftest (`lean/tests/test_pooled.py`, refusals compared word for word).
 
 Window t has U_t receipts and drew s_t of them, S = Σ_t s_t.  Except with δ, the windows' wrong shares f_t have
-Σ_t s_t·f_t ≤ d̄·S = S·(1 − δ^(1/S)) and f_t ≤ 1 − s_t/U_t (`Accounting.Guarantees.Remote.PooledSample`).
+Σ_t s_t·f_t ≤ d̄·S = S·(1 − δ^(1/S)) and f_t ≤ 1 − s_t/U_t (`Accounting.Guarantees.Remote.PooledSample`).  That δ is
+the bound's on uniform samples.  A session's are read off SHA-512's stream, so its δ reads δ + Σ_t adv_t (SHA-512
+stream as PRF: not priced, not assumed; `ledger.DELTA_FORM`), beside the terms `ledger.SamplingTerms` charges.
 
 - The budget B stands for d̄·S from above: B = S·(1 − q), q = m/2^`ROOT_BITS` with q^S ≤ δ certified in integers
   (`below`: the power by squaring, each product rounded up at `POW_BITS`), m the largest the bisection finds (`root`).
