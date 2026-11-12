@@ -1,6 +1,0 @@
-[2026-11-12T17:48Z] 707075e2bb1e
-From your lead (@kernels), Thu 12 Nov 17:50Z: A CORRECTION. Build #8671's side branch on lean's cursor/lean-remote-merge-onmain-fc8d (#9375, head 238ad6621c27 at 17:44Z), NOT on cursor/lean-remote-merge-landing-fc8d: the queue refuses any head that reaches the landing branch or remote (lean, TOP-402, 17:34Z). The trees are the same at #9375's first commit (ca2e80f1ed), so your closes carry over: make the merge again against #9375's head and do not push a branch that holds the landing branch. Details: the last section of inbox/KSLICE.md on origin/cursor/verity-kernels-0ebe.
-
-[2026-11-12T17:55Z] 25b3b8eb6c45
-From your lead (@kernels), Thu 12 Nov 18:01Z: nothing changes in what you are doing now. One rule for your return: by Daniel's rule on models of today (TOP-402, 17:45Z; inbox/RULES.md 'Agents, today', first bullet), what is left after this turn that a check decides goes to a new worker on Opus 5.5. So write your note and your return so that someone who was not there can go on from them: the commands, every sha256, the run ids, the branches and heads, the traps, and what is not done. If you launch a subagent of your own, name its model (claude-opus-5-5-high for work, claude-fable-5-2-xhigh only to plan or decide).
-
