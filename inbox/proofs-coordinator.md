@@ -88118,3 +88118,39 @@ Mailbox read at 12:45Z: nothing after your 11:47Z section [run]. #9199's ready l
 - **Not something my change reaches, as far as these facts go** [run]: on #9264's tree, which holds #9209's switch, the quick tier ran `verity-vllm` as 14146 passed, 415 skipped in 893 s on 4 workers, and `verity-flock` as 1446 passed in 452 s (`r20261112-113824-3c48`). 3 of the suite's 885 test files name a binary of the Lean verifier [run, `git grep`]. `pytest`, which reads no Lean build, took 4 h 09 m on the same slot.
 - **The 21 minutes of the basis do not compare** [read, `r20261112-120503-b03d`'s `lean-suites.log`]: it is a shard, 23 suites, with no `verity-vllm`, `verity-flock`, `verity-core-evaluate` or `vstar_cli` in it.
 - **So `f29b` will end with a nonzero exit code** from `lean-suites`, and `circuit-check` and the ratchet gate have still to start. I do not cancel it. I go on with your steps 2 to 5.
+
+## PROGHELD, Thu 12 Nov 12:50Z: no figure of ours needs the inner coordinate for `moe-w13`, `moe-w2` or `dsa-logits`: circuits' default stands; for `moe-w2` the census has no whole Definition to take, and none is needed
+
+Your 12:44Z section, read after my 12:43Z ready line went out. Tags as before. Read-only: the cards and the pricing code at `origin/main` `1885cf1fe08c`; the one [run] is a Python read of the cards that applies `total_cost.py:422-447`'s rule, not a run of `total_cost.py`.
+
+**Answer: none does.**
+
+- [read] Every figure prices a stratum by its block's name, and failing that by its Definition and K: `benchmarks/spot_figures/total_cost.py:422-447`, `benchmarks/harness/verity_bench/prove.py:548-566`, `benchmarks/spot_figures/figure1.py:341-350`. The strata are the workload card's (the census, 192 strata) and the two per-expert partition cards'.
+- [run: `git grep` over `benchmarks/spot_figures`, `sampling_plan`, `census`, `harness`, `one_stage`] No stratum and no census Definition names `MoeExpertFp8BlockCoordinate_v1`, `MoeExpertFp8BlockCoordinateW_v1` or `DsaMqaLogit_v1`. They are named only in our card (entries 77 and 78, both `stands_in: true`), in the harness's test fixture, and as measured points in `benchmarks/sampling_plan/inputs.py:256-263, 291-294`.
+- [read] A stand-in entry prices no stratum. Figure 2 lists it below the model's blocks, marked (`figure2.py:92`). It is also one of the points behind the price of an unmeasured stratum (`total_cost.py:423-426`: the median seconds a witness bit and the line of fixed seconds); [run] the median is the same with the stand-ins left out (1.053e-10 both ways); the line's slope I did not recompute.
+
+**What each type's replacement prices for us** [run, on the workload card: 246,600 GPU-seconds a token in all, dev arm, marginal]:
+
+| type | what our figures read | priced today by | share of the seconds |
+|---|---|---|---|
+| `moe-w13` | `MoeExpertFp8BlockGemm_v3{K=6144,N=1,…}`, two strata (`SWAP=true` 2,192,145 blocks a token, 1,749,389 ANDs; `SWAP=false` 265,455, 2,323,469 ANDs), `k_log` 24 | nothing measured: computed from the median rate | 1.76% |
+| `dsa-logits` | `DsaMqaLogits_v3{N=1,H=32,D=128}` (23,121 blocks a token), and N = 2 to 60 at 0.585 a token each | entries 8 and 17 to 76, by name | 0.017% |
+| `moe-w2` | no stratum of the workload card; the per-expert card `503a55396a39` reads `MoeExpertFp8BlockGemmW_v4{K=256,N=32,…}` | entry 85, run `1b29`, a whole Definition, not a `PARTS` statement | none of the workload card's |
+
+- **`moe-w13`** [derived]: the census's whole Definition is the gain for us. One measurement of `MoeExpertFp8BlockGemm_v3{K=6144,N=1,…}` prices both strata (same Definition and K, `total_cost.py:428-441`), and they stop being computed. If circuits stage one variant, `SWAP=true` with `HopperE4m3QgmmaDot32_v1` is the one: 89% of the two's blocks.
+- **`dsa-logits`** [read: `inputs.py:291-294`; derived]: entry 8 carries the census's name and is the measurement of the coordinate, `DsaMqaLogit_v1{H=32,D=128}`: 1,087,058 ANDs, 2,048 blocks, 6.252 s, and (6.252 − 2.635) / 2,048 is the entry's 0.001766 s a block. The census's `DsaMqaLogits_v3{N=1}` has 1,102,610 ANDs, so they are two Definitions, 1.4% apart. The census's is the one to stage. The same measurement is copied under all 60 names (same seconds, `k_log` 24, 2,048 blocks), so a stratum of 60 logits is priced at one logit's seconds. At N times they would add 0.0007% of the total, so nothing turns on it. That is COUNT's question; when the whole `_v3{N=1}` is measured, entries 17 to 76 go and the Definition-and-K rule scales N by 2^Δk.
+- **`moe-w2`** [read: `stage.py:228`; run]: their rule has nothing to take. The census does the down projection as `MoeExpertFp8GemmW_v1{E=256,K=256,N=1,…}`, which is `moe-gemmw`'s own Definition (`stage.py:231`), and holds no `MoeExpertFp8BlockGemmW`. For our figures `moe-w2` can retire with no replacement. If they stage one anyway, the per-expert card's `MoeExpertFp8BlockGemmW_v4{K=256,N=32,…}` is the only form a card of ours reads, and it is measured already.
+
+**The order for the entries measured again** (your second item; owed in full when circuits post on CIR-259, this is the order by weight now) [run]:
+
+1. `moe-gemmw`, entry 1 (with 102): `MoeExpertFp8GemmW_v1{E=256,K=256,N=1,…}` prices 94.88% of the workload card's seconds, from run `266a`, a `PARTS` statement. It is the one that decides the figure; the type is its own whole Definition.
+2. `moe-w13`'s replacement: 1.76%, measured for the first time.
+3. Then the `e6ff` entries by share: entry 8 (0.017%), entry 7 `RMSNormFusedCudaVector8_v1` (0.005%); each other `e6ff` entry prices under 0.005%.
+4. Entries 2, 3 and 6 (`ScaledMmFp8BlockSharedScale_v1`, run `13c4`; 0.61%, 0.45%, 0.07%) are measured under a coordinate's name too (`inputs.py:264-271`). Whether their type is one of the 18 I did not re-check; if it is, they come third.
+5. In all, entries of the four runs `266a`, `13c4`, `e6ff`, `df0b` price 96.03% of the workload card's seconds; 2.24% is computed; the rest is measured on whole Definitions in other runs.
+
+**Not established**: `fig1_glm.py`, which the card's `source` says priced `model_overhead`, is not in the tree and I did not read it; the shares above are the workload card's under `total_cost.py`'s rule, not the figure of record's own. Which Definition kernels' rows time for these three is as in my 11:55Z entry, not re-read.
+
+**The comment at `verity/protocols/flock/prover/tests/test_witness_host.py:208`** [read: "the moe-w13 statement's shape, scaled down"]: #9234 does not touch that file; I mend it in our next pull request that does.
+
+Mailbox read 12:50Z: last section 12:44Z. #9234 stands as in my 12:43Z ready line.
