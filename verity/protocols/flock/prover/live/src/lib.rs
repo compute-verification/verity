@@ -892,6 +892,17 @@ impl Resp {
         w
     }
 
+    /// This answer's frame where the verifier lists the statement's known trees (`known`, `flock-verify known-trees`):
+    /// the draw that answers `Register` (`register`: the request was one), then the list. Any other answer's frame is
+    /// its own (`encode`). `decode` reads a draw and no further, so a prover handed the whole frame reads the draw.
+    pub fn frame_with_known(&self, register: bool, known: &[u8]) -> Vec<u8> {
+        let mut w = self.encode();
+        if register && matches!(self, Resp::Draw(_)) {
+            w.extend_from_slice(known);
+        }
+        w
+    }
+
     pub fn decode(b: &[u8]) -> Result<Resp, String> {
         let mut c = Cur(b, 1);
         Ok(match b.first().ok_or("empty frame")? {
@@ -2649,6 +2660,21 @@ mod coin_server_tests {
         let mut c = SessionConfig::flock_128_r2(vec![TableSpec { name: "t".into(), binding: Binding::R1cs { statement_digest: [0; 32] } }]);
         c.coin_tree = Some(coin_tree::Spec { streams: vec![coin_tree::SESSION.into(), rep_stream("t", 0), rep_stream("t", 1)], rounds_log: 2, block: 3 });
         c
+    }
+
+    /// The verifier's list of known trees follows the draw in the answer to `Register` and nowhere else, and a reader of
+    /// the draw reads the draw whatever follows it.
+    #[test]
+    fn the_known_trees_follow_the_draw_in_registers_answer_alone() {
+        let draw = Resp::Draw("null".into());
+        let refused = Resp::Refused("no".into());
+        let known = [0u8, 0, 0, 1, 7, 7];
+        let frame = draw.frame_with_known(true, &known);
+        assert_eq!(frame, [draw.encode(), known.to_vec()].concat());
+        assert!(matches!(Resp::decode(&frame), Ok(Resp::Draw(ref s)) if s == "null"));
+        assert_eq!(draw.frame_with_known(false, &known), draw.encode());
+        assert_eq!(draw.frame_with_known(true, &[]), draw.encode());
+        assert_eq!(refused.frame_with_known(true, &known), refused.encode());
     }
 
     /// A coin-tree server answers `Hello` with the root and its session key (20 words), once per session; without an OS

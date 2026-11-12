@@ -2,6 +2,7 @@ module
 
 public import Flock
 public import Flock.CircuitType
+public import Flock.KnownTrees
 public import Flock.Layout
 public import Flock.JsonParse
 
@@ -1964,6 +1965,7 @@ def main (args : List String) : IO UInt32 := do
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths
+  | "known-trees" :: rest => KnownTrees.cmd (argOf rest "--registered") (argOf rest "--public") (argOf rest "--out")
   | "draw" :: rest => drawCmd rest
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest

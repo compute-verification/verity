@@ -41,7 +41,9 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Five rules ho
   sessions whose statements' value commitments read them (``core-firewall session --salt-key``): each registration up to
   the last a statement reads is admitted (``admit``) if it reads it and skipped (``skip``, a failure of its stream)
   otherwise, in order, and a statement that reads one skipped before, or whose commitments no registration of the
-  server's holds, is its recursive session's stop (`Firewall.register`, `Firewall.admit_reads`).
+  server's holds, is its recursive session's stop (`Firewall.register`, `Firewall.admit_reads`). A tree of the
+  statement that the verifier lists as known content reads no registration, and the record names it (``known``, with
+  its entry in the verifier's list): the event opens and ends nothing and is no failure.
 * **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, and one window a
   statement, ``windows_ms``) releases statement j's proofs at ``start_ms + windows_ms[0] + ... + windows_ms[j]``: proofs
   ready early wait, and proofs not ready by then are a stop. Only the Lean ZK server keeps the times; this module's relay
@@ -77,7 +79,7 @@ import locale
 import os
 import socket
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -295,13 +297,15 @@ class Firewall:
             self._append(rec, {"event": "register", "n": n, "record": r.hex()})
             return n, r
 
-    def admit_reads(self, session: str, part: str, reads: list[int] | str) -> None:
+    def admit_reads(self, session: str, part: str, reads: list[int] | str, known: Sequence[bytes] = ()) -> None:
         """Rule 5 at an outer session of ``session`` at ``part`` that `admit` served: ``reads`` the registrations its
-        statement's value commitments read, by number, or why they are none of the server's. Every registration from the next
+        statement's value commitments read, by number, or why they are none of the server's, and ``known`` the entries of
+        its trees that passed as known content on the verifier's word, which read none. Every registration from the next
         not yet admitted or skipped up to the last it reads is admitted if it reads it, else skipped, in order, each skip a
         failure of the stream; if they bring the stream to its budget, `Refused`. A statement that reads a registration not
         on the record or one skipped before, or whose commitments are none of the server's, is the recursive session's stop
-        at ``part``, then `Refused`. A refusal is recorded (``refused``)."""
+        at ``part``, then `Refused`. A refusal is recorded (``refused``). Each known tree of a statement not stopped here
+        is recorded (``known``), before the registrations it admits."""
         with self._locked((session,)) as rec:
             ev = self._events()
             regs = sum(e.get("event") == "register" for e in ev)
@@ -317,6 +321,8 @@ class Firewall:
                     self._append(rec, {"event": "stop", "session": session, "part": part, "why": why})
                 self._append(rec, {"event": "refused", "session": session, "part": part})
                 raise Refused(refused(f"recursive session {session} stopped at {part}: {why}"))
+            for tree in known:
+                self._append(rec, {"event": "known", "session": session, "part": part, "tree": bytes(tree).hex()})
             fresh = {k for k in reads if k >= u}
             if not fresh:
                 return
@@ -476,7 +482,7 @@ _INDEX = "index-py"
 KEY_MAX = 100
 #: how many of the last bytes it read the index keeps, to tell that the record still holds them
 _LAST = 256
-_KINDS = ("finish", "stop", "release", "refused", "wait", "slot", "admit", "skip")
+_KINDS = ("finish", "stop", "release", "refused", "wait", "slot", "admit", "skip", "known")
 #: what a file of the index that won't read raises
 _BAD = (OSError, ValueError, KeyError, TypeError, RecursionError)
 #: the head's fields of one type (besides ``file``, ``last`` and ``slot``)
@@ -539,8 +545,8 @@ def _regular(e: Any) -> bool:
     """Whether ``e`` is an event as the ZK server writes it, one whose reads `_Index` answers as `_Scan` does: an object with
     a ``seq``, and either a ``register`` with an integer ``n`` and a string ``record``, or one with a string ``session`` and
     either an ``open`` with a string ``stream``, a list of string ``parts`` and an integer ``budget`` or none, or one of the
-    other events with a string ``part`` (and an ``admit`` or ``skip`` an integer ``n``); every name at most `KEY_MAX`
-    bytes."""
+    other events with a string ``part`` (and an ``admit`` or ``skip`` an integer ``n``, a ``known`` a string ``tree``);
+    every name at most `KEY_MAX` bytes."""
     if type(e) is dict and "seq" in e and e.get("event") == "register":
         return type(e.get("n")) is int and type(e.get("record")) is str
     if not (type(e) is dict and "seq" in e and type(e.get("session")) is str and _key(e["session"]) is not None):
@@ -549,7 +555,8 @@ def _regular(e: Any) -> bool:
         return (type(e.get("stream")) is str and _key(e["stream"]) is not None and type(e.get("parts")) is list
                 and all(type(p) is str for p in e["parts"]) and (e.get("budget") is None or type(e["budget"]) is int))
     return (e.get("event") in _KINDS and type(e.get("part")) is str
-            and (e["event"] not in ("admit", "skip") or type(e.get("n")) is int))
+            and (e["event"] not in ("admit", "skip") or type(e.get("n")) is int)
+            and (e["event"] != "known" or type(e.get("tree")) is str))
 
 
 def _strings(v: Any) -> bool:
@@ -714,7 +721,7 @@ class _Index:
         if kind == "wait":
             return
         sess, tallies = self._sessions[s], self._streams
-        if kind in ("admit", "skip"):
+        if kind in ("admit", "skip", "known"):
             for m in sess.member if kind == "skip" else ():
                 tallies[m["stream"]]["n"] += 1
                 self._changed[1].add(m["stream"])

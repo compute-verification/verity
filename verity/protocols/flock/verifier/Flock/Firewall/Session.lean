@@ -500,6 +500,10 @@ structure Hold where
   /-- At the session's first request other than `Ping`, before anything of it reaches the auditor: `none` serves it, else
   why it is refused. -/
   admit : IO (Option String)
+  /-- At the auditor's answer to the session's `Register`, before the prover receives it and before `Hello` leaves:
+  given what follows the draw in it (`drawAnswer`: the verifier's list of the statement's known trees), `none` goes on,
+  else why the session is refused, which the hold has recorded. -/
+  known : ByteArray → IO (Option String)
   /-- At the session's `Finish`: given why the loop stopped the session, if it did (`State.finish`), and how many of its
   `need` proofs the loop holds, `none` once they and `Finish` may leave (at the session's release time), else what the
   prover is told of its stop. -/
@@ -511,8 +515,17 @@ structure Hold where
   /-- The session is over, whatever its outcome. -/
   leave : IO Unit
 
+/-- **The auditor's answer `a` to `Register`** as its draw's frame and what follows it: `Resp::Draw`'s tag and
+length-prefixed text, which is all the prover receives of it and all `State.answer` reads, then the verifier's list of
+the statement's known trees (`Salts.parseKnown`), which is the release side's (`Hold.known`). An answer that is no draw
+is whole, with nothing after it. -/
+def drawAnswer (a : ByteArray) : ByteArray × ByteArray :=
+  match byte? a 0, getBytes a 1 with
+  | some 6, some (_, o) => (a.extract 0 o, a.extract o a.size)
+  | _, _ => (a, .empty)
+
 /-- A refused session's requests from `f` on, each answered with the refusal `why` (`Finish` with a verdict that names
-it) until the prover stops; nothing reaches the auditor. -/
+it) until the prover stops; nothing more reaches the auditor. -/
 def refuseAll (p : Socket.Client) (f : ByteArray) (why : String) : IO Unit := do
   let mut f := f
   repeat
@@ -578,7 +591,11 @@ def ownProofs (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : 
 /-- **A session's relay** once it reaches the auditor `a` (`serve`), from its first request `first` if the hold read it:
 each request decided and its own frame sent at its place (`State.request`, the prover's `Proof`s dropped and its `Ping`s
 answered by the loop), nothing after a stop, the session ended at its `Finish` whatever its outcome, and with a hold
-the loop's proofs and `Finish` held for `Hold.barrier`.
+the loop's proofs and `Finish` held for `Hold.barrier`. Of the auditor's answer to `Register` the prover receives the
+draw's frame and nothing after it (`drawAnswer`); the session's state reads the answer as before (`State.answer`, which
+reads its draw alone). With a hold, what follows the draw is `Hold.known`'s, and a session it refuses ends there as
+where the auditor closed: nothing more of it is read for the auditor or sent, the auditor's connection is cut, and
+the prover is answered with the refusal from then on.
 `phase` is where a held session stands, and `ended` why it ended if the hold has no outcome of it. -/
 def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : Nat)
     (p : Socket.Client) (hold : Option Hold) (a : Socket.Client) (first : Option ByteArray) (phase : IO.Ref Phase)
@@ -712,6 +729,14 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
       sendFrame a g
       pl := pl.after k
       let some r ← recvFrame a | ended.set "the auditor ended the session"; break
+      if k == .register then
+        if let some h := hold then
+          if let some why ← h.known (drawAnswer r).2 then
+            phase.set .done
+            h.leave
+            close a
+            refuseAll p f (REFUSED ++ why)
+            break
       let (st', out) := st.answer k r
       st := st'
       if let (some (i, j), .round _ n, some 2, none) := (rep, k, byte? r 0, st.stop) then
@@ -724,7 +749,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
           continue
       if k == .commit && byte? r 0 == some 2 && st.stop.isNone then
         reg.modify (·.link sid (Frame.words out 5 ((out.size - 5) / 16)))
-      sendFrame p out
+      sendFrame p (if k == .register then (drawAnswer out).1 else out)
 
 /-- **One session**, the `sid`-th: the prover's connection `p`, relayed on a connection of its own to the auditor at
 `auditor` until either side closes or the prover has the answer to its `Finish`. Each request is read whole, decided

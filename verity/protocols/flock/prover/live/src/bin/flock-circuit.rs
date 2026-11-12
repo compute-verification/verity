@@ -3,6 +3,7 @@
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
+//!                          [--known-trees LIST]   (the verifier's list of the statement's known trees, after the draw in Register's answer, `serve_on`)
 //!   flock-circuit serve    --queue FILE|- --listen ADDR --out DIR --circuit FILE --pin SHA256 [--tree-from HOST:PORT]   (a long-lived verifier, `serve_queue`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!                          [--salt-refs REFS]   (--zk: the ZK server's salts in place of INST's, `value_salts`)
@@ -6192,8 +6193,8 @@ fn worker_pads_case(gpu: bool) -> Value {
 ///   is served without a second admission, and the auditor rejects the session at its opening, where the value
 ///   commitments' claims are checked;
 /// * `own`: the staged file as the stack committed it, under salts of its own: none of its roots is a table of a
-///   registration on the record, so the loop refuses the session at its admission, its recursive session's stop, and
-///   nothing of it reaches the auditor.
+///   registration on the record, so the loop refuses the session at the auditor's answer to its `Register`, its
+///   recursive session's stop, and of it only `Register` reaches the auditor.
 ///
 /// And the service itself refuses a commit whose body carries a salt beside each digest, a short refs file and a refs file
 /// with a forged tag; the salts it answers open every one of its commitments; the record is number 0, counts one session
@@ -6350,7 +6351,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
                  "accepted": kept["accepted"], "proofs": proofs(&kept),
                  "prover_stopped": kept["prover_stopped"].as_str().unwrap_or("").chars().take(200).collect::<String>(),
                  "why": kept["why"].as_str().unwrap_or("").chars().take(200).collect::<String>(), "error": kept["error"]},
-        "own": {"ok": own["accepted"] == false && own["error"].is_null() && seen(&own).is_empty()
+        "own": {"ok": own["accepted"] == false && own["error"].is_null() && seen(&own) == [json!(["register"])]
                     && own_why.contains("no value commitment of the ZK server's")
                     && own_stop.as_str().is_some_and(|w| w.contains("no value commitment of the ZK server's")),
                 "why": own_why.chars().take(400).collect::<String>(), "stop": own_stop, "error": own["error"]},
@@ -6359,7 +6360,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
     let pass = service["ok"] == true && ["overwritten", "kept", "own", "admitted"].iter().all(|k| sessions[k]["ok"] == true);
     Ok(json!({"case": "zk_value_salts", "expect": "the server's salts overwrite the stack's, registration 0 is admitted and the session \
                                                  accepted; the stack's kept, registration 0 served again unadmitted, rejected at the opening; \
-                                                 the stack's own commitments refused at admission, its recursive session's stop; a salt in a \
+                                                 the stack's own commitments refused once Register is answered, its recursive session's stop; a salt in a \
                                                  commit, a short refs file and a forged tag refused by the service; registrations numbered \
                                                  0 and 1 on the record, each counting its epoch's one session, a second commit in an epoch \
                                                  refused, each session registered once and in its own epoch",
@@ -7150,11 +7151,19 @@ fn serve_loop<B: FnOnce() -> Server + Send>(log: Option<&RunLog>, make: impl Fn(
 /// thread once it is accepted; each session's record, proofs and verifier file under `out/<session>`, its line, with the
 /// fields `make` gave beside its build, in `out/index.jsonl` and on stdout (`out`: the directory those fields name as
 /// `out`, else the server's). With a run's record (`log`), each session's Hello answered with coins is logged there first.
+/// With `--known-trees FILE`, the verifier's list of the statement's known trees (`flock-verify known-trees`), its bytes
+/// follow the draw in each session's answer to `Register`: the ZK server's release side reads the list there and hands
+/// the prover the draw alone, and a prover that reaches this server itself reads the draw and no further. The list is
+/// one statement's, so `serve --queue`, whose sessions each take their own, refuses the flag.
 fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize,
                                           listen: &str, log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
     let index = Mutex::new(());
+    let known = match arg("--known-trees", "").as_str() {
+        "" => Vec::new(),
+        f => std::fs::read(f).unwrap_or_else(|e| refuse(format!("--known-trees {f}: {e}"))),
+    };
     let one = |i: usize, conn: std::net::TcpStream, mut s: Server, tag: Value| {
         conn.set_nodelay(true).unwrap();
         let mut r = BufReader::new(conn.try_clone().unwrap());
@@ -7162,13 +7171,15 @@ fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::
         let id = format!("l{:04}-{}", i, std::process::id());
         loop {
             let Ok(b) = read_frame(&mut r) else { break };
-            let resp = match (Req::decode(&b), log) {
+            let req = Req::decode(&b);
+            let register = matches!(req, Ok(Req::Register));
+            let resp = match (req, log) {
                 (Ok(req), Some(log)) => log.handle(&mut s, &id, req),
                 (Ok(req), None) => s.handle(req),
                 (Err(e), _) => Resp::Refused(e),
             };
             let done = matches!(resp, Resp::Verdict(_));
-            if write_frame(&mut w, &resp.encode()).is_err() || done {
+            if write_frame(&mut w, &resp.frame_with_known(register, &known)).is_err() || done {
                 break;
             }
         }
@@ -7374,10 +7385,10 @@ fn zk_self_check() -> zkv::SelfCheck {
 /// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
 /// label. With `--tree-from`, every session's coin tree comes from one challenger session, opened at the first line and
 /// closed when the queue ends. A templated statement's circuit is loaded with its unit (`--tmpl-unit`), as `serve` loads it.
-/// No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
+/// No `--instances`, `--draw*`, `--links`, `--rec-run`, `--known-trees` (a list is one statement's) or session tables.
 fn serve_queue(c: Composite, path: &str) {
     use std::io::BufRead;
-    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run"]
+    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run", "--known-trees"]
         .into_iter().filter(|f| !arg(f, "").is_empty()).collect::<Vec<_>>();
     if !given.is_empty() || tables_arg() > 1 {
         refuse(format!("--queue: each session's population and sample come from its line, so no {given:?} or --session-tables"));

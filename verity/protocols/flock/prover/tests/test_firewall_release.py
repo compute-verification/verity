@@ -316,7 +316,7 @@ def _vector_op(fw: FW.Firewall, op: list):
         return fw.register(lambda n: n.to_bytes(8, "big") + bytes.fromhex(op[1]))[0]
     if k == "registrations":
         try:
-            return fw.admit_reads(op[1], op[2], op[3])
+            return fw.admit_reads(op[1], op[2], op[3], [bytes.fromhex(t) for t in op[4]] if len(op) > 4 else ())
         except FW.Refused as e:
             return why(e)
     return getattr(fw, k)(*op[1:])
@@ -330,13 +330,14 @@ def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     session not yet opened (by ``stop``, of a slot's holder that died, or by rule 5's refusal), so that each stop counts
     against its stream, and rule 5 (registrations admitted in order, one reread admitting nothing, one skipped counted as
     a failure and read later, one not on the record, commitments none of the server's, and a skip that brings the stream
-    to its budget).
+    to its budget; a statement's known trees recorded before the registrations it admits, none a failure, and none
+    recorded of a statement stopped there).
     ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers
     read and write one record."""
     v = json.loads(VECTORS.read_text())
     assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {
         "rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "registrations", "prestop",
-        "prestop-registrations", "budget-1", "budget-2"}
+        "prestop-registrations", "budget-1", "budget-2", "known"}
     for c in v["cases"]:
         fw = FW.Firewall(tmp_path / c["name"])
         assert [_vector_op(fw, op) for op in c["ops"]] == c["results"], c["name"]
