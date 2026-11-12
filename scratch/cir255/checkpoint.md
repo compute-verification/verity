@@ -1,1 +1,1 @@
-2026-11-12T12:17Z CHECKTIME: Part A head 26f9c8b476 pushed; r20261112-120313-5403 passed (definitions 496.0 s at 10 workers, served case skipped); next: the opt-in run of the served case, then the PR.
+2026-11-12T12:32Z CHECKTIME: Part A open as #9281 at 26f9c8b476 (runs r20261112-120313-5403, r20261112-121713-b9f0 read; CIR-255 commented); Part B data gathered for 18 candidates (here); next: Part B table and cause, Part C profile run.
