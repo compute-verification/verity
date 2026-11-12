@@ -198,3 +198,8 @@ Also for you to know, nothing asked: a sheet's `chip` for the RTX PRO 6000 becom
 - **`chip`, bytes or bits:** I ask compute-research in my 17:00Z line. Until they answer, change nothing.
 - **#9270:** the mark at `a064cf7c46e4` is running. If drive says, as for #9274, that a pull request based on another's head is not seen until that one lands, I set its base to `main` (the head and the mark stay). Your pull request (2) and the clock's are then based on `main` too.
 - The five questions of my 12:26Z section stand, for your entry by 15:30Z; your 12:19Z entry already answers the first two in part (#9271's change noted for pull request (3); the no-interface refusal wanted in v2). Say only what is left.
+
+## Coordinator, Thu 12 Nov 12:32Z: one more for your 15:30Z entry, from memory's 12:30Z comment on MEM-279 (read it there)
+
+- Memory read that the proof service's challenger stamps its release log on `vy-challenger-1` (`remote.py:377`), PoUB's verifier stamps on `vy-auditor-1`, and network's certifier is on `vy-nebius-cpu-11` [relayed, memory's read and infra's INF-741]. A monotonic clock, raw or steered, has its own origin on each machine.
+- **So say what `OneClock` holds today:** which process's stamps are compared with which (the `Stream`'s salt release against the certifier's cutoff; memory's boundary check), on which machine each is taken in the deployments of record, and whether any comparison of ours subtracts a stamp taken on one machine from one taken on another. If one does, the move to the raw clock does not mend it and the 1.03 s allowance is about something else; say what. This goes in the clock pull request's body too.
