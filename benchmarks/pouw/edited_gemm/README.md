@@ -1,8 +1,8 @@
 # edited_gemm: the served edited GEMM and attention, with receipts, against plain int8
 
 The kernels here serve a linear or an attention product on dithered or edited int8 operands, with receipts of the
-running sums. `egemm.cu` is built on `masked_gemm/lpgemm.cu`'s mainloop, the other sm_120 kernels on `egemm.cu`, and
-`egemm80.cu` is its port to sm_80. The directory measures what serving that way costs over the plain product:
+running sums. `egemm.cu` and `prof.cu` are built on `masked_gemm/lpgemm.cu`'s mainloop, the other sm_120 kernels on
+`egemm.cu`, and `egemm80.cu` is `egemm.cu`'s port to sm_80. The directory measures what serving that way costs over the plain product:
 
 - **time over plain** for each arm: `egemm.cu`'s kernels against cuBLASLt's int8 GEMM at Llama-8B's four linears,
   as hot items and interleaved call by call, and the other kernels' arms against their own plain baselines;
@@ -37,8 +37,8 @@ o_proj and the other linears and runs `ncu`. It exits 4 when the build fails and
 | `O_SHAPE`, `LAYERS` | o_proj, and the other three linears, at m = 8192 | the shapes timed |
 | `EG_ARMS`, `LAYER_ARMS` | the set's | the arms timed at o_proj, and at each other linear |
 | `IL`, `IL_COLD`, `LAYER_IL` | the set's | the interleaved pairs `ARM:BASE`; `IL_COLD` flushes L2 before each call |
-| `NCU`, `NCU_STALL`, `NCU_SHAPES` | the set's | the arms `ncu` profiles, and the shapes |
-| `EG_PYTHON` | `python3` | the Python that runs the gate and the reference |
+| `NCU`, `NCU_STALL` | the set's | the arms whose counters, and whose stall reasons, `ncu` reads at o_proj; the fold-cost sets' sections under `ncu/` are the set's alone |
+| `EG_PYTHON` | `python3` | the Python that runs the SASS gate, the reference and the summary |
 
 What a run writes under `$OUT`:
 
@@ -46,8 +46,8 @@ What a run writes under `$OUT`:
 |---|---|
 | `commit.txt`, `build.log`, `egemm.sass.gz` | the commit, the build's log and the disassembly |
 | `sass_gate.json`, `sass_gate.txt`, `sass_scope.txt`, `sass_local_mem_ops.txt` | the SASS gate's verdict, which kernels its findings are in, and each kernel's local-memory loads and stores |
-| `gate.jsonl`, `gate.err`, `ref.jsonl`, `ref.err` | the device gates and `egemm_ref.py`'s checks, one JSON line a shape |
-| `gpu.txt`, `smi.csv` | the GPU under the timing lease and `nvidia-smi`'s samples |
+| `gate.jsonl`, `gate.err`, `gate_NAME_meta.json`, `ref.jsonl`, `ref.err` | the device gates, each gate's shape and key, and `egemm_ref.py`'s checks, one JSON line a shape |
+| `gpu.txt`, `smi.csv` | the GPU under the gate lease, and `nvidia-smi`'s samples under the timing lease |
 | `bench.jsonl`, `il.jsonl`, their `.err`, `rc.txt` | the hot items and the interleaved pairs, one JSON line a shape; the exit codes |
 | `ncu-*`, `ncu-stall-*`, `ncu/` | Nsight Compute's counters and sections for one call of an arm |
 | `summary.md` | `summary.py`'s tables of the above |
