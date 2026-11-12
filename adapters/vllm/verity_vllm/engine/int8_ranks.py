@@ -13,6 +13,8 @@ from collections.abc import Iterable
 
 from verity_vllm import settings
 
+__all__ = ["EXTENSION", "register"]
+
 ENV = "VERITY_INT8_PARTS"
 PARTS = ("attention", "linears")
 EXTENSION = "verity_vllm.engine.int8_ranks.Int8Ranks"

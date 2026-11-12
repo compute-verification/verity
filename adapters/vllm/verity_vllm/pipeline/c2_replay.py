@@ -93,6 +93,15 @@ class ReplaySources:
     reads: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class ProgramSources:
+    """What `programs_of_record` reads of a replay's sources, for a caller that holds no `ReplaySources` (the slim bundle's planner)."""
+    args: Any
+    manifest: Any
+    reqs: list[dict[str, Any]]
+    sampling: dict[str, Any]
+
+
 def live_weights(model: Any, prefix: str) -> Callable:
     return SR.model_weights_provider(model, prefix)
 
@@ -202,7 +211,7 @@ def reused(s: ReplaySources, _cached: dict[str, Any], _rc_key: str) -> tuple[dic
     return sr, lk
 
 
-def programs_of_record(s: ReplaySources, _rl: dict[str, str], *, definitions: bool = True) -> tuple[dict[str, dict], dict[str, str]]:
+def programs_of_record(s: ReplaySources | ProgramSources, _rl: dict[str, str], *, definitions: bool = True) -> tuple[dict[str, dict], dict[str, str]]:
     """The population is derived from the Program OF RECORD: every loaded Program's digest must be the Build digest of
     record (--program-digest, B=1) or one of the manifest's component digests (B>=2), and the Definitions this tree evaluates their
     rows by must be the ones their Builds bound (`check.replay.definitions`); else REFUSED by name.  ``definitions=False`` for a
@@ -343,9 +352,11 @@ def live_only_entry(protocols: Any) -> str | None:
     entries = getattr(protocols, "entries", None) or ()
     if not entries:
         return None
-    from verity_vllm.check.replay import pouw_circuit as PWC
+    from verity.protocols.pouw.prover.circuit import SCHEMES
 
-    return next((e for e in entries if e.split(":", 1)[0] == PWC.pouw.NAME and e.split(":", 1)[1] in PWC.PC.C.SCHEMES), None)
+    from verity_vllm.protocols import pouw
+
+    return next((e for e in entries if e.split(":", 1)[0] == pouw.NAME and e.split(":", 1)[1] in SCHEMES), None)
 
 
 def plan(s: ReplaySources, planner: Any = None) -> dict[str, Any]:
@@ -451,7 +462,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
 
 
 def no_weights(*a: Any, **kw: Any) -> Any:
-    """The weights provider where the Programs are a planner's and none is loaded here: its plan evaluates no row, so no weight is read."""
+    """The weights provider of a plan (the planner's own sample, and the Commit's over a planner's Programs, where none is loaded): a
+    plan evaluates no row, so no weight is read."""
     raise RuntimeError("no weights provider: the Programs are a planner's, whose plan evaluates no row")
 
 
