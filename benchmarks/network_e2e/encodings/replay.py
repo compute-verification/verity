@@ -17,6 +17,10 @@ now or a step later and nothing after it, says which of its steps emit its outpu
 each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the certified I/O
 alone, and
 `table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
+
+**With a draft** the replay takes one more input, the drafts each row kept, and `draft_table` reports a trace's two
+classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at the bits of its
+own adaptive code, `kept_encode`, or 0 where the audited block derives it).
 """
 
 from __future__ import annotations
@@ -36,7 +40,8 @@ from verity_vllm.pipeline.advice_code.replay import (
     Scheduler as Scheduler,
 )
 from verity_vllm.pipeline.advice_code.schedule import (
-    cdiv, Engine, BlockHashes as BlockHashes, RequestState as RequestState, RequestIO, Row as Row, RUNNING as RUNNING, Step, Tick,
+    cdiv, DraftEngine as DraftEngine, Engine, BlockHashes as BlockHashes, RequestState as RequestState, RequestIO, Row as Row,
+    RUNNING as RUNNING, Step, Tick,
 )
 
 STEP_TRACE = "verity-vllm/step-trace/v1"
@@ -75,6 +80,8 @@ class Trace:
     header: dict[str, Any] = field(default_factory=dict)
     output_t: list[list[float]] | None = None
     releases: Releases | None = None
+    passed: list[int] | None = None  # the empty schedules each request arrived after at its step (`replay`'s `passed`)
+    emitted: list[dict[int, int]] | None = None  # the tokens each step's requests emitted, where the trace records them
 
     def first_scheduled(self) -> list[int]:
         first = [-1] * len(self.requests)
@@ -89,8 +96,18 @@ class Trace:
 
     def kept_steps(self) -> list[list[int]]:
         """Each request's kept outputs as the steps that emitted them: a row emits when it reaches the request's frontier
-        (its prompt and the outputs kept so far), up to its output length."""
+        (its prompt and the outputs kept so far), up to its output length. With a draft a row emits its token and the
+        drafts it kept, at positions that depend on the rows before it, so the steps are read from the trace's own
+        count of what each emitted."""
         kept: list[list[int]] = [[] for _ in self.requests]
+        if self.engine.num_speculative_tokens:
+            if self.emitted is None:
+                raise ValueError("with a draft, the steps a request's outputs left in are the trace's `emitted`, which "
+                                 "this trace does not record")
+            for s, em in enumerate(self.emitted):
+                for i, k in em.items():
+                    kept[i].extend([s] * k)
+            return kept
         for s, st in enumerate(self.steps):
             for i, start, n in st.rows:
                 if start + n == self.requests[i].prompt_len + len(kept[i]) and len(kept[i]) < self.requests[i].output_len:
@@ -138,7 +155,8 @@ class Certified:
 def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequence[int]] | None = None,
                     ingress_lag_s: float = 0.0, release_lag_s: float = 0.0) -> Trace:
     """A `Trace` from `verity_vllm.engine.step_trace` records. Output lengths and stops come from the trace's `emitted` and
-    `finished` (in a served run the committed sampled tokens and the certified egress say the same). An `arrive` or
+    `finished` (in a served run the committed sampled tokens and the certified egress say the same); with a draft (the
+    header's `speculative`), so do the drafts each row kept, its `emitted` less its own token. An `arrive` or
     `step` record's `t` is the engine's clock; a record's `ingress_t` / `release_t`, where the recorder has the
     certifier's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
     recs = list(records)
@@ -154,14 +172,17 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
     if [r["step"] for r in steps_recs] != list(range(len(steps_recs))):
         raise ValueError("the trace's steps are not 0..S-1 each once")
     emitted = [0] * len(ids)
+    kept: list[list[int]] = [[] for _ in ids]
     finish: list[str | None] = [None] * len(ids)
     steps = []
     for r in steps_recs:
         steps.append(Step(rows=[(index[a], int(b), int(c)) for a, b, c in r["rows"]], new=[index[a] for a in r.get("new", ())],
                           resumed=[index[a] for a in r.get("resumed", ())], preempted=[index[a] for a in r.get("preempted", ())],
-                          cache_hit={index[a]: int(k) for a, k in (r.get("cache_hit") or {}).items()}))
+                          cache_hit={index[a]: int(k) for a, k in (r.get("cache_hit") or {}).items()},
+                          drafts={index[a]: int(k) for a, k in (r.get("drafts") or {}).items()}))
         for a, k in (r.get("emitted") or {}).items():
             emitted[index[a]] += int(k)
+            kept[index[a]].append(int(k) - 1)
         for a, f in (r.get("finished") or {}).items():
             finish[index[a]] = f["reason"]
     for r in recs:
@@ -178,7 +199,8 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
         toks = tuple(tokens[ids[k]]) if tokens is not None and ids[k] in tokens else None
         requests.append(RequestIO(prompt_len=int(a["prompt_len"]), max_tokens=int(max_tokens) if max_tokens is not None
                                   else engine.max_model_len - int(a["prompt_len"]), output_len=emitted[k],
-                                  eos=finish[k] == "stop", tokens=toks))
+                                  eos=finish[k] == "stop", tokens=toks,
+                                  kept=tuple(kept[k]) if engine.num_speculative_tokens else None))
 
     def at(r: dict[str, Any], key: str, lag: float) -> float | None:
         if r.get(key) is not None:
@@ -186,6 +208,8 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
         return None if r.get("t") is None else float(r["t"]) + lag
 
     return Trace(engine=engine, ids=ids, requests=requests, before_step=[int(a["before_step"]) for a in arrivals], steps=steps,
+                 passed=[int(a.get("after_empty") or 0) for a in arrivals],
+                 emitted=[{index[a]: int(k) for a, k in (r.get("emitted") or {}).items()} for r in steps_recs],
                  emits=[bool(r.get("emitted")) for r in steps_recs],
                  ingress_t=[at(a, "ingress_t", -ingress_lag_s) for a in arrivals],
                  release_t=[at(r, "release_t", release_lag_s) for r in steps_recs], header=recs[0])
@@ -200,6 +224,33 @@ def records(path: str | Path) -> list[dict[str, Any]]:
 
 def read_step_trace(path: str | Path, **kw: Any) -> Trace:
     return load_step_trace(records(path), **kw)
+
+
+def span(records: Iterable[dict[str, Any]], mine: Callable[[str], bool]) -> list[dict[str, Any]]:
+    """The records of the requests `mine` picks out of a longer serve's step trace, as a trace of their own from step 0:
+    for a span the engine began with nothing running or in flight and an empty prefix cache, the state the replay starts
+    from. The empty schedules the engine made before the span's first arrival are the serve's before it, so the arrivals
+    before the span's first step count theirs from the first arrival's. Refuses a span whose steps are not consecutive or
+    hold another request's rows: such a span is not a serve of its own."""
+    recs = list(records)
+    arrive = [r for r in recs[1:] if r["kind"] == "arrive" and mine(r["request"])]
+    if not arrive:
+        raise ValueError("none of the trace's arrivals is the span's")
+    first, empty = int(arrive[0]["before_step"]), int(arrive[0].get("after_empty") or 0)
+    steps = [r for r in recs[1:] if r["kind"] == "step" and any(mine(row[0]) for row in r["rows"])]
+    if [r["step"] for r in steps] != list(range(first, first + len(steps))):
+        raise ValueError(f"the span's steps are not {first}..{first + len(steps) - 1} each once")
+    for r in steps:
+        named = [row[0] for row in r["rows"]] + [i for k in ("emitted", "finished", "preempted") for i in r.get(k) or ()]
+        if not all(map(mine, named)):
+            raise ValueError(f"step {r['step']} holds requests outside the span")
+    out = recs[:1]
+    for r in arrive:
+        b = int(r["before_step"]) - first
+        out.append({**r, "before_step": b, "after_empty": int(r.get("after_empty") or 0) - (0 if b else empty)})
+    out += [{**r, "step": r["step"] - first} for r in steps]
+    out += [{**r, "after_step": r["after_step"] - first} for r in recs[1:] if r["kind"] == "finish" and mine(r["request"])]
+    return out
 
 
 def _jsonl(path: Path) -> list[dict[str, Any]]:
@@ -670,7 +721,7 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
     """The trace as advice v0, built with its module `v0` (`verity.protocols.certifier.verifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
-    rp = replay(trace.engine, trace.requests, admit=trace.before_step)
+    rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch}, so it has no sources to give")
@@ -719,7 +770,7 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
     """Per certifier window: I1 v0's bits (`advice.bits_by_window` when the module is given as `v0`, else
     `v0_widths`), the steps the replay matched, and the residual advice's bits under each code (Elias gamma; the adaptive
     code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
-    truth = replay(trace.engine, trace.requests, admit=trace.before_step)
+    truth = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     adv = v0_advice(trace, v0, bucket_s=bucket_s) if v0 is not None else None
     charge = v0.bits_by_window(adv, window_buckets) if adv is not None else None
     ds, rp = decisions(trace)
@@ -753,6 +804,103 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "passed": [x for x in g if x is not None]}
 
 
+#: the kept count's code's context for a request's first emitting row, which has no count before it
+_FIRST = -1
+
+
+def kept_encode(K: int, requests: Sequence[RequestIO]) -> tuple[list[int], float]:
+    """The drafts each emitting row kept (`RequestIO.kept`) under the adaptive binary code: the requests in order, each
+    one's counts in order. A count c is the bits "c > j" for j = 0, 1, ... until one is 0 or j is the most the row can
+    keep (K, or the outputs the request still lacks after the row's own token), each in the context (the request's count
+    before, j). Returns the bit string and what an ideal coder would spend."""
+    model, enc, ideal = _KT(), _Encoder(), 0.0
+    for i, q in enumerate(requests):
+        done, prev = 0, _FIRST
+        for c in q.kept or ():
+            for j in range(min(K, q.output_len - done - 1)):
+                f0, f1 = model.freqs((prev, j))
+                enc.put(c > j, f0, f1)
+                ideal -= math.log2((f1 if c > j else f0) / (f0 + f1))
+                model.update((prev, j), c > j)
+                if c <= j:
+                    break
+            done, prev = done + 1 + c, c
+        if done != q.output_len:
+            raise ValueError(f"request {i}: its rows and the drafts they kept add up to {done} outputs, not its "
+                             f"{q.output_len}")
+    return enc.finish(), ideal
+
+
+def kept_decode(K: int, output_lens: Sequence[int], bits: Sequence[int]) -> list[tuple[int, ...]]:
+    """Each request's `RequestIO.kept` back from `kept_encode`'s bits, K and the certified output lengths alone: a
+    request's counts end where they and its rows add up to its output."""
+    model, dec, out = _KT(), _Decoder(bits), []
+    for n in output_lens:
+        done, prev, kept = 0, _FIRST, []
+        while done < n:
+            c = 0
+            for j in range(min(K, n - done - 1)):
+                f0, f1 = model.freqs((prev, j))
+                bit = dec.get(f0, f1)
+                model.update((prev, j), bit)
+                if not bit:
+                    break
+                c += 1
+            kept.append(c)
+            done, prev = done + 1 + c, c
+        out.append(tuple(kept))
+    return out
+
+
+def kept_bits(trace: Trace) -> dict[str, Any]:
+    """With a draft, what the drafts each row kept (`RequestIO.kept`) cost as advice, both ways. `charged`: the bits of
+    their code (`kept_encode`; `ideal`, what an ideal coder would spend), which `kept_decode` turns back into the
+    trace's counts. `derived`: 0, where the audited block computes the count from committed values and nothing is sent.
+    Beside them, and not sent: `counts[k]`, the rows that verified drafts, emitted and kept k; `entropy`, theirs in bits
+    a row (at most `max`, log2(K + 1)); and `alone`, that entropy over those rows, what the counts would come to taken
+    each alone. `alone` bounds `charged` from neither side: the code reads each request's count before. The rows and
+    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce."""
+    K = trace.engine.num_speculative_tokens
+    if not K:
+        raise ValueError("the trace's engine serves with no draft, so no row keeps one")
+    if trace.emitted is None:
+        raise ValueError("the drafts a row kept are the trace's `emitted` less one, which this trace does not record")
+    rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
+    m = compare(rp.steps, trace.steps)
+    if m.first_mismatch is not None:
+        raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
+    counts = [0] * (K + 1)
+    for st, em in zip(rp.steps, trace.emitted):
+        for i, d in st.drafts.items():
+            if d and em.get(i):
+                counts[em[i] - 1] += 1
+    rows = sum(counts)
+    entropy = -sum(c / rows * math.log2(c / rows) for c in counts if c) if rows else 0.0
+    bits, ideal = kept_encode(K, trace.requests)
+    if kept_decode(K, [q.output_len for q in trace.requests], bits) != [q.kept for q in trace.requests]:
+        raise ValueError("the kept count's code decodes to other counts than the trace's")
+    return {"K": K, "rows": rows, "counts": counts, "entropy": entropy, "max": math.log2(K + 1), "alone": rows * entropy,
+            "charged": len(bits), "ideal": ideal, "derived": 0}
+
+
+def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
+                window_buckets: int = 600) -> dict[str, Any]:
+    """A trace served with a draft, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
+    the residual advice under each of `contexts` (`encode`, each decoded back to the trace's steps), which a serve under
+    the certified tick does not send; and `kept_count` (`kept_bits`). Refuses a trace the replay doesn't reproduce."""
+    kept = kept_bits(trace)
+    cert = trace.certified(bucket_s)
+    arrivals = {}
+    for c in contexts:
+        code = encode(trace, contexts=c, bucket_s=bucket_s, window_buckets=window_buckets)
+        back = compare(decode(cert, code).steps, trace.steps)
+        if back.first_mismatch is not None:
+            raise ValueError(f"the residual advice ({c}) decodes to another schedule from step {back.first_mismatch}")
+        arrivals[c] = sum(len(b) for b in code.bits.values())
+    return {"requests": len(trace.requests), "steps": len(trace.steps), "tick": trace.releases is not None,
+            "arrivals": arrivals, "kept_count": kept}
+
+
 #: advice v0's module (`verity.protocols.certifier.verifier.advice`)
 V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "certifier" / "verifier" / "advice.py"
 
@@ -773,13 +921,19 @@ def load_v0(spec: str | Path | None) -> Any:
     return mod
 
 
-def read_any(p: Path, *, egress: str = "engine", ingress: str = "client") -> Trace:
+def read_any(p: Path, *, egress: str = "engine", ingress: str = "client", within: str | None = None) -> Trace:
+    """The trace at `p`: a trace-corpus directory, or a step trace, of which `within` takes only the span (`span`) of the
+    requests whose id holds it."""
     if p.is_dir():
+        if within is not None:
+            raise ValueError(f"{p}: a span is cut from a step trace, not from a trace-corpus directory")
         return read_corpus_trace(p, egress=egress, ingress=ingress)
     if egress != "engine" or ingress != "client":
         raise ValueError(f"{p}: a step trace has only its steps' release times (egress engine) and its own ingress")
     tok = p.with_suffix(".tokens.json")
-    return read_step_trace(p, tokens=json.loads(tok.read_text()) if tok.exists() else None)
+    recs = records(p)
+    return load_step_trace(recs if within is None else span(recs, lambda i: within in i),
+                           tokens=json.loads(tok.read_text()) if tok.exists() else None)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -798,21 +952,40 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
                          "arrival stamp (warden: the floor a server admitting in the warden's release order would "
                          "give; the warden certifies the release order, which a trace's .released view carries)")
+    ap.add_argument("--span", help="of each step trace, only the requests whose id holds this, as a trace of their own: "
+                                   "one load of a serve that ran others, begun with the engine drained and its prefix "
+                                   "cache reset")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)
     out: dict[str, Any] = {}
     per_window = []
+    drafted = []
     print("| trace | requests | steps | replay matched | I1 v0 bits | v0 step records | gamma | adaptive | adaptive clocked "
           "| adaptive egress | best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
         name = p.stem if p.is_file() else f"{p.resolve().parent.name}/{p.name}"
-        tr = read_any(p, egress=a.egress, ingress=a.ingress)
+        tr = read_any(p, egress=a.egress, ingress=a.ingress, within=a.span)
+        if tr.engine.num_speculative_tokens:
+            # I1 v0 has no row for a draft's, so a trace served with one has its own table
+            try:
+                d = out[name] = draft_table(tr, contexts=[c for c in CONTEXTS if c == "plain" or tr.clocked()],
+                                            bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets)
+            except (ValueError, RuntimeError) as e:
+                out[name] = {"error": str(e), "requests": len(tr.requests), "steps": len(tr.steps)}
+                drafted.append(f"| {name} | {len(tr.requests)} | {len(tr.steps)} | {e} |" + " |" * 7)
+                continue
+            k, n = d["kept_count"], max(d["requests"], 1)
+            drafted.append(f"| {name} | {d['requests']} | {d['steps']} | {k['K']} | "
+                           f"{' / '.join(str(d['arrivals'].get(c, '-')) for c in CONTEXTS)} | {k['rows']} | "
+                           f"{k['entropy']:.3f} | {k['max']:.3f} | {k['charged']} | {k['charged'] / n:.2f} | "
+                           f"{k['derived']} |")
+            continue
         try:
             tb = out[name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
         except (ValueError, RuntimeError) as e:
             try:
-                m = compare(replay(tr.engine, tr.requests, admit=tr.before_step).steps, tr.steps)
+                m = compare(replay(tr.engine, tr.requests, admit=tr.before_step, passed=tr.passed).steps, tr.steps)
                 where = f"{m.matched}/{m.steps} (first mismatch {m.first_mismatch})"
                 match: dict[str, Any] = m.__dict__
             except (ValueError, RuntimeError) as e2:
@@ -834,6 +1007,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     print("\n| trace | window | requests | steps | replay matched | decisions | forced | I1 v0 bits | residual bits "
           "| residual framed |\n|---|---|---|---|---|---|---|---|---|---|")
     print("\n".join(per_window))
+    if drafted:
+        print("\n| trace, served with a draft | requests | steps | K | arrivals: bits (" + " / ".join(CONTEXTS) + ") "
+              "| rows that verified drafts | kept count: each alone, bits a row (not sent) | at most "
+              "| charged (its code), bits | a request | derived, bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
+        print("\n".join(drafted))
     if a.out:
         a.out.write_text(json.dumps(out, indent=1))
 

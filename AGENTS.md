@@ -38,7 +38,7 @@ what the layout's design has and the tree does not.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU or host model), `site` (its
+  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model, or time base), `nodes/` (one per kind of node), `site` (its
     types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
     top-level `hardware/` that holds data only, and the types in one file of `verity/`.
   - `verity/configuration/` (not `verity/configurations/`): `wire` (the wire every party speaks), `deploy` (parties,
@@ -233,7 +233,7 @@ unchanged.
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
 only fully checked commits: the verified queue's loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
-verdict, or are low-risk, onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
+verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
 ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
 no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
 fails on its base too. A failure the candidate's base shares blames none of its PRs;
