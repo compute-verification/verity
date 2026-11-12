@@ -321,15 +321,15 @@ def _rows(doc: Any, run: str, art: str | None = None, unstated: int = P.UNSTATED
     return [x for x in read if isinstance(x, P.Steady)], [x for x in read if isinstance(x, str)]
 
 
-def steady_rows(store: Any, target: str) -> dict[str, tuple[list[P.Steady], list[str]]]:
+def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, tuple[list[P.Steady], list[str]]]:
     """What a target of the steady-state record gives, by the run or art read: its rows that name a staged Definition,
     and why the rest (or the target) can't be read. A run gives its own `RATES`. An art that holds `ART_RATES` gives
     those rows in place of its run's own: they are that run's, completed or corrected after it, so its meta names the
     one run in `runs`, which the rows are ordered by and which isn't read. Any other art stands for the runs its meta
-    names. A superseded target gives nothing."""
+    names. A superseded target gives nothing, unless `superseded` asks for its rows anyway (for their staged names)."""
 
-    if superseded := _superseded(store, target):
-        return {target: ([], [f"superseded by {', '.join(superseded)}"])}
+    if not superseded and (by := _superseded(store, target)):
+        return {target: ([], [f"superseded by {', '.join(by)}"])}
     if not target.startswith("art:"):
         return {target: rates(store, target)}
     manifest = store.get_manifest(target)
@@ -337,7 +337,7 @@ def steady_rows(store: Any, target: str) -> dict[str, tuple[list[P.Steady], list
         return {target: ([], [f"its meta names no `runs`: the run its `{ART_RATES}` is of, or the runs it stands for"])}
     runs = [run for run, _ in record_runs(store, [target])]
     if manifest.payload is None or not store.listing(target, [ART_RATES]):
-        return {run: found for named in runs for run, found in steady_rows(store, named).items()}
+        return {run: found for named in runs for run, found in steady_rows(store, named, superseded).items()}
     if len(runs) != 1:
         return {target: ([], [f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
                               "one run's, so each run's go in an art of their own"])}
@@ -365,7 +365,9 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
         if found:
             steady += found
             runs.append(target)
-    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores)
+    aliases = sorted({(s.definition, s.type) for target in records(store).get(workload.record(STEADY), [])
+                      if _superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
+    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases))
     table = prover.table(census)
     measured = sum(r.cost.source == P.STEADY for r in table.rows)
     count = f"{provers} prover{'' if provers == 1 else 's'}"
@@ -604,7 +606,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         lines += ["", "Refused (not read):", ""]
         lines += [f"- {x['target']} (`{x['record']}`): {x['why']}" for x in doc["refused"]]
     if doc["unread"]:
-        lines += ["", "Unread (steady-state rows of record whose staged Definition is no block type of this census under "
+        lines += ["", "Unread (labelled steady-state rows whose staged Definition is no block type of this census under "
                   "its cut; they are in no figure above):", ""]
         lines += [f"- {_record(x['record'])}{'' if x['record'] == x['run'] else ', run ' + x['run']}: `{x['type']}` at "
                   f"{x['provers']} prover{'' if x['provers'] == 1 else 's'}, `{x['definition']}`: "

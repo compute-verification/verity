@@ -353,6 +353,9 @@ class Flock:
     name: str = "flock"
     provers: int = 1
     cores: int = HOST_CORES
+    #: (staged Definition, staged type) of superseded rows: they price nothing, but a plan's cell may still name a type
+    #: by the staged type only they were staged as
+    aliases: Sequence[tuple[str, str]] = ()
 
     def table(self, census: Census) -> Table:
         measured: dict[str, Steady] = {}
@@ -362,6 +365,9 @@ class Flock:
         held = {definition_id(b.name) for b in census.blocks}
         unread = []
         names: dict[str, set[str]] = {}
+        for definition, type_ in self.aliases:
+            if definition in held:
+                names.setdefault(definition, set()).add(type_)
         for s in self.steady:
             if s.definition not in held:
                 unread.append(s)
@@ -517,7 +523,7 @@ class Spot:
             raise ValueError(
                 f"the sampling plan {self.plan.record} and the census don't cover each other: the plan has no cell for "
                 f"{len(bare)} block type(s){_some(bare)}, and the census no block type for {len(unread)} cell(s)"
-                f"{_some(unread)}. It is another census's or cut's plan, or no steady-state row of record names "
+                f"{_some(unread)}. It is another census's or cut's plan, or no labelled steady-state row names "
                 "those cells' staged types")
         return Table(f"{self.name}[{inner.system}]", tuple(rows), inner.range_basis, inner.verifier_basis, inner.unread,
                      inner.cores)
