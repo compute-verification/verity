@@ -93,3 +93,275 @@ Least sure of: whether the interface README's new wording is the Glossary's ("th
 
 Job 3 starts now.
 
+[2026-11-12T21:52Z] 347eb20b7410
+ONSITEMAIN, Thu 12 Nov 1:52 PM PST, to your 1:48 PM PST message. **The toy ended 64, 0 and 66 (`r20261112-213324-c687`, exit 0; my 1:55 PM message has it). `LAUNCH.md`'s text is below, whole, as you asked. One thing in it is new since the toy: the launch is a held script, so that Friday's lines are the toy's byte for byte and nothing is typed from a page at 5 AM.**
+
+- **The launch script** `/tmp/rehearsal/launch-friday.sh`, sha256 `740eb001462db9efb6323fd558255a1d32074625678908987e4cf41e4a1f4d83`, is the third toy's launch script with exactly these differences [ran: `diff` of the two]: the node and the pool's flags where the toy had `--on auto`; `--timeout 5h`; the job's variables; four sent files where the toy sent eight; the script the job runs; the log's path; `RESEARCH_NOTES_SYNC=1` in the export, as in every line before; and one line of its own that refuses a second launch. It is the fifth digest of step 4. One line is typed: `bash /tmp/rehearsal/launch-friday.sh`.
+- **Its log's first three lines are the three you asked for** [ran, in the toy's log]: the held worktree's `HEAD` and its tree clean; `main.txt`'s lines and digest; the module and its package identity `d489c1ebe020fca4`.
+- **Step 4, by 4:40 AM PST**, has your two checks: the launching checkout's `HEAD` and clean tree, and `uv run -q python -c 'import sys; print(sys.executable)'`, which prints `/home/ubuntu/wt-main-launch/.venv/bin/python` [ran now].
+- If you want the launch typed as a line and not run from the script, say so: the script's lines are in the file below and can be typed as they are.
+- In the text below the node's name appears nowhere; the mask's own pattern is cut from its line.
+
+---
+
+# The rehearsal's launch: Fri 13 Nov 5:00 AM PST, only on the coordinator's "launch"
+
+Final as of Thu 12 Nov 2:05 PM PST (the coordinator's rulings of 9:11, 9:44 and 9:56 AM PST and its words of 10:37,
+10:53 and 11:19 AM PST and 12:19, 12:49, 12:55, 1:16, 1:30 and 1:48 PM PST). Nothing here changes without the coordinator's word.
+The coordinator resumes me at about 4:48 AM PST: read the inbox first; "do not launch" means do not.
+
+**There is one launch line: line B, with the launcher pinned** (the coordinator, 12:55 PM and 1:16 PM PST; infra's
+word on INF-743 at 12:20 PM PST: `main`'s launcher, the onsite tree sent as an input). Five hours, six negative
+workers, the tree `db45e589e10f`.
+- **The launcher's code is `main`'s at `5f0c008aa0403ac275f5626828c534f93d987048`, read from a worktree held at that
+  commit, `/home/ubuntu/wt-launcher-5f0c`**, by `RESEARCH_AT_CHECKOUT=1` and `PYTHONPATH` at its `tools/research/src`,
+  with the launching checkout's Python. It is the process `research` starts by itself when a checkout is behind
+  (`at_main.start`), from a tree that does not move: it never reads `origin/main`, so a fetch of `main` changes nothing
+  of it. The research package's identity there is `d489c1ebe020fca4`, the same as the tree the second toy's launcher ran.
+- **The run's source is `0582899c4392e90ddf202d00432b90e720d5bac8`**, the launching checkout's commit
+  (`/home/ubuntu/wt-main-launch`). The package shipped to the machine is that tree's (identity `cc79dc86bf3f6abc`, the
+  second toy's).
+- **`main.txt` is a held file, not made at the launch**: main's first-parent line from `0582899c4392`, 6,933 commits.
+  This clone is shallow, cut on main's line above the pin: `git rev-list --first-parent origin/main` in a worktree of
+  it gives 376 commits, the pin `15d964e7e829` is not among them, and the script then ends at its pin's line (exit 66)
+  ten seconds in. The held file was made through a repository that reads the same objects without the cut ("The files").
+- The onsite tree is sent as an input, as git objects, and the job clones it and holds it to its commit, its tree id
+  and its pin before anything runs.
+- **The line reaches GitHub nowhere for our repository, at the launch or in the job** ("What reaches GitHub", below).
+- Line A (the onsite worktree's own launcher, the tree as the run's source) is not in this file: it is only on infra's
+  word, relayed by the coordinator. Its text is in `prev-launch/LAUNCH-1259.md`; it would send the held `main.txt` too,
+  not one made at the launch.
+
+## What is ruled
+
+- One launch, once, never relaunched. A refused honest proof is a finding: report it first, rerun nothing.
+- Head: `db45e589e10fc2680e61d8fb45232c21f03d9fd1`, branch `cursor/net-onsite-memory-reads-84f9`, pushed; worktree
+  `/home/ubuntu/wt-onsite-memreads`, clean.
+- `--pool-wait 1800` and no `--custody-ttl`: with no slot by 5:30 AM PST the job gives up by itself (exit 75).
+- `V3C_LEAN_WORKERS=1`, `V3C_NEGATIVE_WORKERS=6`, `AUDIT_MEM_GB=650`, `AUDIT_WARNINGS=default::DeprecationWarning`.
+- The build as it is; the start's disk check 600 GB (the default: no `MIN_FREE_GB` passed); `WORK_PARENT` on the kept
+  run's volume; no path in the script changed.
+- The script stops itself on memory (exit 72) once the node's MemAvailable is more than 650 GB under its value at the
+  script's start, read every 5 s beside the disk. `MEM_STOP_GB` and `MEMINFO` are not passed: the defaults are the ruling.
+- Five hours: infra said yes on INF-743 (the coordinator's word of 10:37 AM PST). `--timeout 5h` and
+  `--env JOB_SECONDS=16200`. It passes the custody key's check with `--pool-wait 1800` and no `--custody-ttl` (19,800 s
+  against 21,600 s) [read in the onsite line's launcher; main's launcher not tried on the pool with five hours].
+- If the job ends by 8:10 AM PST, say so to the coordinator at once: infra then opens the node's places.
+- Once the audit has sampled, the script prints one line with the member's circuit file's bytes and the seconds the
+  table gives the audit from there to its end. The coordinator reads it at about 6 AM PST.
+
+## The files
+
+| File | SHA-256 |
+|---|---|
+| `/tmp/rehearsal/rehearse_audit.sh` | `9276fb1a8c019efe6b906640ab8f5fff7a2e571de7a74d9671794ab967e95a09` |
+| `/tmp/rehearsal/rehearsal_read.py` | `1b01b724ef571f80818ff2ec4f3a4db81b5e82c1f19942aa537f4296315a7973` |
+| `/tmp/rehearsal/onsite-git.tar` | `cd79ee7f0c088b40b90795d7f426c371f706ed75da4a680392a8e6bb76502997` |
+| `/tmp/rehearsal/main.txt` | `b1b066f9b1873c3ac2ca4695241d5f42c92a940535a2e06d8dd0c55134d5224b` |
+| `/tmp/rehearsal/launch-friday.sh` | `740eb001462db9efb6323fd558255a1d32074625678908987e4cf41e4a1f4d83` |
+
+Copies of the script, the reader, `main.txt` and the launch script are beside this file. `prev/` holds the 6:20 AM files, `prev-0842/`
+the 8:42 AM ones, `prev-0933/` the 9:33 AM ones, `prev-0955/` the 9:55 AM ones, `prev-1038/` the 10:38 AM ones,
+`prev-launch/` this file as it stood at 12:43 and 12:59 PM PST, `memtoy/` the toy and its logs, `lineb/` line B's toys.
+
+`main.txt` is the bytes the second and the third toy were sent. To make it again (the same bytes while the objects are
+here; `src.git` is made two lines below):
+
+    git -C /tmp/lineb/src.git rev-list --first-parent 0582899c4392e90ddf202d00432b90e720d5bac8 > /tmp/rehearsal/main.txt
+
+`onsite-git.tar` is one bare git directory, `onsite.git`: the head `db45e589e10f` and its history down to
+`15d964e7e829`, the newest commit of main's first-parent line in it, and no further (1,394 commits, 79 MB). The job's
+own checks hold it, not this digest: a file made again has another digest and passes the same checks. To make it again:
+
+    H=db45e589e10fc2680e61d8fb45232c21f03d9fd1 M=15d964e7e829023c475bbdb55e3e9dd456223be3
+    rm -rf /tmp/lineb/src.git /tmp/lineb/onsite.git && mkdir -p /tmp/lineb && git init -q --bare /tmp/lineb/src.git
+    echo /agent/repos/verity/.git/objects > /tmp/lineb/src.git/objects/info/alternates
+    git -C /tmp/lineb/src.git update-ref refs/heads/onsite $H
+    i=0; for p in $(git -C /agent/repos/verity rev-list --parents -n1 $M | cut -d' ' -f2-); do i=$((i+1)); git -C /tmp/lineb/src.git update-ref refs/tags/below$i $p; done
+    git clone -q --bare --single-branch -b onsite --shallow-exclude=below1 --shallow-exclude=below2 file:///tmp/lineb/src.git /tmp/lineb/onsite.git
+    tar -cf /tmp/rehearsal/onsite-git.tar -C /tmp/lineb onsite.git
+
+Why git objects and not `git archive`: the audit asks the tree's git for its history. A local session pins the newest
+commit of `main.txt` in the tree's history (`a5_coins.on_main`), and the verifier refuses a session pinned off main's
+line. In an unpacked archive that pin is forty zeros; in this clone it is `15d964e7e829`, as in a checkout.
+
+## What reaches GitHub, and with which credential (names only)
+
+| Step | Reaches GitHub | Credential |
+|---|---|---|
+| `main.txt` | no: a held file | none |
+| `research run`: the source to the machine | no: git objects pushed over the launcher's own ssh connection (`remote.py`, `git_push_url`) | the launcher's ssh key, not a GitHub one |
+| `--send` files | no: over the same ssh | the same |
+| The job's clone of the tree | no: `git clone file://…` of the sent file | none |
+| `uv sync` | no: the package index and torch's; `uv.lock` names no `git+` source and no github.com URL | none |
+| `lake build` (two packages) | no for our repository: flock's manifest has no package, sampled proofs' are `path` only. A Lean toolchain the node lacks would come from its publisher's releases on GitHub, public | none |
+| `60-circuit.sh` → `20-gpu-link.sh` | only where the shared `FLOCK_WORK` has no flock checkout: `git clone` of the prover's upstream repository, a third party's and public. Where `cargo`, `uv` or the CUDA keyring is missing, their installers (not GitHub's, though uv's fetches its release from GitHub) | none |
+| `cargo build` | crates the node's cache lacks, from the crates' registry; a git dependency in the upstream lock, if any, is public. Not looked at | none |
+| The run's recorder, custody | no: the store | the run's custody key (`research`'s own) |
+| My inbox pull at 4:48 AM and the run id's line | **yes**: `origin`, our repository | the credential in the checkout's `origin` URL (no variable; set by the VM) |
+| `research notes sync`, after | yes: the notes' repository, not this one | `RESEARCH_NOTES_TOKEN` |
+
+So with the repository private, the line launches if the VM's own credential still reads `origin` (the inbox needs it
+either way), and the job needs GitHub for nothing of ours. What I did not look at: the node's caches (the flock
+checkout, the toolchain, cargo's), which decide whether the third parties' public repositories are reached at all.
+
+## Before typing
+
+1. Pull the inbox. Launch only on "launch".
+2. `TZ=America/Los_Angeles date` for every time.
+3. The onsite worktree is not read by the launch: the tree is the sent file, held in the job to its commit, its tree
+   id and its pin.
+4. **By 4:40 AM PST**, so that anything `uv` does to the environment happens here and is seen, in this order:
+   - `sha256sum /tmp/rehearsal/rehearse_audit.sh /tmp/rehearsal/rehearsal_read.py /tmp/rehearsal/onsite-git.tar
+     /tmp/rehearsal/main.txt /tmp/rehearsal/launch-friday.sh` prints the five digests above. If the script, the
+     reader, `main.txt` or the launch script is gone, copy it from this directory and check again; the tree's file is
+     made again as "The files" says (another digest then, and the same checks in the job).
+   - `git -C /home/ubuntu/wt-main-launch rev-parse HEAD` prints `0582899c4392e90ddf202d00432b90e720d5bac8` and `git -C
+     /home/ubuntu/wt-main-launch status --porcelain` prints nothing (do not move it: if the worktree is gone, `git
+     worktree add --detach /home/ubuntu/wt-main-launch 0582899c4392e90ddf202d00432b90e720d5bac8`, then `uv sync -q
+     --all-packages --extra torch-cpu` in it).
+   - `cd /home/ubuntu/wt-main-launch && uv run -q python -c 'import sys; print(sys.executable)'` prints
+     `/home/ubuntu/wt-main-launch/.venv/bin/python`.
+   - `git -C /home/ubuntu/wt-launcher-5f0c rev-parse HEAD` prints `5f0c008aa0403ac275f5626828c534f93d987048` and `git
+     -C /home/ubuntu/wt-launcher-5f0c status --porcelain` prints nothing. If the worktree is gone: `git worktree add
+     --detach /home/ubuntu/wt-launcher-5f0c 5f0c008aa0403ac275f5626828c534f93d987048` (the commit is here: nothing is
+     fetched), and check again. `origin/main` is not read: where it stands does not matter.
+   - `ls /tmp/rehearsal/launched` finds no file.
+   If a check fails, do not launch: say so to the coordinator.
+5. Never print the node's name: the launch's log is read through the mask.
+
+## The launch, whole
+
+One line is typed, in a shell of its own (tmux):
+
+    bash /tmp/rehearsal/launch-friday.sh
+
+Then, for the run id and the three lines that stand in the place of the launcher's first line:
+
+    mask() { sed -E '…the mask of my notes…'; }
+    grep -v '^slot: ' /tmp/rehearsal/launch.log | cut -c1-200 | mask
+
+The script is the third toy's (`lineb/launch-toy3.sh`, the run `r20261112-213324-c687`), byte for byte but for what the
+toy replaced: the node and the pool's flags where the toy had `--on auto`, the five hours, the job's variables, the
+rehearsal's four sent files where the toy sent eight, the script the job runs, the log's path, and one line of its own
+that refuses a second launch (`/tmp/rehearsal/launched`, made before the launch: if the launch is refused before
+anything is sent, the file stays and the coordinator decides). `diff lineb/launch-toy3.sh launch-friday.sh` shows
+exactly those. It reads no ref and makes no file but its log and that mark. Whole:
+
+    #!/usr/bin/env bash
+    # Friday's rehearsal by line B: the final script, the launcher pinned (a worktree of main held at 5f0c008aa040, never origin/main): launched once
+    export RESEARCH_AGENT_URL=https://cursor.com/agents/bc-84f95376-19bd-5f47-b994-2a8c4cdf4182 RESEARCH_LANE=network-accounting RESEARCH_NOTES_SYNC=1
+    PIN=/home/ubuntu/wt-launcher-5f0c
+    test "$(git -C $PIN rev-parse HEAD)" = 5f0c008aa0403ac275f5626828c534f93d987048 || exit 1
+    test -z "$(git -C $PIN status --porcelain)" || exit 1
+    test "$(sha256sum /tmp/rehearsal/main.txt | cut -c1-64)" = b1b066f9b1873c3ac2ca4695241d5f42c92a940535a2e06d8dd0c55134d5224b || exit 1
+    [ -e /tmp/rehearsal/launched ] && { echo "the rehearsal was launched already: it is never relaunched"; exit 1; }
+    NODE=$(python3 -c 'import json;d=json.load(open("/home/ubuntu/.research/runs/r20261109-084127-4ca1/remote.json"));print(d.get("machine") or "")')
+    test -n "$NODE" || exit 1
+    cd /home/ubuntu/wt-main-launch || exit 1
+    I=/tmp/rehearsal
+    : > /tmp/rehearsal/launched
+    {
+    echo "launcher: research from the pinned worktree at $(git -C $PIN rev-parse HEAD), its tree clean"
+    echo "main.txt: held, $(wc -l < /tmp/rehearsal/main.txt) lines, sha256 $(sha256sum /tmp/rehearsal/main.txt | cut -c1-64)"
+    RESEARCH_AT_CHECKOUT=1 PYTHONPATH=$PIN/tools/research/src uv run -q python -c 'import research; from research import remote; print("launcher: module", research.__file__, "identity", remote.tool_identity())'
+    RESEARCH_AT_CHECKOUT=1 PYTHONPATH=$PIN/tools/research/src uv run -q python -m research run --on "$NODE" --pool network --pool-wait 1800 --mem-gb 650 --project verity --source /home/ubuntu/wt-main-launch --cwd clone --timeout 5h \
+      --env KEPT=/workspace/incoming/netacct/r20261109-064213-20a2 --env WORK_PARENT=/workspace/incoming/netacct \
+      --env V3C_LEAN_WORKERS=1 --env V3C_NEGATIVE_WORKERS=6 --env AUDIT_MEM_GB=650 --env JOB_SECONDS=16200 \
+      --env AUDIT_WARNINGS=default::DeprecationWarning --env WARM_JOBS=24 --env REHEARSAL=1 \
+      --env TREE_INPUT=onsite-git.tar --env TREE_COMMIT=db45e589e10fc2680e61d8fb45232c21f03d9fd1 \
+      --env TREE_ID=922f259067b0d887feb1d82b68d07d60e752dcba --env TREE_PIN=15d964e7e829023c475bbdb55e3e9dd456223be3 \
+      --send $I/rehearse_audit.sh --send $I/rehearsal_read.py --send /tmp/rehearsal/main.txt --send /tmp/rehearsal/onsite-git.tar \
+      -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/rehearse_audit.sh"'
+    echo "rc=$?"
+    } > /tmp/rehearsal/launch.log 2>&1
+
+Its log's first three lines are the check in place of the launcher's first line: the held worktree's `HEAD`
+(`5f0c008aa040…`) and that its tree is clean; `main.txt`'s lines and digest; and the module `research` loads there
+with its package identity, `d489c1ebe020fca4`. In this form `research` prints no line of its own naming the commit (it
+prints one only when it re-executes itself from a checkout that is behind). `PYTHONPATH` is set to the held tree's
+`tools/research/src` alone: the toys' shell had none, so `research` itself set exactly that.
+
+**It reaches GitHub nowhere for our repository**: the launch reads no ref of `origin`, ships by ssh, and the job's
+clone is of the sent file ("What reaches GitHub", above).
+
+The job starts in a clone of main's tree
+and reads nothing of it: the script clones the input into its own directory under `WORK_PARENT`
+(`rehearse-tree.XXXXXXXX`, removed on every way out with the job's directory) and runs there. Nothing in the job runs
+the onsite tree's `research` package.
+
+Six negative workers: the coordinator's ruling of 9:56 AM PST. Seven's worst reading of memory sits on
+the stop's line and a run the stop ends keeps no negative; six leaves room at every member's size and costs 580 s.
+
+Right after the launch: one line to the coordinator with the run id.
+
+## What the coordinator looks for at 5:25 AM PST, in the run's `stdout.log`
+
+The first line, and a second within about ten seconds (exit 64 instead where the tree sent is
+not that commit, that tree id, unchanged; exit 66 where the newest commit of `main.txt` in its history is not the pin
+asked). A third follows the build, before the warm and the audit: the tree's own `on_main`, held to the same pin (exit
+66 otherwise, so the hours are not spent on a session the verifier refuses at its open):
+
+    REHEARSAL +0s a rehearsal on a local development session: no audit of record, no verdict of a record; the tree audited is commit db45e589e10fc2680e61d8fb45232c21f03d9fd1, tree id 922f259067b0d887feb1d82b68d07d60e752dcba, sent as an input: the run's source is the launcher's and is not the tree audited
+    REHEARSAL +Ns the tree: cloned from the input into the job's own directory under WORK_PARENT; HEAD is commit db45e589e10fc2680e61d8fb45232c21f03d9fd1, its tree id 922f259067b0d887feb1d82b68d07d60e752dcba, nothing changed in it: as asked; the newest commit of main's line in its history is 15d964e7e829023c475bbdb55e3e9dd456223be3, as asked, by git; the tree's own on_main is held to it once the build has made its environment
+    REHEARSAL +Ns the pin: the tree's on_main gives 15d964e7e829023c475bbdb55e3e9dd456223be3, as asked
+
+Then, in the same second, four more: the kept follow-on's settings; `REHEARSAL +0s disk: N GB free under WORK_PARENT; memory:
+…`; `REHEARSAL +0s memory limit: {…}`; and `REHEARSAL +0s memory stop: MemAvailable is N GB now; the job ends (exit 72)
+once it is more than 650 GB under that`. If that last line ends ", which it cannot be: less than that is available
+now", the node started with less than 650 GB available and the stop cannot fire.
+
+At about 6 AM PST, once the audit has sampled (about 3,400 s after the script's start by the table):
+
+    REHEARSAL +Ns sampled: the member's circuit file is B bytes; by the table the audit ends about R s from here, at about +Es, inside the job's 12600 s
+
+It says `PAST the job's 12600 s` where the table's end is after the job's seconds. The table is the kept run's stages'
+seconds, those that follow the member scaled to its circuit file; with 5 or 6 negative workers it counts 580 s more.
+With six workers it passes 12,600 s from a member of about 17 GB, and 16,200 s from about 26.2 GB.
+
+When the outcome and the negatives' workers have ended (read every 5 s), for the demo's run:
+
+    REHEARSAL +Ns the outcome and the negatives' workers ended: T s in the stage; MemAvailable's lowest in it L GB, X GB under the job's start and Y GB under the stage's own start
+
+And with the result, each task's own seconds beside the others (no task is named):
+
+    REHEARSAL negatives' workers: 6 at once, W s; each task's own seconds, longest first: ...; the most a worker held of its own at its end A GB, the highest peak of a worker's Lean process B GB
+
+## The script's exits
+
+64 an input missing or not as the job reads it; 66 (line B) the pin a local session would take is not the one asked; 70 too little disk to start; 71 the disk ran low; 72 the memory ran low;
+5, 6, 7 a build; 80 the warm failed; 124 the job's seconds ran out; 143 told to stop; 90 the kept dir changed; else the
+audit's. 75 is `research run`'s: no slot inside the pool's wait.
+
+## After it
+
+- The run's label and the first line of its result say exactly: the onsite line's workers on the kept window, from
+  `db45e589e10f`; a rehearsal on a local development session, no audit of record; no run of `main` or of the port (pull
+  request 9319); the port's two added tasks (the history root's negative, the registered reads' fourth case) are not in
+  it. `research data label RUN label "…" --by network-accounting`.
+- The label and that first line add: the tree audited is commit `db45e589e10f`, tree id `922f259067b0`, sent
+  as an input and held to both in the job; the run's source in its record is main's `0582899c4392`, the launcher's,
+  and is not the tree audited. `rehearsal.json` says the same under `tree_audited`, and the reader prints it.
+- By hand on the fetched run: `python3 run_memory.py ~/.research/runs/RUN` (sha256 begins `86783f275c70339d`), for each
+  Lean verify's peak, the processes' peak together, and the audit's system threads around the fork.
+- The honest arm's outcome is reported whole, whichever way it goes. Window figures of the kept case are private: quote
+  none. The circuit, program and partition files' bytes of the sampled member may be quoted.
+
+## What was tried
+
+- `r20261112-191615-b258` (the script before `TREE_PIN`) and `r20261112-202834-2156` (the final script), each launched
+  once by main's launcher from `/home/ubuntu/wt-main-launch`, neither on the pool's node: exit 0 both. The second's
+  three steps ended 64, 0 and 66 as planned. Details: `lineb/LINE-B.md`, outputs in `lineb/toy-run/`.
+- `r20261112-213324-c687`: the third toy, launched once at 1:33 PM PST with the launcher in the pinned form of this
+  file's line, the final script and the held `main.txt`, not on the pool's node: exit 0, its three steps 64, 0 and 66.
+  Its output differs from the second toy's only in the machine's sizes and the seconds (`lineb/toy3-run/`,
+  `lineb/launch-toy3.sh`). Its record names the same shipped package as the second's (`cc79dc86bf3f6abc`).
+- `research` prints a first line naming the commit whose code it runs only when it re-executes itself from a checkout
+  that is behind. In the pinned form it prints none: the launch line prints the held worktree's module and its
+  identity instead. Through the installed `research` command the two variables do not pin (the command's shim puts the
+  checkout's own `tools/research/src` in front): the line runs the checkout's Python with `-m research`.
+- `git rev-list --first-parent origin/main` in a worktree of this clone gives 376 commits, without the pin: the script's
+  pin line on that list ends 66 [ran here, on the sent tree's git]. Hence the held `main.txt`.
+- Not tried: main's launcher on the `network` pool with five hours; the tree's own `on_main` on the real tree on a
+  machine.
+
