@@ -2,7 +2,8 @@
 `member_tree_reason`, `members_order`, `members_tree_reason`), on the cases the Lean's own guards hold
 (`Spot.Challenger`'s, the same lines, records and reasons), and on a challenger's own log: the device opens a tree's
 closing round as it opens any round, so two sessions it serves one after another, each closed after its evidence, pass,
-and the same sessions closed after other evidence, left open, interleaved or named in another order are refused. The
+and the same sessions closed after other evidence, left open, interleaved, the next tree sampled before the closing
+round or named in another order are refused. `test_challenger` holds `member_line` and `members_order` alone. The
 evidence's bytes (`closing.evidence_bytes`, `session_evidence`, `closing_after`) decode to their parts, and a
 directory's digest is its files' evidence's."""
 
@@ -36,15 +37,7 @@ def logged(*opened: C.TreeOpening) -> dict[str, C.LoggedTree]:
     return {"01": C.LoggedTree("02", "03", "01", {}, list(opened))}
 
 
-def open_at(tree: str, stream: str) -> str:
-    return canonical_json_text({"after": "cd", "coins": "ef", "event": C.OPEN_EVENT, "n": 1, "round": 0,
-                                "stream": stream, "tree": tree})
-
-
-TREE = canonical_json_text({"event": C.TREE_EVENT, "key": "02", "nonce": "03", "root": "01", "spec": {}})
-ROOT = canonical_json_text({"event": "root", "index": 0, "label": "sample", "received_at": 0, "root": "ab"})
-RELEASE = canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "sample", "released_at": 0})
-S, REP = CT.SESSION, "circuit/rep0"
+REP = "circuit/rep0"
 
 
 def test_a_closing_round_is_the_session_streams_second_of_no_coins_after_the_evidence():
@@ -64,19 +57,6 @@ def test_a_members_session_is_refused_unless_its_trees_last_opening_closes_it_af
     assert C.member_tree_reason({}, {}, record, "ab") == C.NO_TREE
     assert C.member_tree_reason(logged(closing("ab")), {}, {}, "ab") == C.NO_TREE
     assert C.member_tree_reason(logged(closing("ab")), {}, record, "ab") not in (None, C.NO_CLOSING, C.NO_TREE)
-
-
-@pytest.mark.parametrize("log, order", [
-    ([TREE, ROOT, RELEASE], []),
-    ([open_at("01", S), open_at("01", REP), open_at("01", S), open_at("02", S), open_at("02", S)], ["01", "02"]),
-    ([open_at("01", S), open_at("02", S)], None),
-    ([open_at("01", S), open_at("01", REP), open_at("02", S)], None),
-    ([open_at("01", S), open_at("01", S), open_at("01", REP)], None),
-    ([open_at("01", S), open_at("01", S), open_at("02", S), open_at("02", S), open_at("01", S)], ["01", "02", "01"]),
-    (["not a line", open_at("01", S), "{}", open_at("01", S)], ["01"]),
-])
-def test_the_members_order_is_each_trees_rounds_together_its_closing_round_before_the_next_trees_first(log, order):
-    assert C.members_order(log) == order
 
 
 def coin_tree(c: str) -> dict:
@@ -119,17 +99,21 @@ def members(log: list[str], named: list[tuple[str, str]]) -> str | None:
 
 A, B = ("a", evidence("a")), ("b", evidence("b"))
 HELLOS = [hello("a"), hello("b")]
+MEMBERS = [hello("a")] + closed("a") + [hello("b")] + closed("b")
 REFUSED = "session {}'s coins are not the challenger's: {}"
 TWO_MEMBERS = {
-    "both closed, the trees sampled first": (HELLOS + closed("a") + closed("b"), [A, B], None),
-    "both closed, each tree sampled at its session": ([hello("a")] + closed("a") + [hello("b")] + closed("b"), [A, B],
-                                                      None),
-    "the second closed after other evidence": (HELLOS + closed("a") + closed("b"), [A, ("b", evidence("x"))],
-                                               REFUSED.format("b", C.NO_CLOSING)),
-    "the first left open": (HELLOS + closed("a")[:-1] + closed("b"), [A, B], REFUSED.format("a", C.NO_CLOSING)),
+    "both closed, each tree sampled at its session": (MEMBERS, [A, B], None),
+    "both closed, the second tree sampled before the first closed": (HELLOS + closed("a") + closed("b"), [A, B],
+                                                                     C.MEMBERS_ORDER),
+    "the second closed after other evidence": (MEMBERS, [A, ("b", evidence("x"))], REFUSED.format("b", C.NO_CLOSING)),
+    "the first left open": ([hello("a")] + closed("a")[:-1] + [hello("b")] + closed("b"), [A, B],
+                            REFUSED.format("a", C.NO_CLOSING)),
+    "the second sampled before the first closed, its rounds after": (
+        [hello("a")] + closed("a")[:-1] + [hello("b")] + closed("a")[2:] + closed("b"), [A, B], C.MEMBERS_ORDER),
     "the second begun before the first closed": (HELLOS + closed("a")[:-1] + closed("b")[:1] + closed("a")[2:]
                                                  + closed("b")[1:], [A, B], C.MEMBERS_ORDER),
-    "the sessions in the other order": (HELLOS + closed("b") + closed("a"), [A, B], C.MEMBERS_ORDER),
+    "the sessions in the other order": ([hello("b")] + closed("b") + [hello("a")] + closed("a"), [A, B],
+                                        C.MEMBERS_ORDER),
     "one tree two sessions'": ([hello("a")] + closed("a"), [A, A],
                                f"two sessions' coins are one tree's: {C.SHARED_TREE}"),
     "a tree no session's": (HELLOS + closed("a"), [A],
@@ -166,9 +150,14 @@ class Served:
         self.log.append(line)
         return coins
 
-    def session(self, nonce: bytes) -> dict:
+    def sample(self, nonce: bytes) -> CT.CoinTree:
         tree, line = self.challenger.sample_tree(SPEC, nonce)
         self.log.append(line)
+        return tree
+
+    def session(self, nonce: bytes, tree: CT.CoinTree | None = None) -> dict:
+        """The session on `tree`, a tree sampled before, or else on one it samples now under `nonce`."""
+        tree = self.sample(nonce) if tree is None else tree
         root, root_f, root_b, message = tree.root().hex(), bytes([7]) * 8, bytes([8]) * 8, bytes([9]) * 64
         points = self.opened(root, CT.SESSION, 0, 2, C.link_after(root_f, {"t": root_b}))
         coins = self.opened(root, "t/rep0", 0, 3, message)
@@ -220,6 +209,20 @@ def test_a_challenger_asked_for_the_next_sessions_link_before_the_closing_round_
     b = host.session(bytes(range(32, 64)))
     after_a, after_b = session_evidence(a, b"proof of a"), session_evidence(b, b"proof of b")
     host.close(a, after_a)
+    host.close(b, after_b)
+    assert host.reason(("a", a, after_a), ("b", b, after_b)) == C.MEMBERS_ORDER
+
+
+def test_a_challenger_asked_for_the_next_sessions_tree_before_the_closing_round_logs_an_order_the_check_refuses():
+    """The line that samples a tree is one of its lines: the next session's tree sampled before the closing round of
+    the one before it is refused, though every round of it is opened after that closing round."""
+    host = Served("sampled-early")
+    a = host.session(bytes(range(32)))
+    early = host.sample(bytes(range(32, 64)))
+    after_a = session_evidence(a, b"proof of a")
+    host.close(a, after_a)
+    b = host.session(b"", early)
+    after_b = session_evidence(b, b"proof of b")
     host.close(b, after_b)
     assert host.reason(("a", a, after_a), ("b", b, after_b)) == C.MEMBERS_ORDER
 

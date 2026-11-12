@@ -131,7 +131,8 @@ def _lean_here(file: str, siblings: bool = False) -> int:
     """`lake env lean` in the directory of the nearest lakefile above FILE, against that package's built imports and with
     its Lean options (`siblings.options`), on a copy of FILE with the axiom probe appended (`axiom_probe.py`), whose line is
     the last; lean's status on FILE's own lines.
-    With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes."""
+    With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes; where
+    its stub is refused over a sibling, `lake build` of the siblings the refusal names comes first, once (`siblings.check`)."""
     path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
@@ -163,9 +164,12 @@ def _lean_here(file: str, siblings: bool = False) -> int:
               f"probe after its last line{', then the sibling check' if plan else ''} (in {where})", flush=True)
         rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy, show: lean(copy, args, show))
         if rc == 0 and plan:
-            rc, output, line = sib.check(plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg))
+            rc, output, lines = sib.check(
+                plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg),
+                lambda refusal: sib.run([lake, "build", *(f"+{m}" for m in sib.named(plan, refusal))], pkg)[:3])
             print(output, end="")
-            print(f"verity lean try: {rel}: {line}", flush=True)
+            for line in lines.splitlines():
+                print(f"verity lean try: {rel}: {line}", flush=True)
     if said:
         print(f"verity lean try: {rel}: {said}", flush=True)
     return rc
