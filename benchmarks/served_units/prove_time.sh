@@ -2,8 +2,8 @@
 # Served proof blocks' Flock --zk prove time against the statement's size, on one GPU or on the CPU prover, for each block
 # type's proof overhead and its fixed cost a statement. Run from the tree (research run --on NODE --cwd source):
 #   1. build   flock-circuit (verity/protocols/flock/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
-#   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...] or census:NAME, `+public-weights` for its --public-weights,
-#              `+packed-weights` for --public-weights --packed, `+bind` for --bind) at each N of
+#   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...] or census:NAME, bound as stage.py stages it,
+#              `+public-weights` for its --public-weights, `+packed-weights` for --public-weights --packed) at each N of
 #              PT_NS, or of its own list (UNIT@N,N...; a census type's N may be stage.py's full or full/D), PT_JOBS at a
 #              time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
 #   3. prove   per statement, a loopback --zk session set: a verifier process on VCPUS cores, WARM + RUNS prover sessions on the
@@ -86,7 +86,7 @@ name() {
 stage() {
   local u=${1%+*} flag= nm=$(name "$1" $2)
   case $1 in *+public-weights) flag=--public-weights ;; *+packed-weights) flag="--public-weights --packed" ;;
-    *+bind) flag=--bind ;; *) u=$1 ;; esac
+    *) u=$1 ;; esac
   local d=$FW/data/$nm-$KEY o=$O/stage/$nm
   mkdir -p $o $FW/data
   (

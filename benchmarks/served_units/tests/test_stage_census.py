@@ -1,9 +1,10 @@
 """stage.py's census types: `parse` of census:NAME (the census name verbatim) and of a CENSUS key's statics, and `main`
 staging one through `stage_census` on a stub of `class_statement.UnitStager` (nothing is lowered or proved): the serving
 rows' template the name resolves, its rows' words, the size ``full`` and ``full/D`` resolve to at the block's k_log (never
-under one block's units), and stage.json's record. With ``--bind``: the Program and partition object the statement binds
-(the verifier's copies beside it), the stager's ``bind`` and unit indices, and a ``full`` statement's circuit rebound to
-the Program of the count its k_log gives."""
+under one block's units), and stage.json's record. By default: the Program and partition object the statement binds (the
+verifier's copies beside it), the stager's ``bind`` and unit indices, and a ``full`` statement's circuit rebound to the
+Program of the count its k_log gives; with ``--unbound`` none of them. And the retired types: each refused by name, with
+what stages in its place."""
 from __future__ import annotations
 
 import hashlib
@@ -79,9 +80,10 @@ class Stager:
 @pytest.mark.parametrize(("spec", "n", "want"), [(f"census:{SILU}", "full", 32), (f"census:{SILU}", "full/4", 8),
                                                  (f"census:{SILU}", "full/64", 4), ("gq:K=2048", "full/2", 16),
                                                  (f"census:{SILU}", "3", 3)])
-def test_main(stage, monkeypatch, tmp_path, capsys, spec, n, want):
+def test_main_unbound(stage, monkeypatch, tmp_path, capsys, spec, n, want):
+    """--unbound: the statement under the provisional unit cover, its stager given no ``bind`` and nothing written beside it."""
     monkeypatch.setattr(stage.CS, "UnitStager", Stager)
-    monkeypatch.setattr(sys, "argv", ["stage.py", spec, n, str(tmp_path)])
+    monkeypatch.setattr(sys, "argv", ["stage.py", spec, n, str(tmp_path), "--unbound"])
     stage.main()
     rec = json.loads((tmp_path / "stage.json").read_text())
     assert rec == json.loads(capsys.readouterr().out)
@@ -121,12 +123,12 @@ class BoundStager(Stager):
 
 
 @pytest.mark.parametrize(("n", "want", "composed"), [("3", 3, "own"), ("full/4", 8, "unbound"), ("8", 8, "own")])
-def test_main_bind(stage, monkeypatch, tmp_path, capsys, n, want, composed):
-    """--bind: the statement binds the population Program of its ``want`` instances and that Program's partition under
+def test_main_bound(stage, monkeypatch, tmp_path, capsys, n, want, composed):
+    """By default the statement binds the population Program of its ``want`` instances and that Program's partition under
     `Q_template_instances` v0, both written beside it. A count binds as the circuit is composed; ``full/4`` is composed
     bound to `UNBOUND` and rebound, to the file a count of 8 composes."""
     monkeypatch.setattr(stage.CS, "UnitStager", BoundStager)
-    monkeypatch.setattr(sys, "argv", ["stage.py", f"census:{SILU}", n, str(tmp_path), "--bind"])
+    monkeypatch.setattr(sys, "argv", ["stage.py", f"census:{SILU}", n, str(tmp_path)])
     stage.main()
     rec = json.loads(capsys.readouterr().out)
     part, desc = json.loads((tmp_path / "partition.json").read_text()), json.loads((tmp_path / "program.json").read_text())
@@ -161,8 +163,9 @@ def test_rebind_refuses(stage, tmp_path):
 
 
 @pytest.mark.parametrize(("argv", "why"), [([f"census:{SILU}", "full/0"], "invalid literal"),
-                                           (["s8-linear", "full"], "is for a CENSUS type"),
-                                           (["s8-linear", "2", "--bind"], "which its statement binds already"),
+                                           (["s8-coord", "full"], "is for a CENSUS type"),
+                                           (["s8-coord", "2", "--bind"], "usage: stage.py"),
+                                           (["moe-w13", "2"], "moe-w13 is retired"),
                                            (["census:SiluMul_v2", "2"], "lacks the static")])
 def test_main_refuses(stage, monkeypatch, tmp_path, argv, why):
     monkeypatch.setattr(stage.CS, "UnitStager", Stager)
@@ -170,3 +173,34 @@ def test_main_refuses(stage, monkeypatch, tmp_path, argv, why):
     with pytest.raises((SystemExit, ValueError), match=why):
         stage.main()
     assert not (tmp_path / "stage.json").exists()
+
+
+#: the 18 types that were `Q_word` classes of a word Definition (CIR-259)
+RETIRED = {"moe-gemmw", "moe-chunk", "moe-w13", "dsa-krow", "dsa-logits", "moe-sum", "silu-mul", "rope", "dsa-topk", "s8-linear",
+           "router", "dsa-q", "rmsnorm-cuda", "sparse-mla-head", "token-select", "moe-w2", "rmsnorm-triton", "silu-quant"}
+
+
+def test_retired(stage):
+    """Each retired type is refused by name, and the refusal names what stages in its place, or says that nothing does; each
+    replacement is a type `parse` takes, and a census replacement is a serving rows' template whose statement `verify --zk`
+    takes (`chunk_rows.zk_refusal`). The census's own head block at 64 keys reads in lookup slots, which `verify --zk`
+    refuses, and its refusal names the Boolean version `RETIRED` stages instead."""
+    from verity_vllm.pipeline import chunk_rows as CR
+    from verity_vllm.pipeline.serving_rows import template
+
+    assert set(stage.RETIRED) == RETIRED
+    for name, (instead, why) in stage.RETIRED.items():
+        with pytest.raises(SystemExit) as stop:
+            stage.parse(f"{name}:K=2")
+        said = str(stop.value)
+        assert said.startswith(f"stage.py: {name} is retired") and why in said
+        assert all(r in said for r in instead) and (bool(instead) != ("nothing stages in its place" in said)), said
+        for r in instead:
+            got, cen, S = stage.parse(r)
+            assert got not in stage.RETIRED
+            if isinstance(cen, stage.Census):
+                assert CR.zk_refusal(template(cen.name(S))) is None, r
+    assert not {name for name, (instead, _) in stage.RETIRED.items() if not instead} ^ {"moe-w2", "rmsnorm-triton", "silu-quant"}
+    block = stage.RETIRED["sparse-mla-head"][0][0].removeprefix("census:")
+    census = block.replace("_v2", "_v1")
+    assert CR.zk_refusal(template(census)).endswith(f"name its Boolean version {block}")

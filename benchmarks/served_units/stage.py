@@ -1,10 +1,11 @@
-"""stage.py UNIT N OUT [--public-weights [--packed]] [--bind]: N inputs of one served proof-block type's Q_word proof block, from synthetic
-values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs. For a
-`CENSUS` type N may be ``full``, the most instances a statement of `MAX_STATEMENT_BITS` holds at the built block's k_log
-(a power of two, as `class_statement` cuts a PARTS type's N), or ``full/D``, that over D.
+"""stage.py UNIT N OUT [--public-weights [--packed]] [--unbound]: N inputs of one served proof-block type, one whole Definition a
+proof block, from synthetic values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement
+with hidden outputs, bound to the Program of its N instances and that Program's partition. For a `CENSUS` type N may be
+``full``, the most instances a statement of `MAX_STATEMENT_BITS` holds at the built block's k_log (a power of two), or
+``full/D``, that over D.
 
-    UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
-                           at TP8, s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192, gq:K=384
+    UNIT  TYPE[:S=V,...]   a type of `UNITS`, `CENSUS` or `READS` at its statics (each type's defaults are its model's: GLM-5.3's
+                           at TP8, s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, s8-coord:K=8192, gq:K=384
           census:NAME      any block type of the serving rows by its census name verbatim, staged as a `CENSUS` type, e.g.
                            census:MoeSum_v1{TOPK=8,H=3072}
     --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
@@ -15,29 +16,28 @@ values at the model's served statics, staged for Flock as a ``verity/flock-circu
     --packed               with --public-weights, each port its parameter's leaves concatenated as the row lays them (the row's
                            own words; `UnitStager`'s ``packed``): a registered encoding read packed, so the unit's input words
                            are the opened block's.
-    --bind                 a `UNITS`, `CENSUS` or `READS` statement bound to a Program and its partition (`UnitStager`'s
-                           ``bind``) instead of the provisional unit cover: the population Program of the type's Definition at
-                           its N instances (`population.mixed_population_program`, as a served window registers its
-                           population) and that Program's ``verity/partition/v1`` object under `Q_template_instances` v0, whose
-                           proof blocks 0 .. N are the statement's. Beside the statement it writes the verifier's own copies,
-                           partition.json and program.json (the Lean verifier's ``--partition`` and ``--program``), from which
-                           the verifier derives the statement's proof blocks rather than taking them as stated. The circuit
-                           is the unbound one but for META's binding: its ``class_sha512`` is the same and its pin is not.
+    --unbound              the statement under the provisional unit cover instead (`UnitStager` without ``bind``): it binds
+                           no Program and no partition and nothing is written beside it, so the Lean verifier takes its proof
+                           blocks as stated and, once every check before it has passed, refuses each session for want of the
+                           Program (``NO_PROGRAM``). For the callers that hand the Lean verifier a statement without
+                           partition.json and program.json, or hold a pin of an unbound circuit: the harness's steady rows
+                           (`steady_node.py`) and `verifier_cost/flock_sessions.py`.
+
+A statement is bound (`UnitStager`'s ``bind``) to the population Program of the type's Definition at its N instances
+(`population.mixed_population_program`, as a served window registers its population) and that Program's
+``verity/partition/v1`` object under `Q_template_instances` v0, whose proof blocks 0 .. N are the statement's. Beside the
+statement it writes the verifier's own copies, partition.json and program.json (the Lean verifier's ``--partition`` and
+``--program``), from which the verifier derives the statement's proof blocks rather than taking them as stated. The circuit is
+the unbound one but for META's binding: its ``class_sha512`` is the same and its pin is not.
+
+The word Definitions this stager once cut into `Q_word` classes (`RETIRED`) are refused by name: a class statement claims
+proof blocks 0 .. N-1 of a one-Call Program that has fewer, which the Lean verifier cannot derive, so each is staged as a
+whole Definition by the name `RETIRED` gives in its place, where it gives one.
 
 A type of `UNITS` is a Definition proved as one proof block, staged by `class_statement.stage_unit`: its Boolean Definition
 lowered once, its input rows hashed in the circuit (the per-call row on ``hm96-sha512/row-seg/v1``, the weight row on
 ``hm96-sha512/row/v2``, PoUW's convention), its output word one ``row/v2`` output row, every input's output checked by
 `stage_unit` against the Program's reference of the Boolean Definition and here against the served kernel's numpy twin on the same values (``twin``).
-
-A type of `PARTS` is a word Definition whose Q_word proof blocks are parts of it: the Definition as a one-Call Program cut by
-`Q_word` v1 (X = 16, W = 32), its classes ranked by word gates, and the class of rank ``C`` (static ``C``, default 0: the
-largest) staged by `class_statement.stage` with every input's own ``sha512/row/v1`` rows (``share_rows=False``): the class
-lowered once (Flock's pieces, and for a primitive without one the registered Boolean Definition's builder), its lanes the
-flat Definition evaluated on uniform synthetic parameters (`class_statement.class_lanes`), the laid-out proof block checked against
-them on every input (``twin`` null: no served twin cuts the same proof block).  The circuit binds the partition's
-``verity/partition/v1`` digest, so the verifier is given its own copy of the partition object (partition.json, the Lean
-verifier's ``--partition``); not the program, from which it derives a statement's proof blocks only where each is one whole
-activation of the circuit's template (``Extract.claimedUnits``), and a class here is part of one, on synthetic Calls.
 
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
 overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
@@ -59,9 +59,9 @@ V ranks whose first L hold filled rows and every later one the zero row under th
 capacity; each read's row and verdict are held to the table's (``twin``). Beside the circuit it writes the template and its
 layout mode (``unit.tmpl``, ``unit.layout``), which ``flock-tmpl-unit`` places as the prover's ``--tmpl-unit`` rows.
 
-Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, with --bind
-partition.json and program.json (stage.json's ``bind`` names their digests), and beside a statement reading in slots the MUFU
-tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
+Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, but with --unbound partition.json and program.json
+(stage.json's ``bind`` names their digests), and beside a statement reading in slots the MUFU tables the prover reads
+(``tables/``, ``flock-circuit --tables``), as the served composer does.
 
 Types (GLM-5.3's statics from its config: hidden 6144, q_lora 2048, kv_lora 512, moe_intermediate 2048, 256 experts, top 8,
 FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 rank):
@@ -70,18 +70,12 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 `ScaledMmFp8Block_v1{K,N,128}`'s Q_word proof block), x = Fp8GroupQuant of a seeded N(0, 1) bf16 row, w = a seeded
                 N(0, 0.02) bf16 weight row quantized per 128 the same way.  K = 6144 is fused_qkv_a and the dense and
                 shared experts' gate_up; 2048 is q_b, the indexer's wq_b and o_proj (one TP8 rank); 256 is the shared
-                expert's down_proj on one rank.  The routed experts run Triton's fused MoE (`moe-w13`, `moe-w2`).
+                expert's down_proj on one rank.  The routed experts are census types (`RETIRED`'s ``moe-w13``).
     s8-coord    ScaledMmS8Coordinate_v2{K,DOT=BlackwellS8ImmaDot32_v2}: one output coordinate of a W8A8 linear on sm_120 (K/32
                 satfinite s8 IMMA steps, then steps.py's int8_linear scaling), x = a seeded N(0, 1) row quantized per token to s8
                 (scale absmax/127), w = a seeded N(0, 0.02) row quantized per channel the same way; the twin is the epilogue in
                 numpy (the exact int sum, two float32 multiplies, the bf16 round).  Llama-3.2-1B's statics: K = 2048 is q, k, v,
                 o, gate and up, 8192 is down.
-    s8-linear   `PARTS`: ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, the W8A8 linear on one token row, whose `Q_word`
-                proof blocks are its N coordinates (`ScaledMmS8Coordinate_v1`): the s8-coord proof block as a class of the partition.
-    moe-chunk   `PARTS`: the routed experts as the registered circuit partitions them, the expert's rows gathered inside the
-    moe-gemmw   block from all 256 experts' (`fp8_moe_experts`): K = 512 of a w13 coordinate (a middle chunk) and one w2
-                coordinate, on the H200's wgmma step.  `moe-w13` and `moe-w2` are the same products with the expert's rows as
-                the block's inputs instead.
     gq          `CENSUS`: Fp8GroupQuantUe8m0_v1{K,G}, one token row's quantization to E4M3 in groups of G with power-of-two
                 scales, before an FP8 linear of K inputs (K = 6144: the hidden state's); a K below 6144 is a column block.
     fi          `CENSUS`: FlashInferFp8Linear_v2{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row
@@ -98,9 +92,7 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 table's capacity), H = 576 words (a kv row's 512 latent and 64 rope bf16 words), L = 8192 rows filled.
     dsa-chunk   DsaPositionsChunk_v1{K,W}: chunk c of the long row's index, the merge's K = 2048 slots in chunks of W = 32,
                 each port its own row; its slots below N = 131072 (the longest row's class) but a tenth of any u32.
-    dsa-slot    DsaPositionsSlot_v1{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs.
-    the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
-                tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
+    dsa-slot    DsaPositionsSlot_v1{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs."""
 from __future__ import annotations
 
 import hashlib
@@ -115,26 +107,22 @@ from typing import Callable
 
 import numpy as np
 
-from circuit_check import targets as TG
 from verity.circuits import partition_object as PO
-from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.population import mixed_population_program
 from verity.circuits.types import Array
 from verity.circuits.defs import bind
-from verity.definitions.ops import gemm as OG
 from verity.definitions.ops.boolean import gemm as BG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
-from verity_flock import partition_units as PU
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32
-from verity.definitions.registry import act, b1, dsa, dsa_topk_reads, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
+from verity.definitions.registry import dsa_topk_reads
 from verity.definitions.registry import boolean_fp8 as BF
 
 
-#: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's
-#: N to the most instances under it
+#: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): a ``full`` statement holds the most
+#: instances under it
 MAX_STATEMENT_BITS = 1 << 35
 
 
@@ -220,43 +208,36 @@ UNITS: dict[str, Unit] = {
 }
 
 
-@dataclass(frozen=True)
-class Part:
-    """A proof-block type cut from a word Definition: the family, bound at statics ``S`` (``C``, the class's rank, is not one)."""
-
-    family: object
-    defaults: dict
-    fixed: tuple = ()
-
-    def definition(self, S: dict):
-        return bind(self.family, **{k: v for k, v in S.items() if k != "C"}, **dict(self.fixed))
-
-
-_MLA = tuple((k, v) for k, v in sparse_mla.SPARSE_MLA_GLM53.items() if k not in ("NH", "DR", "DV", "BN", "SCALE"))
-_HOPPER = (("DOT", HopperE4m3QgmmaDot32),)
-PARTS: dict[str, Part] = {
-    "router": Part(moe.MoeRouterSigmoidBias, {"E": 256, "TOPK": 8, "SCALE": 2.5, "KERNEL": "block"}),
-    "moe-w13": Part(fp8_moe.MoeExpertFp8BlockGemm, {"K": 6144, "N": 2, "G": 128, "KB": 128, "SWAP": True}),
-    "moe-w2": Part(fp8_moe.MoeExpertFp8BlockGemmW, {"K": 256, "N": 2, "G": 128, "KB": 128, "SWAP": True}),
-    "moe-chunk": Part(fp8_moe_experts.MoeExpertFp8CoordinateChunk,
-                      {"E": 256, "K": 512, "G": 128, "KB": 128, "SWAP": True, "FIRST": False, "LAST": False}, _HOPPER),
-    "moe-gemmw": Part(fp8_moe_experts.MoeExpertFp8GemmW, {"E": 256, "K": 256, "N": 1, "G": 128, "KB": 128, "SWAP": True}, _HOPPER),
-    "silu-quant": Part(fp8_moe.SiluMulFp8BlockQuant, {"I": 256, "G": 128}),
-    "moe-sum": Part(moe.MoeSum, {"TOPK": 8, "H": 2}),
-    "silu-mul": Part(act.SiluMul, {"I": 2}),
-    "rope": Part(ref_prims.RoPEHeadGptJ, {"D": 64}),
-    "rmsnorm-triton": Part(b1.RMSNormTriton, {"N": 2048, "EPS": 1e-6}),
-    "rmsnorm-cuda": Part(b1.RMSNormFusedCuda, {"N": 6144, "EPS": 1e-5}),
-    "dsa-krow": Part(dsa.DsaIndexerKRow, {"D": 128, "ROPE": 64, "EPS": 1e-6}),
-    "dsa-q": Part(dsa.DsaIndexerQ, {"H": 32, "D": 128, "ROPE": 64}),
-    "dsa-logits": Part(dsa.DsaMqaLogits, {"N": 2, "H": 32, "D": 128}),
-    "dsa-topk": Part(dsa.DsaTopKShortRow, {"TOPK": 2048}),
-    "sparse-mla-head": Part(sparse_mla.SparseMlaHead, {"T": 2048, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}, _MLA),
-    "token-select": Part(b1.TokenSelect, {"V": 154880}),
-    "s8-linear": Part(OG.ScaledMmS8, {"K": 2048, "N": 2}, tuple(OG.GEMM_SM120_S8.items())),
+_QGMMA = 'DOT={"fn":"HopperE4m3QgmmaDot32_v1"}'
+#: the types that were `Q_word` classes of a word Definition, each with what stages in its place (a type's name or a census
+#: name; none where the census has no Definition of it) and why that, as `parse` says when one is asked for
+RETIRED: dict[str, tuple[tuple[str, ...], str]] = {
+    "moe-gemmw": ((f"census:MoeExpertFp8GemmW_v1{{E=256,K=256,N=1,G=128,KB=128,SWAP=true,{_QGMMA}}}",), "its own Definition"),
+    "moe-chunk": ((f"census:MoeExpertFp8CoordinateChunk_v1{{E=256,K=512,G=128,KB=128,SWAP=true,{_QGMMA},FIRST=false,LAST=false}}",),
+                  "its own Definition"),
+    "moe-w13": ((f"census:MoeExpertFp8BlockGemm_v3{{K=6144,N=1,G=128,KB=128,SWAP=true,{_QGMMA}}}",
+                 'census:MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}'),
+                "the census's whole Definition, its swapped variant or the decode one"),
+    "dsa-krow": (('census:DsaIndexerKRow_v1{D=128,ROPE=64,EPS={"f64":"0x1.0c6f7a0b5ed8dp-20"}}',), "the census's Definition"),
+    "dsa-logits": (("census:DsaMqaLogits_v3{N=1,H=32,D=128}",), "the census's whole Definition"),
+    "moe-sum": (("census:MoeSum_v1{TOPK=8,H=96}",), "the census's Definition"),
+    "silu-mul": (("census:SiluMul_v2{I=256}",), "the census's Definition"),
+    "rope": (("census:RoPEHeadGptJ_v2{D=64}",), "the census's Definition"),
+    "dsa-topk": (("census:DsaTopKShortRow_v1{TOPK=2048}",), "the census's Definition"),
+    "s8-linear": (("s8-coord",), "its block, the W8A8 coordinate"),
+    "router": (("router-row", "router-slots"), "the router's Boolean version, its row form or its slots form"),
+    "dsa-q": (("dsa-q-row",), "the indexer query's Boolean version"),
+    "rmsnorm-cuda": (("rmsnorm-v8",), "the fused RMSNorm the census serves"),
+    "sparse-mla-head": (('census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},'
+                         'SCALE={"f64":"0x1.0000000000000p-4"}}', 'census:SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}'),
+                        "the census's cut, its key block (the Boolean version, whose reads are in gates: the census's own "
+                        "reads in lookup slots, which `verify --zk` refuses) and its end block"),
+    "token-select": (("census:GreedyChunk_v1{N=16384,FIRST=false}", "census:GreedyCombine_v1{V=154880,N=16384}"),
+                     "the census's cut, a chunk and the combine"),
+    "moe-w2": ((), "the census does the down projection as moe-gemmw's Definition"),
+    "rmsnorm-triton": ((), "the census has no Definition of it"),
+    "silu-quant": ((), "the census has no Definition of it"),
 }
-for _p in PARTS.values():
-    _p.defaults.setdefault("C", 0)
 
 
 @dataclass(frozen=True)
@@ -324,17 +305,22 @@ def _static(default, v: str):
     return type(default)(v)
 
 
-def parse(spec: str) -> tuple[str, Unit | Part | Census | Read, dict]:
+def parse(spec: str) -> tuple[str, Unit | Census | Read, dict]:
     name, _, rest = spec.partition(":")
     if name == "census":
         family, brace, inner = rest.partition("{")
         if not family or (brace and not inner.endswith("}")):
             raise SystemExit(f"stage.py: census:NAME takes a census name, FAMILY or FAMILY{{STATICS}}, not {rest!r}")
         return name, Census(family, {}, inner[:-1]), {}
-    if name not in UNITS and name not in PARTS and name not in CENSUS and name not in READS:
-        raise SystemExit(f"stage.py: unit type {name!r} is not one of "
-                         f"{sorted(UNITS) + sorted(PARTS) + sorted(CENSUS) + sorted(READS)}")
-    u = UNITS.get(name) or PARTS.get(name) or CENSUS.get(name) or READS[name]
+    if name in RETIRED:
+        instead, why = RETIRED[name]
+        raise SystemExit(f"stage.py: {name} is retired: it was a Q_word class of a word Definition, whose statement claims proof "
+                         "blocks the Lean verifier cannot derive; "
+                         + (f"stage {' and '.join(instead)} in its place ({why})" if instead
+                            else f"nothing stages in its place ({why})"))
+    if name not in UNITS and name not in CENSUS and name not in READS:
+        raise SystemExit(f"stage.py: unit type {name!r} is not one of {sorted(UNITS) + sorted(CENSUS) + sorted(READS)}")
+    u = UNITS.get(name) or CENSUS.get(name) or READS[name]
     S = dict(u.defaults)
     for kv in filter(None, rest.split(",")):
         k, _, v = kv.partition("=")
@@ -348,8 +334,8 @@ def gb() -> float:
     return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
 
 
-#: the binding a ``--bind`` statement of ``full`` instances is composed with, before its circuit's k_log gives the count its
-#: Program names: `rebind` puts the Program's own in its place
+#: the binding a statement of ``full`` instances is composed with, before its circuit's k_log gives the count its Program
+#: names: `rebind` puts the Program's own in its place
 UNBOUND = {k: hashlib.sha512(f"verity/served-units/unbound\0{k}".encode()).hexdigest() for k in ("partition", "program")}
 
 
@@ -406,37 +392,6 @@ def bound_files(out: Path, pin: str, n: int) -> None:
         raise AssertionError(f"{out}/pub.bin names another circuit than {pin[:16]}, or other proof blocks than 0 .. {n}")
 
 
-def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
-    """The class of rank ``S["C"]`` of the type's word Definition under `Q_word`, ``n`` inputs, as stage.json's record."""
-    TG.load_registries()
-    CS.cache_slot_circuits()
-    CS._CTX["max_statement_bits"] = MAX_STATEMENT_BITS
-    fn = part.definition(S)
-    prog = PU.one_call(fn)
-    units = PU.partition_units(prog, "q-word")
-    ranked = sorted(units.classes().items(), key=lambda kv: (-len(kv[1].representative.gates), -kv[1].units, kv[0]))
-    s, cl = ranked[S["C"]]
-    rep = cl.representative
-    key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": program_digest(prog), "seed": 0})
-    lanes = CS.class_lanes(units, cl, key, n, CS.broadcast_params(units))
-    t_values = time.time() - t0
-    salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
-    st = CS.stage(units, "q-word", s, cl, lanes, out, salt_key, packed=False, share_rows=False)
-    (out / f"inst-{st['n']}.bin").rename(out / "inst.bin")
-    (out / f"pub-{st['n']}.bin").rename(out / "pub.bin")
-    (out / "partition.json").write_text(json.dumps(PO.build(units.program, units.query), sort_keys=True))
-    meta = json.loads((out / "circuit.txt").read_text().split("\n", 2)[1][5:])
-    return {"unit": name, "statics": S, "tag": tag, "n": st["n"], "definition": rep.definition, "type_definition": fn.id,
-            "class": {"shape": s[:16], "unit": rep.unit, "units": cl.units, "word_gates": len(rep.gates),
-                      "in_bits": sum(rep.in_widths), "out_bits": sum(rep.out_widths), "rank": S["C"], "classes": len(ranked),
-                      "q_word_units": sum(c.units for _s, c in ranked)},
-            "ands": st["ands"], "unit_nnz": st["unit_nnz"], "k_log": st["k_log"], "unit_log": meta.get("unit_log"),
-            "vus_per_block": st["vus_per_block"], "row_schemas": meta.get("row_schemas"), "circuit_bytes": st["circuit_bytes"],
-            "circuit_sha512": st["circuit_sha512"], "class_sha512": st["class_sha512"],
-            "inst_bytes": (out / "inst.bin").stat().st_size, "pub_bytes": (out / "pub.bin").stat().st_size, "twin": None,
-            "seconds": {"values": round(t_values, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
-
-
 def nets(low) -> list[dict]:
     """Each net's ANDs, rows and matrix entries a side: the unit's, then under read slots each tail stage's (the circuit's
     ``unit``, ``stage0``, ...; a lookup slot's table counts its entries once per statement, in the prover)."""
@@ -445,12 +400,11 @@ def nets(low) -> list[dict]:
     return [{"net": nm, **{k: int(lay.counts[k]) for k in ("ands", "rows", "nnz_a", "nnz_b")}} for nm, lay in lays]
 
 
-def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: Path, t0: float, bind: bool = False) -> dict:
+def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: Path, t0: float, bind: bool = True) -> dict:
     """``n`` inputs of the census type's Definition, a proof block each, on its served rows and statement, as stage.json's
-    record; ``n`` ``full`` or ``full/D`` is the most instances a statement holds at the built block's k_log (as
-    `class_statement` cuts a PARTS type's), over D. ``bind``: the statement bound to the Program of its ``n`` instances and
-    that Program's partition (`binding`); a ``full`` statement's count is its circuit's to give, so its circuit is composed
-    bound to `UNBOUND` and rebound once (`rebind`)."""
+    record; ``n`` ``full`` or ``full/D`` is the most instances a statement holds at the built block's k_log, over D.
+    ``bind``: the statement bound to the Program of its ``n`` instances and that Program's partition (`binding`); a ``full``
+    statement's count is its circuit's to give, so its circuit is composed bound to `UNBOUND` and rebound once (`rebind`)."""
     from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline.serving_rows import template
 
@@ -514,7 +468,7 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: P
             "maxrss_gb": gb()}
 
 
-def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float, bind: bool = False) -> dict:
+def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float, bind: bool = True) -> dict:
     """``n`` honest reads of one table, a proof block each, on the verifier's read template, as stage.json's record. The
     table has V ranks of H words: its first L rows filled at random under random salts, every later rank the zero row under the
     zero salt (the history table's placeholder), its tokens random below L; each read's row and verdict are held to the table's.
@@ -601,10 +555,10 @@ def public_words(d, row: np.ndarray, params: tuple[str, ...], packed: bool = Fal
 
 
 def main() -> None:
-    args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed", "--bind")]
-    public, packed, bound = "--public-weights" in sys.argv, "--packed" in sys.argv, "--bind" in sys.argv
+    args = [a for a in sys.argv[1:] if a not in ("--public-weights", "--packed", "--unbound")]
+    public, packed, bound = "--public-weights" in sys.argv, "--packed" in sys.argv, "--unbound" not in sys.argv
     if any(a.startswith("--") for a in args) or len(args) != 3:
-        raise SystemExit(f"stage.py: usage: stage.py UNIT N OUT [--public-weights [--packed]] [--bind], not {sys.argv[1:]}")
+        raise SystemExit(f"stage.py: usage: stage.py UNIT N OUT [--public-weights [--packed]] [--unbound], not {sys.argv[1:]}")
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
     spec, out = args[0], Path(args[2])
@@ -616,14 +570,10 @@ def main() -> None:
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
     if name == "census":
         tag += hashlib.sha256(u.name(S).encode()).hexdigest()[:16]
-    if isinstance(u, (Part, Census, Read)):
+    if isinstance(u, (Census, Read)):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
-        if bound and isinstance(u, Part):
-            raise SystemExit(f"stage.py: --bind is for a type whose proof block is one whole Definition; {name} is a class of "
-                             "its Definition's Q_word partition, which its statement binds already")
-        rec = (stage_part(name, u, S, tag, n, out, t0) if isinstance(u, Part)
-               else stage_census(name, u, S, tag, n, out, t0, bound) if isinstance(u, Census)
+        rec = (stage_census(name, u, S, tag, n, out, t0, bound) if isinstance(u, Census)
                else stage_read(name, S, tag, n, out, t0, bound))
         (out / "pin.txt").write_text(rec["circuit_sha512"])
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
