@@ -54,6 +54,7 @@ from training_slowdown.capture import capture_step, products
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(ROOT / "benchmarks" / "circuit_properties"))
+from circuit_properties import points as PT  # noqa: E402
 from circuit_properties import work as WK  # noqa: E402
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
@@ -372,6 +373,26 @@ def test_both_sizes_are_boolean_gates_and_differ_by_what_each_prices(readings):
     mine_rest, theirs_rest = it.gates - mine_products, size - theirs_products
     uncounted = sum(g for (ins, f), g in split.items() if not ins and f.rsplit("_v", 1)[0] in UNCOUNTED)
     assert mine_rest - uncounted <= theirs_rest <= mine_rest
+
+
+def test_the_point_evaluates_each_iteration_it_runs_once(readings):
+    """The reading's test at a point (`points.check`) passes the step's loop, its charged claims among them, and
+    costs about one evaluation of the step: the two iterations the reader reads as distinct contexts, of two and of
+    three, each the step's primitive words once, at one point, none by the reference a word at a time."""
+    memo: dict = {}
+
+    def words(fn) -> int:
+        if fn.id not in memo:
+            memo[fn.id] = sum((nd.out.leaves if isinstance(nd.fn, PrimitiveDefinition) else
+                               (nd.n if nd.form in ("batch", "scan") else 1) * words(nd.fn))
+                              for nd in fn.body.nodes if not is_input(nd.fn))
+        return memo[fn.id]
+
+    for n in (2, 3):
+        p = loop(readings.step, n)
+        _w, R, root, reasons = WK._read(p, K0, WK.PRODUCTS, WK.LOOKUPS)
+        t = PT.check(p, R, root, reasons)
+        assert (t.words, t.points, t.claims, dict(t.reference)) == (2 * words(readings.step.root), 1, 23, {})
 
 
 def test_the_readings_constants_are_the_benchmarks():
