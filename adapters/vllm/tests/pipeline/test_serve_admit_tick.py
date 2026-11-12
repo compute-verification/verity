@@ -13,9 +13,7 @@ import json
 import queue
 import random
 import socket
-import sys
 import threading
-import types
 from collections import deque
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -25,6 +23,7 @@ from typing import Any
 import pytest
 from verity.protocols.certifier.verifier import release as REL
 
+from tests import fake_vllm
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
@@ -700,16 +699,13 @@ def plugin(tmp_path, monkeypatch):
     """`register` over stand-ins of vLLM's scheduler and engine core modules; its hooks come off afterwards."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
-    sched_mod, core_mod = types.ModuleType("vllm.v1.core.sched.scheduler"), types.ModuleType("vllm.v1.engine.core")
 
     class Scheduler(Sched):
         pass
 
-    sched_mod.Scheduler, core_mod.EngineCoreProc = Scheduler, EngineCoreProc
-    for name, mod in (("vllm", types.ModuleType("vllm")), ("vllm.v1", types.ModuleType("vllm.v1")),
-                      ("vllm.v1.core", types.ModuleType("vllm.v1.core")), ("vllm.v1.core.sched", types.ModuleType("vllm.v1.core.sched")),
-                      ("vllm.v1.engine", types.ModuleType("vllm.v1.engine")), (sched_mod.__name__, sched_mod), (core_mod.__name__, core_mod)):
-        monkeypatch.setitem(sys.modules, name, mod)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
+    fake.set("vllm.v1.engine.core:EngineCoreProc", EngineCoreProc)
     tp.register()
     tp.register()
     try:
