@@ -327,11 +327,29 @@ class Wait:
 Action = Build | Advance | Drop | Eject | Retry | Rerun | Ring | Red | Regenerate | Commit | Wait
 
 
+@dataclass(frozen=True)
+class Leave:
+    """Ready PR #``number`` at ``head`` is in no candidate once the tick's actions are applied, for ``why`` (`left_out`):
+    ``cause`` names the reason in words that stay the same while it holds, so the loop logs each (number, head, cause) once."""
+    number: int
+    head: str
+    cause: str
+    why: str
+
+
 #: the prefix of a task's test for each file it read outside its declared inputs, a fault graph2 names by file
 UNDECLARED = "undeclared:"
 ON_MAIN = "on main"
 BASE_FAILED = "its base failed"
 BASE_DROPPED = "its base was dropped"
+
+
+def left_out(s: Snapshot) -> list[Leave]:
+    """Why each PR of ``s.ready`` that `decide`'s actions put in no candidate (nor leave in one at its head, nor on `main`)
+    waits, in the order of ``s.ready``."""
+    leaves: list[Leave] = []
+    _decide(s, leaves)
+    return leaves
 
 
 def decide(s: Snapshot) -> list[Action]:
@@ -371,6 +389,11 @@ def decide(s: Snapshot) -> list[Action]:
     the members set aside and the members not ready at the heads they were built at: no other member leaves, and each keeps
     its place.  One with a Lean member is staged again off the chain (`Build.records`) while no other batch stays staged,
     else its members wait for a Lean batch as any Lean PR does, and the rest go on the chain's top."""
+    return _decide(s, None)
+
+
+def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
+    """`decide`, adding to ``leaves``, unless None, why each ready PR its actions build into no candidate waits (`_left`)."""
     ready = {r.number: r for r in s.ready}
     built = {**ready, **{r.number: r for r in s.flying}}
     acts: list[Action] = []
@@ -460,40 +483,47 @@ def decide(s: Snapshot) -> list[Action]:
     n = len(acts)
     kept += _restack(s, ready, chain, rest, landed | ejected | out, main, acts, kept, hold)
     flying = {m for d in chain for m in d.members if m in built}
-    if not held and not hold and not any(built[m].move for m in flying):
-        base, after = chain[-1].sha if chain else main, None
-        if passed and len(chain) < s.depth and len(acts) == n:
-            c = passed[0]
-            kept.remove(c)
-            if c.base == base or (gone := _unmarked(c, ready)) is None:
-                acts.append(Commit(c.sha, base, s.depth - len(chain)))
-                chain, after = [*chain, c], c.sha
-            else:
-                cause = (f"#{gone} isn't taken at the head it was staged at ({why})" if (why := _untaken(c, gone, s))
-                         else f"#{gone} isn't marked at the head it was staged at")
-                acts.append(Drop(c.sha, f"{cause}, so it isn't merged again onto {base[:12]}, main's chain's top now: its "
-                                        "other members are built again"))
-                kept += _restack(s, ready, chain, [c], landed | ejected | out, main, acts, kept)
-                base = chain[-1].sha if chain else main
-            flying = {m for d in chain for m in d.members if m in built}
-            if any(built[m].move for m in flying):
-                return acts
-        scripts = any(built[m].scripts for m in flying)
-        outcomes, room, priority = _outcomes(s, acts), len(chain) < s.depth, max(s.depth - len(chain), 0)
-        busy = landed | ejected | {m for d in (*chain, *kept) for m in d.members}
-        pool = [r for r in _pool(ready, busy, bool(kept)) if not (r.move and scripts)]
-        lean, why = _next(s, pool, outcomes, chain, built)
-        lean = _moves_last(lean, ready)
-        builds = [Build(lean, base, priority, s.records, after)] if lean and (s.records or room) else []
-        if room and (s.records or not lean):
-            beside = bool(kept or lean)
-            plain = _batch([r for r in _pool(ready, busy | set(lean), beside) if not (r.move and scripts)], outcomes,
-                           s.batch, 0, s.wide)
-            plain = _moves_last(plain, ready)
-            if plain and not (beside and _aside(plain, ready, outcomes)):
-                builds.append(Build(plain, base, priority, after=after))
-        acts += builds or ([Wait(why)] if why and room else [])
-    return acts
+    settled = landed | ejected
+    if held:
+        return _leaving(s, leaves, acts, chain, kept, settled, CHAIN_WAITS)
+    if hold:
+        return _leaving(s, leaves, acts, chain, kept, settled, ADVANCED_TO_MOVE)
+    if any(built[m].move for m in flying):
+        return _leaving(s, leaves, acts, chain, kept, settled, MOVE_ON_CHAIN)
+    base, after = chain[-1].sha if chain else main, None
+    if passed and len(chain) < s.depth and len(acts) == n:
+        c = passed[0]
+        kept.remove(c)
+        if c.base == base or (lost := _unmarked(c, ready)) is None:
+            acts.append(Commit(c.sha, base, s.depth - len(chain)))
+            chain, after = [*chain, c], c.sha
+        else:
+            cause = (f"#{lost} isn't taken at the head it was staged at ({why})" if (why := _untaken(c, lost, s))
+                     else f"#{lost} isn't marked at the head it was staged at")
+            acts.append(Drop(c.sha, f"{cause}, so it isn't merged again onto {base[:12]}, main's chain's top now: its "
+                                    "other members are built again"))
+            kept += _restack(s, ready, chain, [c], landed | ejected | out, main, acts, kept)
+            base = chain[-1].sha if chain else main
+        flying = {m for d in chain for m in d.members if m in built}
+        if any(built[m].move for m in flying):
+            return _leaving(s, leaves, acts, chain, kept, settled, MOVE_ON_CHAIN)
+    scripts = any(built[m].scripts for m in flying)
+    outcomes, room, priority = _outcomes(s, acts), len(chain) < s.depth, max(s.depth - len(chain), 0)
+    busy = landed | ejected | {m for d in (*chain, *kept) for m in d.members}
+    pool = [r for r in _pool(ready, busy, bool(kept)) if not (r.move and scripts)]
+    lean, why = _next(s, pool, outcomes, chain, built)
+    lean = _moves_last(lean, ready)
+    builds = [Build(lean, base, priority, s.records, after)] if lean and (s.records or room) else []
+    plain: tuple[int, ...] = ()
+    if room and (s.records or not lean):
+        beside = bool(kept or lean)
+        plain = _batch([r for r in _pool(ready, busy | set(lean), beside) if not (r.move and scripts)], outcomes,
+                       s.batch, 0, s.wide)
+        plain = _moves_last(plain, ready)
+        if plain and not (beside and _aside(plain, ready, outcomes)):
+            builds.append(Build(plain, base, priority, after=after))
+    acts += builds or ([Wait(why)] if why and room else [])
+    return _leaving(s, leaves, acts, chain, kept, settled, None, _Tried(lean, why, plain, room, scripts, pool))
 
 
 def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
@@ -504,6 +534,104 @@ def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
     run starting again (`Commit`)."""
     return sorted((r for r in ready.values() if r.number not in busy and not r.conflict
                    and not (staged and (r.lean or r.lean_input))), key=lambda r: (r.rank, r.number))
+
+
+#: what stops every build of a tick, as a `Leave`'s (cause, why)
+CHAIN_WAITS = ("chain waits", "a failed candidate above the lowest waits for its base's word on its failures: nothing is built "
+                              "above it")
+ADVANCED_TO_MOVE = ("move on chain", "the tick moved `main` to a candidate holding a move: nothing is built until the next "
+                                     "tick reads the ready PRs on it")
+MOVE_ON_CHAIN = ("move on chain", "a candidate on main's chain holds a move: nothing is built on it until it is on `main`")
+
+
+@dataclass(frozen=True)
+class _Tried:
+    """What a tick that builds on the chain's top tried (`decide`): its Lean batch and why it opened none, its batch of PRs
+    with no Lean change, whether the chain had room, whether it holds a member changing `tools/move/`'s scripts, and the
+    pool the Lean batch was drawn from."""
+    lean: tuple[int, ...]
+    why: str
+    plain: tuple[int, ...]
+    room: bool
+    scripts: bool
+    pool: list[Ready]
+
+
+def _leaving(s: Snapshot, leaves: list[Leave] | None, acts: list[Action], chain: list[Candidate], kept: list[Candidate],
+             settled: set[int], blocked: tuple[str, str] | None, tried: _Tried | None = None) -> list[Action]:
+    """``acts``, adding to ``leaves`` (unless None) why each ready PR they build into no candidate waits: the tick's chain and
+    staged batches (``chain``, ``kept``) once they are applied, the PRs on `main` or ejected (``settled``), and what stopped
+    every build (``blocked``) or what the builds tried."""
+    if leaves is None:
+        return acts
+    ready = {r.number: r for r in s.ready}
+    taken = {m for a in acts if isinstance(a, Build) for m in a.members}
+    holds = {m: h for c in (*chain, *kept) for m, h in zip(c.members, c.heads)}
+    newest = _newest(_outcomes(s, acts), {r.number: r.head for r in s.ready})
+    for r in s.ready:
+        o = newest.get(r.number)
+        if r.number in taken or r.number in settled or holds.get(r.number) == r.head or (o is not None and o.state == PASS):
+            continue
+        cause, why = (("in flight", f"a candidate holds it at {holds[r.number][:12]}, an older head: its new head waits for "
+                                    "that one to leave the chain") if r.number in holds else
+                      blocked or _left(s, r, newest, ready, bool(kept), tried))
+        leaves.append(Leave(r.number, r.head, cause, why))
+    return acts
+
+
+def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Ready], kept: bool, t: _Tried
+          ) -> tuple[str, str]:
+    """Why a tick that tried ``t`` built ready PR ``r`` into no candidate (``newest``: `_newest` of the ready PRs; ``kept``: a
+    staged batch stays staged), as a `Leave`'s (cause, why)."""
+    o = newest.get(r.number)
+    full = ("chain full", f"main's chain is full at --depth {s.depth}")
+    aside = ("set aside", "set aside after its check kept erring: it goes behind the PRs waiting")
+    if r.conflict:
+        return "conflict", "it doesn't merge onto `main`: no batch takes it until its head changes"
+    if r.move and t.scripts:
+        return "move", "a candidate on main's chain changes `tools/move/`'s scripts: no move is built on it"
+    if r.lean and kept:
+        return "Lean batch staged", "it is a Lean change, and a Lean batch is staged: one is staged at a time"
+    if r.lean_input and not r.lean and (kept or t.lean and s.records):
+        return "Lean input beside a staged batch", ("it changes a Lean input, and a Lean batch is staged: no batch beside it "
+                                                    "takes one until it is on main's chain")
+    if r.lean:
+        waiting = [x for x in t.pool if x.lean_input and not x.lean and _takes(x, newest)]
+        if t.lean and any(m in s.pinned for m in t.lean) and r.number not in s.pinned:
+            return "Lean cap", "pinned Lean PRs go first: a Lean batch holds them alone while one waits"
+        if t.lean and (_wide(r, s.wide) or any(_wide(ready[m], s.wide) for m in t.lean)):
+            return "Lean cap", "a wide Lean change fills a Lean batch alone"
+        if t.lean:
+            return "Lean cap", f"behind the Lean PRs ranked before it: a Lean batch holds at most {s.lean} (--lean)"
+        if t.why:
+            return "Lean waits", t.why
+        if s.lean == 0 and r.number not in s.pinned:
+            return "Lean cap", "--lean is 0: only a pinned Lean PR opens a Lean batch"
+        if s.records and waiting:
+            return "Lean waits", (f"no Lean batch is staged while #{waiting[0].number}, which changes a Lean input, waits: it "
+                                  "goes first")
+        if not s.records and not t.room:
+            return full
+        if not _takes(r, newest):
+            return aside
+        return "Lean waits", "no Lean batch took it"
+    if not t.room:
+        return full
+    if o is not None and o.state == INFRA:
+        return aside
+    if r.move and any(ready[m].scripts for m in t.plain):
+        return "move", "a batch holds no move beside a PR changing `tools/move/`'s scripts"
+    if r.move and any(ready[m].move for m in t.plain):
+        return "move", "a batch holds one move PR, last"
+    cap = max(1, len(o.suspects) // 2) if o is not None and o.state == FAIL and r.number in o.suspects else None
+    if cap is not None and cap <= len(t.plain):
+        return "suspect cap", f"a suspect of a failed candidate goes in a batch of at most {cap}"
+    if t.plain:
+        return "batch full", (f"behind the PRs ranked before it: a batch holds at most {len(t.plain)} "
+                              + ("(--batch)" if len(t.plain) >= s.batch else "(a suspect's cap)"))
+    if t.lean and not s.records:
+        return "Lean's turn", "with no records run, a Lean batch takes the tick's build and a place on main's chain"
+    return "other", "no batch took it"
 
 
 def _aside(members: tuple[int, ...], ready: dict[int, Ready], outcomes: list[Outcome]) -> bool:
