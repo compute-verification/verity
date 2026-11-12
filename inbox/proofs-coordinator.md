@@ -108194,3 +108194,25 @@ A13 (`noInputs_of_accepts`) and the reference table from the play's own record (
 (the second node); my only run since is on vy-nebius-2. **NEEDS**: none. **STOP RULE**: nothing.
 
 **Not established**: anything building against #9375's `Vocab`, which has not landed. Nothing imports these files yet.
+
+## RELAX, Thu 12 Nov 23:20Z: the first records run failed on one module that is not this change's, `Proofs.Properties.Verity.Sampled.Instance`, which lean's merge fixed at 21:36Z. R7's branch merged that head and is at `8592d9d7c429`; records, quick tier and tries are on vy-nebius-2. Eight of the nine tries pass at the merge with #9458. Ready line still by Fri 06:00Z
+
+**The failure** [run: `r20261112-223453-2b16`, records at `6388939bcb9b`, exit 1 after 1,546 s; read: its `stdout.log`]
+- `security/Proofs` built 14,579 of 14,580 targets. The one that failed: `Proofs.Properties.Verity.Sampled.Instance`, lines 786 to 823 (`(base δ).game` no longer unfolds to `play [] (signer θ) …`, and each `rfl` after it).
+- It is not this change's [run: `git rev-parse` of the file at five commits]: the file is byte for byte the same at lean's merge head `bafae2eaec2e` that I had merged, at #9458's head, at mine and on `main`. lean's merge fixed it in the one commit after that head, `67b2c6791982` (21:36Z), one line in that file (`macs` set in the idle base).
+- So every other module under `security/Proofs` built over this change, the downstream readers of `OneStage.paramsOfJson` and `Registration.Verifier` among them, except those that import `Sampled.Instance`, which Lake did not reach. [read: the log's one failure line; derived for the readers]
+
+**What I did** [run: `git merge`, `git push`, `git rev-parse` of the remote]
+- Merged lean's merge head `67b2c6791982` into R7's branch: one commit, one line, no conflict, no rebase. `cursor/proofs-r7-certified-b6a0` is at `8592d9d7c42992434de9fd5193d2426ccb7366b3`. For CERTSTOP and network's worker: nothing of mine changed.
+- On your 23:07Z word, at that head on vy-nebius-2: records `r20261112-231801-aceb` (80 GB asked: Wednesday's peaked at 61.5), quick tier `r20261112-231802-58bf` (`suites.py --changed 67b2c6791982 --quick`, 48 GB), tries `r20261112-231803-3394` (the nine files, 12 GB). All three in line one minute at 23:19Z.
+- Cancelled, not started: quick tier `b980` on cpu-8.
+
+**Tries at `77ee4e226019`, the merge with #9458** [run: `r20261112-224822-5048`, cpu-8, still on its ninth file]
+- lean exit 0 and no axiom beyond `propext`, `Classical.choice`, `Quot.sound` for `Spot/Record.lean` (4 theorems), `Spot/Registration.lean` (9), `security/Proofs/Properties/Spot.lean` (83), `security/Proofs/Properties/Spot/Pinned.lean` (4); lean exit 0 and no theorems in `Spot/OneStage.lean`, `Spot/Run.lean`, `Spot/Pieces.lean`, `security/Properties/Spot.lean`. Siblings: none declares a name these do.
+- So #9458's change and mine elaborate together. `SpotFlock/Code.lean` is running.
+
+**What I had wrong:** a try of each changed file says nothing of the files that import them. The records run is the first build of those; I should have had one out before I called the Lean tried.
+
+**Not established:** the lock records; the suites against the real Lean; the modules that import `Sampled.Instance`, over this change.
+
+For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `8592d9d7c429` (holds lean's `67b2c6791982` and #9458's `dbb268ce3009`) | records `aceb`, quick tier `58bf`, tries `3394` on vy-nebius-2 | ready line by Fri 06:00Z | nothing needed.
