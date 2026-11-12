@@ -42,7 +42,7 @@ def e2m1(words: np.ndarray) -> np.ndarray:
     w = np.asarray(words, np.uint32)
     v = np.abs(f32(w)).astype(np.float64)
     code = np.zeros(w.shape, np.uint8)
-    for i, mid in enumerate(F._E2M1_MIDPOINTS):
+    for i, mid in enumerate(F.E2M1_MIDPOINTS):
         up = (v > mid) | ((v == mid) & ((i + 1) % 2 == 0))
         code = np.where(up & (code == i), i + 1, code)
     return (code | ((w >> 31).astype(np.uint8) << 3)).astype(np.uint8)
