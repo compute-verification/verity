@@ -19,14 +19,13 @@ from pathlib import Path
 
 import pytest
 
+from tests.pipeline import served_experts as SX
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
-
-from tests.pipeline import served_experts as SX
 
 
 @pytest.fixture(scope="module")
