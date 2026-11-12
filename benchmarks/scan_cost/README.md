@@ -18,7 +18,7 @@ tick's ingress block) and `egress-0` … `egress-(G−1)`: 2G + 2 sessions over 
 | Number | What it is |
 | --- | --- |
 | proving seconds for each second of execution phase | (the round's sessions' seconds + their staging) / (G · T · tick). A session's seconds are its prover process's, start to exit, with the ZK server's work and the waits on the live verifier inside them; staging is each member's statement made ready for its session |
-| the Lean verifier's CPU seconds for each second of execution phase, on one core | the round's `flock-verify verify` processes' CPU seconds, user and system, / (G · T · tick), each verifier process pinned to one core |
+| the Lean verifier's CPU seconds for each second of execution phase, on one core | the CPU seconds, user and system, of the Lean verifier processes that verify the round's sessions / (G · T · tick), each process pinned to one core |
 
 The verifier's wall seconds are written beside its number and are not the number: the core a verifier process is
 pinned to, the job's lowest, is one of the 21 the prover's work also runs on, so its wall is contended. The first
@@ -49,7 +49,7 @@ Two results compare only at one identity, and `result.py compare` refuses any ot
 | Field | The benchmark's | Why it is fixed |
 | --- | --- | --- |
 | `class` | `w63k4` | the Definitions' parameters, so every block's size |
-| `sample` | every unit | the honest round proves every block, with no sampling |
+| `sample` | every unit | the honest round proves every block, with no sampling; read from the answers' public parts |
 | `ticks`, `tick_ms` | T = 32 ticks of 100 ms: an execution phase of 3.2 s | the class's T and the scan's tick, which the numbers divide by |
 | `source` | the synthetic run | the traffic the blocks hold |
 | `cores` | 21 | the job is pinned to its first 21 cores, the least a slot of the network pool gives, and its provers size their threads by that |

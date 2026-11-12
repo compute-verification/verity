@@ -10,8 +10,9 @@
 #      a job with fewer is refused; another N is another identity, which compares with no result at 21)
 #      SC_CLASS (w63k4, the benchmark's; `test`, the certifier tests' class, rehearses this runner, and its result
 #      compares with no w63k4 one)  SC_MEM_GB (128)  SC_CACHE  SC_PORT (scan_zk.sh's)
-# Whatever else scan_zk.sh reads that changes what is proved (SC_DRAW, SC_DRY, SC_WARDEN_RUN, SC_REHEARSE,
-# SC_CHALLENGER) is unset: the identity is not the caller's to change.
+# Every other SC_ setting is cleared, those of scan_zk.sh that change what is proved among them, and so are
+# OMP_NUM_THREADS and OMP_THREAD_LIMIT, which nproc answers with in place of the pin and the scan sizes its provers'
+# threads by: the identity is not the caller's to change.
 # Exit: 0, the guard holds and the result is written; the scan's own exit where it failed; 1, the guard does not hold
 # or the result could not be written; 2, the job cannot run at the identity. The scan's kept files stay under $OUT
 # whatever the exit.
@@ -30,8 +31,11 @@ if [ "$GOT" -lt "$N" ]; then
   exit 2
 fi
 echo "scan_cost: pinned to $N cores ($PIN) of the $(echo "$HAVE" | tr , '\n' | grep -c .) this job has"
-env -u SC_DRAW -u SC_DRY -u SC_WARDEN_RUN -u SC_REHEARSE -u SC_CHALLENGER \
-  SC_CLASS="${SC_CLASS:-w63k4}" SC_MEM_GB="${SC_MEM_GB:-128}" SC_RSS=1 SC_LEAN_ONE=1 \
+for v in $(compgen -e SC_); do
+  case $v in SC_GROUP|SC_CLASS|SC_MEM_GB|SC_CACHE|SC_PORT) ;; *) unset "$v";; esac
+done
+unset OMP_NUM_THREADS OMP_THREAD_LIMIT
+SC_CLASS="${SC_CLASS:-w63k4}" SC_MEM_GB="${SC_MEM_GB:-128}" SC_RSS=1 SC_LEAN_ONE=1 \
   taskset -c "$PIN" bash benchmarks/network_traces/scan_zk.sh
 rc=$?
 echo "scan_cost: the scan exited $rc"

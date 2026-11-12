@@ -30,7 +30,7 @@ RUN, OTHER = "r20000101-000000-aaaa", "r20000101-000001-bbbb"
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
 SOURCE = "the synthetic run (scan_traffic.serve), signed with the driver's own key"
 #: a class's T, as its public part's blocks give it (2T blocks an execution phase)
-TICKS = {cls: len(pin["drawn"]) // 2 for cls, pin in json.loads(R.PUBLIC.read_text(encoding="utf-8")).items()}
+TICKS = {cls: len(pin["proved"]) // 2 for cls, pin in json.loads(R.PUBLIC.read_text(encoding="utf-8")).items()}
 
 
 def members(ticks: int, group: int) -> list[tuple[str, int]]:
@@ -57,12 +57,12 @@ def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: boo
             f"$ flock-circuit prove --zk\n# rc 0 in {12 + i} s\n--- stdout\nLIVE\t{json.dumps(live)}\n--- stderr\n"
             f"statement unit/scan-{name} instances=1 blocks={n} built in 0.5s\n", encoding="utf-8")
         (logs / "lean-verify.log").write_text(
-            f"$ flock-verify verify\n# rc 0 in {4 + i} s\n--- stdout\nVERDICT {{}}\n--- stderr\ninputs: 1000 ms\n"
-            f"setup (drawn): 2000 ms\n/tmp/scan/sessions/{name}: {2500 + 100 * i} ms\n", encoding="utf-8")
-        timing[name] = {"session_s": 12 + i, "lean_verify_s": 4 + i, "drawn": n, "timing": {"k_log": 20, "dense_m": 22}}
+            f"$ verifier verify\n# rc 0 in {4 + i} s\n--- stdout\nVERDICT {{}}\n--- stderr\ninputs: 1000 ms\n"
+            f"setup (sampled): 2000 ms\n/tmp/scan/sessions/{name}: {2500 + 100 * i} ms\n", encoding="utf-8")
+        timing[name] = {"session_s": 12 + i, "lean_verify_s": 4 + i, "timing": {"k_log": 20, "dense_m": 22}}
         rnd[name] = {"stage_s": 0.5}
         base += n
-    summary = {"T": ticks, "group": group, "setup": cls, "draw": "every unit", "source": SOURCE,
+    summary = {"T": ticks, "group": group, "setup": cls, "source": SOURCE,
                "params": {"bucket_ms": 100},
                "members": {R.ROUND: [{"name": name, "n": n} for name, n in names]},
                "stagers": {f"joint/{k}": {"lower_s": 3.0} for k in ("first", "ingress", "egress")},
@@ -151,8 +151,11 @@ def test_a_group_is_its_execution_phases_and_every_blocks_answer(tmp_path):
     assert doc["numbers"]["proving"] == 28.125          # six sessions of 12 to 17 s and 6 × 0.5 s of staging over 3.2 s
     assert R.pinned("test", 2)["proved"] == list(range(64)) and R.pinned("test", 1)["proved"] == list(range(32))
     one = R.document(kept(tmp_path / "b", group=2, public=R.pinned("test", 1)), 0, RUN)
-    assert one["guard"]["why"] == [f"execution phase {i}'s public part is not public.json's for test in drawn, proved"
+    lists = ", ".join(sorted(k for k, v in R.pinned("test", 1).items() if v == list(range(32))))
+    assert lists.endswith("proved") and lists != "proved"
+    assert one["guard"]["why"] == [f"execution phase {i}'s public part is not public.json's for test in {lists}"
                                    for i in (0, 1)]
+    assert one["identity"]["sample"] == "32 of 64 units"
 
 
 def test_an_unpinned_verifier_has_no_number_and_says_why(tmp_path):
@@ -257,9 +260,17 @@ def test_a_round_without_a_sessions_seconds_has_no_result(run_dir, capsys):
     assert result["validation"]["detail"] == "the guard holds, and the summary lacks a session's seconds or staging: no number"
     del summary["rounds"][R.ROUND]["audit"]["timing"]["last"]["session_s"]
     (out / "sczk" / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
-    with pytest.raises(R.Refused, match="lacks what its honest round is read by \\(KeyError: 'session_s'\\)"):
+    with pytest.raises(R.Refused, match="lack what the honest round is read by \\(KeyError: 'session_s'\\)"):
         R.document(out, 0, RUN)
     assert "the summary lacks" in capsys.readouterr().out
+
+
+def test_a_kept_file_that_does_not_parse_is_refused_not_passed_over(tmp_path):
+    out = kept(tmp_path / "a")
+    with (out / "lean.jsonl").open("a", encoding="utf-8") as f:
+        f.write("{half a line\n")
+    with pytest.raises(R.Refused, match="lack what the honest round is read by \\(JSONDecodeError: "):
+        R.document(out, 0, RUN)
 
 
 def test_a_scan_that_left_no_round_fails_with_no_document(run_dir, capsys):
@@ -337,10 +348,11 @@ def test_the_metrics_are_written_under_their_ids():
 
 
 SCAN = """#!/usr/bin/env bash
-# a stand-in for the scan: the kept files, the cores it was given and the settings it was started with
+# a stand-in for the scan: the kept files, the threads it would size its provers by (nproc, as the scan's job
+# does) and the settings it was started with
 mkdir -p "$RESEARCH_RUN_DIR/out" && cp -r "$KEPT"/. "$RESEARCH_RUN_DIR/out"/
 printf 'threads %s\\n' "$(nproc)" > "$RESEARCH_RUN_DIR/out/host.txt"
-printf '%s\\n' "class=${SC_CLASS-} mem=${SC_MEM_GB-} rss=${SC_RSS-} one=${SC_LEAN_ONE-} draw=${SC_DRAW-unset} group=${SC_GROUP-unset}" \\
+printf '%s\\n' "class=${SC_CLASS-} mem=${SC_MEM_GB-} rss=${SC_RSS-} one=${SC_LEAN_ONE-} dry=${SC_DRY-unset} other=${SC_OTHER-unset} group=${SC_GROUP-unset}" \\
   > "$RESEARCH_RUN_DIR/out/seen.txt"
 exit "${SCAN_EXIT:-0}"
 """
@@ -348,10 +360,13 @@ exit "${SCAN_EXIT:-0}"
 
 @pytest.fixture
 def tree(tmp_path):
-    """A copy of the benchmark beside a stand-in scan, with the tree's own harness and settings."""
+    """A copy of the benchmark's runner, writer and pin beside a stand-in scan, with the tree's own harness and
+    settings."""
     top = tmp_path / "tree"
     (top / "benchmarks" / "network_traces").mkdir(parents=True)
-    shutil.copytree(HERE.parent, top / "benchmarks" / "scan_cost", ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    (top / "benchmarks" / "scan_cost").mkdir()
+    for name in ("run.sh", "result.py", "public.json"):
+        shutil.copy2(HERE.parent / name, top / "benchmarks" / "scan_cost" / name)
     (top / "benchmarks" / "network_traces" / "scan_zk.sh").write_text(SCAN, encoding="utf-8")
     (top / "benchmarks" / "harness").symlink_to(ROOT / "benchmarks" / "harness")
     (top / "verity").symlink_to(ROOT / "verity")
@@ -367,10 +382,11 @@ def run_sh(tree: Path, run_dir: Path, **env: str) -> subprocess.CompletedProcess
 
 def test_run_sh_pins_the_job_runs_the_scan_at_the_identity_and_writes_the_result(tree, tmp_path):
     files = kept(tmp_path / "kept", cls="w63k4")
-    r = run_sh(tree, tmp_path / "run", KEPT=str(files), SC_CORES="1", SC_DRAW="4", SC_DRY="1")
+    # a caller's OMP_NUM_THREADS, which nproc would answer with, is cleared with every setting that is not the benchmark's
+    r = run_sh(tree, tmp_path / "run", KEPT=str(files), SC_CORES="1", SC_DRY="1", SC_OTHER="4", OMP_NUM_THREADS="7")
     assert r.returncode == 0, r.stdout + r.stderr
     assert (tmp_path / "run" / "out" / "seen.txt").read_text(encoding="utf-8") == (
-        "class=w63k4 mem=128 rss=1 one=1 draw=unset group=unset\n")
+        "class=w63k4 mem=128 rss=1 one=1 dry=unset other=unset group=unset\n")
     result = json.loads((tmp_path / "run" / "result.json").read_text(encoding="utf-8"))
     # the scan saw one core, the one run.sh pinned it to, whatever this machine has
     assert result["workload_fingerprint"] == {
