@@ -99,7 +99,7 @@ REFUSED = {
     "local load": (_more("lines", "LDL"), {}, "", "lines: local memory {"),
     "local store": (_more("commit_rows", "STL"), {}, "", "commit_rows: local memory {"),
     "ftz": (_more("transpose", "FADD.FTZ", "FFMA.FTZ", "FMUL.FTZ"), {}, "",
-            "transpose: 3 FP32 FADD, FFMA or FMUL with .FTZ"),
+            "transpose: 3 FP32 FADD, FFMA or FMUL with .FTZ (a shipped kernel has none)"),
     "the other format's OMMA": (_more("gemm_nv_hash", OMMA["MX"]), {}, "", "gemm_nv_hash: 1 OMMA_MX (want none)"),
     "part of a copy": (_fewer("gemm_mx_nohash", 1), {}, "",
                        "gemm_mx_nohash: 31 OMMA_MX (want a multiple of 32, at least 32)"),
