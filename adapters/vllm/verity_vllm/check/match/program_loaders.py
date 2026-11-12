@@ -40,7 +40,8 @@ def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bo
     if os.path.exists(tl):
         with open(tl) as f:
             links = json.load(f)
-        names = list(links.get("user_inputs") or [])
+        user_inputs = links.get("user_inputs")   # the rank Program's user inputs in order; a table without the list names none, refused next
+        names = list(user_inputs) if user_inputs else []
         if len(names) != n_user:
             raise ValueError(f"{d}: tp_links.json names {len(names)} user inputs, derive-report has {n_user}")
         listed = set(links.get("prompt_inputs", names[:1])) | set(links.get("peer_inputs") or ())
@@ -101,8 +102,9 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
                 # operand are kept from `operand_refs`; the node-space runs ("n": the attention K/V reads, O(LP^2) over a long prefill) are
                 # the same references `RootView.inst[*].args` holds and are never read from the rows.  Operand arity is preserved (one list per
                 # operand, possibly empty) so `operand_roots[k]` still names operand k below.
+                refs = o.get("operand_refs")   # a row without its operands' references retains none
                 rows.append({"node": o["node"], "step": o.get("step"), "row": o.get("row"), "rows": o.get("rows"), "hint": o.get("hint"),
-                             "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in (o.get("operand_refs") or [])],
+                             "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in refs] if refs else [],
                              "pattern": o.get("pattern"),
                              "request": o.get("request"),  # the fold's own attribution when recorded
                              "position": o.get("position"),  # prefix_reads links a cached row to its producer by position (and layer: hint)
@@ -125,11 +127,12 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     # the weights Record is the LAST root parameter (fold contract) -- its index is the largest `p` index any instance reads,
     # not `n_input_nodes - 1`: a Record that is not width-homogeneous (FP8: e4m3 weights, f32 block scales, bf16 norms) is encoded as
     # ONE Input node per leaf field (436 for Qwen3-4B-FP8 at B=1), so the node count no longer says how many prompt parameters there are.
-    p_idx = {i for o in rows for a in (o.get("operand_refs") or []) for r in a for i in _p_indices(r)}
+    p_idx = {i for o in rows for a in o["operand_refs"] for r in a for i in _p_indices(r)}   # the retained rows always carry the list (`load_oracle`)
     w_param = max(p_idx) if p_idx else n_in - 1
     # the fold states its parameter layout by name (program.json `params`): the weights index is read from it when present
     # (exact, even for a fold whose instances read no weight -- a fixture) and cross-checked against the instances' largest "p" index.
-    names = [n for n, _t in (pj.get("params") or [])]
+    params = pj.get("params")
+    names = [n for n, _t in params] if params else []
     if names:
         if names[-1] != "weights":
             raise ValueError(f"{d}: program.json params end with {names[-1]!r}, the fold contract puts `weights` LAST")
@@ -140,11 +143,13 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     # a tensor-parallel rank fold: one homogeneous `peers_<i>` Record per request = ONE Input node at the parameter's index (every
     # parameter before the weights is homogeneous, one node each); its fields (issue order, leaf offsets) come from `peers_layout`.  The k of a
     # field is its ordinal among the REQUEST's fields = the rank Program's `peers_<k>` for that request.
-    for ent in pj.get("peers_layout") or []:
+    peers_layout, witness_layout = pj.get("peers_layout"), pj.get("witness_layout")   # each stated only by a fold that has such parameters
+    for ent in peers_layout if peers_layout else ():
         node = int(ent["param"])
         if node not in p.inputs:
             raise ValueError(f"{d}: peers parameter {ent.get('name')!r} (index {node}) is not an Input node of the Program")
-        flds = sorted((int(f["offset"]), int(f["ordinal"])) for f in ent.get("fields") or [])
+        fields = ent.get("fields")
+        flds = sorted((int(f["offset"]), int(f["ordinal"])) for f in fields) if fields else []
         if not flds:
             raise ValueError(f"{d}: peers parameter {ent.get('name')!r} has no fields")
         if sum(1 for _o, k in flds) != len({k for _o, k in flds}):
@@ -153,7 +158,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         p.peer_index[node] = int(ent["request_index"])
     # a witness parameter (`witness_layout`) is one homogeneous Input node, bound by its name as the rank
     # Program's witness input of that name is (`load_derived`)
-    for ent in pj.get("witness_layout") or []:
+    for ent in witness_layout if witness_layout else ():
         node = int(ent["param"])
         if node not in p.inputs:
             raise ValueError(f"{d}: witness parameter {ent.get('name')!r} (index {node}) is not an Input node of the Program")
@@ -181,9 +186,9 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         hint = o.get("hint") or ""
         mod, _, tail = hint.rpartition("/")
         name = f"{mod}.cos_sin_cache" if tail in ("rope.q", "rope.k") else tail or hint
-        oroots = o.get("operand_roots") or []
-        for k, a in enumerate(o.get("operand_refs") or []):
-            nm = oroots[k] if k < len(oroots) and oroots[k] else name
+        oroots = o["operand_roots"]   # None where the fold recorded no weight names for the instance's operands
+        for k, a in enumerate(o["operand_refs"]):
+            nm = oroots[k] if oroots and k < len(oroots) and oroots[k] else name
             for r in a:
                 if (w := _p_w_span(r, w_param)) is not None:
                     sp = span.setdefault(nm, [w[0], w[1]])

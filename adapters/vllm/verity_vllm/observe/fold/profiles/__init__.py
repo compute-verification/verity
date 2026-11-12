@@ -16,6 +16,8 @@ import importlib.util
 import json
 import sys
 
+__all__ = ["profile_for_case", "profile_module_for_case"]
+
 
 class _DerivedProfileFinder(importlib.abc.Loader):
     """`sys.meta_path` hook: `verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` / `dense_<ROLE>` -> `generic.make_module`."""

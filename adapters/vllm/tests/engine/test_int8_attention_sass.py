@@ -17,6 +17,7 @@ def _triton():
     """`int8_attention_triton`, or why the compiled checks skip."""
     try:
         import triton  # noqa: F401
+
         from verity_vllm.engine import int8_attention_triton as T
         for cap in S.ARCHES:
             S.tool("ptxas", cap)
@@ -111,5 +112,5 @@ def test_the_sass_rules_refuse_each_class():
         assert want in text, (want, bad["refused"])
     lut = S.sass_rules("lut_rows", _listing("FMUL R1, R2, R3", "FFMA R4, R5, R6, R1", "F2F.BF16.F32 R7, R4", "DMUL R8, R10, R12",
                                             "IMMA.16832.S8.S8.SAT R14, R16, R18, R14"))
-    assert lut["refused"] == ["SASS: 1 FMUL and 0 FADD for 1 bf16 outputs, where Int8LutAttentionRow_v1 rounds three products "
-                              "and one sum per output (3 and 1): a product contracted into its add"]
+    assert lut["refused"] == [("SASS: 1 FMUL and 0 FADD for 1 bf16 outputs, where Int8LutAttentionRow_v1 rounds three products "
+                               "and one sum per output (3 and 1): a product contracted into its add")]
