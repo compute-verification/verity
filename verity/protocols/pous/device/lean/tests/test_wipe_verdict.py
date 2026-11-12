@@ -2,12 +2,13 @@
 `streamed_wipe.verdict`: the whole verdict (accepted, reasons word for word, and the egress in MiB) on records as
 `wipe_verdict.py` writes them from honest sessions at every batch size (each above 1 refused as uncovered), sessions
 under one adversarial edit (`wipe_cases.MUTATIONS`), records under one JSON edit, and each accepted-schemes mapping a
-caller passes; then the named negative controls through `wipe_verdict.verdict` and `judge`, the calls a caller makes, and
-the switch itself."""
+caller passes; then the named negative controls through `wipe_verdict.verdict` and `judge`, the calls a caller makes, the
+format (a v1 session and a start mark that is not one refused, an empty mark and a digest read), and the switch itself."""
 
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import importlib.util
 import shutil
 
@@ -98,10 +99,15 @@ def _params(batch: int = 1, k: int = 3, labels: int = 8) -> sw.WipeParams:
     return sw.WipeParams(labels, k, batch, LIMIT, (("gpu", 3 * sw.LABEL_BYTES), ("host-dram", (labels - 3) * sw.LABEL_BYTES)))
 
 
-def _honest(batch: int = 1, spends=(1, 1, 1), tampered=frozenset(), egress_bits: int = 1234) -> W.Session:
-    """A three-challenge session over 8 labels in two tiers, its deadline 1000 ns, signed at leaf 1 of a height-1 key."""
+CERTIFICATE = b"a start certificate, as the network certifier returned it"
+
+
+def _honest(batch: int = 1, spends=(1, 1, 1), tampered=frozenset(), egress_bits: int = 1234,
+            certificate: bytes | None = None) -> W.Session:
+    """A three-challenge session over 8 labels in two tiers, its deadline 1000 ns, signed at leaf 1 of a height-1 key;
+    with `certificate`, its start mark is that certificate's SHA-512."""
     return W.run(_params(batch), M.test_signer(M.SECRETS[0], 1, 1), spends=lambda b: spends[b], tampered=tampered,
-                 egress_bits=egress_bits)
+                 egress_bits=egress_bits, certificate=certificate)
 
 
 def _uncovered(batch: int) -> str:
@@ -110,11 +116,19 @@ def _uncovered(batch: int) -> str:
 
 def controls() -> dict[str, tuple[W.Session, tuple[str, ...], int]]:
     """The negative controls, each a session, the reasons its verdict gives and its egress in MiB, beside the honest
-    session at batch size 1; an otherwise honest session at batch size 2 is one, rejected as uncovered."""
+    session at batch size 1, with no start mark and with one; an otherwise honest session at batch size 2 is one,
+    rejected as uncovered."""
     s = _honest()
+    marked = _honest(certificate=CERTIFICATE)
+    other = hashlib.sha512(CERTIFICATE + b"x").digest()
     mib = 1
     return {
         "honest": (s, (), mib),
+        "honest, with a start mark": (marked, (), mib),
+        "another mark, signed": (marked.resign(start_mark=other), (), mib),
+        "mark edited": (W._unsigned(marked, start_mark=other), ("the signature does not verify",), mib),
+        "mark dropped": (W._unsigned(marked, start_mark=b""), ("the signature does not verify",), mib),
+        "mark added": (W._unsigned(s, start_mark=other), ("the signature does not verify",), mib),
         "honest, batch 2": (_honest(batch=2), (_uncovered(2),), mib),
         "late answer, batch 2": (_honest(batch=2, spends=(1, LIMIT + 1)),
                                  (_uncovered(2), "the session ended late after 2 of 2 batches",
@@ -168,6 +182,32 @@ def test_negative_controls(server):
             assert all(side == lean for side in sides.values()), (name, decide, sides)
         rec = record(s)
         assert port_.key(D.replay(port_, rec, server)) == port_.key(port_.python(rec)), name
+
+
+def test_the_format_is_v2(server):
+    """A record of an honest session, with a start mark or none, is read; the same session as the v1 format wrote it
+    (no start mark, the v1 protocol in its commitments), and a start mark in upper case or of another length, are
+    refused by the Lean and by the reference."""
+    port_ = port(st.none())
+    for s in (_honest(), _honest(certificate=CERTIFICATE)):
+        rec = record(s)
+        mark = rec["signed"]["start_mark"]
+        assert mark == s.signed.start_mark.hex() and len(mark) in (0, 128)
+        assert D.replay(port_, rec, server)[0] == "output"
+        v1 = {"protocol": "verity-pous/streamed-wipe/v1"}
+        unmarked = {k: v for k, v in rec["signed"].items() if k != "start_mark"}
+        digest = mark or hashlib.sha512(CERTIFICATE).hexdigest()
+        refused = [W._v1(rec, 0),
+                   rec | {"signed": unmarked},
+                   rec | {"commitment": rec["commitment"] | v1},
+                   rec | {"signed": rec["signed"] | {"commitment": rec["signed"]["commitment"] | v1}},
+                   rec | {"commitment": rec["commitment"] | v1,
+                          "signed": rec["signed"] | {"commitment": rec["signed"]["commitment"] | v1}}]
+        refused += [rec | {"signed": rec["signed"] | {"start_mark": bad}}
+                    for bad in (digest.upper(), digest[:-2], digest + "00", digest[:64], "00", digest[:-1], None)]
+        assert digest.upper() != digest
+        for bad in refused:
+            assert D.replay(port_, bad, server)[0] == "reject", bad
 
 
 def test_a_disagreement_is_refused(monkeypatch):

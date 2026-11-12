@@ -5,10 +5,10 @@ public import MemoryChallenger.Verdict
 /-!
 # The streamed-label wipe's verdict
 
-`verity/core/protocols/pous/streamed_wipe.py`'s formats and `verdict`, whose module docstring and `PROTOCOL.md` ("The
+`verity/protocols/pous/verifier/streamed_wipe.py`'s formats and `verdict`, whose module docstring and `PROTOCOL.md` ("The
 streamed-label wipe") are the spec: the commitment and its header, the batch record (`Batch.value`), the records root, the
-signed message, the egress count in MiB, and the check of a signed session against the commitment published when it
-opened. The reasons are the Python's, word for word.
+signed message with its start mark, the start and end messages, the egress count in MiB, and the check of a signed
+session against the commitment published when it opened. The reasons are the Python's, word for word.
 
 A record's fields and the fill's times are integers of either sign, as the Python holds them. One past its width in the
 record (`to_bytes`'s `OverflowError`) leaves the session with no message, so its signature doesn't verify, and every other
@@ -24,12 +24,17 @@ namespace MemoryChallenger.StreamedWipe
 
 open Flock
 
-def PROTOCOL : String := "verity-pous/streamed-wipe/v1"
-def SESSION_TAG : ByteArray := "verity-pous/streamed-wipe/session/v1".toUTF8.push 0
+def PROTOCOL : String := "verity-pous/streamed-wipe/v2"
+def SESSION_TAG : ByteArray := "verity-pous/streamed-wipe/session/v2".toUTF8.push 0
+def START_TAG : ByteArray := "verity-pous/streamed-wipe/start/v1".toUTF8.push 0
+def END_TAG : ByteArray := "verity-pous/streamed-wipe/end/v1".toUTF8.push 0
 def RECORD_BINDING : ByteArray := "verity-pous/streamed-wipe/batch-records/v1".toUTF8.push 0
 def RECORDS_TREE : String := "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
 def RECORD_SCHEMA : String := "pous/streamed-wipe/batch-record/v1"
 def LABEL_BYTES : Nat := 64
+
+/-- A start mark: the SHA-512 of the start certificate. -/
+def MARK_BYTES : Nat := 64
 def COMPLETE : String := "complete"
 
 /-- The public egress count's unit: one MiB, in bits. -/
@@ -112,25 +117,41 @@ def recordsRoot (session : ByteArray) (batches : Array Batch) : E ByteArray := d
   let values ← batches.mapM Batch.value
   pure (FrameV3Sha512.root d ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!))
 
-/-- The signed header: the commitment's header with how the session ended, the fill's times, the number of batches and
-the egress, as `json.dumps(sort_keys=True, separators=(",", ":"))`. -/
-def header (c : Commitment) (ended : String) (fillStartNs fillEndNs : Int) (batches : Nat) (egressBits : Int) : String :=
+/-- The signed header: the commitment's header with how the session ended, the start mark as hex (the empty string for
+none), the fill's times, the number of batches and the egress, as `json.dumps(sort_keys=True, separators=(",", ":"))`. -/
+def header (c : Commitment) (ended : String) (startMark : ByteArray) (fillStartNs fillEndNs : Int) (batches : Nat)
+    (egressBits : Int) : String :=
   let fields := (c.headerFields ++ [("ended", pyJsonStr ended), ("fill_start_ns", toString fillStartNs),
     ("fill_end_ns", toString fillEndNs), ("batches", toString batches),
-    ("egress_bits", toString egressBits)]).toArray.qsort (·.1 < ·.1)
+    ("egress_bits", toString egressBits), ("start_mark", pyJsonStr (hexOf startMark))]).toArray.qsort (·.1 < ·.1)
   "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
 
 /-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`. -/
-def message (c : Commitment) (ended : String) (fillStartNs fillEndNs : Int) (batches : Array Batch) (egressBits : Int) :
-    E ByteArray := do
-  let head := (header c ended fillStartNs fillEndNs batches.size egressBits).toUTF8
+def message (c : Commitment) (ended : String) (startMark : ByteArray) (fillStartNs fillEndNs : Int)
+    (batches : Array Batch) (egressBits : Int) : E ByteArray := do
+  let head := (header c ended startMark fillStartNs fillEndNs batches.size egressBits).toUTF8
   let root ← recordsRoot c.session batches
   pure (Sha512.hash (SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ root))
 
-/-- `SignedWipe`: a closed session, the egress the network certifier counted over it in bits, and the one signature. -/
+/-- The commitment's header alone, as `json.dumps(sort_keys=True, separators=(",", ":"))`: what the start message
+hashes. -/
+def Commitment.headerJson (c : Commitment) : String :=
+  let fields := c.headerFields.toArray.qsort (·.1 < ·.1)
+  "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
+
+/-- `start_message`: what the challenger hands the network certifier before the fill,
+`SHA-512(START_TAG ‖ u64 len ‖ commitment header)`. Not signed. -/
+def startMessage (c : Commitment) : ByteArray :=
+  let head := c.headerJson.toUTF8
+  Sha512.hash (START_TAG ++ be64 head.size.toUInt64 ++ head)
+
+/-- `SignedWipe`: a closed session, its start mark (the SHA-512 of the start certificate the challenger held before the
+fill, empty when it had no mark source), the egress the network certifier counted over it in bits, and the one
+signature. -/
 structure Signed where
   commitment : Commitment
   ended : String
+  startMark : ByteArray
   fillStartNs : Int
   fillEndNs : Int
   batches : Array Batch
@@ -141,7 +162,14 @@ structure Signed where
   deriving BEq, Inhabited
 
 def Signed.message (s : Signed) : E ByteArray :=
-  StreamedWipe.message s.commitment s.ended s.fillStartNs s.fillEndNs s.batches s.egressBits
+  StreamedWipe.message s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches s.egressBits
+
+/-- `end_message`: what the challenger hands the network certifier after its last read,
+`SHA-512(END_TAG ‖ u64 len ‖ message ‖ u64 len ‖ signature)`, the session's signed message and its signature. Not
+signed. -/
+def endMessage (s : Signed) : E ByteArray := do
+  let m ← s.message
+  pure (Sha512.hash (END_TAG ++ be64 m.size.toUInt64 ++ m ++ be64 s.signature.size.toUInt64 ++ s.signature))
 
 /-- `egress_units`: the egress in whole MiB, rounded up (Python's floor division), saturating at `EGRESS_MAX_UNITS`. -/
 def egressUnits (egressBits : Int) : Int := min (-(Int.fdiv (-egressBits) EGRESS_UNIT_BITS)) EGRESS_MAX_UNITS
