@@ -51,7 +51,8 @@ def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], P
 
     events: list[str] = []
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
-    # The rank worker arms the serving switches when it is imported, once a process: before the stand-in, whose modules hold nothing to arm on.
+    # The rank worker arms the serving switches when it is imported, once a process, on the vLLM modules `sys.modules` holds then: before
+    # the stand-in, whose sampler module holds no split for `engine.topp_pin` to pin.
     importlib.import_module("verity_vllm.pipeline.tp.rank_worker")
     fake_vllm.install(monkeypatch).set("vllm:LLM", _LLM(events))
     monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
