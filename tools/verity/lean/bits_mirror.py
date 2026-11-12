@@ -102,6 +102,20 @@ def ks(T: float, kappa: float, gamma: float, finder: str) -> float:
     return kappa + sqrt(gamma * pr_b)
 
 
+# ---- Pouw.PearlC.δPearlC: Pearl-C's noise term, per challenge ----
+
+def delta_pearl_c(q: Fraction, N: Fraction) -> Fraction:
+    """`Pouw.PearlC.δPearlC`: `(q + N)/2^128`, ``N`` a statement's rows times its row width."""
+    return (q + N) / Fraction(2) ** 128
+
+
+# ---- Pouw.Guarantees.PeriodBindingPerProver: a verification phase's binding per prover ----
+
+def period_binding(T: float, L: float, kappa: float) -> float:
+    """`PeriodBindingPerProver`'s bound `|L|·√(q/2^256 + κ)`, ``L`` the period's opened positions and ``q = T``."""
+    return L * sqrt(T / 2.0 ** 256 + kappa)
+
+
 #: SPOT's three sizes: the program's gates `N` and its proof blocks `n_PU`, with `k = 1507` rounds at one table, `e_s =
 #: 1 + 210·k` and `openCalls = 2^25`. No card declares them: `N` counts MACs where `εregAt` counts gates, `n_PU` at the
 #: floor is a workload card's `macs` field, and `openCalls`'s tree depth is a guess.
@@ -206,5 +220,51 @@ MIRRORS: tuple[Mirror, ...] = (
                   {"kappa": 2.0 ** -202.98, "gamma": 2.0 ** 51, "finder": "ExpectedCR"}),
         ),
         value=lambda T, kappa, gamma, finder: ks(float(T), kappa, gamma, finder),
+    ),
+    Mirror(
+        lean="Pouw.PearlC.δPearlC",
+        term="δPearlC q N = (q + N)/2^128, q = T and N the rows times the row width (each statement's δ, a term of "
+             "its gap)",
+        guarantees={
+            "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192":
+                ("unfolded_hash", "507fb03572a319ad07c133042c9fd96c2e7b9e6b40c419c30ed2b10da33f5235"),
+            "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192":
+                ("unfolded_hash", "2f5e38246498aa870adda0a71a77d943d4eead4922e041513dc71c7e890ff65c"),
+            "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192":
+                ("unfolded_hash", "18caf59f47dc6f09d5227c2bb6ef405bf3268c2af7cdf43b360b2af697561994"),
+            "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256":
+                ("unfolded_hash", "2fb81f5ebfd295195002ead7457dfe7e85bd2f12d987d64229054c30154beaba"),
+            "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol":
+                ("unfolded_hash", "4eb3183f3916e1971f474d4628543951edd35fd8484c238e4e75c83667b37381"),
+            "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256":
+                ("unfolded_hash", "45768ac8198706181626edcfbe759c283d0684c24f5823c7a41384e9f14bd52f"),
+            "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol":
+                ("unfolded_hash", "4f1a50ddaaf1f6cacca8e669d640336fdf1ee8c116859db708fa18086b14f9ef"),
+            "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192":
+                ("unfolded_hash", "1363de33bf93059ce2e8c560c0f7d9fce3681306c374da6c056fb2d1caf9500d"),
+            "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192":
+                ("unfolded_hash", "6597197cd72d99a894102682fe0d2bb74e13a8e65d45bb37bb750bec2fc9c17f"),
+        },
+        definitions={"Pouw.PearlC.δPearlC": "d59867555ea584f9dc1ae4ba8f6247384c1b116b37fbe1808efba06bbef504a8"},
+        budgets=CALLS,
+        points=(Point("rows·width = 2^30", "N = 2^30 (an illustrative size; no card declares it)", {"N": 2 ** 30}),
+                Point("rows = 2^64, width 8192", "N = 2^64·8192, the most the sm120 statements' domain admits "
+                      "(`rowsOf L ≤ 2^64`)", {"N": 2 ** 64 * 8192})),
+        value=lambda T, N: delta_pearl_c(Fraction(T), Fraction(N)),
+        per_audit=False,
+    ),
+    Mirror(
+        lean="Pouw.Guarantees.PeriodBindingPerProver",
+        term="|L|·√(q/2^256 + κ) at κ = 0, its least, q = T and L the period's opened positions (a verification "
+             "phase's, per prover)",
+        guarantees={"Pouw.SecurityProofs.PeriodBindingPerProver":
+                    ("unfolded_hash", "64f30f40c6ae82fca10844cdd2b2d0782a38949e2b06a7d744a9c1710d5ada70")},
+        definitions={"Pouw.Guarantees.PeriodBindingPerProver":
+                     "a7149770af8e66c7ae22a6189d06919d9b319a9b6100925dcd5500d95d353a43"},
+        budgets=CALLS,
+        points=tuple(Point(f"|L| = 2^{n}, κ = 0", f"2^{n} opened positions (an illustrative size; no card declares "
+                           f"it), κ = 0", {"L": 2 ** n, "kappa": 0.0}) for n in (20, 30)),
+        value=lambda T, L, kappa: period_binding(float(T), float(L), kappa),
+        per_audit=False,
     ),
 )
