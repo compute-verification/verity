@@ -36,6 +36,9 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option, workload_arg
 
+#: The names other modules and the tests read here; ``Options`` and ``main`` are the ``target-family`` command.
+__all__ = ["Options", "declared_profile", "device_token_of_row", "main"]
+
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = "verity-sweep/target-family/v1"
 
@@ -106,10 +109,11 @@ def device_cc() -> tuple[tuple[int, int] | None, str]:
     except (OSError, subprocess.SubprocessError):
         pass
     try:
-        import torch  # noqa: WPS433 -- fallback only
+        import torch  # the fallback only: this module is torch-free at import
 
         if torch.cuda.is_available():
-            return tuple(torch.cuda.get_device_capability(0)), "torch.cuda.get_device_capability"
+            major, minor = torch.cuda.get_device_capability(0)
+            return (major, minor), "torch.cuda.get_device_capability"
         return None, "torch.cuda.is_available() False"
     except Exception as e:  # noqa: BLE001
         return None, f"no device: {type(e).__name__}"

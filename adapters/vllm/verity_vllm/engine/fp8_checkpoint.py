@@ -58,13 +58,15 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 import numpy as np
 
 from verity_vllm import config as C
 from verity_vllm.config import UsageError, option
 from verity_vllm.log import init_logger
+
+__all__ = ["COMMANDS", "main"]
 
 logger = init_logger(__name__)
 
@@ -233,18 +235,17 @@ def encode_header(layout: list[tuple[str, str, list[int], str, str]]) -> tuple[b
 
 
 class _Sink:
-    """A file written once, front to back, and hashed as it is written."""
+    """An open file written once, front to back, and hashed as it is written.  Its opener closes it."""
 
-    def __init__(self, path: Path):
-        self.f, self.h, self.size = open(path, "wb"), hashlib.sha256(), 0
+    def __init__(self, f: BinaryIO):
+        self.f, self.h, self.size = f, hashlib.sha256(), 0
 
     def write(self, b: bytes | memoryview) -> None:
         self.f.write(b)
         self.h.update(b)
         self.size += len(b)
 
-    def close(self) -> dict[str, Any]:
-        self.f.close()
+    def digest(self) -> dict[str, Any]:
         return {"sha256": self.h.hexdigest(), "size": self.size}
 
 
@@ -277,21 +278,22 @@ def make_shard(src: Path, dst: Path, vocab: int, recipe: Recipe = FP8) -> tuple[
                 n = int(header[source]["shape"][0])
                 scales[source] = np.concatenate([recipe.scales(weight(source, lo, min(lo + STRIPE, n)))
                                                  for lo in range(0, n, STRIPE)])
-        sink = _Sink(dst)
-        sink.write(head)
-        for name, _, _, kind, source in layout:
-            if kind == "scale":
-                sink.write(scales[source].astype("<f4").tobytes())
-            elif kind == "weight":
-                n = int(header[source]["shape"][0])
-                for lo in range(0, n, STRIPE):
-                    hi = min(lo + STRIPE, n)
-                    sink.write(recipe.quantize(weight(source, lo, hi), scales[source][lo // r: hi // r]).tobytes())
-            else:
-                a, b = header[source]["data_offsets"]
-                for at in range(a, b, _CHUNK):
-                    sink.write(_read(f, base + at, base + min(at + _CHUNK, b)))
-        digest = sink.close()
+        with open(dst, "wb") as out:
+            sink = _Sink(out)
+            sink.write(head)
+            for name, _, _, kind, source in layout:
+                if kind == "scale":
+                    sink.write(scales[source].astype("<f4").tobytes())
+                elif kind == "weight":
+                    n = int(header[source]["shape"][0])
+                    for lo in range(0, n, STRIPE):
+                        hi = min(lo + STRIPE, n)
+                        sink.write(recipe.quantize(weight(source, lo, hi), scales[source][lo // r: hi // r]).tobytes())
+                else:
+                    a, b = header[source]["data_offsets"]
+                    for at in range(a, b, _CHUNK):
+                        sink.write(_read(f, base + at, base + min(at + _CHUNK, b)))
+        digest = sink.digest()
     n_vocab = sum(1 for n, i in header.items() if n != "__metadata__" and len(i["shape"]) == 2 and not is_linear(i, vocab))
     return digest, {name: dst.name for name, *_ in layout}, n_vocab, sum(b - a for a, b in offsets.values())
 

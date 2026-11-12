@@ -21,6 +21,8 @@ from pathlib import Path
 from verity_vllm import settings
 from verity_vllm.config import option
 
+__all__ = ["Options", "main"]
+
 RECORDS = ("stages.txt", "row.log", "source_identity.json", "verdict.json", "timeline_report.json",
            "manifest_verify.log", "build_request/digest.txt", "call_boundaries.json", "commit/versions.json", "match/run.json",
            "match_compare.json", "match_decomp.json", "global_match.json")
