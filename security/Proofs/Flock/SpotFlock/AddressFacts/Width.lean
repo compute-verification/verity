@@ -94,40 +94,6 @@ theorem ports_member (hr : r.Ok h) :
         rw [← hcirc]
         exact congrArg _root_.Flock.Circuit.ports hs
 
-theorem ports_member_old (hr : r.Ok h) :
-    ∃ m, h.ms[templateOf h.ms r.u]? = some m ∧ r.sts[0]!.c.ports = m.1.ports := by
-  have hj := sts_pos hr
-  obtain ⟨Pt, d, _, hx, hP, h2, hin, hok, hu, hck, hb, hρ, -, hset⟩ := hr
-  have hokAt := stmtOkAt_unit h hx hok hu
-  have hT := fun t (ht : t < h.ms.length) => templateOk_facts h (templateOk_of_two h h2 ht) ht
-  obtain ⟨t, ht, k, hut, -, -⟩ :=
-    shape_of_checked h (fun t ht => ⟨(hT t ht).2.1, (hT t ht).2.2⟩) hx hP h2 hin hb hρ
-  have htu : templateOf h.ms r.u = t := by
-    rw [hut]
-    exact templateOf_unitBase ht k.isLt
-  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h r.m₂ r.u) with
-  | none => simp [Claims.Flock.check, hS] at hck
-  | some S =>
-    obtain ⟨p, hpb, -, hpp, hc, hh⟩ := parsed_of_stmtOkAt h hokAt hS
-    obtain ⟨rfl, -⟩ := parsed_setupOf hset hpb
-    obtain ⟨w, w₀, hw, hw₀, he⟩ := pin_of_stmtOkAt h hokAt
-    rw [htu] at hw₀ ⊢
-    have hst₀ := (hT t ht).1
-    cases hr₀ : FlockDeploy.readOf true (h.xS₀ t) with
-    | none => rw [hr₀] at hst₀; cases hst₀
-    | some r₀ =>
-      rw [hr₀] at hst₀
-      have hm : r₀.stmt = h.ms[t].1 := by simpa using hst₀
-      have hst := stmt_of_pin hw hw₀ he (readOf_of_parseBytes hpb) hr₀
-      obtain ⟨T, a, hst0, -, hcirc, -⟩ := accepted_check hpp hc hh hj
-      refine ⟨h.ms[t], List.getElem?_eq_getElem ht, ?_⟩
-      calc r.sts[0]!.c.ports = a.st.c.ports := by rw [(getElem!_pos r.sts 0 hj).trans hst0.symm]
-        _ = (_root_.Flock.HmOut.unrolled a.st.c).ports := (FlockSoundness.unrolled_ports a.st.c).symm
-        _ = r₀.stmt.ports := by
-          rw [← hcirc]
-          exact congrArg _root_.Flock.Circuit.ports hst
-        _ = h.ms[t].1.ports := by rw [hm]
-
 /-- **A session port's words are its template's member circuit's** (`ports_member`). -/
 theorem words_eq (hr : r.Ok h) (q : ℕ) :
     (r.sts[0]!.c.ports[q]!).words = portWords h (templateOf h.ms r.u) q := by

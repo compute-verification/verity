@@ -43,10 +43,15 @@ template instance's rows (`Copies`):
 The copy fact then holds where every accepted run's checked unit that needs the gate reads it at a column that copies
 the address's port and place (`copyHolds_of_copies`).
 
-The address's place is one for every unit that needs the gate, and the column the layout reads is `pickAny`'s, one of
-the unit's columns on the gate's wire, chosen once. Which columns copy which row bit is fixed by the session circuit, so
-by its template's (`CheckedRun.ports_member` for the ports); that every column on a gate's wire copies one row bit is
-the registration's to state and is not decided here.
+**The block** (`CheckedRun.inBlock_of_counted`): a unit the row fact counts (`Counted`, its instance below the table's
+`pub.n`) has its block in its table, since setup lays `pub.n` instances in `g · 2^nbl` slots.
+
+**The registration's form** (`CopyRef`, `copyHolds_of_ref`): `Copies` read off the unit's template's member circuit
+alone (`CopiesRef`, `OutRef`), at the column `pickAny` gives the gate there. At an accepted session it is the session's
+(`CheckedRun.copies_of_ref`): the committed circuit's key at an input is the member's moved inside the unit
+(`Hidden.srcKey_commit`), and the member's unit net is the session's logical net (`unrolled_unit_commit`). `CopyRef`
+reads only the registration and the address; no check of the verifier's decides it today. The address's place is one
+for every unit that needs the gate.
 -/
 
 @[expose] public section
