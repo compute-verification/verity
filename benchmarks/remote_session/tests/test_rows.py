@@ -58,3 +58,10 @@ def test_a_row_keeps_each_slow_pass_with_every_gpus_part():
     report = rows.device.stall_report(observed, trace, None, (0, 0), [])
     assert rows.slow(report) == {"over_median": 1.1, "passes": [3], "each": [
         {"pass": 3, "interval_ms": 15 / 1e6, "gpu_ms": 4.0, "part_ms": [3.5]}]}
+    # every pass in order, the slow one among them at its own index: the first has no interval
+    parts = {"gpu_ms": [t["gpu_ms"] for t in trace], "part_ms": [t["part_ms"] for t in trace]}
+    kept = rows.every(report, parts)
+    assert kept["interval_ms"] == [None, 10 / 1e6, 10 / 1e6, 15 / 1e6, 10 / 1e6, 10 / 1e6, 11 / 1e6]
+    assert kept["gpu_ms"] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+    assert kept["part_ms"] == [[0.5], [1.5], [2.5], [3.5], [4.5], [5.5], [6.5]]
+    assert kept["part_ms"][3] == rows.slow(report)["each"][0]["part_ms"]

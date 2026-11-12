@@ -1197,6 +1197,7 @@ class GpuBackend:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks + host_blocks, warm_openings
         self.host = {"host_ctas": host_ctas, "host_consumers": host_consumers}
         self.trace_allocator, self.calibration_trace = trace_allocator, None
+        self.calibration_parts = None
         self.gate_chunk, self.gate_chunks, self.gate_samples = gate_chunk, gate_chunks, gate_samples
         self.calibration_passes, self.warm_passes = calibration_passes, warm_passes
         self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas,
@@ -1334,6 +1335,8 @@ class GpuBackend:
             observed.append(at)
             gaps.append(time.perf_counter_ns() - at)
         trace, s.trace = s.trace, None
+        # every pass's time by the device's events and each GPU's own part of it, in ms, in the passes' order
+        self.calibration_parts = {"gpu_ms": [t["gpu_ms"] for t in trace], "part_ms": [t["part_ms"] for t in trace]}
         gc.enable()
         gc.unfreeze()
         s.sync()

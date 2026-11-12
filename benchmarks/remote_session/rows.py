@@ -20,7 +20,7 @@ a count may name an experiment's arms, `ARMS`, as in 264+p0), the gates once, at
                against the plain pass at the same seed over the whole store, the device's signs against the
                reference's and a window's openings (`GpuBackend.calibrate`): tau is the pass over the read. A row
                keeps its slow passes (`slow`): which they were, and of the first 64 each one's time and each
-               GPU's own part of it
+               GPU's own part of it; and every pass's interval, time and each GPU's part (`every`)
 
 Writes OUT/rows.json after each: the gates, the openings and the calibration of each row count and CTA count, in
 order. Prints for each the plain read's and the pass's milliseconds and GB/s.
@@ -143,6 +143,15 @@ def slow(trace: dict) -> dict:
             "each": [{k: x[k] for k in ("pass", "interval_ms", "gpu_ms", "part_ms")} for x in trace["stalls"]]}
 
 
+def every(trace: dict, parts: dict) -> dict:
+    """Every calibration pass, in order: its interval from the root before it (none for the first), its time by the
+    device's events and each GPU's own part of it, in ms. A GPU's median over the run and the passes it was slow in
+    are read from these, where `slow` keeps only the passes the node was slow in."""
+    return {"interval_ms": [None] + [x / 1e6 for x in trace["intervals_ns"]],
+            "gpu_ms": [round(x, 3) for x in parts["gpu_ms"]],
+            "part_ms": [[round(x, 3) for x in p] for p in parts["part_ms"]]}
+
+
 def set_arms(backend: device.GpuBackend, arms: tuple[str, ...]) -> dict:
     """The backend's passes from here on with `arms` and no other: what a row records as its arms."""
     backend.set_side_priority(0 if "p0" in arms else -1)
@@ -206,6 +215,7 @@ def main() -> int:
                     raise RuntimeError(f"the store's openings are not the reference's: {row['openings']}")
                 row["calibration"] = backend.calibrate()
                 row["slow"] = slow(backend.calibration_trace)
+                row["every"] = every(backend.calibration_trace, backend.calibration_parts)
             except RuntimeError as e:
                 row["failed"], ok = str(e), False
             row["gates"] = dict(backend.gates)
