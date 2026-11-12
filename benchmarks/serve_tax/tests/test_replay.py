@@ -68,6 +68,18 @@ def test_window_refuses_a_step_shared_with_another_load(tmp_path: Path):
         R.window(arm(tmp_path, foreign=True), "sat", 1)
 
 
+def test_a_capture_is_of_the_check_the_serve_committed_under_unless_told():
+    """The capture's rows are units of the check the served arm's boundary commitment names (its meta.json's, the
+    launch line's ``check`` in place of the model's), else of the model's check; one given wins, and an arm with neither
+    is refused by name before anything is replayed."""
+    served = {"model_id": "glm53", "boundary_rows": {"check": "GreedySelect_v1{V=154880,N=7744}", "inline": True}}
+    assert R.capture_template(served) == "GreedySelect_v1{V=154880,N=7744}"
+    assert R.capture_template({"model_id": "glm53", "boundary_rows": None}) == R.S.MODELS["glm53"].check
+    assert R.capture_template(served, "TokenSelect_v4{V=154880}") == "TokenSelect_v4{V=154880}"
+    with pytest.raises(SystemExit, match="--capture-template T"):
+        R.capture_template({"model_id": "qwen3-30b"})
+
+
 def test_the_replays_engine_takes_the_headers_cache_format_and_draft(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """A serve with an FP8 cache or speculative decoding is replayed on an engine with them; a header without them builds
     the engine it did."""
