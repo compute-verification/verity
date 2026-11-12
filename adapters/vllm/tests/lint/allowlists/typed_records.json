@@ -98,7 +98,6 @@
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/aot-artifact/v1"},
-    {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "schema-literal", "symbol": "CachedGreedyRequest", "detail": "verity-vllm/cached-greedy-request/v1"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "schema-literal", "symbol": "CachedStochasticRequest", "detail": "verity-vllm/cached-stochastic-request/v1"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "schema-literal", "symbol": "EngineStep", "detail": "verity-vllm/engine-step/v1"},

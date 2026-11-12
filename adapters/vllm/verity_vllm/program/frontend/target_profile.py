@@ -594,7 +594,8 @@ class TargetProfile:
         tp = cls.from_gpu_document(profile_doc.get("gpu"))
         if tp is None:
             return None
-        fav = ((profile_doc.get("backends") or {}).get("attention_flash_attn_version"))
+        backends = profile_doc.get("backends")
+        fav = backends.get("attention_flash_attn_version") if backends else None
         if fav is not None and int(fav) != tp.effective_flash_attn_version():
             tp = tp.with_overrides(flash_attn_version=int(fav))
         return tp
