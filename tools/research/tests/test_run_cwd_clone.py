@@ -456,6 +456,32 @@ def test_the_launcher_refuses_a_tree_shipped_without_git(tmp_path, repo, machine
     assert not (machine / "runs").exists(), "nothing claimed"
 
 
+HEAD_PROBE = ("import json, os, subprocess; json.dump({'cwd': os.getcwd(), 'head': subprocess.run(['git', 'rev-parse', 'HEAD'], "
+              "capture_output=True, text=True).stdout.strip()}, open(os.path.join(os.environ['RESEARCH_RUN_DIR'], 'seen.json'), 'w'))")
+
+
+def test_a_source_run_after_a_stream_ship_of_its_commit_runs_in_a_checkout(tmp_path, repo, machine, monkeypatch):
+    """A run that needs no git runs in a tree the archive stream shipped; the next `--cwd source` run of the commit finds the
+    shared tree made a checkout in place, so `suites.py --changed` there would key from git as in the launcher's checkout."""
+    sha = _git(repo, "rev-parse", "HEAD")
+    shared = (machine / "src" / sha).resolve()
+
+    def go(n: int) -> dict:
+        runs = tmp_path / f"runs{n}"
+        assert main(["run", "--runs-dir", str(runs), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2",
+                     "--no-sampler", "--cwd", "source", "--", PY, "-c", HEAD_PROBE]) == 0
+        [rid] = [p.name for p in runs.iterdir()]
+        wait_runner(machine / "runs" / rid)
+        return {**_seen(machine / "runs" / rid), "transport": json.loads((machine / "runs" / rid / "job.json").read_text())["run"]["remote"]["source_transport"]}
+
+    monkeypatch.setenv("RESEARCH_SHIP", "stream")
+    first = go(0)
+    assert Path(first["cwd"]) == shared and first["head"] == "" and first["transport"] == "stream"
+    monkeypatch.delenv("RESEARCH_SHIP")
+    second = go(1)
+    assert Path(second["cwd"]) == shared and second["head"] == sha and second["transport"] == "stream+git"
+
+
 def test_a_clone_run_after_a_source_run_shipped_the_commit_without_git_launches(tmp_path, repo, machine, monkeypatch):
     """A `--cwd source` run shipped the commit by the archive stream, and every later `--cwd clone` run of it (the train's
     recorded checks) was refused.  The clone run makes the shared tree a checkout in place and launches; the source run's tree
