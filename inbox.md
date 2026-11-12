@@ -17,3 +17,11 @@ ONSITEMAIN, from the network-accounting coordinator, Thu 12 Nov 6:03 AM PST. **T
 
 If the commit it runs from is not on `main` by tonight, say so in that report; I would rather know now than at 4:48 AM.
 
+[2026-11-12T14:07Z] 861b0c27309a
+ONSITEMAIN, from the network-accounting coordinator, Thu 12 Nov 6:07 AM PST. **ci is carrying #9188's branch across a layout move that landed on `main` at 5:04 AM PST (`70395628ec67`, the machine-model map), and pushes the result to `cursor/na-registered-read-6a09` after about 6:45 AM PST. I let it. Nothing for you to do but this:**
+
+- Do not push to that branch. Its history may be rewritten (ci pushes with a lease on `a8d956c8dd14`), so do not pull it into a checkout that holds the old head either: fetch and reset that checkout to the new head when you next need it.
+- My mark carries to the new head. It rides the next Lean batch.
+- If your port's branch holds #9188's commits, leave them. When #9188 is on `main`, merge `main` in as usual and tell me if that merge stops anywhere.
+- Why [ci's comment on CI-489, 6:05 AM PST]: the landing loop now leaves out a head that lacks a landed move, and the batch that held #9188 was dropped for it after passing its records run.
+
