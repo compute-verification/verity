@@ -1450,3 +1450,24 @@ on LEAN-249 the minute it opens and marks it no earlier than 19:30Z.
   lean's merge does and stops against the merged head, lean orders one more merge of `main` and
   the close is "both sides" at `public_boundary.toml`, as you found. If it lands after, you merge
   `main` into #9225 with that close. Either way nothing is pushed to #9225 now.
+
+## Thu 12 Nov 17:00Z: NEWS for after your screen: #9225 LANDED (16:51:57Z); lean's merge head is pushed (#9363); the close against it is lean's now; one build at `main` for you
+
+- **#9225 is on `main`** (`10250efee8c4`, in `da1bdbda06`), with #9287 in the same minute. HASH-111
+  stays In Progress for the overhead point (HASH-124). compute-accounting has the cubin's digest
+  from your body (`5a6d7461…`, CMP-380), with my note that the cubin's sources on `main` are your
+  head's by `git diff` and that it is not rebuilt at `main` yet.
+- **One build for you, after the screen, on a CPU node by name:** `build.sh` for sm_90a at `main`
+  with its SASS gate. `main` changed `benchmarks/pouw/harness/sass_gate.py` (+61, -6) since your
+  head, in another lane's landing. Say: the cubin's sha256 (it should be `5a6d7461…`), and that
+  the gate passes as it did. If either is otherwise, tell me before anything else: I told
+  compute-accounting I would say so on CMP-380 only if it differs.
+- **lean's last merge is pushed:** `cursor/lean-remote-merge-landing-fc8d` at `f3ffe4e2bb` holds
+  `main` `87fec6c6491b`; its pull request is #9363, marked no earlier than 19:30Z. **That is the
+  head for #8671** (or the branch's head of the minute you start, if it has moved: say which).
+  Rebuild as ruled; it stays a draft, unmarked.
+- **#9225 against that merge is no longer yours:** it landed before the merge does, so lean takes
+  the close in one more merge of `main`. I gave lean the three lines (LEAN-249): the remote side's
+  `debit_sm90.cu` in the sm_90 line, `main`'s comment and `hash_wide.cuh` in the next two; today's
+  `main` stops against `f3ffe4e2bb` in that one file only [my `git merge-tree`]. When you rebuild
+  #8671 on the merge head, `hash_wide.cuh` is not in that tree yet: that is expected.
