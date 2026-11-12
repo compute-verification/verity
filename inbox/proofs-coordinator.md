@@ -84510,3 +84510,34 @@ Tags: [run] a command I ran and read now (a run's id, or the git command or scri
 **5. Runs out: none.** `d29f`, `523f` and `e07e` have ended; I launched nothing else.
 
 **6. Your three facts, as I hold them.** I write no figure under 300 GB as reachable and no figure of the bound from these seconds: they are the verifier's seconds and memory, and booking them is COUNT's. LEAN-290: no run of mine this turn was a try, and I spend none on a `--siblings` rebuild.
+
+## STOPS, Thu 12 Nov 10:58Z: addendum to my 10:50Z entry: `main` moved to `afa939410f6f` and nothing changes for #9116 or the scratch branch; the scratch branch's one failing test is the one that asserts `main`'s off form; `438b` has 6 suites left, about 11:30Z, so no ready line yet and I end my turn on it
+
+In plain words. Three things since 10:50Z. `main` moved once more, and both #9116's head and the scratch branch still merge with it with no stop; against lean's branch nothing stops beyond `main`'s own. The tests I ran on the scratch branch ended: the three vLLM files pass whole, and the Lean difftest's file fails in one test, the one that asserts `main` refuses the two-stage form, which is what the switch turns off. And the quick tier at #9116's head is not done: 57 suites passed, 2 cached, none failed, 6 left, running one at a time at about five minutes each. Everything else the ready line needs is read and below, so it waits on that one run.
+
+**VLLM-370, two lines more for vllm**
+
+- [run] `r20261112-103839-d65c` at `43cef2125e06`, ended rc 1 (a development run: the form's switch on, ahead of its proof; not `main`'s verifier). The three vLLM files (`test_boundary_rows.py`, `test_interior_rows.py`, `test_dead_free.py`): 265 passed, none failed. The Lean difftest's file: 111 passed, 1 failed, 2 skipped. [read] The failure is `test_a_two_stage_run_reaches_every_step`, at its assertion that the honest two-stage case ends `reject` with nothing public; with the switch on it ends `accept` with `{'credited': 12}` public. That is the test of `main`'s off form, expected to fail here; the Lean and the Python agree on the case (the replay comparison on the line before the assertion passes). No other test of the file fails, so the two merges broke nothing it tests. `/opt/cursor/artifacts/stops-scratch-suites-d65c.log`.
+- [run] `main` is `afa939410f6f` at my 10:53Z read (#9044, #9163 and #9183 landed). The scratch head `43cef2125e06` holds `main` `33faab2be81c` and merges with `afa939410f6f` with no stop; no file of that move is one the scratch branch changes. I did not merge again for it. Say if vllm wants the newer `main` in the branch.
+
+**#9116: what the ready line needs, all but the quick tier**
+
+- [run] Head `3a580254f8bfc4b56072b5d1bc0f8c7c0dddfd7c`, unchanged. `git merge-tree` with `main` `afa939410f6f`: no stop (tree `63a508033226`).
+- [run] Since the head's merge base with `main` (`19fb19a21e40`), `main` changed two files this change also changes: `security/lean-audit.json` (#8994) and the verifier's README (#9175). Both merge with no stop.
+- [run] **The lock keys that move.** The lock of `main` `afa939410f6f` merged with the head differs from `main`'s in six keys and no other: under `reads[Spot.SecondStage]`, `definitions[Spot.SecondStage.Own]`, the new `definitions[Spot.SecondStage.Own.returns]` and `digest`; under `reads[Proofs.Flock.SpotFlock.Code]`, `definitions[SpotFlock.codesOk]`, `definitions[SpotFlock.ownOf]` and `digest`. No guarantee's own record, statement, premise or constant. The body's notice line already says it (`Spot.SecondStage.Own` gains the field `returns`).
+- [run] Against `cursor/lean-remote-merge-landing-fc8d` @ `f3837f57d113`, redone on `main` `afa939410f6f`, drivers installed: 23 files stop with `main` alone and the same 23 with `main` merged with the head. **None beyond `main`'s own.** Two of the 23 hold this change's lines in their merged text: the Lean difftest (inside `main`'s own stop at `PIECE_RUNS`) and the verifier's README (outside its stop). `/opt/cursor/artifacts/return-ready-against-lean-branch.log`.
+- [run] **The Lean difftest's close still serves.** CROSSCLOSE's `494bd85fb553` (git blob `fc4019234796`, on `cursor/proofs-landing-closes-99d1` @ `f58b4a3ef6e9`) is the merged file byte for byte but for its one stop, which it closes as my re-cut hunk does:
+  ```
+                (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
+                (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
+                (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNS, 200), (REPLAY_RETURNED, 300),
+                (SECOND_SCHEDULE, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
+  ```
+  `PIECE_RUNS` 47, none doubled.
+- [run] The README's close (`5a04c87c6e`) owes this change's three lines once #9116 is on `main`; they merge into it with no stop (result git blob `eb6b9ea7edbf`). CROSSCLOSE's, mechanical.
+- [run] Runs at the head, each read: `r20261112-091809-6a36` rc 0 (Lean try of `Spot/Pieces.lean`, siblings); `r20261112-091830-e69e` rc 0 (the Lean difftest's file: 111 passed, 2 skipped, both pieces and both sides' tests among them); `r20261112-091524-0110` rc 0 (the records' fast path: all pass, nothing regenerated, the lock is the head's bytes); `r20261112-092227-e399` rc 0 (Lean try of `Spot/SecondStageExamples.lean`).
+- [run] **`r20261112-091943-438b`, the quick tier, still running** on vy-nebius-cpu-3. At 10:56Z: 57 suites passed, 2 cached, none failed, 6 of 65 left (`verity/circuits`, `verity/commitments/windows`, `verity-core-evaluate`, `verity/definitions`, `verity-numerical`, the recursion verifier's `vstar_cli`). They run one at a time; the last three to end took 315 s, 355 s and 308 s. [guess] It ends about 11:30Z, between 11:20Z and 11:45Z; its timeout is at about 12:23Z.
+- [run] #9116's body is replaced at 10:56Z (9863 bytes; `Lane proofs`, the goal line and `Refs VLLM-370` kept): `0110` exit 0 with no record regenerated, `e399`, `main`'s move and the two files it shares, `438b` running with its counts. One line of it changes when `438b` ends.
+- Not run: the kernel replay of the Lean (the candidate's records run does it); slow tests outside the modules the change reaches (the tier is `--quick`); `circuit-check` (no circuit changes); `lean-agreement` (neither Flock nor its Lean verifier changes); the check of the merged candidate, which is the queue's; nothing with the form's switch on at this head.
+
+This is not a ready line: `438b` has not ended. Resume me when it has and I read it, change the body's one line and write the line. Nothing marked, nothing written to Linear or Slack, no push but the scratch branch's (10:37Z).
