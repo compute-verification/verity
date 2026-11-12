@@ -89,8 +89,12 @@ def test_the_gemm_route_follows_the_step(art: Path) -> None:
     assert down(6)["base"] == "Gemm_v2"
 
 
-def test_a_missing_route_leaves_the_build_incomplete(art: Path) -> None:
-    m = _build(art, routes={})
+NO_ROUTES: list[dict] = [{}, {"routes": None}, {"routes": {}}, {"routes": []}, {"routes": ""}, {"routes": 0}, {"routes": False}]
+
+
+@pytest.mark.parametrize("routes", NO_ROUTES, ids=repr)
+def test_a_missing_route_leaves_the_build_incomplete(art: Path, routes: dict) -> None:
+    m = _build(art, routes=routes)
     assert not m["complete"] and len(m["routes_missing"]) == 28
     assert all(g is None for s in m["steps_plan"] for g in s["gemms"].values())
 
@@ -112,6 +116,49 @@ def test_an_unhooked_buffer_is_refused(art: Path, tmp_path: Path) -> None:
     _edit(ind, "        run_intermediate_hooks('verity|mul|buf4', buf4)\n", "", count=-1)
     with pytest.raises(Unmodelled, match="no run_intermediate_hooks names them"):
         _build(art, inductor=ind)
+
+
+def test_a_piece_argument_of_no_known_source_is_refused(art: Path, tmp_path: Path) -> None:
+    graph = tmp_path / "computation_graph.py"
+    src = (art / "computation_graph.py").read_text()
+    assert "_weight_, l_positions_, " in src
+    graph.write_text(src.replace("_weight_, l_positions_, ", "_weight_, positions, ", 1))
+    with pytest.raises(Unmodelled, match=r"piece 0 argument 5 \(positions\): a unknown argument"):
+        _build(art, split_graph=str(graph))
+
+
+@pytest.mark.parametrize("operand,why", [
+    ("output_3", "an attention op's output buffer is not a piece's return"),
+    ("query_2", "piece 1 mm reads storage no launch wrote"),
+    ("key_2", "attention 0: its k is not a piece's return"),
+    ("value", "attention 0: its v is not a piece's return"),
+])
+def test_an_attention_op_whose_signature_leaves_an_operand_out_is_refused(art: Path, tmp_path: Path, operand: str, why: str) -> None:
+    """The wiring names an attention op's query, key, value and output by its signature's parameter names; one it cannot name is
+    left out of the op's record, and the build is refused."""
+    graph = tmp_path / "computation_graph.py"
+    src = (art / "computation_graph.py").read_text()
+    signature = next(line for line in src.splitlines() if line.lstrip().startswith("def forward(self, key_2: "))
+    assert f"{operand}: " in signature
+    graph.write_text(src.replace(signature, signature.replace(f"{operand}: ", f"x_{operand}: "), 1))
+    with pytest.raises(Unmodelled, match=re.escape(why)):
+        _build(art, split_graph=str(graph))
+
+
+def test_a_launch_reads_a_view_at_the_views_width(art: Path, tmp_path: Path) -> None:
+    ind = _copy(art, tmp_path)
+    kernel = "triton_red_fused_fused_add_rms_norm_0"
+    old = f"{kernel}.run(buf0, arg4_1, arg3_1, buf2, s72, 2048, stream=raw_stream0)"
+    path = next(p for p in sorted(ind.rglob("*.py")) if old in p.read_text())
+
+    def launch() -> dict:
+        return next(la for la in C.parse_wrapper(str(path))["launches"] if la["kernel"] == kernel)
+
+    whole = launch()
+    assert whole["args"][0] == "buf0" and whole["widths"][0] == 2048
+    view = "reinterpret_tensor(buf0, (s72, 8, 64), (512, 64, 1), 0)"
+    _edit(ind, old, old.replace("buf0", view))
+    assert launch()["args"][0] == view and launch()["widths"] == [512, *whole["widths"][1:]]
 
 
 def test_batched_copy_flushes_are_no_calls(art: Path, tmp_path: Path) -> None:

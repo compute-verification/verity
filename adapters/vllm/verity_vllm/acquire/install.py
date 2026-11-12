@@ -17,12 +17,13 @@ value reads, no synchronisation): the GPU gate's non-interference observer.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping
+from typing import Any
 
+from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite
 from verity_vllm.engine import hooks as engine_hooks
 from verity_vllm.observe.runtime_tree import RUNNER_PATH
-from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite, hooks_of_doc
 
 Sink = Callable[[tuple[str, str, str], Any], None]
 
@@ -31,15 +32,10 @@ class IncompletePlan(RuntimeError):
     """The plan names UNSUPPORTED Values: nothing is installed."""
 
 
-def _sites_of(plan: AcquisitionPlan | Mapping[str, Any]) -> tuple[list[AcquisitionSite], list[AcquisitionSite], list[dict[str, Any]]]:
-    """(hook sites, deferred sites, unsupported) of a plan object or its serialised document."""
-    if isinstance(plan, AcquisitionPlan):
-        chosen = plan.chosen_sites()
-        unsupported = [{"value": v.value_id, "why": v.why} for v in plan.unsupported]
-    else:
-        chosen = [AcquisitionSite(s["kind"], s["module"], s["slot"], s.get("lifetime", "n/a"), s.get("derived_from", "")) for s in (plan.get("sites") or [])]
-        unsupported = list(plan.get("unsupported") or [])
-        assert [s.key() for s in chosen if s.kind in HOOK_KINDS] == hooks_of_doc(plan)
+def _sites_of(plan: AcquisitionPlan) -> tuple[list[AcquisitionSite], list[AcquisitionSite], list[dict[str, Any]]]:
+    """(hook sites, deferred sites, unsupported) of a plan."""
+    chosen = plan.chosen_sites()
+    unsupported = [{"value": v.value_id, "why": v.why} for v in plan.unsupported]
     return [s for s in chosen if s.kind in HOOK_KINDS], [s for s in chosen if s.kind not in HOOK_KINDS], unsupported
 
 
@@ -110,7 +106,7 @@ class OccurrenceSink:
              "dtypes": sorted(self.dtypes.get(k, ())), "non_tensor": self.non_tensor.get(k, 0)} for k in keys]}
 
 
-def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, runner: Any = None, *, sink: Sink | None = None,
+def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, sink: Sink | None = None,
                       refuse_incomplete: bool = True) -> Installation:
     hooks, deferred, unsupported = _sites_of(plan)
     if unsupported and refuse_incomplete:
@@ -177,7 +173,7 @@ def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, run
 # the committer adapter: the committer takes its hook sets from the plan
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def plan_selection(plan: AcquisitionPlan | Mapping[str, Any], model: Any) -> tuple[list[str], list[str]]:
+def plan_selection(plan: AcquisitionPlan, model: Any) -> tuple[list[str], list[str]]:
     """The module boundaries the plan hooks on `model`: (producer_output modules in runtime order, consumer_input modules sorted), which
     the committer takes (`apply_plan_to_committer`).  Refuses (`IncompletePlan`) a plan with UNSUPPORTED Values or with hook sites that
     are not modules of `model`."""
@@ -195,13 +191,7 @@ def plan_selection(plan: AcquisitionPlan | Mapping[str, Any], model: Any) -> tup
     return sorted(out_mods, key=lambda n: order[n]), sorted(in_mods)
 
 
-def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: AcquisitionSite) -> list[str]:
-    if isinstance(plan, AcquisitionPlan):
-        return plan.values_at(site)
-    return next((list(h.get("values") or []) for h in (plan.get("hooks") or []) if (h["module"], h["kind"], h["slot"]) == site.key()), [])
-
-
-def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str, Any]) -> dict[str, Any]:
+def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan) -> dict[str, Any]:
     """The committer's selection from the plan (`plan_selection`): `_modules` = the producer_output sites' modules
     (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token)
     stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
@@ -219,12 +209,15 @@ def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str,
     committer._modules = [(m, mods[m]) for m in out_mods]
     committer.plan_inputs = set(in_mods)
     committer.name = f"{committer.name}+plan"
-    rec = {"engine": "v2", "modules_after": list(out_mods), "plan_inputs": list(in_mods),
-           "deferred_sites": [s.key() for s in deferred], "runner_return_sites": [s.key() for s in hooks if s.kind == "runner_return"]}
+    rec: dict[str, Any] = {"engine": "v2", "modules_after": list(out_mods), "plan_inputs": list(in_mods), "deferred_sites": [s.key() for s in deferred],
+                           "runner_return_sites": [s.key() for s in hooks if s.kind == "runner_return"]}
     if getattr(committer, "skip_classes", None):
         dropped = committer.apply_skip()
         gone = {n for names in dropped.values() for n in names}
         rec["modules_after"] = [n for n, _m in committer._modules]
         rec["skip"] = {"classes": sorted(dropped), "modules": dropped,
-                       "values_unacquired": sorted(v for s in hooks if s.kind == "producer_output" and s.module in gone for v in _values_at(plan, s))}
+                       "values_unacquired": sorted(v for s in hooks if s.kind == "producer_output" and s.module in gone for v in plan.values_at(s))}
     return rec
+
+
+__all__ = ["IncompletePlan", "OccurrenceSink", "apply_plan_to_committer", "install_from_plan"]

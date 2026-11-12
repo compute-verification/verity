@@ -11,19 +11,23 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
 from verity_vllm.engine.arrivals import realized_arrive_steps
-from verity_vllm.query.manifest.format import manifest_digest as _manifest_digest
 from verity_vllm.program.compiled_relations import OUTPUT_ROLES, pointer_arity, roles_of
+from verity_vllm.query.manifest.format import manifest_digest as _manifest_digest
+from verity_vllm.records.schema_ids import MANIFEST_VERIFY_SCHEMA
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 _RUN = re.compile(r"^\s*(\w+)\.run\((.*),\s*stream=\w+\)\s*$")
 
 
 def _split_args(s: str) -> list[str]:
-    out, depth, cur = [], 0, []
+    out: list[str] = []
+    cur: list[str] = []
+    depth = 0
     for ch in s:
         if ch in "([":
             depth += 1
@@ -42,7 +46,6 @@ def _split_args(s: str) -> list[str]:
 _SHAPE_ALLOC = re.compile(r"^\s*(\w+) = empty_strided_cuda\(\(([^()]*)\),")
 _SHAPE_ASSERT = re.compile(r"^\s*assert_size_stride\((\w+), \(([^()]*)\),")
 _REINTERP = re.compile(r"^reinterpret_tensor\((\w+), \(([^()]*)\),")
-_ALIAS = re.compile(r"^\s*(\w+) = (\w+)\s*;\s*del \w+")                         # Inductor's buffer reuse: `buf6 = buf0; del buf0  # reuse`
 
 
 def _dims(s: str) -> list[str]:
@@ -97,7 +100,7 @@ def parse_wrapper(path: str) -> dict[str, Any]:
     edges [{arg, role, src}] (the DATAFLOW: every non-weight input's producer)}], the wrapper's positional args with their kinds
     (tensor | int, from get_args()), the return tuple with each position's producer, and the count of `.run(` lines the parser did not
     read (must be 0: an unparsed launch is an undeclared part of the implementation)."""
-    src = open(path).read()
+    src = Path(path).read_text()
     if "    def call(self, args):" not in src:
         return {"launches": [], "args": [], "arg_kinds": {}, "returns": [], "unparsed_runs": 0, "signatures": {}}
     signatures = kernel_signatures(src)
@@ -156,9 +159,9 @@ def parse_wrapper(path: str) -> dict[str, Any]:
         ints = [int(a) for a in args if re.fullmatch(r"-?\d+", a)]
         widths = []
         for a in args:
-            r = _REINTERP.match(a)
-            if r:
-                widths.append(_width(_dims(r.group(2))))
+            view_as = _REINTERP.match(a)
+            if view_as:
+                widths.append(_width(_dims(view_as.group(2))))
             elif a in shapes:
                 widths.append(_width(shapes[a]))
             else:
@@ -214,7 +217,7 @@ def kernel_signatures(src: str) -> dict[str, list[str]]:
         block = src[m.end(): end]
         d = _KERNEL_DEF.search(block)
         if d:
-            params = "\n".join(l.split("#", 1)[0] for l in d.group(2).splitlines())      # a commented-out parameter is not a parameter
+            params = "\n".join(ln.split("#", 1)[0] for ln in d.group(2).splitlines())      # a commented-out parameter is not a parameter
             out[m.group(1)] = [p.strip() for p in params.replace("\n", " ").split(",") if p.strip()]
     return out
 
@@ -222,7 +225,6 @@ def kernel_signatures(src: str) -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------------------------------------------- the split graph
 _CALL = re.compile(r"^\s*(submod_\d+) = self\.(submod_\d+)\((.*?)\);?")
 _GETITEM = re.compile(r"^\s*(getitem(?:_\d+)?) = (submod_\d+)\[(\d+)\]")
-_CLASS = re.compile(r"^\s*class (submod_\d+)\(torch\.nn\.Module\):")
 _FWD = re.compile(r"^\s*def forward\(self, (.*)\):\s*$")
 
 
@@ -252,14 +254,13 @@ def split_graph_wiring(path: str) -> dict[str, Any]:
     without the attention splitting op), each attention op, and for every piece argument WHERE ITS VALUE COMES FROM -- another piece's
     return position, the attention op's output buffer, a weight, positions, input ids, or a symbolic int.  This is the wiring the
     Inductor wrappers cannot show (they see `argN_1`)."""
-    src = open(path).read()
-    top, *classes = re.split(r"\n(?=    class submod_\d+\(torch\.nn\.Module\):)", src)
+    src = Path(path).read_text()
+    top, *classes = re.split(r"\n    class (submod_\d+)\(torch\.nn\.Module\):", src)
     sigs: dict[str, list[tuple[str, str]]] = {}
     is_attn: dict[str, bool] = {}
-    for c in classes:
-        name = _CLASS.match(c).group(1)
-        fwd = next((l for l in c.splitlines() if _FWD.match(l)), None)
-        sigs[name] = _param_kinds(_FWD.match(fwd).group(1)) if fwd else []
+    for name, c in zip(classes[::2], classes[1::2]):
+        fwd = next(filter(None, map(_FWD.match, c.splitlines()[1:])), None)        # the first line is what follows the class's own header
+        sigs[name] = _param_kinds(fwd.group(1)) if fwd else []
         is_attn[name] = "unified_attention_with_output" in c
     calls: list[tuple[str, list[str]]] = []
     getitems: dict[str, tuple[str, int]] = {}
@@ -368,13 +369,18 @@ COMMANDS = {"verify": VerifyOptions}
 
 
 def main(a: VerifyOptions) -> int:
-    used, rebuilt = json.load(open(a.manifest)), json.load(open(a.rebuilt))
-    rows_digest = _manifest_digest(used.get("identities") or [])
-    rec = {"schema": "verity-sweep/manifest-verify/v1", "manifest": a.manifest, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
+    used, rebuilt = (json.loads(Path(p).read_text()) for p in (a.manifest, a.rebuilt))
+    # a Build may leave out its rows, its populations and its compile artifact, or hold each empty: then it has none
+    rows = used.get("identities")
+    rows = rows if rows else []
+    rows_digest = _manifest_digest(rows)
+    counted, used_artifact, rebuilt_artifact = rebuilt.get("populations"), used.get("artifact"), rebuilt.get("artifact")
+    rec = {"schema": MANIFEST_VERIFY_SCHEMA, "manifest": a.manifest, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
            "rebuilt_digest": rebuilt.get("manifest_digest"), "used_program_digest": used.get("program_digest"), "rebuilt_program_digest": rebuilt.get("program_digest"),
-           "used_identities": len(used.get("identities") or []), "rebuilt_identities": (rebuilt.get("populations") or {}).get("identities"),
+           "used_identities": len(rows), "rebuilt_identities": counted.get("identities") if counted else None,
            "rebuilt_complete": rebuilt.get("complete"), "rebuilt_from": a.rebuilt,
-           "used_artifact": (used.get("artifact") or {}).get("digest"), "rebuilt_artifact": (rebuilt.get("artifact") or {}).get("digest"),
+           "used_artifact": used_artifact.get("digest") if used_artifact else None,
+           "rebuilt_artifact": rebuilt_artifact.get("digest") if rebuilt_artifact else None,
            "method": "served-compiled rows: no derive_step Program dir exists; the rebuild is the served Build the TREATMENT process "
                      "rederived from its own compile artifact x the workload schedule (pipeline.served_match) -- equal program_digest = the "
                      "treatment executed the Program of record, equal manifest_digest = the same required-value population, equal compile "
@@ -400,3 +406,6 @@ def main(a: VerifyOptions) -> int:
     print(f"[compiled_manifest verify] ok={rec['ok']} used {str(rec['used_digest'])[:16]} rows {rows_digest[:16]} rebuilt {str(rec['rebuilt_digest'])[:16]} "
           f"program {str(rec['used_program_digest'])[:16]} / {str(rec['rebuilt_program_digest'])[:16]}{(' -- ' + rec['why']) if not rec['ok'] else ''} -> {a.out}")
     return 0 if rec["ok"] else 3
+
+
+__all__ = ["COMMANDS", "IDENTITY_KEY", "assign_wrappers", "main", "parse_wrapper", "schedule_of_workload", "split_graph_wiring", "tokens_at"]

@@ -20,7 +20,7 @@ from verity_vllm.acquire.install import (
     install_from_plan,
 )
 from verity_vllm.correspondence.reader_for_acquire import (
-    AnnotationCorrespondence,
+    AcquireCorrespondence,
     runtime_tree_of,
 )
 from verity_vllm.query.manifest import format as RM
@@ -86,7 +86,7 @@ def row(family, op, member, step=0, **extra):
 def make(rows, model, runner):
     man = {"schema": RM.SCHEMA, "program_digest": PD, "identities": rows, "manifest_digest": RM.manifest_digest(rows), "wrapper_prefix": "", "op_path_aliases": {}}
     rt = runtime_tree_of(model, runner, source="tiny")
-    return P.acquisition_plan(man, AnnotationCorrespondence(rt), tables=TABLES), rt
+    return P.acquisition_plan(man, AcquireCorrespondence(rt), tables=TABLES), rt
 
 
 def base_rows():
@@ -139,17 +139,6 @@ def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor()
     assert sink.counts[key] == 1 and sink.shapes[key] == [[1, 2, 4]] and key not in sink.non_tensor
     sink(("linear", "producer_output", "out"), (torch.zeros(3, 2, dtype=torch.bfloat16), None))
     assert sink.shapes[("linear", "producer_output", "out")] == [[3, 2]] and sink.dtypes[("linear", "producer_output", "out")] == {"bfloat16"}
-    inst.remove()
-
-
-def test_install_from_the_serialised_document(tmp_path):
-    model, runner = Tiny(), Runner()
-    plan, _ = make(base_rows(), model, runner)
-    path = tmp_path / "plan.json"
-    plan.save(path)
-    doc = P.load_plan(path)
-    inst = install_from_plan(doc, model, runner)
-    assert inst.keys() == [h.key() for h in plan.hooks()]
     inst.remove()
 
 
