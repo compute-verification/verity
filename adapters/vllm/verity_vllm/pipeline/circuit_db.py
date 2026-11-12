@@ -83,7 +83,7 @@ def index() -> dict[str, dict[str, Any]]:
 
 def art_of(row: str) -> str:
     e = index().get(row)
-    if not (e or {}).get("record"):
+    if not e or not e.get("record"):
         raise UsageError(f"{row}: not in the circuit database ({INDEX.name}{' pins its Programs but names no record' if e else ''}; "
                          f"`verity-vllm records publish` adds a row)")
     return e["record"]
@@ -94,7 +94,10 @@ def record(row: str, bundle: Path | None = None) -> dict[str, Any]:
     if bundle is None:
         return json.loads(fetch(art_of(row)).read_text())
     with tarfile.open(bundle) as tf:
-        rec = json.load(tf.extractfile(CR.NAME))
+        member = tf.extractfile(CR.NAME)
+        if member is None:
+            raise UsageError(f"{bundle}: its {CR.NAME} is not a file")
+        rec = json.load(member)
     if rec["config"].get("row") != row:
         raise UsageError(f"{bundle}: the record of {rec['config'].get('row')}, not {row}")
     return rec
@@ -266,7 +269,8 @@ def due(build: str, listed: list[str]) -> dict[str, Any]:
     pins = {(((m.get("model") or {}).get("pin") or {}).get("model"), int((m.get("tp") or {}).get("world") or 1)) for m in docs}
     if len(pins) != 1:
         raise UsageError(f"the Build {build}'s construction manifests name {len(pins)} checkpoints and worlds: {sorted(map(str, pins))}")
-    cmap = CM.of_checkpoint(*pins.pop())
+    repo, world = pins.pop()
+    cmap = CM.of_checkpoint(repo, world) if repo else None
     if cmap is None:
         return {"map": None, "due": {}}
     used = {spec_base(s) for m in docs for s in m.get("spec_histogram") or {}}
@@ -278,8 +282,9 @@ def evidence_of(build: str, *, manifest: str | None = None, match: str | None = 
                 commit: str | None = None, commit_run: str | None = None, conformance: dict[str, str] | None = None,
                 gaps: dict[str, str] | None = None) -> dict[str, Any]:
     """The record's `evidence` block, each id checked for its form, each gap for its reason."""
-    ev = {"build": build, "manifest": manifest, "match": match, "match_run": match_run, "commit": commit, "commit_run": commit_run,
-          "conformance": dict(sorted((conformance or {}).items())), "gaps": dict(sorted((gaps or {}).items()))}
+    ev: dict[str, Any] = {"build": build, "manifest": manifest, "match": match, "match_run": match_run, "commit": commit,
+                          "commit_run": commit_run, "conformance": dict(sorted((conformance or {}).items())),
+                          "gaps": dict(sorted((gaps or {}).items()))}
     bad = [f"{k}={v!r}" for k, v in ev.items() if k in REFS and v is not None and not ART.fullmatch(v)]
     bad += [f"{k}={v!r}" for k, v in ev.items() if k.endswith("_run") and v is not None and not RUN.fullmatch(v)]
     bad += [f"conformance {k}={v!r}" for k, v in ev["conformance"].items() if not ART.fullmatch(v) or k in ev]
@@ -558,31 +563,31 @@ def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
 
 def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions | StagedOptions
          | SwitchOptions) -> int:
-    if a.cmd == "switch":
+    if isinstance(a, SwitchOptions):
         print(json.dumps(switch(a.row, json.loads(Path(a.comparison).read_text()), run=a.run, trace=a.trace, tier=a.tier)["aot"]))
         return 0
-    if a.cmd == "publish":
+    if isinstance(a, PublishOptions):
         ev = evidence_of(a.build, manifest=a.manifest, match=a.match, match_run=a.match_run, commit=a.commit, commit_run=a.commit_run,
                          conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),
                          gaps=_pairs("--gap", a.gap, "PROPERTY=REASON"))
         summary = json.loads(Path(a.summary).read_text()) if a.summary else None
         print(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary, tier=a.tier, newest=a.newest_captures))
         return 0
-    if a.cmd == "pull":
+    if isinstance(a, PullOptions):
         for art in a.art:
             print(f"{pull(art, a.tier)} {art}")
         return 0
-    if a.cmd == "capture":
+    if isinstance(a, CaptureOptions):
         for prop, art in capture(a.run, a.property or None).items():
             print(f"{prop}={art}")
         return 0
-    if a.cmd == "show":
+    if isinstance(a, ShowOptions):
         print(json.dumps(record(a.row) if a.row else {r: e.get("record") for r, e in index().items()}, indent=1, sort_keys=True))
         return 0
-    if a.cmd == "fetch":
+    if isinstance(a, FetchOptions):
         print(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None))
         return 0
-    if a.cmd == "staged":
+    if isinstance(a, StagedOptions):
         print(staged(a.repo, a.revision, at=a.at, ref=a.ref, by=a.by), end="")
         return 0
     src = Path(a.bundle) if a.bundle else None

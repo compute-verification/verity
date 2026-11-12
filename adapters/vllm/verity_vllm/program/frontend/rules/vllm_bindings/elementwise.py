@@ -20,13 +20,12 @@ from verity_vllm.program.frontend.rules.common import (
     shape,
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
-from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.frontend.rules.vllm_iface import real_C, targets_for
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------
 
 
 def _C_op(name: str) -> set:
-    from verity_vllm.program.frontend.rules.vllm_iface import real_C
     C = real_C()
     return {getattr(C, name).default} if C is not None and hasattr(C, name) else set()
 
