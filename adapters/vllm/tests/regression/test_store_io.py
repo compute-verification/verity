@@ -104,4 +104,4 @@ def test_fetch_hands_each_glob_of_paths_to_the_cli_and_returns_the_path_it_print
     assert store_io.fetch(art) == tmp_path
     assert seen == [("fetch", art, "--to", str(tmp_path), "--path", "build_request/*", "--path", "*.json"), ("fetch", art)]
     with pytest.raises(ValueError, match="not an artifact id"):
-        store_io.fetch("art:0e6911da", paths=("*.json",))
+        store_io.fetch(art[:12], paths=("*.json",))
