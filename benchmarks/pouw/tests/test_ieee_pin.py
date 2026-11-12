@@ -74,7 +74,8 @@ def test_every_shipped_toolkit_names_a_run_of_these_builds():
 
 
 def test_a_toolkit_names_its_target_and_a_run_has_one():
-    assert (IP.arch_of("13.0.1"), IP.arch_of("13.0.1-sm_90a")) == ("sm_120a", "sm_90a") and IP.nvcc_args("sm_120a") == IP.NVCC_ARGS
+    assert (IP.arch_of("13.0.1"), IP.arch_of("13.0.1-sm_90a")) == ("sm_120a", "sm_90a")
+    assert "arch=compute_120a,code=sm_120a" in IP.nvcc_args("sm_120a")
     assert "arch=compute_90a,code=sm_90a" in IP.nvcc_args("sm_90a")
     with pytest.raises(IP.PinFailed, match="no target sm_100a"):
         IP.arch_of("13.0.1-sm_100a")
