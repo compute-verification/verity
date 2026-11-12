@@ -185,12 +185,12 @@ def _operands(rng: np.random.Generator, params, n: int, E: int) -> list[np.ndarr
     def f32(a) -> np.ndarray:
         return np.asarray(a, dtype=np.float32).view(np.uint32)
 
-    draw = {"acc": lambda k: f32(rng.standard_normal((n, k))), "x": lambda k: _bf16_rows(rng, (n, k)),
-            "q": lambda k: rng.integers(0, 16, (n, k)), "s": lambda k: rng.integers(118, 130, (n, k)),
-            "e": lambda k: rng.integers(0, E, (n, k)), "g": lambda k: f32(rng.random((n, k))),
-            "blk": lambda k: rng.integers(0, 3, (n, k)), "par": lambda k: rng.integers(1, 6, (n, k)),
-            "wq": lambda k: rng.integers(0, 256, (n, k)), "ws": lambda k: rng.integers(118, 130, (n, k))}
-    return [draw[name](t.leaves).astype(np.uint32) for name, t in params]
+    by_name = {"acc": lambda k: f32(rng.standard_normal((n, k))), "x": lambda k: _bf16_rows(rng, (n, k)),
+               "q": lambda k: rng.integers(0, 16, (n, k)), "s": lambda k: rng.integers(118, 130, (n, k)),
+               "e": lambda k: rng.integers(0, E, (n, k)), "g": lambda k: f32(rng.random((n, k))),
+               "blk": lambda k: rng.integers(0, 3, (n, k)), "par": lambda k: rng.integers(1, 6, (n, k)),
+               "wq": lambda k: rng.integers(0, 256, (n, k)), "ws": lambda k: rng.integers(118, 130, (n, k))}
+    return [by_name[name](t.leaves).astype(np.uint32) for name, t in params]
 
 
 @pytest.mark.parametrize("word,bits,st", _SWITCHED, ids=[w.name for w, _, _ in _SWITCHED])
