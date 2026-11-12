@@ -29,9 +29,11 @@ from verity.commitments.windows import interface as IF
 from verity.protocols.spot.verifier.one_stage import registered as G
 
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.config import CHECKPOINTS
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.records.weights_registration import WeightsRegistration
 
+from .common import _arr_shape
 from .window_builder import WEIGHTS, Grain, table_param, weight_param
 from .window_circuit import WindowClass, class_program, lower
 
@@ -133,8 +135,6 @@ def weight_nonces(params: Any) -> dict[str, int]:
 
 def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
     """The class Program the weights are read of and its weights record's fields (name, shape, value bits)."""
-    from .common import _arr_shape
-
     r = class_program(registered, WEIGHTS_CLASS)
     return r, [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
 
@@ -164,8 +164,6 @@ def _composed(registered: Any, r: Any, fields: list, checkpoint_dir: str, checkp
     """`check.weights_of_record` of ``fields``, composed from ``checkpoint_dir``'s shards as ``checkpoints_manifest``
     (default the repository's ``manifests/checkpoints.json``) pins them at ``registered``'s model and revision, each field's
     words handed to ``on_field`` as digested."""
-    from verity_vllm.config import CHECKPOINTS
-
     model = registered.phi.model
     ck = WR.CheckpointIndex(checkpoint_dir, checkpoints_manifest=str(checkpoints_manifest or CHECKPOINTS), model=model["repo"],
                             revision=model["revision"])
