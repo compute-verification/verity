@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import inspect
 import json
 import random
 
@@ -160,6 +161,26 @@ def test_record_many_records_every_root_then_asks_for_their_coins_at_once():
     with pytest.raises(C.CoinError, match="every commit coin of the epoch is open"):
         C.record_many([(b, root), (b, root)])
     assert (b.roots, b.openings, len(b.log)) == ([root], got[1:], 2) and C.record_many([]) == []
+
+
+def test_the_challengers_clock_is_its_hosts_raw_one_and_a_host_without_it_reads_no_time(monkeypatch):
+    """`raw_ns` and `raw_s` read `CLOCK_MONOTONIC_RAW` and nothing else, and a record made with no clock reads `raw_s`.
+    Where the host refuses the read, or has no such clock, each refuses by name: no time is read on another clock."""
+    asked = []
+    monkeypatch.setattr(C.time, "clock_gettime_ns", lambda clock: asked.append(clock) or 7)
+    monkeypatch.setattr(C.time, "clock_gettime", lambda clock: asked.append(clock) or 7.25)
+    assert (C.raw_ns(), C.raw_s()) == (7, 7.25) and asked == [C.time.CLOCK_MONOTONIC_RAW] * 2
+    assert inspect.signature(C.LiveRecord).parameters["clock"].default is C.raw_s
+
+    def refuse(clock):
+        raise OSError("no such clock")
+
+    monkeypatch.setattr(C.time, "clock_gettime_ns", refuse)
+    with pytest.raises(C.CoinError, match=r"no raw monotonic clock \(OSError\)"):
+        C.raw_ns()
+    monkeypatch.delattr(C.time, "CLOCK_MONOTONIC_RAW")
+    with pytest.raises(C.CoinError, match=r"no raw monotonic clock \(AttributeError\)"):
+        C.raw_s()
 
 
 def test_one_coin_and_a_family_of_many_open_alike():

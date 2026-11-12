@@ -60,7 +60,7 @@ its frozen edges): the caller hands in `verify`, LMS at the key's parameters, an
 **The session's close** is the only evidence that each coin followed its root: an opening's `after` is the client's to
 write, and a coin opened before its root still opens against the commitment.  The challenger logs each root it receives
 and each release after it, a line each in canonical JSON (`remote`'s `releases.jsonl`, its head the commitment, its times
-integer nanoseconds on the challenger's monotonic clock), and when its session ends,
+integer nanoseconds on the challenger's raw clock, `raw_ns`), and when its session ends,
 however it ends, it signs the log at its key's next leaf and writes the close record (`remote`'s `challenger.json`):
 
     close   = {chain, ended, lines, session, signature}       ended: null when the client closed the session, else why not
@@ -716,6 +716,27 @@ class ChallengerClose:
                 or not _session_id(doc["session"])):
             raise CoinError(CLOSE_FORM)
         return cls(doc["session"], lines, chain, ended, signature)
+
+
+def _raw(read: str) -> Any:
+    try:
+        return getattr(time, read)(time.CLOCK_MONOTONIC_RAW)
+    except (AttributeError, OSError) as e:
+        raise CoinError(f"this host gives no raw monotonic clock ({type(e).__name__}), and the challenger's times are "
+                        "read on no other") from None
+
+
+def raw_ns() -> int:
+    """The challenger's clock in integer nanoseconds: the host's raw monotonic clock (`CLOCK_MONOTONIC_RAW`), its
+    oscillator's own count, which no time service steers or steps, so its rate against true time is the hardware's
+    alone.  It counts from the host's start, so two hosts' readings share no origin.  Raises `CoinError` where the
+    host gives no such clock: a time is read on no other."""
+    return _raw("clock_gettime_ns")
+
+
+def raw_s() -> float:
+    """`raw_ns`'s clock in seconds."""
+    return _raw("clock_gettime")
 
 
 _ROOT_EVENT = ["event", "index", "label", "received_at", "root"]
@@ -1908,7 +1929,7 @@ class LiveRecord:
     the record's clock in seconds, and `log` the release order on it.  On a withheld session (`remote.serve`) its openings
     are the coins' raw bytes until the session closes, and `reason` waits for the close."""
 
-    def __init__(self, challenger: LiveChallenger, label: str, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, challenger: LiveChallenger, label: str, clock: Callable[[], float] = raw_s) -> None:
         if _count(challenger, label) is None:
             raise CoinError(f"the epoch's coins have no {label} family")
         self.challenger, self.label, self._clock = challenger, label, clock

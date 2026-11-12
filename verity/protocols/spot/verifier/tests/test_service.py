@@ -4,6 +4,7 @@ stream asked to sample from coins other than a challenger's refuses: the verifie
 
 from __future__ import annotations
 
+import inspect
 import itertools
 import random
 
@@ -607,6 +608,11 @@ def test_no_registration_deadline_changes_nothing():
     for bad in (0, -1.0, True, "30", float("nan")):
         with pytest.raises(ValueError, match="registration deadline is a positive number"):
             _spec(registration_deadline=bad)
+
+
+def test_a_stream_given_no_clock_reads_the_challengers_raw_one():
+    """A stream's readings and the release log's are one clock unless a caller says otherwise: `challenger.raw_s`."""
+    assert inspect.signature(S.Stream).parameters["clock"].default is C.raw_s
 
 
 def test_a_salt_released_elsewhere_counts_the_deadline_from_its_release():

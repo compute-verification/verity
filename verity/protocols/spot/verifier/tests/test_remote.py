@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import inspect
 import itertools
 import json
 import re
@@ -155,12 +156,13 @@ class Host:
     (a new ledger in `tmp_path` unless `ledger`), whose record `open_session` signed with `sign` and wrote to
     `directory` naming the host the ledger opens it on (or `record_host`), serving one session on a loopback port;
     `reason` is how `serve` ended it, and the ledger's end says the session closed when its client closed it (or as
-    `closed` says). With `withhold`, the session is a withheld one, and the ledger's open says so."""
+    `closed` says). With `withhold`, the session is a withheld one, and the ledger's open says so. Its release log's
+    clock counts, unless `clock` is given."""
 
     def __init__(self, tmp_path, sign, session: str = "s-1", seed: str = "host", ledger: Ledger | None = None,
                  window: dict = WINDOW, closed: bool | None = None, record_host: str | None = None,
-                 secret: bytes | None = None, withhold: bool = False) -> None:
-        self.secret = secret
+                 secret: bytes | None = None, withhold: bool = False, clock=None) -> None:
+        self.secret, self.clock = secret, clock or itertools.count().__next__
         self.directory = tmp_path / session
         self.directory.mkdir(parents=True)
         self.ledger, self.closed = ledger or Ledger(tmp_path / "windows.jsonl", sign), closed
@@ -181,7 +183,7 @@ class Host:
         self.listener.close()
         with conn:
             try:
-                self.reason = R.serve(conn, self.session, itertools.count().__next__, self.secret)
+                self.reason = R.serve(conn, self.session, self.clock, self.secret)
             except Exception as e:
                 self.error = e
             finally:
@@ -226,6 +228,22 @@ def test_an_honest_session_checks_against_what_the_challenger_signed_and_logged(
         assert C.order_reason(commitment, label, roots[label], record.openings) is None
     close = json.loads((host.directory / R.CLOSE).read_text())
     assert (close["session"], close["ended"], close["lines"]) == ("s-1", None, 11)
+
+
+def test_serve_logs_on_the_hosts_raw_clock_and_a_host_without_it_releases_no_coin(tmp_path, signer, monkeypatch):
+    """With no clock given `serve` writes its log on `challenger.raw_ns`. On a host that gives no raw clock the first
+    coin asked for stays on the host: its root's receipt is never read, the session ends for that reason under the
+    challenger's signed close, and the log holds its head alone."""
+    assert inspect.signature(R.serve).parameters["clock"].default is C.raw_ns
+    monkeypatch.delattr(C.time, "CLOCK_MONOTONIC_RAW")
+    host = Host(tmp_path, signer, clock=C.raw_ns)
+    client = R.RemoteChallenger.connect(host.address)
+    with pytest.raises(C.CoinError, match="no raw monotonic clock"):
+        C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
+    why = host.ended()
+    assert why is not None and "no raw monotonic clock (AttributeError)" in why
+    close = json.loads((host.directory / R.CLOSE).read_text())
+    assert (close["session"], close["ended"], close["lines"]) == ("s-1", why, 1)
 
 
 def test_the_challenger_hangs_up_only_after_the_client_so_its_last_frame_arrives(tmp_path, signer):
