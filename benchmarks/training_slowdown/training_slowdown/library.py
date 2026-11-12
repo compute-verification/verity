@@ -16,8 +16,9 @@ in (`priced_in`), its slowdown and what binds, and how much of the step's gates 
 does (`approximated`); then the entry's planned run at that slowdown over each fleet and period (`periods`). With
 `--out` it writes the rows with what each read to `DIR/library.json`.
 
-An entry's program is its job's: a route's step runs under bf16 autocast on a CPU as on a GPU, so the traced
-products' dtypes are the job's, and the row prints them.
+An entry's program is its job's: a route's step runs under bf16 autocast on a CPU as on a GPU. The row prints the
+dtypes the traced products are priced in: bf16, and float32 for attention's, which the capture traces as torch's
+math path computes them from upcast operands and as the train-step circuit wires them.
 
 A row has no slowdown, and says why, where the capture refuses the step, where the step breaks a premise the rows'
 rates take, where the trace doesn't classify the products at the policy's k, and where the entry's E keeps less than

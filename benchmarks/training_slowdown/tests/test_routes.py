@@ -272,7 +272,7 @@ def test_qats_forward_runs_under_bf16_autocast_on_a_cpu():
     assert all(layer.v.dtype == layer.start.dtype == torch.float32 for layer in qat.coded(model, dials).values())
 
 
-def test_a_qat_step_reads_the_start_plus_its_codes_and_steps_the_latents_straight_through(monkeypatch):
+def test_a_qat_step_reads_the_start_plus_its_codes_and_steps_the_latents_straight_through():
     """Route `qat` against its steps written by hand, at a first step and at one in the cooldown. The weights a
     step's forward reads are the start plus the rounding of the latents as the step found them (the start itself at
     the first step, whose latents are zero). Each latent then moves by Muon's rule on the gradient of the loss at
@@ -282,10 +282,7 @@ def test_a_qat_step_reads_the_start_plus_its_codes_and_steps_the_latents_straigh
     hands over, is the rounding of the latents it wrote; every other weight is the start's, and the output has no
     latent. A latent is compared within Newton-Schulz's bf16 rounding, a rounding to within f16's last bit of the
     scale: a kept entry more or fewer is a whole scale off. A kept state's load, which holds the latents, leaves each
-    layer's copy of the start the very tensor it held, which the counter names; θ's load makes the copy anew. What is
-    held is the step's rule, so the route's forward runs in float32 as the one written by hand does: torch's autocast
-    is a no-op while the test runs."""
-    monkeypatch.setattr(torch, "autocast", lambda *args, **kwargs: contextlib.nullcontext())
+    layer's copy of the start the very tensor it held, which the counter names; θ's load makes the copy anew."""
     targets = ("blocks.0.wq.weight", "blocks.0.w_gate.weight", "blocks.0.w_down.weight")
     dials = qat.DIALS | {"targets": ",".join(targets), "keep": 0.3, "lr": 0.02, "warmup": 4.0, "decay": 0.5,
                          "cooldown": "sqrt", "clip": 0.01}

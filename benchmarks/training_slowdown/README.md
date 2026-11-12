@@ -48,7 +48,7 @@ is a block's `c_gates` and `k_bits`; `step` is a step's record, a job's trace (`
 stated from one (`work.products_of_trace`'s); `run` adds the run's `gates` (|C|; else the trace's own circuit's),
 `tau_bits` and `code_bits`. The work and the circuit it is divided by have one price: a trace's products are priced
 in the dtype its circuit counts them in, and a trace whose capture prices some in another (`work.repriced`: one of a
-capture before `capture.products.JOB_DTYPES_FROM`, with float32 attention products) has no slowdown over its own
+capture before `capture.products.PRICED_AS_TRACED_FROM`, with float32 attention products) has no slowdown over its own
 circuit, with the row and the fix in `why`. It returns `slowdown`, the calculator's bound of record on the work the record states (at
 least 1; None, with the reason in `why`, where the record gives none); `binds` (`products`, `none` or `unmeasured`);
 `term`, the count before the floor; `bound`, the calculator's bound with its theorem, least blocks, premises and the
@@ -282,11 +282,12 @@ reachable.
 After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
 at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
-are read, each in the dtype it was traced in. That dtype is the job's: the capture runs attention on its math
-backend in its operands' dtype (`capture.trace`'s `_math_attention`, on every device), as the fused kernel a job
-runs does, so a step under bf16 autocast has its attention products in bf16. A trace of a capture before
-`capture.products.JOB_DTYPES_FROM` has them in float32, and that capture's rule prices them in bf16
-(`capture.products.priced_dtype`); the rule goes when the stored records it reads are traced again. The capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
+are read, each in the dtype it was traced in. The capture runs attention on torch's math path, so a step under
+bf16 autocast has its attention products in float32, as that path computes them from upcast operands and as the
+train-step circuit wires them; its other products are bf16. A trace of a capture before
+`capture.products.PRICED_AS_TRACED_FROM` holds the same float32 products, and that capture's rule prices them in
+bf16 (`capture.products.priced_dtype`); the rule goes when the stored records it reads are traced again. The
+capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
 so the measured step reads what the step before it wrote and the step after it reads what it makes; where the three
 aren't the run's first steps, the first of them reads the run's own weights, not θ's (`mid_run`). That gives the
 step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's

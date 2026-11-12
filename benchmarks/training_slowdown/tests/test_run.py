@@ -372,10 +372,12 @@ def test_the_job_traces_its_routes_step(ran):
         assert block["rows"] and all(set(r) == RAW for r in block["rows"])
     # the forward's ops that read the update, each over the step's tokens: block 0's MLP reads its three trained
     # matrices in products at the 16 bits the route's autocast runs them in, on this CPU as on a GPU, and the norms
-    # above it, which autocast runs in fp32, read what it wrote at 32
+    # above it, which autocast runs in fp32, read what it wrote at 32. Attention's products (`bmm`) are traced in
+    # fp32, as torch's math path computes them from upcast operands, and every other product in bf16
     assert all(u[2:4] == [u[2], tr["tokens"]] for u in tr["updated"])
     assert sorted({u[4] for u in tr["updated"]}) == [16, 32] and len([u for u in tr["updated"] if u[4] == 16]) >= 3
-    assert {tuple(r["dtypes"]) for r in tr["rows"]} == {("bfloat16", "bfloat16")}
+    assert {(r["op"] == "bmm", tuple(r["dtypes"])) for r in tr["rows"]} == {
+        (False, ("bfloat16", "bfloat16")), (True, ("float32", "float32"))}
     priced = [products.priced(r, tr["capture"]) for r in tr["rows"]]
     assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
     assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
