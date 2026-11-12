@@ -338,7 +338,7 @@ class Advice:
     def i1(self) -> I1.Advice:
         """The window as I1 v0's `Advice`; only a version 0 window is one."""
         if self.version:
-            raise MalformedAdvice("a window that carries a request in or out, aborts one or holds a draft row isn't I1 v0 advice")
+            raise MalformedAdvice("a window that carries a request in or out, holds a draft row or aborts one, isn't I1 v0 advice")
         return I1.Advice(tuple(q.i1() for q in self.requests), self.steps, self.release)
 
 

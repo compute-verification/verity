@@ -203,7 +203,7 @@ def test_the_advice_reads_a_draft_rows_kept_count_off_the_next_rows_start():
     assert list(WA.Row.__dataclass_fields__) == ["request", "kind", "start", "n", "cache_hit", "preempted", "sources"]
     assert WA.decode(WA.encode(advice)) == advice and WA.from_json(WA.to_json(advice)) == advice and WA.encode(advice)[0] == 3
     assert len(WA.outputs(advice)) == 8
-    with pytest.raises(WA.MalformedAdvice, match="holds a draft row isn't I1 v0 advice"):
+    with pytest.raises(WA.MalformedAdvice, match="holds a draft row or aborts one, isn't I1 v0 advice"):
         advice.i1()
     stated = bytearray(WA.encode(advice))
     stated[0] = WA.ABORTS

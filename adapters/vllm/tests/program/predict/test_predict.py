@@ -438,7 +438,7 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     (TINY, {"engine": {"env": {"VLLM_BATCH_INVARIANT": "0"}}}, "env VLLM_BATCH_INVARIANT=0 under a target that sets '1'"),
     (TINY, {"engine": {"env": {"VLLM_USE_DEEP_GEMM": "0"}}}, "env VLLM_USE_DEEP_GEMM=0 (the switches modelled"),
     (TINY, {"engine": {"enforce_eager": False}}, "engine arg enforce_eager=False where the 'bi-eager' target applies True"),
-    (TINY, {"engine": {"kv_cache_dtype": "fp8"}}, "engine arg kv_cache_dtype='fp8' (not modelled)"),
+    (TINY, {"engine": {"kv_cache_dtype": "fp8"}}, "an FP8-cache launch (engine arg kv_cache_dtype 'fp8')"),
     (INT8, {}, "an exact-int8 checkpoint on a target whose int8_exact is None"),
     (TINY, {"target": INT8_LINEARS}, "a bf16 checkpoint on a target whose int8_exact is 'linears'"),
     (INT8, {"target": {**RTXPRO6000, "int8_exact": "all"}}, "the exact-int8 attention (int8_exact 'all'"),
