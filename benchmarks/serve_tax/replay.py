@@ -12,7 +12,8 @@ caching, async scheduling, block size and block count, and where the header hold
 cache's format and the speculative decoding: `HEADER_ARGS`), compiled unless ``--eager``, and adds each request, under its served
 engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
 the scheduler's ``schedule``), and where it arrived after schedules that held every request back, after as many
-(``after_empty``); the scheduler decides the rest as it did while serving. Where the arm served with other vLLM general
+(``after_empty``); the scheduler decides the rest as it did while serving, and a step it has in flight when the last
+request finishes is taken as serving took it. Where the arm served with other vLLM general
 plugins (the canonical DSA top-k: ``canonical-topk``, ``two-stage``, ``prod-record``), the replay's processes load them
 too, under the arm's environment (`served_under`), and ``--private`` is where they keep what the arm keeps on the node
 (the top-k's counters; not kept without it). Its own step trace (`StepTrace`) is
@@ -210,6 +211,11 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: i
                 tokens[o.request_id] = [int(t) for t in c.token_ids]
                 if logprobs:
                     lps[o.request_id] = [float(c.logprobs[i][t].logprob) for i, t in enumerate(c.token_ids)]
+    # an engine that schedules a step while the one before it runs has a step in flight when the last request's finish
+    # comes back: one more row of that request, whose output nobody reads. The served engine took that output, so its
+    # trace holds the step, and the replay takes it too
+    for _ in range(trace.scheduled - sum(r["kind"] == "step" for r in trace.records)):
+        eng.step()
     wall = time.monotonic() - start
     takes = eng.collective_rpc(SC.take, args=(str(capture[1]),)) if capture else None
     hooks.uninstall()

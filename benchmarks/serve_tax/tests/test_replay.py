@@ -254,6 +254,74 @@ def test_the_replay_puts_a_request_back_after_the_empty_schedules_its_arrival_na
     assert replayed(False) == [["a"], ["b"], ["a"]]
 
 
+class AheadCore(Core):
+    """`Core` whose update drops a row of a request that finished while the row's step was in flight, as vLLM's does."""
+
+    def update_from_output(self, so, mro):
+        live = {r: n for r, n in so.num_scheduled_tokens.items() if r in self.requests}
+        return super().update_from_output(NS(num_scheduled_tokens=live), mro)
+
+
+class Ahead(Engine):
+    """`Engine` scheduling a step while the one before it runs, as vLLM's engine core does under async scheduling
+    (``step_with_batch_queue``, two steps in flight at most): a step is scheduled while a request is unfinished and
+    its output taken a call later, so a request's last output comes back with one more row of it in flight."""
+
+    def __init__(self):
+        self.engine_core = NS(scheduler=AheadCore())
+        self.tokens: dict[str, list[int]] = {}
+        self.flying: list = []
+
+    def step(self):
+        sched = self.engine_core.scheduler
+        if sched.requests:
+            self.flying.insert(0, sched.schedule())
+            if len(self.flying) < 2:
+                return []
+        elif not self.flying:
+            return []
+        so = self.flying.pop()
+        done = []
+        for o in sched.update_from_output(so, NS(req_ids=list(so.num_scheduled_tokens)))[0].outputs:
+            self.tokens.setdefault(o.request_id, []).extend(o.new_token_ids)
+            if o.finish_reason is not None:
+                done.append(NS(finished=True, request_id=o.request_id, outputs=[NS(token_ids=self.tokens[o.request_id])]))
+        return done
+
+
+def test_the_replay_takes_the_step_in_flight_when_the_last_request_finishes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """An engine that schedules ahead has a step in flight when the last request's finish comes back. Serving took its
+    output, so the served trace ends on a step that emitted nothing; a replay that stopped at the finish would have one
+    step fewer and differ from the served schedule in its last step, with every token equal."""
+    from verity_vllm.engine.step_trace import StepTrace
+
+    vllm = types.ModuleType("vllm")
+    vllm.SamplingParams = lambda **kw: NS(**kw)
+    monkeypatch.setitem(sys.modules, "vllm", vllm)
+    monkeypatch.setitem(sys.modules, "verity_vllm.engine.sampler_capture", types.ModuleType("sampler_capture"))
+    serving = Ahead()
+    trace = StepTrace().install(serving)
+    serving.add_request("a", {"prompt_token_ids": [1]}, NS(max_tokens=2))
+    while serving.has_unfinished_requests() or serving.flying:
+        serving.step()
+    trace.uninstall()
+    steps = [r for r in trace.records if r["kind"] == "step"]
+    # two rows ran the request's two tokens; the third was scheduled before the second's finish came back
+    assert [(s["step"], [row[0] for row in s["rows"]], s["emitted"], sorted(s["finished"])) for s in steps] == [
+        (0, ["a"], {"a": 1}, []), (1, ["a"], {"a": 1}, ["a"]), (2, ["a"], {}, [])]
+    w = {"header": trace.records[0], "steps": steps,
+         "requests": [{"engine_id": "a", "before_step": 0, "after_empty": 0, "prompt_ids": [1], "max_tokens": 2,
+                       "sampling": {}, "served": serving.tokens["a"]}]}
+    monkeypatch.setattr(R, "engine", lambda *a, **kw: Ahead())
+    got = R.replay(w, tmp_path, eager=True)
+    assert [s["rows"] for s in got["steps"]] == [s["rows"] for s in steps] and got["tokens"] == serving.tokens
+    out = R.compare(w, got)
+    assert (out["steps_served"], out["steps_replayed"], out["steps_differing"], out["bit_exact"]) == (3, 3, 0, True)
+    # an engine with nothing in flight at the end is stepped no further
+    monkeypatch.setattr(R, "engine", lambda *a, **kw: Engine())
+    assert len(R.replay(w, tmp_path, eager=True)["steps"]) == 2
+
+
 def test_the_replays_engine_takes_the_headers_cache_format_and_draft(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """A serve with an FP8 cache or speculative decoding is replayed on an engine with them; a header without them builds
     the engine it did."""
