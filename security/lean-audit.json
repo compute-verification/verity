@@ -34535,9 +34535,9 @@
    }
   },
   "Definitions.Core.Accel.Sm120": {
-   "digest": "42afd15f47232ab8bf9d5285f0fabb480239f6a6db1c4b2986b653180de7bbb9",
+   "digest": "ad27808571d830a513df5bb75afbcef31cc6edf36cbf91049b5a17c543ee9a24",
    "definitions": {
-    "Verity.Accel.Sm120.card": "d08e22ff09b335e82348f44f07acd3d94e3c613b3f60cb4cc8c874893e87a133",
+    "Verity.Accel.Sm120.card": "803f6efa03447713db1c6770d94c48456203ee23c2837176f63ef5388d308df5",
     "Verity.Accel.Sm120.clock": "ea2673b6de9e58c6fa35f80fede9d753d34db5730a04763a291a618e45509bd5"
    }
   },

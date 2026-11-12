@@ -25,10 +25,10 @@ from functools import cache
 from pathlib import Path
 
 import torch
-from vllm.utils.torch_utils import is_quantized_kv_cache
 from vllm.v1.attention.backend import AttentionType
 from vllm.v1.attention.backends.flash_attn import FlashAttentionBackend, FlashAttentionImpl
 from vllm.v1.attention.backends.registry import AttentionBackendEnum, register_backend
+from vllm.v1.kv_cache_interface import is_quantized_kv_cache
 from vllm.v1.kv_cache_layout import KVCacheLayout
 
 from verity_vllm.engine import int8_attention as A
