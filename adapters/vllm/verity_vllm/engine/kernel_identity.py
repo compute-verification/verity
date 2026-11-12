@@ -30,6 +30,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+__all__ = ["collect", "inductor_cache_dir", "triton_cache_dir"]
+
 _TRITON_SRC = re.compile(r"async_compile\.triton\('([^']+)', '''(.*?)''', device_str=", re.S)
 _AOT_ID = re.compile(r"^# AOT ID: \[(.*?)\]", re.M)
 _KERNEL_HEADER = re.compile(r"^@triton_heuristics\.\w+\(|^@triton\.jit", re.M)
@@ -161,7 +163,7 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
                     entry["ptx_code_sha256"] = sha256_bytes(ptx_code(ptx_src).encode())
             cubins.append(entry)
     kernel_pairs = sorted({(k["name"], k["source_sha256"]) for w in wrappers for k in w["kernels"]})
-    doc = {
+    doc: dict[str, Any] = {
         "schema": "verity-vllm/kernel-identity/v1",
         "inductor_cache_dir": inductor_dir,
         "triton_cache_dir": triton_dir,
