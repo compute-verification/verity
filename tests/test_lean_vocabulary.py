@@ -533,10 +533,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.TC.Relation.Witness`: becomes one Core witness (lean)",
     "security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":
         "duplicate of `Verity.Circuit`: becomes it, with registered parameters (compute-accounting)",
-    "security/Definitions/NetworkCertifier/Run.lean::NetTiming.Program":
-        "homonym, a committed Program's egress prediction: rename (network-accounting)",
-    "security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
-        "homonym, one window's timing advice: rename (network-accounting)",
     "security/Definitions/Spot/Exfiltration.lean::Population.Exfil.Strategy":
         "homonym, an adaptive exfiltration strategy, each window's leak and escaping coins from the earlier coins: rename (lean)",
     "security/Definitions/Pous/Game/Oracle.lean::Pous.Prog":
@@ -780,10 +776,6 @@ KNOWN: dict[str, str] = {
     "verity/commitments/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/configuration/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
-    "verity/protocols/certifier/device/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
-    "verity/protocols/certifier/device/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
-        "homonym, a link's online state: rename (network-accounting)",
     "verity/protocols/pous/device/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "verity/protocols/certifier/verifier/audit.py::Verdict":
@@ -792,10 +784,6 @@ KNOWN: dict[str, str] = {
         "homonym, a cache call's inputs: rename (network-accounting)",
     "verity/protocols/certifier/device/program/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",
-    "verity/protocols/certifier/device/program/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
-        "homonym, one window's timing advice: rename (network-accounting)",
-    "verity/protocols/certifier/prover/window_charge.py::Window":
-        "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
     "verity/protocols/interface/CoreProtocol/Record.lean::Core.Record":
@@ -853,8 +841,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
     "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
         "duplicate of `Flock.Draw.Law`: becomes it (deleted) (compute-accounting)",
-    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Window":
-        "duplicate of the execution block (no canonical yet): becomes a reading of it: the execution block's record (compute-accounting)",
     "verity/protocols/pouw/verifier/lean/check/PouwCheck/Pass.lean::PouwCheck.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (compute-accounting)",
     "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Frame.lean::PouwCommit.Hash":
