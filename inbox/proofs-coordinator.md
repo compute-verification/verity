@@ -82014,3 +82014,57 @@ And the question still open from its 08:10Z entry, which verifier a table other 
 
 - **On the merge with `main`** (`8f8ba8178069`: `main` at `19fb19a21e40` and my `5972af2daf80`), a try of `security/Proofs/Flock.lean` with its siblings check: rc 0, "Build completed successfully (12435 jobs)", "lean exit 0 in 2348 s", "siblings: no built module of its package that doesn't import Proofs.Flock declares a name it does (1067 imported in 13 s, peak 4730 MB); 2815 unchecked" [run: `r20261112-084727-8766`]. So the 22 `Proofs.Flock.SpotFlock.*` importers that `main` changed build over my two changed statements. It is one commit of `main` and four of mine behind: `main` is at `33faab2be81c` now, which adds three files under `Proofs/Flock` and three imports to `Proofs/Flock.lean`; none declares a name of mine by `rg`, and `git merge-tree --write-tree` of `b02143ea52ce` against it exits 0, the lock included [run: local]. **On the merge with lean's branch** (`3975f42ce251`: `f3837f57d113` and my `c1a1252afa0e`, not pushed): the same try, `r20261112-091522-402b`, running since 09:19Z, not ended [run].
 - Next, in this order: the three tries' verdicts and a fix if one stops; the witness's record committed when `f368` ends; one fast path at the final head; `402b`'s verdict; then one entry that says the first branch is ready, or what stops it.
+
+## REDRAW, Thu 12 Nov 09:53Z: #9237 is open, unmarked, at `36909d392ed7`; its runs are out and the two long ones still wait for a slot; no ready line yet, and the head you mark will be one commit later (the two locks as the records run keeps them)
+
+Mailbox read at 09:52Z: the 07:59Z section is the newest [run]. Times are from `date -u`.
+
+**1. The head and the pull request.**
+
+- Head `36909d392ed77bb9f0ffe434fd61606b7658d29f` of `cursor/proofs-redraw-cc71`, pushed [run: `git ls-remote`].
+- https://github.com/compute-verification/verity/pull/9237, open, no mark, base `main`, linked to PRF-569 [run: `research queue open ... --issue PRF-569 --by proofs`; `gh pr view`].
+- `open` warned twice: PRF-569 has no goal label (its one label is `from:proofs`) [run]. The body's line is `Goal proofs/sampled-audits-sound` [guess: the goal on the page it reads closest to]. If it is another, say which and I change the line; the label on the issue is yours to add.
+- It holds #9081's head `ad9af609f4ee`, so it lands after #9081 [run: `git merge-base --is-ancestor`]. Above `main` `19fb19a21e40` with #9081 it is 29 files, +1,297 −520 [run: `git diff --shortstat` against the merge-tree of the two].
+
+**2. What the head holds since my 07:53Z entry.**
+
+- STOPDRIVER's `2011220faf` merged, a fast-forward [run].
+- `main` `19fb19a21e40` merged once: it stopped in one file, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, five hunks in the two-stage run's case and its test; both sides are kept [run: the merge `9da80d5917`]. That file is mended by hand, so its suite at the head is the check of it (3, below).
+- lean's caution, read against my two entries: neither names an issue, a lane, a person or a day; each says what is missing [read: `security/Properties/lean-audit.json`, the two `Properties.Challenger.Drawn.*` entries under `unwitnessed`]. 182 to 184 [run: counted].
+- Two things the records run at `c132410107` (`r20261112-065527-fe30`, rc 1) showed beyond the missing honest halves, both mended at the head: the statements' module `Properties.Challenger` was not under `meaning`, and the two nontrivial lemmas read two definitions of the proofs tree (`idle`, `noKey`), which the `trees` rule refuses [read: that run's `report.json`]. `meaning` gains the module; the two definitions moved to `security/Properties/Challenger.lean` (commits `4877546ccc`, `36909d392e`).
+- **The head is not yet the one to mark.** A half-entry of a statement the check unfolds must carry the statement's `unfolded_hash`, which only a build gives [read: `tools/verity/lean/check.py`, `witness_failures`]. The records job below reads the two hashes from its first pass, writes them into the two entries, and runs a second pass on that lock. I then commit the two locks exactly as the run kept them, one commit, no Lean in it.
+
+**3. Runs at `36909d392ed7`** [run: launched; states from `research status` at 09:52Z].
+
+| what | run | state | expected end |
+|---|---|---|---|
+| records, `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, two passes in one job | `r20261112-093344-0553` | waiting, 1 check ahead, since 09:35Z | about 85 min after it gets its slot [guess: 45 s, 3,002 s and 710 s for the three packages in `fe30`, then the second pass of `security/Properties`] |
+| `suites.py --changed 19fb19a21e40 --quick` | `r20261112-093634-2002` | waiting, 1 check ahead, since 09:36Z | about an hour after it gets its slot [guess] |
+| `verity lean try --siblings`, eleven files, two at a time | tmux on my VM; four ended | `security/Properties/Challenger.lean`, `security/Proofs/Properties/Challenger.lean`, `Spot/ChallengerCoins.lean`, `Spot/Run.lean`: each lean exit 0, no name clash, no axiom beyond the three (2 and 10 theorems; the Spot files have none) | 10:30Z [guess: 8 to 10 min each] |
+| the nine rehearsals, again | below | launched 09:48Z to 09:51Z | 20 to 90 min each after its slot [read: the same commands' times at `c132410107`] |
+
+- The sha is passed to `--changed` because a shipped tree may hold no `origin/main` [read: `suites.py`].
+- Rehearsals at the head, since the head gained two merges of `main` after the eight passed at `c132410107`: `two_stage_small.sh` `r20261112-094800-bdc5`; the same inline at `--v 4096` `-094826-ec8e`; `two_stage/audit.sh` `-094840-f4e1`; `a5_tp.sh` at 256 plain `-094912-68a1`, `sparse-mla` `-094925-638f`, `warden` with the ZK server `-095006-c8df`, `topp` `-095033-17f7`; `scan_zk.sh` `-094938-3edd`; `stop_audit_small.sh` `-095104-d054` [run: each launch exit 0].
+- network-accounting's three suites: at `c132410107` `benchmarks/prove_path` (154 passed), `verity-network-traces` (542) and `verity-network-e2e` (70) passed in `r20261112-070202-10b7`, which still runs: 57 suites passed, none failed so far [run: read from its `stdout.log`, 09:52Z]. At the head they are in `2002`. I have told network-accounting nothing.
+
+**4. `prove_path/run.sh` is not a rehearsal that passes on `main`.** It exits 1 at `main` `19fb19a21e40` (`r20261112-094134-10a2`) as at `c132410107` (`r20261112-071627-9d2b`): the honest audit's law `subset:4` is refused by the law check before any session is opened ("a fixed count samples each proof block with K/N"), at both [run: both runs' `out/standin/rank0/summary.json`, `checks.draw`]. Not mine and not changed here; its owner should hear [guess: network-accounting's script].
+
+**5. `main` moved to `33faab2be81c`.** It merges with the head without a conflict, so I leave it [run: `git merge-tree --write-tree --name-only origin/main HEAD`, no file named]. Two things the merge will meet, neither a stop: `UNWITNESSED["security/Properties"]` is 191 on `main` and 185 at my head, with `main`'s lock still at 182 entries, so after the merge it is 184 under 191; and `whole_run/Main.lean`'s one line is the same on both sides [run: `git show` of both].
+
+**6. Against lean's merge branch** `cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`, after `merge.py --install` [run, 09:50Z]: the head stops in 12 files and `main` `33faab2be81c` in 23; **none of the 12 is beyond `main`'s own.** Inside one of them, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, my head has one hunk more than `main` (2 against 1, at `19fb19a21e40` and at `33faab2be81c`): the import of `verity.protocols.spot.device.coins`. Its close is one import holding both sides' names:
+
+```python
+from verity.protocols.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
+                                                draw_coins, draw_first, law_problem)
+from verity.protocols.spot.device.coins import ran_out as draw_ran_out
+```
+
+I changed nothing to avoid it.
+
+**7. For your 14:00Z list, what is already so.**
+
+- Items 1, 2 and 4 are at the head as my 06:02Z entry describes them; their suites passed at `c132410107` in `10b7`: `verity-core-sampled-proofs` 255 passed, `verity/protocols/spot/verifier` 879, `benchmarks/one_stage` 559 [run: read]. At the head they are in `2002`.
+- Item 7: both statements and both proofs compile at the head so far as tried (the statements' file and `Proofs/Properties/Challenger.lean`; `Drawn.lean` and `Coins.lean` are in the tries still out) [run]. (ii) closed: `FamilyOneCommitmentRead` is proved of `coinsReason` itself.
+- The 15 tracebacks of `r20261112-074755-a921` (the suite at `09430dfbd2`, 15 failed, 240 passed) are one error: `CoinError: every other coin of the epoch is open`, raised in the difftest's own helper `Drawn.__init__` (`test_challenger_difftest.py:1777`, through `_step` at `:1789`) [run: read from its `out/logs`; all 15 pass through those two frames]. The helper gave its other family 2 coins, and the family cases record its roots on both sides of the sample. `dc7066ceef` makes it 4, one line; the suite passes after it (`r20261112-061500-5aa8`, rc 0, at `4599be5623`) [run]. No verifier code was wrong in them.
+
+**8. What I do when you resume me.** Read `0553`; commit the two locks as it kept them and push; fill the body's two open lines from its `audit.json` (the `reads` records by name, and that no statement or premise moves, if that is so; if one would, I stop and write to you first); run the records once more at that commit, where it should only pass; redo 6; then the ready line, with the line for `round2`: every record whose sample read a challenger's coins, made by `main`'s drivers, is refused by the mended verifier, not read.
