@@ -64,9 +64,11 @@ def test_rows_and_widths_fall_back_by_name_and_the_cli_engine_arg_wins():
     # an explicit CLI engine arg overrides the workload's engine.args (run_config's merge order)
     cap2, why2 = RC.snapshot_cap_bytes(_wl([1024], mnbt=2048), LLAMA_1B, {"max_num_batched_tokens": 1025})
     assert why2["rows"] == 1025 and cap2 == 1025 * 32768
-    # empty / missing workload: floor
-    cap3, why3 = RC.snapshot_cap_bytes(None, None)
-    assert cap3 == RC.SNAPSHOT_CAP_FLOOR and why3["rows"] == 0
+    # empty / missing workload, or one that states no requests: floor
+    absent: list[dict | None] = [None, {}, {"requests": None}, {"requests": []}]
+    for doc in absent:
+        cap3, why3 = RC.snapshot_cap_bytes(doc, None)
+        assert cap3 == RC.SNAPSHOT_CAP_FLOOR and why3["rows"] == 0 and why3["rows_source"].startswith("longest prompt"), doc
 
 
 def test_main_derives_the_cap_only_when_none_is_given_and_records_the_derivation(tmp_path, monkeypatch):
