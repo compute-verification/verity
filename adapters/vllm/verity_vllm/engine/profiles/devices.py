@@ -14,6 +14,8 @@ import json
 from verity_vllm.config import workload_file
 from verity_vllm.target_family import device_token_of_row
 
+__all__ = ["CARD", "NO_CARD", "device_name", "device_name_of_row", "fused_moe_config"]
+
 DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
 
 #: the card file (`verity.hardware.cards.load`) each served target is registered on, by the name its device reports, which
@@ -42,10 +44,12 @@ def device_name_of_row(row_id: str) -> str | None:
 
 
 def device_name(workload: str | None) -> str | None:
-    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list or without a workload.  A
-    stored workload is made present and checked first (`config.workload_file`)."""
-    sweep = (json.loads(workload_file(workload).read_text()).get("sweep") or {}) if workload else {}
-    return device_name_of_row(sweep.get("row_id") or "")
+    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list, for a workload with no
+    sweep plan, and without a workload.  A stored workload is made present and checked first (`config.workload_file`)."""
+    if not workload:
+        return None
+    sweep = json.loads(workload_file(workload).read_text()).get("sweep")
+    return None if sweep is None else device_name_of_row(sweep.get("row_id") or "")
 
 
 def fused_moe_config(E: int, N: int, device: str, dtype: str, block: tuple[int, int], M: int) -> dict[str, int] | None:

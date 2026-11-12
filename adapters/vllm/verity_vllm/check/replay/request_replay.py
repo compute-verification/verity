@@ -24,6 +24,7 @@ from verity_vllm.check.replay.index import (
     ProgramIndex,
     described,
     node_runs,
+    plane_copies,
 )
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.query.manifest import format as RM
@@ -52,7 +53,7 @@ class Replay:
             if d is None:
                 continue
             outs = [(d["op_path"], m[0], int(m[1]), str(m[2]), int(d["row"])) for m in d["members"]]
-            outs += [(c["op_path"], c["member"], int(c["width"]), str(c["dtype"]), int(c["row"])) for c in d.get("copies") or ()]
+            outs += [(c["op_path"], c["member"], int(c["width"]), str(c["dtype"]), int(c["row"])) for c in plane_copies(d)]
             for op, member, width, dtype, row in outs:
                 w, dt, by = self.at.setdefault((int(d["step"]), op, member), (width, dtype, {}))
                 if (w, dt) != (width, dtype) or by.setdefault(row, int(r["i"])) != int(r["i"]):
@@ -137,7 +138,7 @@ class Replay:
                 raise LookupError(f"row {i} ({fam}): its relation gives no output {member!r} (it gives {sorted(got)})")
             got[member] = v
             outs[(d["op_path"], member)] = _words(v, str(dtype), int(width), fam, f"row {i} {member}")
-        for c in d.get("copies") or ():
+        for c in plane_copies(d):
             outs[(c["op_path"], c["member"])] = _words(got[c["of"]], str(c["dtype"]), int(c["width"]), fam,
                                                        f"row {i} {c['member']}")
         self.out[i] = outs

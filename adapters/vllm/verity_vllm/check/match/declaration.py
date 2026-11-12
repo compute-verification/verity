@@ -17,14 +17,49 @@ from verity_vllm.config import workload_file
 from verity_vllm.observe import capture_log as CL
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.schema_ids import GLOBAL_PROGRAM_SCHEMA
 from verity_vllm.records.workload import Workload
 
-GP_SCHEMA = "cb-a/global-program/v1"
+GP_SCHEMA = GLOBAL_PROGRAM_SCHEMA
 
 
 def request_id_of(index: int) -> str:
     """`r<k>` -- the same function as global_program.request_id_of (kept local: this module must not import torch paths)."""
     return f"r{int(index)}"
+
+
+# engine conditions the workload Program models: the components are eager per-request Programs (X-09) over one shared
+# weights input; a request's prefill may be chunked over engine steps (X-09's chunked-prefill criterion).  Prefix caching is the
+# manifest's (`workload_applicability`): with it on, a request whose first C rows the prefix cache serves (`program.prefix_plan`) is a
+# component that reads them as its `prefix` input, which Match binds to the producing requests' rows; no other cross-request read.
+MODELLED_ENGINE = {"enforce_eager": True, "enable_prefix_caching": False, "enable_chunked_prefill": "modelled (a request's prefill rows may span engine steps)"}
+
+# a COMPILED execution is modelled only when every component declares it (applicability.execution
+# 'bi-compiled…' AND an agreed `compilation` block {mode, cudagraph_mode, capture_sizes, …} written by derive_step from the TargetProfile);
+# the engine conditions then say enforce_eager False + those facts, and GM-01 G1 compares the record's header against them.
+COMPILATION_FACT_KEYS = ("mode", "cudagraph_mode", "capture_sizes", "backend", "use_inductor_graph_partition", "compile_cache",
+                         # the record-level pin of the Inductor output identity (control process): carried into
+                         # global_match.json execution.effective_compilation when the header attests it, NOT compared with the Build
+                         # (derive_step traces eagerly; the pin is an attempt-to-attempt condition the report/commit compare)
+                         "kernel_set_sha256", "call_set_sha256", "wrapper_norm_set_sha256")
+_FACT_ALIASES = {"compilation_mode": "mode"}   # compiled's TargetProfile.modelled_engine() names it compilation_mode
+
+# vLLM CompilationMode: the recorder's profile.compilation writes the enum VALUE as a string ("0" on an eager record), compiled's
+# TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable
+_MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
+
+
+def compilation_facts(block: dict | None) -> dict:
+    """The compilation facts of an applicability `engine`/`compilation` block, key-normalised (compilation_mode -> mode); {} if none.
+    (Of a declared block; `engine.build.compilation_facts` is another function, which reads them back from a built engine.)"""
+    if not isinstance(block, dict):
+        return {}
+    out = {}
+    for k, v in block.items():
+        kk = _FACT_ALIASES.get(k, k)
+        if kk in COMPILATION_FACT_KEYS and v is not None:
+            out[kk] = _MODE_NAMES.get(str(v), v) if kk == "mode" else v
+    return out
 
 
 # ------------------------------------------------------------------------------------------------------ the global Program
@@ -117,7 +152,6 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
                      "prompt_sha256": hashlib.sha256(json.dumps(list(r.prompt_token_ids)).encode()).hexdigest()[:16],
                      "component": {"dir": comps.get((lp, T)), "LP": lp, "T": T},
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
-    from verity_vllm.pipeline.global_program import MODELLED_ENGINE
     engine = dict(MODELLED_ENGINE)
     stop_rule: dict = {"eos_token_ids": sorted(set(int(x) for x in eos_token_ids)) if eos_token_ids else None}
     lag_block = None
@@ -176,7 +210,7 @@ def workload_lag_static(desc: dict) -> int | None:
     return v_bind if v_bind is not None else v_ids
 
 
-def relocate_components(derived: dict, artifact_path: str) -> dict:
+def relocate_components(derived: dict | None, artifact_path: str) -> dict:
     """Resolve GP-01's component dirs (`inputs.derived`: "lp,t" -> derive_step dir) beside the artifact when the recorded absolute
     paths do not exist here.
 
@@ -199,6 +233,14 @@ def relocate_components(derived: dict, artifact_path: str) -> dict:
                 d = cand
         out[k] = d
     return {"derived": out, "relocated": relocated, "base": base}
+
+
+def relocated_components(gp: dict | None) -> dict:
+    """The component dirs a Build recorded on another host and `from_gprog` resolved beside its artifact ("lp,t" -> {from, to}): empty
+    where none moved, and for a declaration that was not read from a Build artifact."""
+    built = gp.get("gprog_artifact") if gp else None
+    moved = built.get("relocated_components") if built else None
+    return moved if moved else {}
 
 
 def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
@@ -226,7 +268,8 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
             raise ValueError(f"{artifact_path}: workload_digest {str(art.get('workload_digest'))[:16]} != the digest of the descriptor beside it "
                              f"{recomputed[:16]} (descriptor.json.gz): the Build artifact is not the Program it names")
         dsha = hashlib.sha256(canonical_json(desc)).hexdigest()
-        declared_sha = (art.get("descriptor") or {}).get("sha256")
+        descriptor = art.get("descriptor")   # the artifact's own record of the descriptor file; one that carries none claims no sha256
+        declared_sha = descriptor.get("sha256") if descriptor else None
         if declared_sha and declared_sha != dsha:
             raise ValueError(f"{artifact_path}: descriptor.sha256 {declared_sha[:16]} != the descriptor file's {dsha[:16]}")
         digest_verification = {"verified": True, "recomputed_from": dpath, "descriptor_sha256": dsha}
@@ -240,10 +283,10 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
                                  f"program_fn {str(desc.get('program_fn'))[:40]}...{str(desc.get('program_fn'))[-24:]}, root "
                                  f"{str(desc.get('root'))[:32]}...{str(desc.get('root'))[-24:]}): the artifact's lag declaration is not the Program's")
             digest_verification["lag_static"] = int(static_lag)
-    derived = (art.get("inputs") or {}).get("derived") or {}
-    relocation = relocate_components(derived, artifact_path)
+    inputs = art.get("inputs")   # what the Build read: its components by shape (`derived`) and its manifest; an artifact without it names neither
+    relocation = relocate_components(inputs.get("derived") if inputs else None, artifact_path)
     derived = relocation["derived"]
-    wl_path = workload_path or (art.get("inputs") or {}).get("manifest")
+    wl_path = workload_path or (inputs.get("manifest") if inputs else None)
     wl = Workload.load(wl_path) if wl_path and workload_file(wl_path).is_file() else None
     declared = () if wl is None else wl.requests
     for i, q in enumerate(declared):
@@ -252,8 +295,10 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     # prompts by manifest POSITION (the Program's r<k>); the manifest's own request_id is the workload (UUID) id
     prompts = {request_id_of(i): list(q.prompt_token_ids) for i, q in enumerate(declared) if q.prompt_token_ids is not None}
     wl_uuids = {request_id_of(i): q.request_id for i, q in enumerate(declared)}
-    amap = {r["request_id"]: r for r in (art.get("address_map") or {}).get("requests", [])}
-    chron = {r["request_id"]: r for r in (art.get("chronology") or {}).get("requests", [])}
+    # the Build's address map and chronology, each by request; an artifact without the block states none, and a request's entry is then None
+    address_map, chronology = art.get("address_map"), art.get("chronology")
+    amap = {r["request_id"]: r for r in address_map.get("requests", [])} if address_map else {}
+    chron = {r["request_id"]: r for r in chronology.get("requests", [])} if chronology else {}
     plan = PP.plan(wl.dump()) if wl is not None else None
     reqs = []
     for r in art["requests"]:
@@ -272,11 +317,12 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
                              f"{p!r} (program.prefix_plan)")
         C = int((pfx or {}).get("rows") or 0)
         d = derived.get(PP.shape_key(PP.shape(lp, cap - 1, C)))
+        built = r.get("component")   # the Build's claim of the request's component (its digest, its specialization); None on an artifact without it
         reqs.append({"index": r["index"], "request_id": rid, "workload_request_id": wrid, "prompt_len": lp, "max_tokens": cap, "T_bound": cap - 1,
                      "arrive_step": int(r["arrive_step"]), **({"prefix": pfx} if pfx else {}),
                      "prompt_sha256": hashlib.sha256(json.dumps(prompts[rid]).encode()).hexdigest()[:16] if rid in prompts else None,
-                     "component": {"dir": d, "LP": lp, "T": cap - 1, **({"C": C} if C else {}), "program_digest": (r.get("component") or {}).get("program_digest"),
-                                   "specialization": (r.get("component") or {}).get("specialization")},
+                     "component": {"dir": d, "LP": lp, "T": cap - 1, **({"C": C} if C else {}), "program_digest": built.get("program_digest") if built else None,
+                                   "specialization": built.get("specialization") if built else None},
                      "global_address": {k: amap[rid].get(k) for k in ("root_node", "gates", "n_instances", "rule")} if rid in amap else None,
                      "programmed_steps": chron[rid].get("programmed_steps") if rid in chron else None,
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
@@ -328,7 +374,6 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
     `capture/versions.json` repeats the effective engine kwargs.  Returns {engine: {k: v}, compilation: {fact: v}, values: {k: [distinct v]},
     sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}, and unreadable: {location: error} only when a location is present
     but unreadable} -- the caller FAILS on any disagreement, on an unreadable location and when nothing is attested."""
-    from verity_vllm.pipeline.global_program import compilation_facts
     header = header if isinstance(header, dict) else {}
     prof = header.get("profile")
     prof = prof if isinstance(prof, dict) else {}
@@ -439,7 +484,9 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     """The engine and compilation conditions the record attests, against the Program's declared applicability; returns the facts."""
     # the Program declares the execution profile + engine conditions it models (GP-01 applicability); the record's
     # RunHeader carries the EFFECTIVE engine kwargs -- a run outside the declaration is not a Match for this Program (named)
-    app = gp.get("applicability") or {}
+    app = gp.get("applicability")
+    if not app:
+        app = {}   # a declaration without the block (an older artifact's) declares nothing, and fails below by name on its absent engine conditions
     # the recorder (vllm_adapter build_manifest -> RunHeader.profile) nests the
     # effective engine kwargs and the compilation facts under RunHeader.profile.*; read EVERY location the record may attest them
     # (profile.*, top level, capture/versions.json), require the locations to agree, and FAIL CLOSED when the record attests nothing
@@ -483,7 +530,6 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     # a Program modelling a COMPILED execution declares its compilation facts; the record must attest the same
     # (RunHeader.profile.compilation / .compilation / engine_kwargs.compilation_config); a compiled Program against a header without them
     # FAILS (fail closed).  An EAGER Program against a record whose compilation facts attest cudagraphs / torch.compile FAILS too.
-    from verity_vllm.pipeline.global_program import compilation_facts
     decl_comp = app["engine"].get("compilation") if app.get("engine") else None
     if decl_comp is not None:
         decl = compilation_facts(decl_comp)
@@ -513,7 +559,8 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
     """The workload manifest against the Program (ids, per-request fields, sha256) and the record header (the manifest the run was
     captured with, seeds, sampling).  Returns the manifest, or None when the Program names none that exists here or it is not a
     workload record (named)."""
-    wl_path = (gp.get("workload") or {}).get("path")
+    named = gp.get("workload")   # the manifest the Program was built from, by path and sha256; a declaration without the block names none
+    wl_path = named.get("path") if named else None
     wl = None
     if wl_path and workload_file(wl_path).is_file():
         try:
@@ -536,7 +583,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                                  ("arrive_step", wl.arrive_step(i), g.get("arrive_step"))):
                 if wv is not None and gv is not None and int(wv) != int(gv):
                     c.fail(f"{request_id_of(i)}: manifest {name}={int(wv)} != the Program's declared {name}={int(gv)} (manifest edited after the Build)")
-        want = (gp.get("workload") or {}).get("sha256")
+        want = named.get("sha256") if named else None
         have = sha256_file(wl_path)
         c.info["workload_sha256"] = have
         if want and want != have:
@@ -544,7 +591,8 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
         # the manifest of record must be the manifest the RUN was captured with: the driver records its sha256 in
         # RunHeader.workload.sha256 -- a manifest edited after the run (seeds swapped, a seed deleted) composes the same Program and
         # passed G1 by ids/prompts/caps/arrivals alone; and per request the header's sampling fields are compared with the manifest's
-        hw = (header.get("workload") or {}).get("sha256")
+        served = header.get("workload")   # the driver's record of the manifest it served (its sha256, its sampling); None on a header without it
+        hw = served.get("sha256") if served else None
         # the driver (vllm_adapter.load_workload) hashes the manifest DOCUMENT canonically (sort_keys, compact separators), not the file
         have_doc = wl.doc_sha256
         c.info["header_workload_sha256"] = hw
@@ -566,7 +614,8 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records no seed")
             elif ws is not None and hs is not None and int(ws) != int(hs):
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records seed={hs}")
-        m_s, h_s = manifest_sampling(wl), dict((header.get("workload") or {}).get("sampling") or {})
+        served_sampling = served.get("sampling") if served else None
+        m_s, h_s = manifest_sampling(wl), (dict(served_sampling) if served_sampling else {})
         c.info["sampling"] = {"manifest": m_s, "header": {k: h_s.get(k) for k in ("variant", "temperature", "top_p", "top_k") if k in h_s}}
         # the manifest's own sources (variants table = the driver's, label, explicit fields) must agree: fail closed
         for conf in m_s.get("conflict", []):   # stated only when the manifest's sources disagree

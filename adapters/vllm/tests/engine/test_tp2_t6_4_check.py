@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Any
 
 import pytest
 
@@ -23,6 +24,7 @@ def _worker():
 
     class Stub:
         _t6_4_check = cls._t6_4_check
+        _tp2_commit: dict[str, Any]
 
     s = Stub()
     s._tp2_commit = {"rank": 1}

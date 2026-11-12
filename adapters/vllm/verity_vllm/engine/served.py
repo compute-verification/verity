@@ -34,6 +34,9 @@ from verity_vllm.config import row_world
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine.profiles import transport
 
+__all__ = ["DEFAULTS", "ENFORCE_EAGER", "apply", "declared", "execution", "execution_env", "of_summary", "read_rank",
+           "record", "require"]
+
 SCHEMA = "verity-vllm/served-switches/v1"
 #: The default of a switch vLLM resolves from the rest of the config: whatever it resolves is its own.
 RESOLVED = "resolved by vLLM"
@@ -90,9 +93,9 @@ _COMPILED = "a compiled row runs TargetProfile.COMPILATIONS' piecewise CUDA grap
 EXECUTIONS: dict[str | None, tuple[dict[str, Any], str]] = {
     None: ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True}, "a workload without a row id runs the harness's batch-invariant eager engine"),
     "eager": ({"enforce_eager": True}, "an eager row: its Programs are of the eager forward"),
-    "compiled": ({"enforce_eager": False}, "a compiled row at vLLM's serving defaults: torch.compile with vLLM's own CUDA-graph mode, "
-                                           "or, for an architecture vLLM serves with breakable CUDA graphs (VLLM_USE_BREAKABLE_CUDAGRAPH), "
-                                           "those graphs over the eager kernels; no batch invariance; its Program is of that execution"),
+    "compiled": ({"enforce_eager": False}, ("a compiled row at vLLM's serving defaults: torch.compile with vLLM's own CUDA-graph mode, "
+                                            "or, for an architecture vLLM serves with breakable CUDA graphs (VLLM_USE_BREAKABLE_CUDAGRAPH), "
+                                            "those graphs over the eager kernels; no batch invariance; its Program is of that execution")),
     "bi-eager": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True}, _BI),
     "bi-eager-fa2": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True, "flash_attn_version": 2}, f"{_BI}, with attention_config.flash_attn_version 2"),
     "bi-compiled": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": False, "cudagraph_mode": "PIECEWISE"}, f"{_BI}; {_COMPILED}"),
@@ -105,8 +108,8 @@ ENFORCE_EAGER = {k: v[0]["enforce_eager"] for k, v in EXECUTIONS.items() if k is
 BATCH_INVARIANT: tuple[dict[str, Any], str] = (
     {"disable_custom_all_reduce": True, "VLLM_ALLREDUCE_USE_SYMM_MEM": False, "NCCL_COLLNET_ENABLE": "0", "NCCL_NVLS_ENABLE": "0",
      "NCCL_MIN_NCHANNELS": "1", "NCCL_MAX_NCHANNELS": "1", "NCCL_PROTO": "Simple", "NCCL_ALGO": "allreduce:tree", "NCCL_NTHREADS": "1"},
-    "vLLM's batch invariance turns its custom all-reduce and torch's symmetric memory off and pins NCCL to one channel of its tree "
-    "(ParallelConfig._verify_args, override_envs_for_invariance)")
+    ("vLLM's batch invariance turns its custom all-reduce and torch's symmetric memory off and pins NCCL to one channel of its tree "
+     "(ParallelConfig._verify_args, override_envs_for_invariance)"))
 _MISSING = object()
 
 
@@ -174,7 +177,7 @@ def declared(wl: Mapping[str, Any], target: Any = None) -> dict[str, dict[str, A
     or None): ``{switch: {"value", "source", "reason"}}`` for every switch a layer sets."""
     out: dict[str, dict[str, Any]] = {}
 
-    def put(source: str, values: Mapping[str, Any], reasons: Mapping[str, str]) -> None:
+    def put(source: str, values: Mapping[str, Any], reasons: Mapping[str, str | None]) -> None:
         if values.get("enforce_eager") is True:
             values, reasons = {**EAGER, **values}, {**dict.fromkeys(EAGER, reasons.get("enforce_eager")), **reasons}
         for k, v in values.items():

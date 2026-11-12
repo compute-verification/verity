@@ -43,8 +43,13 @@ from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
 from typing import Any
 
+from verity.circuits import codec, refs
+from verity.circuits.program import is_input
+from verity.circuits.types import RecordType
+from verity.circuits.types import Tuple as TupleT
 from verity.definitions.call_scope import spec_base, spec_statics
 
+from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
@@ -523,9 +528,6 @@ class _Builder:
 
 def ports_of_type(t) -> tuple[Port, ...]:
     """The output ports of a `verity.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
-    from verity.circuits.types import RecordType
-    from verity.circuits.types import Tuple as TupleT
-
     def one(name: str, lo: int, ty) -> Port:
         n = ty.leaves
         return Port(name, lo, lo + n, n, ty.homogeneous_width())
@@ -554,14 +556,14 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     hit = _PORTS_CACHE.get(spec)
     if hit is not None:
         return hit
-    from verity.circuits.codec import lookup_primitive
+    # importing the registry registers the on-demand primitive families, so it stays in the functions that read it
     from verity.definitions.registry.catalog import load
     reg, errors = load()
     base = spec_base(spec)
     d = reg.defs.get(base)
     if d is None:
         try:
-            d = lookup_primitive(reg, base)
+            d = codec.lookup_primitive(reg, base)
         except KeyError:
             raise KeyError(f"{base} is not a registered Definition" + (f" (registry import errors: {'; '.join(errors)})" if errors else "")) from None
     if hasattr(d, "bind"):
@@ -623,7 +625,6 @@ def iter_instance_rows(path: str, *, expand: bool = True) -> Iterator[dict[str, 
     The document's key order (`schema`, `digest`, `params`, `rows`) is the writer's (`derive_step._instance_sequence`).  A v2 row's
     stored argument progressions are expanded to the v1 per-leaf run lists, bit-identically (`compact.expanded_file_args`), so every
     reader of this iterator sees the record form whatever the file carries."""
-    from verity_vllm.program.compact import expanded_file_args
     dec = json.JSONDecoder()
     with _open_text(path) as f:
         buf = f.read(_CHUNK)
@@ -730,13 +731,10 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) 
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
-    from verity.circuits.codec import decode_program, descriptor_id
-    from verity.circuits.refs import runs
     if registry is None:
         from verity.definitions.registry.catalog import load
         registry, _errors = load()
-    from verity.circuits.program import is_input
-    decoded = decode_program(desc, registry)
+    decoded = codec.decode_program(desc, registry)
     hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}
     fn = decoded.defs.get(decoded.program_fn_id)
     if fn is not None:
@@ -755,11 +753,10 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) 
         remap = lambda r: (("p", inputs[r[1]], *r[2:]) if r[1] in inputs else ("n", pos[r[1]], *r[2:])) if r[0] == "n" else r  # noqa: E731
     b = _Builder(params)
     for i, (k, n) in enumerate(rows):
-        b.add(i, descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
-              ([remap(r) for r in runs(a.refs)] for a in n.args))
-    ret = [remap(r) for r in runs(body.ret)]
-    from verity.circuits.codec import program_digest
-    return b.view(b.outputs(ret), program_digest(desc), "descriptor", b.outputs(_last_leaves(ret, checks)) if checks else ())
+        b.add(i, codec.descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
+              ([remap(r) for r in refs.runs(a.refs)] for a in n.args))
+    ret = [remap(r) for r in refs.runs(body.ret)]
+    return b.view(b.outputs(ret), codec.program_digest(desc), "descriptor", b.outputs(_last_leaves(ret, checks)) if checks else ())
 
 
 def _last_leaves(ret: list, n: int) -> list:

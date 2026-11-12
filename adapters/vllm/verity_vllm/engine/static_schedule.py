@@ -25,7 +25,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
+
+__all__ = ["against_warmup", "report_lines"]
 
 SCHEMA = "verity-vllm/static-schedule/v1"
 RULE = ("sampling.ignore_eos: every request finishes by length at exactly max_tokens, is never preempted and reads no KV block chosen by "

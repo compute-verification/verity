@@ -19,7 +19,11 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
+from verity_vllm.config import checkpoint_entries, checkpoints_hf_home
 from verity_vllm.engine import env, handle
+from verity_vllm.engine.profiles.cases import CASES
+
+__all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profile_id_of", "verify_local_weights"]
 
 DECLARED_ENV = env.ENGINE
 
@@ -43,21 +47,14 @@ def max_model_len_for(cp: dict[str, Any]) -> int:
 
 
 def apply_env() -> dict[str, str]:
-    from verity_vllm.config import checkpoints_hf_home
-
     return env.apply_engine(checkpoints_hf_home())
 
 
 def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
-    from verity_vllm.config import checkpoint_entries
-
     return {c["repo"]: c for c in checkpoint_entries(path)}
 
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
-    from verity_vllm.config import checkpoint_entries
-    from verity_vllm.engine.profiles.cases import CASES
-
     if case in CASES:
         cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
     else:
@@ -350,8 +347,9 @@ def backends_info(llm: Any) -> dict[str, Any]:
     try:
         tp = int(handle.engine_of(llm).vllm_config.parallel_config.tensor_parallel_size)
         if tp > 1:
-            # the model lives in the worker processes: ask rank 0 (all ranks run the same classes)
-            per_rank = llm.collective_rpc(_backends_probe)
+            # the model lives in the worker processes: ask rank 0 (all ranks run the same classes), through the `vllm.LLM`
+            # a `verity_vllm.LLM` holds, since the wrapper has no `collective_rpc` of its own
+            per_rank = getattr(llm, "vllm", llm).collective_rpc(_backends_probe)
             out = dict(per_rank[0])
             out["ranks"] = len(per_rank)
             out.pop("tp_rank", None)

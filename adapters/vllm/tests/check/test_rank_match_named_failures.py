@@ -43,7 +43,7 @@ def _only(res: dict, name: str, words: str) -> None:
 def test_the_inputs_these_tests_change_pass(world):
     colls, recorder = _world(world)
     res = RM.cross_rank_check(colls, recorder=recorder, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["Gemm_v1{K=8}"]} for r in colls})
-    assert res["verdict"] == "PASS" and res["failed"] == [], res
+    assert res["schema"] == "tp2/rank_match/v1" and res["verdict"] == "PASS" and res["failed"] == [], res
     assert [c["name"] for c in res["checks"]] == ["count", "order", "op", "segmentation", "site", "shard_linkage", "producer", "step", "recorder", "value"]
 
 
@@ -120,6 +120,40 @@ def test_a_provenance_record_is_not_bound_without_the_recorder_files_digests():
     _only(res, "provenance", "(recorder_sha256=None): the provenance record cannot be bound to the rows loaded")
 
 
+def test_a_fold_row_that_states_no_fields_has_no_rows_by_request():
+    colls, recorder = _world()
+    del colls[1][0]["fields"]
+    res = RM.cross_rank_check(colls, recorder=recorder)
+    assert res["verdict"] == "FAIL" and res["failed"] == ["segmentation", "shard_linkage"], res["failed"]
+    assert _fails(res, "segmentation") == ["(step 0, k 0): rows by request {'r0': 1} vs {}"]
+    assert _fails(res, "shard_linkage") == ["rank 0 (step 0, k 0): peers field for request 'r0' has no own partial on rank 1"]
+
+
+def test_a_recorder_row_without_a_shape_has_neither_the_folds_nor_the_definitions():
+    colls, recorder = _world()
+    del recorder[0][0]["shape"]
+    _only(RM.cross_rank_check(colls, recorder=recorder), "recorder", "rank 0 (0, 0): recorder partial shape None vs fold [1, 8]")
+    colls, recorder = _world()
+    del recorder[1][1]["out_shape"]
+    _only(RM.cross_rank_check(colls, recorder=recorder), "value", "rank 1 (0, 1): received shape None vs the Definition's [1, 16]")
+
+
+def test_a_failed_provenance_counts_the_mismatches_it_lists_where_it_states_no_count():
+    colls, recorder = _world()
+    digests = {0: "h0", 1: "h1"}
+    bare = {"pass": False, "collectives_checked": 2, "recorder_sha256": {"0": "h0", "1": "h1"}, "tensors_digested": 8}
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance=bare, recorder_sha256=digests)
+    assert res["failed"] == ["provenance"] and _fails(res, "provenance") == ["provenance FAIL: 0 mismatches, first null"]
+    listed = dict(bare, mismatches=[{"step": 0, "k": 1}], digest_mismatches=[{"rank": 1, "k": 0}, {"rank": 1, "k": 1}])
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance=listed, recorder_sha256=digests)
+    assert _fails(res, "provenance") == ['provenance FAIL: 1 mismatches, first {"step": 0, "k": 1}',
+                                         '2 stored tensors do not digest to their recorder rows, first {"rank": 1, "k": 0}']
+    stated = dict(listed, n_mismatches=7, n_digest_mismatches=9)
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance=stated, recorder_sha256=digests)
+    assert _fails(res, "provenance") == ['provenance FAIL: 7 mismatches, first {"step": 0, "k": 1}',
+                                         '9 stored tensors do not digest to their recorder rows, first {"rank": 1, "k": 0}']
+
+
 # --- commit_binding -----------------------------------------------------------------------------------------------------------
 
 def _match_dir(tmp_path: Path, world: int = 2) -> tuple[Path, dict, dict[int, list[dict]]]:
@@ -148,6 +182,7 @@ def _oracle(world: int = 2) -> dict[int, dict]:
 def test_the_match_directory_these_tests_change_binds(tmp_path, world):
     md, rank_match, _ = _match_dir(tmp_path, world)
     res = RM.commit_binding(md, world=world, match_oracle=_oracle(world))
+    assert res["schema"] == "verity/tp2/commit-binding/v1"
     assert res["result"] is True and res["failures"] == [] and res["n_bad_bindings"] == 0, res
     assert res["n_bindings"] == len(rank_match["peer_binding"]) and res["n_recorder"] == {str(r): 2 for r in range(world)}
 
@@ -184,3 +219,22 @@ def test_beyond_two_ranks_a_collective_without_a_binding_to_one_peer_fails(tmp_p
     res = RM.commit_binding(md, world=3, match_oracle=_oracle(3))
     assert res["result"] is False
     assert res["failures"] == ["rank 0: 1 recorder collectives without a fold binding to peer rank 2 (first [(0, 1)])"], res
+
+
+def test_a_rank_match_record_that_states_no_peer_binding_binds_no_recorder_collective(tmp_path):
+    md, rank_match, recorder = _match_dir(tmp_path)
+    del rank_match["peer_binding"]
+    _write(md, rank_match, recorder)
+    res = RM.commit_binding(md, match_oracle=_oracle())
+    assert res["result"] is False and res["n_bindings"] == 0
+    assert res["failures"] == [f"rank {r}: 2 recorder collectives without a fold binding (first [(0, 0), (0, 1)]) -- the fold did not state every peer leaf"
+                               for r in (0, 1)], res
+
+
+def test_a_rank_without_a_block_of_the_commit_oracle_was_not_run(tmp_path):
+    md, _, _ = _match_dir(tmp_path)
+    res = RM.commit_binding(md, match_oracle={0: {"verdict": "PASS"}})
+    assert res["result"] is False and res["n_bindings"] == 4
+    words = "rank 1: Commit match oracle not run (committed partials vs the recorder's stored tensors): the binding has no committed value to bind to"
+    assert res["failures"] == [words], res
+    assert RM.commit_binding(md, match_oracle={"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}})["result"] is True

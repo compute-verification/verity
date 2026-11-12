@@ -37,17 +37,18 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import CHECKPOINTS as MANIFEST, checkpoint_entries
+from verity_vllm.config import CHECKPOINTS as MANIFEST
+from verity_vllm.config import checkpoint_entries
+from verity_vllm.engine.profiles.cases import CASES
+
+__all__ = ["HF_CONFIG_DIR", "MANIFEST", "MODULE_PREFIX", "checkpoint_entries", "find_hf_config", "hf_snapshot",
+           "pinned_hf_config", "role_of_module"]
 
 MODULE_PREFIX = "dense_"                    # verity_vllm.observe.fold.profiles.dense_<ROLE>
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
 
 #: the served vocabulary is `family_facts.FAMILY_FACTS` (every family's vLLM hard-codes with provenance); a configuration outside it, or
 #: with a structure the table does not describe, refuses fail-closed in `generic.structural_refusal` -- not a silently mis-fitted profile.
-
-
-def module_name(role: str) -> str:
-    return f"{MODULE_PREFIX}{role}"
 
 
 def role_of_module(name: str) -> str | None:
@@ -68,9 +69,8 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
     for e in entries:
         if e.get("role") == role:
             return e
-    from verity_vllm.engine.profiles.cases import CASES
-    repo = (CASES.get(role) or {}).get("repo")
-    if repo:
+    if role in CASES:
+        repo = CASES[role]["repo"]
         for e in entries:
             if e.get("repo") == repo:
                 return e
