@@ -1102,6 +1102,7 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_circuit_check_or_l
     assert check.train_gb(True, "research", None, False) is None
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) == check.TRAIN_GB   # a shard of Lean alone
     assert check.train_gb(True, None, ["lean-audit:*"], False) == check.TRAIN_GB            # a records run
+    assert check.train_gb(True, None, ["flock-circuit-build", "flock-rust-tests"], False) == check.TRAIN_GB   # the Rust alone
     assert check.train_gb(True, None, ["ratchet-gate"], False) is None                      # the run beside a candidate's check
     assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # an after-landing run of the suites
     assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard

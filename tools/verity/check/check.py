@@ -46,7 +46,7 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks,
                                                             and one of TRAIN_GB or more when it runs pytest, lean-suites,
-                                                            circuit-check, lean-build or lean-audit
+                                                            circuit-check, flock-circuit-build, lean-build or lean-audit
                                                             (`train_gb`: a machine without one is skipped or refused, exit 75);
                                                             --agreement sends the upstream build's URLs whatever it changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
@@ -442,9 +442,10 @@ SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 #: at a time: two to four times a train slot's wall time
 TRAIN_GB = 200
 #: the steps that need a train slot's memory: the suites and circuit-check, which divide the slot's mem= among their workers, and
-#: the Lean build and audit, whose parallel builds and replays hold tens of GB (`SIBLINGS_GB`), so a Lean shard never takes a
-#: small slot a lighter run (ratchet-gate, the preflights) fits
-TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check", "lean-build", "lean-audit")
+#: the Rust and Lean builds and the audit, whose parallel builds and replays hold tens of GB (`SIBLINGS_GB`). Every other step
+#: but ratchet-gate needs one of these, which a plan puts on its shard, so no shard of a plan takes a small slot a lighter run
+#: (ratchet-gate, the preflights) fits
+TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check", "flock-circuit-build", "lean-build", "lean-audit")
 
 
 def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
