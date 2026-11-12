@@ -43,8 +43,8 @@ def _resolve(op: str, nth: int, arg: int, value):
      "act_input", ("gate_up", S.view(323, (M, 2 * S.SI)))),
     (DYN_MM, 1, 0, S.view(398, (M, S.SI)), "the shared expert's down GEMM does not read its input",
      "gemm_input", ("expected", S.view(324, (M, S.SI)))),
-    (QUANT, 1, 0, S.view(397, (P, S.I)), "the routed per_token_group_fp8_quant does not read the SiLU output between the two launches",
-     "quant_input", ("silu_output", S.view(301, (P, S.I)))),
+    (QUANT, 1, 0, S.view(397, (P, S.C["I"])), "the routed per_token_group_fp8_quant does not read the SiLU output between the two launches",
+     "quant_input", ("silu_output", S.view(301, (P, S.C["I"])))),
 ], ids=["shared-silu", "shared-down", "routed-quant"])
 def test_a_call_of_the_shared_scope_that_reads_another_view_is_refused_with_both_views(op, nth, arg, other, reason, read, should):
     scope, _combine = _resolve(op, nth, arg, other)
