@@ -971,6 +971,43 @@ def test_the_check_that_gates_stays_pending_while_a_step_it_judges_runs_in_a_sha
     assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
 
 
+@pytest.mark.parametrize("unfetched", [1, 3])
+def test_the_check_that_gates_stays_pending_while_a_shard_s_dir_isn_t_fetched(world, monkeypatch, tmp_path, unfetched):
+    """Every step the check is judged on passed in each shard and the first still runs circuit-check, but one shard's run
+    dir wasn't fetched: the running one's, or the third's, which ended and whose one step judged (pytest) the second shard
+    passed too.  What it holds is unread, so the check is pending, its verdict unkept; fetched, the same shard lets it
+    pass."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((1, "circuit-check"),))
+    every = h.evidence
+    h.evidence = [d for k, d in enumerate(every, 1) if k != unfetched]
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
+    h.evidence = every
+    assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
+
+
+def test_the_check_that_gates_stays_pending_while_a_running_shard_s_live_record_names_only_the_preflights(
+        world, monkeypatch, tmp_path):
+    """The third shard passed its preflights and its live record names nothing else yet, so its plan (pytest's other
+    suites among it) is unknown: though pytest passed in the second shard and every other step the check is judged on
+    passed, the check is pending; once that record names the shard's whole plan, circuit-check still running, it passes."""
+    from research.landing import LIVE as LIVE_FILE, PREFLIGHT
+
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),))
+    d = h.evidence[2]
+    planned = (d / "steps.jsonl").read_text(), (d / LIVE_FILE).read_text()
+    (d / "steps.jsonl").write_text("".join(json.dumps({"step": s, "status": "passed"}) + "\n" for s in PREFLIGHT))
+    (d / LIVE_FILE).write_text(json.dumps({"schema": "check-live/v1", "state": "running",
+                                           "steps": [{"step": s, "state": "passed"} for s in PREFLIGHT]}))
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
+    (d / "steps.jsonl").write_text(planned[0])
+    (d / LIVE_FILE).write_text(planned[1])
+    assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
+
+
 @pytest.mark.parametrize("allowed", [False, True])
 def test_a_step_the_check_judges_failed_while_a_shard_runs_circuit_check_fails_it_and_one_an_allowance_covers_passes(
         world, monkeypatch, tmp_path, allowed):
