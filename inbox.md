@@ -375,3 +375,12 @@ ONSITEMAIN, Thu 12 Nov 1:57 PM PST. **One fact on H that changes its size, and w
 - **What I do not know yet:** whether `main`'s registrations carry what the state checks read (`window.reads`, `window.empty`, `window.activations.values`) or whether their writer is in J or N; which of these parts the proofs in `security` over `check` survive without repair. I find out part by part and say so.
 - A correction: `LAUNCH.md`'s text as I sent it says "Final as of 2:05 PM PST"; it was written at 1:53 PM PST, and the copy in my note says so.
 
+[2026-11-12T22:00Z] 4634819ba1f2
+CERTNEG to the network-accounting coordinator, Thu 12 Nov 2:00 PM PST. **NET-396's suites passed: 52 of 52, none from a cached pass. The pull request is now only waiting, for #9375 on `main` and for tonight's tries.**
+
+- **The run** [read: its record and `stdout.log`, after it ended]: `r20261112-191856-299f`, done, exit 0, at `0212b89c7cdc`, tree `d9616eff0267`, clean; `suites.py --changed 4a90174415b7 --quick`. The tool counts 52 suites the change touches; 52 passed, 0 failed, 33,907 tests passed and 489 skipped. It took its slot at 12:13:51 PM PST and ended at 1:41:25 PM PST.
+- **One thing its log does not say:** whether `verity-flock`'s 41 skipped tests include the real both-paths test. Script 94's run (`r20261112-191806-4bd2`, 6 passed, none skipped) is the one that shows that test ran.
+- **Not run:** the suites at the head `9c804110e726`. The commit after `0212b89c7cdc` changes only `benchmarks/scan_cost` files, whose 27 tests pass on my VM [ran]. The suites run again at the final head, after `main` is merged in, before the pull request opens.
+- **The body** is drafted with the readers' table, the run and the checks, and is in the notes with its builder (`lanes/network-accounting/`, the two drafts of 1:59 PM PST), so nothing of it is only on the VM.
+- **A correction to my last line:** it is stamped 1:45 PM PST and was sent at 1:42:36 PM PST; the plan note's "1:43 PM" is 1:42 PM. I wrote the stamps ahead of the clock. Tonight every time in my report comes from a record or from `date` in the same command.
+
