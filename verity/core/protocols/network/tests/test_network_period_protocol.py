@@ -657,6 +657,45 @@ def test_a_scan_proved_whole_is_charged_its_view_rows_alone(server):
     assert seen["mixed", True, False] and seen["mixed", False, False] and seen["mixed", False, True], seen
 
 
+def test_a_scan_sampled_in_part_is_charged_its_view_rows_beside_its_tied_audits(server):
+    """A scan's egress instances read their `state` off its view rows whichever of its units are drawn, and no view
+    tie holds those rows to what its ingress computed, so a link-window whose scan is sampled in part is charged them
+    too, V_w bits, beside what such a scan is charged without them: its tied audits' free inputs (`free`), the sets
+    and the bits of its at most `b` faulty units, the entries a charged audit's incorrect proof blocks can set
+    (`faulty_entries`) and its jitter. Over honest rows periods and each way of sampling a tied audit in part, with
+    every scan sampled in part (`PC.sampled_in_part`: all but one of its units drawn), Lean accepts with the mirror's
+    public, K in it: each term's `view` is V_w and its `entries` 0, its `free` is its tied audits' charge
+    (`PC._tied_free`), some of them nonzero, its `faulty_bits` its bound times the more of an ingress and an egress
+    instance's bits, and K is the schedules, the cells and each term's six charges. A tied audit's charge counts its
+    own Program's input gates, none of them a view row's. A faulty unit's bits count an egress instance's parameters,
+    which are its `state` (`Scan.egress` is a view row's bits and its return's), so a term whose bound is `b` ≥ 1
+    faulty units counts at most `b` of its T view rows a second time, in `faulty_bits`."""
+    terms = ("free", "view", "faulty_sets", "faulty_bits", "faulty_entries", "jitter")
+    seen = Counter()
+    for m in ("rows-honest", *SAMPLED_IN_PART):
+        for n in range(6):
+            case = PC.sampled_in_part(build(m, n, small=n % 2 == 0))
+            assert not any(PC.wholes(case)), (m, n)
+            p, c = PC.params(case["params"]), json.loads(bytes.fromhex(case["commitment"]))
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (m, n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
+            pub, s = out["public"], p.scan
+            row = s.view // p.schedule.window
+            assert s.view == p.schedule.window * row > 0 and s.egress > row, (m, n, s)
+            for reg, t in zip(c["windows"], pub["scans"], strict=True):
+                assert (t["view"], t["entries"], t["whole"]) == (s.view, 0, False), (m, n, t)
+                assert t["free"] == s.free + PC._tied_free(p, c["audits"], c["windows"], reg), (m, n, t)
+                assert t["faulty_bits"] == t["wrong_units"] * max(s.ingress, s.egress), (m, n, t)
+                seen["free"] += t["free"] > 0
+                seen["faulty"] += t["wrong_units"] >= 1
+                seen["entries"] += t["faulty_entries"] > 0
+            assert pub["K"] == pub["schedules"] + pub["cells"] + sum(t[k] for t in pub["scans"] for k in terms), (m, n, pub)
+            assert pub["scan_bits"] == {"entries": s.entries, "view": s.view}, (m, n, pub)
+    assert seen["free"] and seen["faulty"] and seen["entries"], seen
+
+
 def test_an_output_port_is_a_units_past_o0():
     """`output_port` is Lean's `outputPort` on its `#guard`s: a unit's port `o<j>`, j ≥ 1 in ASCII digits without a
     leading zero."""
