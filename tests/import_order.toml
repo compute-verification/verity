@@ -733,6 +733,7 @@ loaded_by = [
     "verity/protocols/flock/prover/tests/test_lean_registered_reads.py",
     "verity/protocols/flock/prover/tests/test_lean_served_registered.py",
     "verity/protocols/flock/prover/tests/test_lean_verifier.py",
+    "verity/protocols/flock/prover/tests/test_lean_verify_members.py",
     "verity/protocols/flock/prover/tests/test_lean_witness.py",
     "verity/protocols/flock/prover/tests/test_pod_lean_verdicts.py",
     "verity/protocols/flock/prover/tests/test_rec_bindings.py",
