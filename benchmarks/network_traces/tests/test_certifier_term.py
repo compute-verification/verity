@@ -156,7 +156,7 @@ def test_the_table_on_a_hand_worked_world():
             r, n2 = got[scope, period, "scan"], got[scope, period, "N2"]
             phases, requests = machines * n, machines * n * 10
             assert (r.scope.machines, r.scope.gpus, r.phases, r.requests) == (machines, 8 * machines, phases, requests)
-            assert r.eps == phases * Fraction(1, 2 ** 20)
+            assert r.eps == Fraction(phases, 739_125) / 2 ** 20
             for dj, jitter in ((1, 0), (2, 32 * phases)):
                 assert r.terms[dj] == LB.Terms(10 * requests, 10 * requests, jitter, 18_048 * requests)
                 assert r.terms[dj].certifier == 20 * requests + jitter
@@ -582,6 +582,57 @@ def test_nothing_counted_by_capacity_scales_with_the_requests():
     assert least == 73_776 * 10 ** 16 < world.terms[1].entries
 
 
+def test_a_scan_is_at_the_delta_at_which_the_worlds_year_carries_the_periods_error():
+    """With no δ given, each execution phase's scan is at the error a row is to carry over its monitoring period,
+    2^-20, over the execution phases of the row that pools the most: the world's year, 739,125 of them on the
+    hand-worked world. It is one δ for every row, so the world's year's ε is that error exactly and every other row's
+    is less, in proportion to its execution phases, whichever rows are printed. It is counted from the inputs: a
+    world of twice the machines halves it. No term reads it. Each row states it and the error it is taken from, and
+    it is assumed. A δ a caller gives is taken as it is, with no error set: a row's ε is what it sums to, and at 1 or
+    more it bounds nothing."""
+    inp, error = small(), Fraction(1, 2 ** 20)
+    assert LB.PERIOD_ERROR == error and inp["scan_delta"].value is None and inp["scan_delta"].mark == "assumed"
+    scan = LB.period_delta(inp)
+    assert scan == LB.Scan(error / 739_125, False, error, "world", "year", 739_125)
+    got = rows(inp)
+    assert max(r.phases for r in got.values()) == scan.phases == got["world", "year", "scan"].phases
+    assert all(r.eps == r.phases * scan.delta <= error for r in got.values())
+    assert {k[:2] for k, r in got.items() if r.eps == error} == {("world", "year")}
+    assert got["node", "week", "scan"].eps == Fraction(4_725, 739_125) / 2 ** 20
+    twice = inp | {"world_machines": inp["world_machines"]._replace(value=6)}
+    assert LB.period_delta(twice).delta == scan.delta / 2 and rows(twice)["world", "year", "scan"].eps == error
+
+    doc = LB.document(inp)
+    assert doc["scan"] == {"delta": float(scan.delta), "given": False, "mark": "assumed", "eps_target": 2 ** -20,
+                           "scope": "world", "period": "year", "phases": 739_125.0}
+    stated = doc["inputs"]["scan_delta"]
+    assert (stated["value"], stated["mark"]) == (float(scan.delta), "assumed")
+    assert all(said in stated["source"] for said in ("1/1048576", "739,125 execution phases of the world's year",
+                                                     "none is given (--scan-delta)", "no scan has run at it"))
+    assert all((r["scan_delta"], r["eps_target"]) == (float(scan.delta), 2 ** -20) and r["eps"] <= 2 ** -20
+               for r in doc["rows"])
+    few = LB.document(inp, only=["node"], periods=["week"])
+    assert few["scan"] == doc["scan"] and {r["scan_delta"] for r in few["rows"]} == {float(scan.delta)}
+    text = LB.render(doc)
+    assert "It is one δ for every row, so each row's ε is that error or less." in text
+    assert "The δ is assumed: no scan has run at it. No term reads it." in text and "| δ a phase |" in text
+
+    given = small(scan_delta=error)
+    assert LB.period_delta(given) == LB.Scan(error, True, None, "world", "year", 739_125)
+    assert all(r.terms == got[k].terms and r.eps == r.phases * error for k, r in rows(given).items())
+    assert rows(given)["world", "year", "scan"].eps == Fraction(739_125, 2 ** 20) < 1
+    assert rows(small(scan_delta=Fraction(1, 739_125)))["world", "year", "scan"].eps == 1
+    at = LB.document(given)
+    assert at["scan"] == doc["scan"] | {"delta": 2 ** -20, "given": True, "eps_target": None}
+    assert all((r["scan_delta"], r["eps_target"]) == (2 ** -20, None) for r in at["rows"])
+    assert at["inputs"]["scan_delta"] == {"value": 2 ** -20, "unit": "", "mark": "assumed", "source":
+                                          "each execution phase's scan's δ, given (--scan-delta): no scan has run at it"}
+    assert "none: δ given" in LB.render(at) and "no error over a monitoring period is set" in LB.render(at)
+    for off in (0, 1, Fraction(3, 2)):
+        with pytest.raises(ValueError, match="the scan's δ in"):
+            LB.table(small(scan_delta=off))
+
+
 def test_the_document_names_its_value_unit_commit_and_run(capsys):
     doc = LB.document(small(), commit="c0ffee", run="r1")
     assert (doc["unit"], doc["commit"], doc["run"], doc["model"]) == ("GB", "c0ffee", "r1", "GLM-5.3")
@@ -624,7 +675,9 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     bare = by["world", "year", NO_STOP]
     assert bare["schedules"] == r["schedules"] and bare["cells"] == by["world", "year", "design"]["cells"]
     assert bare["term"]["2"]["bits"] == r["schedules"]["bits"] + by["world", "year", "design"]["term"]["2"]["bits"]
-    assert r["eps"] == 739_125 / 2 ** 20
+    assert (r["eps"], r["eps_target"], r["scan_delta"]) == (2 ** -20, 2 ** -20, float(Fraction(1, 2 ** 20) / 739_125))
+    assert {name for name, k in LB.ROWS.items() if LB.SCAN_ACCEPT in k.counts} == {"scan"}
+    assert "its accept is run, not proved" in doc["legend"]["scan"]["counts"]
     json.dumps(doc)
     few = LB.document(small(), only=["world"], periods=["year", "week"])
     assert [(x["scope"], x["period"]) for x in few["rows"]] == [("world", "week")] * 8 + [("world", "year")] * 8
