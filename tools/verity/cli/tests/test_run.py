@@ -199,13 +199,16 @@ def with_lengths(**schedule):
 
 def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_schedule_that_fits_them():
     fits = {"cell_bytes": 512, "ingress_buckets": 10, "egress_cells": 2048}
-    cfg = K.check(K.parse(K.render(with_lengths(**fits))), REG.components, REG.workloads)
-    table = cfg["params"]["verity/certifier/v0"]
-    assert table["lengths"] == 1 and "max_tokens_cap" not in table
-    assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == 1
-    assert K.check(cfg, REG.components, REG.workloads) == cfg
-    assert K.digest(cfg) != UNCAPPED_ONSITE
-    for schedule in ({}, fits | {"lengths": 2}, fits | {"egress": "bytes"}):
+    digests = {UNCAPPED_ONSITE}
+    for form in (1, 2):  # the lengths rows' two forms, each a configuration of its own digest
+        cfg = K.check(K.parse(K.render(with_lengths(**fits | {"lengths": form}))), REG.components, REG.workloads)
+        table = cfg["params"]["verity/certifier/v0"]
+        assert table["lengths"] == form and "max_tokens_cap" not in table
+        assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
+        assert K.check(cfg, REG.components, REG.workloads) == cfg
+        digests.add(K.digest(cfg))
+    assert len(digests) == 3
+    for schedule in ({}, fits | {"lengths": 3}, fits | {"egress": "bytes"}):
         with pytest.raises(Refused) as e:
             K.check(with_lengths(**schedule), REG.components, REG.workloads)
         assert e.value.name == "params" and "lengths" in e.value.detail
