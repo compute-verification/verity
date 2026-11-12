@@ -133,7 +133,8 @@ theorem rowsProgWired : RowsProgWired := by
   · cases h
   · rename_i hF
     have h0 := firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))))
     unfold wiredCheck at h0
     split at h0
     · assumption
@@ -183,7 +184,7 @@ accepts a rows-form period of one link-window with no audit, whose scan's `prog`
 theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hw : wired #[] slotSchedule #[] tiedWindow = true :=
     h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [tiedWindow_unwired] at hw
@@ -204,7 +205,7 @@ lemma at the pin): such a check accepts a rows-form period whose scan's `prog` i
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
-    .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = true :=
     h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [renamedAudit_unwired] at hw
@@ -249,7 +250,7 @@ theorem stateCheck_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub :
   · cases h
   · rename_i hF
     exact firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))
 
 theorem rowsStateTied : RowsStateTied := by
   intro p c e pub prof h s sd scan hform i reg hreg
@@ -341,7 +342,7 @@ that audit's `SCAN_STATE`, which skips or alters a transition of the scan's. -/
 theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true :=
     h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       stateWindow rfl
@@ -358,12 +359,70 @@ and whose registration opens no row 0, so the Programs anchored at bucket 0 read
 theorem rowsStateEmpty_nontrivial : ¬ RowsStateEmptyOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hs : stateEmpty slotSchedule stateWindow = true :=
     h p ⟨#[stateReg "s"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       stateWindow rfl
   rw [stateWindow_unopened] at hs
   cases hs
+
+/-! ## The rows form's tied audits run the class circuit -/
+
+theorem heldChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    (heldChecks p c)[i]? = some (heldCheck p c.audits (p.first + i) reg) := by
+  simp [heldChecks, hform, Array.getElem?_zipIdx, hreg]
+
+theorem rowsCircuitHeld : RowsCircuitHeld := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  have hmem := Array.mem_of_getElem? (heldChecks_getElem? hform hreg)
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
+    unfold heldCheck at h0
+    split at h0
+    · assumption
+    · cases h0
+
+/-- The slot audit's registration under the Program `d`: its entries port at the root `r` and the domain `d`, so
+`tiedWindow`'s scan's `prog` is its output. -/
+def heldReg (d : String) : Lean.Json :=
+  Lean.Json.mkObj [("program", .str d), ("roots", Lean.Json.arr #[Lean.Json.mkObj
+    [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
+
+/-- Its honest side: an execution phase whose tied audit is registered under the class circuit `c` holds it. -/
+theorem rowsCircuitHeld_honest : held (some "c") #[heldReg "c"] tiedWindow = true := by
+  decide +kernel
+
+/-- An execution phase whose tied audit is registered under another Program than the class circuit `c` does not. -/
+theorem tiedWindow_swapped : held (some "c") #[heldReg "d"] tiedWindow = false := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsCircuitHeld`'s property** (its nontrivial lemma): such a
+check accepts a rows-form period of one execution phase whose tied audit is registered under another Program than
+the class circuit `c`. -/
+theorem rowsCircuitHeld_nontrivial : ¬ RowsCircuitHeldOf acceptAllRows := by
+  intro h
+  let p : Params :=
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1,
+      some "c"⟩
+  have hh : held (some "c") #[heldReg "d"] tiedWindow = true :=
+    h p ⟨#[heldReg "d"], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      tiedWindow rfl
+  rw [tiedWindow_swapped] at hh
+  cases hh
 
 /-! ## The rows form charges a tied audit sampled in part -/
 
@@ -433,10 +492,10 @@ theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {
     refine ⟨by omega, by omega, by omega, ?_, ?_, ?_⟩
     · intro y hy
       exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-        (List.mem_append_left _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))))
+        (List.mem_append_left _ (List.mem_append_left _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))))
     · intro y hy
-      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))
+      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))))
     · injection h with hp
       rw [hform]
       exact hp.symm
@@ -623,7 +682,7 @@ def otherAnswer : Core.Answer :=
 
 /-- The parameters of one compute audit, the slot audit, under `slotSchedule` and a scan of 7 slot entry bits. -/
 def chargedParams : Params :=
-  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1⟩
+  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1, none⟩
 
 /-- Its commitment: the slot audit's registration and the link-window whose scan's `prog` is its entries port. -/
 def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedWindow], .empty⟩
@@ -644,7 +703,7 @@ charge. -/
 theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
     ⟨0, 0, 0, 0, 0⟩ rfl
   obtain ⟨x, f, -, -, hf, -⟩ := h1 0 slotReg rfl rowsProgWired_honest.2
@@ -720,7 +779,8 @@ theorem check_okHeld {p : Params} {c : Commitment} {e : Evidence} {pub : Public}
   · cases h
   · cases h
   · rename_i hF
-    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
+    have h0 := firstFinding_none hF _
+      (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
     unfold okCheck at h0
     split at h0
     · rename_i ks hks

@@ -37,6 +37,8 @@ of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `R
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. `RowsStateEmpty` says it accepts none whose scan's
 registration does not open row 0 of that state to the empty state, the one row no unit of the scan computes.
+`RowsCircuitHeld` says it accepts none whose tied audit's registration names a Program other than the class circuit,
+the parameters' `circuit`.
 `RowsTiedCharged` says the public it accepts with supplies
 the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
 one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
@@ -137,6 +139,28 @@ refused. -/
 def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
+
+/-- What `RowsCircuitHeld` says of a period its check accepted: in the rows form, each execution phase's tied compute
+audits are registered under the parameters' class circuit (`held`). -/
+def RowsCircuitHeldAt (p : Params) (c : Commitment) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → held p.circuit c.audits reg = true
+
+/-- `RowsCircuitHeld` of the period check `chk`: `RowsCircuitHeldAt` of every period `chk` accepts. -/
+def RowsCircuitHeldOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → RowsCircuitHeldAt p c
+
+/-- **The rows form accepts no execution phase whose tied compute audit's window circuit is not the class circuit.**
+If the check accepts a period in the rows form, every audit an execution phase's scan's `prog` is an output of
+(`tiedAudits`) has a registration whose `program` is the parameters' `circuit`, the SHA-512 of the Program of the one
+window circuit the workload's class registers (`held`). A window circuit's own digest binds its window's run; its
+Program is one for the period, so no execution phase's tied audit is registered under a Program the prover chose for
+that phase. That its term is read off that Program's descriptor is the audit check's (`auditCheck`), not stated
+here. -/
+def RowsCircuitHeld : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsCircuitHeldAt p c
 
 /-- What `RowsStateEmpty` says of a period its check accepted: in the rows form, each link-window's scan's
 registration opens row 0 of its state to the empty state (`stateEmpty`). -/
@@ -246,7 +270,7 @@ def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, some 4⟩
 /-- The rows-form period of no link-window and no audit under `cappedSchedule`, at the deployed LMS parameters: the
 period `RowsCapPublished`'s witnesses are stated at. -/
 def cappedPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩
 
 /-- The `roots` entry `e` is the ok bits' constant of the scan's member `m` (its name, template and proof blocks'
 count, `ScanOk.members`): its port is `<name>/o0`, its leaves are the member's proof blocks' count, and its domain and
@@ -296,7 +320,7 @@ def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none⟩
 /-- The rows-form period of `n` execution phases and no audit under `pairSchedule`, at the deployed LMS parameters:
 the periods `RowsOkHeld`'s witnesses are stated at. -/
 def pairParams (n : ℕ) : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n, none⟩
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩

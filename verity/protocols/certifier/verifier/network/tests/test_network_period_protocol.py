@@ -126,6 +126,7 @@ ROWS_REFUSALS = {
     "rows-state-untied": (PC.UNSTATED,) * 2,
     "rows-state-misindexed": (PC.MISREAD,) * 2,
     "rows-state-unpinned": (PC.UNPINNED,) * 2,
+    "rows-circuit-swapped": (PC.UNHELD,) * 2,
     "rows-ok-unheld": (PC.UNOK,) * 2,
     "rows-one-tick": (f"{PC.UNCOMPUTED}: T = 1: a scan has at least two ticks",) * 2,
 }
@@ -138,8 +139,9 @@ def test_the_rows_form_refuses_what_it_must(server):
     cap or none), scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
     no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
-    `SCAN_STATE`, a scan whose ok bits are not at the schedule's constants, and one under a schedule of one tick,
-    which has no constants: Lean and the mirror each refuse every one at that check."""
+    `SCAN_STATE`, a tied audit registered under another Program than the class circuit, a scan whose ok bits are not
+    at the schedule's constants, and one under a schedule of one tick, which has no constants: Lean and the mirror each
+    refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -236,6 +238,35 @@ def test_a_tied_audit_whose_state_is_in_its_windows_activations_alone_is_tied(se
             assert PC.UNSTATED in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.UNSTATED in json.loads(out)["reason"], (u, n, out)
+
+
+def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):
+    """The rows form holds each execution phase's tied audits to the class circuit, the parameters' `circuit`: a period
+    whose every tied audit is registered under it passes, and Lean accepts it with the mirror's public; each way the
+    hold can fail (`PC.UNHOLDS`: the aimed phase's tied audit registered under another Program, or the parameters'
+    `circuit` another digest) Lean and the mirror refuse by name; and a mirror that skips the hold accepts what Lean
+    refuses."""
+    for n in range(3):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        c = PC.commitment(bytes.fromhex(case["commitment"]))
+        tied = [i for reg in c.windows for i in PC._tied_audits(c.audits, reg)]
+        assert tied and all(c.audits[i]["program"] == case["params"]["circuit"] for i in tied), (n, c.audits)
+        out = reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+    unhold = PC.UNHOLDS
+    for u in unhold:
+        monkeypatch.setattr(PC, "UNHOLDS", (u,))
+        for n in range(3):
+            case = build("rows-circuit-swapped", n, small=n % 2 == 0)
+            assert PC.UNHELD in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNHELD in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNHOLDS", unhold)
+    monkeypatch.setattr(PC, "_held", lambda p, audits, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-circuit-swapped", n, small=True), server, PC.UNHELD)
 
 
 def test_a_scan_whose_units_read_their_state_off_the_chain_is_refused(server, monkeypatch):
