@@ -10,10 +10,9 @@ import struct
 
 import numpy as np
 import pytest
-
 from verity.definitions.registry import sampling as SP
-from verity.definitions.registry import sampling_twins
 from verity.definitions.registry import sampling_rows as SR
+from verity.definitions.registry import sampling_twins
 
 
 def _tables_ok() -> bool:
@@ -335,8 +334,9 @@ def _cases(V: int, n: int, seed: int):
 @needs_tables
 @pytest.mark.slow
 def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
-    from verity_vllm.properties.admission import evaluate_spec
     from verity.definitions.registry import sampling_topp_difftest as D
+
+    from verity_vllm.properties.admission import evaluate_spec
     V = 1024
     for bf, temp, p, S, seed, pos in _cases(V, 30, 11):
         words = [bf.astype(np.uint64), np.array([f32b(p)], dtype=np.uint64), np.array([seed], dtype=np.uint64),
@@ -351,9 +351,11 @@ def test_the_select_is_the_strict_first_maximum_scan_nan_never_wins_and_a_nan_la
     x = np.array([f32b(1.0), f32b(3.0), f32b(3.0), f32b(2.0)], dtype=np.uint32)
     tok, y = SR.gumbel_select_row(x, 0, 0, 0)                                    # temp 0: no noise, first max
     assert tok == 1 and (y == x).all()
-    x_nan = x.copy(); x_nan[1] = 0x7FC00000
+    x_nan = x.copy()
+    x_nan[1] = 0x7FC00000
     assert SR.gumbel_select_row(x_nan, 0, 0, 0)[0] == 2                          # the NaN lane never wins
-    x_nan0 = x.copy(); x_nan0[0] = 0x7FC00000
+    x_nan0 = x.copy()
+    x_nan0[0] = 0x7FC00000
     assert SR.gumbel_select_row(x_nan0, 0, 0, 0)[0] == 0                         # nothing is > NaN: the scan keeps lane 0
     neg = np.full(4, SP.NEG_INF_BITS, dtype=np.uint32)
     assert SR.gumbel_select_row(neg, 0, 0, 0)[0] == 0                            # all -inf: lane 0

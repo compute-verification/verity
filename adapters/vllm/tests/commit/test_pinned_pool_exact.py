@@ -122,7 +122,7 @@ def test_pool_accounting_without_cuda_uses_torch_pinned_or_skips():
     if GPU:
         pytest.skip("covered above")
     pool = PinnedPool(exact=True)
-    with pytest.raises(Exception):
+    with pytest.raises(RuntimeError):
         pool.take(1 << 16)                        # pin_memory without CUDA raises in torch; the mode is never claimed
     assert pool.mode is None
 

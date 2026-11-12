@@ -11,7 +11,6 @@ import struct
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
