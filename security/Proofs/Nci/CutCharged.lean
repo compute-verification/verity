@@ -16,8 +16,8 @@ outside `G` holds, matmul by matmul, are the MACs each of whose gates is in the 
 disjoint, so the MACs a block outside `G` holds whole take `γ` of its at most `c` gates each (`card_inside_mul_le`):
 the second bound.
 
-`HECharged_honest` and `HECharged_nontrivial` are at the toy `Nci.Cut.Toy`. With a block for each MAC, the first under
-the cap `k = 2` and the second charged whole, `HECharged`'s premises hold together. With one block holding both MACs
+`HECharged_honest` and `HECharged_nontrivial` are at the toy (`Toy`). With a block for each MAC, the first under the
+budget `k = 2` and the second charged whole, `HECharged`'s premises hold together. With one block holding both MACs
 and no block charged, the block reads three gates, and at the total `T = 0` the bound is `0`, below `N = 2`.
 -/
 
@@ -35,7 +35,7 @@ theorem card_inside_mul_le {C : Circuit} {ι : Type} [Fintype ι] (W : Work C ι
     _ = ((W.inside A).biUnion W.mac).card := (card_biUnion fun s _ t _ hst => W.mac_disjoint s t hst).symm
     _ ≤ A.card := card_le_card (biUnion_subset.2 fun _ hs => (mem_filter.1 hs).2)
 
-/-- (H) at a read cap holds at every smaller one. -/
+/-- (H) at a budget holds at every smaller one. -/
 theorem hardness_mono {ρ V : Type} [Fintype ρ] [DecidableEq V] {d : RegisteredCircuit}
     {A : ρ → Finset (Finset (Fin d.D.N))} {val : Finset (Fin d.D.N) → V} {β : ρ → ℝ} {k k' : ℕ}
     (h : Assumptions.Hardness d A val β k) (hk : k' ≤ k) : Assumptions.Hardness d A val β k' :=

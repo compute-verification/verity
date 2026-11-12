@@ -14,8 +14,8 @@ charged work and every partition into blocks that each read at most `k` gates ou
 or a padding: `W` and `X` may share values, outputs may repeat, and each slowdown holds for every `c`, as it must for a
 partition into blocks of at most `c` gates, each priced at `c`. `CountHE` is `HE` on a count verdict: its only premise
 on the circuit is the verdict itself, `CompliesAtMost c k n`, at most `n` proof blocks of a `(c, k)`-partition, and
-both bounds are at `n`. `HECharged` is `HE`'s count over a set of the blocks, each of them within the cap and the rest
-charged whole, with what all the blocks read as a total and what the set's blocks read squared and summed.
+both bounds are at `n`. `HECharged` is `HE`'s count over a set of the blocks, each of them within the budget and the
+rest charged whole, with what all the blocks read as a total and what the set's blocks read squared and summed.
 
 The witnesses that each says something are at the toy (`Nci.Cut.Toy`): `Cut_honest`, `CountHE_honest` and
 `HECharged_honest`, their premises holding together, and each statement's `_nontrivial`, the toy beating its bound
@@ -96,7 +96,7 @@ def HEShared : Prop :=
         m * c / d.D.size d.D.computed
 
 /-- **The bound under (H) and (E), with blocks charged whole.** `G` is a set of a partition's blocks, each reading
-at most `k` gates outside `θ`; the blocks outside `G` are charged whole, with no cap on what each reads. `T` is at
+at most `k` gates outside `θ`; the blocks outside `G` are charged whole, with no budget on what each reads. `T` is at
 least what all the blocks read outside `θ` between them, and `S` at least the sum over `G` of the squares of what each
 of its blocks reads. Under `HE`'s premises, with (H) at `k`, `N` is at most the MACs the blocks outside `G` hold whole
 (`Work.inside`) and `T + ½ √(S O / (β_w β_x)) + ½ √(S T / (β_w β_x b))` (`workHEOn`). A MAC split between blocks is
@@ -105,7 +105,7 @@ are disjoint, so where each has at least `γ` gates and each block outside `G` a
 `c / γ` MACs whole each: `γ N ≤ |Gᶜ| c + γ (T + …)`. At `G` every block, `T = m k` and `S = m k²` the first bound is
 `HE`'s.
 
-It is no second statement of the count. The count over a set of blocks, each under its own cap and the rest's MACs
+It is no second statement of the count. The count over a set of blocks, each under its own budget and the rest's MACs
 held whole, is stated once, and this is its corollary at one (H) for every block of `G`, with the charged blocks' MACs
 priced in gates. -/
 def HECharged : Prop :=
