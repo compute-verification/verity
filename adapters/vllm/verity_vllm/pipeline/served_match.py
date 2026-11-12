@@ -30,9 +30,10 @@ import os
 import sys
 import time
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine import env as engine_env
