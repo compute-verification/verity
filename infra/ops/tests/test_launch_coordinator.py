@@ -1,6 +1,7 @@
 """`launch_coordinator.py tell` (infra/cursor) sends one message to each coordinator's chat: one request an agent, to the
 holder the registry names, top left out unless named; a dry run sends nothing and needs no key; a bad handle or an empty
 message refuses before any request; one target's failure stops none of the others."""
+import http.client
 import importlib.util
 import json
 import sys
@@ -44,6 +45,7 @@ def api(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "REGISTRY", reg)
     monkeypatch.setenv("CURSOR_API_KEY", KEY)
     a = Api()
+    a.real_call = L.call
     monkeypatch.setattr(L, "call", a)
     return a
 
@@ -126,10 +128,72 @@ def test_one_failing_target_stops_none_of_the_others_and_the_exit_is_nonzero(api
     assert api.agents() == [LEAN, VLLM], "ci's request raised before the stand-in recorded it; vllm was still sent"
     assert capsys.readouterr().out.splitlines() == [
         f'lean\t{LEAN}\tFAILED HTTP 409 {{"code": "agent_archived"}}',
-        f"ci\t{CI}\tFAILED not reached: connection refused",
+        f"ci\t{CI}\tFAILED not reached: OSError: connection refused",
         f"vllm\t{VLLM}\tsent (steered)"]
     assert str(exit_.value) == (f'2 of 3 not sent:\nlean {LEAN}: HTTP 409 {{"code": "agent_archived"}}\n'
-                                f"ci {CI}: not reached: connection refused")
+                                f"ci {CI}: not reached: OSError: connection refused")
+
+
+class Response:
+    def __init__(self, status: int, body: bytes):
+        self.status, self.body = status, body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return None
+
+    def read(self) -> bytes:
+        return self.body
+
+
+@pytest.mark.parametrize("body,payload", [
+    (b"<html>Bad gateway</html>", {"raw": "<html>Bad gateway</html>"}), (b'["a", 1]', {"raw": '["a", 1]'}),
+    (b'"steered"', {"raw": '"steered"'}), (b"", {}), (b'{"delivery": "queued"}', {"delivery": "queued"})])
+def test_call_returns_an_object_for_any_2xx_body(monkeypatch, body, payload):
+    seen = []
+    monkeypatch.setattr(L.urllib.request, "urlopen", lambda req: seen.append(req.full_url) or Response(202, body))
+    assert L.call("POST", f"/v1/agents/{CI}/runs", KEY, {"prompt": {"text": "x"}}) == (202, payload)
+    assert seen == [f"{L.API}/v1/agents/{CI}/runs"]
+
+
+def test_a_2xx_that_is_not_json_is_sent_and_shown_and_the_rest_still_go(api, monkeypatch, capsys):
+    monkeypatch.setattr(L, "call", api.real_call)
+    asked = []
+
+    def urlopen(req):
+        asked.append(req.full_url.split("/")[5])
+        return Response(202, b"<html>\n<b>Accepted</b></html>" if CI in req.full_url else b'{"delivery": "queued"}')
+    monkeypatch.setattr(L.urllib.request, "urlopen", urlopen)
+    tell("--text", "x")
+    assert asked == [LEAN, CI, VLLM]
+    assert capsys.readouterr().out.splitlines() == [
+        f"lean\t{LEAN}\tsent (queued)",
+        f'ci\t{CI}\tsent (HTTP 202, body not a JSON object: "<html>\\n<b>Accepted</b></html>")',
+        f"vllm\t{VLLM}\tsent (queued)"], "exit 0: no SystemExit raised"
+
+
+@pytest.mark.parametrize("error", [ValueError("Expecting value"), http.client.IncompleteRead(b"par")])
+def test_anything_call_raises_for_one_target_stops_none_of_the_others(api, monkeypatch, capsys, error):
+    def flaky(method, path, key, body=None):
+        if CI in path:
+            raise error
+        return api(method, path, key, body)
+    monkeypatch.setattr(L, "call", flaky)
+    with pytest.raises(SystemExit) as exit_:
+        tell("--text", "x")
+    assert api.agents() == [LEAN, VLLM], "vllm, after ci, was still sent"
+    line = capsys.readouterr().out.splitlines()[1]
+    assert line.startswith(f"ci\t{CI}\tFAILED not reached: {type(error).__name__}: ")
+    assert str(exit_.value).startswith("1 of 3 not sent:")
+
+
+def test_the_other_commands_refuse_a_2xx_that_is_not_json_in_one_line(api, monkeypatch):
+    monkeypatch.setattr(L, "call", lambda *a, **k: (200, {"raw": "<html>ok</html>"}))
+    with pytest.raises(SystemExit) as exit_:
+        L.main(["archive", CI])
+    assert str(exit_.value) == f'archive {CI}: HTTP 200, but the body is not a JSON object: "<html>ok</html>"'
 
 
 def test_a_send_needs_the_key(api, monkeypatch):

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import http.client
 import json
 import os
 import re
@@ -121,18 +122,25 @@ def call(method: str, path: str, key: str, body: dict | None = None) -> tuple[in
                                  headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req) as resp:
-            return resp.status, json.loads(resp.read() or b"{}")
+            return resp.status, decoded(resp.read())
     except urllib.error.HTTPError as err:
-        raw = err.read()
-        try:
-            return err.code, json.loads(raw or b"{}")
-        except ValueError:
-            return err.code, {"raw": raw.decode(errors="replace")}
+        return err.code, decoded(err.read())
+
+
+def decoded(raw: bytes) -> dict:
+    """A response body as a JSON object: ``{}`` when empty, ``{"raw": TEXT}`` when it is not a JSON object."""
+    try:
+        doc = json.loads(raw or b"{}")
+    except ValueError:
+        return {"raw": raw.decode(errors="replace")}
+    return doc if isinstance(doc, dict) else {"raw": raw.decode(errors="replace")}
 
 
 def ok(status: int, payload: dict, what: str) -> dict:
     if not 200 <= status < 300:
         sys.exit(f"{what}: HTTP {status} {json.dumps(payload)}")
+    if "raw" in payload:
+        sys.exit(f"{what}: HTTP {status}, but the body is not a JSON object: {json.dumps(payload['raw'][:200])}")
     return payload
 
 
@@ -252,19 +260,27 @@ def tell(args: argparse.Namespace) -> None:
     body = {"prompt": {"text": text}} if args.no_steer else {"prompt": {"text": text}, "delivery": "steer"}
     failed = []
     for handle, agent in to:
-        try:
-            status, payload = call("POST", f"/v1/agents/{agent}/runs", key, body)
-        except OSError as err:
-            status, payload = None, {"error": str(err)}
-        if status is not None and 200 <= status < 300:
-            how = payload.get("delivery") or f"run {payload.get('run', {}).get('id', '?')}"
-            print(f"{handle}\t{agent}\tsent ({how})")
-        else:
-            why = f"HTTP {status} {json.dumps(payload)}" if status is not None else f"not reached: {payload['error']}"
-            print(f"{handle}\t{agent}\tFAILED {why}")
-            failed.append(f"{handle} {agent}: {why}")
+        sent, what = send(agent, key, body)
+        print(f"{handle}\t{agent}\t{'sent (' + what + ')' if sent else 'FAILED ' + what}")
+        if not sent:
+            failed.append(f"{handle} {agent}: {what}")
     if failed:
         sys.exit(f"{len(failed)} of {len(to)} not sent:\n" + "\n".join(failed))
+
+
+def send(agent: str, key: str, body: dict) -> tuple[bool, str]:
+    """One target's request: whether the API accepted it, and what came back. Whatever goes wrong for one target is
+    reported here, so the others are still sent."""
+    try:
+        status, payload = call("POST", f"/v1/agents/{agent}/runs", key, body)
+    except (OSError, ValueError, http.client.HTTPException) as err:
+        return False, f"not reached: {type(err).__name__}: {err}"
+    if not 200 <= status < 300:
+        return False, f"HTTP {status} {json.dumps(payload)}"
+    if "raw" in payload:
+        return True, f"HTTP {status}, body not a JSON object: {json.dumps(payload['raw'][:80])}"
+    run = payload.get("run")
+    return True, str(payload.get("delivery") or "") or f"run {run.get('id', '?') if isinstance(run, dict) else '?'}"
 
 
 def main(argv: list[str] | None = None) -> None:
