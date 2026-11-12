@@ -75,6 +75,7 @@ verity/protocols/flock/prover/tests/fixtures/zk-sessions
 verity/protocols/spot/verifier/tests/fixtures/form-refusals
 adapters/vllm/tests/protocols/fixtures/challenger_periods
 benchmarks/network_e2e/encodings/tests/fixtures
+benchmarks/network_e2e/encodings/tests/fixtures_draft
 benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl
 benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json
 benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json

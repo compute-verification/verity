@@ -278,7 +278,9 @@ def bind_vocab_parallel_embeddings(model: torch.nn.Module, into: hooks.Hooks) ->
 
 def vocab_parallel_embeddings(model: torch.nn.Module) -> list[tuple[str, torch.nn.Module]]:
     """The model's `VocabParallelEmbedding`s (exact class) with tp_size > 1, in module order: the ones `bind_vocab_parallel_embeddings` binds."""
-    from vllm.model_executor.layers.vocab_parallel_embedding import VocabParallelEmbedding
+    from vllm.model_executor.layers.vocab_parallel_embedding import (
+        VocabParallelEmbedding,
+    )
     return [(name, m) for name, m in model.named_modules() if type(m) is VocabParallelEmbedding and getattr(m, "tp_size", 1) > 1]
 
 

@@ -20,7 +20,7 @@ broad handler everywhere; this one checks every handler in these two packages, n
 from __future__ import annotations
 
 import ast
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -69,7 +69,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             for node, symbol in R.walk(R.parse_src(src)) if isinstance(node, ast.ExceptHandler) and silent(node)]
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():

@@ -318,7 +318,7 @@ def test_the_verifier_derives_the_anchored_inputs():
             TileAnchors(shape, t.seed_a, t.seed_b, rows, t.cols)
 
 
-def test_the_tile_layout_proves_each_drawn_tile_with_its_rows():
+def test_the_tile_layout_proves_each_sampled_tile_with_its_rows():
     """`plan.tile_layout`: a tile's closure is itself and its TM `RowA` units, and its ``b_rows`` its TN `RowB` units in the
     weight's Program; a sample proves both, the row units each once (`Plan.proved_b`), opens nothing, and the tile stratum
     has the W_ref given."""
@@ -333,12 +333,12 @@ def test_the_tile_layout_proves_each_drawn_tile_with_its_rows():
         assert [(us[i].role, us[i].where) for i in lay.closure[t.index][1:]] == [("row_a", (rs * tm + i,)) for i in range(tm)]
         assert [(ws[j].role, ws[j].where) for j in lay.b_rows[t.index]] == [("row_b", (cs * tn + j,)) for j in range(tn)]
     assert [(s.role, s.work) for s in lay.strata] == [("row_a", 0), ("tile", 4 * 1000)] and lay.tile_work() == 1000
-    for law in (plan.CountLaw(3), plan.WorkLaw(2)):
-        p = plan.draw(derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc4"}), lay, law)
-        drawn = [u for u in p.drawn if us[u].role == "tile"]
-        assert drawn and p.openings == () and p.proved_y == ()
-        assert set(p.proved) == set(p.drawn) | {i for t in drawn for i in lay.closure[t]}
-        assert p.proved_b == tuple(sorted({j for t in drawn for j in lay.b_rows[t]}))
+    for design in (plan.CountLaw(3), plan.WorkLaw(2)):
+        p = plan.draw(derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc4"}), lay, design)
+        sampled = [u for u in p.drawn if us[u].role == "tile"]
+        assert sampled and p.openings == () and p.proved_y == ()
+        assert set(p.proved) == set(p.drawn) | {i for t in sampled for i in lay.closure[t]}
+        assert p.proved_b == tuple(sorted({j for t in sampled for j in lay.b_rows[t]}))
     assert plan.tile_layout(replace(HIDDEN, hidden=False), 1000).closure == lay.closure
 
 
