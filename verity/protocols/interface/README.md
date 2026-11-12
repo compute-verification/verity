@@ -145,7 +145,8 @@ accepted answer names the registration's head; a protocol that names none is hel
 the Site (`Account.Part.capacity`), at each reading the registration can be read at, and is never copied from an answer.
 A flow has one row for the period; an amount at a moment has one for each accepted answer and one for the period. An
 error of 1 or more prints "no bound at this period", and what no accepted answer covers is "not audited: charged at
-capacity". `Account.Example.account` is the example protocol's value; every other protocol's is written with that protocol.
+capacity". `Account.Example.account` is the example protocol's value; every other protocol's is written with that
+protocol.
 
 ## Properties
 
