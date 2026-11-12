@@ -10,10 +10,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from tests.program import sampling_rng as R
 from verity_vllm.config import RowEngine, workload_file
 from verity_vllm.engine import static_schedule
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.program import sampling_rng as R
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 WORKLOADS = ["workload_b0_sampling_temp07", "workload_b0_sampling_topk50_topp09", "workload_b0_sampling_n2", "workload_b0_sampling_2req_seeds"]
