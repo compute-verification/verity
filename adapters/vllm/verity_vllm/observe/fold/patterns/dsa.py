@@ -495,7 +495,8 @@ class DsaIndexShare:
         req, blocks, source, out, valid = (a.get(k) for k in
                                            ("req_id_ptr", "block_table_ptr", "token_indices_ptr", "out_ptr", "valid_count_ptr"))
         M = len(ctx.start.rows)
-        if not all(isinstance(v, ViewDesc) for v in (req, blocks, source, out, valid)):
+        if not (isinstance(req, ViewDesc) and isinstance(blocks, ViewDesc) and isinstance(source, ViewDesc) and isinstance(out, ViewDesc)
+                and isinstance(valid, ViewDesc)):
             return unsupported(node, "IndexShare conversion pointers are not bound")
         if req.shape != (M,) or req.dtype != "int32" or blocks.dtype != "int32" or blocks.rank != 2 \
                 or source.shape != out.shape or source.shape != (M, 2048) or source.dtype != out.dtype or source.dtype != "int32" \
@@ -523,7 +524,7 @@ class DsaSparseMla:
             return None
         a, outs = bound_args(node), node.output_views()
         q, qv, k, v = a.get("q"), a.get("q_v"), a.get("k"), a.get("v")
-        if not all(isinstance(x, ViewDesc) for x in (q, qv, k, v)) or not outs:
+        if not (isinstance(q, ViewDesc) and isinstance(qv, ViewDesc) and isinstance(k, ViewDesc) and isinstance(v, ViewDesc)) or not outs:
             return unsupported(node, "FA3 sparse MLA q/q_v/k/v/out pointers are not bound")
         out = outs[0]
         M, NH, DR, DV = q.shape[0], q.shape[1], q.shape[2], qv.shape[2]
