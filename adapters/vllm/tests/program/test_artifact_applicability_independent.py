@@ -480,7 +480,7 @@ def identity_of(b: Build):
 
 def identity_targets(ident) -> dict:
     """The target/profile-fact part of an identity (so a code-version component cannot mask an unchanged target)."""
-    t = {}
+    t: dict[str, object] = {}
     if ident is None:
         return t
     for path, v in walk(ident):
