@@ -22,6 +22,7 @@ What the translator imports from the rest of the adapter. Its modules are those 
     verity_vllm.config.VLLM                                   the pinned vLLM revision, a target's default
     verity_vllm.config.DEFAULT_ROW_PROTOCOLS                  the protocol set a target runs when it declares none
     verity_vllm.config.parse_protocols                        a protocol set's one spelling
+    verity_vllm.config.vllm_revision                          the installed vLLM's version with its commit, for the read-back
     verity_vllm.program.inputs                                what may fill a served Program's input, for a rule's run inputs
     verity_vllm.program.inputs.run_field                      the same, for one field a registration reads
     verity_vllm.program.prune.kept_records                    a derivation's body in the registered compiler's form

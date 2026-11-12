@@ -305,9 +305,66 @@ def test_a_nodes_entry_from_its_files() -> None:
     assert refusal(onsite, reached, auditor) is None
 
 
-def _node_entry(**tables: object) -> Entry:
+def _rate(v: object) -> dict[str, object]:
+    return {"rate": {**_entry(v), "unit": "bit/s"}}
+
+
+PORTS = {"eth0": _rate(25 * 10 ** 9), "eth1": _rate("1000000000.5")}
+"""A node file's `interface` tables: two interfaces that leave the node, at 25 bits a tick and at a rate that is not
+a whole number of bits a tick."""
+
+
+def test_a_nodes_interfaces_are_its_own_boundary_links() -> None:
+    """A file with no `interface` table gives no link. Each interface it states is a link from the host to the outside
+    at its rate over a tick, rounded up, at latency 0: a boundary link with no certifier at an end, which remote
+    accepts and onsite refuses by `uncertified`, with a challenger reaching the host or without one."""
+    assert Registration("remote").node_entry(NODE_FILE, CARD_FILE, "n0").links == ()
+    node, auditor = {**NODE_FILE, "interface": PORTS}, Auditor.of_files([CARD_FILE], TOLERANCE, {"chal0": ""})
+    entry = Registration("remote").node_entry(node, CARD_FILE, "n0")
+    assert entry.links == (Link("n0/eth0", ("n0", OUTSIDE), 25, 0), Link("n0/eth1", ("n0", OUTSIDE), 2, 0))
+    assert entry.locs == Registration("remote").node_entry(NODE_FILE, CARD_FILE, "n0").locs
+    assert Registration("remote").node_entry(node, CARD_FILE, "n0", tick=Fraction(1, 10 ** 6)).links[1].beta == 1001
+    site = check(Registration("remote").append(entry), auditor)
+    assert site.boundary("n0") == list(entry.links) and not any(site.certified(k) for k in site.links)
+    onsite = Registration("onsite")
+    bare = onsite.node_entry(node, CARD_FILE, "n0")
+    reached = replace(bare, locs=(*bare.locs, Loc("chal0", "challenger", "site", "auditor")),
+                      links=(*bare.links, Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000)))
+    for e in (bare, reached):
+        with pytest.raises(Refused, match="n0/eth0.*n0/eth1") as refused:
+            check_registration(onsite, e, auditor)
+        assert refused.value.name == "uncertified"
+
+
+def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None:
+    """With a certifier's id and key the entry also holds the certifier under the site and a certified way out, host
+    to certifier and certifier to outside, each at the interfaces' rates summed and rounded up once. The interfaces'
+    own links stay, so onsite still refuses the entry by `uncertified`, naming them and not the certified link."""
+    node = {**NODE_FILE, "interface": PORTS}
+    auditor = Auditor.of_files([CARD_FILE], TOLERANCE, {"cert0": "dummy-cert0-key", "chal0": ""})
+    plain = Registration("remote").node_entry(node, CARD_FILE, "n0", "site0")
+    entry = Registration("remote").node_entry(node, CARD_FILE, "n0", "site0", certifier=("cert0", "dummy-cert0-key"))
+    assert entry.locs == (*plain.locs, Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key"))
+    assert entry.links == (*plain.links, Link("n0/cert0", ("n0", "cert0"), 27, 0),
+                           Link("cert0/outside", ("cert0", OUTSIDE), 27, 0))
+    site = check(Registration("remote").append(entry), auditor)
+    assert [(k.id, site.certified(k)) for k in site.boundary("n0")] == [
+        ("n0/eth0", False), ("n0/eth1", False), ("n0/cert0", True)]
+    onsite = Registration("onsite")
+    stood = onsite.node_entry(node, CARD_FILE, "n0", "site0", certifier=("cert0", "dummy-cert0-key"))
+    reached = replace(stood, locs=(*stood.locs, Loc("chal0", "challenger", "site0", "auditor")),
+                      links=(*stood.links, Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000)))
+    with pytest.raises(Refused) as refused:
+        check_registration(onsite, reached, auditor)
+    assert refused.value.name == "uncertified" and "n0/eth1" in refused.value.detail
+    assert "cert0" not in refused.value.detail
+    certified = replace(reached, links=tuple(k for k in reached.links if k not in plain.links))
+    assert refusal(onsite, certified, auditor) is None
+
+
+def _node_entry(certifier: tuple[str, str] | None = None, **tables: object) -> Entry:
     """The entry of `NODE_FILE` with these tables in place of its own."""
-    return Registration("remote").node_entry({**NODE_FILE, **tables}, CARD_FILE, "n0")
+    return Registration("remote").node_entry({**NODE_FILE, **tables}, CARD_FILE, "n0", certifier=certifier)
 
 
 def test_the_encoding_round_trips_and_is_pinned() -> None:
@@ -365,6 +422,15 @@ def _sheet_json(**f: object) -> Sheet:
     (lambda: _node_entry(memory={"vda": NODE_FILE["memory"]["vda"]}), "no dram leaf"),
     (lambda: _node_entry(memory={"dram": NODE_FILE["memory"]["dram"]}), "no disk leaf"),
     (lambda: _node_entry(memory={}), "no dram and no disk leaf.*lsmem -b --summary=only; lsblk -b -d"),
+    (lambda: _node_entry(interface={"eth0": {}}), "rate"),
+    (lambda: _node_entry(interface={"eth0": {"rate": 25 * 10 ** 9}}), "not an entry"),
+    (lambda: _node_entry(interface={"eth0": {"rate": {**_entry(25), "unit": "Gbit/s"}}}), "in bit/s"),
+    (lambda: _node_entry(interface={"eth0": {"rate": {**_entry(3125000000), "unit": "B/s"}}}), "in bit/s"),
+    (lambda: _node_entry(interface={"eth0": _rate(0)}), "above 0"),
+    (lambda: _node_entry(interface={"eth0": _rate(-1)}), "above 0"),
+    (lambda: _node_entry(("cert0", "k")), "states no interface, so a certifier's links have no rate.*ip route"),
+    (lambda: _node_entry("cert0", interface=PORTS), "id and its key"),
+    (lambda: _node_entry(("cert0", 7), interface=PORTS), "not a string"),
 ])
 def test_what_no_site_holds_is_malformed(make, what: str) -> None:
     with pytest.raises(Malformed, match=what):
