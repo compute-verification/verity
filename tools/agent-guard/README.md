@@ -9,10 +9,11 @@ side by side; it is not a package.
 
 | File | What it is | Named by |
 |---|---|---|
-| `boot.sh` | Puts the guard on a VM whatever branch is checked out: it writes `.cursor/hooks.json` where the branch tracks none, copies origin/main's guard out of the checkout, runs `install.sh` and starts `oom_watch.py`. | The Cloud Agent environment's start, on every boot; the team skill; `infra/cursor` |
+| `boot.sh` | Puts the guard on a VM whatever branch is checked out: it writes `.cursor/hooks.json` where the branch tracks none, copies origin/main's guard out of the checkout, runs `install.sh`, and starts `oom_watch.py` and the tmux session the VM keeps (`kept_session.py start`). | The Cloud Agent environment's start, on every boot; the team skill; `infra/cursor` |
 | `hook.sh` | `hook.sh NAME` runs origin/main's copy of the hook NAME on Cursor's event, so a branch cut before a guard landed still runs it. | `.cursor/hooks.json`, for every hook |
-| `shell_hook.py` | The shell hook. It refuses a command that would print secrets (the environment, a key or env file, or any process's full command line, whatever it is piped into), a local build or unselected test run, a call that would block more than 20 minutes, a branch switch that belongs to another agent, and a push to verity or infra that updates `main`, `checked`, `next` or another agent's branch; each rule also reads what the command has another program run: what tmux types into a pane (`send-keys`) or starts (`new-session`, `new-window`, `split-window`, `respawn-pane`, `run-shell` and the like), and what `bash -c`, `env`, `xargs`, `eval`, `watch`, `nohup`, `setsid` or `timeout` runs. A script file's contents are not read. A listing that another machine runs over `ssh` or `research pods ssh` is refused unfiltered and passes when piped straight into a `grep` that keeps only matching lines. It delivers a waiting inbox message by refusing the next command once. | `hook.sh`; the root's tests |
+| `shell_hook.py` | The shell hook. It refuses a command that would print secrets (the environment, a key or env file, or any process's full command line, whatever it is piped into), a local build or unselected test run, a call that would block more than 20 minutes, a branch switch that belongs to another agent, a push to verity or infra that updates `main`, `checked`, `next` or another agent's branch, and a `tmux kill-server` or `tmux kill-session` that would end the VM's tmux server or the session it keeps; each rule also reads what the command has another program run: what tmux types into a pane (`send-keys`) or starts (`new-session`, `new-window`, `split-window`, `respawn-pane`, `run-shell` and the like), and what `bash -c`, `env`, `xargs`, `eval`, `watch`, `nohup`, `setsid` or `timeout` runs. A script file's contents are not read. A listing that another machine runs over `ssh` or `research pods ssh` is refused unfiltered and passes when piped straight into a `grep` that keeps only matching lines. It delivers a waiting inbox message by refusing the next command once. | `hook.sh`; the root's tests |
 | `pre_push.py` | git's `pre-push` hook: the branch rule a typed push meets, applied to every branch a push updates, so a push from a script or a child process meets it too. It judges a push to `compute-verification/verity` or `compute-verification/infra`, the repositories whose `main`, `checked` and `next` drive lands, by an agent's process (one with `CURSOR_CONVERSATION_ID`, which every agent's shell sets and its children inherit): refused when it updates `main`, `checked` or `next`, or a branch registered to another agent (`worktree_guard.py hand` hands one over); an unregistered branch passes. A push without that id (a person's, the queue's) and one to any other repository (the notes, whose `main` every agent's `research notes sync` pushes, a fork, a node) are not judged. It then runs the hook the push would have run without it. | `install.sh` writes `/usr/local/lib/agent-guard/hooks/pre-push`, which `git_guard.sh` sets as `core.hooksPath` for every `git push`, through `--no-verify` and a caller's own `core.hooksPath` |
+| `kept_session.py` | The tmux session a VM keeps, `vm-secrets`, so that its tmux server never ends: the server's environment holds the secrets it started with, and a shell that lost them takes them back from it. `start` starts it; the shell hook's rule against ending it is here too. | `boot.sh`; the shell hook; `research doctor`, whose `secrets` check names the session |
 | `procs.py` | This machine's processes, with each command line's token-like runs cut out: what the shell hook's refusal of a listing points to, beside `ps -eo pid,etimes,comm` and `pgrep -l`. | The shell hook's refusal |
 | `inbox.py` | Messages to a running agent, on this VM or another. | The team skill; `research digest` |
 | `research.sh` | The `research` on an agent VM's PATH: it runs origin/main's `tools/research/src/research/at_main.py`, which runs the checkout's `research` or, when the checkout is only behind, origin/main's. | `install.sh`; `at_main.py` |
@@ -40,6 +41,19 @@ exported `GIT_DIR`, an alias); `pre_push.py`, which reads the URL git pushes to,
 push rule: a push that runs `/usr/bin/git` by path, a git alias for `push`, `VERITY_GIT_GUARD=off`, and a client other
 than git. On a git before 2.31 a push is judged but runs no other pre-push hook.
 
+The tmux rule (`kept_session.py`) covers the VM's own tmux server, the one a `tmux` with no `-L NAME` or `-S PATH` talks
+to; a server of a command's own passes whatever it ends there. `tmux kill-server` is refused always. A `tmux
+kill-session` is refused when it would end `vm-secrets` (named exactly, by the start of its name or by a pattern, as
+tmux reads a target), when it would end the server's last session, when it names no session the hook can read (no `-t`,
+a variable, a window or a pane), and when it ends every session but the one it names (`-a`) and `vm-secrets` is among
+those ended; any other passes, as does `kill-session -C`, which ends nothing. For a `kill-session` the hook asks tmux
+which sessions there are; where tmux gives no answer it refuses what the command's text could mean for `vm-secrets`.
+Each refusal says to close your own sessions by name. It can't see which server a pane's own tmux talks to (a kill typed
+into a pane is judged as the VM's), a `TMUX` or `TMUX_TMPDIR` the command sets, or a session ended some other way (its
+last window killed, its shell's `exit`, a signal). `kept_session.py start` starts the session only where the server it
+would start holds every secret the VM injects; a server it starts gives each later session the `CURSOR_*` variables and
+`PATH` of the shell that starts that session, since the boot's environment names no agent.
+
 ## Commands
 
 ~~~text
@@ -50,6 +64,7 @@ python3 tools/agent-guard/inbox.py check AGENT_ID                  on its own VM
 python3 tools/agent-guard/procs.py [PATTERN]                       processes and their command lines, tokens cut
 python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent
 python3 tools/agent-guard/worktree_guard.py list                   each worktree's owner
+tmux new-session -d -s vm-secrets                                  the session this VM keeps, by hand (boot starts it)
 python3 tools/agent-guard/oom_watch.py scan                        the OOM kills still in the kernel's buffer
 uv run tools/verity/check/suites.py tools/agent-guard              its tests
 ~~~

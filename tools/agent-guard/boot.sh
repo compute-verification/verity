@@ -15,7 +15,8 @@
 # that starts from that checkout reads it, and until DEST's copy is there every command is refused. Then it
 # copies the files of origin/main's `tools/agent-guard` (not its tests) to DEST (default /opt/agent-guard), or keeps an
 # earlier copy when origin/main can't be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
-# /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
+# /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py) and the tmux session
+# the VM keeps (kept_session.py), whose server holds this boot's secrets for a shell that later loses them. It also puts research
 # and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once, and sets WORKSPACE's merge drivers (`.gitattributes`
 # names them; git keeps them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, as every run clone
 # has them: without them `git merge-tree` here merges a lean-audit.json line by line and calls clean what the queue refuses.
@@ -98,4 +99,6 @@ if [ -z "${AGENT_GUARD_SKIP_INSTALL:-}" ]; then
   # the VM's OOM recorder: one per VM (it holds its lock; a second exits), so a reboot or a second boot.sh is harmless
   setsid nohup python3 "$dest/oom_watch.py" loop >> /tmp/agent-oom-watch.log 2>&1 < /dev/null &
   echo "agent-guard: OOM recorder started ($dest/oom_watch.py, records in ~/.research/agent-oom.jsonl)"
+  # the tmux session the VM keeps (kept_session.py), started with Cursor's tmux where the VM has it, as an agent's shell would
+  PATH=$([ -x /exec-daemon/tmux ] && echo /exec-daemon:)$PATH python3 "$dest/kept_session.py" start || true
 fi

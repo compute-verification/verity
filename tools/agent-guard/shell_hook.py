@@ -81,6 +81,11 @@ It places a git command by the event's cwd and its own `-C` alone: a `cd` anywhe
 carriers run too) leaves it unplaced unless its `-C` is absolute, a `source` or a `GIT_DIR` the command sets (`git_env`)
 whatever its `-C`, and an unplaced push is judged as theirs.
 
+The VM's tmux server stays (kept_session.py): its environment holds the secrets it started with, which a shell that lost
+them takes back from it. So it refuses `tmux kill-server`, and a `tmux kill-session` that would end the session the VM
+keeps, the server's last session, or a session the command doesn't name in words the hook can read; for a `kill-session`
+it asks tmux which sessions there are. A `tmux -L NAME` or `-S PATH` talks to another server and passes.
+
 It also carries messages to running agents, the one channel that reaches a subagent mid-run, on any VM (`inbox.py send
 AGENT_ID`). A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next
 allowed command is refused once, with the message as the refusal's text, which is what Cursor shows the agent (an
@@ -99,6 +104,7 @@ Security's lock to one `reads` group when an old branch merged main.
 """
 import fnmatch
 import glob
+import importlib
 import json
 import math
 import os
@@ -353,6 +359,8 @@ TMUX_ALIASES = {"new": "new-session", "neww": "new-window", "splitw": "split-win
                 "send": "send-keys"}
 #: names that start a simple command of their own once the shell has split `tmux A \; B` at the `;`
 TMUX_BARE = {n for n in TMUX_CARRIERS if "-" in n} | {"neww", "splitw", "respawnp", "respawnw", "pipep"}
+#: tmux's commands that end sessions, each with the shortest prefix tmux takes for it
+TMUX_KILLS = {"kill-server": "kill-ser", "kill-session": "kill-ses"}
 #: send-keys: keys that end a typed line, and keys that type a blank
 TMUX_ENTER, TMUX_BLANK = {"Enter", "C-m", "C-j", "KPEnter", "^M", "^J"}, {"Space", "Tab"}
 TMUX_KEY = re.compile(r"([CMS]-)+\S+|\^.|Escape|BTab|BSpace|Up|Down|Left|Right|Home|End|IC|DC|PageUp|PgUp|PageDown|PgDn|NPage|"
@@ -387,6 +395,12 @@ def typed(key: str, literal: bool) -> str:
     return " " if key in TMUX_BLANK else "\n"
 
 
+def tmux_carrier(name: str) -> str:
+    """The command of TMUX_CARRIERS that `name` names: itself, its alias or a prefix tmux takes for it; else ""."""
+    return TMUX_ALIASES.get(name) or next((c for c, (least, _, _) in TMUX_CARRIERS.items()
+                                           if c.startswith(name) and name.startswith(least)), "")
+
+
 def tmux_carried(args: list[str]) -> list[str]:
     """The shell commands `tmux ARGS` has run (or types into a pane, `send-keys`), each as one text: global `-c CMD`, and each
     command of TMUX_CARRIERS, by its name, alias or a prefix that names one; `run-shell -C` and `if-shell`'s branches are tmux
@@ -397,9 +411,7 @@ def tmux_carried(args: list[str]) -> list[str]:
     if i >= len(args):
         return []
     name, rest = args[i], args[i + 1:]
-    canon = TMUX_ALIASES.get(name) or next((c for c, (least, _, _) in TMUX_CARRIERS.items()
-                                            if c.startswith(name) and name.startswith(least)), "")
-    if not canon:
+    if not (canon := tmux_carrier(name)):
         return []
     _, valued, dir_option = TMUX_CARRIERS[canon]
     j, given = options_end(rest, valued)
@@ -419,6 +431,28 @@ def tmux_carried(args: list[str]) -> list[str]:
     text = rest[0] if len(rest) == 1 else shlex.join(rest)
     where = given.get(dir_option, "") if dir_option else ""
     return [f"cd {shlex.quote(where)} && {text}" if where else text]
+
+
+def tmux_kills(words: list[str]) -> list[tuple[str, dict[str, str]]]:
+    """The `kill-server` and `kill-session` commands among the tmux commands `words` (one, or several split at a `;` word or
+    at a word's final `;`), each by its name or a prefix that names it, with its options (a letter to its value);
+    `run-shell -C` and `if-shell`'s branches are tmux commands, read again."""
+    out, command = [], []
+    for w in [*words, ";"]:
+        if not w.endswith(";"):
+            command.append(w)
+            continue
+        command, done = [], [*command, *([w[:-1]] if w != ";" else [])]
+        if not done:
+            continue
+        name, rest = done[0], done[1:]
+        if kill := next((k for k, least in TMUX_KILLS.items() if k.startswith(name) and name.startswith(least)), ""):
+            out.append((kill, options_end(rest, "t")[1]))
+        elif (canon := tmux_carrier(name)) in ("run-shell", "if-shell"):
+            i, given = options_end(rest, TMUX_CARRIERS[canon][1])
+            inner = rest[i + 1:] if canon == "if-shell" else rest[i:] if "C" in given else []
+            out.extend(k for c in inner for k in tmux_kills(shlex.split(c)))
+    return out
 
 
 def carried(words: list[str]) -> list[str]:
@@ -1132,13 +1166,12 @@ def git_env(raw: list[list[str]]) -> list[dict[str, str]]:
     return [{**dict.fromkeys(elsewhere, "$"), **mine} for mine in ahead]
 
 
-def guard():
-    """worktree_guard, beside this hook, imported when a rule first needs it."""
+def guard(name: str = "worktree_guard"):
+    """The module `name` beside this hook (worktree_guard, kept_session), imported when a rule first needs it."""
     sys.dont_write_bytecode = True                      # no __pycache__ beside the hook: boot.sh copies its directory file by file
     if (here := os.path.dirname(os.path.abspath(__file__))) not in sys.path:
         sys.path.insert(0, here)
-    import worktree_guard
-    return worktree_guard
+    return importlib.import_module(name)
 
 
 def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
@@ -1150,6 +1183,31 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
     return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw))
+
+
+def own_tmux(given: dict[str, str]) -> bool:
+    """Whether a `tmux` with these options talks to the VM's own server: it names no socket (`-L NAME`, `-S PATH`), or the
+    default one (`-L default`, `-S .../tmux-UID/default`)."""
+    return bool(re.search(r"(^|/)tmux-\d+/default$", given["S"])) if "S" in given else given.get("L", "default") == "default"
+
+
+def kept_session_reason(command: str) -> str | None:
+    """The VM's tmux server stays (kept_session.py): why this command's `tmux kill-server` or `tmux kill-session` may not
+    run, or None. One on another server (`own_tmux`) passes, and a `kill-...` after `\\;` is its `tmux`'s."""
+    if "kill-se" not in command:
+        return None
+    try:
+        kills, own = [], False
+        for words in flattened(command):
+            run = unwrap(words)
+            if run and os.path.basename(run[0]) == "tmux":
+                i, given = options_end(run[1:], TMUX_ARG_OPTIONS)
+                own, run = own_tmux(given), run[1 + i:]
+            if own:
+                kills.extend(tmux_kills(run))
+    except ValueError:                                  # a command the hook can't split: refuse the one that names the server's end
+        kills = [("kill-server", {})] if "kill-ser" in command else []
+    return guard("kept_session").reason(kills) if kills else None
 
 
 def delivery(conversation: str) -> str | None:
@@ -1268,6 +1326,7 @@ def main() -> int:
                       else checkout_reason(command, conversation, cwd))
     except Exception:                                   # nor one in the checkout guard
         pass
+    low = low or (None if deny else kept_session_reason(command))
     low = secret_file_reason(command, stated_cwd(raw)) or low   # ahead of the gates' reasons: the one about a secret is the one to act on
     if deny or low:
         reason = REASONS[deny] if deny else low
