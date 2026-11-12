@@ -828,7 +828,7 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     assert HT.roots_of(CS.leaf_layer(bodies), hist2) == {"latent": (table.root, table.domain.domain_id)}
     assert HW.strings(later.circuit.registered.histories[0], mine2, bodies, strings) == table.bcs
     assert table.bcs[:6] == strings["latent"]
-    with pytest.raises(ValueError, match="is no value the verifier holds"):
+    with pytest.raises(ValueError, match="holds no rows of"):
         HT.roots_of(CS.leaf_layer(bodies), HW.params(doc2, later.window, bodies, HW.pins(doc2, roots2)))
 
 
@@ -937,9 +937,9 @@ def test_a_history_is_declared_by_its_writers_output_and_runs_and_read_as_a_tabl
     with pytest.raises(ValueError, match="its runs are"):
         latent(runs=[{"start": 0, "count": 6}])
     for edit, why in [(dict(out="o1"), "whose output o1 is 8 words"), (dict(words=4), "whose output o0 is 4 words"),
-                      (dict(writer=GID), f"its writer {re.escape(GID)}"), (dict(n=7), f"a writer unit outside {re.escape(G8ID)}'s 6"),
+                      (dict(writer=GID), f"its writer {re.escape(GID)}"), (dict(n=7), "outside the writer's 6"),
                       (dict(runs=[{"start": 1, "count": 6, "writer": G8ID, "out": "o0", "radix": [6], "base": 0,
-                                   "step": [1]}]), "the runs leave position 0 unwritten or write it twice"),
+                                   "step": [1]}]), "leave a gap or overlap"),
                       (dict(runs=[{"start": 0, "count": 6, "writer": GID, "out": "o0", "radix": [6], "base": 0,
                                    "step": [1]}]), "not the table's writer")]:
         with pytest.raises(ValueError, match=why):

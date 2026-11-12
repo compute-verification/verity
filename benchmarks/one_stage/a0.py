@@ -382,7 +382,7 @@ def lean_read_no_proof(v: dict) -> bool:
 def lean_answered(verifiers: dict | None) -> bool:
     """Whether a verdict's or an audit record's `verifiers` holds an answer of the Lean's. In its place the verifier
     writes `{"refused": reason}` for a Lean that refused the input and for one that could not run (`verifier.lean`), and
-    fails its check either way. History tables the Lean itself refuses for the Python's reason are its answer
+    fails its check either way. History tables the Lean itself refuses are its answer
     (`verifier.check`'s `R.HISTORY`)."""
     return "refused" not in ((verifiers or {}).get("lean") or {"refused": None})
 
