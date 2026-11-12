@@ -9,7 +9,7 @@ def record(n_steps: int) -> dict:
              for t in range(n_steps)]
     return {"setup": {"macs": 7, "tokens": 0, "by": {}}, "tail": {"macs": 5, "tokens": 0, "by": {}}, "steps": steps,
             "structures": {"s": struct},
-            "checkpoints": [{"step": s, "val_bpb": 1.0 - 0.01 * s} for s in (4, 9)]}
+            "checkpoints": [{"step": s, "bpb": 1.0 - 0.01 * s} for s in (4, 9)]}
 
 
 def test_an_annotation_through_a_step_is_a_prefix():

@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.protocols.certifier.verifier import active as A, io_tie as IT, release as REL
-from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 
@@ -120,10 +119,6 @@ class PlainProtocol:
         """The sampling fields the request sent, as it sent them."""
         return {k: req.raw[k] for k in SAMPLING_FIELDS if k in req.raw}
 
-    def seeded(self, params: dict[str, Any]) -> dict[str, Any]:
-        """``params`` with the served default seed when the request sent none (`engine.served_seed`)."""
-        return {**params, "seed": DEFAULT_SEED} if params.get("seed") is None else params
-
     def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
         """vLLM's ``get_max_tokens`` without truncation or an override (and no platform limit, which CUDA hasn't)."""
         if max_model_len < prompt_len:
@@ -200,9 +195,6 @@ class VllmProtocol(PlainProtocol):
     def brought(self, req: Completion) -> dict[str, Any]:
         return req.raw.model_dump(include=set(SAMPLING_FIELDS), exclude_unset=True)
 
-    def seeded(self, params: Any) -> Any:
-        return seeded(params)
-
     def chunk(self, *, request_id: str, created: int, model: str, text: str, finish_reason: str | None, stop_reason: Any,
               prompt_token_ids: list[int] | None, token_ids: list[int] | None, usage: dict[str, int] | None) -> str:
         P = self.P
@@ -229,6 +221,24 @@ class VllmProtocol(PlainProtocol):
 
 #: the scan's cell payload, P = B − 9 at its B = 512-byte cells: ``--id-payload``'s default
 ID_PAYLOAD = 503
+
+
+def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
+    """The fields (`active.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
+    request as the network certifier forwards it: without the release headers it puts on the server's copy
+    (`release.with_release`), exactly `active.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
+    ``payload``), from their first byte (``offset`` 0). None for anything else."""
+    head, _, body = request.partition(b"\r\n\r\n")
+    line, *fields = head.split(b"\r\n")
+    kept = b"".join(f + b"\r\n" for f in fields
+                    if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER, REL.BUCKET_HEADER))
+    try:
+        b = json.loads(body)
+        got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
+        canonical = A.id_request(**got, frame_bytes=payload + A.HEADER.size, offset=0)
+        return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else None
+    except (ValueError, KeyError, TypeError):
+        return None
 
 
 class IdsProtocol:
@@ -259,20 +269,9 @@ class IdsProtocol:
         return self if self.id_request_of(request) else self.base
 
     def id_request_of(self, request: bytes) -> bool:
-        """Whether `request` (its head and body as the server read them) is an id request as the network certifier forwards it:
-        without the release headers it puts on the server's copy (`release.with_release`), exactly `active.id_request`
-        of its own fields in the scan's B = P + 9-byte cells, from their first byte (``offset`` 0)."""
-        head, _, body = request.partition(b"\r\n\r\n")
-        line, *fields = head.split(b"\r\n")
-        kept = b"".join(f + b"\r\n" for f in fields
-                        if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER))
-        try:
-            b = json.loads(body)
-            got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
-            canonical = A.id_request(**got, frame_bytes=self.payload + A.HEADER.size, offset=0)
-            return canonical == line + b"\r\n" + kept + b"\r\n" + body
-        except (ValueError, KeyError, TypeError):
-            return False
+        """Whether `request` (its head and body as the server read them) is an id request as the network certifier forwards it
+        (`id_request_fields`) in the scan's B = P + 9-byte cells."""
+        return id_request_fields(request, self.payload) is not None
 
     def parse(self, body: Any) -> Completion:
         req = self.base.parse(body)
@@ -284,9 +283,6 @@ class IdsProtocol:
 
     def brought(self, req: Completion) -> dict[str, Any]:
         return self.base.brought(req)
-
-    def seeded(self, params: Any) -> Any:
-        return self.base.seeded(params)
 
     def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
         return self.base.max_tokens(req, max_model_len, prompt_len, defaults)
