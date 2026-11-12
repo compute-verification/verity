@@ -94425,3 +94425,32 @@ No: with the head block proved at the seconds timed today on one GPU (2.09 and 2
 | `r20261112-174409-73ff` | a second copy of `4129` | cancelled at 17:49Z while waiting for a slot; it never started |
 
 To read them again: `research data fetch art:790e56fa637efb30661c1735cc50c7a5fb00a25d8551c40920ece0cc9e70d1f4 --to DIR`; `DIR/out/sessions_meas.json` holds every design by id (`m/` as measured, `w/` the what-ifs, `f/` and `h/` the grid; in the second run's `sessions_meas2.json`, `x/`, `xb/`, `xr/`, `xh/`, `xl/` and `top/`), `DIR/out/wires_meas.txt` one line a design, and `DIR/inputs/` the script and the kit.
+
+## CROSSCLOSE, Thu 12 Nov 17:53Z: lean's new head for #9375 (`238ad6621c27`, `main` `6d95fcc68dd3` in) holds `ac843f35dc13` whole and every file of ours as my trial has it; the rows hold against it; it merges with today's `main` with no stop
+
+**Lean's new branch** [read: LEAN-249, MAINMERGE's comment of 17:45Z; then my `git fetch` of `cursor/lean-remote-merge-onmain-fc8d`]
+
+- #9375's head is `238ad6621c279889ff50d95dad374bf02a2d164b`: `ca2e80f1edf7` (one commit on `main` `87fec6c6491b`, its tree the landing tip `f3ffe4e2bbcb`'s, `f376f405e646`), then `64a780f498c9` (`main` `6d95fcc68dd3` merged), then one commit of Lean check entries. Lean says its last merge of `main` comes about 19:30Z.
+- [run] **Our nine files there are, blob for blob, what my closed trial `b7f2da3f4f82` has:** spot's `test_difftest.py` `fc4019234796` (`ac843f35dc13`'s, taken whole), its verifier README `eb6b9ea7edbf`, `optimize.py` `25282e9bd890` and `test_optimize.py` `601b763eddc4` (`6d67905515b3`'s bytes, by git's merge), `a5.py` `d3bcbc8cd44e`, `test_a5_wiring.py` `77434e56efae`, `whole_run.py` `353f5a6ddc36`, `FlockVerify.lean` `edfab267b68f`, the pin `deac96233d8b`.
+- [run] The pin is its command's output on my trial, and no pinned file differs between my trial, lean's head and `main` `15662e7c40ae`. [derived] So the pin is right on lean's head.
+- [run] Lean's head differs from my trial in 26 files: the 25 that `main` changed from `4520abe708b0` to `6d95fcc68dd3`, and `tools/verity/lean/README.md`. `public_boundary.toml` is my stand-in byte for byte. [derived] So `f6bf` (on my trial) tries lean's head but for those 26 files; lean's own `r20261112-174003-c8a6` and `9c8c` run on the head itself [read: the same comment].
+
+**The rows against that head** [run: `git merge-tree` of `238ad6621c27` with each open head, 17:50Z]
+
+- Same as at 17:23Z, row for row. Stops: #9237 in `test_difftest.py`, once, `82a48d3a8dda` git's merge outside it; #9253 in `FlockVerify.lean`, twice, `b58ece80e982`; #9091 in the pin, `0add9868cafe`. No stop: #9199, #9176, #9229, #9080, #9212, #9075, each merging to the bytes its row names.
+- [run] **Lean's head with `main` `15662e7c40ae`: no stop in any file.**
+
+**One meet with no stop on that `main`, not ours, known to both owners** [run, then read]
+
+- [run] By-name pass again, both ways, over what `main` added since `87fec6c6491b` (17,148 lines to `15662e7c40ae`) and what the remote line adds (90,185 lines): 58 hits by word, one real. `benchmarks/numerical/python/verity_numerical/settings.py` lines 16 and 25 (#9247, on `main` since 17:41Z) import and call `Registry` from `verity.settings`; the remote line names that class `EnvSettings`. I ran that one import on the merged tree's two files: `ImportError`; on `main`'s own it imports. Nine files under `benchmarks/numerical` import that module.
+- [read: LEAN-249, lean 17:34Z, compute-research 17:45Z] Lean found it first and compute-research answered: lean's worker renames the two lines in the last merge. Owners: compute-research and lean. Nothing is ours, and I say nothing to them.
+- [derived] So until that merge, a suite run on lean's head with today's `main` fails in `benchmarks/numerical` on that import. `f6bf` does not see it: its `main` is `4520abe708b0`, before #9247.
+
+**Runs** [run: polled 17:52Z]
+
+- `r20261112-164720-cb51` (lean's own tree, the 27 suites of its 9 differing files): 24 of 27 passed, 0 failed.
+- `r20261112-171809-f6bf` (my trial at `main` `4520abe708b0`, 125 suites): 41 passed, 0 failed. ETA 19:00Z [guess].
+- `r20261112-165537-6644` (every marked head in, 80 suites): 70 passed, 0 failed. ETA 18:15Z [guess].
+- `r20261112-165959-48b8` (every head in, 28 Lean files under `security/`): 22 tries exit 0, none failed. ETA 18:15Z [guess].
+
+Branches: `cursor/proofs-landing-closes-99d1` at `826cea0776932dff8b9890eb77f0458b79ca7358`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
