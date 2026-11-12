@@ -21,6 +21,8 @@ from collections.abc import Iterable
 from verity.protocols.spot.verifier.profile import WINDOW_DELTA
 
 LN2 = math.log(2)
+# The premium reads only T_BITS + DELTA_BITS (`ln_t_over_delta`), so the point below, T = 2^128 at δ = 2^-40, is the
+# same premium as (2^80, 2^-88): at 2^80 hash queries its δ is 12 bits above a 2^-100 bar.
 DELTA_BITS = WINDOW_DELTA.denominator.bit_length() - 1  # δ = 2^-DELTA_BITS, the grind's own failure probability (outside ε)
 T_BITS = 128                         # the cheater's hash queries a salt's execution phase, at which compile checks a seed group
 FLAG = 1e-3                          # a grind term over 0.1% is flagged, and compile refuses its seed group
