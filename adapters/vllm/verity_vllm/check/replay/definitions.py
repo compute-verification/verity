@@ -31,7 +31,7 @@ from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
 
-__all__ = ["of_record"]
+__all__ = ["of_record", "premises"]
 
 SHOWN = 5
 #: what a replay that evaluates a Boolean Definition's row leaves to others, on its record (`premises`)
