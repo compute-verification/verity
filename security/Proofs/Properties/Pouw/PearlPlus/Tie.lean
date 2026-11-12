@@ -190,7 +190,7 @@ theorem sum_le_fill (L : List (ℚ × ℚ × ℝ)) (b : ℝ) (hnn : ∀ t ∈ L,
     exact hnn t ht
   have hb0 : 0 ≤ b := le_trans (sum_map_nonneg' _ L fun t ht => (ha t ht).1) hb
   obtain ⟨l, hl0, -, hl⟩ := fill_dual _ b hsorted hSnn hb0
-  have hpos : ((((L.map fun t => (t.1, t.2.1)).mergeSort fun a c => decide (c.1 ≤ a.1)).map
+  have hpos : (((L.map fun t => (t.1, t.2.1)).mergeSort fun a c => decide (c.1 ≤ a.1)).map
       fun x => (x.2 : ℝ) * max ((x.1 : ℝ) - l) 0).sum =
       (L.map fun t => (t.2.1 : ℝ) * max ((t.1 : ℝ) - l) 0).sum :=
     ((hperm.map fun x : ℚ × ℚ => (x.2 : ℝ) * max ((x.1 : ℝ) - l) 0).sum_eq).trans
@@ -231,7 +231,8 @@ def recordTiles (q : ℕ × Pass × ℕ × UnitRecord) : List _root_.Pouw.PearlP
     { i := q.1, p := q.2.1, pos := q.2.2.1, r := q.2.2.2, x := e.2, rows := e.1.1, cols := e.1.2 }
 
 theorem cells_eq (passes : List Pass) : cells passes = (runRecords passes).flatMap recordTiles := by
-  simp only [cells, runRecords, List.flatMap_assoc, List.flatMap_map] <;> rfl
+  simp only [cells, runRecords, List.flatMap_assoc, List.flatMap_map]
+  rfl
 
 theorem sum_cells_eq (passes : List Pass) (F : _root_.Pouw.PearlPlus.Draw.Cell → ℝ) :
     ((cells passes).map F).sum = ((runRecords passes).map fun q => ((recordTiles q).map F).sum).sum := by
@@ -262,9 +263,8 @@ theorem sum_ticket_left (q : ℕ × Pass × ℕ × UnitRecord) (f : _root_.Pouw.
 /-- A tile cuts a width `n > 0`: `Scheme.tiles` has no block of a width of 0. -/
 theorem n_pos_of_tile {s : Scheme} {m n x : ℕ} {rc : List ℕ × List ℕ} (h : (s.tiles m n)[x]? = some rc) : 0 < n := by
   have hx : x < nblocks m s.tileM * nblocks n s.tileN := by
-    by_contra hx
-    rw [tiles_getElem?, if_neg hx] at h
-    cases h
+    rw [tiles_getElem?] at h
+    split_ifs at h with hx <;> first | exact hx | cases h
   rcases Nat.eq_zero_or_pos n with rfl | hn
   · exfalso
     have h0 : nblocks 0 s.tileN = 0 := by
@@ -495,7 +495,7 @@ theorem untiedCredited_sub (R : Run) : R.untiedCredited ⊆ (untiedBoxes R).toFi
   refine List.mem_flatMap.2 ⟨⟨pi, p, pos, r, x, rows, cols⟩, mem_cells.2 ⟨hp, hr, hx⟩, ?_⟩
   show (pi, pos, i, j) ∈ (if TileTiedAtW R.w R.rounds R.passes R.table (pi, p.offsets[pos]! + x) then []
     else boxOf ⟨pi, p, pos, r, x, rows, cols⟩)
-  rw [if_neg hnt]
+  simp only [hnt, ↓reduceIte]
   unfold boxOf
   exact List.mem_flatMap.2 ⟨i, hi', List.mem_map.2 ⟨j, hj', rfl⟩⟩
 
@@ -535,7 +535,6 @@ theorem cellUnits_map (R : Run) : (cellUnits R).map (fun t => (t.1, t.2.1)) =
     if recordCells p r = 0 then none else some (1 / cellTicket r, (recordCells p r : ℚ) * cellTicket r)) R.passes 0)
   congr 1
   funext q
-  dsimp only
   rw [List.filterMap_map]
   refine Eq.trans ?_ (filterMap_zipIdx_fst (fun r : UnitRecord =>
     if recordCells q.1 r = 0 then none else some (1 / cellTicket r, (recordCells q.1 r : ℚ) * cellTicket r))
@@ -548,6 +547,11 @@ theorem cellUnits_map (R : Run) : (cellUnits R).map (fun t => (t.1, t.2.1)) =
 theorem unitsBy_one (R : Run) : unitsBy (fun _ => 1) R.passes =
     ((cellUnits R).map fun t => (t.1, t.2.1)).mergeSort fun a b => decide (b.1 ≤ a.1) := by
   rw [cellUnits_map]
+  unfold unitsBy
+  congr 1
+  refine congrArg (List.flatMap · R.passes) (funext fun p => ?_)
+  refine congrArg (List.filterMap · p.records) (funext fun r => ?_)
+  show (if recordCells p r = 0 then none else some ((1 : ℚ) / cellTicket r, (recordCells p r : ℚ) * cellTicket r)) = _
   rfl
 
 theorem sum_units (R : Run) (G : ℚ × ℚ × ℝ → ℝ) :
@@ -591,25 +595,23 @@ theorem units_nonneg (R : Run) : ∀ t ∈ cellUnits R, 0 ≤ t.1 ∧ 0 ≤ t.2.
   unfold cellUnits at ht
   obtain ⟨q, -, hq⟩ := List.mem_filterMap.1 ht
   split_ifs at hq with h0
-  · cases hq
-  · cases hq
-    exact ⟨div_nonneg zero_le_one (cellTicket_nonneg _), mul_nonneg (Nat.cast_nonneg _) (cellTicket_nonneg _)⟩
+  cases hq
+  exact ⟨div_nonneg zero_le_one (cellTicket_nonneg _), mul_nonneg (Nat.cast_nonneg _) (cellTicket_nonneg _)⟩
 
 theorem units_taken (R : Run) : ∀ t ∈ cellUnits R, 0 ≤ t.2.2 ∧ t.2.2 ≤ (t.2.1 : ℝ) := by
   intro t ht
   unfold cellUnits at ht
   obtain ⟨q, -, hq⟩ := List.mem_filterMap.1 ht
   split_ifs at hq with h0
-  · cases hq
-  · cases hq
-    have h1 := sum_ut_le_cells R q
-    have h2 : (0 : ℝ) ≤ cellTicket q.2.2.2 := by exact_mod_cast cellTicket_nonneg _
-    have h3 := sum_map_nonneg' (fun c => (untiedTileCells R c : ℝ)) (recordTiles q) fun c _ => Nat.cast_nonneg _
-    refine ⟨mul_nonneg h2 h3, ?_⟩
-    show (cellTicket q.2.2.2 : ℝ) * ((recordTiles q).map fun c => (untiedTileCells R c : ℝ)).sum ≤
-      (((recordCells q.2.1 q.2.2.2 : ℚ) * cellTicket q.2.2.2 : ℚ) : ℝ)
-    rw [Rat.cast_mul, Rat.cast_natCast]
-    nlinarith
+  cases hq
+  have h1 := sum_ut_le_cells R q
+  have h2 : (0 : ℝ) ≤ cellTicket q.2.2.2 := by exact_mod_cast cellTicket_nonneg _
+  have h3 := sum_map_nonneg' (fun c => (untiedTileCells R c : ℝ)) (recordTiles q) fun c _ => Nat.cast_nonneg _
+  refine ⟨mul_nonneg h2 h3, ?_⟩
+  show (cellTicket q.2.2.2 : ℝ) * ((recordTiles q).map fun c => (untiedTileCells R c : ℝ)).sum ≤
+    (((recordCells q.2.1 q.2.2.2 : ℚ) * cellTicket q.2.2.2 : ℚ) : ℝ)
+  rw [Rat.cast_mul, Rat.cast_natCast]
+  nlinarith
 
 theorem untiedSum_units (R : Run) : untiedSum R = ((cellUnits R).map fun t => t.2.2).sum := by
   unfold untiedSum
@@ -639,7 +641,7 @@ theorem ticketSum_units (R : Run) : ticketSum R = ((cellUnits R).map fun t => (t
 
 theorem units_w (R : Run) :
     ((((cellUnits R).map fun t => (t.1, t.2.1)).map (·.2)).sum : ℝ) = ticketSum R := by
-  rw [List.map_map, cast_sum_rat]
+  rw [List.map_map]
   exact (ticketSum_units R).symm
 
 theorem card_le_units (R : Run) :
@@ -665,8 +667,8 @@ theorem untiedCellsAtMost : UntiedCellsAtMost := by
   have hfill := sum_le_fill (cellUnits R) _ (units_nonneg R) (units_taken R) hb
   unfold cellsAt atBy
   rw [unitsBy_one R]
-  have hperm : (((((cellUnits R).map fun t => (t.1, t.2.1)).mergeSort fun a b => decide (b.1 ≤ a.1)).map
-      (·.2)).sum : ℚ) = ((((cellUnits R).map fun t => (t.1, t.2.1))).map (·.2)).sum :=
+  have hperm : ((((cellUnits R).map fun t => (t.1, t.2.1)).mergeSort fun a b => decide (b.1 ≤ a.1)).map
+      fun x => (x.2 : ℝ)).sum = (((cellUnits R).map fun t => (t.1, t.2.1)).map fun x => (x.2 : ℝ)).sum :=
     ((List.mergeSort_perm _ _).map _).sum_eq
   rw [hperm]
   exact (card_le_units R).trans hfill
