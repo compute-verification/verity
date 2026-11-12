@@ -56,7 +56,7 @@ from verity.protocols.spot.verifier.one_stage import registration as REG
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[4]
 
 
 def module(name: str, path: Path) -> ModuleType:

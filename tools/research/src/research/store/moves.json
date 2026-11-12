@@ -2193,6 +2193,11 @@
       "paths": {
         "benchmarks/specs/": "benchmarks/harness/specs/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/remote/verifier/composition/": "verity/protocols/compose/"
+      }
     }
   ]
 }

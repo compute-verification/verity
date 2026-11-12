@@ -21,7 +21,7 @@ path = "../../interface"
 
 [[require]]
 name = "core_composition"
-path = "../../remote/verifier/composition"
+path = "../../compose"
 
 # The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
 # `PouwCheck.Period`).

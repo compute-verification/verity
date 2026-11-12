@@ -27,7 +27,7 @@ and no console script.
   the certifier.
 - **Not here**: its tests, `test_nci_*.py` and `test_inference_only_protocol.py`. They are in
   `../../../certifier/verifier/network/tests`, in the suite `verity/protocols/certifier/verifier/network`, with the
-  tests of the certifier's Lean check. The tests of `verity/protocols/remote/verifier/composition` load the second by
+  tests of the certifier's Lean check. The tests of `verity/protocols/compose` load the second by
   path.
 
 ## Overview
@@ -41,7 +41,7 @@ ZK proof that B ran correctly and explains the committed trace can also show tha
 at most k bits outside θ (`verity/protocols/remote/verifier/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`; its
 check decides the policy at a rate, `Nci.CompliesRate` (below).
 
-The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/protocols/remote/verifier/composition`):
+The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/protocols/compose`):
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
 the run's own registration record, which must name the registered circuit and which each composite requires to be the

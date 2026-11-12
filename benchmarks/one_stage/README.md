@@ -131,7 +131,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
   directory of such directories); for onsite, the inference-only policy's case is the registration. The composed params, commitment and
-  evidence (the composition's formats, `verity/protocols/remote/verifier/composition/README.md`) and every answer go to
+  evidence (the composition's formats, `verity/protocols/compose/README.md`) and every answer go to
   `--private-out` (0700, files 0600), since a case's evidence and params are witness, and so are an answer's query,
   digests and profile. `--public-out` gets only the verdict lines (each piece's and Lean's id, verdict and refusal's
   name), the composite's commitment, and each case's params digest and commitment, and is refused when it shares a

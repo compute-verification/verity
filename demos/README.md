@@ -77,7 +77,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
 - `lifecycle/` (`run` `runs`, `proof` `none`): both composites, `onsite` and `remote`, stepped through one monitoring
   period on CPU in about 2 s, from the hardware registration to the period's verdict and accounting. Every party is
   simulated in one process, the prover is a labelled stand-in for Flock, and the verdict is the composition's Python
-  mirror (`verity/protocols/remote/verifier/composition/tests/reference.py`), not `remote check`. It is the only demo that steps
+  mirror (`verity/protocols/compose/tests/reference.py`), not `remote check`. It is the only demo that steps
   through the whole remote composite; its tests (`demos/lifecycle/tests/test_lifecycle.py`) run each composite honest
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8

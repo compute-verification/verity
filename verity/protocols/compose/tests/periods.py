@@ -27,7 +27,7 @@ from verity.protocols.pous.verifier.schemes import p2 as P2
 from verity.protocols.poub.verifier import p2, p2_case, p2_lean, p2_party
 from verity.commitments.identity import canonical_json_bytes
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[4]
 BANDWIDTH = ROOT / "verity/protocols/poub/verifier"
 POUS_K = 8
 """Rounds of PoUS's audit: the composition reads only the component's answer, so its case is kept small (the hook's

@@ -12,11 +12,11 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "core_base"
-path = "../../../../circuits/base"
+path = "../../circuits/base"
 
 [[require]]
 name = "core_protocol"
-path = "../../../interface"
+path = "../interface"
 
 [[lean_lib]]
 name = "CoreComposition"
