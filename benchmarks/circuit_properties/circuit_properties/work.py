@@ -732,7 +732,7 @@ class Work:
     gates: int
     #: every product, by shape and reason
     products: list[Group]
-    #: the adapter's rank that caps every activation's β, if any shows
+    #: the adapter's rank that bounds every activation's β, if any shows
     r_step: int | None = None
     #: the share of a token-indexed product's MACs a sequence's start leaves (`SHARED_PREFIX`)
     keep: float = 1.0
@@ -819,13 +819,13 @@ def least_sequence(sites) -> int | None:
     return min(seqs, default=None)
 
 
-def operand_beta(rate: float, w: float, activation: bool, r_step: int | None, k: float, cap: float) -> float:
+def operand_beta(rate: float, w: float, activation: bool, r_step: int | None, k: float, most: float) -> float:
     """An operand's β (`he_of_rows`): its width where its rate pays it, else w·ρ/(w + ρ), an activation's at most
-    `beta_eff` at the adapter's rank, and every one at most ``cap``."""
+    `beta_eff` at the adapter's rank, and every one at most ``most``."""
     b = w if paid(rate, w) else w * rate / (w + rate) if rate > 0 else 0.0
     if r_step is not None and activation:
         b = min(b, beta_eff(w, r_step, k))
-    return min(b, cap)
+    return min(b, most)
 
 
 def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> Work:
@@ -862,7 +862,7 @@ def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> Work:
     seq = least_sequence(sites)
     keep = 1 - SHARED_PREFIX / seq if seq else 1.0
     bk = min_cut().beta(k)
-    cap = min(min_cut().BF16, bk) if bk is not None else min_cut().BF16
+    most = min(min_cut().BF16, bk) if bk is not None else min_cut().BF16
     groups: dict = {}
     for s, site, x, w in ops:
         n = count[s.sid] * site.n
@@ -877,7 +877,7 @@ def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> Work:
         else:
             reason = ""
         weight = (not site.x.data, not site.w.data)
-        beta = tuple(round(operand_beta(r, p, not wt, r_step, k, cap), 9)
+        beta = tuple(round(operand_beta(r, p, not wt, r_step, k, most), 9)
                      for r, p, wt in zip(site.rates, site.passed(), weight))
         key = (site.product.op, site.widths, weight, site.out_width, site.k_dim, site.dims,
                tuple(round(r, 6) for r in site.rates), tuple(round(b, 6) for b in site.bits), beta, reason)
