@@ -13,7 +13,8 @@ field by name. The package's docstring lists the record kinds.
 
 What the integration's other packages import, module by module: each record's class, with its `SCHEMA` or its `FILE`
 where another package reads one. `BlockClass`, `BlockJudgment`, `RULES` and `shape_checks` of `block_counts`;
-`BoundaryCommit`, `FILE` and `SCHEMA` of `boundary_commit`; `BuildSummary` of `build_summary`; `CommitBinding` of
+`BoundaryCommit`, `FILE` and `SCHEMA` of `boundary_commit`; `ASSIGN`, `ROOTS`, `TableAssignment` and `TableRoots` of
+`boundary_tables`; `BuildSummary` of `build_summary`; `CommitBinding` of
 `commit_binding`; `CommitRun`, `SCHEMA` and `TP_SCHEMA` of `commit_run`; `DeclaredStop` of `declared_stop`;
 `ExpertTables` and `SCHEMA` of `expert_tables`; `GlobalMatch` and `SCHEMA` of `global_match`; `InferenceBlocks` and
 `SCHEMA` of `inference_blocks`; `LogitsCapture` of `logits_capture`; `FILE` and `PredictedRow` of `predicted_row`;

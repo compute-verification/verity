@@ -18,6 +18,8 @@ from verity_vllm.records.fields import (
     required,
 )
 
+__all__ = ["ASSIGN", "ROOTS", "TableAssignment", "TableRoots"]
+
 ASSIGN = "verity-vllm/boundary-tables/assign/v1"
 ROOTS = "verity-vllm/boundary-tables/roots/v1"
 #: an assigned span's fields, in slot order: its engine id, prompt and served lengths, and finish (null while running)
