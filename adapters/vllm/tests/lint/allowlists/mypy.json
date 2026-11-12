@@ -189,8 +189,6 @@
     {"file": "tests/program/test_frontend_rulings.py", "kind": "name-defined", "symbol": "test_r4_derivation_provenance_record_for_the_module_route.Lin", "detail": ""},
     {"file": "tests/program/test_norm_chain.py", "kind": "override", "symbol": "CubeNorm.forward", "detail": ""},
     {"file": "tests/program/test_norm_chain.py", "kind": "override", "symbol": "LlamaStyleNorm.forward", "detail": ""},
-    {"file": "tests/program/test_sampling_split.py", "kind": "arg-type", "symbol": "<module>", "detail": ""},
-    {"file": "tests/program/test_sampling_split.py", "kind": "attr-defined", "symbol": "<module>", "detail": "", "count": 2},
     {"file": "tests/program/test_serve3_authored.py", "kind": "var-annotated", "symbol": "<module>", "detail": ""},
     {"file": "tests/program/test_superseded_kept.py", "kind": "arg-type", "symbol": "test_the_pinned_versions_are_the_migration_script_s_kept_list", "detail": ""},
     {"file": "tests/program/test_superseded_kept.py", "kind": "union-attr", "symbol": "test_the_pinned_versions_are_the_migration_script_s_kept_list", "detail": "", "count": 3},
