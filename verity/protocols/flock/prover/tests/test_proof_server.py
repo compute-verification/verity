@@ -348,11 +348,11 @@ def test_a_provers_exit_fails_its_sessions_before_the_server_retires_their_verif
     vars(spy).update(vars(threading), Thread=Retiring)
     monkeypatch.setattr(PS, "threading", spy)
     with ProofServer(binary, tmp_path / "ps") as ps:
-        first = ps.submit(st, draw([0]), "s0").result()
+        first = ps.submit(st, {"units": [0]}, "s0").result()
         (v,) = ps._verifiers.values()
         monkeypatch.setattr(v, "end", lambda end=v.end: note("end", end))
         monkeypatch.setattr(v.p, "terminate", lambda terminate=v.p.terminate: note("terminate", terminate))
-        left = ps.submit(st, draw([1]), "s1")
+        left = ps.submit(st, {"units": [1]}, "s1")
         with pytest.raises(ProofServerError) as e:
             left.result()
     assert seen == [("retire", True), ("end", True), ("terminate", True)], "False: the session had not failed at that step"
