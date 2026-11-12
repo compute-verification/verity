@@ -6,5 +6,6 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.verity.tests]
-# summarize.py reads the bound from the card (`verity.hardware.cards`, which imports `verity.errors` alone).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "verity/hardware/cards"]
+# summarize.py reads the bound from the card (`verity.hardware.site`, which imports `verity.errors` and the wire).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "verity/hardware/cards",
+          "verity/hardware/site/__init__.py", "verity/configuration/__init__.py", "verity/configuration/wire/__init__.py"]

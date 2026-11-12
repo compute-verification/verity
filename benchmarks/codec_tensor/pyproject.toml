@@ -21,6 +21,8 @@ inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "b
           "verity/protocols/spot/verifier/__init__.py",
           "verity/claims/__init__.py",
           "verity/hardware/__init__.py", "verity/hardware/cards",  # kv_bench.py reads the RTX PRO 6000's card
+          # through the Site's module, which imports the wire
+          "verity/hardware/site/__init__.py", "verity/configuration/__init__.py", "verity/configuration/wire/__init__.py",
           "verity/protocols/spot/device/challenger.py", "verity/protocols/spot/device/remote.py",
           "verity/commitments/crypto",
           "verity/circuits", "verity/commitments", "verity/commitments/randomness",
