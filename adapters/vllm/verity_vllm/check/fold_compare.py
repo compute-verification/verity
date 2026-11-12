@@ -34,27 +34,38 @@ import json
 import sys
 import time
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
-
 from verity.circuits.defs import bind
-from verity_vllm.check.checkpoint_words import MLA_LAYER_FIELD, load_safetensors_words, mla_field_words, mla_moe_sources
 from verity.circuits.evaluation.reference import evaluate_call
-from verity_vllm.config import option
-from verity_vllm.program.frontend.rules.family import _field_intervals, expand_leaves, match_program, node_leaf_id
 from verity.circuits.layout import FunctionCall
 from verity.circuits.refs import Refs, runs
+from verity.circuits.types import Tuple as TupleT
+from verity.circuits.types import Type
 from verity.definitions.registry import b1
-from verity.circuits.types import Array, Tuple as TupleT, Type
 
+from verity_vllm.check.checkpoint_words import (
+    MLA_LAYER_FIELD,
+    load_safetensors_words,
+    mla_field_words,
+    mla_moe_sources,
+)
+from verity_vllm.config import option
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import FoldResult, fold, summarize
-from verity_vllm.observe.log import read_log
 from verity_vllm.observe.fold.resolver import Profile
+from verity_vllm.observe.log import read_log
+from verity_vllm.program.frontend.rules.family import (
+    _field_intervals,
+    expand_leaves,
+    match_program,
+    node_leaf_id,
+)
 
 DEFAULT_COS_SIN = Path(str(resources.files(__package__) / "tables" / "B0-divergence-20260907T1604Z" / "cos_sin_cache.npy"))
 HF_GLOB = str(Path.home() / ".cache" / "huggingface" / "hub" / "models--HuggingFaceTB--SmolLM2-135M" / "snapshots" / "*" / "model.safetensors")
@@ -134,7 +145,7 @@ class SnapshotStore:
             raise FileNotFoundError(idx)
         raw = _load_json(idx)
         self.meta = {k: v for k, v in raw.items() if k != "entries"} if isinstance(raw, dict) else {}
-        entries = raw.get("entries", raw.get("snapshots", raw)) if isinstance(raw, dict) else raw
+        entries: Any = raw.get("entries", raw.get("snapshots", raw)) if isinstance(raw, dict) else raw
         if isinstance(entries, dict):   # {event_id: [entry...]} or {event_id: {arg: entry}}
             flat = []
             for k, v in entries.items():
@@ -161,7 +172,7 @@ class SnapshotStore:
         self.steps = sorted({s.step for s in self.entries if s.step is not None})
 
     def _entry(self, e: dict, default_layout: str) -> Snapshot:
-        ev = e.get("event", e.get("event_id", e.get("id")))
+        ev: Any = e.get("event", e.get("event_id", e.get("id")))
         arg = e.get("arg", e.get("arg_path", e.get("path", "")))
         v = e.get("view", e)
         view = ViewDesc.from_json(v) if isinstance(v, dict) and "$v" in v else ViewDesc.from_json({"$v": v}) if isinstance(v, list) else ViewDesc(**v)
@@ -306,7 +317,7 @@ def _f16_words_to_bf16(w: np.ndarray) -> np.ndarray:
     return f32_to_bf16_words(np.ascontiguousarray(w, dtype=np.uint16).view(np.float16).astype(np.float32))
 
 
-def _layernorm_family_fields(C: dict | None) -> tuple[dict[str, tuple[str, list[str]]], dict[str, tuple[str, list[str]]]] | None:
+def _layernorm_family_fields(C: dict | None) -> tuple[dict[str, tuple[str, list[str] | None]], dict[str, tuple[str, list[str]]]] | None:
     """Checkpoint sources of the `analytic.layernorm_layer_weights_type` fields (GPT-NeoX / Pythia,
     `C["NORM"] == "layernorm"`): `(top_fields, layer_fields)` in the `_WEIGHT_FIELDS` / `_LAYER_FIELDS` shape, with vLLM's
     GPT-NeoX parameter names (= the HF checkpoint names: `gpt_neox.layers.{L}.attention.query_key_value.weight`, ...).  The fused
@@ -578,7 +589,7 @@ def _tokens_from_json(d: Any) -> dict[str, list[int]]:
     return {}
 
 
-def _record_tokens(record: Path) -> dict[str, dict[str, list[int]]]:
+def _record_tokens(record: Path) -> dict[str, dict[str, Any]]:
     out = {}
     for p in sorted(record.glob("adapter/*/ru/*/boundary.json")):
         d = _load_json(p)
@@ -824,7 +835,7 @@ def compare_structure(result: FoldResult, *, C=b1.B0_CONFIG, LP: int = 32, STEPS
     leaf_bases = {n.fn.base_id for n in result.body.nodes if hasattr(n.fn, "base_id")}
     try:
         leaves, _, _, _ = expand_leaves(fam, leaf_bases)
-        family_hist = Counter(l.id for l in leaves)
+        family_hist = Counter(leaf.id for leaf in leaves)
     except Exception as e:
         family_hist = Counter()
         out["family_expand_error"] = f"{type(e).__name__}: {e}"
