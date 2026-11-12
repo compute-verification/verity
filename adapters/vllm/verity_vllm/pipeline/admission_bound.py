@@ -70,12 +70,14 @@ def _launch_hidden_words(model: dict[str, Any], *, n_seq: int, seqlen_q: int, se
 
 def per_token_bytes_of(sizing: dict[str, Any]) -> tuple[int, str | None]:
     """The sizing record's bytes per token, corrected by name when the record predates the per-layer RotaryEmbedding count (the module
-    is shared by every layer and invoked once per layer; `step_bound_bytes` counted it once -> 76,800 B/token short on Llama-3.2-1B)."""
+    is shared by every layer and invoked once per layer; `step_bound_bytes` counted it once -> 76,800 B/token short on Llama-3.2-1B).
+    A record may leave out its `widths` or its `model`: no width, or one layer, is nothing to add."""
     pt = int(sizing["per_token_bytes"])
     if sizing.get("rope_per_layer"):
         return pt, None
-    rope = int((sizing.get("widths") or {}).get("RotaryEmbedding") or 0)
-    layers = int((sizing.get("model") or {}).get("layers") or 1)
+    widths, model = sizing.get("widths"), sizing.get("model")
+    rope = 0 if widths is None else int(widths.get("RotaryEmbedding") or 0)
+    layers = 1 if model is None else int(model.get("layers") or 1)
     if rope and layers > 1:
         return pt + rope * (layers - 1), f"RotaryEmbedding width {rope} B counted once in the sizing record: x{layers} layers (+{rope * (layers - 1)} B/token)"
     return pt, None
@@ -91,7 +93,7 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
     per_seq, per_step = int(sizing["per_seq_bytes"]), int(sizing["per_step_bytes"])
     reqs = []
     for i, r in enumerate(requests):
-        p = int(r.get("prompt_len") or len(r.get("prompt_token_ids") or []))
+        p = plan.request_prompt_len(r)
         c = int(r.get("max_tokens") or 1)
         a = int(r.get("arrive_step") or 0)
         if p <= 0 or c <= 0 or a < 0:
