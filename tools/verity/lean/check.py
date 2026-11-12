@@ -4712,14 +4712,14 @@ def in_overlay(layers: dict[Path, Path], argv: list[str], at: Iterable[str] = ()
             *(a for d, t in sorted(layers.items()) for a in ("--overlay", str(d), str(t))), *at, "--", *argv]
 
 
-def in_sandbox(pkg: Path, argv: list[str], compiles: bool = False) -> list[str]:
+def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = ()) -> list[str]:
     """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
-    (``argv`` as is where there is no sandbox). A build (``compiles``) reads the tree at `FIXED` (`bound`); a step that
-    compiles nothing stays at the package's own path, where its caller opens the files its output names."""
+    (``argv`` as is where there is no sandbox). A build passes ``at``, `bound`'s words for those directories, and reads
+    the tree at `FIXED`; the report's `bound` is read from the same words (`audit`). A step that compiles nothing passes
+    none and stays at the package's own path, where its caller opens the files its output names."""
     ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
-    lakes = writable(pkg)
-    at = bound(lakes) if compiles else []
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, lakes), "--", *argv] if sandboxed() else argv
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, writable(pkg)), "--", *argv] \
+        if sandboxed() else argv
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
@@ -5610,7 +5610,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     pipe = None
     if build:
         rep["sandbox"] = sandboxed()
-        rep["bound"] = [str(FIXED), str(TREE.resolve())] if rep["sandbox"] and bound(writable(pkg)) else None
+        at = bound(writable(pkg)) if rep["sandbox"] else []
+        rep["bound"] = at[1:] or None
         (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")}))
         n = build_threads(pkg)
         if ARTIFACTS and not rep["sandbox"]:
@@ -5630,11 +5631,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if pipelined(pkg, build, replay, replay_cache, lifts) else None
         try:
             for step, argv in (("setup", None), ("stage", None),
-                               ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts], True)
+                               ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts], at)
                                                           if (ts := plugin_targets(pkg)) else [])),
-                               ("build", in_sandbox(pkg, [*jobs, "lake", "build"], True)),
+                               ("build", in_sandbox(pkg, [*jobs, "lake", "build"], at)),
                                ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])],
-                                                          True))):
+                                                          at))):
                 if step == "stage":
                     if cache:
                         # it takes traces from this build and from those of the path dependencies this run doesn't audit

@@ -5972,7 +5972,7 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     assert rep["staged"].startswith("not used: this node builds without the sandbox") and "stage" not in rep["seconds"]
     seen.clear()
     monkeypatch.setattr(A, "sandboxed", lambda: True)
-    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, compiles=False: argv)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, at=(): argv)
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
                     (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
@@ -6010,7 +6010,7 @@ def test_an_audit_has_its_build_settle_only_the_path_dependencies_its_run_does_n
         return {}, {"modules": 0, "keyed": 0, "missed": {}, "first": {}, "took": {}, "left": 0}
 
     monkeypatch.setattr(A, "sandboxed", lambda: True)
-    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, compiles=False: argv)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, at=(): argv)
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (1, "fake build"))
     monkeypatch.setattr(A, "ARTIFACTS", tmp_path / "store")
@@ -6034,7 +6034,7 @@ def test_before_its_first_build_step_an_audit_leaves_whether_its_builds_run_in_t
     seen = []
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: seen.append(json.loads(began.read_text())) or (1, ""))
-    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, compiles=False: argv)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, at=(): argv)
     for sandbox in (True, False):
         monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
         assert A.audit(pkg, out, build=True, runs=False)["sandbox"] is sandbox
@@ -6082,6 +6082,50 @@ def test_the_sampled_recompile_follows_the_build_and_its_failure_fails_the_audit
     n = A.build_threads(pkg)
     assert calls == [(["P"], {"P.A", "P"}, ["env", "-u", "LAKE_CACHE_DIR", *([f"LEAN_NUM_THREADS={n}"] if n else [])])]
     assert rep["failure_codes"] == ["sampled"] and rep["sampled"]["modules"] == ["P.B"] and announced == []
+
+
+def test_every_step_of_an_audit_that_compiles_reads_the_tree_at_the_fixed_path_and_its_report_says_where(
+        tmp_path, monkeypatch):
+    """A module compiles to the same bytes wherever its tree is only if every step that compiles it reads the tree at
+    `FIXED` (`sandbox.sh --at`): the plugins step, the build, the roots' build and the sampled recompile. The report's
+    `bound`, under which the artifact cache reads the build's `setup.json` paths, is the words the build steps were
+    handed. A package outside `TREE` is bound by none of them, and its report says so."""
+    tree = tmp_path / "tree"
+    pkg = tree / "p"
+    (pkg / "P").mkdir(parents=True)
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (pkg / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
+    (pkg / "P.lean").write_text("theorem p : True := trivial\n")
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    lib.mkdir(parents=True)
+    (lib / "P.trace").write_text("{}")                  # a module this build didn't compile, so the recompile samples it
+    steps = []
+
+    def fake_run(argv, cwd, log=None, timeout=0, on_line=None):
+        steps.append(argv)
+        Path(log).write_text("")
+        return (1, "") if "--overlay" in argv else (0, "")
+
+    def binds(argv: list[str]) -> list[str] | None:
+        box = next(i for i, a in enumerate(argv) if a.endswith("/sandbox.sh"))
+        words = argv[box + 1:argv.index("--", box)]
+        return words[words.index("--at") + 1:words.index("--at") + 3] if "--at" in words else None
+
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", fake_run)
+    monkeypatch.setattr(A, "plugin_targets", lambda pkg: ["dep/plugin:shared"])
+    for at, bound in ((tree, [str(A.FIXED), str(tree.resolve())]), (tmp_path / "elsewhere", None)):
+        steps.clear()
+        monkeypatch.setattr(A, "TREE", at)
+        rep = A.audit(pkg, tmp_path / "out", build=True, runs=False, replay=False)
+        assert rep["failure_codes"] == ["sampled"], rep["failures"]
+        assert [s[-1] for s in steps[:3]] == ["dep/plugin:shared", "build", "+P"] and "--overlay" in steps[3]
+        assert [binds(s) for s in steps] == [bound] * 4, \
+            "the plugins step, the build, the roots' build and the sampled recompile"
+        assert rep["bound"] == bound
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -6199,7 +6243,8 @@ def test_a_bound_build_gives_a_module_the_same_bytes_wherever_its_tree_is(tmp_pa
 
     def build(at: Path, bound: bool, *pre: str) -> str:
         monkeypatch.setattr(A, "TREE", at)
-        argv = A.in_sandbox(at, ["env", *pre, "lake", "build"], True) if bound else ["env", *pre, "lake", "build"]
+        argv = ["env", *pre, "lake", "build"]
+        argv = A.in_sandbox(at, argv, A.bound(A.writable(at))) if bound else argv
         assert ("--at" in argv) is bound
         r = subprocess.run(argv, cwd=at, capture_output=True, text=True, env=A.lake_env())
         assert r.returncode == 0, r.stdout + r.stderr

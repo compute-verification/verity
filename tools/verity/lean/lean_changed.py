@@ -396,13 +396,13 @@ def bound(pkg: str, tree: Path) -> list[str]:
     return AUDIT.bound([tree / p / ".lake" for p in closure(pkg)], tree)
 
 
-def in_sandbox(pkg: str, tree: Path, argv: list[str], compiles: bool = False) -> list[str]:
+def in_sandbox(pkg: str, tree: Path, argv: list[str], at: tuple[str, ...] | list[str] = ()) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
     fetched dependencies. The paths are resolved, as mountinfo names them: a slot tree is a link into the node's cache root.
-    A build (``compiles``) reads the tree at the fixed path (`bound`), where its fetched dependencies are read-only too."""
+    A build passes ``at``, `bound`'s words, and reads the tree at the fixed path, where its fetched dependencies are
+    read-only too."""
     rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
     ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
-    at = bound(pkg, tree) if compiles else []
     ro += [str(AUDIT.fixed(Path(d), tree)) for d in ro] if at else []
     return [*UNSHARE, "--", "bash", str(SANDBOX), *at, *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
 
@@ -422,17 +422,19 @@ def refused_write(text: str, pkg: str, tree: Path) -> str | None:
 
 
 def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, sandbox: bool = True,
-          cmd: list[str] | None = None, echo=None) -> tuple[int, str]:
+          cmd: list[str] | None = None, echo=None, at: list[str] | None = None) -> tuple[int, str]:
     """`lake build` (of ``targets``, else the default ones; ``cmd``: that `lake` command instead) of ``tree/pkg``, in the
     sandbox unless ``sandbox`` is False; Lake's output is echoed as it comes, or each line handed to ``echo``. Before the
     default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`). A `lake build` in
-    the sandbox reads the tree at the fixed path (`bound`); ``cmd`` runs at the tree's own, where its arguments name files."""
+    the sandbox reads the tree at the fixed path: ``at``, `bound`'s words (by default `bound`'s own), which a caller
+    that stores what it compiled hands `built_report` too. ``cmd`` runs at the tree's own, where its arguments name files."""
+    at = bound(pkg, tree) if at is None else at
     if cmd is None and targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
-        rc, text = build(pkg, tree, lake, plugins, sandbox)
+        rc, text = build(pkg, tree, lake, plugins, sandbox, at=at)
         if rc:
             return rc, text
     argv = [lake, *(cmd or ["build", *(targets or [])])]
-    argv = in_sandbox(pkg, tree, argv, cmd is None) if sandbox else argv
+    argv = in_sandbox(pkg, tree, argv, at if cmd is None else ()) if sandbox else argv
     env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS") or
            str(AUDIT.build_threads(tree / pkg) or LA.COMMON.cores())}
     p = subprocess.Popen(argv, cwd=tree / pkg, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -552,10 +554,11 @@ def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: s
         log(f"{who}: the artifact cache was not written: {e}")
 
 
-def built_report(pkg: str, tree: Path, text: str) -> dict:
-    """What `put_built` takes of a sandboxed `build` of ``tree/pkg`` with Lake's output ``text``, as check.py's report
-    says it of its own: that it ran in the sandbox, where it read the tree (`bound`), and the modules Lake built."""
-    return {"sandbox": True, "bound": bound(pkg, tree)[1:] or None, "compiled": compiled(text)}
+def built_report(at: list[str], text: str) -> dict:
+    """What `put_built` takes of a sandboxed `build` with Lake's output ``text``, as check.py's report says it of its
+    own: that it ran in the sandbox, where it read the tree (``at``, the `bound` words that `build` was handed), and the
+    modules Lake built."""
+    return {"sandbox": True, "bound": at[1:] or None, "compiled": compiled(text)}
 
 
 def put_left(tree: Path, left: dict | None, artifacts, log=print) -> None:
@@ -1773,9 +1776,10 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean "
                 f"{''.join(o + ' ' for o in opts)}on {PROBE.COPIES / rel}, {rel} with the axiom probe after its last line"
                 f"{', then the sibling check' if siblings else ''})")
-            step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
+            bind = bound(pkg, tree)
+            step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox, at=bind)
             if storing:                                 # before `lean` reads the file itself, whose code then runs
-                put_built(artifacts, {tree / pkg: built_report(pkg, tree, text)}, since, log, f"lean-try: {pkg}")
+                put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-try: {pkg}")
             plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
@@ -1902,9 +1906,10 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 mark(tree, package=pkg, phase="build")
                 mods = [f"+{module_of(pkg, f)}" for f in fs]
                 log(f"lean-build: {pkg} on {tree} ({n} files changed there): lake build {' '.join(mods)}")
-                rc, text = build(pkg, tree, lake, mods, sandbox)
+                bind = bound(pkg, tree)
+                rc, text = build(pkg, tree, lake, mods, sandbox, at=bind)
                 if storing:
-                    put_built(artifacts, {tree / pkg: built_report(pkg, tree, text)}, since, log, f"lean-build: {pkg}")
+                    put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-build: {pkg}")
                 errs = first_errors(text, pkg, have)
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     errs = {f: e for f, e in errs.items() if not CLASH.search(e)}
