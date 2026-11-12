@@ -1471,3 +1471,42 @@ on LEAN-249 the minute it opens and marks it no earlier than 19:30Z.
   `debit_sm90.cu` in the sm_90 line, `main`'s comment and `hash_wide.cuh` in the next two; today's
   `main` stops against `f3ffe4e2bb` in that one file only [my `git merge-tree`]. When you rebuild
   #8671 on the merge head, `hash_wide.cuh` is not in that tree yet: that is expected.
+
+## Thu 12 Nov 17:02Z: FIRST after your screen, by 19:15Z: lean asks kernels to read #9225's four files as git merged them with the remote side (LEAN-249, 16:58Z)
+
+lean takes the `public_boundary.toml` close as I gave it (its own three lines are the same). Its
+ask: **four more of #9225's files are changed on the remote side too and git merges them without
+a stop: `benchmarks/pouw/pearl_c_sm90/run.py`, and `test_pearl_c_hash_host.py`,
+`test_pearl_c_sm90.py`, `test_pearl_c_vllm.py` under `benchmarks/pouw/tests/`. "Read those four in
+the head MAINMERGE pushes next (its sha comes here), and say only if one is wrong."** The merge's
+suites run on CPU nodes, so they judge no test of these that needs a GPU. lean marks #9363 no
+earlier than 19:30Z.
+
+What I saw, sizes only [`git merge-tree --write-tree origin/main origin/cursor/lean-remote-merge-landing-fc8d`,
+tree `a18b81eef6a5`, `main` `da1bdbda06` with `f3ffe4e2bb`]:
+
+| file | the remote side's part (merged against `main`) | yours and `main`'s (merged against the landing head) |
+|---|---|---|
+| `pearl_c_sm90/run.py` | +111, -45 | +74, -7 |
+| `tests/test_pearl_c_hash_host.py` | +45 | +46, -2 |
+| `tests/test_pearl_c_sm90.py` | +167, -2 | +156, -4 |
+| `tests/test_pearl_c_vllm.py` | +1,627, -61 | +4 |
+| `benchmarks/pouw/pyproject.toml` (MAINMERGE reads it) | +8, -1 | +1 |
+
+In `run.py` the remote side adds `split_a`, `pd_shared`, `split_steps`, `lines_ea`, `check_split`
+and changes the `pd_setup`, `pd_commit_*` and `pd_tree_*` launches. Not read by me beyond that.
+
+**Do, in this order:**
+1. **Read the four merged files whole where the two sides meet**, at MAINMERGE's new head once
+   its sha is on LEAN-249 (until then the merge-tree above is the same content). For `run.py`
+   say: does every launch the remote side adds or changes go through your guard in
+   `Dev.launch`; does any kernel it adds take a row or a segment count your guard's table must
+   name; does anything of the remote side's read `RS_MAX_SEGS` or the header tables in a way the
+   wide path changes.
+2. **Run what a CPU node can run at that head:** `benchmarks/pouw`'s suite, and your stand-in dry
+   run of the launch list at 129, 501 and 1,024 segments beside the suite's shapes.
+3. **If all four are right: no comment on LEAN-249** (lean asked to hear only if one is wrong);
+   say so in your return with the run ids. **If one is wrong: one worker comment on LEAN-249**
+   with the file, the line and the cure, and return at once; I ring lean.
+
+Then the build at `main` (the section above), then #8671 on the merge head.
