@@ -29,8 +29,8 @@ uncaptured.  Each step names the Definitions its batch selects:
     device's k16 step, or cc 12.0's M = 1 gemvx `CublasGemv_v1`;
   * a query row i of a request's qlen rows over klen keys sees T = klen - qlen + 1 + i keys in the device's attention launch
     (`served_device.launch`).  FA3's tile (kBlockM, kBlockN) is the batch's max query length's; its scheduler (vllm-flash-attn's
-    `num_splits_heuristic` and its varlen split, statically capped at `split_cap` when the step has at most the largest capture
-    size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
+    `num_splits_heuristic` and its varlen split, held to the static count a full graph may hold when the step has at most the largest
+    capture size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
     `Fa3AttentionSplit_v1`.  FA2 splits a decode step `fa2_num_splits` ways (`Attention_v5`, `Fa2AttentionSplit_v1`).
 
 The manifest's identities are one per (step, request, committed value), the request's rows of the value
@@ -707,3 +707,6 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
         out[f"{M},{K},{N}"] = json.loads(exact[0])
     return {"device": torch.cuda.get_device_name(), "versions": {"torch": torch.__version__, "cuda": torch.version.cuda},
             "routes": out}
+
+
+__all__ = ["SPLIT_CAP", "assemble", "build", "probe_routes"]

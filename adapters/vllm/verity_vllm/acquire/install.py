@@ -218,3 +218,6 @@ def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan) -> dict[str, 
         rec["skip"] = {"classes": sorted(dropped), "modules": dropped,
                        "values_unacquired": sorted(v for s in hooks if s.kind == "producer_output" and s.module in gone for v in plan.values_at(s))}
     return rec
+
+
+__all__ = ["IncompletePlan", "OccurrenceSink", "apply_plan_to_committer", "install_from_plan"]

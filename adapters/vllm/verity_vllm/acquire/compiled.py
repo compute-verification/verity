@@ -406,3 +406,6 @@ def main(a: VerifyOptions) -> int:
     print(f"[compiled_manifest verify] ok={rec['ok']} used {str(rec['used_digest'])[:16]} rows {rows_digest[:16]} rebuilt {str(rec['rebuilt_digest'])[:16]} "
           f"program {str(rec['used_program_digest'])[:16]} / {str(rec['rebuilt_program_digest'])[:16]}{(' -- ' + rec['why']) if not rec['ok'] else ''} -> {a.out}")
     return 0 if rec["ok"] else 3
+
+
+__all__ = ["COMMANDS", "IDENTITY_KEY", "assign_wrappers", "main", "parse_wrapper", "schedule_of_workload", "split_graph_wiring", "tokens_at"]
