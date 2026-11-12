@@ -149,3 +149,44 @@ In the pull request's body, for the reader: the table of the 45 (old, new, file,
 row), which records moved and that each moved by its name and the names it reads only (how you
 checked: the diff of each lock, record by record), the moves file, the builds' and the records
 run's ids.
+
+## Thu 12 Nov 21:40Z: THE BASE IS RED IN ONE MODULE (lean, LEAN-249, 21:37Z): your `records-proofs` step will fail on `bafae2eaec2e` whatever your move does. Do not debug it, do not fix it
+
+Your 21:36Z checkpoint is read: all 45 staged, and you took the 21:16Z entry yourself. Good.
+
+**lean, on LEAN-249 at 21:37Z (its comment read whole by me; compute-accounting found it):**
+#9375's marked head `bafae2eaec2e` does not build at
+`Proofs.Properties.Verity.Sampled.Instance` (`security/Proofs`): 10 errors from line 755, the
+first a type mismatch on `macs`. It is the only failed target of 14,580 there; **the modules
+that import it (`Sampled/OpensAt.lean`, `Sampled/SessionAt.lean` and theirs) are not built.**
+The cause is the merge's own (it adds the field `macs` to `Verity.Vocab`; the file's `base` does
+not set it). lean builds a one-line fix and **names the new head on LEAN-249 by Fri 00:00Z**;
+`main` does not move to the merge before Friday morning UTC. The log to compare with:
+compute-accounting's `r20261112-194422-1529`, `lean-audit/audit-security_Proofs/build.log`.
+
+**For your dry run `r20261112-213515-507c`** (waiting on cpu-12 at 21:39Z; its `records-spot`
+then `records-proofs`):
+1. **`records-proofs` will be red at that module.** Hold its errors to the known ones: the same
+   file, lines 755 to 808, the same 10. **Those are the base's: say so and go on. Any other
+   error is yours.** Do not edit `Sampled/Instance.lean` and do not carry lean's fix yourself.
+2. **So `security/Proofs`' records are not made on this base**, and proofs' condition 1 (each
+   record moves by its own name and the names it reads, nothing else) is NOT shown for
+   `windowK` and `audit_window_split_of_record` until they run on lean's new head. Say it in
+   those words wherever you report; "the records moved by name only" is SPOT's alone until then.
+3. **`records-spot`** does not read that module (say if it does): diff SPOT's records now, one
+   by one, as you planned.
+4. **Say which of the 35 files the move changes, and which of the 45 names' uses, are in
+   `Sampled/Instance.lean` or a module that imports it** (`lake`'s import graph or a grep of
+   `import .*Sampled`): those were built by nobody on this base, with or without your move.
+5. **When lean names the new head I write it here and resume you** (you read this file
+   yourself, so look at it again before each launch): merge it into your branch, restage if
+   the map's rows moved, and run `records-proofs` again. Send that run to a node with no check
+   line (at 21:30Z: cpu-13 and cpu-6 had none; cpu-12 had six, three by 21:39Z); look before you
+   pick.
+6. **The pull request:** open it when both records runs are in on the new head. If lean's head
+   is not named by Fri 01:30Z, open it anyway, unmarked, and say in its first lines what is
+   shown (SPOT's records; the move's checks) and what is not (the security side's records, the
+   base being red at that module, LEAN-249). proofs waits for the word that it is open
+   (condition 3), not for a mark.
+
+Your return stays Fri 04:00Z.
