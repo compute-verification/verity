@@ -18,7 +18,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
@@ -244,6 +244,7 @@ def test_the_replay_samples_interior_registers_after_its_boundary_and_the_second
     assert ireg.record["population"] == Q * N_RHO and ireg.record["previous"] == reg.digest and stream.log[-1] == ireg.record
     assert ireg.record["window"] == {"kind": "served", "run": IR.interior_run(reg.digest, [0, 2]), "row": ROW,
                                      "interior": True, "replay_sample": [0, 2], "replay": "replay-test"}
+    assert IR.interior_run(reg.digest, first.units) == SS.interior_root(reg.digest, first.units)
     second = stream.select(ireg)
     assert second.replay_sample == first and [u // N_RHO for u in second.units] == [0, 1]
 
