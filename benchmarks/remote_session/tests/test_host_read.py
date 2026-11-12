@@ -110,3 +110,20 @@ def test_the_forms_are_session_cu_s():
     assert "enum { HOST_LOAD, HOST_KEEP, HOST_PREFETCH, HOST_FORMS };" in text
     assert [k for k, _ in sorted(HOST_FORMS.items(), key=lambda kv: kv[1])] == ["load", "keep", "prefetch"]
     assert f"constexpr int HOST_AHEAD_MAX = {device.HOST_AHEAD_MAX};" in text
+
+
+def test_an_unbound_tier_sets_no_numa_policy(monkeypatch):
+    """`--unbound` is for a machine that refuses set_mempolicy: after it `numa_bound` makes no call at all."""
+    import ctypes
+
+    import host_read
+
+    monkeypatch.setattr(device, "numa_bound", device.numa_bound)   # put back when the test ends
+    host_read.unbind()
+
+    def refused(*a, **k):
+        raise AssertionError("an unbound tier loaded libc for a policy")
+
+    monkeypatch.setattr(ctypes, "CDLL", refused)
+    with device.numa_bound(1):
+        pass

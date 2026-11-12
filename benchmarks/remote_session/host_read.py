@@ -36,6 +36,7 @@ were refused, 6 when not.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import gc
 import hashlib
 import json
@@ -212,6 +213,11 @@ def spread(xs: list[float]) -> dict:
     return {"p50": xs[len(xs) // 2], "min": xs[0], "max": xs[-1], "n": len(xs)}
 
 
+def unbind() -> None:
+    """The device's host tiers from here on with no NUMA policy set (`device.numa_bound` does nothing)."""
+    device.numa_bound = lambda node: contextlib.nullcontext()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, required=True)
@@ -221,6 +227,9 @@ def main() -> int:
     ap.add_argument("--chain-passes", type=int, default=100, help="a chain's passes, a row and round")
     ap.add_argument("--chain-rounds", type=int, default=2, help="the rounds of `chain`, each row once a round")
     ap.add_argument("--budget-s", type=float, default=1080.0, help="nothing new starts this long after the start")
+    ap.add_argument("--unbound", action="store_true",
+                    help="the host tier's pages wherever the kernel puts them, for a machine that refuses "
+                         "set_mempolicy: its gates hold, its times are not those of a tier on the card's NUMA node")
     ap.add_argument("--node", default="host-read")
     ap.add_argument("--seed", type=int, default=20261112)
     device.add_arguments(ap)
@@ -242,6 +251,8 @@ def main() -> int:
     def log(m: str) -> None:
         print(f"{time.monotonic() - t_start:7.1f}s {m}", flush=True)
 
+    if a.unbound:
+        unbind()
     b = device.from_arguments(a, log=log)
     s, torch = b.store, b.torch
     rng = np.random.default_rng(a.seed)
@@ -254,7 +265,7 @@ def main() -> int:
     out = {"schema": "verity/remote-session/host-read/v0", "device": [torch.cuda.get_device_name(g.index) for g in s.gpus],
            "chunk_blocks": s.chunk, "step_bytes": s.chunk * BLOCK, "hbm_bytes": s.hbm_blocks * BLOCK,
            "host_bytes": host_bytes, "h0": s.h0, "hc": s.hc, "host_ctas": a.host_ctas, "host_consumers": a.host_consumers,
-           "encoded": False,
+           "encoded": False, "unbound": a.unbound,
            "host_segments": [{"gpu": s.gpus[s.seg_gpu[q]].index, "numa": s.gpus[s.seg_gpu[q]].numa, "bytes": s.n[q] * BLOCK,
                               "address_in_page": s.data_g[q].data_ptr() % 4096,
                               "address_in_256": s.data_g[q].data_ptr() % 256} for q in host],
