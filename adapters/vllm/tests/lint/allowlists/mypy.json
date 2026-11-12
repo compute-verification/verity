@@ -1108,6 +1108,7 @@
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "arg-type", "symbol": "build", "detail": ""},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "exit-return", "symbol": "_Stream.__exit__", "detail": ""},
     {"file": "verity_vllm/engine/profiles/engine_classes.py", "kind": "call-overload", "symbol": "effective_refusals", "detail": ""},
+    {"file": "verity_vllm/engine/profiles/engine_classes.py", "kind": "index", "symbol": "effective_refusals", "detail": ""},
     {"file": "verity_vllm/engine/step_end.py", "kind": "no-redef", "symbol": "StepSeam._install", "detail": ""},
     {"file": "verity_vllm/engine/step_trace.py", "kind": "assignment", "symbol": "StepTrace._record_step", "detail": ""},
     {"file": "verity_vllm/engine/step_trace.py", "kind": "assignment", "symbol": "StepTrace.install", "detail": ""},
