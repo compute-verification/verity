@@ -17,6 +17,10 @@ serves one client, the driver's, whose samples already read it (`a5_coins`). So 
 * holds the published log to the sessions' records (`trees_reason`), and hands the verifier the challenger's key, the
   window's root and the coins' evidence with the case (`a5.case_coins`).
 
+A window of one member runs its one session the same way without the closing round: v2 reads its case in the one
+statement's form, which holds the session's tree to the rounds its record gives (`OneStageZk.treesHeld`,
+`challenger.sessions_tree_reason`) and refuses any other opening (`EXTRA_OPENING`).
+
 `Relay(session, listener)` and `closing_round(session, directory)` take any ``session`` with a client's `layout()`,
 `tree(spec, nonce)` and `tree_open(root, stream, rnd, n, after)`: `a5_coins`' proxy, or a `remote.RemoteChallenger`
 itself. The relay adds no rule: what the challenger refuses it refuses, which ends the challenger's session, and what
@@ -193,14 +197,18 @@ def closing_round(session: Any, directory: Path) -> str:
     return after.hex()
 
 
-def trees_reason(log: Sequence[str], sessions: Sequence[tuple[str, Path]]) -> str | None:
+def trees_reason(log: Sequence[str], sessions: Sequence[tuple[str, Path]], closed: bool = True) -> str | None:
     """Why the challenger's release log `log` doesn't show the `sessions` (each its name and its directory, in the
     order they ran) each on a tree of its own, closed after its evidence, one after another
-    (`challenger.members_tree_reason`, at `TABLES`); None when it does."""
+    (`challenger.members_tree_reason`, at `TABLES`); None when it does. With ``closed`` False, the one statement's
+    session of a window of one member, which v2's one-statement form reads with no closing round
+    (`challenger.sessions_tree_reason`, whose `EXTRA_OPENING` refuses one)."""
     try:
         trees = Ch.coin_trees_of(log)
         records = [(name, TABLES, json.loads((d / "session.json").read_text()), closing_after(d).hex())
                    for name, d in sessions]
     except (Ch.CoinError, OSError, ValueError) as e:
         return str(e)
+    if not closed:
+        return Ch.sessions_tree_reason(trees, [r[:3] for r in records])
     return Ch.members_tree_reason(trees, log, records)
