@@ -148,6 +148,19 @@ def test_the_interval_is_the_medians_order_statistics_at_the_confidence():
     assert kit.paired([1.5, 1.1, 1.4, 1.2, 1.3], [1.0] * 5, 0.5)["ci50"] == pytest.approx([0.2, 0.4])
 
 
+def test_an_arm_whose_reps_cost_nothing_has_its_interval_and_no_half_width():
+    """A median ratio of 0 has an interval like any other, and no half-width as a share of it."""
+
+    free = kit.paired([0.0] * 6, [1.0] * 6)
+    assert free == {"gamma": -1.0, "ratio": 0.0, "n": 6, "ratios": [0.0] * 6, "ci95": [-1.0, -1.0], "half_width": None}
+    # most reps free and one not: the median ratio is still 0, and the interval reaches the one that cost
+    mostly = kit.paired([0.0, 0.0, 3.0, 0.0, 0.0, 0.0], [1.0, 1.0, 2.0, 1.0, 1.0, 1.0])
+    assert (mostly["ratio"], mostly["ci95"], mostly["half_width"]) == (0.0, [-1.0, 0.5], None)
+    # one free rep among six leaves the median above 0, and its half-width a share of it
+    one = kit.paired([0.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0] * 6)
+    assert (one["ratio"], one["ci95"], one["half_width"]) == (1.0, [-1.0, 0.0], 1.0)
+
+
 def test_paired_refuses_reps_that_dont_pair_a_stock_rep_of_no_cost_and_a_confidence_out_of_range():
     for arm, stock in (([1.0], [1.0, 2.0]), ([], [])):
         with pytest.raises(ValueError, match="one for one"):
@@ -207,7 +220,8 @@ def test_the_writer_refuses_a_verdict_of_record_and_a_seal(tmp_path, no_gpu):
     w.measurement("kept", 1.0, "s", target=2.0, verdict="within target")
     before = (tmp_path / kit.RESULT).read_bytes()
     for verdict in ("PASS", "FAIL", "accept", "Accepted", "rejected", "passed: within target", "the verifier accepts",
-                    "sealed", "seal"):
+                    "sealed", "seal", "passing", "Failing", "rejection", "the proof's acceptance", "a failure", "accepting",
+                    "rejecting: over target", "sealing"):
         with pytest.raises(ValueError, match="reads as a verdict of record or a seal .* nothing under benchmarks/ writes"):
             w.measurement("gate", 1.0, "s", target=2.0, verdict=verdict)
     with pytest.raises(ValueError, match="'within target' has no target"):
@@ -219,7 +233,8 @@ def test_the_writer_refuses_a_verdict_of_record_and_a_seal(tmp_path, no_gpu):
         with pytest.raises(ValueError, match="value is a finite number.*a verdict of record or a seal is never a measurement"):
             w.measurement("gate", value, "verdict")
     assert (tmp_path / kit.RESULT).read_bytes() == before and list(tmp_path.iterdir()) == [tmp_path / kit.RESULT]
-    for verdict in ("within target", "over target", "meets", "misses", "cannot tell"):
+    # a target check that only holds one of those words inside another is no verdict of record
+    for verdict in ("within target", "over target", "meets", "misses", "cannot tell", "surpasses target", "acceptable"):
         w.measurement(f"gate {verdict}", 1.0, "s", target=2.0, verdict=verdict)
 
 

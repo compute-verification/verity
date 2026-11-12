@@ -48,10 +48,10 @@ RESULT = "result.json"
 QUERY = ("name", "uuid", "driver_version", "clocks.sm", "clocks.mem")
 #: a query that hasn't answered by then is taken as failed, so a sick GPU can't hold a finished job's lease
 QUERY_TIMEOUT_S = 60
-#: the words of a verdict of record (a verifier's decision, a stage's PASS or FAIL) and of a seal, which no measurement's
-#: verdict uses
-OF_RECORD = frozenset("accept accepts accepted reject rejects rejected pass passes passed fail fails failed "
-                      "seal seals sealed".split())
+#: the words of a verdict of record (a verifier's decision, a stage's PASS or FAIL) and of a seal, each in every form a
+#: verdict takes (the verb's and its noun's), which no measurement's verdict uses
+OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejects rejected rejecting rejection "
+                      "pass passes passed passing fail fails failed failing failure seal seals sealed sealing".split())
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -159,7 +159,8 @@ def paired(arm: Sequence[float], stock: Sequence[float], confidence: float = 0.9
     the median of the reps' ratios; `gamma`, the ratio less one, the arm's overhead; `n`; the sorted `ratios`; the
     overhead's interval at `confidence` from the ratios' order statistics, exact sign-test bounds on the median, under the
     key of its level (`ci95` at 0.95), None when `n` reps can't bound the median at it; and `half_width`, the interval's
-    half-width as a share of the median ratio."""
+    half-width as a share of the median ratio, None with the interval and where that ratio is 0 (most of the arm's reps
+    cost nothing), which nothing is a share of."""
 
     if not 0 < confidence < 1:
         raise ValueError(f"a confidence is between 0 and 1, not {confidence!r}")
@@ -175,7 +176,8 @@ def paired(arm: Sequence[float], stock: Sequence[float], confidence: float = 0.9
         return out
     lo, hi = bounds
     out[ci] = [ratios[lo - 1] - 1, ratios[hi - 1] - 1]
-    out["half_width"] = max(median - ratios[lo - 1], ratios[hi - 1] - median) / median
+    if median:
+        out["half_width"] = max(median - ratios[lo - 1], ratios[hi - 1] - median) / median
     return out
 
 
