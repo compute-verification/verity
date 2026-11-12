@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.circuits.boolean import table as BT
 from verity.circuits.codec import encode_program, program_digest
-from verity.circuits.defs import bind
+from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
@@ -38,9 +39,6 @@ def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
 def test_a_read_has_its_boolean_form_up_to_max_words():
     """`table_read` makes `TableRead{IB}x{EW}_v2` with the read (`verity.circuits.boolean.table`, by which Flock lowers it) up
     to `BT.MAX_WORDS` table words, and `gelu_tanh_bf16`'s and `tanh_rn`'s reads, past it, have none."""
-    from verity.circuits.boolean import table as BT
-    from verity.circuits.defs import REGISTRY
-
     r = T.table_read(6, 1)
     assert REGISTRY.defs["TableRead6x1_v2"] is BT.table_read(r, 6) and REGISTRY.defs["TableRead6x1_v2"].word is r
     for name in ("gelu_tanh_bf16", "tanh_rn"):
@@ -137,9 +135,9 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 
     class GeGLU(torch.nn.Module):
-        def __init__(self, I: int) -> None:
+        def __init__(self, INTER: int) -> None:
             super().__init__()
-            self.I, self.weight = I, torch.nn.Parameter(torch.empty(2 * I, dtype=torch.bfloat16))
+            self.I, self.weight = INTER, torch.nn.Parameter(torch.empty(2 * INTER, dtype=torch.bfloat16))
 
         def forward(self, x):
             y = torch.empty_like(x)
