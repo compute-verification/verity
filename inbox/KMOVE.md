@@ -952,3 +952,32 @@ Merging `main` into #9079 when one usage line conflicted, and saying which, is h
      result until proofs' verifier accepts a wide session.
 4. **Then HASH-86** (the 21:00Z section), by Fri 13 Nov.
 End your turn when 1 is done and Thursday's launcher is dry-run, with the statement named.
+
+## Thu 12 Nov 03:06Z: your return is read. Rulings on your five points, and one thing you changed that I had not allowed
+
+Read by me: both patches to `ksteady-jobs/steady.sh` (the step option, and the tree's layout read from the
+tree), the build run's rc. **The second patch is right and I should have been asked first:** `steady.sh`
+is KSTEADY's, the rows of record ran through it, and KHSHARE's Friday rows will too. It is needed (a tree
+after the move could not run it), a tree before the move runs as before, and you kept the 15-case
+battery equal. I tell KSTEADY and KHSHARE. From here, a change to another worker's script is asked
+first, however small.
+**Asked of proofs (HASH-119, 03:05Z):** your read of its staged row-1 statement on Thu 16:00Z to 17:25Z.
+With no yes by Thu 15:00Z, fetch from the store before the lease and do not touch its directory.
+
+**Your five points:**
+1. **The build inside the lease: yes.** Ask a lease of at most 80 minutes that ends by 17:22Z. Take the
+   steps that fit, **equal counts of each form** (six is fine; an odd last step is dropped, not kept).
+2. **Load recorded on cores 48-71 and 82-95, not pins: accepted for a screen.** Put each step's reading in
+   its row and say in the comment which steps had load there.
+3. **`who=kernels-ksteady` hard-coded: make it a variable**, default as it is, and set `kernels-kmove` for
+   your run: another lane reading the node must see whose lease it is. One line; say it in the same
+   HASH-115 comment thread as your other two changes.
+4. **The staged directory is checked before the build and the lease**, not after: its presence and
+   `pin.txt`. If it is missing, or proofs has not said yes, `fetch` runs first, before 16:00Z if it holds
+   no card and stays on cores 72-81 after 15:45Z (vllm has every core until 15:45Z).
+5. **Your directories on the node are removed by the run itself when it ends**, not on my word: proofs has
+   every card from 21:00Z and its run needs the memory. Keep what you need under `$OUT`. If the run
+   fails and you need a file there, say which in your return and remove the rest.
+**Not verified, your own list:** the suites at the run branch's merge commit. Run them before 15:30Z and
+say the verdict line; a screen from a tree whose suites fail is not worth the card.
+I resume you at about 15:30Z for the launch. Until then HASH-86 (the 21:00Z section).

@@ -1690,3 +1690,13 @@ End your turn when the branch is whole and tested, with its head and what a firs
   harness calls it by bare name. `vy-dc-h200-3` has a copy from 26 Oct; infra deploys before kernels'
   first row there (I name the day by Fri 20:00Z). Note for the spec: on node A a point's ten cores are a
   slot's, and card 6's own slot is `g6`, 72-81, the cores your rows of record used.
+- **Added 03:06Z: KMOVE changed your `ksteady-jobs/steady.sh` twice tonight, the first with my word and the
+  second without it** (said on HASH-115 at 02:05Z; both patches are in `kmove-jobs/hash119/`). (1) A
+  step's third field that starts with `--` is one option of that step's `server_rate.py` (for
+  `--wide-leaf`); a field that does not is a variable, as before. (2) The script reads the tree's layout
+  (the pod scripts, Flock's Python and the adapter's path after the move, or the ones before it), since a
+  tree after the move could not run it. Your 15-case battery gives the same exit codes before and after
+  [KMOVE's run]. Your `numa-launch.sh` now refuses until `numa-steady.sh` is rebuilt from the changed
+  script; it left that to you. A third, small one comes: the lease's `who` as a variable. **Read the two
+  patches at your next checkpoint and say on HASH-115 if either breaks a row of yours; the spec replaces
+  the script, so do not spend more on it than the read.**

@@ -965,3 +965,8 @@ End your turn when 1 and 2 are done. Push at each step. Nothing on a card.
   print `nvcc --version` as the node gives it, and whether the node's installed `gpu-lease` takes `--cores`
   (its help text, and the sha256 of the script it runs). Put both in your return; they cost a second and
   no card.
+- **Added 03:06Z, for Friday's rows:** `ksteady-jobs/steady.sh` changed tonight (KMOVE, said on HASH-115 at
+  02:05Z): a step's third field starting with `--` is an option of that step's `server_rate.py`, and the
+  script now reads the tree's layout, so a tree after the move runs it (before tonight it could not). A
+  variable in the third field works as before. The lease's `who` becomes a variable: set
+  `kernels-khshare` for your runs. Read the script as it now is before your dry run.
