@@ -186,8 +186,8 @@ def HECharged_honest : Prop :=
     (∀ s, 1 ≤ (Toy.W.mac s).card) ∧ ∀ u ∈ ({0} : Finset (Fin 2))ᶜ, (Toy.P2.gates u).card ≤ 1
 
 /-- **`HECharged` without `ReadsOn`**: `HE_nontrivial`'s values, costs, (H) at `k = 0` and (E); one block holding
-both MACs, no block charged, reads three gates, more than `k = 0` and than the total `T = 0`, and `N = 2` exceeds the
-bound at `T = 0` and `S = 0`, `0`. -/
+both MACs, no block charged, reads three gates, so none of `ReadsOn`'s three limits holds at `k = 0`, `T = 0` and
+`S = 0`, and `N = 2` exceeds the bound there, `0`. -/
 def HECharged_nontrivial : Prop :=
   (0 : ℝ) < 1 ∧ ValuesInjective Toy.W Toy.val ∧ NoSharedPair Toy.W Toy.val ∧
     Assumptions.Hardness Toy.d Toy.arrays Toy.val ![1, 1] 0 ∧ Assumptions.Exports Toy.W 1 ∧

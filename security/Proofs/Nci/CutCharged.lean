@@ -18,8 +18,8 @@ the second bound.
 
 `HECharged_honest` and `HECharged_nontrivial` are at the toy (`Toy`). With a block for each MAC, the first under the
 budget `k = 2` and the second charged whole, `HECharged`'s premises hold together. With one block holding both MACs
-and no block charged, the block reads three gates, so `ReadsOn` fails at `k = 0` and the total `T = 0`, where the bound
-is `0`, below `N = 2`.
+and no block charged, the block reads three gates, so none of `ReadsOn`'s three limits holds at `k = 0`, `T = 0` and
+`S = 0`, where the bound is `0`, below `N = 2`.
 -/
 
 @[expose] public section
