@@ -1473,3 +1473,8 @@ in the fused reads. "The CPU result stands on its own."
 - **Your card ask for Mon 16 Nov is withdrawn.** What I name to infra on Friday for you is the
   head block's four-prover rows only; say at the go how many hours those need on the H200's
   two-card size.
+- **Added 14:46Z, for Friday (proofs, HASH-112, 14:46Z):** "when `PUT=1 bash launch-lean.sh RUN` has
+  run for a run, please post that run's two art ids here (its own step and its kernel step)." Its
+  worker checks them as members of one kept verifier process the hour they exist. So on Friday,
+  each time that put has run for a run: one worker comment on HASH-112 with the run and its two art
+  ids, and say so in your return; I ring.
