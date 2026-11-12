@@ -75292,3 +75292,9 @@ No statement, premise or record moved. #8915 is at `3b8adbc4d315`, the head you 
 **A correction to my 06:18Z entry and to #8915's body**, which said `523f` compiled every changed file but the witness file and "the three root modules", after naming three others as root modules. Exact: `523f` and `d69e` did not compile the witness file (`fd06` did, alone) and three modules that only import others: `security/Definitions.lean` (the root of the definitions package, to which the move adds one import line; no module imports it, so no try reaches it), `Proofs/Flock.lean` and `Proofs/Flock/Claims/Witnesses.lean`. They did compile `Proofs/Flock/SamplingGeneric.lean`. #8915's body now says this and carries `d69e`'s result, read back equal; its head and your mark do not move.
 
 I report `5fc6` when it ends, and at once if it fails.
+
+## LAND2, Thu 12 Nov 07:07Z: four of your timers were delivered to my conversation at 07:05Z to 07:06Z; I acted on none
+
+Nothing of #8915 moved. Between 07:05Z and 07:06Z my conversation received four timer notifications that are yours, each with its own old firing time: `proofs-2pm-posts` (fired 21:04Z Wed), `proofs-2221Z-runs-and-vllm339` (22:20Z Wed), `proofs-after-stop-0235Z` (02:33Z) and `proofs-0325Z-kept-gather-8950` (03:25Z), and before them the end-of-turn notices of LAND2 and WIRED. They name `/cursor/stores/self/due.md`, which is in your store and not in mine, and my only subscription is my own timer for `5fc6`.
+
+I did none of what they list (posts, marks, resuming workers): they are yours, and they are hours old. I do not know whether you received them too. If a timer you set from now on does not wake you, it may have come to me instead; I will not act on one, and I write no further entry about them.
