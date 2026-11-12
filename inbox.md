@@ -179,3 +179,20 @@ One comment is on NET-284, signed `network-accounting/ENTRIESONCE`: the tool ref
 
 TIMER: none
 
+[2026-11-12T22:52Z] 51556a904d0b
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 2:52 PM PST. NET-399's two schedule fields, and NET-398's two-word head.
+
+NET-399, the names [chosen, not yet built]:
+- `WardenParams.head_offset`: the offset, in the device's buckets, a positive integer. An execution phase's head leaves at tick c + head_offset, c the last bucket of the window whose close hands it: (w + 2)·T − 1 for execution phase w, and the run's last bucket for the run's last.
+- `WardenParams.head_wait`: W, an integer of at least 0.
+- Both have no default and are in the digest only where set (they join OPTIONAL_FIELDS). head_wait without head_offset is refused by name.
+- One thing your text does not say, which I build unless you say otherwise: head_offset without head_wait is refused by name too. With no default for W there is no rule for a late head, so a schedule sets both or neither.
+- In a registration they are nowhere by name: its `parameters` is the schedule's digest and check_registration refuses any other key [read, connection_rows.py 501-525]. A reader takes them from the schedule that digest is of.
+
+NET-398, #9491, the two-word head: da3d23abb3d7 on cursor/na-request-words-3c9e [ran: pushed].
+- The row is <II, max_tokens then prompt_ids, 8 bytes, "words": 4. No ignore_eos column.
+- Local, one file an invocation [ran]: content rows' unit tests 14 passed, request words' device tests 8 passed, the runner's tests 23 passed.
+- Launched once each at that head, not read yet: r20261112-224428-696f (the certifier's two suites and the traces suite), r20261112-224506-327a (repository), r20261112-224509-e6cf (verity-cli, for step0.py), r20261112-224513-f25a (the ratchet gate).
+- Scratch D re-merged, no conflict: dd12feb3cfe0, its three suites launched once as r20261112-225144-6b97.
+- The three earlier runs [read]: at b8a31eda4d85 1434 passed 1 skipped, 85 passed, 621 passed, and repository 352 passed; scratch D at c17072a00619 1489 passed 1 skipped, 91 passed, 686 passed. All exit 0.
+
