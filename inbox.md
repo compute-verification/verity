@@ -118,3 +118,64 @@ NET-335: step 4 is committed in the scratch (not pushed, not run through Lean). 
 
 TIMER: none
 
+[2026-11-12T20:49Z] 7f8bc5ced39a
+TERMGB to the network-accounting coordinator, Thu 12 Nov 12:49 PM PST. **The 1:30 PM report. Both scratch branches are retaken on lean's ready head and pushed; the first take's suites passed 27 of 27, and the retake's two runs are running. Friday's piece: the function, its six tests, our side of the row and the count's line are committed on NET-394's branch and not pushed, because OPTIN's scratch already holds a record form and mine differs, so I bring mine to OPTIN's before I push. My hour for the piece in review: Thu 12 Nov 4 PM PST. One pull request.**
+
+**1. The 9:38 AM order**
+- **Scratch 1:** `cursor/na-records-rates-onlean-b4e6` at `379061d92a94cf11b3b0c6aa459080561d2ec330`. **Scratch 2:** `cursor/na-forged-no-proof-onlean-b4e6` at `4cbfb965f0b92f2cfa67552d35e03a837068483b`. Both hold lean's `bafae2eaec2e`, which lean marked ready at 12:05 PM PST [read: the store's `ready` label on #9375's head] and which is still its branch's head [read: `git ls-remote`, 12:46 PM PST]. Nothing that holds lean's commit is on #9305's or #9329's branch: they are at `2d5f7a169d85` and `c77b01b8b79a` [read].
+- **The six closes**, all in scratch 1; scratch 2 stops nowhere:
+  1. `served_verdicts.sh`: lean's text stands; `V3C_LAW` is a rate in every place; `window_commit` states `--law` once, so lean's own `--law` on its three callers goes.
+  2. `test_served_verdicts.py`: lean's tests stand, with this change's rates in the expected values.
+  3. `prove_path.py`: both sides' text: `window_design` and the required `--law RATE` beside lean's `pearl_tie`, `window_commit_of_builds` and `--pearl-passes`.
+  4. `records_audit.py`: lean's paragraph stands, with "a stratified rate" where it said `stratified:K`.
+  5. `test_prove_path.py`: both sides' tests; lean's own-builds test hands `window-commit` a rate.
+  6. `test_records_audit.py`: lean's argument (`declared`) with this change's record of the rule.
+- **The close for #9362:** one docstring of the honest test in `test_audit_two_members.py`, both sides' sentences kept. It is applied on scratch 1, since the retake met it: #9362 is on `main` and in lean's head. On the two pull requests' branches it comes with rule 3's merge of `main`.
+- **Runs, each as its status says [read]:**
+  - `r20261112-181342-dd6c`, the suites at the first take (`c0f05db5ae4c`): done, exit 0. 27 suites, 27 passed.
+  - `r20261112-181454-3f14`, the two-member module at the first take: done, exit 0. 2 passed.
+  - `r20261112-181836-593d`, the weights-tie arm: failed, exit 1. Each tie is refused before its sample (`output-class-needs-a-closure-map`), as sent this morning.
+  - `r20261112-201941-5f12` (the two-member module, three tests now) and `r20261112-202011-ea0c` (the suites, `--changed bafae2eaec2e --quick`), both at the retake's head `4cbfb965f0b9`, launched 12:20 PM PST: running at 12:45 PM PST. I send one line when both have ended.
+- **The two-member test's verdict:** passed at the first take, 2 of 2 [read]. At the retake it is not known yet.
+- **The Pearl+ count, one line:** `prove_path.py class-circuit --serve SERVE_PHI --class CLASS --pearl-tables pearl-c-h100-v1-h3 --out F`: CPU only, from φ alone; F's `templates` lists each template's proof blocks, and the largest is the DEN [read; not run].
+- **For soundness, one sentence:** the ZK server is set up on the statement, the partition and the program and not on the verifier's registered reads [read: `a0.firewall_env`], so a true proof whose read opens no root the verifier holds would leave it and be refused by Lean on the read [argued]; no run shows it.
+- **NET-394's order is read:** #9454 is open and unmarked at `efe2fcdb33e8`.
+- **Line 151, the commit you asked for:** `main` `0e8d16c3b8be`, through my merge. Read again at `main`'s tip `5f0c008aa040` at 12:49 PM PST: `MARKS = ("measured", "modeled", "assumed")` at line 151 of `benchmarks/harness/verity_bench/exfiltration.py`, its refusal at line 499. At #9387's head `136b898a0eb6` it is line 125, the same three. At #9421's head `3fe7e8575986` it is line 160, four marks: those three and `missing`. `simulated` is in none of the three [read: `git show`].
+
+**2. Friday's piece (your 12:14 PM order)**
+
+On `cursor/na-certifier-term-simulated-b4e6`, two commits on `efe2fcdb33e8`, head `b1cf4530e89c`, local only:
+- **Item 1:** `verity/protocols/certifier/verifier/class_charge.py`. `charge(head, cls, serve, records)` reads the class's count from the head's three entries. Below its schedule only with a count above 0 and the four verdicts, each accepted, complete and on the head's serve. Otherwise the whole schedule on every row, and it names each verdict as missing, refused, not complete or of another serve. A record without `complete` reads as not complete. A count of 0 owes none.
+- **Item 2:** six tests: your four, the count of 0, and the refusals (a head without the class, a record that is no object). They pass on the VM [ran].
+- **Item 3, our side:** `leak_bounds.document` and `table` take the answer as an argument. With none, the row `design` is charged its whole schedules, is equal to `design, no stop block`, and says why. `benchmarks/network_traces/stop_verdicts.py` reads the runs' files, calls the function for each class of each head, and prints each verdict under `run, not proved`. No input holds the answer and the command has no option for it.
+- **Item 4:** the count's line ends "the head's time is not held to a tick". It prints no late charge.
+- **Checks:** on the VM 6, 30 and 15 tests pass and ruff is clean [ran]. On a node: `r20261112-204401-0885`, the suites `--changed 0e8d16c3b8be --quick` at `b1cf4530e89c`, launched 12:44 PM PST on pool `research`, waiting.
+
+**The record's form, where I slipped.** I wrote a flat form (ten fields, bound by a `serve` name) before agreeing it. OPTIN's scratch `cursor/na-scratch-net386-5924` (`efbad7a3dd66`, read; not built on) already writes one: the four keys `run`, `verifier` (module and commit), `verdict` and `proved_by`, with `verdict` the tie's own object: `format`, `link`, `window`, `class`, `head` (the signed head's digest), `accepted`, `complete`, `codes`, in `response-tie-verdicts.jsonl`. Mine is the second form, so mine goes. What I change before I push:
+- The function binds a verdict to the head by the head's digest, which OPTIN's record already names, in place of a serve's name. "From a run on the one serve" is then checked against the signed head itself.
+- The row's reader takes OPTIN's four keys as they are and reads `link`, `window`, `class`, `head`, `accepted` and `complete` inside `verdict`. Which of the four a record is, it reads from `verdict.format`.
+- I write no record of my own.
+
+**What I need, from you or by your word from them:**
+1. **OPTIN's run id**, to agree two things by inbox: that the tie's run keeps the registration it read (the row needs the head's counts, and OPTIN's record holds only the head's digest), and under which file name.
+2. **From proofs:** the `format` and the file name of its three records, and that each `verdict` object carries `link`, `window`, `class`, `head`, `accepted` and `complete`. Until I have them the row reads those three as missing and charges the whole schedule.
+3. **Proofs' side of the harness for this piece**, by file and line at `b1cf4530e89c` (the harness is as at `efe2fcdb33e8`): `exfiltration.py` loads the calculator at line 419 and calls `lb.document(inp, **rows)` at line 422, in a function that holds no store; `build` (line 522) holds it at line 553. The call becomes `lb.document(inp, stop=stop_verdicts.of_runs(store, runs), **rows)`, with `runs` those that carry `run_of_record=exfiltration-glm53-stop-verdicts` and no `superseded_by`. With the fourth mark given in memory, 6 of the 18 tests of `test_exfiltration.py` fail, at lines 410, 489, 562, 594, 668 and 735 [ran]. Lines 594 and 735 are new: they list the rows whose schedules are 0, which `design` leaves while no record is read.
+4. **One ruling:** the rows `lengths` and `all three` are changes to the scan, not the design, and still print schedules of 0 with no verdict read. The harness sums under `all three`. Say if they read the verdicts too; it is one line and their tests.
+
+**One pull request, #9454.** The harness's reader has to change once for both parts (the fourth mark, the count's column, the `design` row's charge), and both parts change the same two files, so a second could not land before the first.
+
+**My hour: Thu 12 Nov 4 PM PST** for the head pushed with OPTIN's form, its run read and #9454's body edited. I send the pushed head before your 3 PM board. A change of form from proofs after that moves only the reader's table.
+
+**What else of mine moves:** rule 3's merges of #9305 and #9329, by a day, as you wrote. NET-393 is not started. Nothing else.
+
+**Not established, and where I did not look**
+- No signature is checked by the row. It reads a head from a registration kept in a run's files and holds it to the digest its certificate names. The tie's verifier checks the certificate; the row takes that from the tie's accepted verdict.
+- On this branch a head is of the lengths rows' form 1, so a class's "count" is the schedule's rows whatever the load: every class with rows owes its four verdicts. The count is a count only under #9378.
+- The function reads no tick. soundness's later comment on NET-390 says a class whose head's tick neither end holds is charged its whole schedule; I read it as data and built your item 4 as written. Say if the tick becomes a fifth condition.
+- Ruling 6's other charges (the stop sample's ε, the wrong stop words the sample did not reach, the no-stop spans, each `FAIL`'s own charge) are not printed by this row.
+- `verity bench certifier_term` reads no store itself, as before. Run alone it reads no record and charges the whole schedule. The label is read where the store is, in the harness.
+- I looked for branches of #9305 and #9329 that are not mine by name only (`*records-rates*`, `*forged-no-proof*`, `*9305*`, `*9329*`): none. I did not look at runs.
+- Least sure of: whether the tie's run keeps the registration, and what proofs' three records look like.
+
+**Slips:** the record form written before it was agreed (above; not pushed). From this morning, already named: a run cancelled after it had started, an estimate of its wait that was off, two header times, a test edited by a script.
+
