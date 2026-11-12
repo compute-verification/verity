@@ -3,7 +3,7 @@ request count and split, and leaves the planner as it found it; the figure reads
 import hashlib
 import json
 from dataclasses import astuple
-from math import isclose
+from math import ceil, isclose
 from pathlib import Path
 
 import cards
@@ -151,6 +151,22 @@ def test_a_planner_row_describes_itself_and_restores_the_planner():
     assert isinstance(phase["sampled"], int) and 1 <= phase["sampled"] <= phase["replay_blocks"]
     assert p["replay_sample"] == pytest.approx(phase["sampled"] * got["requests"] / phase["replay_blocks"])
     assert phase["sessions"] > len(p["cells"]) and phase["limit"]
+    bound = phase["binding"]
+    taken = sum(c["taken"] for c in p["cells"] + p["left_out"])
+    assert bound["status"] == "modeled" and bound["proof_blocks"] == pytest.approx(phase["sampled"] * taken)
+    assert f"is {bound['tables']} of its type" in phase["limit"]
+    assert [(a["input"], a["value"]) for a in bound["assumed"]] == [
+        ("classes of gates a sampled proof block", 4130), ("symbols of a table's level-0 codewords", 2 ** 23),
+        ("one commitment, one sample; every committed window is presented", None)]
+    assert bound["design"]["sessions"] == ceil(phase["sessions"])
+    assert bound["design"]["classes"] == 4130 * ceil(bound["proof_blocks"] - 1e-6)
+    assert bound["design"]["k"] == P.binding.queries(bound["tables"] * 2 ** 23)
+    assert bound["design"]["phases"] == ceil(got["gpu_seconds"] / (phase["machines"] * 8 * H.RUN_S) - 1e-9)
+    assert bound == H.binding_bound(P, {"tables": bound["tables"], "draws": taken, "replay_sample": 1.0},
+                                    phase["sampled"], phase["sessions"], bound["design"]["phases"])
+    for counted in P.binding.COUNTED:
+        cell = bound["counted"][counted]
+        assert 0 < cell["phases"]["centibits"] < cell["phase"]["centibits"] and "theorem" in cell["lean"]
     measured = {b["block"]: b for b in cards.load("proof_overhead", "GLM-5.3")["value"]["blocks"]}
     held = [c for c in p["cells"] if c["block"] in measured]
     assert held and all(c["table"] == P.tc.table_blocks(measured[c["block"]]["k_log"]) for c in held)

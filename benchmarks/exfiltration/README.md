@@ -129,6 +129,21 @@ leaves out the witness, the commitment's round trips and the wait for the challe
 time for the staging, the replay or the interior commitment, so the reader names `prove.gpus`, `staging`, `replay`
 and `interior`, and the command claims no share from such a record.
 
+## The security level
+
+Beside the GB the command prints the binding bound the row of record holds: the probability that an accepted run
+opens a value off the committed trace, by the bound Lean states of a two-stage sample counted by classes of gates
+(`CompiledTwo.eventTwoX_le_cls_at_budget`'s right-hand side). The planner computes it for each
+row's own design (`benchmarks/spot_figures/binding.py`, `over_phases`) and writes it in the row's
+`verification_phase`; the command computes none of it. Each figure is named by what it is over, one verification
+phase or the world's year of them, and is given counted in calls of SHA-512, as the Lean counts, and in
+compressions. It is marked modeled, and the inputs it assumes are listed and are among the inputs, each marked
+assumed: the classes of gates a sampled proof block, the symbols of a table's level-0 codewords, and that a prover
+makes one commitment for one sample and presents every committed window. Beside each figure the command prints what
+Lean proves of it at numbers: a theorem of `Claims.Flock.Numbers` by name with its bound, or "not proved at these
+sizes" with the nearest instance and each numeral the row's design is past. No theorem sums a monitoring period's
+verification phases. Rows written before the planner computed a bound hold none, and the command says so.
+
 ## The errors
 
 Every figure carries the error summed over everything it covers. A figure whose error is 1 or more is printed as

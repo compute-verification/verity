@@ -1414,3 +1414,84 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "alone"))
     code, _, err = run("--local-only")
     assert code == 2 and "no planner rows of record: nothing in the store carries" in err
+
+
+#: a row's verification phase as the planner writes it, with its binding bound: the row's own at the world's year,
+#: but what Lean proves counted in compressions, made up so that both of Lean's cases print
+PHASE = {
+    "name": "datacenter", "seconds": 600, "machines": 12500.0, "replay_blocks": 90237979.8, "sampled": 55,
+    "sessions": 406359.6, "limit": "its largest session in tables is 4 of its type, past the GPU prover's 1",
+    "binding": {
+        "what": "the two-stage first-hit finder's bound by classes of gates", "status": "modeled",
+        "proof_blocks": 207715585.0, "tables": 4,
+        "assumed": [
+            {"input": "classes of gates a sampled proof block", "value": 4130, "unit": "class", "source": "no count gives it"},
+            {"input": "symbols of a table's level-0 codewords", "value": 8388608, "unit": "symbol", "source": "the most"},
+            {"input": "one commitment, one sample; every committed window is presented", "value": None, "unit": "",
+             "source": "what a sum over verification phases takes of the prover"}],
+        "design": {"sessions": 406360, "classes": 857865366050, "k": 49375943, "reruns": 10368948031,
+                   "calls_a_run": "2^80.00", "rounds": 1788796724, "phases": 197078976,
+                   "longest_call": {"bytes": 65536, "compressions": 513}},
+        "counted": {
+            "calls": {"phase": {"bound": "2^-101.08", "centibits": 10108}, "phases": {"bound": "2^-73.53", "centibits": 7353},
+                      "lean": {"theorem": None, "nearest": "εclsAt_le_table1", "bits": 100,
+                               "past": {"e": {"design": 10368948031, "instance": 2592237061}}}},
+            "compressions": {"phase": {"bound": "2^-92.08", "centibits": 9208},
+                             "phases": {"bound": "2^-64.52", "centibits": 6452},
+                             "lean": {"theorem": "εclsAt_le_table1_513", "bits": 100}}}}}
+
+
+def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(tmp_path):
+    """Beside the GB the command prints the binding bound its row of record holds, the planner's: over one
+    verification phase and over a world-year of phases, each counted in calls and in compressions and named by what
+    it is over, marked modeled; the inputs it assumes, each listed and marked assumed; and what Lean proves of each,
+    by its theorem's name, or that nothing is proved at these sizes. It computes none of it, moves no GB, and says so
+    where the rows hold no bound."""
+
+    def built(phase: dict | None) -> dict:
+        s = Store(tmp_path / str(len(list(tmp_path.iterdir()))))
+        s.label(s.ran(PLANNED, [as_row(r) | ({} if phase is None else {"verification_phase": phase})
+                                for r in rows(PLANNED)]))
+        return E.build(store=s.fresh(), root=REPO)
+
+    bare, doc = built(None), built(PHASE)
+    assert doc["value"] == bare["value"] and len(doc["inputs"]) == len(bare["inputs"]) + 3
+    bound = next(p for p in doc["compute_audit"] if p["scope"] == "world year")["binding"]
+    assert (bound["run"], bound["beta"], bound["scope"], bound["sampled"]) == (PLANNED, 0.055, "world year", 55)
+    assert bound["counted"] == PHASE["binding"]["counted"] and bound["design"] == PHASE["binding"]["design"]
+    assert all(p["binding"] is None for p in bare["compute_audit"])
+    assumed = [i for i in doc["inputs"] if i["part"] == E.SECURITY]
+    assert [(i["input"], i["value"], i["mark"]) for i in assumed] == [
+        ("classes of gates a sampled proof block", 4130, "assumed"),
+        ("symbols of a table's level-0 codewords", 8388608, "assumed"),
+        ("one commitment, one sample; every committed window is presented", None, "assumed")]
+    assert all(i["source"].startswith(f"`{E.RECORD}` ({PLANNED}) `verification_phase.binding`: ") for i in assumed)
+
+    lines = [line for line in E.render(doc).splitlines() if E.SECURITY in line and line.startswith("- ")]
+    assert len(lines) == 3 and lines[0].startswith(
+        "- **the security level** (modeled): the probability that an accepted run opens a value off the committed "
+        "trace, by the bound Lean states of a two-stage sample counted by classes of gates "
+        "(`CompiledTwo.eventTwoX_le_cls_at_budget`), every run at 2^80.00 calls of SHA-512, at "
+        f"the row's own design at the pinned budget nearest, β = 5.500% ({PLANNED}). **Over one verification phase: at "
+        "most 2^-101.08** counted in calls, as the Lean counts, and 2^-92.08 in compressions. **Over a world-year of "
+        "phases**, 197,078,976 of them: **at most 2^-73.53** in calls and 2^-64.52 in compressions. A verification "
+        "phase is a datacenter's 600 s on 12,500 machines: its first stage samples 55 replay blocks, and its second "
+        "207,715,585 of their proof blocks in 406,360 sessions, the largest of 4 tables.")
+    assert lines[1] == (
+        "- the security level assumes: 4,130 classes of gates a sampled proof block; 8,388,608 symbols of a table's "
+        "level-0 codewords; one commitment, one sample; every committed window is presented. It counts each session's "
+        "knowledge error and the run's own opening checks as 0.")
+    assert lines[2] == (
+        "- what Lean proves of the security level: over one verification phase counted in calls, not proved at these "
+        "sizes: the nearest instance, `Claims.Flock.Numbers.εclsAt_le_table1`, at most 2^-100, has reruns a session "
+        "(e_s) at most 2,592,237,061 there and 10,368,948,031 here. Counted in compressions, "
+        "`Claims.Flock.Numbers.εclsAt_le_table1_513` holds the part of it that is linear in the prover's calls to at "
+        "most 2^-100, beside each session's knowledge error and the rewinding part. Over a world-year of phases, not "
+        "proved at these sizes: no theorem sums "
+        "a monitoring period's verification phases.")
+    # no figure of it is called bits: each is a probability over what its clause names
+    assert not any(" bits" in line for line in lines)
+    none = [line for line in E.render(bare).splitlines() if E.SECURITY in line]
+    assert none == ["- **the security level**: not read. The rows of record hold no binding bound "
+                    "(`verification_phase.binding`): the planner wrote them before it computed one. Run it again and "
+                    f"label its run (`research data label RUN {E.RUN_OF_RECORD} {E.RECORD} --by LANE`)."]

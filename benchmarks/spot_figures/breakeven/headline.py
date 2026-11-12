@@ -76,6 +76,12 @@ STEP = "+ the verifier as measured"
 #: the world the rows are priced in, the tree's reference fleet, by the name `verity bench exfiltration` takes a run of
 #: record's rows by; it also reads a row's pinned beta as `b10`, and its step by the prefix "+ the verifier as measured"
 WORLD = "ours"
+#: the classes of gates a sampled proof block's reveals open, each whole, in a row's binding bound: assumed
+CLASSES_A_PROOF_BLOCK = 4130
+#: the symbols of one table's level-0 codewords, at most, in a row's binding bound: assumed
+TABLE_SYMBOLS = 2 ** 23
+#: what a binding bound summed over verification phases takes of the prover: assumed
+ONE_SAMPLE = "one commitment, one sample; every committed window is presented"
 
 #: the GPU prover at its measured 3.71 times, not the 4 times goal (1.101 s against 2.088 s over 3.71)
 PROVER_MEASURED = 1.101 / (2.088 / 3.71)
@@ -211,7 +217,38 @@ def planner() -> SimpleNamespace:
     import reprice
     import sweep
     from common import f1, opt, tc
-    return SimpleNamespace(levers=levers, reprice=reprice, sweep=sweep, f1=f1, opt=opt, tc=tc)
+
+    import binding
+    return SimpleNamespace(levers=levers, reprice=reprice, sweep=sweep, f1=f1, opt=opt, tc=tc, binding=binding)
+
+
+def binding_bound(P: SimpleNamespace, design: dict, sampled: int, sessions: float, phases: float) -> dict:
+    """A row's binding bound, modeled: the two-stage first-hit finder's bound by classes of gates
+    (`binding.over_phases`) of one verification phase of the row's `design` and of the `phases` of its scope, each
+    counted in calls and in compressions, with what Lean proves of one phase. The phase's `sessions` and its sampled
+    proof blocks, `sampled` replay blocks' of them, are the design's. Its classes are `CLASSES_A_PROOF_BLOCK` a
+    sampled proof block, and a session's reruns are those of its largest session, its tables of `TABLE_SYMBOLS`
+    symbols each: both assumed, and listed (`assumed`) with what a sum over phases takes of the prover
+    (`ONE_SAMPLE`)."""
+    tables = max(1, ceil(design["tables"] - 1e-9))
+    blocks = sampled * design["draws"] / design["replay_sample"]
+    return {"what": "the two-stage first-hit finder's bound by classes of gates, every run at the stated calls of "
+                    "SHA-512: of one verification phase of the row's design (`phase`) and of the row's scope of them, "
+                    "their sum (`phases`), a finder's cost counted in calls, as the Lean counts, and in compressions, "
+                    "every call charged as the longest; `lean` is what Lean proves at numbers of one phase's conflict "
+                    "and first-hit part",
+            "status": "modeled", "proof_blocks": blocks, "tables": tables,
+            "assumed": [
+                {"input": "classes of gates a sampled proof block", "value": CLASSES_A_PROOF_BLOCK, "unit": "class",
+                 "source": "no count of the row's own blocks gives the classes one reveal opens whole"},
+                {"input": "symbols of a table's level-0 codewords", "value": TABLE_SYMBOLS, "unit": "symbol",
+                 "source": "the most a table's codewords hold at the sizes Lean's instances are stated at; a "
+                           "session's reruns are counted at its tables times this"},
+                {"input": ONE_SAMPLE, "value": None, "unit": "",
+                 "source": "what a sum over verification phases takes of the prover; the row prices no check that "
+                           "holds it to either"}],
+            **P.binding.over_phases(ceil(sessions - 1e-9), CLASSES_A_PROOF_BLOCK * ceil(blocks - 1e-6),
+                                    P.binding.queries(tables * TABLE_SYMBOLS), ceil(phases - 1e-9))}
 
 
 def fused_block(name: str) -> str | None:
@@ -453,8 +490,9 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
     the pool's AND gates a window when only replays read it, at the line's price an AND; compile is the sampled replay
     blocks' compile; total adds them to beta.  The row's verification phase is its case's (`MEASURED`: a datacenter's
     window), the first stage a whole count of its replay blocks, and the row carries it (`verification_phase`: its
-    size, the count sampled, its sessions and the first limit of today's second-stage code the design meets,
-    `total_cost.limits`); a beta that pays for no sampled replay block of it has no design and is refused."""
+    size, the count sampled, its sessions, the first limit of today's second-stage code the design meets,
+    `total_cost.limits`, and its binding bound, `binding_bound`); a beta that pays for no sampled replay block of it
+    has no design and is refused."""
     P = P or planner()
     sweep, levers, reprice = P.sweep, P.levers, P.reprice
     scope, t, b = spec["scope"], spec["run_s"], spec["beta"]
@@ -502,6 +540,8 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
                "served_bits": L[1]["served_bits"].value, "requests": s.requests, "flop_request": s.flop_request,
                "gpu_seconds": gs, "case": spec["case"], "scale": spec["scale"], "volume": spec["volume"],
                "census_scope": {k: getattr(sweep.SCOPES[scope], k) for k in ("requests", "flop_request")}}
+        row["verification_phase"]["binding"] = binding_bound(P, d["row"], pt["registration_sample"], pt["sessions"],
+                                                             gs / phase)
         if st := spec.get("steady"):
             row["steady"] = {"priced": [{k: r[k] for k in ("block", "type", "per_block", "provers", "record")}
                                         for r in st["rows"].values()], "unread": st["unread"]}
