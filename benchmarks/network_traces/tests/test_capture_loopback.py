@@ -70,14 +70,14 @@ def job(tmp_path: Path, *flags: str, **env: str) -> tuple[subprocess.CompletedPr
 
 def test_the_rehearsal_is_in_the_launchs_egress_form_and_in_bytes_when_it_gives_none(tmp_path):
     """With no `EGRESS`, and with `bytes`, the rehearsal gets the job's three flags and the launch's, nothing for the
-    form; with `id` it gets `--ids` before the launch's. Either way the capture is the loopback's TCP at the reader's
-    snapshot length, what is kept of it is its packets on the deployment's two ports, and the reader gets the kept
-    file, the front's address with its port, the relay's and the run. The exit is the reader's."""
+    form; with `id` it gets `--ids` before the launch's. Either way the capture is the loopback's TCP kept at 54
+    bytes a packet, which holds no content, what is kept of it is its packets on the deployment's two ports, and the
+    reader gets the kept file, the front's address with its port, the relay's and the run. The exit is the reader's."""
     for env, form in (({}, []), ({"EGRESS": "bytes"}, []), ({"EGRESS": "id"}, ["--ids"])):
         p, calls, out = job(tmp_path, "--requests", "3", "--lanes", "64", **env)
         assert p.returncode == 0, p.stdout + p.stderr
         capture, rehearsal, kept, reader = calls
-        assert capture[:7] == ["tcpdump", "-i", "lo", "-U", "-s", "130", "-w"] and capture[8:] == ["tcp"]
+        assert capture[:7] == ["tcpdump", "-i", "lo", "-U", "-s", "54", "-w"] and capture[8:] == ["tcp"]
         assert rehearsal[1:] == ["rehearse", "--fake", "--watermark", "--out", f"{out}/run", *form,
                                  "--requests", "3", "--lanes", "64"]
         assert kept == ["tcpdump", "-r", capture[7], "-w", f"{out}/run.pcap", f"tcp port {FRONT} or tcp port {RELAY}"]

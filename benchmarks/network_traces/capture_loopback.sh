@@ -9,13 +9,15 @@
 # `uv run`). EGRESS is the run's egress form, the launch's to give and no flag's: bytes when it isn't given, text
 # requests answered in vLLM's stock framing; id, `rehearse --ids`, id requests each answered an id event a token, the
 # form a network certifier holds a served run's server to.
-# 1. The capture: `tcpdump -i lo -U -s 130 tcp`, started before the rehearsal and stopped once its file has stopped
-#    growing. It holds every TCP flow on the loopback meanwhile, other programs' among them, so it stays in the job's
-#    temporary directory, which is deleted.
+# 1. The capture: `tcpdump -i lo -U -s 54 tcp`, started before the rehearsal and stopped once its file has stopped
+#    growing. It keeps each packet's first 54 bytes, the least a TCP packet's headers are over IPv4 in the loopback's
+#    Ethernet frame, so it holds no content byte of any flow. It holds the headers of every TCP flow on the loopback
+#    meanwhile, other programs' among them, so it stays in the job's temporary directory, which is deleted.
 # 2. The run: the rehearsal, with its offline check; its run directory is $OUT/run.
 # 3. What is kept of the capture: $OUT/run.pcap, its packets on the run's two ports, the stand-in front's and the
-#    relay's (`deployment.json`), at most each one's first 130 bytes: every header and, where the headers are
-#    shorter, the first bytes of its content.
+#    relay's (`deployment.json`), headers alone. The filter reads a packet's ports in the 54 bytes kept of it: it
+#    finds IPv4's there, under at most 16 bytes of IP options, and never IPv6's, so it keeps no IPv6 packet. The
+#    front and the relay listen on IPv4's loopback.
 # 4. The reader: `capture_flows.py` on $OUT/run.pcap and $OUT/run. The front and the relay share the loopback's address,
 #    so the front's is given with its port; the load's connections to the relay are among the other flows. Its result
 #    is $OUT/capture_flows.json and its table $OUT/capture_flows.txt, also printed.
@@ -46,7 +48,7 @@ done
 "$PY" -c 'import verity.protocols.certifier.verifier.warden' 2> /dev/null \
   || { log "PY has no verity: give a python with the tree's packages, or run this under uv run"; exit 4; }
 command -v tcpdump > /dev/null || { log "no tcpdump on this machine"; exit 4; }
-tcpdump -i lo -U -s 130 -w "$W/lo.pcap" tcp 2> "$W/tcpdump.log" &
+tcpdump -i lo -U -s 54 -w "$W/lo.pcap" tcp 2> "$W/tcpdump.log" &
 CAPTURE_PID=$!
 # tcpdump says it listens once it captures, and exits before that where the job has no right to
 until grep -q "listening on" "$W/tcpdump.log"; do

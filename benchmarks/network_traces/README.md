@@ -255,11 +255,13 @@ forward's end and the server's port:
 
 **On one machine**, `capture_loopback.sh` is the reader's own check, not a served run: the stand-in front, the network
 certifier and the load on one machine's loopback (`warden_serve.py rehearse --fake --watermark`), a capture of the
-loopback beside them, then the reader. The front and the relay share an address there, so the front's is given with
-its port, and the load's connections to the relay are among the other flows. The run is in the bytes egress form, or
-with `EGRESS=id` at its launch in the id form, id requests each answered an id event a token. It is a `research run`
-job where the job may capture, which a pool node's job may not. It holds the reader's count to the relay's on the same
-bytes; it puts no link between two machines under the capture.
+loopback beside them, then the reader. It captures at 54 bytes a packet, as the command above does, so neither its
+temporary file of every TCP flow on the loopback nor the file it keeps of the run's two ports holds a byte of
+content. The front and the relay share an address there, so the front's is given with its port, and the load's
+connections to the relay are among the other flows. The run is in the bytes egress form, or with `EGRESS=id` at its
+launch in the id form, id requests each answered an id event a token. It is a `research run` job where the job may
+capture, which a pool node's job may not. It holds the reader's count to the relay's on the same bytes; it puts no
+link between two machines under the capture.
 
 **Reading it:**
 
