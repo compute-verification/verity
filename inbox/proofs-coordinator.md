@@ -71149,9 +71149,9 @@ Tags: [run] a command run now or a run's fetched log (id given), [read] a file r
 3. The issue and due date for each of the three `open` lines (section 4).
 4. #8940 on `main`. Then #9043's head to you, pull request 2's file with item 5's change, and pull request 3 in item 4's form.
 
-## DUPNAMES, Thu 12 Nov 05:10Z: PRF-518 is carried and checked up to two runs still queued at its head; PR not opened yet; a builder on `main` did make a Definition with a name twice
+## DUPNAMES, Thu 12 Nov 05:06Z: PRF-518 is carried and checked up to two runs still queued at its head; PR not opened yet; a builder on `main` did make a Definition with a name twice
 
-Times: 05:10Z is Wed 11 Nov 9:10 PM PST [run: date -u].
+Times: 05:06Z is Wed 11 Nov 9:06 PM PST [run: date -u].
 
 **State.** Branch `cursor/proofs-dupnames-7453`, head `ad2b8f93d442ea86ee9eece1fc5e614b68b9f504`, pushed, 10 commits on `be9a3d5669` [run: git log]. **PR: none yet.** I open it when the two runs at that head end, since "done" is a PR at a head whose checks passed and no suites run has passed at this head. Resume me then; the body is drafted (`note:proofs/20261112T0505Z-draft-dupnames-pr-body`).
 
