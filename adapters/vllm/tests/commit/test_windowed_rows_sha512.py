@@ -49,7 +49,7 @@ class _Runner:
 
     def __init__(self) -> None:
         self.committer = None
-        self.tensors: list[tuple[str, object]] = []
+        self.tensors: list[tuple[str, torch.Tensor]] = []
         self.input_batch = None
 
     def execute_model(self, scheduler_output, *a, **kw):
@@ -65,7 +65,7 @@ class _Sched:
         self.req_ids = [f"r{i}" for i in range(len(kv))]
         self.num_scheduled_tokens = dict.fromkeys(self.req_ids, 1)
         self.total_num_scheduled_tokens = len(kv)
-        self.scheduled_new_reqs = []
+        self.scheduled_new_reqs: list[object] = []
         self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
 
 
