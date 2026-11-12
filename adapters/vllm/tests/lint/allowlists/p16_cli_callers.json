@@ -25,7 +25,6 @@
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "commit-arb"},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "coverage-workloads"},
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "program-graph"},
-    {"file": "verity_vllm/pipeline/research_outputs.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "research-outputs"},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "topp-split-probe"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "gemm-correspondence"},
     {"file": "verity_vllm/program/mla_capture.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "mla-capture"},

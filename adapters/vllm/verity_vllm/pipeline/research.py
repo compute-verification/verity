@@ -63,6 +63,11 @@ def abs_store_env(environ: dict[str, str]) -> dict[str, str]:
     return env
 
 
+def cli(*args: str, py: str) -> list[str]:
+    """The command line of ``verity-vllm ARGS...`` under the interpreter ``py``."""
+    return [py, *CLI, *args]
+
+
 def research_argv(research_bin: str | None, research_py: str, env: dict[str, str]) -> tuple[list[str], dict[str, str]]:
     """The research CLI's argv prefix and the environment it runs with."""
     if research_bin:
@@ -129,7 +134,7 @@ def build_input(py: str, d: str, row: str, build_in: str, env: dict[str, str],
                 research: Callable[[], tuple[list[str], dict[str, str]]]) -> tuple[str | None, str]:
     """(why the Build in row dir ``d`` is not the cited Build artifact ``build_in``, as the precheck's FAIL detail, else None; the
     Program digest of ``d``'s Build). ``research()``: the research CLI, as `research_argv` gives it."""
-    r = subprocess.run([py, *CLI, "research-outputs", "digest", d, row], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    r = subprocess.run(cli("research-outputs", "digest", d, row, py=py), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                        text=True, cwd=ROOT, env=env)
     here = r.stdout.strip() if r.returncode == 0 else ""
     if not here:
@@ -162,7 +167,7 @@ def stage(o: Any, run: Callable[[Any, str], int]) -> int:
         if env.research_run_dir:
             inputs = [*(["--input", f"build={build_in}"] if build_in else []), *(["--input", f"match={match_in}"] if match_in else [])]
             with open(f"{d}/row.log", "a") as f:
-                subprocess.run([env.py, *CLI, "research-outputs", "write", d, o.row, o.stage, *inputs], stdout=f, stderr=subprocess.STDOUT,
+                subprocess.run(cli("research-outputs", "write", d, o.row, o.stage, *inputs, py=env.py), stdout=f, stderr=subprocess.STDOUT,
                                cwd=ROOT, env=child)
             if env.research_run_id:
                 preserve(env.guard_preserve_file, env.research_run_id)
@@ -234,9 +239,10 @@ def publish(o: Any, d: str, runs: dict[str, dict[str, Any]], research: tuple[lis
         _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: publishes nothing: the Commit {c_run} ran source {src or 'unknown'}, "
                              f"not a clean commit")
         return PUBLISH_REFUSED
-    argv = [sys.executable, *CLI, "records", "publish", d, o.row, "--build", b, "--match", m, "--match-run", m_run, "--commit", c,
-            "--commit-run", c_run, "--tree", f"{how['ref']}@{commit}", "--by", how["by"],
-            *(["--tier", how["tier"]] if how["tier"] else []), "--summary", f"{d}/commit/summary.json", "--newest-captures"]
+    argv = cli("records", "publish", d, o.row, "--build", b, "--match", m, "--match-run", m_run, "--commit", c,
+               "--commit-run", c_run, "--tree", f"{how['ref']}@{commit}", "--by", how["by"],
+               *(["--tier", how["tier"]] if how["tier"] else []), "--summary", f"{d}/commit/summary.json", "--newest-captures",
+               py=sys.executable)
     _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: {' '.join(argv[1:])}")
     r = subprocess.run(argv, stdout=subprocess.PIPE, text=True, cwd=ROOT, env=research[1])
     found = re.findall(r"art:[0-9a-f]{64}", r.stdout) if r.returncode == 0 else []
@@ -289,7 +295,7 @@ def chain(o: Any, sweep_dir: str) -> int:
         if st == "commit" and match_art:
             args += ["--input", f"match={match_art}"]
         _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: research {' '.join(args)} -- verity-vllm row stage {st} ...")
-        workload = [sys.executable, *CLI, "row", "stage", st, o.row, o.role, o.repo, o.rev, *o.flags]
+        workload = cli("row", "stage", st, o.row, o.role, o.repo, o.rev, *o.flags, py=sys.executable)
         rc = subprocess.run([*research[0], *args, "--", *workload], env=research[1]).returncode
         art = attempt_output(research, run_id, ACCOUNT[st])
         print(f"{st} {run_id} {art or '-'} rc={rc}", flush=True)
