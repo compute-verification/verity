@@ -55,9 +55,10 @@ units the device outsourced (had computed elsewhere and brought in through the n
 words times `m`.
 
 It is priced, not counted: work on every op class counts at its price, so a word computed on the CUDA cores counts
-too, and its multiply-adds cost more there (at `Accounting.h200S8Price` an INT8 tensor-core multiply-add costs `1` and
-a CUDA-core op `32`, so `IDP4A`'s four multiply-adds an op cost `8` each). `m` is the fewest multiply-adds any credited
-word stands for (`Accounting.Compose.minWordMacs`): `16·R·C` for H1 + fx1 tiles of one shape `R × C`
+too, and its multiply-adds cost more there (at the H200's W1 prices with INT8, `Pouw.PearlC.W1.W1Device.s8H100`'s,
+an INT8 tensor-core multiply-add costs `1`, their `mac .s8`, and a CUDA-core op at the cheaper of W1's FP32 and INT32
+instructions `32`, their `fp32`, so `IDP4A`'s four multiply-adds an op cost `8` each). `m` is the fewest multiply-adds
+any credited word stands for (`Accounting.Compose.minWordMacs`): `16·R·C` for H1 + fx1 tiles of one shape `R × C`
 (`Accounting.receiptWordMacs`), `512` at `PouwH1Tile_v1`'s `4 × 8` and `16384` at `_v5`'s and `_v6`'s warp.
 
 What it rests on: a credited word costs at least its multiply-adds at the public best. That is SAK(matmul), the one

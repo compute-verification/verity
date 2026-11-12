@@ -58,8 +58,9 @@ CUTS = ("tokens", "kv", "layer_of_token", "every_block")
 CONFIGURATIONS = ("tokens", "tokens_bi", "layer_of_token", "every_block")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 ART = re.compile(r"art:[0-9a-f]{64}")
-#: what holds a serving rate where it is: the GPUs' compute, the KV pool's size, or not known
-BOUNDS = ("compute", "kv-pool", "unknown")
+#: what holds a serving rate where it is: the GPUs' compute; the engine's step, where requests waited with room in the
+#: KV pool and the record does not tell the GPUs' arithmetic from a step's token budget; the KV pool's size; or not known
+BOUNDS = ("compute", "engine-step", "kv-pool", "unknown")
 NUM = (int, float)
 
 
@@ -95,7 +96,11 @@ SERIES = {"scope": F(str), "budget": F(NUM), "x": F(list), "y": F(list)}
 AXIS = {"label": F(str), "unit": F(str)}
 POINT = {"x": F(NUM), "y": F(NUM), "runs": _opt(list), "note": _opt(str)}
 CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "points": F(list, each=POINT)}
-TAX_PART = {"part": F(str), "share": F(NUM), "low": F(NUM), "high": F(NUM), "source": F(str)}
+#: how a serve tax's part got its share: priced from the code and a measured rate, simulated on served traces, or
+#: measured on the served engine
+PART_STATUS = ("modeled", "simulated", "measured")
+TAX_PART = {"part": F(str), "status": F(str, choices=PART_STATUS), "share": F(NUM), "low": F(NUM), "high": F(NUM),
+            "source": F(str)}
 TAX = {"config": F(str, choices=CONFIGURATIONS), "status": F(str, choices=("priced", "measured")), "tax": F(NUM),
        "low": F(NUM), "high": F(NUM), "lower_bound": F(bool), "parts": F(list, each=TAX_PART), "runs": _opt(list)}
 VERIFY_TYPE = {"block": F(str), "core_seconds": F(NUM), "peak_gb": F(NUM, nullable=True), "runs": _opt(list)}
@@ -203,6 +208,15 @@ def check(card: dict) -> dict:
                    if names.count(n) > 1]
         errors += [f"serve_tax.value.configurations[{i}]: low <= tax <= high, but {t['low']}, {t['tax']}, {t['high']}"
                    for i, t in enumerate(value["configurations"]) if not 0 <= t["low"] <= t["tax"] <= t["high"]]
+        for i, t in enumerate(value["configurations"]):
+            parts = [p["part"] for p in t["parts"]]
+            errors += [f"serve_tax.value.configurations[{i}].parts: {n!r} given {parts.count(n)} times"
+                       for n in sorted(set(parts)) if parts.count(n) > 1]
+            errors += [f"serve_tax.value.configurations[{i}].{k}: {t[k]}, but its parts' {key}s add to {total}: a "
+                       "priced configuration is the sum of its named parts (regenerate it with total_cost.py "
+                       "priced-card)"
+                       for k, key in (("tax", "share"), ("low", "low"), ("high", "high")) if t["status"] == "priced"
+                       for total in [sum(p[key] for p in t["parts"])] if abs(t[k] - total) > 1e-12 * max(1.0, total)]
     if slot == "verifier_cost" and not errors:
         measured = {t["block"] for t in value["types"]}
         errors += [f"verifier_cost.value.families[{i}]: member {m!r} is none of the measured types' blocks"

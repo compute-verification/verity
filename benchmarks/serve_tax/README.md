@@ -23,7 +23,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
 | `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
-| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`) | `boundary-rows` |
+| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -79,7 +79,10 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   `long` is long context: the client's synthetic dataset at one long length (8,192 tokens in, 128 out), which stands
   until a plan of recorded long requests replaces it; the output says which it was. Its first token takes seconds on
   any engine, so its goodput counts the time per output token alone, and the engines' context limit is raised to fit
-  it.
+  it. A pass sends the load's prompts whatever its rung, so a rung near or past them is held for part of the pass
+  only: `PASS_PROMPTS=chat=N` makes a pass of `chat` send N prompts at every rung, for a ladder that climbs past
+  them. Every rung sends the same N, since passes of two sizes differ in tokens a second by their size alone, and
+  the cost refuses two arms whose passes sent different numbers of prompts.
 - **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512). A node
   keeps one copy, in its Hugging Face cache outside every run's directory; `serve_tax.py passes --fetch`, which
   `run.sh` runs before it holds a GPU, downloads it there where there is none, and a download or a copy whose SHA-512

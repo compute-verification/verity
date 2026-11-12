@@ -129,7 +129,8 @@ are kept beside the verdict under BASE's key (they run BASE's lints and config),
 below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  A change's
 judgement reads only its own commits (and BASE), so the changes the cache doesn't hold are judged at once, each in a forked
 process of its own, its worktree and ruff cache with it, up to ``$RATCHET_GATE_JOBS`` at a time (default the lesser of 16 and
-this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before
+this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  git keeps
+no lock on a repository's worktrees, so each process adds and removes its own in its turn (`worktree_turn`).  Before
 marking a branch, run ``python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes,
 1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the
 host), which fails the check's step: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose
@@ -139,6 +140,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
+import fcntl
 import functools
 import hashlib
 import importlib.util
@@ -156,7 +159,7 @@ import tokenize
 import tomllib
 import types
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
@@ -224,6 +227,8 @@ RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
 PLACES = {f"{LINT}/_imports.py": ("LAYER",), f"{LINT}/test_p09_layering.py": ("PACKAGE_OF",)}
 #: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
 MEASURES = {"size"}
+#: the file in the repository's common git directory whose lock is a process's turn at the repository's worktrees
+TURN = "ratchet-gate-turn"
 
 #: Run as ``python -I -c RUNNER LINT_DIR SLUGS TABLES`` (SLUGS a JSON list, or null for every lint; TABLES a JSON object,
 #: {module: {name: rows}}, the dicts to hold those rows in place of the module's own): imports the lint directory as a
@@ -991,12 +996,31 @@ def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
     return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{lint}/") and is_ratchet(f)} | ruff)
 
 
+@contextlib.contextmanager
+def worktree_turn() -> Iterator[None]:
+    """This process's turn at the repository's worktrees, held while git adds or removes one.  git keeps no lock on them: it
+    reads every worktree's entry to add or remove one, and deletes ``worktrees`` in the common git directory with its last
+    entry, so of two processes at it at once one can find an entry half written or the directory just gone ("could not create
+    directory of '.git/worktrees/tree'"), and the gate would exit 2 with no verdict.  The turn is the lock on `TURN` in
+    that directory, the same file from every checkout of the repository, so the processes of one run and of any other run
+    there wait for each other; it ends with the block, or with the process."""
+    path = Path(git("rev-parse", "--git-common-dir").strip()) / TURN
+    with contextlib.ExitStack() as held:
+        try:
+            fcntl.flock(held.enter_context(open(path, "a")), fcntl.LOCK_EX)
+        except OSError as e:
+            raise GitError(f"no turn at the repository's worktrees ({path}: {e}), so the gate can't add or remove the "
+                           f"lints' worktree: make {path} a file this user can write") from e
+        yield
+
+
 def drop_worktree(tree: Path) -> None:
-    """Remove the lints' worktree. Cleanup decides no verdict: when git won't remove it ("Directory not empty"), the directory
-    goes by hand and git forgets it."""
-    if subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True).returncode:
-        shutil.rmtree(tree, ignore_errors=True)
-        subprocess.run(["git", "worktree", "prune"], capture_output=True)
+    """Remove the lints' worktree, in this process's turn. Cleanup decides no verdict: when git won't remove it ("Directory
+    not empty"), the directory goes by hand and git forgets it."""
+    with worktree_turn():
+        if subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True).returncode:
+            shutil.rmtree(tree, ignore_errors=True)
+            subprocess.run(["git", "worktree", "prune"], capture_output=True)
 
 
 def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[str, list],
@@ -1013,8 +1037,12 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
     runs = []
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
         tree = Path(d) / "tree"
-        git("worktree", "add", "-q", "--detach", str(tree), c.hi)
+        with worktree_turn():
+            git("worktree", "add", "-q", "--detach", "--no-checkout", str(tree), c.hi)
         try:
+            # the checkout `git worktree add` runs itself, after the turn: it writes only this worktree's own files, so the
+            # processes judging at once still check out at once
+            git("-C", str(tree), "reset", "-q", "--hard", "--no-recurse-submodules")
             for lint in selection:
                 shutil.rmtree(tree / lint, ignore_errors=True)
                 git("-C", str(tree), "checkout", "-q", c.lo, "--", lint)
