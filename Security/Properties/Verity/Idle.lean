@@ -160,7 +160,7 @@ def periodRun : PeriodRun device Unit fileRead.circuit fun _ : Unit => Unit wher
   win := ⟨0, 0⟩
   schedule _ := world.schedule
   fits _ := world.fits
-  transcript _ := 0
+  trace _ := 0
   commWithin _ _ := True
   accepts _ _ := True
 
