@@ -1,17 +1,24 @@
 """The wipe over a monitoring period: a week, a month and a year of every machine of a deployment, at δ = 1% and 10⁻⁶,
 from one accepted wipe's answer as `wipe_period.certify` publishes it: at most `foreign_bits` of the declared tiers'
-`memory_bits` hold anything but the fill, except with `eps` (2^-128 when the bound covers the session; with `memory_bits`
-for `foreign_bits` and `eps` 0, the vacuous statement, when it doesn't).
+`memory_bits` hold anything but the fill, except with `eps` plus the wipe's labels' and coins' PRF advantage (SHA-512
+as PRF: not priced, not assumed). `eps` is 2^-128 when the bound covers the session; when it doesn't, `foreign_bits` is
+`memory_bits` and `eps` 0, the vacuous statement.
 
 A deployment of `machines` machines, each wiped every `cadence_s` seconds (`CADENCE_S`, a day, by default) as this one
 was, has T = machines·⌊period/cadence_s⌋ wipes in a period, each on the memory challenger's own live coins, against one
 adaptive prover.
 
 - **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each wipe,
-  given the earlier ones, is accepted and leaves more than its `foreign_bits` with probability at most p = `eps`, at
-  least M of the T are with probability at most C(T, M)·p^M. M is the least count within δ (`short_sessions`), so
-  except with δ at most M − 1 of the T wipes fail their bound.
-- **Per wipe** (`per_wipe`): every one of the T wipes meets its `foreign_bits` at once, except with T·`eps`.
+  given the earlier ones, is accepted and leaves more than its `foreign_bits` with probability at most p, at least M of
+  the T are with probability at most C(T, M)·p^M. M is the least count within δ at p = `eps` (`short_sessions`), so at
+  p = `eps`, except with δ, at most M − 1 of the T wipes fail their bound. The count bound takes p as each wipe's whole
+  failure probability, and `eps` leaves out the wipe's labels' and coins' PRF advantage. So with those terms not
+  priced, the count and its δ are established only before them (`holds_at`).
+- **Per wipe** (`per_wipe`): every one of the T wipes meets its `foreign_bits` at once, except with T·`eps` plus the sum
+  over the T wipes of each wipe's labels' and coins' PRF advantage.
+
+No number here prices a PRF's advantage, and none assumes it away. The table says so beside each number that is short
+by it, in the same closing words (`UNPRICED`).
 
 `short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
 (`verity.protocols.reporting`).
@@ -20,10 +27,10 @@ A wipe signed `UNCOUNTED` stays vacuous: `counted` refuses every `wipe-egress/v1
 challenger signs its session's times on its monotonic clock and a record's window (`t0_unix_ns`, `t1_unix_ns`) is real
 time handed to the record's writer, so nothing signed says a record covers the wipe's session.
 
-Both statements leave out (`EXCEPT`) each wipe's PRF advantage, δ_net and the egress count's premises, which are named
-assumptions, not numbers, and what the wipe's own bound doesn't cover (`wipe_period.uncertified` of the answer's
-placement). What the wipe proves is its verdict and outputs, by the Lean verifier; what is scaled is the number
-of wipes and that each is wiped as this one was."""
+Both statements leave out (`EXCEPT`) each wipe's labels' and coins' PRF advantage, which is not priced and not assumed;
+δ_net and the egress count's premises, which are premises, not numbers; and what the wipe's own bound doesn't cover
+(`wipe_period.uncertified` of the answer's placement). What the wipe proves is its verdict and outputs, by the Lean
+verifier; what is scaled is the number of wipes and that each is wiped as this one was."""
 
 from __future__ import annotations
 
@@ -45,7 +52,11 @@ STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
 CADENCE_S = 86400
 EGRESS = "wipe-egress/v1"
 HBM = "gpu-hbm"
-EXCEPT = ("each wipe's PRF advantage (its labels' and coins' PRF, a named assumption), δ_net (the network certifier's "
+UNPRICED = "(SHA-512 as PRF: not priced, not assumed)"
+"""The words that close every mention of a PRF's advantage that a number of the table leaves out."""
+PRF_TERMS = f"labels' and coins' PRF advantage {UNPRICED}"
+"""The two terms a wipe's `eps` is short by, as the table writes them beside a number."""
+EXCEPT = (f"each wipe's labels' PRF advantage and its coins' PRF advantage {UNPRICED}, δ_net (the network certifier's "
           "error in the egress count) and the egress count's premises (every link leaving the node counted, its window "
           "the wipe's session), with the guarantee's own (every tier declared, no side channel), over the period's wipes")
 REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its monotonic clock "
@@ -69,16 +80,18 @@ def short_sessions(t: int, p: Fraction, delta: Fraction) -> tuple[int, Fraction]
 
 
 def pooled_step(t: int, eps: Fraction, delta: Fraction) -> dict[str, Any]:
-    """The period's pooled statement over `t` wipes at `eps` (module docstring)."""
+    """The period's pooled statement over `t` wipes at `eps` (module docstring); `holds_at` says its count and bound
+    are at p = `eps`, before each wipe's PRF advantage."""
     m, bound = short_sessions(t, eps, delta)
     failing = min(m - 1, t)
     return {"failing_at_most": failing, "meeting_at_least": t - failing, "bound": f"{float(bound):.3g}",
-            "statement": STATEMENT["name"]}
+            "statement": STATEMENT["name"], "holds_at": f"p = eps, before each wipe's {PRF_TERMS}"}
 
 
 def per_wipe(t: int, eps: Fraction) -> dict[str, Any]:
-    """Every one of `t` wipes meets its `foreign_bits` at once, except with t·`eps`."""
-    return {"except_with": f"T·eps = {float(t * eps):.3g}"}
+    """Every one of `t` wipes meets its `foreign_bits` at once, except with t·`eps` plus the sum over the wipes of each
+    wipe's PRF advantage."""
+    return {"except_with": f"T·eps = {float(t * eps):.3g}, plus the sum over the T wipes of each wipe's {PRF_TERMS}"}
 
 
 def counted(answer: Mapping[str, Any], egress: Mapping[str, Any]) -> NoReturn:
@@ -98,11 +111,13 @@ def memory(profile: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def each(public: Mapping[str, Any]) -> dict[str, Any]:
-    """What each wipe certifies: at most `foreign_bits` of `memory_bits` foreign, the rest wiped, except with `eps`."""
+    """What each wipe certifies: at most `foreign_bits` of `memory_bits` foreign, the rest wiped, except with `eps` plus
+    `eps_plus`, its PRF advantage. The vacuous statement, which holds outright, has no `eps_plus`."""
     eps, f, m = Fraction(public["eps"]), int(public["foreign_bits"]), int(public["memory_bits"])
     return {"foreign_bits": f, "memory_bits": m, "wiped_bits": m - f, "wiped_share": f"{(m - f) / m:.4g}",
             "eps": str(eps), "eps_float": float(eps), "k": public["k"], "r": public["r"],
-            "egress_mib": public["egress_mib"], "certified": public["certified"]}
+            "egress_mib": public["egress_mib"], "certified": public["certified"],
+            **({"eps_plus": f"its {PRF_TERMS}"} if public["certified"] else {})}
 
 
 def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, *,
@@ -138,7 +153,8 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
     return head | {"periods": periods,
                    "scaled": [f"the wipes: {machines} machines, one wipe every {cadence_s} s each",
                               f"every wipe as this one: {head['each']['foreign_bits']} of {head['each']['memory_bits']} "
-                              f"bits foreign at most ({head['memory']['tier']}), at eps {head['each']['eps_float']:.4g}"]}
+                              f"bits foreign at most ({head['memory']['tier']}), at eps {head['each']['eps_float']:.4g} "
+                              f"+ its {PRF_TERMS}"]}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -162,8 +178,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["CADENCE_S", "EGRESS", "EXCEPT", "FORMAT", "HBM", "REFUSED", "STATEMENT", "counted", "each", "main", "memory",
-           "per_wipe", "pooled_step", "short_sessions", "table"]
+__all__ = ["CADENCE_S", "EGRESS", "EXCEPT", "FORMAT", "HBM", "PRF_TERMS", "REFUSED", "STATEMENT", "UNPRICED", "counted",
+           "each", "main", "memory", "per_wipe", "pooled_step", "short_sessions", "table"]
 
 if __name__ == "__main__":
     sys.exit(main())
