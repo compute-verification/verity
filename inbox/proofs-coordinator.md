@@ -109459,3 +109459,22 @@ Nothing.
 - Branches: `cursor/soundness-prf579-rest-8fb2` is still absent at 23:30Z. `cursor/soundness-live-deployment-8fb2` (`f705e1e353`) adds only `Sampled/LiveDevice.lean`; it has no constructor of a session and doesn't overlap my files. [read] #9375 has not landed. [read]
 - Next: read the try's errors and fix until both files compile. I'll write the next entry when it returns, or by 00:40Z.
 - Not established: that `ParamsProgram.lean` compiles (the `ret_walk` steps through `paramsParsed`'s `let p := …` and the private `obj` are written without having been run), and that `AcceptedChecks` still compiles without `hdesc`.
+
+## NEEDEDBITS, Thu 12 Nov 23:40Z: SLOT WAIT OVER TEN MINUTES on vy-nebius-2 (24 checks ahead at 23:40Z, two cleared in 13 minutes); the whole proof is written, without sorry, and pushed: `SideBySide h` with no hypothesis, and `NeededBits h` from one named hypothesis on the members' circuit files; its first try is in that line
+
+The full proof file is pushed and waits for its first compile. It proves that the members' proof blocks stand side by side at every held code, with no hypothesis, and that every gate a checked unit needs is one of that unit's own bits wherever each member's free source gates and returned leaf bits have commitment positions. That condition is the one the 23:02Z GAP entry showed can fail; it is a named `Prop` here, owned by FRAME, until `templateOk` gives it. Nothing of it has compiled yet: my try is queued behind 24 checks on vy-nebius-2's proofs line.
+
+- [read] Pushed `cursor/proofs-neededbits-2597` at `b363814c38`: new file `security/Proofs/Flock/SpotFlock/NeededBitsOf.lean` (899 lines, no `sorry`, no `axiom`, no `native_decide`), and its root `"Proofs.Flock.SpotFlock.NeededBitsOf",` on a line of its own in `security/Proofs/lakefile.toml`.
+- [read] The statements, all new:
+  - `SpotFlock.sideBySide_of_held (h : Held) : SideBySide h` (from `Flock.Bridge.NeededBitsOf.blocksClosed_bitsProgs ms : SpotFlock.BlocksClosed (bitsProgs ms) (membersPart ms)`).
+  - `SpotFlock.MemberRowed c n : Prop`: every source gate `g < inputs` with `consts c n g = none` has `rowBit c n g` some, and every `outGate c n u k j t = some x` has `outRowBit c u k j t` some. `SpotFlock.MembersRowed h := ∀ ci ∈ h.ms, MemberRowed ci.1 ci.2.size`.
+  - `SpotFlock.neededBits_of_rowed {h : Held} (hR : MembersRowed h) : NeededBits h`.
+- [derived] The proof's route: a needed gate is a gate of its closed block (`mem_of_needs`, through `needs_committed_of_closed`); a block's gates are its unit's row gates, each returned and so a written bit of that unit (`written_eq`, `src_ne_row`), or the free source gates it owns, each a source bit of that unit (`exists_of_owner`, `rowBit_leaf`, `pos_eq`).
+- [run] Try `r20261112-232707-2f63` (`verity lean try security/Proofs/Flock/SpotFlock/NeededBitsOf.lean --on vy-nebius-2 --pool proofs --as proofs`, launched 23:27Z): waiting in the check line, 26 ahead at 23:35Z and 24 at 23:40Z, not started.
+
+Size and ETA [guess]: if the first compile returns errors of the usual kind (simp sets, names), two or three rounds; each round now costs the slot line's wait, not the compile.
+
+NEEDS
+- FRAME, as in the 23:02Z entry: discharge `MembersRowed h` from `templateOk` (the scopeOkH conjunct) or confirm it stays a named hypothesis with FRAME as owner.
+
+Not established: that the file elaborates; that `MembersRowed` is all `NeededBits` needs beyond what the file proves (the try decides it); whether `.pad` and `.lit` sources are already refused upstream of `Held`.
