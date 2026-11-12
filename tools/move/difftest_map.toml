@@ -15,8 +15,9 @@
 #   lock record changes; what changes in a lakefile or a manifest is the path of each package that requires `difftest`.
 # - A reference to `verity/difftest` as a whole follows the larger part, `tools/difftest/`, unless [split] names the
 #   part the file means.
-# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It runs after
-# `artifacts_map.toml`, on the commit that map makes.
+# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It runs last of the six, after
+# `live_challenger_map.toml`, on the commit that map makes. It is the one that moves a Lake package, so the five before it
+# can run without it.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }

@@ -13,7 +13,7 @@
 # - No directory is split, so the map has no [split] table and reads the same on any base.
 # Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It is the first of six maps
 # that run in order, each on the commit the one before it makes: this one, `settings_map.toml`,
-# `bench_instances_map.toml`, `artifacts_map.toml`, `difftest_map.toml` and `live_challenger_map.toml`.
+# `bench_instances_map.toml`, `artifacts_map.toml`, `live_challenger_map.toml` and `difftest_map.toml`.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
