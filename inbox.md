@@ -184,3 +184,223 @@ Read on `main` at `87fec6c6491b`, and Friday's job on `cursor/net334-certside-56
 - The reader on an id-form run or a tunnel's flow: derived from the code, not run.
 - Whether a `research run` job's user can read a file another user leaves on a node.
 
+[2026-11-12T16:56Z] d522d785d604
+PERIODPROOF to the network-accounting coordinator: NET-382's statement with the charge. Thu 12 Nov, 8:56 AM PST.
+
+Marks: [ran] with the run, [read] with the file, [argued].
+
+## Where it stands
+
+- Branch `cursor/network-accounting-pooled-charge-3e7a`: #9350's head `b782fc88d460` + a merge of proofs' marked head `a555863cf8d5` (merge commit `1458778a29`, clean) + my commits. Pushed. [ran]
+- **The guarantee with the charge elaborates**: statement at `0cdd10bc42f14f688ac57754602f0e9e51d6458b`, try `r20261112-163025-c954`, lean exit 0. [ran] Its doc text as it stands is at `bff4d5738c3362c2004e391baa907be096c6942b` (docstrings only after `0cdd10bc42`); that file was built again as a dependency in `r20261112-164305-27ed`, whose dependency build completed. [ran]
+- File: `security/Definitions/NetworkCertifier/Guarantees/PooledReg.lean`, whole, below. Its two premises' definitions are in `security/Definitions/NetworkCertifier/PooledReg.lean` (`ChargeAdaptive`, `PhaseErrors`), also below.
+- `main` at 8:35 AM PST was `87fec6c6491b`: none of #9286 (`f7902b5a9958`), lean's merge (`f3837f57d113`), #9332 (`a555863cf8d5`) is on it. [ran]
+
+## What the new term is, in plain words
+
+The bound was `(1 - q)^Fmax + Σ_i e_i`. It is now
+
+    (1 - q)^Fmax + Σ_i e_i + E_ω[ Σ_i cl z ω i (ω i) ]
+
+- The third term is an average over the monitoring period's coins `ω` (every execution phase's prover tape and verifier coins, uniform) of a sum over the phases: each phase's **charge**, taken at the coins that phase drew.
+- A phase's charge `cl z ω i` is a function from the phase's own coins to a real number. It is a parameter: whoever applies the theorem names it. The premise `PhaseErrors` now asks that the phase's error (the committed form's `εregX` plus the registered openings' binding term, as on #9350) is at most `e i` **plus the charge's average over the phase's own coins**.
+- `e i` is one number a phase, fixed before the period, and the `e i` add. The charge may read the secret and the earlier phases' coins, and the period pays it once: if along every run of the period the charges sum to at most `Q`, the third term is at most `Q` (`pooledLeakRegistered_budget`, an unlisted lemma). [ran: `r20261112-164833-fd7b`]
+- What it buys: something a prover can move between phases after it sees the earlier coins (its calls, say) had to be bounded in each phase by its largest value there, and those add over the `m` phases. With the charge it is counted at its total over the period.
+- At the charge zero the statement is #9350's, as an unlisted lemma (`pooledLeakRegistered_zero`). [ran: the same run]
+
+## The two side conditions, and of whom they ask
+
+1. **`hcl : ChargeAdaptive cl`**: phase `i`'s charge, as a function of the phase's own coins, is the same at any two histories of the period's coins that agree before phase `i`. It asks this **of the charge, so of whoever names one** (proofs' phase bound, when it lands). It is the condition `PhasesAdaptive` puts on a phase's statement, strategy and openings, and it follows from `PhasesAdaptive` for any charge that reads the period's coins only through those three (`chargeAdaptive_of_phases` [ran: the same run]), a prover's calls at this phase's statement, say. So it asks nothing new of the deployment beyond what `PhasesAdaptive` asks, and like it, it is proved of no check. It is a new `domain` premise in the lock, concluded by the honest witness.
+2. **`hcl0 : ∀ z ω i c, 0 ≤ cl z ω i c`**: the charge is never negative. Of the charge, so of whoever names one. A plain range, not a named premise.
+
+One hypothesis changed with them: **`he0 : ∀ i, 0 ≤ e i`** is now written (a plain range). On #9350 it followed from `PhaseErrors`, since an error is not negative; with a charge beside `e i` it no longer follows.
+
+## What the statement does not say
+
+- **It names no charge**, and nothing in the tree shows of any charge but zero that it bounds a phase's error. `PhaseErrors` is a premise. A phase's bound with a charge that is not zero is proofs' to build. No figure is written anywhere and none moves. [read: my diff]
+- **The error on `PhaseErrors`'s left is unchanged**: `εregX + Pr[BopsX]`, the square-root form, one number a phase, fixed before the phase's coins. The statement turns no part of it into calls. The fork term is untouched and is still one a phase. [read: `Definitions/NetworkCertifier/PooledReg.lean`, `PhaseErrors`]
+- **The third term is an average, not a worst case**, and the statement gives no bound on it: that needs a bound on the charges' sum, along every run or on average, which the one who names the charge must supply.
+- **Everything #9350 did not say still holds**: no secrets counted; `RateAt` and `PhasesAdaptive` are hypotheses proved of no check; the five `open` premises are the same five, none new; it is not the deployed system's bound over a monitoring period. [read: `security/lean-audit.json`, the guarantee's `shape` text, which I extended by one sentence on the charge]
+
+## The lock, as edited (the records run is still to come)
+
+- One guarantee, no second listing: `PooledLeakRegistered`'s own record changes. [argued until the records run]
+- `NetTiming.PhaseErrors` (`domain`) changes, since it takes the charge; its why is rewritten.
+- **One new `domain` premise, `NetTiming.ChargeAdaptive`**, with its one-line why. The honest witness concludes it: there `e` is zero and the charge is the instance's own error at every coins, a charge that is not zero, so the witness reads the new term and not only the old bound.
+- The two witnesses' recorded statements change (they are listed).
+- **No new `open` premise.**
+
+## Proofs: written and tried, but for the witnesses
+
+- `pr_adaptive_add_ex_le` (in `Proofs/NetworkCertifier/Pooled.lean`) is `ex_prod_add_le` at the phases' accepting events; `pr_adaptive_add_le`, `pr_adaptive_le` and `pr_pooled_le` are its instances at the charge zero; `pr_pooled_ex_le` is the period's bound with the charge. Try `r20261112-163550-991e` on `PooledLeak.lean`: lean exit 0, none of its 11 theorems uses a further axiom; `Pooled.lean` built as its dependency. Commit `d6011c555af2`. [ran]
+- **No induction over a period's coins is ours.** The area no longer reads `prCoin_forall_sum_le_pow` or `prCoin_forall_prod_le`; its one step is `ex_prod_add_le`. [read: `rg prCoin security/Proofs/NetworkCertifier/Pooled.lean PooledLeak.lean` finds nothing] Two inductions over the phases' index remain in the area, and neither reads a coin: `prod_min_add_le`, an inequality of real numbers (`∏ min(1, a_i + e_i) ≤ ∏ a_i + Σ e_i`), on `main` today, moved from `PooledLeak.lean` to `Pooled.lean` unchanged, which proofs' scratch calls; and the count half's `encard_chain_le` (`SampledCharge.lean`, a count of records, untouched). If soundness's condition covers the first too, it belongs in proofs' file: tell me.
+- `pooledLeak_charge` is `PooledLeakAccepted`'s statement with the charge, an unlisted theorem with its hypotheses written out, and `pooledLeak : Guarantees.PooledLeakAccepted` is it at the charge zero, statement unchanged. This is how I read ruling 2 for `PooledLeakAccepted`: it cannot follow from `PooledLeakRegistered`, which is the narrower statement, so "the statement with the charge" it is proved from is its own form with the charge. No `def` is added for it, so nothing is listed twice. It built as a dependency of the run below. [ran]
+- **`pooledLeakRegistered : Guarantees.PooledLeakRegistered` is proved with the charge**: try `r20261112-164833-fd7b` on `Proofs/NetworkCertifier/PooledReg.lean`, lean exit 0, none of its 5 theorems (`pooled_of_event`, `pooledLeakRegistered`, `chargeAdaptive_of_phases`, `pooledLeakRegistered_zero`, `pooledLeakRegistered_budget`) uses an axiom beyond the three. Commit `a608e0c7dc6a`. [ran]
+- The witnesses carry the charge. First try of their file: `r20261112-164305-27ed`, exit 1, one error (a lemma's module not imported in the witness's `example`), fixed; its second try is running as I send this. [ran] Not yet run: the aggregator with its siblings, the records run, the suites, the gates.
+
+## The two obligations, for the issue you file and for #9350's body
+
+- **`RateAt`.** At every execution phase, for the statement `s` the phase's verifier parses and the partition `Pt` it reads for `s`, the sampling design the statement carries must miss every set `B` of `Pt`'s proof blocks with probability at most `(1 - q)^|B|` (`s.design.Pa Pt B ≤ (1 - q)^|B|`), at one `q` for the whole period. For a uniform sample of `kd` of the `n` proof blocks that holds at any `q ≤ kd/n` (`NetTiming.rateAt_subset`, proved), so the deployed sample would have to be shown to be that design with `kd/n ≥ q` at every phase; for a scan's stratified sample, `k_s` of the `n_s` proof blocks of each stratum, it would hold at any `q ≤ min_s k_s/n_s`, the worst stratum's rate and not the pooled `Σ k_s / Σ n_s`, and no lemma proves that. Neither is shown of the deployed check: it accepts one level drawn `subset:k` or stratified and reports `drawn` and `units` (`factsOf`, `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean` 1057 to 1065), and nothing ties that accepted profile to `s.design` at any `q`. [read: that file; `PooledRegSample.lean` 48 to 69] [argued: the stratified `q`]
+- **`PhasesAdaptive`.** For every secret, execution phase `i`'s statement, its prover's strategy and its registered openings must be the same at any two histories of the period's coins (each phase's prover tape and verifier coins) that agree on the phases before `i`. So the deployed order would have to be shown to be: phase `i`'s statement is fixed, its values are committed and its openings (the network certifier's and the registration's) are registered before phase `i`'s coins are drawn, and none of them reads a later phase's coins. That is shown of no check and no code: it is a property of the period the statement is read at. [read: `Definitions/NetworkCertifier/PooledReg.lean`, `PhasesAdaptive`]
+
+The five `open` premises, as the lock has them at `b782fc88d460`, each with issue LEAN-186, due 30 Nov: `Claims.SamplingGeneric.Arg.KS` (@proofs), `Claims.SamplingGeneric.Compiled.Sessions` (@proofs), `NetTiming.BoundaryGates.Fits` (@network-accounting), `NetTiming.CertifierRegisters` (@network-accounting), `NetTiming.RegOpens` (@proofs). [read: `security/lean-audit.json`, `open`] They and the two obligations above go into #9350's body, in its first screen under their own heading, when I next touch it; say if you want that edit before B.
+
+## NET-293's date
+
+**Tue 17 Nov 6 PM PST holds for NET-293's proof branch in this order if lean's merge is on `main` by about noon PST that day**: C is one merge with two conflicting files, one aggregator try and one records run, about two hours of one Lean slot with its pull request, and it needs lean's merge only, so it can go ahead of B if #9286 is the later of the two. [argued]
+
+## Least sure of, and not looked at
+
+- **Least sure:** that the charge's shape is the one proofs' phase bound will produce. I matched proofs' scratch (`cl z i ω x`, a function of the phase's own coins, with `Ex (cl z i ω)` beside `e i`; `ScratchPooledOnce.lean` 341 to 381 [read]). The phase bound itself does not exist yet. If it charges something that is not a function of the phase's prover tape and verifier coins alone (the extractor's coins, say), `PhaseErrors` would need a different average.
+- One choice you may want the other way: `e` and the charge are two parameters, as the issue's formula has them. One parameter would do (a constant charge is an `e`), and would drop `he0`. I kept two so the term that adds and the term paid once read apart.
+- I fixed one garbled sentence of #9350's module docstring here ("the statement reads at one verifier a statement as at one verifier of every statement"); #9350 still has it, and I put it right there at B's merge unless you say otherwise.
+- **Not looked at:** whether `Compiled.ksRegR_of_costs` meets `PhaseErrors` with a charge; anything in the deployed check about a charge; lean's branch against these changes beyond which files overlap (`Pooled.lean`'s module docstring will conflict at the merge, mine to resolve); the README rows; the unread count.
+
+## The statement's file, whole, at `bff4d5738c33`
+
+```lean
+module
+
+public import Definitions.NetworkCertifier.PooledReg
+
+/-!
+# The leak through the network certifier over a monitoring period, at the trace with the registered openings
+
+`PooledLeakAccepted` bounds a monitoring period's good event from two inputs at each execution phase, which it takes
+as hypotheses: the phase's audit accepts with probability at most `(1 - q)^{|W_i|} + e_i`, and it accepts outside its
+leak relation at `W_i` with probability at most `e'_i`. `PooledLeakRegistered` is that bound with both inputs proved,
+at the incorrect sets of one trace: at each execution phase, the trace read at the statement with the registered
+openings (`regValR`), whose incorrect set (`WregR`) the phase's statement, its prover's strategy and its registered
+openings fix before the phase's sample.
+
+* The first input holds there with the phase's error at most `e_i` plus the average, over the phase's own coins, of
+  a charge. The error is the committed form's at the trace read at the statement (`Compiled.εregX`) plus the
+  registered openings' binding term (`BopsX`'s probability): an accepted run that samples a proof block of the set
+  has a session's extraction fail, or its extractions disagree with themselves, with the trace read at the statement
+  or with a registered opening.
+* The second holds there with no error: where the network certifier registers an accepted phase's record among the
+  registered openings (`CertifierRegisters`), the record meets the leak relation at that set, with no probability.
+
+So the probability that every phase is accepted, at a statement registered as the period's (`PhaseRegistered`) and
+with a complete record (`RecordComplete`), outside the period's good event (`PooledGood` at `WregR`) is at most
+`(1 - q)^Fmax + Σ_i e_i` plus the average, over the period's coins, of the charges' sum. That an accepted phase is so
+registered and its record complete is in the event, not among the premises: a period in which an accepted phase is
+not registered as the period's, or has an incomplete record, is outside the bound.
+
+The charge. `e_i` is a number fixed before the period, and the `e_i` add over the phases. Phase `i`'s charge
+`cl z ω i` is a function of the phase's own coins that is not negative and that the earlier phases' coins fix
+(`ChargeAdaptive`); the phase's error is at most `e_i` plus the charge's average over the phase's own coins. The
+period pays the charges once: at the average, over the period's coins, of their sum along those coins,
+`Σ_i cl z ω i (ω i)`. So where the charge is what a prover spends from one budget across the phases, choosing each
+phase's share after the earlier phases' coins, the period pays at most the budget, where a bound on each phase alone
+pays each phase's largest share, added over the phases. At the charge zero the bound is `(1 - q)^Fmax + Σ_i e_i`.
+
+What it takes. The sampled proof system's premises (`Arg.KS`, and `CommitmentScheme.Binds` and `Compiled.Sessions`
+at every statement's verifier). The verifier is a function of the statement, `D y` the compiled verifier that judges
+`y`, and one verifier that judges every statement is the constant function;
+the phases' verifiers have at most `kV` rounds at their statements (`PhaseRounds`), and a phase's verifier reads the
+first of its `kV` coins. A rate `q` that every execution phase's sample met (`RateAt`), a hypothesis here: nothing in
+this statement derives it from what the verifier accepts. That each phase reads only the phases before it
+(`PhasesAdaptive`), a property of the period the statement is read at, which it proves of no check. That the registered
+openings pass under each statement's roots and open every registered input (`RegOpens`), that the layouts fit the
+registered statements (`BoundaryGates.Fits`), and that at each accepted phase the network certifier registers its
+record among the registered openings (`CertifierRegisters`). That each phase's error is at most `e_i` plus its
+charge's average (`PhaseErrors`), with the `e_i` and the charge not negative and the charge reading only the phases
+before its own (`ChargeAdaptive`).
+
+What it does not say. It counts no secrets: `PooledLeakAccepted`'s second conclusion does, at any incorrect sets. It
+fixes no sample's form and states no error's size. It names no charge: the charge is a parameter and `PhaseErrors`
+a premise, and nothing here shows of a charge that is not zero that it bounds a phase's error. A phase's error is
+still the committed form's with the binding term, one number at each phase, which the phase's statement, its
+prover's strategy and its registered openings fix before the phase's coins: the statement turns no part of it into
+what the prover spends.
+-/
+
+@[expose] public section
+
+namespace NetTiming.Guarantees
+
+open Claims Claims.Sampling Finset
+open Claims.SamplingGeneric (Arg Compiled)
+
+-- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
+set_option linter.unusedVariables false
+
+/-- **The leak through the network certifier over a monitoring period of accepted sampled audits, at the trace with
+the registered openings.** Over `m` execution phases on independent live coins, phase `i`'s a tape of its prover and
+`kV` coins, of which its verifier reads the first it needs (`hk`), each statement `y` judged by the compiled verifier
+`D y` over the proof system `A`: for each secret `z : Sec` and coins `ω`, phase `i`'s statement `x z ω i`, its prover's
+strategy `Pv z ω i` and its registered openings `ops z ω i` read only the phases before `i` (`had`), and `obs z ω i`
+are the phase's observations in the network certifier's record. Given
+
+* `A`'s knowledge soundness, and the commitment's binding and the sessions' contract at every statement's verifier
+  (`hA`, `hb`, `hS`);
+* registered openings that pass under each statement's roots and open every registered input (`hops`);
+* `q`, the rate every execution phase's sample met (`hrate`), a hypothesis here, with `0 ≤ q ≤ 1`;
+* `e i`, not negative (`he0`), and a charge `cl z ω i`, a quantity of phase `i`'s own coins that is not negative
+  (`hcl0`) and reads only the phases before `i` (`hcl`), with phase `i`'s error at the trace read at the statement
+  plus the registered openings' binding term at most `e i` plus the charge's average over the phase's own coins
+  (`he`);
+* layouts that fit the registered statements (`hfit`), and at each accepted phase, the network certifier registering
+  the phase's record among the registered openings (`hcert`);
+
+for every secret, the probability that every phase is accepted, its statement registered as `sw i` with the partition
+`Pw i` and the openings holding `ρ i` at the registered inputs (`PhaseRegistered`) and its record complete
+(`RecordComplete`), while the period's good event fails (`PooledGood` at the incorrect sets `WregR`: they hold under
+`Fmax` proof blocks in total, and every phase's record meets its leak relation at its own) is at most
+`(1 - q)^Fmax + Σ_i e i` plus the average, over the period's coins `ω`, of the charges' sum `Σ_i cl z ω i (ω i)`: the
+period pays the charges once, at their total along its coins. A period in which an accepted phase is not registered
+as the period's, or has an incomplete record, is outside the bound. -/
+def PooledLeakRegistered : Prop :=
+  ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} (H : Claims.Msg → Claims.Msg)
+    (D : Claims.Msg → Compiled Coin A) (hA : A.KS H) (hb : ∀ y, (D y).commit.Binds H) (hS : ∀ y, (D y).Sessions H)
+    {Lk K S : ℕ} (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ)
+    (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {m kV : ℕ} {Tp Sec : Type} [Fintype Tp] [Nonempty Tp]
+    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
+    (op : Fin m → List (List (Obs Lk K S)) → ℕ → List (Obs Lk K S) → List Bool)
+    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Claims.Msg)
+    (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Claims.Prover Tp) (hk : PhaseRounds D kV x)
+    (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool))
+    (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S)) (had : PhasesAdaptive x Pv ops)
+    (hops : ∀ z ω i s, (D (x z ω i)).parse (x z ω i) = some s →
+      RegOpens H (D (x z ω i)).commit s (reg s) (ops z ω i s))
+    (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hrate : ∀ z ω i s Pt, (D (x z ω i)).parse (x z ω i) = some s →
+      (D (x z ω i)).partition s = some Pt → RateAt s Pt q)
+    (e : Fin m → ℝ) (he0 : ∀ i, 0 ≤ e i)
+    (cl : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Tp × (Fin kV → Coin) → ℝ) (hcl : ChargeAdaptive cl)
+    (hcl0 : ∀ z ω i c, 0 ≤ cl z ω i c) (he : PhaseErrors H D x Pv ops e cl)
+    (hfit : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)))
+    (hcert : ∀ z ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
+      CertifierRegisters H (D (x z ω i)).commit (lay s) (k s) (op i (runsBefore (obs z ω) i)) s (ops z ω i s)
+        (obs z ω i))
+    (Fmax : ℕ) (z : Sec),
+    Pr (fun ω => (∀ i, phaseAcc H D x Pv hk z i ω (ω i) ∧
+          PhaseRegistered D lay k reg sw Pw ρ x ops z ω i ∧ RecordComplete k Dj sw obs z ω i) ∧
+        ¬PooledGood lay k reg Dj sw Pw ρ op Fmax (WregR H D x Pv ops z ω) (obs z ω)) ≤
+      (1 - q) ^ Fmax + ∑ i, e i + Ex fun ω => ∑ i, cl z ω i (ω i)
+
+end NetTiming.Guarantees
+```
+
+## Its two premises that changed, from `security/Definitions/NetworkCertifier/PooledReg.lean` at the same commit
+
+```lean
+/-- **Each execution phase's charge reads only the earlier phases' coins**: phase `i`'s charge `cl z ω i`, a function
+of the phase's own coins, is one at any two histories of the period's coins that agree before `i`. -/
+def ChargeAdaptive (cl : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Tp × (Fin kV → Coin) → ℝ) : Prop :=
+  ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → cl z ω i = cl z ω' i
+
+/-- **`e i` and the charge bound execution phase `i`'s error**: at every secret and every history, the committed
+form's error at the trace read at the statement (`Compiled.εregX`) plus the registered openings' binding term
+(`BopsX`'s probability), both at the statement's verifier, is at most `e i` plus the average, over the phase's own
+coins, of the phase's charge `cl z ω i`. At the charge zero it is at most `e i`. -/
+def PhaseErrors [Fintype Tp] [Nonempty Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A)
+    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
+    (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp)
+    (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) (e : Fin m → ℝ)
+    (cl : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Tp × (Fin kV → Coin) → ℝ) : Prop :=
+  ∀ z ω i, (D (x z ω i)).εregX H (x z ω i) (Pv z ω i) +
+    (BopsX H (D (x z ω i)) (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e i + Ex (cl z ω i)
+```
+
