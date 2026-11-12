@@ -155,16 +155,17 @@ PLACE: dict[str, tuple[str, ...]] = {
                     "definitions/circuits/constants.py", "definitions/circuits/library.py",
                     "definitions/circuits/operations.py", "definitions/circuits/requirement.py",
                     "definitions/circuits/requirement_units.py", "definitions/circuits/stacking.py"),
-    "ml.circuits.ops": ("definitions/ops",),
-    "ml.circuits.silicon": ("definitions/silicon",),
-    "ml.circuits.targets": ("definitions/circuits/targets",),
+    "ml.circuits.ops": ("definitions/ops", "circuits/ops"),
+    "ml.circuits.silicon": ("definitions/silicon", "circuits/silicon"),
+    "ml.circuits.targets": ("definitions/circuits/targets", "circuits/targets"),
     "ml.commitments": ("commitments", "definitions/commitments/gates/attest.py",
                        "definitions/commitments/gates/block_key.py",
                        "protocols/poub/verifier/commitments/gates/block_check.py"),
     "ml.crypto": ("commitments/crypto",),
-    "ml.definitions": ("definitions",),
-    "ml.kernels": ("definitions/kernels",),
-    "ml.private_circuits": ("definitions/private_circuits",),
+    "ml.definitions": ("definitions", "circuits/call_scope.py", "circuits/cross_call.py", "circuits/tiny.py",
+                       "circuits/word.py"),
+    "ml.kernels": ("definitions/kernels", "circuits/kernels"),
+    "ml.private_circuits": ("definitions/private_circuits", "circuits/private_circuits"),
     "ml.protocols.certifier": ("protocols/certifier/prover",),
     "ml.protocols.pous": ("protocols/pous/prover",),
     "ml.protocols.pouw": ("protocols/pouw/prover",),
@@ -191,7 +192,8 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 #: what else is core's, from ``verity/``.
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
-CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
+CORE_TREES = ("circuits/evaluate", "circuits/requirement", "commitments/identity", "commitments/lms", "definitions/evaluate",
+              "definitions/requirement", "difftest",
               "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/inference_only/verifier",
               "protocols/recursion", "protocols/remote", "protocols/tests")
 _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
@@ -210,8 +212,10 @@ DEPENDENCIES = {"numpy"}
 SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
             "protocols/inference_only/nci")
-#: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")
+#: The units that must stay stdlib-only, the scalar references (``PLACE`` says where their files are), and within them what
+#: may use numpy.
+NUMPY_FREE = ("ml.circuits", "ml.circuits.silicon", "ml.circuits.targets", "ml.randomness", "core.claims", "hardware",
+              "core.site", "core.protocols.record", "core.protocols.registration")
 NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")
 #: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
 #: ``verity/ml/`` that import core anyway
@@ -540,10 +544,12 @@ def test_every_source_directory_is_a_package() -> None:
     assert not missing, missing
 
 
-@pytest.mark.parametrize("subtree", NUMPY_FREE)
-def test_scalar_references_are_stdlib_only(subtree: str) -> None:
+@pytest.mark.parametrize("unit", NUMPY_FREE)
+def test_scalar_references_are_stdlib_only(unit: str) -> None:
+    files = [p for p in _sources() if _unit(_dotted(p)) == unit]
+    assert files, f"unit {unit!r} has no source: remove it from NUMPY_FREE"
     offenders = [f"{path.relative_to(SRC)}:{line}: {name}"
-                 for path in _sources(SRC / subtree)
+                 for path in files
                  if not any(path.relative_to(SRC).as_posix().startswith(u) for u in NUMPY_USERS)
                  for name, line, _ in _imports(path)
                  if name.split(".")[0] == "numpy"]
