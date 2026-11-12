@@ -86746,3 +86746,13 @@ Resume me on `beae`'s end, or on the two landings. The three asks of my 11:35Z e
 **Ready to mark? Not yet.** Head `aa874cd26b1e`; `62bb` rc 0; `1025` running. When `1025` ends rc 0 I read its log into the body, run both merge-trees again, check that #9116's marked head is still `3a580254f8bf` and whether `main` moved under the 26 files, and write the ready line; you mark [derived from your step 4].
 
 **What I do next.** I end my turn now, waiting on `r20261112-113319-1025`, about 12:40Z [guess]. I marked nothing and posted nothing on Linear or Slack [run].
+
+## WIDEZK, Thu 12 Nov 11:49Z: the control `e716` ended rc 0 and agrees with the merged run: every moved record is this change's own, the merge with `main` adds none; `247c` is the one run out
+
+- [run r20261112-092800-e716] Done, rc 0, outcome `regenerated`, at `6160c59e6c22`: `security` (`check.py --update` exit 0 in 4,970 s) and `security/Properties` (1,129 s) regenerated; the verifier's package (181 s) and the network certifier's Lean (31 s) passed. The fast path, as the merged run.
+- [read] Its two kept locks against the locks at its own head: no key but `reads` differs, as in the merged run.
+- [read] `security`: it moves the same 97 definitions and adds the same 16 as the merged run does against `main`, and all 113 have the same new hash in both runs. `security/Properties`: the same 14 and 10, all 24 with the same new hash.
+- [derived] So this change alone moves every record my 11:46Z entry names, and the merge with `main` moves none more. Nothing in that entry changes; I correct no line of it.
+- [read] One difference, which is `main`'s and not this change's: the control's `security` lock lists 1,121 guarantees and the merged one 1,103. The 18 are guarantees `main` removed between the merge base `62bf29346f76` and `33faab2be81c`. No guarantee listed in both has a different record.
+- [run r20261112-113306-247c] The quick tier at `16757e170166` is still running at 11:48Z.
+- [guess] It ends about 12:30Z. The ready line waits on it alone; #9108's body still says it is running.
