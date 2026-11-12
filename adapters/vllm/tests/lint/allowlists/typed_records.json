@@ -255,7 +255,6 @@
     {"file": "verity_vllm/pipeline/tp/commit_replay.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/tp-rank-replay/v1"},
     {"file": "verity_vllm/pipeline/tp/emit_ranks.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/build-relabel/v1"},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/tp2/fold-match/v1"},
-    {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 34},
     {"file": "verity_vllm/pipeline/tp/import_path.py", "kind": "schema-literal", "symbol": "write_import_path_runtime", "detail": "verity/tp2/import-path-runtime/v1", "count": 2},
     {"file": "verity_vllm/pipeline/tp/links.py", "kind": "schema-literal", "symbol": "write_tp_links", "detail": "cb-a/tp_links/v2"},
     {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/tp-sampled-replay/v1"},
