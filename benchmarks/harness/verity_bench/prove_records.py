@@ -41,6 +41,12 @@ every proof server report. A row
 whose staged Definition is no block type of the census under its cut is on no row and in no figure: it is listed
 under "Unread", with its own figure where it is a steady-state measurement.
 
+A row prices the census type it was staged for (`stage.word`), whatever Definition was staged (`stage.definition`).
+A type's row names the Definition its figure's statements are of (a row's `definition`): alone where it is the type's
+own, as "its Boolean version" where the tree registers it as the type's (`boolean_version`), and as "another
+Definition" where it doesn't, so a reader sees which form priced the type. A type priced from its family's row names
+that row's Definition the same way.
+
 The Lean verifier's seconds and the proof's bytes a served token are `not measured` with no `lean-verify` run of
 record. With one, a block type the Lean verifier was run on takes its record's figures and every other type is scaled
 from it (`prove`'s rules), and both totals print as `modeled`, each line naming what was measured (the block type, its
@@ -264,7 +270,9 @@ def row_cores(row: Mapping[str, Any], unstated: int = P.UNSTATED_CORES) -> int |
 def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> P.Steady | str:
     """A `RATES` row as a staged type's measurement at its prover count and its cores: a statement's GPU-seconds are
     the GPUs its provers held over its statements a second, and its cores the CPU cores they held for its card
-    (`row_cores`; `unstated` on a row that states none). A row that names no staged Definition can't be put on a block
+    (`row_cores`; `unstated` on a row that states none). Its block type is the census type it was staged for
+    (`stage.word`), and the Definition staged (`stage.definition`) its `form` where that is another; a row with no
+    `stage.word` is its `stage.definition`'s. A row that names no staged Definition can't be put on a block
     type's row, and is its reason instead. `art`: the art that holds the row as its `ART_RATES`, where the run's files
     don't."""
 
@@ -276,17 +284,40 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
         return f"its row {name}: {why}"
     why = row_why(row)
     stage = row["stage"]
+    staged = definition
     if isinstance(stage.get("word"), str):
         definition = P.definition_id(stage["word"])
+    form = None if staged == definition else staged
     blocks, full, provers = (x if _count(x) else 0 for x in (stage.get("blocks"), stage.get("full"), row.get("provers")))
     k_log = stage["k_log"] if isinstance(stage.get("k_log"), int) else 0
     held = RATES if art is None else ART_RATES
     cores = row_cores(row, unstated) or unstated
     if why:
         return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, refused=why, provers=provers,
-                        art=art, cores=cores)
+                        art=art, cores=cores, form=form)
     return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
-                    row.get("verify_s"), provers=provers, art=art, cores=cores)
+                    row.get("verify_s"), provers=provers, art=art, cores=cores, form=form)
+
+
+def boolean_version(block: str, definition: str) -> bool:
+    """Whether the tree registers `definition` (a Definition's id) as the Boolean version of the census type `block`
+    (its census name): the registry binds the type's Definition, and `verity.definitions.boolean.boolean_version` of
+    it, the newest registered Boolean Definition that names it as its word and no caller has to opt in to, has that
+    id. A type this tree's registry doesn't bind, or registers no Boolean version of, has none."""
+
+    from verity.circuits.defs import CompositeDefinition, bind
+
+    # registers `EmbeddingRead_v1`, a `READ` static's Definition, which `boolean.load` doesn't
+    from verity.commitments.gates import embedding  # noqa: F401
+    from verity.definitions import boolean
+    from verity.definitions.call_scope import spec_base, spec_statics, specialization
+
+    boolean.load()
+    try:
+        own = specialization(spec_base(block), spec_statics(block))
+        return boolean.boolean_version(bind(own) if isinstance(own, CompositeDefinition) else own).id == definition
+    except (LookupError, TypeError, ValueError):
+        return False
 
 
 def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
@@ -401,7 +432,8 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
             runs.append(target)
     aliases = sorted({(s.definition, s.type) for target in records(store).get(workload.record(STEADY), [])
                       if _superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
-    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases))
+    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases),
+                     boolean=boolean_version)
     table = prover.table(census)
     measured = sum(r.cost.source == P.STEADY for r in table.rows)
     count = f"{provers} prover{'' if provers == 1 else 's'}"
