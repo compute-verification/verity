@@ -345,7 +345,7 @@ theorem stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     rw [hLj]
     simp only [slotReveal, roundIn, ht0, Option.bind_some, hrec, hmsg]
   have hmode := RoundsReach.stop_modes_reveal hq hr hn hcut hlog hj hrev (by
-    change sha512Msg bb.data.toList = b.data.toList
+    change Verity.sha512Msg bb.data.toList = b.data.toList
     rw [← hya, hyans, hsha bb hbb, hdg512]
     all_goals rfl)
   have hwb : w = bb.data.toList := Option.some.inj (hw.symm.trans hmode)

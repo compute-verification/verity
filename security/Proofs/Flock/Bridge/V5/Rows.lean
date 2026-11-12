@@ -107,14 +107,14 @@ theorem _root_.Flock.Bridge.sampledKSLiveV5_rows :
           (zcStrat execArith hs512 (planZHJP dj y₀) (cont σ ω)) qF qS) →
         LinkCRZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw M t' →
         prob (fun o => LiveAcceptsZKP I own o ∧
-            ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
-              (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+            ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
+              (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
             (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
           ENNReal.ofReal δ +
             ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +
             ENNReal.ofReal (((kd * (D.unroll.ports.size + Bridge.pubBits D.unroll hU pi) + 3 : ℕ) : ℝ) *
               (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) +
-            Claims.ecrBound Claims.Sampling.sha512Msg (Bridge.rootsFinderL D.unroll Lm)
+            Claims.ecrBound Verity.sha512Msg (Bridge.rootsFinderL D.unroll Lm)
               (Bridge.rootsCostL D.unroll Lm)
       else
         prob (fun o => Bridge.LiveAcceptsKSP I own o)

@@ -76,8 +76,8 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOf_isInput (Discharge.Layout.outsOf D.unroll hU n) h
   have hns := Bridge.nsOf_sum hpop
-  have hsub : (Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ (.subset kd) desc q roots)
-      (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)).filter
+  have hsub : (Claims.Sampling.faulty Verity.sha512Msg Cd (Bridge.stmtOf P κ (.subset kd) desc q roots)
+      (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr)).filter
         (· < n) ⊆
       (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
         (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr).map
@@ -90,13 +90,13 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
     obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_wrongRegZc _ _ _ _ _ _).2 hu)
     refine hF P vb.pos (fun o g => vb.bit (vb.val o) g) id vb.com (vb.cs (reg σ))
       (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
-      Claims.Sampling.sha512Msg Cd roots Xr κ ⟨v, hlt⟩ hκin ⟨op, hop⟩
+      Verity.sha512Msg Cd roots Xr κ ⟨v, hlt⟩ hκin ⟨op, hop⟩
       (fun g hg hn o ho hc => hTu ⟨v, hlt⟩ g hg hn o ho (hc.2 hn)) ?_ _ (.subset kd) desc q hns hv
     intro g hg b hb
     obtain ⟨-, hbit, hcan⟩ := hop g hg
     exact hbit.symm.trans (hcan.1 b hb)
-  have hcard : ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
-      (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) →
+  have hcard : ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+      (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr) →
       min K₀ (n - kd + 1) ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
         (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr).card := fun hrel =>
     (hC P _ hns kd K₀ hkd1 hkd _ _ κ desc q roots _ hrel).trans

@@ -226,7 +226,7 @@ theorem link_answers {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
     (hlog : x.log = L₀ ++ r :: L) (hr : r.frame = .opening i s n)
     (hL₀ : ∀ q ∈ L₀, ∀ i' s' n', q.frame ≠ .opening i' s' n')
     (hO : ((helloSpecs L₀)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION) :
-    ∃ m, linkIn A.tables x = some m ∧ sha512Msg m = r.answers.data.toList := by
+    ∃ m, linkIn A.tables x = some m ∧ Verity.sha512Msg m = r.answers.data.toList := by
   subst hθ
   obtain ⟨p', hp', -⟩ := hA.params
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)

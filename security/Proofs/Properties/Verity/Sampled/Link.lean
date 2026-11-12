@@ -309,7 +309,7 @@ theorem checkBlobsAt_link {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.O
       _root_.Spot.OneStageZk.treesOf p.base e.base = .ok #[t] ∧
       t.opening _root_.Spot.Challenger.TREE_SESSION 0 = some o ∧
       linkMsg record spec.tables = some (spec.sigma ++ rb).data.toList ∧
-      o.after = Flock.hexOf ⟨(sha512Msg (spec.sigma ++ rb).data.toList).toArray⟩ := by
+      o.after = Flock.hexOf ⟨(Verity.sha512Msg (spec.sigma ++ rb).data.toList).toArray⟩ := by
   obtain ⟨record, spec, tabs, rest, proofs, hv⟩ := checkBlobsAt_verified h
   obtain ⟨rs, tags0, circuitB, pubB, rd, hs, ht, hc, hpb, hrd, hrec, hst, -, hver⟩ := id hv
   obtain ⟨recB, hb, hr⟩ : ∃ recB, bs.get rs.record s!"session {rs.name}'s record" = .ok recB ∧
@@ -379,6 +379,6 @@ theorem checkBlobsAt_link {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.O
   refine ⟨record, spec, tabs, rest, proofs, sess, t, o, rb, tabs[0], hv, hd, hB, Array.getElem?_eq_getElem h0,
     by rw [hlen n rfl]; exact hn, hts1 ▸ hts, ho, hm, ?_⟩
   have he : ∀ b : ByteArray, (⟨b.data.toList.toArray⟩ : ByteArray) = b := fun _ => rfl
-  rw [hafter, sha512Msg, he, he]
+  rw [hafter, Verity.sha512Msg, he, he]
 
 end Verity.Sampled

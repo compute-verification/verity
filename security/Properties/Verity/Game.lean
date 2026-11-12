@@ -524,10 +524,6 @@ def requestThen (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : A
     (t : Game.Strategy (finish D θ F c a [])) : Game.Strategy (play fs D θ F c) :=
   ⟨a, closeThen (finish D θ F c a) t (frames fs) fs []⟩
 
-/-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
-(`Claims.ExpectedCR`) read. -/
-def sha512Msg (m : Claims.Msg) : Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
-
 open Classical in
 /-- **The committed file a digest the parameters hold names**: the first of the committed files `F` whose SHA-512 is
 `h`, as v2 looks the circuit file and the public file up by their digests; empty when none is. -/
@@ -619,8 +615,8 @@ it outputs a SHA-512 collision with probability at most its budget at the strate
 def FinderSpec.CR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (f : FinderSpec G cost) (σ : Game.Strategy G) :
     Prop :=
   match f.claim with
-  | .ecr => (f.finder σ).Pr sha512Msg ≤ (f.budget (cost σ) : ℝ) / 2 ^ (256 : ℝ)
-  | .cr => Claims.StrictBirthday sha512Msg (f.finder σ)
+  | .ecr => (f.finder σ).Pr Verity.sha512Msg ≤ (f.budget (cost σ) : ℝ) / 2 ^ (256 : ℝ)
+  | .cr => Claims.StrictBirthday Verity.sha512Msg (f.finder σ)
 
 /-- **The collision premises at a list of further finders**, each at its own budget (`FinderSpec.CR`): `True` at no
 finder. -/
@@ -868,7 +864,7 @@ noncomputable def crBound (θ : ByteArray) (a : Subprotocol) (t : ℕ) : ℝ :=
 strategy. Its calls are within its budget on every coin (`finderSpec`), so it outputs a SHA-512 collision with
 probability at most `crBound` at the strategy's calls. -/
 def FinderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
-  Claims.ExpectedCR sha512Msg (V.finder a θ F c σ)
+  Claims.ExpectedCR Verity.sha512Msg (V.finder a θ F c σ)
 
 /-- **`B^τ`'s forgery premise**: subprotocol `a`'s forger applied to the strategy meets
 `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier, at the finder's budget of SHA-512 calls
@@ -888,7 +884,7 @@ noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray)
   condError (fun σ => V.finderCR a θ F c σ ∧ V.premises a θ F c σ ∧ V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
     (fun σ => V.delta θ a (V.cost θ F c σ) +
       ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a) (V.signatures θ)) +
-      V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) σ
+      V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr Verity.sha512Msg))) σ
 
 /-- **Soundness at composite `k` for the acceptance `acc`, in the causal game.** At all parameters `θ`, committed files
 `F` and commitments `c`, and for every strategy, the probability that `acc` holds of what the prover sent for files

@@ -185,19 +185,19 @@ theorem unbound_subset_faulty_part
     (w : Wit) :
     (Accounting.unbound A.fileRead.parts op
         (cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-          (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val sha512Msg A.Cd
+          (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val Verity.sha512Msg A.Cd
             (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩
               A.roots))))).image Fin.val ⊆
-      faulty sha512Msg A.Cd
+      faulty Verity.sha512Msg A.Cd
         (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩ A.roots)
         (Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.desc A.qr)) w := by
   refine unbound_subset_of_parsed A.parsed_eq A.Cc_eq A.P_heq (κ₀ := A.κ) (κ := A.κ) HEq.rfl A.consts_eq
-    (H := sha512Msg) (Cm := A.Cd) (roots := A.roots)
-    (val := w.val sha512Msg A.Cd
+    (H := Verity.sha512Msg) (Cm := A.Cd) (roots := A.roots)
+    (val := w.val Verity.sha512Msg A.Cd
       (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩ A.roots))
     (fun _ _ h => Flock.Bridge.opens_of_val h) ?_ op hop hc _ (cast_heq _ _)
   intro opens hK hO
-  exact Flock.Bridge.unbound_subset_faulty_partOf A.P A.κ (Flock.Bridge.nsOf_sum A.hpop) sha512Msg A.Cd
+  exact Flock.Bridge.unbound_subset_faulty_partOf A.P A.κ (Flock.Bridge.nsOf_sum A.hpop) Verity.sha512Msg A.Cd
     (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩ A.roots) rfl w
     opens A.κ_isInput hK hO
 

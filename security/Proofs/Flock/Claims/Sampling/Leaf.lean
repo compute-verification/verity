@@ -117,12 +117,13 @@ theorem hm96Leaf_binds (H : Msg → Msg) {row : Opening Bool → Msg} (hrow : Ro
 /-- **At SHA-512 the program is Flock's hm96 leaf**: it never refuses, and its leaf is the digest of `hm96Input` at the
 row and salt (`ExplicitLeaf.hm96`'s, the executable's `Hm96.Default512.treeLeaf` by `hm96_treeLeaf`). -/
 theorem hm96Leaf_sha512 (row salt : Opening Bool → Msg) (o : Opening Bool) :
-    ((hm96Leaf row salt o).eval sha512Msg).1 = some (digBytes (H512 (hm96Input (row o) (salt o)))) := by
-  have e : ∀ m, sha512Msg m = digBytes (H512 m) := fun m => by
-    unfold sha512Msg bytes
+    ((hm96Leaf row salt o).eval Verity.sha512Msg).1 = some (digBytes (H512 (hm96Input (row o) (salt o)))) := by
+  have e : ∀ m, Verity.sha512Msg m = digBytes (H512 m) := fun m => by
+    rw [sha512Msg_bs]
+    unfold bytes
     rw [digBytes, dig_eq, H512_val]
     rfl
-  have hlen : ∀ m, (sha512Msg m).length = 64 := fun m => by
+  have hlen : ∀ m, (Verity.sha512Msg m).length = 64 := fun m => by
     rw [e]
     exact hL512 _
   rw [hm96Leaf_fst, ite_eq_left ⟨hlen _, hlen _⟩]

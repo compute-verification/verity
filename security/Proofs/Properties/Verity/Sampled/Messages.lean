@@ -305,28 +305,28 @@ theorem play_eq (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : A
 
 /-- **The messages `rv` reveals that open the digest `dg`**: those whose SHA-512 is `dg`. -/
 def digestReveal {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) : Option Claims.Msg :=
-  (rv o).filter fun w => decide (sha512Msg w = dg)
+  (rv o).filter fun w => decide (Verity.sha512Msg w = dg)
 
 theorem digestReveal_sha512 {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) (w : Claims.Msg)
-    (h : digestReveal rv dg o = some w) : sha512Msg w = dg := by
+    (h : digestReveal rv dg o = some w) : Verity.sha512Msg w = dg := by
   unfold digestReveal at h
   rcases hr : rv o with _ | u
   · simp [hr] at h
   · rw [hr] at h
-    by_cases hu : sha512Msg u = dg
+    by_cases hu : Verity.sha512Msg u = dg
     · simp [Option.filter, hu] at h
       exact h ▸ hu
     · simp [Option.filter, hu] at h
 
 /-- **The cut here, at the digest `dg`**: the messages `rv` reveals that open `dg`. -/
 def cutAt {β : Type} {g : Game β} (rv : β → Option Claims.Msg) (dg : Claims.Msg) :
-    DigestCut.AgreeCut sha512Msg g :=
+    DigestCut.AgreeCut Verity.sha512Msg g :=
   .here (digestReveal rv dg) dg (digestReveal_sha512 rv dg)
 
 /-- An option's two cuts, on `optGame`'s two continuations. -/
 def optCut {γ β : Type} {n : Game β} {y : γ → Game β} :
-    (o : Option γ) → DigestCut.AgreeCut sha512Msg n → ((x : γ) → DigestCut.AgreeCut sha512Msg (y x)) →
-      DigestCut.AgreeCut sha512Msg (optGame o n y)
+    (o : Option γ) → DigestCut.AgreeCut Verity.sha512Msg n → ((x : γ) → DigestCut.AgreeCut Verity.sha512Msg (y x)) →
+      DigestCut.AgreeCut Verity.sha512Msg (optGame o n y)
   | none, cn, _ => cn
   | some x, _, cy => cy x
 
@@ -336,7 +336,7 @@ frame, and its digest the bytes the frame answers: there the play reveals the me
 digest. A play with no such frame has no cut. -/
 noncomputable def frameCut {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg) :
     (k : ℕ) → (fs : List (String × ℕ)) → (ts : List OpenTree) → (f : List Release → Game β) →
-      (pre : List Release) → DigestCut.AgreeCut sha512Msg (relK k fs ts f)
+      (pre : List Release) → DigestCut.AgreeCut Verity.sha512Msg (relK k fs ts f)
   | 0, _, _, _, _ => .skip
   | k + 1, fs, ts, _, pre => .send fun
     | none => .skip
@@ -388,12 +388,12 @@ variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
 /-- **Round `j`'s cut**: after the prover's request, at the first frame round `j`'s reading picks, the messages the
 evidence reveals for it that open the bytes the frame answers. -/
-noncomputable def roundCut (rd : Reading R) (j : Fin R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
+noncomputable def roundCut (rd : Reading R) (j : Fin R) : DigestCut.AgreeCut Verity.sha512Msg (V.game θ F c) :=
   (DigestCut.AgreeCut.send fun a : ByteArray => frameCut (rd.round j) (rd.reveal j) (frames (V.families θ))
     (V.families θ) [] (finish (V.signer θ) θ F c a) []).cast (game_eq_relK V θ F c).symm
 
 /-- **The record's cut**: at the play's start, the records the evidence reveals that open the record's digest. -/
-noncomputable def recordCut (rd : Reading R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
+noncomputable def recordCut (rd : Reading R) : DigestCut.AgreeCut Verity.sha512Msg (V.game θ F c) :=
   cutAt rd.record rd.recordDigest
 
 /-- **A tape that misses at no round and not at the record**: its play reveals, at each round's cut and the record's
@@ -408,15 +408,15 @@ theorem prob_le_noMiss_add (rd : Reading R) (σ : Game.Strategy (V.game θ F c))
     Game.prob E (V.game θ F c) σ ≤
       ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
           E (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c rd σ x) +
-        (∑ j, ENNReal.ofReal (Real.sqrt (((roundCut V θ F c rd j).cut.finder σ q).Pr sha512Msg)) +
-          ENNReal.ofReal (Real.sqrt (((recordCut V θ F c rd).cut.finder σ q).Pr sha512Msg))) := by
+        (∑ j, ENNReal.ofReal (Real.sqrt (((roundCut V θ F c rd j).cut.finder σ q).Pr Verity.sha512Msg)) +
+          ENNReal.ofReal (Real.sqrt (((recordCut V θ F c rd).cut.finder σ q).Pr Verity.sha512Msg))) := by
   let Ks : Option (Fin R) → DigestCut Claims.Msg (V.game θ F c) := fun
     | none => (recordCut V θ F c rd).cut
     | some j => (roundCut V θ F c rd j).cut
-  have hK : ∀ i, (Ks i).Agrees sha512Msg := fun
+  have hK : ∀ i, (Ks i).Agrees Verity.sha512Msg := fun
     | none => (recordCut V θ F c rd).agrees
     | some j => (roundCut V θ F c rd j).agrees
-  have h := DigestCut.prob_le_noMiss_add_sqrt sha512Msg E (V.game θ F c) σ Ks hK fun _ => q
+  have h := DigestCut.prob_le_noMiss_add_sqrt Verity.sha512Msg E (V.game θ F c) σ Ks hK fun _ => q
   rw [Fintype.sum_option, add_comm (ENNReal.ofReal _) (∑ j, _)] at h
   refine h.trans_eq ?_
   congr 2
@@ -459,8 +459,8 @@ theorem prob_le_messages (rd : Readings) (K : Constructions V) (hM : K.msgFinder
     Game.prob E (V.game θ F c) σ ≤
       ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
           E (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd A θ F c) σ x) +
-        (∑ j, ENNReal.ofReal (Real.sqrt ((K.msgFinder A θ F c σ j).Pr sha512Msg)) +
-          ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr sha512Msg))) := by
+        (∑ j, ENNReal.ofReal (Real.sqrt ((K.msgFinder A θ F c σ j).Pr Verity.sha512Msg)) +
+          ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr Verity.sha512Msg))) := by
   rw [hM, hR]
   exact prob_le_noMiss_add V θ F c (rd A θ F c) σ _ E
 
@@ -477,8 +477,8 @@ theorem couplingTarget_of_noMiss (k : Verity.Registration.Composite) (rd : Readi
           V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd A θ F c) σ x) ≤
         FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkHidden.LiveAcceptsZKP A.I A.own o)
             (K.live A θ F c σ).game (K.project A θ F c σ) +
-          (ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr sha512Msg)) + A.hidingTerm +
-            ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+          (ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr Verity.sha512Msg)) + A.hidingTerm +
+            ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
             ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))) :
     CouplingTarget V k K A θ F := fun c σ =>
   (prob_le_messages V rd K hM hR A θ F c σ _).trans <| (add_le_add (h c σ) le_rfl).trans_eq (by ring)

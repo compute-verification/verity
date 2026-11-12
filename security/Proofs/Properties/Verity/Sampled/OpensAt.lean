@@ -62,8 +62,8 @@ theorem sha512_hashOf : Flock.Bridge.Spec.HashOf Verity.sha512 := fun x => by
   rw [hx]
   rfl
 
-theorem sha512Msg_length (m : Claims.Msg) : (Claims.Sampling.sha512Msg m).length = 64 := by
-  rw [Claims.Sampling.sha512Msg, bs_length, Flock.Sha512.hash_size]
+theorem sha512Msg_length (m : Claims.Msg) : (Verity.sha512Msg m).length = 64 := by
+  rw [Claims.Sampling.sha512Msg_bs, bs_length, Flock.Sha512.hash_size]
 
 /-- **A port's row message hashes to its registered schema's `Hash.RowLeaf` digest** under SHA-512, whichever of
 Flock's formats the port's rows are in: `sha512/row-seg/v1`, `sha512/row/v2` or `sha512/row/v1`. -/
@@ -189,7 +189,7 @@ theorem placeOf_words {i : ℕ} {r : Flock.Bridge.RowAt} (hr : Flock.Bridge.rowO
 /-- **An opening the deployed commitment accepts is a `Hash.RowLeaf` opening at the registered place**: under
 SHA-512, at `placeAt`'s verifier, root and rank, its row holding the opened bit at the place's offset. -/
 theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : Claims.Msg}
-    (h : A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨i, b, m⟩ = true) :
+    (h : A.Cd.Opens Verity.sha512Msg A.roots ⟨i, b, m⟩ = true) :
     ∃ p, A.placeAt i = some p ∧ ∃ o : Hash.RowLeaf.Opening,
       Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 p.verifier p.root p.rank o ∧ o.row[p.offset]? = some b := by
   unfold Live.Cd Flock.Bridge.commitDepL at h

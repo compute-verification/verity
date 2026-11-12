@@ -4,6 +4,7 @@ public import Proofs.Flock.Verifier.Registered
 public import Proofs.Flock.Bytes
 public import Batteries.Data.ByteArray
 public import Definitions.Claims.Sampling
+public import Properties.Verity.Sha512
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -53,7 +54,7 @@ is as an oracle program that queries the code's own frames in the code's order (
   position query two different frames; where their climbs first reach one digest, the two queries there are different
   frames with one answer. A frame-v3 frame gives each part's length, and every node has a 64-byte sibling child, so
   equal node frames have equal children of whatever length `H` answers.
-* `regPath_sha512`: at `H` = SHA-512 (`sha512Msg`), the program accepts exactly when the verifier's own
+* `regPath_sha512`: at `H` = SHA-512 (`Verity.sha512Msg`), the program accepts exactly when the verifier's own
   `Flock.Registered.opensLeaf` does at that port.
 * `pathCommit`, `pathCommit_binds`: the trace's commitment by leaves (a leaf that refuses fails the opening) and a path
   check binds (`CommitmentScheme.Binds`) when its leaf binds the value (`LeafBinds`) and its path check binds the leaf
@@ -234,22 +235,22 @@ theorem regPath_binds (H : Msg → Msg) (own : Array Registered.Port) : PathBind
 
 /-! ## At SHA-512, the verifier's own check -/
 
-/-- SHA-512 on messages. -/
-def sha512Msg (m : Msg) : Msg := bs (Sha512.hash (bytes m))
+/-- SHA-512 on messages (`Verity.sha512Msg`) is the code's SHA-512 of the message's bytes. -/
+theorem sha512Msg_bs (m : Msg) : Verity.sha512Msg m = bs (Sha512.hash (bytes m)) := rfl
 
 theorem climbOC_sha512 (dom : ByteArray) (root : Msg) :
     ∀ (sibs : List ByteArray) (cur : Msg) (idx d : ℕ),
-      ((climbOC dom root cur idx d sibs).eval sha512Msg).1 =
+      ((climbOC dom root cur idx d sibs).eval Verity.sha512Msg).1 =
         decide (bs (climbL dom (bytes cur) idx d sibs) = root) := by
   intro sibs
   induction sibs with
   | nil => intro cur idx d; simp [climbOC, OC.eval, climbL, bs_bytes]
   | cons sib rest ih =>
     intro cur idx d
-    have e : bytes (sha512Msg (bs (if idx % 2 = 0 then nodeIn dom d (idx / 2) (bytes cur) sib
+    have e : bytes (Verity.sha512Msg (bs (if idx % 2 = 0 then nodeIn dom d (idx / 2) (bytes cur) sib
         else nodeIn dom d (idx / 2) sib (bytes cur)))) =
         if idx % 2 = 0 then node dom d (idx / 2) (bytes cur) sib else node dom d (idx / 2) sib (bytes cur) := by
-      simp only [sha512Msg, bytes_bs]
+      simp only [sha512Msg_bs, bytes_bs]
       split_ifs <;> exact (node_eq _ _ _ _ _).symm
     simp only [climbOC, OC.eval, climbL]
     rw [ih, e]
@@ -258,7 +259,7 @@ theorem climbOC_sha512 (dom : ByteArray) (root : Msg) :
 /-- **At SHA-512 the program is the verifier's check**: it accepts exactly when the verifier's own port whose root is
 `root` opens `leaf` at `pos` through `π` (`Flock.Registered.opensLeaf`). -/
 theorem regPath_sha512 (own : Array Registered.Port) (root : Msg) (pos : ℕ) (leaf π : Msg) :
-    ((regPath own root pos leaf π).eval sha512Msg).1 = true ↔
+    ((regPath own root pos leaf π).eval Verity.sha512Msg).1 = true ↔
       ∃ reg, own.find? (fun p => decide (bs p.root = root)) = some reg ∧
         opensLeaf reg (bytes leaf) pos (bytes π) = true := by
   unfold regPath
@@ -266,16 +267,16 @@ theorem regPath_sha512 (own : Array Registered.Port) (root : Msg) (pos : ℕ) (l
   | none => simp [OC.eval]
   | some reg =>
     have hroot : bs reg.root = root := by simpa using Array.find?_some hf
-    have hiff : ((regPathAt reg root pos leaf π).eval sha512Msg).1 = true ↔
+    have hiff : ((regPathAt reg root pos leaf π).eval Verity.sha512Msg).1 = true ↔
         opensLeaf reg (bytes leaf) pos (bytes π) = true := by
       unfold regPathAt opensLeaf
       simp only [Bool.and_eq_true, decide_eq_true_eq, size_bytes]
       split_ifs with c
       · simp only [OC.eval]
         rw [climbOC_sha512]
-        have e : bytes (sha512Msg (bs (leafInAs reg.schema reg.domain pos (bytes leaf)))) =
+        have e : bytes (Verity.sha512Msg (bs (leafInAs reg.schema reg.domain pos (bytes leaf)))) =
             leafAs reg.schema reg.domain pos (bytes leaf) := by
-          simp only [sha512Msg, bytes_bs]
+          simp only [sha512Msg_bs, bytes_bs]
           exact (leafAs_eq _ _ _ _).symm
         rw [e, decide_eq_true_eq]
         constructor

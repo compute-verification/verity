@@ -350,12 +350,12 @@ end Vocab
 /-- **A file finder outputs a collision** when the committed file the digest `h` names is not the registered one and
 has its SHA-512: the circuit file's (`Vocab.fileFinder`) and the public file's (`Vocab.publicFinder`). -/
 theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (hne : namedFile h F ≠ namedFile h R)
-    (hd : sha512Msg (namedFile h F).data.toList = sha512Msg (namedFile h R).data.toList) :
-    (namedFinder h F R).Pr sha512Msg = 1 := by
+    (hd : Verity.sha512Msg (namedFile h F).data.toList = Verity.sha512Msg (namedFile h R).data.toList) :
+    (namedFinder h F R).Pr Verity.sha512Msg = 1 := by
   have hl : (namedFile h F).data.toList ≠ (namedFile h R).data.toList := fun e =>
     hne (ByteArray.ext (Array.ext' e))
   have hs : ∀ s : (namedFinder h F R).S,
-      ∃ u v, (namedFinder h F R).out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
+      ∃ u v, (namedFinder h F R).out s = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v :=
     fun _ => ⟨_, _, by simp only [namedFinder, if_neg hne], hl, hd⟩
   classical
   unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
@@ -371,7 +371,7 @@ theorem namedFinder_calls (h : Option Hash.Digest) (F R : Array ByteArray) (x : 
 coin (`FinderSpec.calls`), so where it meets `Claims.ExpectedCR` it finds a collision with probability at most its
 budget over `2^256`. -/
 theorem FinderSpec.cr_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (f : FinderSpec G cost)
-    (hc : f.claim = .ecr) (σ : Game.Strategy G) (h : Claims.ExpectedCR sha512Msg (f.finder σ)) : f.CR σ := by
+    (hc : f.claim = .ecr) (σ : Game.Strategy G) (h : Claims.ExpectedCR Verity.sha512Msg (f.finder σ)) : f.CR σ := by
   unfold FinderSpec.CR
   rw [hc]
   unfold Claims.ExpectedCR at h
@@ -386,8 +386,8 @@ theorem FinderSpec.cr_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G 
 and `cr/sha-512` at each asked under the strict birthday bound. -/
 theorem finderCROf_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (fs : List (FinderSpec G cost))
     (σ : Game.Strategy G)
-    (h : ∀ f ∈ fs, (f.claim = .ecr ∧ Claims.ExpectedCR sha512Msg (f.finder σ)) ∨
-      (f.claim = .cr ∧ Claims.StrictBirthday sha512Msg (f.finder σ))) : finderCROf fs σ := by
+    (h : ∀ f ∈ fs, (f.claim = .ecr ∧ Claims.ExpectedCR Verity.sha512Msg (f.finder σ)) ∨
+      (f.claim = .cr ∧ Claims.StrictBirthday Verity.sha512Msg (f.finder σ))) : finderCROf fs σ := by
   unfold finderCROf
   refine List.forall_iff_forall_mem.2 fun f hf => ?_
   rcases h f hf with ⟨hc, he⟩ | ⟨hc, hs⟩
@@ -401,7 +401,7 @@ theorem finderCROf_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G →
 at the strategy's calls. -/
 theorem Vocab.finderPr_le_crBound {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) {a : Subprotocol}
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    (h : V.FinderCR a θ F c σ) : (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ) :=
+    (h : V.FinderCR a θ F c σ) : (V.finder a θ F c σ).Pr Verity.sha512Msg ≤ V.crBound θ a (V.cost θ F c σ) :=
   (V.finderSpec a θ F c).cr_of_expectedCR rfl σ h
 
 namespace Idle

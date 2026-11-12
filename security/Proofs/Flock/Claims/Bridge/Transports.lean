@@ -172,7 +172,7 @@ index through `π`. -/
 theorem opens_pathCommitRow (at_ : List Msg → ℕ → Option (Msg × ℕ)) (rowf : Opening Bool → Msg)
     (salt π : Opening Bool → Msg) (own : Array Flock.Registered.Port)
     (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) (roots : List Msg) (o : Opening Bool) :
-    (pathCommit at_ (hm96Leaf rowf salt) π (regPath own) layer).Opens sha512Msg roots o = true ↔
+    (pathCommit at_ (hm96Leaf rowf salt) π (regPath own) layer).Opens Verity.sha512Msg roots o = true ↔
       ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (rowf o) (salt o)))))
           ri.2 (bytes (π o)) = true := by
@@ -190,7 +190,7 @@ theorem opens_pathCommitRow (at_ : List Msg → ℕ → Option (Msg × ℕ)) (ro
 theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool)
     (salt π : Opening Bool → Msg) (own : Array Flock.Registered.Port)
     (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) (roots : List Msg) (o : Opening Bool) :
-    (pathCommit at_ (hm96Leaf (row place bits) salt) π (regPath own) layer).Opens sha512Msg roots o = true ↔
+    (pathCommit at_ (hm96Leaf (row place bits) salt) π (regPath own) layer).Opens Verity.sha512Msg roots o = true ↔
       ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (row place bits o) (salt o)))))
           ri.2 (bytes (π o)) = true :=
@@ -199,7 +199,7 @@ theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place
 /-- **At SHA-512 the deployed check is the verifier's** (`opens_pathCommit` at a sampled verifier's code, at the ports
 the opening's position reads under its roots). -/
 theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :
-    (commit c).Opens sha512Msg roots o = true ↔
+    (commit c).Opens Verity.sha512Msg roots o = true ↔
       ∃ ri reg, c.at_ roots o.pos = some ri ∧
         (c.ownAt roots o.pos).find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (row c.place c.bits o) (c.salt o)))))
@@ -210,7 +210,7 @@ theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :
 `RowShaped` of its place's width. -/
 theorem opens_shaped (c : Code) (roots : List Msg) (o : Opening Bool) (h16 : (c.place o.pos).1 % 16 = 0)
     (hW : (c.place o.pos).1 ≤ W) :
-    (commit c).Opens sha512Msg roots o = true ↔
+    (commit c).Opens Verity.sha512Msg roots o = true ↔
       ∃ ri reg, c.at_ roots o.pos = some ri ∧
         (c.ownAt roots o.pos).find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input

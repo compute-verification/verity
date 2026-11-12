@@ -14,7 +14,7 @@ circuit file, whose SHA-512 is the reference's. The two differ only at a SHA-512
 * `pinHash_of_pinOk`: a statement `pinOk` passes, `pinHash` passes.
 * `pinOk_of_pinHash`: a statement `pinHash` passes whose circuit file exposes no collision (`pinColl = none`), `pinOk`
   passes.
-* `pinColl_collides`: what `pinColl` outputs is a SHA-512 collision (`Claims.Collision sha512Msg`).
+* `pinColl_collides`: what `pinColl` outputs is a SHA-512 collision (`Claims.Collision Verity.sha512Msg`).
 
 `VHash` is the two-stage verifier with round 2's pin as the driver checks it, and `V` stays the stricter one the
 guarantees read. The two give one run unless the message that states the session statements (round `stage + 1`'s)
@@ -89,7 +89,7 @@ theorem pinOk_of_pinHash {t : ℕ} {w : FlockDeploy.Raw} (hp : pinHash h t w = t
     simp_all
 
 theorem pinColl_collides {t : ℕ} {w : FlockDeploy.Raw} {u v : Msg} (hp : pinColl h t w = some (u, v)) :
-    Claims.Collision sha512Msg u v := by
+    Claims.Collision Verity.sha512Msg u v := by
   unfold pinColl at hp
   cases hd : FlockDeploy.decode (h.xS₀ t) with
   | none => simp [hd] at hp
@@ -99,7 +99,7 @@ theorem pinColl_collides {t : ℕ} {w : FlockDeploy.Raw} {u v : Msg} (hp : pinCo
     · rename_i hc
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hp)
       refine ⟨fun e => hc.1 (bs_inj e).symm, ?_⟩
-      simp only [sha512Msg, bytes_bs, hc.2]
+      simp only [sha512Msg_bs, bytes_bs, hc.2]
     · simp at hp
 
 theorem pin_eq {t : ℕ} {w : FlockDeploy.Raw} (hn : pinColl h t w = none) : pinHash h t w = pinOk h t w := by
@@ -164,7 +164,7 @@ def pinFinder (H : Msg → Msg) : FinderFamily := fun Ω _ _ P x =>
 
 variable {h}
 
-theorem pinCollOf_collides {m₂ u v : Msg} (hc : pinCollOf h m₂ = some (u, v)) : Claims.Collision sha512Msg u v := by
+theorem pinCollOf_collides {m₂ u v : Msg} (hc : pinCollOf h m₂ = some (u, v)) : Claims.Collision Verity.sha512Msg u v := by
   unfold pinCollOf at hc
   split at hc
   · obtain ⟨t, -, ht⟩ := List.exists_of_findSome?_eq_some hc
@@ -275,13 +275,13 @@ theorem pr_acc_hash_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) 
     [Fintype C] [Nonempty C] (E : Ω × (Fin ((V h).k x) → FlockDeploy.Coin) × C → Prop) :
     Pr (fun s : Ω × (Fin ((V h).k x) → FlockDeploy.Coin) × C => (run H P (VHash h) x s.1 s.2.1).out = .acc ∧ E s) ≤
       Pr (fun s : Ω × (Fin ((V h).k x) → FlockDeploy.Coin) × C => (run H P (V h) x s.1 s.2.1).out = .acc ∧ E s) +
-        (pinFinder h H Ω P x).Pr sha512Msg := by
+        (pinFinder h H Ω P x).Pr Verity.sha512Msg := by
   have hb : Pr (fun s : Ω × (Fin ((V h).k x) → FlockDeploy.Coin) × C => ∃ u v,
       pinCollOf h ((run H P (V h) x s.1 s.2.1).msgs.getD (h.stage + 1) ([], .rej)).1 = some (u, v) ∧
-        Claims.Collision sha512Msg u v) = (pinFinder h H Ω P x).Pr sha512Msg :=
+        Claims.Collision Verity.sha512Msg u v) = (pinFinder h H Ω P x).Pr Verity.sha512Msg :=
     Pr_drop fun ω r => ∃ u v,
       pinCollOf h ((run H P (V h) x ω r).msgs.getD (h.stage + 1) ([], .rej)).1 = some (u, v) ∧
-        Claims.Collision sha512Msg u v
+        Claims.Collision Verity.sha512Msg u v
   refine Claims.Sampling.Pr_or_le (fun s hs => ?_) le_rfl hb.le
   cases hc : pinCollOf h ((run H P (V h) x s.1 s.2.1).msgs.getD (h.stage + 1) ([], .rej)).1 with
   | none => exact Or.inl (by rw [← run_hash H P x s.1 s.2.1 hc]; exact hs)

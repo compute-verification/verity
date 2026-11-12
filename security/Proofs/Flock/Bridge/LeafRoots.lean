@@ -278,14 +278,14 @@ def rootsFinderL (c : Flock.Circuit) (L : LeafMap) : Claims.Finder where
   cost _ := rootsCostL c L
 
 theorem rootsCollL_collides {c : Flock.Circuit} {L : LeafMap} {x y : Msg} (h : rootsCollL c L = some (x, y)) :
-    Claims.Collision sha512Msg x y := by
+    Claims.Collision Verity.sha512Msg x y := by
   obtain ⟨⟨q', q⟩, -, hp⟩ := Option.bind_eq_some_iff.mp h
   obtain ⟨i, hi, he⟩ := Option.map_eq_some_iff.mp hp
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
   have hpr := List.find?_some hi
   simp only [decide_eq_true_eq] at hpr
   refine ⟨fun e => hpr.1 (bs_inj e), ?_⟩
-  simp only [sha512Msg, bytes_bs, hpr.2]
+  simp only [sha512Msg_bs, bytes_bs, hpr.2]
 
 theorem fixesL_of_none {c : Flock.Circuit} {L : LeafMap} (h : rootsCollL c L = none) : RootFixesDomainL c L := by
   intro q q' hlt hq he
@@ -312,8 +312,8 @@ theorem ex_costL (c : Flock.Circuit) (L : LeafMap) :
 /-- **A registration whose roots at `L` expose a collision has `ecr/sha-512`'s term at least 1** at the roots
 finder. -/
 theorem one_le_ecrBoundL {c : Flock.Circuit} {L : LeafMap} {u v : Msg} (hc : rootsCollL c L = some (u, v)) :
-    1 ≤ Claims.ecrBound sha512Msg (rootsFinderL c L) (rootsCostL c L) := by
-  have hPr : (rootsFinderL c L).Pr sha512Msg = 1 :=
+    1 ≤ Claims.ecrBound Verity.sha512Msg (rootsFinderL c L) (rootsCostL c L) := by
+  have hPr : (rootsFinderL c L).Pr Verity.sha512Msg = 1 :=
     PortRoots.finderPr_one fun _ => ⟨u, v, hc, rootsCollL_collides hc⟩
   unfold Claims.ecrBound
   split_ifs with h
@@ -329,7 +329,7 @@ registration whose roots at `L` fix their domains (`RootFixesDomainL`) is at mos
 roots finder, at every registration. -/
 theorem le_add_ecrBoundL {c : Flock.Circuit} {L : LeafMap} {p x : ℝ≥0∞} (hp : p ≤ 1)
     (h : RootFixesDomainL c L → p ≤ x) :
-    p ≤ x + Claims.ecrBound sha512Msg (rootsFinderL c L) (rootsCostL c L) := by
+    p ≤ x + Claims.ecrBound Verity.sha512Msg (rootsFinderL c L) (rootsCostL c L) := by
   cases hc : rootsCollL c L with
   | none => exact (h (fixesL_of_none hc)).trans le_self_add
   | some z => exact hp.trans ((one_le_ecrBoundL (u := z.1) (v := z.2) (by rw [hc])).trans le_add_self)

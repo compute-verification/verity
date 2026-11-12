@@ -51,7 +51,7 @@ forger's forgery. -/
 def LoggedBound (K : Constructions V) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray) : Prop :=
   ∀ (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤
-      ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) + ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify)
+      ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) + ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify)
 
 /-- **(a'), the digest, at `Q`**: at the session `A`, the parameters `θ` and the committed files `F`, a play of the
 period's game whose sampled verdict at `k` accepts and that `Q` at its commitment and strategy doesn't hold of is at
@@ -60,7 +60,7 @@ def DigestBound (K : Constructions V) (A : Live) (θ : ByteArray) (F : Array Byt
     (Q : (c : ByteArray) → Game.Strategy (V.game θ F c) → Exchange → Prop) : Prop :=
   ∀ (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Q c σ o) (V.game θ F c) σ ≤
-      ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr sha512Msg))
+      ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr Verity.sha512Msg))
 
 /-- **(b), the logged coupling, at the cut `P`**: at the session `A`, the parameters `θ` and the committed files `F`, a
 play whose sampled verdict at `k` accepts and that `P` at its commitment and strategy holds of, on a tape that misses at
@@ -89,8 +89,8 @@ theorem noMiss_le_of_logged (rd : Readings) (K : Constructions V) (A : Live) (P 
         V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd A θ F c) σ x) ≤
       FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkHidden.LiveAcceptsZKP A.I A.own o)
           (K.live A θ F c σ).game (K.project A θ F c σ) +
-        (ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr sha512Msg)) + A.hidingTerm +
-          ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+        (ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr Verity.sha512Msg)) + A.hidingTerm +
+          ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
           ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify)) := by
   have hsplit : Claims.Pr (fun x : CoinTape (V.game θ F c) σ =>
         V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd A θ F c) σ x) ≤

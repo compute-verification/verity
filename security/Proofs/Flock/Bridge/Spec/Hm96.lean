@@ -98,18 +98,18 @@ theorem xorBytes_ofFn (d : Hash.Digest) (m : List UInt8) (hm : m.length = 64) :
     simp only [FlockSoundness.Merkle.xorBytes, Verity.Digest.bytes, List.getElem_zipWith, List.getElem_ofFn,
       List.getD_eq_getElem _ _ (show i < m.length by omega)]
 
-/-- `Claims.Sampling.sha512Msg` is the bytes of `H`'s digest. -/
+/-- `Verity.sha512Msg` is the bytes of `H`'s digest. -/
 theorem sha512Msg_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (m : Claims.Msg) :
-    Claims.Sampling.sha512Msg m = (H m).bytes := by
+    Verity.sha512Msg m = (H m).bytes := by
   have h := hH (Claims.Sampling.bytes m)
   rw [Claims.Sampling.bs_bytes] at h
-  rw [Claims.Sampling.sha512Msg, h, dig_bytes (Sha512.hash_size _)]
+  rw [Claims.Sampling.sha512Msg_bs, h, dig_bytes (Sha512.hash_size _)]
 
 /-- **The outer message the Bridge's hm96 leaf hashes is `Hash.Hm96`'s**: `leafPrefix ‖ commitString` at the
 executable's key, the row message's digest and the salt. -/
 theorem hm96Outer_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (row salt : Claims.Sampling.Opening Bool → Claims.Msg)
     (o : Claims.Sampling.Opening Bool) :
-    Claims.Sampling.hm96Outer Claims.Sampling.sha512Msg row salt o =
+    Claims.Sampling.hm96Outer Verity.sha512Msg row salt o =
       Hash.Hm96.leafPrefix H (bs Flock.Hm96.Default512.key) ++
         Hash.Hm96.commitString H (bs Flock.Hm96.Default512.key) (H (row o)) (salt o) := by
   have em : ∀ y, FlockSoundness.Refine.K512.mask y = Hash.Hm96.mask (bs Flock.Hm96.Default512.key) y :=
@@ -124,7 +124,7 @@ theorem hm96Outer_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (row salt : 
 over the row message's digest and the salt, at the executable's key. -/
 theorem sha512Msg_hm96Outer {H : Hash.Msg → Hash.Digest} (hH : HashOf H)
     (row salt : Claims.Sampling.Opening Bool → Claims.Msg) (o : Claims.Sampling.Opening Bool) :
-    Claims.Sampling.sha512Msg (Claims.Sampling.hm96Outer Claims.Sampling.sha512Msg row salt o) =
+    Verity.sha512Msg (Claims.Sampling.hm96Outer Verity.sha512Msg row salt o) =
       (Hash.Hm96.leaf H (bs Flock.Hm96.Default512.key) (H (row o)) (salt o)).bytes := by
   rw [sha512Msg_eq hH, hm96Outer_eq hH, Hash.Hm96.leaf]
 

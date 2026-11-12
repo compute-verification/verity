@@ -426,7 +426,7 @@ noncomputable def drawMiss : ℝ≥0∞ :=
 public file's leaf map (`Flock.Bridge.rootsFinderL`, no coins, `Flock.Bridge.rootsCostL` SHA-512 calls): two ports with
 one root and different domains are a collision it finds. -/
 noncomputable def rootsErr : ℝ≥0∞ :=
-  Claims.ecrBound Claims.Sampling.sha512Msg
+  Claims.ecrBound Verity.sha512Msg
     (Flock.Bridge.rootsFinderL A.D.unroll (Flock.Bridge.LeafMap.ofPublic A.D.unroll A.pub A.n))
     (Flock.Bridge.rootsCostL A.D.unroll (Flock.Bridge.LeafMap.ofPublic A.D.unroll A.pub A.n))
 
@@ -542,7 +542,7 @@ files' circuit (`circuit_eq`). -/
 noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRead.circuit.Trace :=
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
     (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ
-      ((Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val Claims.Sampling.sha512Msg A.Cd
+      ((Flock.Bridge.witDep A.Cc A.Cd Verity.sha512Msg A.roots (A.Xr τ)).val Verity.sha512Msg A.Cd
         (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩
           A.roots)))
 
@@ -551,7 +551,7 @@ gate `r` doesn't fix to a constant, a bit the deployed commitment opens at the g
 session's roots (`Flock.Bridge.posOf`, `Cd`, `roots`) opens the gate to every value whose first bit it is. -/
 def OpensUnder (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ (h : r.circuit.N = A.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Claims.Msg), r.consts g = none →
-    A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨Flock.Bridge.posOf A.Cc (Fin.cast h g), b, d⟩ = true →
+    A.Cd.Opens Verity.sha512Msg A.roots ⟨Flock.Bridge.posOf A.Cc (Fin.cast h g), b, d⟩ = true →
       ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
 
 end Live

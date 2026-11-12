@@ -741,7 +741,7 @@ theorem bytes_ofList (b : ByteArray) : ({ data := b.data.toList.toArray } : Byte
   cases b
   simp
 
-/-- A collision of the compiled SHA-512 is one of `sha512Msg`. -/
+/-- A collision of the compiled SHA-512 is one of `Verity.sha512Msg`. -/
 theorem collision_of_valid {x y : ByteArray} (h : x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) :
     Claims.Collision Verity.sha512Msg x.data.toList y.data.toList := by
   refine ⟨fun e => h.1 (ByteArray.ext (Array.ext' e)), ?_⟩
@@ -765,7 +765,7 @@ theorem lmsVerify_of_verifies {key : ChallengerKey} (hk : key.params = Lms.deplo
       simp [hv, bind, Except.bind, h]
 
 /-- The first collision among findings that are each valid where they are collisions is a collision of
-`sha512Msg`. -/
+`Verity.sha512Msg`. -/
 theorem findSome_collisionOf_valid {l : List Finding}
     (hl : ∀ x y, Finding.collision x y ∈ l → x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) {u v : Claims.Msg}
     (h : l.findSome? collisionOf = some (u, v)) : Claims.Collision Verity.sha512Msg u v := by
@@ -778,7 +778,7 @@ theorem findSome_collisionOf_valid {l : List Finding}
     exact collision_of_valid (hl a b hw)
 
 /-- The first collision among findings that are each valid where they are collisions is a collision of
-`sha512Msg`, and there is one where a finding is a collision. -/
+`Verity.sha512Msg`, and there is one where a finding is a collision. -/
 theorem findSome_collisionOf {l : List Finding}
     (hl : ∀ x y, Finding.collision x y ∈ l → x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) {x y : ByteArray}
     (hxy : Finding.collision x y ∈ l) :
@@ -918,7 +918,7 @@ theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : Byt
       rw [hk]
       exact hv
 
-/-- What `tableCollision` outputs is a collision of `sha512Msg`. -/
+/-- What `tableCollision` outputs is a collision of `Verity.sha512Msg`. -/
 theorem tableCollision_valid {s : Sent} {u v : Claims.Msg} (h : tableCollision s = some (u, v)) :
     Claims.Collision Verity.sha512Msg u v := by
   obtain ⟨t, -, ht⟩ := List.exists_of_findSome?_eq_some h

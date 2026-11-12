@@ -285,7 +285,7 @@ def rootsFinder (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Claims.Fin
   cost _ := rootsCost c nl
 
 theorem rootsColl_collides {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} {x y : Msg}
-    (h : rootsColl c pub nl = some (x, y)) : Claims.Collision sha512Msg x y := by
+    (h : rootsColl c pub nl = some (x, y)) : Claims.Collision Verity.sha512Msg x y := by
   obtain ⟨⟨q', q⟩, hp, he⟩ := Option.map_eq_some_iff.mp h
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
   have hmem := mem_pairs.mp (List.mem_of_find?_eq_some hp)
@@ -293,7 +293,7 @@ theorem rootsColl_collides {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} {
   simp only [decide_eq_true_eq] at hpr
   obtain ⟨hne, hh⟩ := rootsOf_collides (hmem.1.trans hmem.2) hmem.2 hpr.2 hpr.1
   refine ⟨fun e => hne (bs_inj e), ?_⟩
-  simp only [sha512Msg, bytes_bs, hh]
+  simp only [sha512Msg_bs, bytes_bs, hh]
 
 theorem fixes_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (h : rootsColl c pub nl = none) :
     RootFixesDomain c pub nl := by
@@ -333,9 +333,9 @@ theorem ex_cost (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
 /-- **A registration whose roots expose a collision has `ecr/sha-512`'s term at least 1** at the roots finder, at
 any budget of at least its calls. -/
 theorem one_le_ecrBound {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (hc : rootsColl c pub nl ≠ none) {q : ℝ}
-    (hq : (rootsCost c nl : ℝ) ≤ q) : 1 ≤ Claims.ecrBound sha512Msg (rootsFinder c pub nl) q := by
+    (hq : (rootsCost c nl : ℝ) ≤ q) : 1 ≤ Claims.ecrBound Verity.sha512Msg (rootsFinder c pub nl) q := by
   obtain ⟨⟨x, y⟩, hxy⟩ := Option.ne_none_iff_exists'.mp hc
-  have hPr : (rootsFinder c pub nl).Pr sha512Msg = 1 :=
+  have hPr : (rootsFinder c pub nl).Pr Verity.sha512Msg = 1 :=
     finderPr_one fun _ => ⟨x, y, hxy, rootsColl_collides hxy⟩
   unfold Claims.ecrBound
   split_ifs with h
@@ -349,9 +349,9 @@ theorem one_le_ecrBound {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (hc 
 /-- **A registration whose roots expose no collision has `ecr/sha-512`'s term `rootsCost / 2^256`** at the roots
 finder. -/
 theorem ecrBound_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (hc : rootsColl c pub nl = none) :
-    Claims.ecrBound sha512Msg (rootsFinder c pub nl) (rootsCost c nl) =
+    Claims.ecrBound Verity.sha512Msg (rootsFinder c pub nl) (rootsCost c nl) =
       ENNReal.ofReal ((rootsCost c nl : ℝ) / 2 ^ (256 : ℝ)) := by
-  have hPr : (rootsFinder c pub nl).Pr sha512Msg = 0 :=
+  have hPr : (rootsFinder c pub nl).Pr Verity.sha512Msg = 0 :=
     finderPr_zero fun _ ⟨_, _, he, _⟩ => Option.some_ne_none _ (he.symm.trans hc)
   unfold Claims.ecrBound
   rw [ite_eq_left]
@@ -365,7 +365,7 @@ registration whose roots fix their domains (`RootFixesDomain`) is at most `x` pl
 finder, at every registration. -/
 theorem le_add_ecrBound {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} {p x : ℝ≥0∞} (hp : p ≤ 1)
     (h : RootFixesDomain c pub nl → p ≤ x) :
-    p ≤ x + Claims.ecrBound sha512Msg (rootsFinder c pub nl) (rootsCost c nl) := by
+    p ≤ x + Claims.ecrBound Verity.sha512Msg (rootsFinder c pub nl) (rootsCost c nl) := by
   cases hc : rootsColl c pub nl with
   | none => exact (h (fixes_of_none hc)).trans le_self_add
   | some z => exact hp.trans ((one_le_ecrBound (by simp [hc]) le_rfl).trans le_add_self)

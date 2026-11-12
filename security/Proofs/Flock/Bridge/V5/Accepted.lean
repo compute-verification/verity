@@ -360,8 +360,8 @@ def SampledKSLiveV5Accepted : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => (Bridge.LiveAcceptsKSP I own o ∧ Bridge.RunPopOk desc qr n) ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots) (Bridge.partOf P κ ns)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots) (Bridge.partOf P κ ns)
+          (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
       ENNReal.ofReal δ +
         ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +

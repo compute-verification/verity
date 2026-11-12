@@ -36,7 +36,7 @@ theorem drawFixed : DrawFixed (record A o e) := by
   exact (record_checked A o e x r').symm
 
 /-- **The interior roots are the statement's**, at every second stage. -/
-theorem interiorFixed : InteriorFixed sha512Msg (record A o e) (fun _ _ _ => A.roots) :=
+theorem interiorFixed : InteriorFixed Verity.sha512Msg (record A o e) (fun _ _ _ => A.roots) :=
   fun _ _ _ _ _ _ _ => rfl
 
 /-- **The verifier refuses what is out of scope**, where the record's statement is in scope: an accepted run is of the

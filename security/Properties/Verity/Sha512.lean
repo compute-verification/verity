@@ -18,4 +18,8 @@ namespace Verity
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
 
+/-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
+(`Claims.ExpectedCR`) read, and the one the sampled commitments' path checks open under. -/
+def sha512Msg (m : Hash.Msg) : Hash.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
+
 end Verity

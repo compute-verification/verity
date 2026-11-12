@@ -176,7 +176,7 @@ theorem transports_shapedP_at (R : Reg) (hrows : RowsOk c)
       (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).cs R ((vbP dj y₀ ht hc hscope hU hpi hpub).pos g)) :
     (commitDepL ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi))
         (rowsOfLP c hU n pi (LeafMap.ofPublic c pub n)) c (LeafMap.ofPublic c pub n)
-        (rootsOfL c (LeafMap.ofPublic c pub n))).Opens sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
+        (rootsOfL c (LeafMap.ofPublic c pub n))).Opens Verity.sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
       ⟨posOf ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)) g,
         (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).bit
           ((vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).val (p, v, y)) g,
@@ -207,7 +207,7 @@ theorem transports_shapedP (R : Reg) (hrows : RowsOk c)
       (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).cs R ((vbP dj y₀ ht hc hscope hU hpi hpub).pos g)) :
     ∃ d : Claims.Msg, (commitDepL ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi))
         (rowsOfLP c hU n pi (LeafMap.ofPublic c pub n)) c (LeafMap.ofPublic c pub n)
-        (rootsOfL c (LeafMap.ofPublic c pub n))).Opens sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
+        (rootsOfL c (LeafMap.ofPublic c pub n))).Opens Verity.sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
       ⟨posOf ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)) g,
         (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).bit
           ((vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).val (p, v, y)) g, d⟩ = true :=

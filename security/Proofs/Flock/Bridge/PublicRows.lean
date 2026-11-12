@@ -88,8 +88,8 @@ theorem _root_.Flock.Bridge.sampledKSLive_le_deltaPub_of_qs :
       FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
         k Rw M (t' + v) →
       prob (fun o => LiveAcceptsZK I o ∧
-          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
-            (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+          ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+            (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
           (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
         ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) (t' + v) M Rw W ρ) := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
@@ -190,8 +190,8 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows :
       FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
         k Rw M (t' + v) →
       prob (fun o => LiveAcceptsZK I o ∧
-          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
-            (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+          ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+            (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
           (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
         ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) (t' + v) M Rw
           (kd * D.unroll.ports.size + 3) ρ) := by
@@ -273,8 +273,8 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows_deployed :
       FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
         Bridge.kDep (2 ^ 192) (2 ^ 192) (t' + v) →
       prob (fun o => LiveAcceptsZK I o ∧
-          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
-            (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+          ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+            (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
           (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
         ENNReal.ofReal (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + 2 ^ (-(100 : ℝ))) := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src

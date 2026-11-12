@@ -290,6 +290,6 @@ def _root_.Flock.Bridge.TransportsLiveCR : Prop :=
     let Cd := Bridge.commitDepL Cc rows D.unroll L roots
     ∀ u, ∀ g ∈ P.io u, κ g = none → ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       Bridge.canonOpen rows g (vb.val o) o.2.2 →
-      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
+      ∃ d : Claims.Msg, Cd.Opens Verity.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 end Flock.Guarantees

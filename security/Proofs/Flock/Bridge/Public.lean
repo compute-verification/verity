@@ -149,8 +149,8 @@ def SampledKSLivePub : Prop :=
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
       k Rw M (t' + v) →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
-          (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+          (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) (t' + v) M Rw (Bridge.ioSum P) ρ)
 

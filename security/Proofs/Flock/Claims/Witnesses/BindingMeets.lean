@@ -73,7 +73,7 @@ registered check accepts its hm96 leaf at the port whose root the code addresses
 position reads under its roots, at the leaf index it names, through the path the opening carries. -/
 theorem Binding_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : SamplingDeploy.Code)
     (roots : List Msg) (o : Opening Bool) :
-    (SamplingDeploy.deploy rel c).commit.Opens sha512Msg roots o = true ↔
+    (SamplingDeploy.deploy rel c).commit.Opens Verity.sha512Msg roots o = true ↔
       ∃ root i reg, c.at_ roots o.pos = some (root, i) ∧
         (c.ownAt roots o.pos).find? (fun p => decide (p.root = bytes root)) = some reg ∧
         _root_.Flock.Registered.opensLeaf reg
@@ -117,7 +117,7 @@ theorem Binding_meets_one (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
     (hown : c.ownAt roots o.pos =
       #[{ name := "", value := "", root := bytes root, leaves := 1, words := none, wordBits := 16, domain := dom,
           readsRel := #[] }]) :
-    (SamplingDeploy.deploy rel c).commit.Opens sha512Msg roots o = true := by
+    (SamplingDeploy.deploy rel c).commit.Opens Verity.sha512Msg roots o = true := by
   refine (Binding_meets rel c roots o).2
     ⟨root, 0,
       { name := "", value := "", root := bytes root, leaves := 1, words := none, wordBits := 16, domain := dom,

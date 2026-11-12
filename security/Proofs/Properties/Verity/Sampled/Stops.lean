@@ -1627,7 +1627,7 @@ theorem RoundsReach.stop_modes_reveal {A : Live} {rd : Reading A.rounds} {σ : S
     (hc : CutsAt rd.reveal q.toStop pre (CoinTape.run (V.game θ F c) σ o.2).log)
     (hL : (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: L) {i : Fin A.rounds}
     (hi : (q.toStop.Ks i).isHere = true) {w : Claims.Msg}
-    (hw : rd.reveal i (CoinTape.run (V.game θ F c) σ o.2) = some w) (hd : sha512Msg w = r.answers.data.toList) :
+    (hw : rd.reveal i (CoinTape.run (V.game θ F c) σ o.2) = some w) (hd : Verity.sha512Msg w = r.answers.data.toList) :
     q.toStop.modes i = some w := by
   refine RoundsReach.stop_modes_noMiss hq hr hn hi ?_
   refine (RoundsReach.stop_reveal hq hr (hc i r L hi hL)).trans ?_

@@ -39,9 +39,9 @@ theorem segs_of_rowsV2 {c} (h : Flock.Bridge.RowsV2 c) : c.ports.all (fun p => !
 
 /-- **The record's trace commitment binds at SHA-512**, at a circuit file of `sha512/row/v2` rows. -/
 theorem record_binds (A : Live) (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) :
-    (record A o e).commit.Binds sha512Msg := by
+    (record A o e).commit.Binds Verity.sha512Msg := by
   rw [record_commit A o e hv2]
-  exact Flock.Bridge.commitDepL_binds sha512Msg A.Cc A.rows A.D.unroll (segs_of_rowsV2 hv2) A.Lm A.roots
+  exact Flock.Bridge.commitDepL_binds Verity.sha512Msg A.Cc A.rows A.D.unroll (segs_of_rowsV2 hv2) A.Lm A.roots
 
 set_option synthInstance.maxSize 1024 in
 /-- **Knowledge soundness at the record**, at SHA-512: at a session v2 sets up (`SetsUp`, `Names` and v2's reads, as
@@ -58,10 +58,10 @@ theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.De
     (he : e.reveal = revealRec A) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeOk A)
     (href : ∃ d, RefOk A o d) (hroots : Flock.Bridge.RootFixesDomainL A.D.unroll A.Lm) :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code A o e)
-      (fun _ _ _ => A.roots)).KS sha512Msg :=
+      (fun _ _ _ => A.roots)).KS Verity.sha512Msg :=
   SamplingDeploy.ks_compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code A o e)
-    (fun _ _ _ => A.roots) sha512Msg FlockDeploy.KS.zk_KS_untrim (Claims.Sampling.listWithin_deployZk _)
-    (record_binds A o e hv2) (drawLaw A o e) (refuses_of_scopeOk A o e sha512Msg hscope) (interiorFixed A o e)
+    (fun _ _ _ => A.roots) Verity.sha512Msg FlockDeploy.KS.zk_KS_untrim (Claims.Sampling.listWithin_deployZk _)
+    (record_binds A o e hv2) (drawLaw A o e) (refuses_of_scopeOk A o e Verity.sha512Msg hscope) (interiorFixed A o e)
     (drawFixed A o e) (sessionRuns A o e) (innerNumbers e href)
     (sessionOpens A o e hsu hn hpl hrd hpart hidx (record_commit A o e hv2) he hroots _)
 

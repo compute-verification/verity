@@ -229,7 +229,7 @@ def PeriodCoupling.BreakBound {acc : Exchange → Prop} {k : Verity.Registration
   Game.prCoin (fun ξ : (i : q.I) → q.Ω i => acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∧
       (¬ V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ)) ≤
     ENNReal.ofReal ((V.forger (.ofAudit b) θ F c σ).Pr lmsVerify) +
-      V.loss (.ofAudit b) θ (ENNReal.ofReal ((V.finder (.ofAudit b) θ F c σ).Pr sha512Msg))
+      V.loss (.ofAudit b) θ (ENNReal.ofReal ((V.finder (.ofAudit b) θ F c σ).Pr Verity.sha512Msg))
 
 /-- **The plays at `b`'s subprotocol couple to period runs**: at every `θ`, `F`, `c`, strategy and resolution of the
 coin trees' coins there is a period run coupled to the play (`PeriodCoupling`) that meets `b`'s per-period guarantee

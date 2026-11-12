@@ -359,7 +359,7 @@ open Classical in
 /-- **A frame's cut after the prover's frame `m`**, at `k + 1` frames (`frameCut`). -/
 noncomputable def frameNext {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg) (k : ℕ)
     (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) :
-    (m : Option (Frame × ByteArray)) → DigestCut.AgreeCut sha512Msg (relKNext k fs ts f m)
+    (m : Option (Frame × ByteArray)) → DigestCut.AgreeCut Verity.sha512Msg (relKNext k fs ts f m)
   | none => .skip
   | some (.fresh l, b) =>
     if P pre (.fresh l) then cutAt rv b.data.toList else
@@ -925,7 +925,7 @@ theorem roundCuts_heq (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c
     HEq (roundCuts V θ F c rd j)
       (DigestCut.send (V := Claims.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) (frames (V.families θ))
         (V.families θ) [] (finish (V.signer θ) θ F c a) []).cut) := by
-  have key : ∀ {g g' : Game Exchange} (h : g = g') (K : DigestCut.AgreeCut sha512Msg g),
+  have key : ∀ {g g' : Game Exchange} (h : g = g') (K : DigestCut.AgreeCut Verity.sha512Msg g),
       HEq (K.cast h).cut K.cut := by
     intro g g' h K
     subst h

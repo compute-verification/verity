@@ -89,12 +89,12 @@ theorem segMsg_eq (b : List Bool) (j : ℕ) :
     ← count_eq]
   exact congrArg (· ++ _) (segmentPrefix_eq _ _ _)
 
-/-- A digest's bytes, as the code's outer message carries them, are `sha512Msg`'s. Stated at any message, so that no
+/-- A digest's bytes, as the code's outer message carries them, are `Verity.sha512Msg`'s. Stated at any message, so that no
 proof unfolds SHA-512 on one whose prefix is concrete. -/
 theorem digBytes_H512 (m : List UInt8) :
-    FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 m) = Claims.Sampling.sha512Msg m := by
+    FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 m) = Verity.sha512Msg m := by
   rw [FlockSoundness.Binding.digBytes, FlockSoundness.Refine.dig_eq, FlockSoundness.Refine.H512_val,
-    Claims.Sampling.sha512Msg, Claims.Sampling.bytes, bs]
+    Verity.sha512Msg, Claims.Sampling.bytes, bs]
 
 /-- **The code's `sha512/row-seg/v1` outer message is `Hash.RowSeg.outerMsg`**, at a hash that reads bytes as
 SHA-512 does. -/

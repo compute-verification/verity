@@ -252,7 +252,7 @@ theorem opens_commitDep (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option 
     (hy : y.length = saltLen)
     (hleaf : H512 (hm96Input (FlockSoundness.Discharge.HiddenExec.encPortH c.ports[r.port]! v) y) =
       H512 (K512.leafPrefix ++ (pub.digest r.leaf r.port c.ports.size).data.toList)) :
-    (commitDep C rows c pub nl (rootsOf c pub nl)).Opens sha512Msg (rootsOf c pub nl)
+    (commitDep C rows c pub nl (rootsOf c pub nl)).Opens Verity.sha512Msg (rootsOf c pub nl)
       ⟨i, v.get r.place, dataOf y (FlockC3.RegLevels.sibsV (domOf c pub r.port) (leavesOf c pub nl r.port) r.leaf)
         (List.ofFn fun k : Fin r.width => v.get k.val)⟩ = true := by
   have hsz : ∀ z ∈ FlockC3.RegLevels.sibsV (domOf c pub r.port) (leavesOf c pub nl r.port) r.leaf, z.size = 64 :=
@@ -333,7 +333,7 @@ theorem hm96Pair_spec_salt (r y r' y' : List UInt8) (hy : y ≠ y') (h : H512 (h
 /-- **An opening the deployed check passes carries a full path**: `64 · log2ceil nl` bytes after its salt. -/
 theorem pathOf_length_of_opens (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (o : Opening Bool)
-    (h : (commitDep C rows c pub nl roots).Opens sha512Msg roots o = true) :
+    (h : (commitDep C rows c pub nl roots).Opens Verity.sha512Msg roots o = true) :
     (pathOf (Flock.log2ceil nl) o).length = 64 * Flock.log2ceil nl := by
   unfold commitDep at h
   rw [SamplingDeploy.opens_pathCommitRow] at h
@@ -351,7 +351,7 @@ theorem pathOf_length_of_opens (C : Verity.Boolean.Circuit) (rows : Fin C.N → 
 `saltLen` bytes is the leaf of an opening the deployed check passes only by a SHA-512 collision. -/
 theorem leaf_salt (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (o : Opening Bool)
-    (h : (commitDep C rows c pub nl roots).Opens sha512Msg roots o = true)
+    (h : (commitDep C rows c pub nl roots).Opens Verity.sha512Msg roots o = true)
     {r y : Msg} (hy : y.length ≠ saltLen)
     (hl : H512 (hm96Input r y) =
       H512 (hm96Input (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o))) :
@@ -563,7 +563,7 @@ theorem transports_shaped (R : Reg)
     (he : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).com (p, v, y) =
       (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).cs R ((vbOf dj y₀ ht hc hscope hU hpub hpt).pos g)) :
     ∃ d : Claims.Msg, (commitDep ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) (rowsOf c hU n) c pub n
-        (rootsOf c pub n)).Opens sha512Msg (rootsOf c pub n)
+        (rootsOf c pub n)).Opens Verity.sha512Msg (rootsOf c pub n)
       ⟨posOf ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) g,
         (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).bit
           ((vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).val (p, v, y)) g, d⟩ = true := by
@@ -632,7 +632,7 @@ def TransportsLiveCS : Prop :=
     Bridge.PortRoots.RootFixesDomain D.unroll pub n →
     ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       Bridge.canonOpen rows g (vb.val o) o.2.2 →
-      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
+      ∃ d : Claims.Msg, Cd.Opens Verity.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 /-- **`TransportsLiveCS` holds** (`transports_shaped`). -/
 theorem transportsLiveCS : TransportsLiveCS := by

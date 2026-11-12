@@ -61,10 +61,10 @@ noncomputable abbrev part := Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.d
 position under the deployed commitment, read at the circuit's gates with its constants (`Flock.Bridge.transcriptOf`). -/
 noncomputable def transcriptAt (w : Claims.Sampling.Wit) : A.fileRead.circuit.Trace :=
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-    (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val Claims.Sampling.sha512Msg A.Cd A.stmt))
+    (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val Verity.sha512Msg A.Cd A.stmt))
 
 theorem extract_eq (τ : FlockSoundness.Game.Strategy A.game) :
-    A.extract τ = A.transcriptAt (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) :=
+    A.extract τ = A.transcriptAt (Flock.Bridge.witDep A.Cc A.Cd Verity.sha512Msg A.roots (A.Xr τ)) :=
   rfl
 
 end Live
@@ -97,9 +97,9 @@ theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n :
       (zcStrat execArith hs512 (planZHJP A.dj A.y₀) (cont σ ω)) (A.qF t) (A.qS t)) →
     LinkCRZC execArith hs512 A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb (reg σ) (cont σ) A.k A.Rw A.M (A.tL t) →
     Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg A.Cd
+        ¬ Claims.Sampling.RelS Verity.sha512Msg A.Cd
           ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part B) A.stmt A.part
-          (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots Xr))
+          (Flock.Bridge.witDep A.Cc A.Cd Verity.sha512Msg A.roots Xr))
         (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr)) τ ≤
       ENNReal.ofReal ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part B) +
         ksAvgStrictZ (planZHJP A.dj A.y₀) L A.k (A.qF t) (A.qS t) (reg σ) +
@@ -139,8 +139,8 @@ theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
   subst hr
   obtain rfl := eq_of_heq htr
   have hns : (Flock.Bridge.nsOf A.desc A.qr).sum = A.n := Flock.Bridge.nsOf_sum A.hpop
-  let w := Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)
-  let Fs := Claims.Sampling.faulty Claims.Sampling.sha512Msg A.Cd A.stmt A.part w
+  let w := Flock.Bridge.witDep A.Cc A.Cd Verity.sha512Msg A.roots (A.Xr τ)
+  let Fs := Claims.Sampling.faulty Verity.sha512Msg A.Cd A.stmt A.part w
   have hFs : Fs ⊆ Finset.range A.n := by
     intro v hv
     have h := (Finset.mem_filter.1 hv).1
@@ -158,7 +158,7 @@ theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
   unfold Live.sessionDelta
   have hmono : Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) A.game τ ≤
       Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg A.Cd
+        ¬ Claims.Sampling.RelS Verity.sha512Msg A.Cd
           ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part Fs) A.stmt A.part w)
         A.game τ :=
     Verity.Game.prob_mono (fun o ho => ⟨ho, fun hR =>

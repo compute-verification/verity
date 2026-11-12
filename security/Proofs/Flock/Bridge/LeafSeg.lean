@@ -183,18 +183,19 @@ theorem segLeaf_binds (H : Msg → Msg) (place : ℕ → (w : ℕ) × Fin w) (bi
 the segments' SHA-512 digests is `RowSeg.enc`, the message `rowMsg` hashes at a segmented port. -/
 theorem segLeaf_sha512 (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) (salt : Opening Bool → Msg)
     (o : Opening Bool) :
-    ((segLeaf place bits salt o).eval sha512Msg).1 =
+    ((segLeaf place bits salt o).eval Verity.sha512Msg).1 =
       ((hm96Leaf (fun x => FlockSoundness.Binding.RowSeg.enc (place x.pos).1
-        (Flock.HmRow.packBits (SamplingDeploy.rowBits place bits x))) salt o).eval sha512Msg).1 := by
-  have e : ∀ m, sha512Msg m = FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 m) := fun m => by
-    unfold sha512Msg bytes
+        (Flock.HmRow.packBits (SamplingDeploy.rowBits place bits x))) salt o).eval Verity.sha512Msg).1 := by
+  have e : ∀ m, Verity.sha512Msg m = FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 m) := fun m => by
+    rw [sha512Msg_bs]
+    unfold bytes
     rw [FlockSoundness.Binding.digBytes, FlockSoundness.Refine.dig_eq, FlockSoundness.Refine.H512_val]
     rfl
-  have hd : ∀ d ∈ (segsOf place bits o).map sha512Msg, d.length = 64 := fun d hd => by
+  have hd : ∀ d ∈ (segsOf place bits o).map Verity.sha512Msg, d.length = 64 := fun d hd => by
     obtain ⟨m, -, rfl⟩ := List.mem_map.1 hd
     rw [e]
     exact FlockSoundness.Refine.hL512 _
-  have ho : outerOf place o ((segsOf place bits o).map sha512Msg) =
+  have ho : outerOf place o ((segsOf place bits o).map Verity.sha512Msg) =
       FlockSoundness.Binding.RowSeg.enc (place o.pos).1 (Flock.HmRow.packBits (SamplingDeploy.rowBits place bits o)) := by
     simp only [outerOf, segsOf, FlockSoundness.Binding.RowSeg.enc, FlockSoundness.Binding.RowSeg.digests, List.map_map,
       Function.comp_def, e, List.flatMap_def]
@@ -267,8 +268,8 @@ theorem rowLeaf_binds (H : Msg → Msg) (C : Verity.Boolean.Circuit) (rows : Fin
 /-- **At SHA-512 `rowLeaf` is `commitDepL`'s leaf**, hm96's of `rowDep`. -/
 theorem rowLeaf_sha512 (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) (salt : Opening Bool → Msg) (o : Opening Bool) :
-    ((rowLeaf C rows c place bits salt o).eval sha512Msg).1 =
-      ((hm96Leaf (rowDep C rows c place bits) salt o).eval sha512Msg).1 := by
+    ((rowLeaf C rows c place bits salt o).eval Verity.sha512Msg).1 =
+      ((hm96Leaf (rowDep C rows c place bits) salt o).eval Verity.sha512Msg).1 := by
   unfold rowLeaf
   by_cases hs : segAt C rows c o.pos = true
   · rw [ite_eq_left hs, segLeaf_sha512]
@@ -315,7 +316,7 @@ theorem commitRowL_binds (H : Msg → Msg) (C : Verity.Boolean.Circuit) (rows : 
 /-- **At SHA-512 `commitRowL` opens what `commitDepL` opens.** -/
 theorem commitRowL_sha512 (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (L : LeafMap) (roots rs : List Msg) (o : Opening Bool) :
-    (commitRowL C rows c L roots).Opens sha512Msg rs o = (commitDepL C rows c L roots).Opens sha512Msg rs o := by
+    (commitRowL C rows c L roots).Opens Verity.sha512Msg rs o = (commitDepL C rows c L roots).Opens Verity.sha512Msg rs o := by
   unfold commitRowL commitDepL
   exact pathCommit_opens_congr (rowLeaf_sha512 C rows c (placeOf C rows) (bitsOf L.d) saltOf) rs o
 

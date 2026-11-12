@@ -179,7 +179,7 @@ theorem opens_commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option
     (hy : y.length = saltLen)
     (hleaf : H512 (hm96Input (FlockSoundness.Discharge.HiddenExec.encPortH c.ports[r.port]! v) y) =
       H512 (K512.leafPrefix ++ (L.dig r.port r.leaf).data.toList)) :
-    (commitDepL C rows c L (rootsOfL c L)).Opens sha512Msg (rootsOfL c L)
+    (commitDepL C rows c L (rootsOfL c L)).Opens Verity.sha512Msg (rootsOfL c L)
       ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf)
         (L.d - Flock.log2ceil (L.cnt r.port)) (List.ofFn fun k : Fin r.width => v.get k.val)⟩ = true := by
   have hsz : ∀ z ∈ FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf, z.size = 64 :=
@@ -442,7 +442,7 @@ theorem transports_shapedS (R : Reg) (hrows : RowsOk c)
       (vbS dj y₀ ht hc hscope hU hpub (Reg := Reg)).cs R ((vbS dj y₀ ht hc hscope hU hpub).pos g)) :
     ∃ d : Claims.Msg, (commitDepL ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n))
         (rowsOfL c hU n (LeafMap.ofPublic c pub n)) c (LeafMap.ofPublic c pub n)
-        (rootsOfL c (LeafMap.ofPublic c pub n))).Opens sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
+        (rootsOfL c (LeafMap.ofPublic c pub n))).Opens Verity.sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
       ⟨posOf ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) g,
         (vbS dj y₀ ht hc hscope hU hpub (Reg := Reg)).bit
           ((vbS dj y₀ ht hc hscope hU hpub (Reg := Reg)).val (p, v, y)) g, d⟩ = true := by

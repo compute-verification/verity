@@ -270,7 +270,7 @@ theorem record_commit (hv2 : Flock.Bridge.RowsV2 A.D.unroll) : (record A o e).co
 
 end Fields
 
-theorem sha512_msg : FlockDeploy.sha512 = Claims.Sampling.sha512Msg := rfl
+theorem sha512_msg : FlockDeploy.sha512 = Verity.sha512Msg := rfl
 
 theorem seen_msgs (t : Claims.Transcript) : t.seen.msgs = t.msgs := rfl
 
@@ -411,7 +411,7 @@ theorem correct_revealAt (hc1 : A.I.count ≤ 1) (hroots : Flock.Bridge.RootFixe
     {u : Fin A.n} {J : Json} {kd : ℕ}
     (y : DrawSetupZHJP (inputsJ A.I 0) none (mPtsOf A.D.unroll.g (kd / nTab A.I)) {u} J) {wF : Claims.Flock.Wit}
     (hsat : y.table.S.Satisfies (Flock.Readable.zOf 1 wF 0 y.table.S.m)) (val : ℕ → Option Bool) (ι : ℕ → Bool)
-    (hval : ∀ q ∈ revealAt A u J y wF, A.Cd.Opens Claims.Sampling.sha512Msg q.1 q.2 = true → q.1 = A.roots →
+    (hval : ∀ q ∈ revealAt A u J y wF, A.Cd.Opens Verity.sha512Msg q.1 q.2 = true → q.1 = A.roots →
       val q.2.pos = some q.2.val) :
     (Flock.Bridge.progOf A.Cc A.κ).Correct
       ((Flock.Bridge.progOf A.Cc A.κ).refIn (Flock.Bridge.blockOf A.P A.κ u) val ι)

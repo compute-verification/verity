@@ -282,7 +282,7 @@ theorem correct_of_revealV5
         (wit execArith (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).S
           (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch M) →
       ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
-        (∀ q ∈ revealV5 ht hD hU hpi hpub hscope dj y₀ S R u M, Cd.Opens sha512Msg q.1 q.2 = true →
+        (∀ q ∈ revealV5 ht hD hU hpi hpub hscope dj y₀ S R u M, Cd.Opens Verity.sha512Msg q.1 q.2 = true →
           q.1 = roots → val q.2.pos = some q.2.val) →
         (progOf Cc κ).Correct ((progOf Cc κ).refIn (blockOf P κ u) val ι) (blockOf P κ u) := by
   intro P Cc Lm κ roots Cd S R u hu M hM val ι hval
@@ -292,7 +292,7 @@ theorem correct_of_revealV5
     (placeZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi) S R u hu M hM
   refine correct_of_revealOf P κ roots u (fun g => vb.bit (vb.val (vb.opening S R u M (vb.pos g))) g)
     (fun g => dataOfRow D.unroll Lm (rowsOfLP D.unroll hU n pi Lm) g (vb.opening S R u M (vb.pos g)).2.1
-      (vb.opening S R u M (vb.pos g)).2.2) sha512Msg Cd
+      (vb.opening S R u M (vb.pos g)).2.2) Verity.sha512Msg Cd
     (fun g b h => constsOfP_isInput (Discharge.Layout.outsOfP D.unroll hU n pi) h) ?_ ?_ ?_ val ι hval
   · exact P.correct_congr (fun g hg => (vb.opening_spec S R u hu M hM g hg).2) hlow
   · exact fun g hg b hb =>

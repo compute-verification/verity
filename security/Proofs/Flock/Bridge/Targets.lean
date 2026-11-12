@@ -123,9 +123,9 @@ def RelDeployTarget : Prop :=
     (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (δ : ℝ) (x : Claims.Msg),
     LayoutIs C rows c pub nl roots cd →
     cd.parse x = some (stmtOf P κ r desc q roots) → cd.partition (stmtOf P κ r desc q roots) = some (partOf P κ ns) →
-    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep C rows c pub nl roots) δ (stmtOf P κ r desc q roots)
-      (partOf P κ ns) (witDep C (commitDep C rows c pub nl roots) Claims.Sampling.sha512Msg roots Xr) →
-    ¬ Claims.Sampling.R Claims.Sampling.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
-      (witDep C (commitDep C rows c pub nl roots) Claims.Sampling.sha512Msg roots Xr)
+    ¬ Claims.Sampling.RelS Verity.sha512Msg (commitDep C rows c pub nl roots) δ (stmtOf P κ r desc q roots)
+      (partOf P κ ns) (witDep C (commitDep C rows c pub nl roots) Verity.sha512Msg roots Xr) →
+    ¬ Claims.Sampling.R Verity.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
+      (witDep C (commitDep C rows c pub nl roots) Verity.sha512Msg roots Xr)
 
 end Flock.Bridge

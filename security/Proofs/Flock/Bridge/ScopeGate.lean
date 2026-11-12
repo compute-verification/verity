@@ -171,8 +171,8 @@ def SampledKSLiveV3 : Prop :=
       FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
         k Rw M (t' + v) →
       prob (fun o => (Bridge.LiveAcceptsScoped I o ∧ Bridge.RunPopOk desc qr n) ∧
-          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
-            (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+          ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+            (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
           (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
         ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
           ksAvgStrictZ (planZHJ dj y₀) L k (2 * (t' + v)) (t' + v) (reg σ) +

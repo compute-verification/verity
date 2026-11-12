@@ -191,14 +191,14 @@ variable (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg)
 
 /-- A round's cut after a fresh frame it doesn't pick. -/
 noncomputable def freshCut (k : ℕ) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) (l : String)
-    (b : ByteArray) (o : Option (List (String × ℕ))) : DigestCut.AgreeCut sha512Msg (freshK k ts f l b o) :=
+    (b : ByteArray) (o : Option (List (String × ℕ))) : DigestCut.AgreeCut Verity.sha512Msg (freshK k ts f l b o) :=
   optCut o .skip fun fs' => .coin fun x =>
     frameCut P rv k fs' ts (fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
 
 /-- A round's cut after a `Hello` it doesn't pick. -/
 noncomputable def helloCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (spec : Flock.CoinTree.Spec) (ν : ByteArray) :
-    DigestCut.AgreeCut sha512Msg (helloK k fs ts f spec ν) :=
+    DigestCut.AgreeCut Verity.sha512Msg (helloK k fs ts f spec ν) :=
   .iteCut (.coin fun t => frameCut P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩])
     (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log))
     (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])) .skip
@@ -207,7 +207,7 @@ noncomputable def helloCut (k : ℕ) (fs : List (String × ℕ)) (ts : List Open
 noncomputable def treeOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (i s n : ℕ) (b : ByteArray) (T : OpenTree)
     (q : Option (Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog))) :
-    DigestCut.AgreeCut sha512Msg (treeOpenK k fs ts f i s n b T q) :=
+    DigestCut.AgreeCut Verity.sha512Msg (treeOpenK k fs ts f i s n b T q) :=
   optCut q .skip fun p => .coin fun d =>
     frameCut P rv k fs (ts.set i (T.bump p.1)) (fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log))
       (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])
@@ -215,7 +215,7 @@ noncomputable def treeOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List O
 /-- A round's cut after an opening of the `i`-th tree it doesn't pick, at the tree. -/
 noncomputable def optOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (i s n : ℕ) (b : ByteArray) (o : Option OpenTree) :
-    DigestCut.AgreeCut sha512Msg (optOpenK k fs ts f i s n b o) :=
+    DigestCut.AgreeCut Verity.sha512Msg (optOpenK k fs ts f i s n b o) :=
   .iteCut (optCut o .skip fun T => treeOpenCut P rv k fs ts f pre i s n b T (T.next s n)) .skip
 
 open Classical in
@@ -506,7 +506,7 @@ theorem stopOf_end {pre : List Release} {f : List Release → Game β} {a : ι �
 
 /-- **The walk from a decision's node stops as the walk from the branch it takes does**, at that branch's cuts. -/
 theorem stopOf_ite {pre : List Release} {f : List Release → Game β} {a : ι → Prop} {c : Prop} {t e : Game β}
-    {Ct : ι → DigestCut.AgreeCut sha512Msg t} {Ce : ι → DigestCut.AgreeCut sha512Msg e} :
+    {Ct : ι → DigestCut.AgreeCut Verity.sha512Msg t} {Ce : ι → DigestCut.AgreeCut Verity.sha512Msg e} :
     ∀ (dc : Decidable c) (s' : Strategy (@ite _ c dc t e)) (Ks : ι → DigestCut Claims.Msg (@ite _ c dc t e))
       (x : CoinTape (@ite _ c dc t e) s') (back : CoinTape (@ite _ c dc t e) s' → CoinTape g σ),
       (c → ∀ (s' : Strategy t) (Ks : ι → DigestCut Claims.Msg t) (x : CoinTape t s')

@@ -63,12 +63,12 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
   classical
   have hns : ns.sum = n := Bridge.nsOf_sum hpop
   have hon : Bridge.LawOn law ns kd := Bridge.lawOn_drawsUnder hpop hlaw hb
-  by_cases hrel : Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
-      (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)
+  by_cases hrel : Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
+      (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr)
   · exact (FlockSoundness.Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hrel) _ τ).trans
       ((FlockSoundness.Game.prob_false _ τ).le.trans zero_le)
-  obtain ⟨F, hFe⟩ : ∃ F, Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ r desc q roots)
-      (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) = F := ⟨_, rfl⟩
+  obtain ⟨F, hFe⟩ : ∃ F, Claims.Sampling.faulty Verity.sha512Msg Cd (Bridge.stmtOf P κ r desc q roots)
+      (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr) = F := ⟨_, rfl⟩
   have hle : (Bridge.designOf r).Pa (Bridge.partOf P κ ns) F ≤ δ := by
     rw [← hFe]
     exact not_lt.1 hrel
@@ -86,15 +86,15 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
   have hsub : (Finset.univ.filter fun u : Fin n => u.val ∈ F) ⊆ wrongRegZc execArith P (planZHJP dj y₀)
       (tabZHJP dj y₀) vb (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr := by
     intro u hu
-    have hv : u.val ∈ Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ r desc q roots)
-        (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) := by
+    have hv : u.val ∈ Claims.Sampling.faulty Verity.sha512Msg Cd (Bridge.stmtOf P κ r desc q roots)
+        (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr) := by
       rw [hFe]
       exact (Finset.mem_filter.1 hu).2
     by_contra hu'
     obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_wrongRegZc _ _ _ _ _ _).2 hu')
     refine hF P vb.pos (fun o g => vb.bit (vb.val o) g) id vb.com (vb.cs (reg σ))
       (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
-      Claims.Sampling.sha512Msg Cd roots Xr κ u hκin ⟨op, hop⟩
+      Verity.sha512Msg Cd roots Xr κ u hκin ⟨op, hop⟩
       (fun g hg hn o ho hc => hTu u g hg hn o ho (hc.2 hn)) ?_ ns r desc q hns hv
     intro g hg b hb
     obtain ⟨-, hbit, hcan⟩ := hop g hg

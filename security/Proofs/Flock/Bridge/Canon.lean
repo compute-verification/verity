@@ -260,7 +260,7 @@ def _root_.Flock.Bridge.TransportsLiveC : Prop :=
     let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
     ∀ u, ∀ g ∈ P.io u, κ g = none → ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       Bridge.canonOpen rows g (vb.val o) o.2.2 →
-      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
+      ∃ d : Claims.Msg, Cd.Opens Verity.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 open Classical in
 /-- **`SampledKSLive` at the circuit files the verifier reads**: `SampledKSLive`'s statement at a circuit
@@ -337,8 +337,8 @@ def SampledKSLiveV2 : Prop :=
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
       k Rw M (t' + v) →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
-          (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+          (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         ksAvgStrictZ (planZHJ dj y₀) L k (2 * (t' + v)) (t' + v) (reg σ) +

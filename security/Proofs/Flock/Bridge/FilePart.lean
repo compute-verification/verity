@@ -217,11 +217,11 @@ theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
     LayoutIs Cc rows D.unroll pub nl roots cd →
     cd.parse x = some (stmtOf P κ r desc q roots) →
     cd.partition (stmtOf P κ r desc q roots) = some (filePartOf D.unroll n ns) →
-    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep Cc rows D.unroll pub nl roots) δ
+    ¬ Claims.Sampling.RelS Verity.sha512Msg (commitDep Cc rows D.unroll pub nl roots) δ
       (stmtOf P κ r desc q roots) (partOf P κ ns)
-      (witDep Cc (commitDep Cc rows D.unroll pub nl roots) Claims.Sampling.sha512Msg roots Xr) →
-    ¬ Claims.Sampling.R Claims.Sampling.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
-      (witDep Cc (commitDep Cc rows D.unroll pub nl roots) Claims.Sampling.sha512Msg roots Xr) := by
+      (witDep Cc (commitDep Cc rows D.unroll pub nl roots) Verity.sha512Msg roots Xr) →
+    ¬ Claims.Sampling.R Verity.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
+      (witDep Cc (commitDep Cc rows D.unroll pub nl roots) Verity.sha512Msg roots Xr) := by
   intro Cc P κ hL hx hpart hrel
   exact hR F cd P rows D.unroll pub nl ns r κ desc q roots Xr δ x hL hx
     (hpart.trans (congrArg some (partOf_ofCircuit D hU hscope n ns).symm)) hrel

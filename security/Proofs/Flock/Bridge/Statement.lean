@@ -11,7 +11,7 @@ public import Proofs.Flock.Bridge.Deployed
 trace commitment: for every live prover, the probability that flock-verify accepts and the committed transcript fixed
 at registration (`XplurZC`), read as the sampling witness `Bridge.witDep` of the session's statement (`Bridge.stmtOf`
 at the circuit's constants `Bridge.constsOf` and the design `subset kd`, `Bridge.partOf` at the population's strata
-`ns`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
+`ns`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Verity.sha512Msg`), under the registration's frame-v3 roots over the public
 file's rows (`Bridge.rootsOf`), and at the deployed commitment `Bridge.commitDep`, whose layout is the game's rows read
 off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots or its hash is a free parameter. Its
 named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
@@ -120,8 +120,8 @@ def SampledKSLive : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
-          (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+          (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
@@ -170,7 +170,7 @@ def _root_.Flock.Bridge.TransportsLive : Prop :=
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
     ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
-      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
+      ∃ d : Claims.Msg, Cd.Opens Verity.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 /-- **`SampledKSLive` is stated**: it, and the definitions it reads, equal to itself. -/
 def SampledKSLiveStated : Prop :=

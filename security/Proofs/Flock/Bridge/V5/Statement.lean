@@ -204,7 +204,7 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
     let Cd := Bridge.commitDepL Cc rows D.unroll Lm roots
     ∀ u, ∀ g ∈ P.io u, κ g = none → ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       Bridge.canonOpen rows g (vb.val o) o.2.2 →
-      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
+      ∃ d : Claims.Msg, Cd.Opens Verity.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 open Classical in
 /-- **`SampledKSLiveV5` under the roots guard**: V5's bound without its `ecr/sha-512` term at the roots finder, at
@@ -277,8 +277,8 @@ def _root_.Flock.Bridge.SampledKSLiveV5R : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZKP I own o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots) (Bridge.partOf P κ ns)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots) (Bridge.partOf P κ ns)
+          (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
       ENNReal.ofReal δ +
         ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +
@@ -388,15 +388,15 @@ def SampledKSLiveV5 : Prop :=
       -- ecr/sha-512 for the prover's link finders
       LinkCRZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw M t' →
       prob (fun o => LiveAcceptsZKP I own o ∧
-          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
-            (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+          ¬ Claims.Sampling.RelS Verity.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
+            (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Verity.sha512Msg roots Xr))
           (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
         ENNReal.ofReal δ +
           ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +
           ENNReal.ofReal ((∑ p : vb.Pos,
               (Fintype.card (ΩcZ execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
             (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) +
-          Claims.ecrBound Claims.Sampling.sha512Msg (Bridge.rootsFinderL D.unroll Lm) (Bridge.rootsCostL D.unroll Lm)
+          Claims.ecrBound Verity.sha512Msg (Bridge.rootsFinderL D.unroll Lm) (Bridge.rootsCostL D.unroll Lm)
     else
       prob (fun o => Bridge.LiveAcceptsKSP I own o)
         (auditLive (Bridge.execSel (n := n) src law n) Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ = 0

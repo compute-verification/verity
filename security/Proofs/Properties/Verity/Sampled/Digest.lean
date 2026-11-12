@@ -174,7 +174,7 @@ theorem eq_of_bindMsg {k : Verity.Registration.Composite} {s s' : Verity.Sent} (
   · exact h₁
   · exact (h₁.1 (ByteArray.ext (Array.ext' h))).elim
 
-theorem sha512Msg_bytes (b : ByteArray) : sha512Msg b.data.toList = (Flock.Sha512.hash b).data.toList :=
+theorem sha512Msg_bytes (b : ByteArray) : Verity.sha512Msg b.data.toList = (Flock.Sha512.hash b).data.toList :=
   rfl
 
 open Classical in
@@ -206,7 +206,7 @@ noncomputable def bindCut : DigestCut Claims.Msg (V.game θ F c) := .here (bindR
 
 /-- **The commitment's cut agrees under SHA-512**: each play binds its digests into the one commitment
 (`bind_hash_eq`). -/
-theorem bindCut_agrees : (bindCut V k θ F c).Agrees sha512Msg := fun _ _ _ _ h h' => by
+theorem bindCut_agrees : (bindCut V k θ F c).Agrees Verity.sha512Msg := fun _ _ _ _ h h' => by
   obtain ⟨hc, ds, hB, rfl⟩ := bindReveal_some h
   obtain ⟨hc', ds', hB', rfl⟩ := bindReveal_some h'
   rw [bindMsg, bindMsg, sha512Msg_bytes, sha512Msg_bytes, bind_hash_eq (hc.trans hc'.symm) hB hB']
@@ -267,8 +267,8 @@ answer `afterAt σ` is at most as likely as the square root of the commitment's 
 at any budget `q`. -/
 theorem prob_not_sampledDigest_le (σ : Strategy (V.game θ F c)) (q : ℕ) :
     prob (fun o => V.Verdict k .sampled o ∧ ¬ SampledDigest k o.sent (afterAt V k θ F c σ)) (V.game θ F c) σ ≤
-      ENNReal.ofReal (Real.sqrt (((bindCut V k θ F c).finder σ q).Pr sha512Msg)) := by
-  refine le_trans ?_ (DigestCut.missP_le sha512Msg _ (bindCut_agrees V k θ F c) σ q)
+      ENNReal.ofReal (Real.sqrt (((bindCut V k θ F c).finder σ q).Pr Verity.sha512Msg)) := by
+  refine le_trans ?_ (DigestCut.missP_le Verity.sha512Msg _ (bindCut_agrees V k θ F c) σ q)
   rw [prob_eq_ofReal_pr, DigestCut.missP_eq_ofReal]
   exact ENNReal.ofReal_le_ofReal (Claims.Pr_mono fun x hx => Classical.byContradiction fun hn =>
     hx.2 (sampledDigest_of_noMiss V k θ F c σ x hx.1 hn))
@@ -276,10 +276,10 @@ theorem prob_not_sampledDigest_le (σ : Strategy (V.game θ F c)) (q : ℕ) :
 /-- **The clause's bound at `cr/sha-512`**: where the finder at `q` calls meets the strict birthday bound, at most
 `√(q²/2^513)`. -/
 theorem prob_not_sampledDigest_le_strict (σ : Strategy (V.game θ F c)) (q : ℕ)
-    (hCR : Claims.StrictBirthday sha512Msg ((bindCut V k θ F c).finder σ q)) :
+    (hCR : Claims.StrictBirthday Verity.sha512Msg ((bindCut V k θ F c).finder σ q)) :
     prob (fun o => V.Verdict k .sampled o ∧ ¬ SampledDigest k o.sent (afterAt V k θ F c σ)) (V.game θ F c) σ ≤
       ENNReal.ofReal (Real.sqrt ((q : ℝ) ^ 2 / 2 ^ (513 : ℝ))) := by
-  refine le_trans ?_ (DigestCut.missP_le_strict sha512Msg _ (bindCut_agrees V k θ F c) σ q hCR)
+  refine le_trans ?_ (DigestCut.missP_le_strict Verity.sha512Msg _ (bindCut_agrees V k θ F c) σ q hCR)
   rw [prob_eq_ofReal_pr, DigestCut.missP_eq_ofReal]
   exact ENNReal.ofReal_le_ofReal (Claims.Pr_mono fun x hx => Classical.byContradiction fun hn =>
     hx.2 (sampledDigest_of_noMiss V k θ F c σ x hx.1 hn))

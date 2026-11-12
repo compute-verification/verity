@@ -645,7 +645,7 @@ theorem target_of_periods : TargetOfPeriods := by
     show _ ≤ V.delta θ (.ofAudit b) (V.cost θ F c σ) +
       ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit b) * V.cost θ F c σ + V.callsAdd θ (.ofAudit b))
         (V.signatures θ)) +
-      V.loss (.ofAudit b) θ (ENNReal.ofReal ((V.finder (.ofAudit b) θ F c σ).Pr sha512Msg))
+      V.loss (.ofAudit b) θ (ENNReal.ofReal ((V.finder (.ofAudit b) θ F c σ).Pr Verity.sha512Msg))
     rw [add_assoc]
     refine hρ.trans ((Coupling.prCoin_equiv q.coins _).symm.trans_le ?_)
     refine (Game.prCoin_mono (q := fun ξ => (q.run.accepts b ξ ∧ ¬ q.run.Holds (V.certOf θ) q.price b ξ) ∨
