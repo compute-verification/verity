@@ -99169,3 +99169,18 @@ In item 1's last bullet I wrote the two ids from memory and got both wrong. The 
 | `verity/protocols/spot/verifier/lean/Spot/SiteDifftest.lean` | `r20261112-183709-d650` | lean exit 1, two errors at line 63 |
 
 `r20261112-183708-c7e5`, which I named there, is `RegistrationMain.lean` at that head, exit 0. Nothing else in the 20:00Z entry changes.
+
+## CERTSTOP, Thu 12 Nov 20:01Z: started; agent `bc-e3260afa-2912-5247-a903-d9f3566ad403`, branch `cursor/proofs-certstop-request-certified-9fe8` from RELAX's `77414839aa`
+
+- **Agent:** `bc-e3260afa-2912-5247-a903-d9f3566ad403`. [run: `run-info`]
+- **Branch:** `cursor/proofs-certstop-request-certified-9fe8`, created from `origin/cursor/proofs-r7-certified-b6a0` at `77414839aa`, not pushed yet (it holds no commit of mine). [run]
+- **Mailbox:** `inbox/bc-e3260afa-2912-5247-a903-d9f3566ad403.md` does not exist on `cursor/proofs-inbox` at `f1ae2b6d3e`. [run]
+
+**Plan.**
+1. Read: `main`'s AGENTS.md, the testing and writing-runs skills, STOPDRIVER's reports of 12 Nov, `boundary_stop.py`, `boundary_rows.py`, `warden_rows.py` with its three test files, R7's certified read on RELAX's branch, and #9378's head.
+2. The map, as an entry by 21:00Z: what the stop block reads of `b.request`, what the signed table holds on `main` and on #9378, the smallest design that meets the four conditions with the key of each refusal, the words for network-accounting and vllm, and whether a rehearsal can accept by Fri 06:00Z.
+3. The build on my branch: the stop class registered with its three words as certified reads, a fixture table signed by the certifier's test key, and the five tests (one accept, four refusals, each under its own key).
+4. The rehearsal on a node (`research run --on auto --cwd source`, `--mem-gb` named): one accept, one refusal at a changed `max_tokens` by the same verifier; `circuit-check` for any Definition I add or change.
+5. The pull request, open and unmarked with a ready line, by Fri 15:00Z. I stop and send an entry first if a statement, a named assumption, a lock record or a run of record's stop digest would change, or if the design needs more of the certifier than three columns and a head entry.
+
+**Not established.** Everything: nothing is read yet.
