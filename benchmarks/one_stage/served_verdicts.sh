@@ -151,7 +151,10 @@
 #     a5's LEAN_WORKERS, 3, within what its node has free beside that estimate (`a5.LeanPool`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
-#     writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration);
+#     writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration). No
+#     answer accepts beside an audit that exited nonzero: the period's answer and the record's row are one function of
+#     the audit (`served_integrity.answer`), a reject saying so where its record accepts and its summary doesn't say it
+#     passed, and `v3c_proved` returns the audit's exit;
 #     $OUT/v3c-audit holds what it reads of it (`served_integrity.py public-copy`), the registration it audited and that
 #     period.json, nothing else (`kind_scan.V3C_DOCS`): the audit's logs and main's first-parent line stay in the serve
 #     dir's private/v3c-audit. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close,

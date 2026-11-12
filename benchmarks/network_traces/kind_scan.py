@@ -190,12 +190,13 @@ HEX = {"case.json": ("commitment", "evidence")}
 #: output
 TEXT = {"refused.txt": O}
 
-#: what `served_integrity.answer` reads of a records audit's ``summary.json`` (`served_integrity.SUMMARY`): its refusal,
-#: its checks before the sample and after it, and the audit's verdict, its coins' outcome and Lean's refusals, each the
-#: protocol's output; and the entries its registered reads opened the window's own values at (``registered.own``), each
-#: a registered value's entry. An audit that compiled the advice (``compile``) opened it: `OPENING`'s
+#: what `served_integrity.answer` reads of a records audit's ``summary.json`` (`served_integrity.SUMMARY`): whether it
+#: passed, its refusal, its checks before the sample and after it, and the audit's verdict, its coins' outcome and
+#: Lean's refusals, each the protocol's output; and the entries its registered reads opened the window's own values at
+#: (``registered.own``), each a registered value's entry. An audit that compiled the advice (``compile``) opened it:
+#: `OPENING`'s
 SUMMARY_DOC = {
-    "refused.**": O, "checks_before_draw": O, "checks_before_draw.*": O,
+    "ok": O, "refused.**": O, "checks_before_draw": O, "checks_before_draw.*": O,
     "fixed_before_draw": O, "fixed_before_draw.ok": O, "fixed_before_draw.codes[]": O,
     "checks.*": O, "checks.*.ok": O, "checks.*.codes[]": O, "checks.registered_complete.members[]": O,
     "audit": O, "audit.accepted": O, "audit.outcome.**": O, "audit.why.**": O,

@@ -7,6 +7,8 @@
   member whose --registered file the audit couldn't complete, by name, or the tie failing once the sessions were done,
   ``record``), an audit record that doesn't accept and advice fixed after the sample each reject by name, with no public
   outputs or profile;
+* no answer accepts beside an audit that exited nonzero: an accepting audit record under a summary that doesn't say the
+  audit passed (``ok``, its exit) is a reject saying so, on the audit and on its public copy;
 * an audit that left nothing behind is an error, not a verdict, and so is one that opened the advice (``--opening``, a
   development check), accepted or not;
 * an audit record decided at δ = 0.01 (a float in the record) is the exact ratio 1/100 in the profile;
@@ -79,9 +81,13 @@ UNTIED = {"checks_before_draw": {"registration": True},
                                 "detail": {"record": "the challenger's session gave no evidence"}}}}
 
 
+#: the summary of an audit that passed (`records_audit.audit`'s ``ok``, what its exit says) and fixed its inputs before
+#: the draw
+PASSED = {"ok": True, "checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}
+
+
 def test_an_accepted_audit_is_an_accept(tmp_path):
-    out = write(tmp_path / "a", {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}},
-                record(True))
+    out = write(tmp_path / "a", PASSED, record(True))
     a = I.answer(out, REG)
     assert check_answer(a) == a
     assert a["verdict"] == "accept" and a["protocol"] == "verity/sampled-proofs/one-stage/v1"
@@ -108,6 +114,25 @@ def test_refusals_reject_by_name(tmp_path, summary, rec, why):
     assert check_answer(a) == a
     assert a["verdict"] == "reject" and a["reason"].startswith(why)
     assert a["commitment"] == R.digest(REG)
+
+
+@pytest.mark.parametrize("ok", [False, None, "absent", 1, "true"])
+def test_no_answer_accepts_beside_an_audit_that_exited_nonzero(tmp_path, ok):
+    """An audit that exits nonzero after it wrote an accepting audit record (a negative that wasn't refused, its coins'
+    session's error: `records_audit.audit` writes ``ok`` false and exits 1) leaves no accepted answer: every check
+    `answer` names passed and the record accepts, and the answer is a reject saying the audit exited nonzero, with no
+    public outputs or profile, on the audit and on its public copy alike. So is a summary that doesn't say it passed
+    (no ``ok``, or one that isn't true); the same audit with ``ok`` true is the accept."""
+    summary = {k: v for k, v in {**PASSED, "ok": ok, "negatives": {"coins-no-evidence": False}}.items() if v != "absent"}
+    out = write(tmp_path / "a", summary, record(True))
+    I.public_copy(out, tmp_path / "copy")
+    for d in (out, tmp_path / "copy"):
+        a = I.answer(d, REG)
+        assert check_answer(a) == a
+        assert a == {"commitment": R.digest(REG), "profile": None, "protocol": I.PROTOCOL, "public": None,
+                     "reason": I.EXITED_NONZERO, "verdict": "reject"}
+    assert "exited nonzero" in I.EXITED_NONZERO
+    assert I.answer(write(tmp_path / "b", {**summary, "ok": True}, record(True)), REG)["verdict"] == "accept"
 
 
 def test_a_refused_audit_record_names_leans_refusals(tmp_path):
@@ -143,7 +168,7 @@ def test_an_audit_that_left_nothing_is_an_error(tmp_path):
 
 def test_an_audit_that_opened_the_advice_is_no_answer(tmp_path):
     """The records audit's compile check ran (``--opening``): accepted or refused, `answer` makes no verdict of it."""
-    before = {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}
+    before = PASSED
     for name, compiled in (("ok", {"ok": True}), ("refused", {"ok": False})):
         out = write(tmp_path / name, before | {"compile": compiled}, record(True))
         assert I.opened(json.loads((out / "summary.json").read_text()))
@@ -155,13 +180,13 @@ def test_an_audit_that_opened_the_advice_is_no_answer(tmp_path):
 
 def test_an_audit_at_one_percent_is_the_exact_ratio(tmp_path):
     rec = {**record(True), "wrong_units": {"delta": 0.01, "of": 1024, "bound": 69}}
-    a = I.answer(write(tmp_path / "a", {"checks_before_draw": {"registration": True}}, rec), REG)
+    a = I.answer(write(tmp_path / "a", PASSED, rec), REG)
     assert a["profile"]["delta"] == "1/100" and str(CC.integrity(a["profile"])["delta"]) == "1/100"
 
 
 def test_an_audit_at_2_to_the_minus_64_keeps_it_exact_where_a_nearby_ratio_would_be_0(tmp_path):
     rec = {**record(True), "wrong_units": {"delta": 2.0 ** -64, "of": 1024, "bound": 1023}}
-    a = I.answer(write(tmp_path / "a", {"checks_before_draw": {"registration": True}}, rec), REG)
+    a = I.answer(write(tmp_path / "a", PASSED, rec), REG)
     assert a["profile"]["delta"] == f"1/{2 ** 64}" and CC.integrity(a["profile"])["delta"] == Fraction(1, 2 ** 64)
     assert Fraction(2.0 ** -64).limit_denominator(10 ** 12) == 0
 
@@ -202,7 +227,8 @@ def _kind_scan():
 
 
 @pytest.mark.parametrize("summary,rec", [
-    ({"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}, "accepted"),
+    ({"ok": True, "checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}, "accepted"),
+    ({"ok": False, "checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}, "accepted"),
     ({"refused": {"records": "ValueError: the window has 2 row tables"}}, None),
     ({"checks_before_draw": {"registration": False, "m0": True}}, None),
     ({"checks_before_draw": {"registration": True}, "audit": {"accepted": False, "outcome": "coins refused"}}, None),
@@ -211,8 +237,8 @@ def _kind_scan():
       "audit": {"why": {f"lean-verify/m{k}": "session files: no such file" for k in range(5)}}}, "unproved"),
     (AFTER_DRAW, None),
     (UNTIED, None),
-    ({"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}, "registered": REGISTERED},
-     "completed"),
+    ({"ok": True, "checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True},
+      "registered": REGISTERED}, "completed"),
 ])
 def test_the_public_copy_is_what_answer_reads_and_answers_as_the_audit_does(tmp_path, summary, rec):
     """`public_copy` of an audit that also wrote what `answer` doesn't read (the window's number, its requests and
@@ -233,6 +259,8 @@ def test_the_public_copy_is_what_answer_reads_and_answers_as_the_audit_does(tmp_
     out = write(tmp_path / "audit", s, r)
     I.public_copy(out, tmp_path / "copy")
     assert I.answer(tmp_path / "copy", REG) == I.answer(out, REG)
+    if rec in ("accepted", "completed"):
+        assert (I.answer(out, REG)["verdict"] == "accept") == (summary.get("ok") is True and summary["fixed_before_draw"]["ok"])
     for f in ("summary.json", "window/audit.json"):
         text = (tmp_path / "copy" / f).read_text() if (tmp_path / "copy" / f).exists() else ""
         assert '"window"' not in text and '"requests"' not in text and '"population": 37' not in text, (f, text)

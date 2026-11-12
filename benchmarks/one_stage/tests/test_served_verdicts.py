@@ -609,6 +609,35 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
 
 
+def test_an_audit_that_exited_nonzero_beside_its_accepting_record_is_a_reject_row_and_composes_to_reject(tmp_path):
+    """The record's integrity row reads the audit itself (`served_integrity.answer`): an audit whose record accepts and
+    whose summary says it didn't pass (``ok`` false, the exit of an audit one of whose negatives wasn't refused) is a
+    reject row saying the audit exited nonzero, and the record composes to reject by sampled proofs with no block
+    record; the same audit with ``ok`` true is the accept row."""
+    import served_integrity as SI
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    reg = {"format": R.FORMAT, "protocol": R.PROTOCOL, "program": "aa" * 64, "partition": "bb" * 64, "population": 1024,
+           "law": {"law": "subset", "k": 2}}
+    draw = {"law": "subset", "k": 2, "population": 1024, "units": [700, 5]}
+    (tmp_path / "registration.json").write_text(json.dumps(reg))
+    rows = {}
+    for ok in (False, True):
+        audit = tmp_path / str(ok) / "audit"
+        (audit / "window").mkdir(parents=True)
+        (audit / "summary.json").write_text(json.dumps({"ok": ok, "checks_before_draw": {"registration": True},
+                                                        "fixed_before_draw": {"ok": True}}))
+        (audit / "window" / "audit.json").write_text(json.dumps({
+            "accepted": True, "registration": reg, "draw": draw, "proved_units": [700, 5],
+            "checks": {"draw": {"ok": True}}, "wrong_units": {"delta": 0.5, "of": 1024, "bound": 3}}))
+        rows[ok] = S.sampled_proofs_row(audit, None, tmp_path / "registration.json")
+    assert rows[True]["verdict"] == "accept" and rows[True]["quantity"]["bound"] == 3
+    assert (rows[False]["verdict"], rows[False]["reason"], rows[False]["quantity"]) == ("reject", SI.EXITED_NONZERO, None)
+    assert rows[False]["commitment"] == R.digest(reg)
+    _report, rec, line = S.record(_rows(rows[False], tmp_path), window=1, steps=(5, 11), node="n", run=None)
+    assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
+
+
 def test_a_v3c_audit_refused_before_staging_commits_to_the_registration_it_is_given(tmp_path, monkeypatch):
     """V3c's audit dir holds no registration of its own until it stages its members; ``--registration`` (the window
     commit's) is the one its row commits to. A registration file that isn't there is an ``error`` row, and so is an

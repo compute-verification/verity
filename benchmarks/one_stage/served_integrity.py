@@ -8,8 +8,11 @@ template's under a stratified or work law; `audit.profile` as `Core.Integrity`, 
 sample (the records, a check on the registration, the sample) rejects with its codes, and so does one after it that
 left no audit record (a drawn member whose ``--registered`` file the audit couldn't complete, by name); an audit record
 that doesn't accept, with its failed checks and the first of Lean's refusals by member (a registered read that doesn't
-open its root names its port). An audit that ended with no summary is an error (RuntimeError), not a verdict, and so is
-one that opened the advice (`opened`), whatever its verdict.
+open its root names its port). No answer accepts beside an audit that exited nonzero: the audit's exit is its summary's
+``ok``, so an accepting audit record under a summary that doesn't say the audit passed (a negative that wasn't refused,
+its coins' session's error, a second attempt's summary beside an earlier record) rejects, saying so. An audit that
+ended with no summary is an error (RuntimeError), not a verdict, and so is one that opened the advice (`opened`),
+whatever its verdict.
 
 `public_copy` writes what `answer` reads of an audit, what the onsite record credits its members by and the entries its
 registered reads opened the window's own values at, and nothing else (`SUMMARY`, `RECORD`): the copy a verifier on
@@ -30,11 +33,15 @@ from verity.core.protocols.sampled_proofs.one_stage import audit as A, registrat
 
 PROTOCOL = R.PROTOCOL
 #: what `answer` reads of the audit's ``summary.json``, by key (its value whole, or of those keys alone): whether it
-#: opened the advice, its refusal, its checks before and after the draw (each one's outcome, ``checks`` where one
-#: after the draw refused), and the audit's verdict, outcome and Lean's refusals; and what the onsite record holds the
-#: scan's state to: the entries its registered reads opened the window's own values at (``registered.own``)
-SUMMARY = {"compile": None, "refused": None, "checks_before_draw": None, "fixed_before_draw": ("ok", "codes"),
+#: passed (``ok``, what its exit says), whether it opened the advice, its refusal, its checks before and after the draw
+#: (each one's outcome, ``checks`` where one after the draw refused), and the audit's verdict, outcome and Lean's
+#: refusals; and what the onsite record holds the scan's state to: the entries its registered reads opened the window's
+#: own values at (``registered.own``)
+SUMMARY = {"ok": None, "compile": None, "refused": None, "checks_before_draw": None, "fixed_before_draw": ("ok", "codes"),
            "checks": None, "audit": ("accepted", "outcome", "why"), "registered": ("own",)}
+#: the reject of an accepting audit record whose audit didn't pass
+EXITED_NONZERO = ("the audit exited nonzero (records_audit.py audit's exit is its summary's ok, which isn't true) "
+                  "beside an accepting audit record: no answer accepts on it")
 #: what `answer` reads of the audit record ``window/audit.json``: its verdict, each check's outcome and the proved units
 #: its statement covers, the draw, the registration, the bound on wrong units and the units proved; and what the onsite
 #: record credits members by: each check after the draw's outcome, with the drawn members whose ``--registered`` files
@@ -163,7 +170,8 @@ def opened(summary: Mapping[str, Any]) -> bool:
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
-    units that are wrong, except with probability δ."""
+    units that are wrong, except with probability δ. It accepts only where the summary says the audit passed (``ok``
+    true, an exit of 0): any other beside an accepting record is `EXITED_NONZERO`."""
     commitment = R.digest(registration) if registration is not None else None
     try:
         summary = json.loads((out / "summary.json").read_text())
@@ -200,6 +208,8 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     fixed = summary.get("fixed_before_draw")
     if fixed is not None and not fixed.get("ok"):
         return _refusal("not fixed before the draw: " + ", ".join(fixed.get("codes") or []), commitment)
+    if summary.get("ok") is not True:
+        return _refusal(EXITED_NONZERO, commitment)
     reg, draw, wrong = rec["registration"], rec["draw"], rec["wrong_units"]
     delta = exact_delta(wrong["delta"])
     profile = A.profile(reg, draw, wrong["delta"]).to_json()
@@ -222,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PROTOCOL", "RECORD", "SUMMARY", "answer", "exact_delta", "opened", "public_copy"]
+__all__ = ["EXITED_NONZERO", "PROTOCOL", "RECORD", "SUMMARY", "answer", "exact_delta", "opened", "public_copy"]
 
 
 if __name__ == "__main__":

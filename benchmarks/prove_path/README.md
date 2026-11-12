@@ -250,6 +250,9 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   unchanged digests is refused (`circuit`). It imports no `verity_vllm` code. Its sampled members' sessions run one at a time
   (`a5.ONE_AT_A_TIME`), and Lean's checks of finished members run beside them, `--lean-workers` at a time, each starting
   only while its memory estimate fits within `--audit-mem-gb` beside the running session's and checks' (`a5.LeanPool`).
+  An `--out` that holds an audit record takes no second audit: nothing resamples, and a second attempt on a registration
+  is a new serve directory. No answer accepts beside an audit that exited nonzero: `served_integrity.answer` accepts only
+  where the audit's summary says it passed.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to

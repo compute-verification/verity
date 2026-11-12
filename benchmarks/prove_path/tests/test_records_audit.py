@@ -794,7 +794,7 @@ def _audited(window: Path, out: Path, registration: dict | None = None, accepted
     if not accepted:
         (out / "summary.json").write_text(json.dumps({"checks_before_draw": {"registration": False}}))
         return out
-    (out / "summary.json").write_text(json.dumps({"checks_before_draw": {"registration": True},
+    (out / "summary.json").write_text(json.dumps({"ok": True, "checks_before_draw": {"registration": True},
                                                   "fixed_before_draw": {"ok": True}}))
     (out / "window" / "audit.json").write_text(json.dumps({
         "accepted": True, "registration": rec, "proved_units": [1, 5], "checks": {"draw": {"ok": True}},
@@ -808,6 +808,7 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     registration, the Program the audit sampled (the one the registration names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
+    An audit that exited nonzero beside its accepting record is the period's reject, saying so, in the file it writes.
     Refused by name: a registration binding a compiler or an advice (bound at a root, it falls in no term of K), a window
     that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no Program or another than the
     registration names, an answer committing to another registration, and an audit that opened the advice
@@ -831,6 +832,14 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
         "verdict": "accept", "reason": None, "free": p["free"], "commitment": R.digest(rec), "program": rec["program"]}
     refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {})["answer"]
     assert refused["verdict"] == "reject" and refused["commitment"] == R.digest(rec)
+    failed = tmp_path / "f"
+    shutil.copytree(audit, failed)
+    (failed / "summary.json").write_text(json.dumps({**json.loads((audit / "summary.json").read_text()), "ok": False}))
+    assert RA.main(["period", "--window", str(got.dir), "--audit", str(failed), "--out", str(tmp_path / "f.json")]) == 0
+    assert json.loads((tmp_path / "f.json").read_text())["answer"] == {
+        "commitment": R.digest(rec), "profile": None, "protocol": SI.PROTOCOL, "public": None, "reason": SI.EXITED_NONZERO,
+        "verdict": "reject"}
+    capsys.readouterr()
 
     other = _registered(tmp_path / "x")
     unbound = tmp_path / "u"
@@ -1109,6 +1118,8 @@ def _two_attempts(written, tmp_path, monkeypatch, first):
 
     wiring = {"registration": {"ok": True, "codes": []}, "wiring": {"ok": False, "codes": ["wiring"]}}
     stand_ins = {"accepted": accepted,
+                 "accepted, a negative not refused": lambda *a, **kw: (
+                     {**accepted(*a, **kw)[0], "negatives": {"coins-no-evidence": False}}, False),
                  "before the draw": lambda *a, **kw: ({"checks_before_draw": {"registration": False}}, False),
                  "after the draw": lambda *a, **kw: ({"checks_before_draw": {"registration": True}, "checks": wiring}, False)}
     ran: list[str] = []
@@ -1139,6 +1150,20 @@ def test_a_second_attempt_on_an_out_that_holds_an_audit_record_refuses_to_start_
     assert {f: (out / f).read_bytes() for f in kept} == kept and set(kept) == {"summary.json", "window/audit.json"}
     assert json.loads(kept["summary.json"])["ok"] is True and SI.answer(out, written.rec)["verdict"] == "accept"
     assert RA.held_record(out) and RA.held_record(tmp_path / "another") is None
+
+
+def test_an_audit_that_exits_nonzero_after_it_wrote_an_accepting_record_leaves_no_accepted_answer(tmp_path, monkeypatch):
+    """The audit as it runs (`RA.main`, a5 stood in): a5 writes its accepting audit record, then one of its negatives
+    isn't refused, so a5 says it didn't pass and the audit exits 1. Its summary says so (``ok`` false), and the answer
+    on its accepting record is `served_integrity.EXITED_NONZERO`'s reject: no answer accepts beside that exit."""
+    written = _write(tmp_path / "w", advice=False)
+    exits, ran, out, kept = _two_attempts(written, tmp_path, monkeypatch, "accepted, a negative not refused")
+    assert exits == [1, 1] and ran == ["accepted, a negative not refused"]
+    assert json.loads((out / "window" / "audit.json").read_text())["accepted"] is True
+    summary = json.loads((out / "summary.json").read_text())
+    assert summary["ok"] is False and summary["fixed_before_draw"]["ok"] and summary["negatives"] == {"coins-no-evidence": False}
+    assert SI.answer(out, written.rec) == {"commitment": R.digest(written.rec), "profile": None, "protocol": SI.PROTOCOL,
+                                           "public": None, "reason": SI.EXITED_NONZERO, "verdict": "reject"}
 
 
 def test_an_out_whose_attempt_wrote_no_audit_record_takes_a_second_attempt_whose_refusal_is_the_answer(tmp_path, monkeypatch):
