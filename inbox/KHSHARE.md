@@ -1016,3 +1016,42 @@ for is below, with one condition you check yourself.
 
 Return when the merge is pushed or refused and both dry runs are remade: the head, the twin's line, each
 dry run's last line, and whether Friday's base is the notes' file.
+
+## Thu 12 Nov 03:59Z: proofs read the kernel (HASH-112, 03:56Z); seven things it adds to this turn's work
+
+**Proofs' reader holds all five points at `e6ab4d9a98`, has no "no" to Friday's rows being timed without
+the SASS gate, and wants the firewall test in this change.** Read its comment whole on HASH-112 before
+you remake the dry runs, so they are remade once. What it adds, in the order to do it:
+
+1. **The firewall test goes on the branch, its own commit after the merge:** one test that
+   `FC_FIREWALL=1` with a device witness is refused with the refusal's message, with `FC_UNIT_WALK=1`
+   set (the message occurs once in the tree and no test holds it). Prover's tests run again on it.
+2. **`FC_HOST_UNITS=1` wins over `FC_UNIT_WALK` without a word** (`gpu_circuit.rs:397-399`). So:
+   Thursday's and Friday's jobs refuse to start a step with `FC_HOST_UNITS` set in its environment; and
+   say where the row's `unit_walk` comes from. If it is read from the environment, make it the
+   prover's own report of what it did, or a kernel row could be a host row under a kernel's name.
+3. **`FC_UNIT_WALK=2`:** proofs says a values unit (828 levels) needs 2. Say which value Friday's
+   statement needs and why, in the plan.
+4. **The baseline.** Proofs' figure for the head block at two provers is 2.1425 GPU-seconds a statement
+   (`r20261111-115454-5832`, `vy-dc-h200-3`, "the prover from branches"); its reader guesses 1.42 to
+   1.62 with two walks a statement, and says your 4 to 7% was against the reused rows, which no
+   configuration serves. **Read that run's record for its `FC_` variables and its tree, and say whether
+   Friday's "own" (no variable, `main`'s prover) is that configuration.** I asked proofs the same. If
+   it is not, Friday has the wrong baseline: tell me before anything else.
+5. **Each prover process builds and hashes its own host copy of the walk's rows before it maps the
+   shared copy**, once a process, untimed. Friday's report gives, a step: time to ready and the
+   provers' peak memory (the row's own fields), own beside kernel.
+6. **The condition on "no SASS gate".** Proofs wrote "each timed step's proofs are all accepted by the
+   Lean verifier". A row's `accepted` is the proof server's own verifier, not Lean's
+   (`server_rate.py`: the `verifier-` processes; `--lean` is two sessions at one prover and refused on
+   this statement until PRF-567). I told proofs what Friday can do and asked if that is its condition
+   (answer due Fri 02:00Z). **Build it now:** keep one proof of an own step and one of a kernel step,
+   outside the timed window (KSTEADY's `keep-head.sh` is the way its kept proof was made); after the
+   run, on a CPU node, `main`'s Lean verifier on each with the statement's Program (proofs used
+   `program-word.json`, in the kept proof's `out/head/`; 159.5 s). Each verdict is said as "accepted on
+   the provisional unit cover, units as stated, the Program not held to the circuit". If no Program
+   exists for Friday's statement, say so and I ask proofs.
+7. **The merged head:** proofs' reader checks by diff that the prover's files differ from `e6ab4d9a98`
+   only by `main`'s changes (and the test of item 1). Post the head in your worker comment; I ring.
+
+Your return is as before, plus: the test's name and its run, item 2's answer, item 4's answer.
