@@ -35,7 +35,7 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
     first holder's own scripts and the tests ask by name: a script beside another ``NAME.py`` never does, nor one in no
     holder's directory, which means whichever holder it put on the path itself. Nobody asks by name for a NAME that
     `AHEAD` gives to no directory, and `AHEAD` names no directory it need not. `EXCUSED` lets one script of a directory
-    ask beside its own file, and no second one."""
+    ask beside its own file, whether or not `AHEAD` gives the name a directory, and no second one."""
     shared = {name: dirs for name, dirs in CT.holders().items() if len(dirs) > 1}
     ahead = [POUW / d for d in CT.AHEAD]
     wrong, used, excused = [], set(), set()
@@ -44,11 +44,11 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
             first, beside = shared[name][0], path.parent in shared[name]
             where = ", ".join(str(d.relative_to(POUW)) for d in shared[name])
             entry = (path.parent.relative_to(POUW).as_posix(), name)
-            if first not in ahead:
+            if beside and path.parent != first and entry in EXCUSED - excused:
+                excused.add(entry)
+            elif first not in ahead:
                 wrong.append(f"{path.relative_to(POUW)} imports {name}, which {where} hold and conftest.AHEAD gives to "
                              f"none: put the directory whose scripts import it by name in AHEAD, or load() the file")
-            elif beside and path.parent != first and entry in EXCUSED - excused:
-                excused.add(entry)
             elif beside and path.parent != first:
                 wrong.append(f"{path.relative_to(POUW)} imports {name} beside its own {name}.py, and under the suite "
                              f"that is {first.relative_to(POUW)}'s: load it from its file")

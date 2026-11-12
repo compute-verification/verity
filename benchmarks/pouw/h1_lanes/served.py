@@ -1,5 +1,5 @@
 """served.py extract|prepare|summarize: one unit a served H1 window's own sample selected (`h1_prove/served.py`, core's
-`credit.drawn` on the window's signed sampling coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, run.py's lane
+`credit.drawn` on the window's signed sampling coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, leaf.py's lane
 statement) from the window's trace, each lane one Flock --zk statement whose rows open the window's own
 registered tables at the rows the verifier reads them.
 
@@ -16,14 +16,14 @@ registered tables at the rows the verifier reads them.
   position. The openings (rows and salts, private) go to ``--out``, never under the run's ``out/``; ``--public`` gets
   the unit, the entries and the checks.
 * **prepare** (hidden_zk's venv): the unit's leaf from those rows, the lane statement's Program (`h1window.leaf_program`
-  of the window Program rebuilt from ``--descriptor`` and held to its bytes, run.py's `derived`; without one, run.py's
+  of the window Program rebuilt from ``--descriptor`` and held to its bytes, leaf.py's `derived`; without one, leaf.py's
   one-call window: each statement is unit 0 of it), the lanes' partials committed after the sample
   (`produced`, under a registration record of the lane Program that names the window's three entries), and each lane
   staged with its ports read through ``--registered`` at the window's rows: ``a<s>`` row M·j + 32 rb + i of
   ``h1/a/<K>@<s>`` (j the call's place among its step's calls of K), ``b<t>`` row b0 + 32 cb + j of ``h1/b/<K>``,
   ``zy`` row t of ``h1/zy@<c>`` (the window's roots and
   domains, `credit.registered_file`'s), ``partials`` row l of the produced tree, and ``pub``, ``admit`` and ``o0`` known
-  rows (run.py's `known_rows`). The lane's public values are conventions of this harness, named in its report: salt
+  rows (leaf.py's `known_rows`). The lane's public values are conventions of this harness, named in its report: salt
   `pouw_h1_challenger.program_salt_of` of the window's commitment, position the sampled proof block u, roots (root of the call's
   A table, root of ``h1/b/<K>``), admit bit i 1 exactly when slot 32 rb + i is one of the call's served rows.
   The negatives, each proved and checked like the lanes: ``tampered-zy`` (lane 0 given the record with cell 2's z low
@@ -58,7 +58,7 @@ sys.path.insert(0, str(HERE.parent / "h1_prove"))
 sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
-import run as L  # noqa: E402
+import leaf as L  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.pouw.verifier import leaf_lanes as LL  # noqa: E402

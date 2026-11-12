@@ -1,5 +1,5 @@
 """The H1 tile unit as a Flock statement, and the execution phase's commitments it is opened against: what the committer, the
-prover and the verifier of `run.py` share.
+prover and the verifier of `recorded.py` share.
 
 * **The unit** is `circuit.h1zy.PouwH1TileZy` over `circuit.h1tile.PouwH1Tile{EXACT=GemmAccumulatorS8_v2{K, sm120}, R, C,
   PAIRS=the full grid}` (`h1window.tile_unit`): the H1 tile on its rows' codes, with its z/y record checked.
@@ -230,7 +230,7 @@ def program_tables(program: Program, k: int) -> dict[str, int]:
 
 
 def registered_of(com: dict) -> dict[str, tuple[int, str]]:
-    """A commitment's registered values as its entries name them, each its rows and root (`run.check_registration` holds
+    """A commitment's registered values as its entries name them, each its rows and root (`recorded.check_registration` holds
     the entries to the verifier's own Program)."""
     return {e["value"]: (int(e["leaves"]), e["root"]) for e in com["registered"]}
 
