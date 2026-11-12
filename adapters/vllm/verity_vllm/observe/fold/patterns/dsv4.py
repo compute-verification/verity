@@ -210,9 +210,10 @@ class QKvRmsNorm:
         if node.enter.src_sha != QKV_RMS_PINS["src_sha256"]:
             return unsupported(node, "the kernel's source differs from the pin", src_sha=node.enter.src_sha, pinned=QKV_RMS_PINS["src_sha256"])
         a = bound_args(node)
-        sizes, eps = [a.get(k[-1]) for k in QKV_ARGS], as_float(a.get("eps"))
-        if not all(isinstance(n, int) and n > 0 for n in sizes) or eps is None:
-            return unsupported(node, "Q_SIZE, KV_SIZE and eps are not static positive sizes and a float", sizes=sizes, eps=repr(a.get("eps")))
+        read, eps = [a.get(k[-1]) for k in QKV_ARGS], as_float(a.get("eps"))
+        sizes = [n for n in read if isinstance(n, int) and n > 0]
+        if len(sizes) != len(read) or eps is None:
+            return unsupported(node, "Q_SIZE, KV_SIZE and eps are not static positive sizes and a float", sizes=read, eps=repr(a.get("eps")))
         block, warps = qkv_rms_launch(sizes)
         if a.get("BLOCK_SIZE") != block or node.enter.num_warps != warps:
             return unsupported(node, "BLOCK_SIZE and num_warps are not the wrapper's", BLOCK_SIZE=a.get("BLOCK_SIZE"), num_warps=node.enter.num_warps,

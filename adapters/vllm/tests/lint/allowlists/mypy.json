@@ -925,7 +925,6 @@
     {"file": "verity_vllm/observe/fold/patterns/dsa.py", "kind": "arg-type", "symbol": "DsaNormRope.match", "detail": "", "count": 2},
     {"file": "verity_vllm/observe/fold/patterns/dsa.py", "kind": "arg-type", "symbol": "DsaQ.match", "detail": ""},
     {"file": "verity_vllm/observe/fold/patterns/dsa.py", "kind": "var-annotated", "symbol": "DsaSparseMla.match", "detail": ""},
-    {"file": "verity_vllm/observe/fold/patterns/dsv4.py", "kind": "arg-type", "symbol": "QKvRmsNorm.match", "detail": ""},
     {"file": "verity_vllm/observe/fold/patterns/fp8.py", "kind": "assignment", "symbol": "DynamicDeepGemmFp8Linear.match", "detail": "", "count": 2},
     {"file": "verity_vllm/observe/fold/profiles/gen_dense_gemma2_patterns.py", "kind": "union-attr", "symbol": "MeanDimTriton.match", "detail": "", "count": 4},
     {"file": "verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py", "kind": "call-arg", "symbol": "AttentionScopeSoftcap._rebind", "detail": ""},
