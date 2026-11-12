@@ -1030,7 +1030,7 @@ def test_a_check_that_needs_a_train_slots_memory_takes_only_a_slot_that_holds_it
     assert not list(tmp_path.glob("check-line/*"))
     monkeypatch.delenv(SLOT.MIN_MEM_ENV)
     with pytest.raises(Exec):
-        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW)       # a Lean check needs no train slot
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW)       # a light run needs no train slot
     assert ran["slot"] == "c"
     monkeypatch.setenv(SLOT.MIN_MEM_ENV, "lots")
     with pytest.raises(SystemExit, match="not a whole number of GB"):
@@ -1078,10 +1078,11 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
         SLOT.main(["--fast", "--", "true"])
 
 
-def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_and_through_the_runs_environment(monkeypatch):
+def test_record_asks_for_a_train_slot_only_for_a_trains_tests_circuit_check_or_lean_and_through_the_runs_environment(monkeypatch):
     """`research merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
-    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps without lean-suites need no train
-    slot."""
+    slot.py option; a lane's check, a pooled one, a combine and a train's run of light steps alone (ratchet-gate, the
+    preflights) need no train slot, and a train's shard of Lean steps alone does: its builds and replays don't fit a small
+    slot such a run takes."""
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
@@ -1099,7 +1100,9 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert sent("--on", "vy-nebius-1", "--priority")
     assert not sent("--on", "vy-nebius-1")
     assert check.train_gb(True, "research", None, False) is None
-    assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
+    assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) == check.TRAIN_GB   # a shard of Lean alone
+    assert check.train_gb(True, None, ["lean-audit:*"], False) == check.TRAIN_GB            # a records run
+    assert check.train_gb(True, None, ["ratchet-gate"], False) is None                      # the run beside a candidate's check
     assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # an after-landing run of the suites
     assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
     assert check.train_gb(True, None, ["pytest", "lean-audit:security"], False) == check.TRAIN_GB   # the audit's shard

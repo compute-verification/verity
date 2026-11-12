@@ -45,8 +45,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take,
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks,
-                                                            and one of TRAIN_GB or more when it runs pytest, lean-suites or
-                                                            circuit-check
+                                                            and one of TRAIN_GB or more when it runs pytest, lean-suites,
+                                                            circuit-check, lean-build or lean-audit
                                                             (`train_gb`: a machine without one is skipped or refused, exit 75);
                                                             --agreement sends the upstream build's URLs whatever it changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
@@ -437,17 +437,19 @@ RATCHET_BASE_FILE = "check-ratchet-base.txt"
 AUTO_PLAN = "check-shard-plan.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
-#: the least slot memory a train check that runs pytest, lean-suites or circuit-check takes (slot.py's MIN_MEM_ENV): the train
-#: slots' mem=. In a lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check
-#: runs one target at a time: two to four times a train slot's wall time
+#: the least slot memory a train check that runs one of `TRAIN_STEPS` takes (slot.py's MIN_MEM_ENV): the train slots' mem=. In a
+#: lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check runs one target
+#: at a time: two to four times a train slot's wall time
 TRAIN_GB = 200
-#: the steps that need a train slot's memory
-TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
+#: the steps that need a train slot's memory: the suites and circuit-check, which divide the slot's mem= among their workers, and
+#: the Lean build and audit, whose parallel builds and replays hold tens of GB (`SIBLINGS_GB`), so a Lean shard never takes a
+#: small slot a lighter run (ratchet-gate, the preflights) fits
+TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check", "lean-build", "lean-audit")
 
 
 def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
-    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest,
-    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or after-landing run holding one; else None."""
+    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs one of
+    `TRAIN_STEPS`, all of a check (``parts`` None) or a shard or after-landing run holding one; else None."""
     if not priority or pool is not None or combining:
         return None
     return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
@@ -661,12 +663,14 @@ def _trees(doc: dict) -> set[str]:
 
 
 def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
-          now=time.time, min_mem: int | None = None) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+          now=time.time, min_mem: int | None = None,
+          shard: str | None = None) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
     """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
-    no machine shows yet (PLACED) as waiters on theirs; ``commit`` is recorded on its pick."""
+    no machine shows yet (PLACED) as waiters on theirs; ``commit`` (with ``shard``, its `--shard` spec: a candidate's shards
+    are launched together, and each must count the others) is recorded on its pick."""
     import fcntl
 
-    path = path or PLACED
+    path, commit = path or PLACED, f"{commit} {shard}" if shard else commit
     with open(path.with_name(path.name + ".lock"), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         docs = (read or read_slots)(names)
@@ -1317,7 +1321,7 @@ def record(argv: list[str]) -> int:
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-        docs, got, why, skipped = place(names, head, priority, min_mem=min_mem)
+        docs, got, why, skipped = place(names, head, priority, min_mem=min_mem, shard=spec)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:

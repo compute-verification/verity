@@ -111,8 +111,24 @@ def test_a_train_that_needs_a_train_slots_memory_skips_a_machine_of_smaller_slot
     got, why, skipped = CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True, min_mem=CHECK.TRAIN_GB)
     assert got == N2 and "b held" in why and skipped == [f"{N1}: no slot in /workspace/research/locks/slots holds this check's "
                                                          f"{CHECK.TRAIN_GB} GB (c 64 GB, d 64 GB): it takes a train slot"]
-    assert CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True)[0] == N1         # a Lean check takes the free small one
+    assert CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True)[0] == N1         # a light run takes the free small one
     assert CHECK.placement(machine([{**slot("a"), "mem": None}]), True, CHECK.TRAIN_GB)[0] is True   # no mem=: any size
+
+
+def test_a_shard_of_lean_alone_asks_a_train_slot_and_neither_takes_nor_twins_on_a_small_one():
+    """A train slot of 30 GB shares a train slot's cores, so a light run starts beside a check there; a shard of Lean steps
+    alone (an auto plan's, a records run) builds and replays far past it, so it asks a train slot's memory like every other
+    shard: a machine whose only free slot is that small one has no room for it, and one with no bigger slot gets no twin."""
+    ask = CHECK.train_gb(True, None, ["lean-build", "lean-unit-cut", "lean-audit:*"], False)
+    assert ask == CHECK.TRAIN_GB
+    beside = machine([{**slot("c", HOLDER), "mem": 300, "trains": True}, {**slot("d"), "mem": 30, "trains": True}])
+    small = machine([{**slot("d"), "mem": 30, "trains": True}])
+    busy = machine([{**slot("b", HOLDER), "mem": 300, "trains": True}])
+    assert CHECK.placement(beside, True)[0] is True and CHECK.placement(beside, True, ask)[0] is False
+    got, why, skipped = CHECK.choose([N1, N2, "m3"], {N1: small, N2: beside, "m3": busy}, True, ask)
+    assert got == N2 and why.startswith("the fewest waiting ahead") and skipped[0].startswith(f"{N1}: no slot")
+    assert CHECK.twins([N1, N2, "m3"], {N1: small, N2: beside, "m3": busy}, got, True, ask) == [N2, "m3"]
+    assert CHECK.choose([N1, N2], {N1: small, N2: beside}, True)[0] == N1           # a light run takes the free small one
 
 
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
@@ -359,3 +375,31 @@ def test_checks_placed_at_once_go_to_different_machines_until_each_shows_in_its_
     assert got[1] == N1 and CHECK.twins([N1, N2], got[0], N1, True) == [N1, N2]                       # no room, so twins
     t[0] += CHECK.PLACED_S                                                                              # until b's claim expires
     assert CHECK.place([N1, N2], "d" * 40, True, read=read, path=path, now=lambda: t[0])[1] == N2
+
+
+def test_a_candidates_shards_launched_together_each_take_a_free_slot_and_never_one_a_sibling_was_placed_on(tmp_path):
+    """The queue launches a candidate's shards at once, each on its own machines first and then every other
+    (`research.landing.shard_machines`), all of one commit.  A shard whose own machines are busy takes a free slot on another's
+    rather than waiting; and a slot a sibling was just placed on (its run not yet in the line) is no free slot for it, else it
+    would wait there behind the sibling while another machine's slot freed."""
+    from research.landing import shard_machines
+
+    on = ["m1", "m2", "m3", "m4"]
+    s1, s2 = (s.split(",") for s in shard_machines(",".join(on), 2))
+    assert (s1, s2) == (["m1", "m3", "m2", "m4"], ["m2", "m4", "m3", "m1"])
+    sha, t = "e" * 40, [1000.0]
+
+    def placed(free: set[str], tag: str) -> tuple[tuple[str | None, list[str]], tuple[str | None, list[str]]]:
+        docs = {m: machine([slot(m, None if m in free else HOLDER)]) for m in on}
+        path = tmp_path / f"placed-{tag}.json"
+        out = []
+        for spec, names in (("1/2", s1), ("2/2", s2)):
+            got = CHECK.place(names, sha, True, read=lambda ns: json.loads(json.dumps({n: docs[n] for n in ns})), path=path,
+                              now=lambda: t[0], min_mem=CHECK.TRAIN_GB, shard=spec)
+            out.append((got[1], CHECK.twins(names, got[0], got[1], True, CHECK.TRAIN_GB)))
+        return out[0], out[1]
+
+    assert placed({"m1", "m2"}, "own") == (("m1", []), ("m2", []))                 # each on its own free slot
+    assert placed({"m1", "m3"}, "fallback") == (("m1", []), ("m3", []))            # shard 2's own busy: shard 1's free m3
+    first, second = placed({"m1"}, "sibling")                                        # one free slot, shard 1's
+    assert first == ("m1", []) and second == ("m2", ["m2", "m4", "m3", "m1"])       # shard 2 twins over every machine
