@@ -267,13 +267,6 @@ def test_the_programs_split_count_is_held_to_the_mask_kernels_at_every_row(tmp_p
     assert rep["reasons"][0] == "step 0 row 0 (a): the Build has no request Program for this request's shape -- its S is undeclared"
 
 
-def test_max_rows_stops_the_check_and_the_verdict_says_how_many_were_checked(tmp_path):
-    run, manifest = _capture(tmp_path)
-    rep = _recompute(run, manifest, max_rows=3)
-    assert (rep["summary"]["verdict"], rep["summary"]["rows"], len(rep["rows"])) == ("INCOMPLETE", _tally(exact=3), 3)
-    assert rep["reasons"][-1].startswith("3 of 6 sampled rows value-checked")
-
-
 def test_a_seed_the_kernels_consumed_that_is_not_the_declared_one_fails_though_the_token_matches(tmp_path):
     run, manifest = _capture(tmp_path, device_seed=8)
     rep = _recompute(run, manifest)
@@ -353,5 +346,5 @@ def test_the_command_writes_the_report_and_its_exit_code_is_the_verdicts(tmp_pat
     assert f"stoch_recompute {run}: {verdict} {rep['summary']['rows_checked']} of 6 sampled rows value-checked" in said
     assert ("  FAIL: " in said) == bool(rep["reasons"])
     out = tmp_path / "elsewhere.json"
-    assert SR.main(SR.Options(run=str(run), out=str(out), jobs=1, evaluator="rows", reference_rows=0, max_rows=6)) == code
+    assert SR.main(SR.Options(run=str(run), out=str(out), jobs=1, evaluator="rows", reference_rows=0)) == code
     assert json.loads(out.read_text())["summary"]["verdict"] == verdict

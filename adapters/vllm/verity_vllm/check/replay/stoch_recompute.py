@@ -464,8 +464,7 @@ def _sampler_steps(events: list) -> dict[int, dict]:
     return per_step
 
 
-def _sampled_rows(per_step: dict[int, dict], store, facts: dict[str, dict], program_S: dict[str, Any], max_rows: int | None,
-                  reasons: list[str]) -> tuple:
+def _sampled_rows(per_step: dict[int, dict], store, facts: dict[str, dict], program_S: dict[str, Any], reasons: list[str]) -> tuple:
     """Walk every sampled row of the record: (rows, pending, tally, rows_without_seed, steps_seen, sampled_rows_total, s_disagree,
     chain_absent, samples_seen).  `rows` holds one entry per sampled row, or one per step whose rows cannot be value-checked; `pending`
     the rows to evaluate under their declared facts.  Each row that is not checked is named in `reasons`."""
@@ -532,8 +531,6 @@ def _sampled_rows(per_step: dict[int, dict], store, facts: dict[str, dict], prog
                 p_snap = sampling_rng._small_arg(store, d["mask"], "p_ptr", np.float32)
         served = list(se.sampled_token_ids)
         for row, (rid, pos_fact) in enumerate(ss.logits_rows):
-            if max_rows is not None and len(rows) >= max_rows:
-                break
             f = facts.get(rid)
             ev_i = events_of.get(rid, 0)                  # this row is request `rid`'s ev_i-th sampled event (prefill = event 0)
             events_of[rid] = ev_i + 1
@@ -661,9 +658,8 @@ def _evaluate_pending(pending: list, rows: list[dict], reasons: list[str], tally
     return eval_seconds_total, ref_check
 
 
-def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = None, workload: str | Path | None = None,
-                  jobs: int | None = None, build_dir: str | Path | None = None, evaluator: str = "lane",
-                  reference_rows: int = 0) -> dict:
+def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | None = None, jobs: int | None = None,
+                  build_dir: str | Path | None = None, evaluator: str = "lane", reference_rows: int = 0) -> dict:
     # fold_compare imports torch, which only this function needs
     from verity_vllm.check.fold_compare import SnapshotStore
 
@@ -692,7 +688,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     program_S, splits_unreadable = _program_splits(build_dir, workload)      # the Program's S per request, if a Build is given
     reasons.extend(f"Build result unreadable ({u}): the Program's S of its request shape is not read" for u in splits_unreadable)
     rows, pending, tally, rows_without_seed, steps_seen, sampled_rows_total, s_disagree, chain_absent, samples_seen = _sampled_rows(
-        per_step, store, facts, program_S, max_rows, reasons)
+        per_step, store, facts, program_S, reasons)
     eval_seconds_total, ref_check = _evaluate_pending(pending, rows, reasons, tally, jobs, evaluator, reference_rows, sampled_rows_total)
     checked = tally["exact-match"] + tally["mismatch"]
     device_ok = all(r.get("device_facts_match", True) for r in rows)
@@ -762,7 +758,6 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
 class Options:
     run: str = option("--run", help="Match dir (RUN_DIR/capture/{log.jsonl.gz,snapshots.json,values/})")
     out: str | None = option("--out", default=None)
-    max_rows: int | None = option("--max-rows", type=int, default=None)
     workload: str | None = option("--workload", type=workload_arg, default=None,
                                   help="the workload manifest of record (declared seeds / policy); the run's header must agree with it")
     jobs: int | None = option("--jobs", type=int, default=None,
@@ -780,7 +775,7 @@ class Options:
 
 def main(a: Options) -> int:
     run = Path(a.run)
-    rep = recompute_run(run / "capture" / "log.jsonl.gz", run / "capture", a.max_rows, workload=a.workload, jobs=a.jobs, build_dir=a.build,
+    rep = recompute_run(run / "capture" / "log.jsonl.gz", run / "capture", workload=a.workload, jobs=a.jobs, build_dir=a.build,
                         evaluator=a.evaluator, reference_rows=a.reference_rows)
     out = Path(a.out) if a.out else run / "stoch_recompute.json"
     out.write_text(json.dumps(rep, indent=1, default=str))
