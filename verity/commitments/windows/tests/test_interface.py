@@ -401,12 +401,8 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
         bad.close(salt_key=bytes(32))
 
 
-def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch):
-    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root, and the verifier's
-    window derives no port for it: its rows are its writer's output value, its writer units' leaves of its writer's tree
-    (`rows.Binding.held`, `held_leaves`), given as `rows.WIRED`, and its ``b || c`` its writer's. Given as rows it is
-    refused, and so is a wire of several members' units, which no one tree holds, and, in a member with no tables, one
-    that isn't its writer's rows in order."""
+def chain_given(monkeypatch) -> tuple[I.Window, list[dict]]:
+    """A window of `chain` recorded and closed, and the members' data it gave `rows.commit`."""
     win = I.Window(chain(), RUN, LAW, 2)
     ins, outs = chain_values()
     win.record(GEMM, ins, outs, {"chain": 0})
@@ -414,9 +410,19 @@ def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch)
     monkeypatch.setattr(CS, "commit", lambda window, data, **kw: given.setdefault("data", data))
     win.close(salt_key=bytes(32))
     monkeypatch.undo()
+    return win, given["data"]
+
+
+def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch):
+    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root, and the verifier's
+    window derives no port for it: its rows are its writer's output value, its writer units' leaves of its writer's tree
+    (`rows.Binding.held`, `held_leaves`), given as `rows.WIRED`, and its ``b || c`` its writer's. Given as rows it is
+    refused, and so is a wire of several members' units, which no one tree holds, and, in a member with no tables, one
+    that isn't its writer's rows in order."""
+    win, given = chain_given(monkeypatch)
     ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
     held = replace(win.window, members=ms)
-    data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}}} for d, m in zip(given["data"], ms)]
+    data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}}} for d, m in zip(given, ms)]
     c, plain = CS.commit(held, data, salt_key=bytes(32)), win.close(salt_key=bytes(32))
     wired = {m.port(p) for m in ms for p, _o, _ws in m.wired}
     assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains) | set(CS.expected_ports(held)))
@@ -426,7 +432,7 @@ def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch)
         (ms[2].port("o0"), (0, 1)), (ms[0].port("o0"), (0, 1)), (ms[1].port("o0"), (0, 1))]
     assert all(c.bc[m.port("x")] == c.bc[held.held(m, "x")] == plain.bc[m.port("x")] for m in ms[1:])
     with pytest.raises(ValueError, match="given as"):
-        CS.commit(held, given["data"], salt_key=bytes(32))
+        CS.commit(held, given, salt_key=bytes(32))
     with pytest.raises(ValueError, match="several members' outputs"):
         replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (0, 4)),)), *ms[2:]))
     with pytest.raises(ValueError, match="in its writer's order"):
@@ -440,13 +446,7 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     port) names the same value, that root, a leaf count of the table's rows and each unit's writer row, so the header opens
     every row the verifier reads and no other. A member holding none gets no entry, and a body whose held rows are not its
     writer's is refused."""
-    win = I.Window(chain(), RUN, LAW, 2)
-    ins, outs = chain_values()
-    win.record(GEMM, ins, outs, {"chain": 0})
-    given = {}
-    monkeypatch.setattr(CS, "commit", lambda window, data, **kw: given.setdefault("data", data))
-    win.close(salt_key=bytes(32))
-    monkeypatch.undo()
+    win, given = chain_given(monkeypatch)
     plain = replace(win.window, members=tuple(replace(m, wired_trees=False) for m in win.window.members))
     n_of = {m.port("o0"): m.n for m in plain.members}
     ms = tuple(replace(m, tables=tuple((p, n_of[plain.held(m, p)] if p == "x" else m.n) for p, _w in m.rows)) if m.wired else m
@@ -454,7 +454,7 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     w = replace(win.window, members=ms)
     data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}},
              **({"refs": np.stack([np.array(w.held_leaves(m, p)) if m.wired else np.arange(m.n) for p, _w in m.rows], axis=1)}
-                if m.tables else {})} for d, m in zip(given["data"], ms)]
+                if m.tables else {})} for d, m in zip(given, ms)]
     c = CS.commit(w, data, salt_key=bytes(32))
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
                          "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})

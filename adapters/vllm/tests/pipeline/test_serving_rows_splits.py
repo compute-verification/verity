@@ -21,7 +21,7 @@ read, each split's end on each column block (``SparseMlaSplitEnd_v1``) and the c
 window at DV = 64 and DR = 32 in column blocks of 32 (``HALF``): what each unit reads and returns, the wires, the Boolean
 bodies, and the commitment.  Every scores and values unit reads its keys from one committed row a column block, its writer's,
 so a unit whose key rows are not its writer's is refused: when the window is committed, at registration where they are a
-tree of its own, and when the unit is drawn where its reference names another row of its writer's table.
+tree of its own, and when the unit is sampled where its reference names another row of its writer's table.
 
 `test_a_window_of_one_row_commits_and_its_wires_hold` takes minutes, all of it the window's population program lowering the
 five templates: it is the one test of the committed window and its public bodies, which the others reach only through the rows.
@@ -199,11 +199,12 @@ def members(s: Served, tmpls=TMPLS, caps=CAPS) -> list[CS.Member]:
     return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
 
 
-def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Binding:
-    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
+def window(s: Served, tmpls=TMPLS, caps=CAPS, design: dict | None = None) -> CS.Binding:
+    """The window of ``s``'s rows over ``tmpls`` (`members`) under sampling design ``design`` (one unit of each template by
+    default)."""
     ms = members(s, tmpls, caps)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -819,7 +820,7 @@ def test_a_values_unit_on_other_keys_than_its_block_s_scores_unit_is_refused():
     (`chain_rows.wire`): their key ports have no tree of their own.  A values unit on other keys than its block's scores unit
     (`other_keys`) is refused before anything is committed, since its key rows are not its writer's output rows; a prover that
     commits them in a tree of their own is refused at registration, and one whose reference names another row of its writer's
-    table when the unit is drawn (the two tests after this one)."""
+    table when the unit is sampled (the two tests after this one)."""
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
     got, va = other_keys(s, w)
@@ -835,8 +836,8 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
     a tree of its own and wired to nothing, one values unit on other keys than its block's scores unit (`other_keys`).  It
     commits, and its registration is refused on the ports the verifier derives, which hold no tree of a unit's key rows
     (``R3-ports``); the window's own registers on them."""
-    s = Served(row(HALF))
-    w = window(s, UNITS, UNITS_CHUNK)
+    s, design = Served(row(HALF)), D.parse_design("stratified:1")
+    w = window(s, UNITS, UNITS_CHUNK, design)
     at, keyed = WI.bases(w.members), {m.key for m in w.members if is_keys(m.template)}
     copies = replace(w, members=tuple(replace(m, wired=tuple(x for x in m.wired if WI._writers(w.members, x[2], at)[0][0].key
                                                               not in keyed), wired_trees=True, tables=()) for m in w.members))
@@ -845,18 +846,18 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
     def codes(win: CS.Binding, data: list[dict]) -> tuple[str, ...]:
         c = CS.commit(win, data, salt_key=bytes(32))
         rec = CS.registration(c, {"by": "test"}, None, registrar=R)
-        return tuple(R.check(rec, w.program, w.query, w.law, CS.SCHEME, CS.expected_ports(w),
+        return tuple(R.check(rec, w.program, w.query, design, CS.SCHEME, CS.expected_ports(w),
                              leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(win.members)})).codes)
 
     assert "R3-ports" in codes(copies, other_keys(s, copies)[0])
     assert "R3-ports" not in codes(w, CH.held_rows(w, [g for g, _e in read(s, w.members, UNITS)]))
 
 
-def test_a_drawn_unit_whose_key_reference_names_another_row_of_its_writer_s_table_is_refused():
+def test_a_sampled_unit_whose_key_reference_names_another_row_of_its_writer_s_table_is_refused():
     """A scores or values unit's key rows are its reference into its writer member's table (its public body, which the leaf
     layer binds).  Head 0's values unit of split 0's first block, on column block 0, with its reference to the next row of
     the table, another key block's, or to the row of the writer of column block 1 of its own key block: the wiring check on
-    the drawn units refuses it when that unit is drawn, and not when only the member's other units are."""
+    the sample refuses it when the sample holds that unit, and not when it holds only the member's other units."""
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
     c = CS.commit(w, CH.held_rows(w, [g for g, _e in read(s, w.members, UNITS)]), salt_key=bytes(32))
@@ -875,11 +876,12 @@ def test_a_drawn_unit_whose_key_reference_names_another_row_of_its_writer_s_tabl
         body[at:at + 4] = int(r).to_bytes(4, "little")
         return {**publics, m.key: bytes(body)}
 
-    assert WI.check_drawn(w.members, ref(writer[(0, 0, 0)] - wm.base), [u]) == {}
+    on_sample = WI.check_drawn
+    assert on_sample(w.members, ref(writer[(0, 0, 0)] - wm.base), [u]) == {}
     for r in ((writer[(0, 0, 0)] - wm.base + 1) % wm.n, writer[(0, 0, 1)] - wm.base):
-        assert WI.check_drawn(w.members, ref(r), [u]) == {
-            m.key: f"a drawn unit's in1 strings are not the o0 strings of the {wm.key} units that wrote them"}
-        assert WI.check_drawn(w.members, ref(r), [x for x in range(m.base, m.base + m.n) if x != u]) == {}
+        got = on_sample(w.members, ref(r), [u])
+        assert list(got) == [m.key] and got[m.key].endswith(f" in1 strings are not the o0 strings of the {wm.key} units that wrote them")
+        assert on_sample(w.members, ref(r), [x for x in range(m.base, m.base + m.n) if x != u]) == {}
 
 
 def test_a_key_rows_writer_whose_return_is_not_its_input_is_refused_by_its_definition():
