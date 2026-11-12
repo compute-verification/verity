@@ -17,9 +17,18 @@
   },
   "accepted": 9,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.0
  },
  {
@@ -40,9 +49,18 @@
   },
   "accepted": 8,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.0
  },
  {
@@ -63,9 +81,18 @@
   },
   "accepted": 9,
   "refused_n": 1,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.0
  },
  {
@@ -86,9 +113,18 @@
   },
   "accepted": 9,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.0,
   "void": [
    "out of device memory: prover-gpu0"
@@ -112,9 +148,18 @@
   },
   "accepted": 9,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.0
  },
  {
@@ -135,9 +180,18 @@
   },
   "accepted": 9,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": false,
   "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.0
  },
  {
@@ -158,8 +212,17 @@
   },
   "accepted": 9,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "flat": true,
   "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.0
  },
  {
@@ -178,7 +241,16 @@
   },
   "accepted": 9,
   "refused_n": 0,
-  "statements_per_s": 0.125
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "failed",
