@@ -14,7 +14,9 @@ untraced = ["tests/test_serve_tax.py"]
 # an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
 # serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's; the client's shim to the
 # network certifier (cell_shim, tests/test_cell_shim.py) is run against the certifier itself, `warden.Warden` on a
-# virtual clock, whose package imports the circuit language, the commitments and the sampled proofs' verifier
+# virtual clock, whose package imports the circuit language, the commitments and the sampled proofs' verifier; the arm
+# behind the certifier names the certifier's program by its file in this tree, which its test (tests/test_certified.py,
+# both sides on stand-ins for the processes they start) checks is there
 inputs = [
     "verity/errors.py",
     "verity/circuits",
@@ -25,6 +27,7 @@ inputs = [
     "verity/protocols/certifier",
     "verity/protocols/spot",
     "benchmarks/dsa_topk/dsa_topk.py",
+    "benchmarks/network_traces/warden_serve.py",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/nsys.py",
     "benchmarks/harness/verity_bench/overhead.py",

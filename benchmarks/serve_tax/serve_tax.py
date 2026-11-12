@@ -1696,7 +1696,9 @@ def certified(a: argparse.Namespace) -> int:
     return (certified_server if a.side == SERVER else certified_client)(a)
 
 
-def certified_server(a: argparse.Namespace) -> int:
+def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Popen] = subprocess.Popen,
+                     sleep: Callable[[float], None] = time.sleep, now: Callable[[], float] = time.time,
+                     clock: Callable[[], float] = time.monotonic) -> int:
     """The server's side of an arm behind the network certifier, on the node: the arm's engine on the certified tick
     (`server_argv`, `server_env`; the tick's bucket is the schedule's) and, once it answers, the id front before it on
     loopback port ``--front`` (`front_argv`), both held until the certifier's run has ended (`runs_ended`) or
@@ -1737,25 +1739,25 @@ def certified_server(a: argparse.Namespace) -> int:
            "host": os.uname().nodename, "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES,
            "open_files": nofile}
     (out / SERVER_RECORD).write_text(json.dumps(rec, indent=1))
-    t = time.monotonic()
+    t = clock()
     with open(srv / "server.log", "wb") as log:
-        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+        server = popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
     fronted, rc = None, 0
     try:
         wait_ready(server, port, a.startup_s)
-        rec["startup_s"] = round(time.monotonic() - t, 1)
+        rec["startup_s"] = round(clock() - t, 1)
         with open(srv / "front.log", "wb") as log:
-            fronted = subprocess.Popen(front, stdout=subprocess.PIPE, stderr=log, env=tree_env(), text=True)
+            fronted = popen(front, stdout=subprocess.PIPE, stderr=log, env=tree_env(), text=True)
         announced(fronted, "the id front", srv / "front.log")
         (out / SERVER_RECORD).write_text(json.dumps(rec, indent=1))
         print(f"[serve-tax] {a.arm}: the engine is up in {rec['startup_s']} s and the id front listens on loopback "
               f"port {a.front}: held for the network certifier's run", flush=True)
         while True:
             why = hold_ends(server.poll(), fronted.poll(), runs_ended(srv / "tick-feed.jsonl"),
-                            None if stop_at is None else stop_at - time.time())
+                            None if stop_at is None else stop_at - now())
             if why is not None:
                 break
-            time.sleep(2.0)
+            sleep(2.0)
         rec["stopped"] = why[0]
         print(f"[serve-tax] {a.arm}: stopping: {why[0]}", flush=True)
         if not why[1]:

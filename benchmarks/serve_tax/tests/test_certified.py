@@ -28,8 +28,8 @@ def test_the_arm_is_the_tick_arm_with_the_certifier_in_front(tmp_path: Path, mon
     assert [n for n, x in S.ARMS.items() if x.certifier] == [ARM]
     assert S.server_argv(arm, glm, Path("/ck"), 8000) == S.server_argv(tick, glm, Path("/ck"), 8000)
     assert S.entry_points(arm) == S.entry_points(tick)
-    monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path)
-    monkeypatch.setattr(S.Path, "is_file", lambda self: True)
+    (tmp_path / "tick_plugin.py").touch()
+    monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
     monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100))
     cells = S.certifier_cells(None, {"chat": (96,)})
     tau = S.tick_args(None, "220,230", bucket_ms=cells["bucket_ms"])
@@ -165,6 +165,76 @@ class Proc:
 
 
 COUNTERS = dict.fromkeys(S.SCHEDULE, 0.0)
+
+
+@pytest.mark.parametrize(("ends", "exits"), [("certifier", 0), ("stop-at", 0), ("front", 1)])
+def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
+        ends: str, exits: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
+    """From the engine's start to the side's record: the engine under the arm's plugins and the certifier's bucket,
+    the id front before it once it answers, both held while the certifier's run goes on, and stopped at its end or at
+    --stop-at, the engine's counters read first. An id front that ends first fails the side."""
+    (tmp_path / "tick_plugin.py").touch()
+    monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
+    monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100, free_port=lambda: 8100))
+    monkeypatch.setattr(S, "signal", NS(signal=lambda *a: None, SIGTERM=15))
+    monkeypatch.setattr(S, "open_files", lambda: 4096)
+    monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
+    monkeypatch.setattr(S, "check_plugins", lambda env, arm: events.append(("plugins", arm.plugin)))
+    monkeypatch.setattr(S, "wait_ready", lambda server, port, startup_s: events.append(("ready", port)))
+    monkeypatch.setattr(S, "scrape", lambda port: events.append(("scrape", port)) or COUNTERS)
+    monkeypatch.setattr(S, "stop", lambda server, grace_s: events.append(("stop", server.name, grace_s)) or "exited")
+    out, t, events, procs = tmp_path / "out", [5000.0], [], {}
+    feed = out / "server" / "tick-feed.jsonl"
+
+    def popen(argv, stdout, stderr, env, **how):
+        name = "front" if "ids-front" in argv else "server"
+        if name == "server":
+            assert how == {"start_new_session": True} and json.loads(env[S.PLUGIN_ENV])["idle_reset"] is True
+            assert json.loads(env["VERITY_TICK"]) | {"bucket_us": 250000, "sat_us": 220000, "feed": str(feed)} == \
+                json.loads(env["VERITY_TICK"])
+            assert argv[argv.index("--port") + 1] == "8100"
+        else:
+            assert how == {"text": True} and str(S.ROOT / "adapters/vllm") in env["PYTHONPATH"].split(":")
+            assert argv == S.front_argv(8100, 18750, 4087, out / "server" / "front.jsonl")
+        events.append(("started", name))
+        procs[name] = Proc({"listening": ["127.0.0.1", 18750]}, events, name)
+        return procs[name]
+
+    def sleep(s: float) -> None:
+        # the engine empties its prefix cache, the certifier's watermark goes on, and at the third look the hold ends
+        t[0] += s
+        events.append(("sleep", s))
+        if len([e for e in events if e[0] == "sleep"]) == 1:
+            (out / "server" / "prefix_resets.7.jsonl").write_text('{"t":5001.0,"idle_s":null,"reset":true}\n')
+            feed.write_text('{"run":"aa","t":0,"n":0}\n')
+        elif ends == "certifier":
+            with feed.open("a") as f:
+                f.write('{"run":"aa","end":true}\n')
+        elif ends == "front":
+            procs["front"].returncode = 1
+
+    a = argparse.Namespace(
+        arm=ARM, model_id="glm53", checkpoint="/ck", client="vllm-bench", side="server", loads="chat=96", cells=None,
+        front=18750, tick_from=None, tick_ms="220,220", stop_at="1970-01-01T01:25:00Z" if ends == "stop-at" else None,
+        num_gpu_blocks=None, max_model_len=None, window_s=30.0, kv_window_s=30.0, startup_s=1800.0, out=str(out))
+    rc = S.certified_server(a, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
+    said = capsys.readouterr().out
+    # --stop-at is 100 s off, and the side stops `STOP_S` before it
+    held = [("sleep", 2.0)] * (round((100 - S.STOP_S) / 2) if ends == "stop-at" else 2)
+    assert rc == exits
+    assert events == [("plugins", S.ARMS[ARM].plugin), ("started", "server"), ("ready", 8100), ("started", "front"),
+                      *held, *([] if ends == "front" else [("scrape", 8100)]),
+                      *([] if ends == "front" else [("terminated", "front"), ("ended", "front", None)]),
+                      ("stop", "server", 120.0)]
+    rec = json.loads((out / S.SERVER_RECORD).read_text())
+    assert (rec["arm"], rec["side"], rec["cells"]["lanes"], rec["tick"]["bucket_us"]) == (ARM, "server", 96, 250000)
+    assert rec["stopped"] == {"certifier": "the network certifier's run ended", "stop-at": "--stop-at",
+                              "front": "the id front exited with 1 (server/front.log)"}[ends]
+    assert rec["prefix_resets"] == [{"t": 5001.0, "idle_s": None, "reset": True}] and rec["server_stop"] == "exited"
+    assert ("error" in rec, "schedule" in rec) == (ends == "front", ends != "front")
+    assert "the id front listens on loopback port 18750" in said and f"stopping: {rec['stopped']}" in said
+    # the side's directory is no arm's: no table and no cost reads it
+    assert not (out / "meta.json").exists() and not (out / ".site").exists()
 
 
 def result(sends: int, tok: float, duration: float = 300.0) -> dict:
