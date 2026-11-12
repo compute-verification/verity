@@ -23,7 +23,7 @@ untraced = [
     "tests/test_wipe_protocol.py",
     "tests/test_wipe_verdict.py",
 ]
-# Test-only: `lake` builds this package and, through its path requires, C-Flock's verifier's Lean, core's randomness, LMS,
+# Test-only: `lake` builds this package and, through its path requires, Flock's verifier's Lean, core's randomness, LMS,
 # the auditor parties' period checks, the protocol interface and the difftest server; the sessions are signed by the PoUS
 # tests' test signer, read by path.
 inputs = ["verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
