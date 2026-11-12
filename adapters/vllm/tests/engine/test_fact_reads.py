@@ -12,6 +12,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.engine import build, engine_profile, run_facts
 from verity_vllm.pipeline.tp import rank_worker
 
@@ -147,7 +148,7 @@ def _no_device(exc):
 @pytest.mark.parametrize("export, want_export", [(None, None), ("{bad", None), ('{"a": 1}', {"a": 1}), ("<dir>", None)])
 def test_versions_doc_keeps_the_facts_it_reads(monkeypatch, tmp_path, props, gpu, export, want_export):
     monkeypatch.setitem(sys.modules, "triton", _module("triton", __version__="t"))
-    monkeypatch.setitem(sys.modules, "vllm", _module("vllm", __version__="v"))
+    fake_vllm.install(monkeypatch)["vllm"].__version__ = "v"
     real = importlib.metadata.version
 
     def version(name):

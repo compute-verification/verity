@@ -6,11 +6,11 @@ from __future__ import annotations
 import enum
 import json
 import sys
-import types
 from types import SimpleNamespace
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.config import WORKLOADS, RowId, row_execution, workload_files
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import served as SV
@@ -195,33 +195,24 @@ _ROUTES = {"world": 8, "flashinfer": True, "flashinfer_backend": "mnnvl", "quick
 def vllm_stub(monkeypatch):
     """`vllm.envs` and `vllm.distributed` as a serving process's: the flags as vLLM parses them, rank 3 of a TP group whose
     communicator resolved `_ROUTES`."""
-    envs = types.ModuleType("vllm.envs")
-    envs.__dict__.update(VLLM_BATCH_INVARIANT=False, VLLM_USE_DEEP_GEMM=True, VLLM_DISABLE_SHARED_EXPERTS_STREAM=True,
-                         VLLM_USE_FLASHINFER_SAMPLER=False, VLLM_ALLREDUCE_USE_FLASHINFER=True, VLLM_FLASHINFER_ALLREDUCE_BACKEND="auto",
-                         VLLM_ALLREDUCE_USE_SYMM_MEM=True, VLLM_USE_NCCL_SYMM_MEM=False, VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC=False,
-                         VLLM_DISABLE_PYNCCL=False)
-    dist = types.ModuleType("vllm.distributed")
-    dist.__dict__.update(get_tensor_model_parallel_rank=lambda: 3)
+    flashinfer = "vllm.distributed.device_communicators.flashinfer_all_reduce"    # read from sys.modules, never imported
+    fake = fake_vllm.install(monkeypatch, extra=[flashinfer])
+    vars(fake["vllm.envs"]).update(
+        VLLM_BATCH_INVARIANT=False, VLLM_USE_DEEP_GEMM=True, VLLM_DISABLE_SHARED_EXPERTS_STREAM=True,
+        VLLM_USE_FLASHINFER_SAMPLER=False, VLLM_ALLREDUCE_USE_FLASHINFER=True, VLLM_FLASHINFER_ALLREDUCE_BACKEND="auto",
+        VLLM_ALLREDUCE_USE_SYMM_MEM=True, VLLM_USE_NCCL_SYMM_MEM=False, VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC=False,
+        VLLM_DISABLE_PYNCCL=False)
+    fake.set("vllm.distributed:get_tensor_model_parallel_rank", lambda: 3)
     comm = SimpleNamespace(world_size=8, fi_ar_comm=SimpleNamespace(disabled=False), qr_comm=None, fi_pcie_ipc_ar_comm=None,
                            aiter_ar_comm=None, ca_comm=SimpleNamespace(disabled=True, max_size=256 << 10),
                            symm_mem_comm=SimpleNamespace(disabled=False, max_size=64 << 20),
                            pynccl_comm=SimpleNamespace(disabled=False, nccl_version=22907))
-    ps = types.ModuleType("vllm.distributed.parallel_state")
-    ps.__dict__.update(get_tp_group=lambda: SimpleNamespace(device_communicator=comm))
-    dc = types.ModuleType("vllm.distributed.device_communicators")
-    fi = types.ModuleType("vllm.distributed.device_communicators.flashinfer_all_reduce")
-    fi.__dict__.update(_fi_ar_workspace=SimpleNamespace(backend="mnnvl"))
-    dist.__dict__.update(parallel_state=ps, device_communicators=dc)
-    dc.__dict__.update(flashinfer_all_reduce=fi)
-    pkg = types.ModuleType("vllm")
-    pkg.__dict__.update(envs=envs, distributed=dist)
-    for name, mod in (("vllm", pkg), ("vllm.envs", envs), ("vllm.distributed", dist), ("vllm.distributed.parallel_state", ps),
-                      ("vllm.distributed.device_communicators", dc), ("vllm.distributed.device_communicators.flashinfer_all_reduce", fi)):
-        monkeypatch.setitem(sys.modules, name, mod)
+    fake.set("vllm.distributed.parallel_state:get_tp_group", lambda: SimpleNamespace(device_communicator=comm))
+    fake[flashinfer]._fi_ar_workspace = SimpleNamespace(backend="mnnvl")
     for k in SV.NCCL_ENVS:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("NCCL_P2P_DISABLE", "1")
-    return comm
+    return fake
 
 
 def _vllm_config() -> SimpleNamespace:
@@ -262,7 +253,7 @@ def test_a_process_that_never_loaded_flashinfers_all_reduce_reads_no_backend(vll
 def test_a_route_read_without_a_tp_group_raises(vllm_stub, monkeypatch):
     def no_group():
         raise AssertionError("tensor model parallel group is not initialized")
-    monkeypatch.setattr(sys.modules["vllm.distributed.parallel_state"], "get_tp_group", no_group)
+    vllm_stub.set("vllm.distributed.parallel_state:get_tp_group", no_group)
     with pytest.raises(AssertionError, match="not initialized"):
         SV.collectives()
 
