@@ -20,9 +20,10 @@ The keys it names, and where the period check writes each:
 * `link`, in the profile (`profileJson`): the link the period is on;
 * `registration`, in the profile: the registration's head. No answer holds it yet. The period check writes it once it
   takes the registered hardware as a parameter, and `link` is then a registered link's id;
-* `certified`, in the public output: whether the answer certifies anything. No answer holds it yet. The period check
-  writes it as true only once it verifies the one-stage answers it reads, which it takes as given until then, and only
-  for a site whose network certifier mediates the link's egress.
+* `certified`, in the public output: that the answer certifies its `K`. No answer holds it yet. The period check
+  writes it, and only as true, once the one-stage answers its `K` rests on are verified, which it takes as given until
+  then, and only for a site whose network certifier mediates the link's egress. An answer that certifies nothing
+  holds no `certified`, and says why under a key of its own.
 
 An answer that holds no `registration` counts for nothing, and one that holds no `certified` gives no reading, so until
 the period check writes both the link's row reads "not audited: charged at capacity" (the guards below).
@@ -119,8 +120,8 @@ private def notAudited : List (String × String × String × Option Nat × Optio
   [some (toJson (9088 : Nat)), some (.str "1/100"), some (toJson (1 : Nat))]
 #guard (["link", "windows"].map fun k => ((profileJson prof).getObjVal? k).toOption) ==
   [some (.str "up0"), some (toJson (1 : Nat))]
--- and those it does not write yet, in neither. `certified` goes into the public output in the change that makes the
--- period check verify the one-stage answers it reads, and in no other: this guard then goes with it
+-- and those it does not write yet, in neither. `certified` goes into the public output in the change after which the
+-- one-stage answers the period check reads are verified, and in no other: this guard then goes with it
 #guard ["certified", "first", "registration"].all fun k =>
   ((publicJson pub).getObjVal? k).toOption.isNone && ((profileJson prof).getObjVal? k).toOption.isNone
 -- so the answer as the period check writes it counts for nothing, flagged or not: it names no registration's head
@@ -137,8 +138,9 @@ private def notAudited : List (String × String × String × Option Nat × Optio
   [("K", "up0", "certified", some 360000000, some 5981824, some 354018176, "1/50", 2)]
 -- a link the registration does not hold makes no row, and the site's boundary link stays not audited
 #guard linkRows (unflagged (account minute)) [answer "warden" [] registered] == notAudited
--- `certified` true: the row. False: `K` is dropped and every tick is charged at capacity, in a row whose standing still
--- reads "certified" at the answers' error. Anything but a boolean: no reading
+-- `certified` true: the row. False: `K` is dropped and every tick is charged at capacity, but in a row whose standing
+-- still reads "certified", at the answers' error, so the period check never writes false. Anything but a boolean: no
+-- reading
 #guard linkRows (account minute) [answer "up0" [("certified", .bool true)] registered] ==
   [("K", "up0", "certified", some 360000000, some 5990912, some 354009088, "1/100", 1)]
 #guard linkRows (account minute) [answer "up0" [("certified", .bool false)] registered] ==
