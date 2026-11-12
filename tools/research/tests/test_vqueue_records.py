@@ -159,6 +159,23 @@ def test_a_records_run_its_machine_failed_runs_again_once_elsewhere_and_its_rese
     assert got.state == FAIL and again in got.why and len(h.launched) == 2
 
 
+@pytest.mark.parametrize("on, again", [("big", "big"), ("big1,big2", "big2")])
+def test_a_records_run_on_given_machines_launches_there_and_its_resend_after_a_machines_fault_stays_there(world, monkeypatch,
+                                                                                                         on, again):
+    """``on`` (a heavy candidate's machines): the records run launches on them and not on the queue's, its record keeps them,
+    and its resend after its machine failed it goes on those it didn't run on, or on its one machine again, never on the
+    queue's."""
+    h, sha = _harness(world, monkeypatch)
+    h.d.on = "m1,m2"
+    rec = start(h.d, sha, on=on)
+    (rid,) = rec["ids"]
+    assert rec == {"ids": [rid], "tip": sha, "at": h.clock, "on": on} and h.launched == [(sha, on, False)]
+    assert any(x.startswith(f"research queue vqueue: train.sh {sha[:12]} {on} --deferred") for x in world.logs), world.logs
+    h.run_state[rid] = ("failed", -9, None, None, on.split(",")[0])
+    rec = json.loads(json.dumps(rec))
+    assert judge(h.d, rec) == RecordsRun(PENDING) and h.launched[1:] == [(sha, again, False)] and rec["resend"]
+
+
 @pytest.mark.parametrize("rows, log, why", [
     ([{"step": LEAN_STEP, "status": "passed"}, {"step": "lean-suites", "status": "failed", "rc": 1}], "",
      f"failed after its {LEAN_STEP} passed"),

@@ -21,6 +21,10 @@
   research run --job-user USER [--job-namespaces LIST] [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay
                                                  # the runner's. LIST (of user, mnt, net): the namespace types the unit may make, where
                                                  # the workload then holds capabilities; none otherwise (research/jobuser.py)
+  research run-preserve PATH [--kind K] [--meta JSON] [--timeout S]   # in a workload `run --on` started: its runner puts the file
+                                                 # PATH of $OUT (at most 1 MiB, 64 requests a run) in the store now, with the run's
+                                                 # custody key, which stays the runner's; prints the art id once the remote is
+                                                 # checked to hold it, else says why and exits 1 (research/store/run_preserve.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
   research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group and its whole cgroup
                                                  # scope, recorded as a manual cancel; 20 s later the runner SIGKILLs what is left (never
@@ -596,6 +600,15 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 
         store_toml, key_env = Path(ns.store_read_dir) / CU.STORE_TOML, CU.KEY_ENV
         apply_env = {"RESEARCH_STORE_CONFIG": os.path.join(job_dir, jobuser.STORE_CONFIG), **apply_env}
+    preserver = None
+    if ns.custody_dir:
+        # the workload's `research run-preserve PATH`: this runner puts the file with its custody key, which stays its own
+        from .store.run_preserve import Preserver
+
+        try:
+            preserver = Preserver(run_dir, ns.custody_dir, shared=bool(ns.job_user))
+        except OSError as e:            # the workload runs all the same, and its `research run-preserve` finds nothing offered
+            print(f"research: run-preserve is not offered to this run's workload: {e}", file=sys.stderr)
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
     spawn, mode, unsafe = command, None, []
@@ -611,13 +624,15 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     try:
         if ns.job_user:
             mode = jobuser.prepare(job_dir, store_toml)
-        rc = harness_run(a, spawn)
+        rc = harness_run(a, spawn, preserver.poll) if preserver else harness_run(a, spawn)
     finally:
         if mode is not None:            # before anything reads the run dir
             removed, unsafe = jobuser.finish(job_dir, jobuser.unit_name(run_id), ns.job_user, job_pw.pw_uid, mode)
             if removed:
                 print(f"research: --job-user: deleted {len(removed)} entr{'y' if len(removed) == 1 else 'ies'} the job left that "
                       f"{'is' if len(removed) == 1 else 'are'} neither a file nor a directory: {', '.join(removed[:10])}", file=sys.stderr)
+        if preserver is not None:       # no request is taken once the workload has ended, and none is answered after the record
+            preserver.close()
         for k, v in saved_env.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -2063,6 +2078,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_compare(rest)
     if cmd == "launch-request":
         return cmd_launch_request(rest)
+    if cmd == "run-preserve":
+        from .store.run_preserve import main as run_preserve_main
+
+        return run_preserve_main(rest)
     if cmd == "env":
         return cmd_env(rest)
     if cmd == "doctor":

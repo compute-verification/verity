@@ -104,23 +104,24 @@ def bookkeeping_told(rid: str, into: str, tip: str, prs: str, lock: str, warned:
             f"for the next PR to fix: {shown}", ("lean", *owners))
 
 
-def start(driver: Landing, sha: str) -> dict | None:
-    """Launch candidate ``sha``'s records run (`Landing.launch_locks`, on `Landing.on`).  The record to keep
-    (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then); the candidate (``tip``) and when it launched (``at``).  None, logged, when it registered no run, or when ``driver``
-    launches nothing (a dry run, or its queue's shadow)."""
-    if not driver.on:
+def start(driver: Landing, sha: str, on: str = "") -> dict | None:
+    """Launch candidate ``sha``'s records run (`Landing.launch_locks`, on ``on``'s machines, else `Landing.on`).  The record to
+    keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then); the candidate (``tip``),
+    when it launched (``at``) and ``on`` when given, which its resend stays on (`resend_locks`).  None, logged, when it
+    registered no run, or when ``driver`` launches nothing (a dry run, or its queue's shadow)."""
+    if not (machines := on or driver.on):
         raise ValueError("a candidate's records run needs the queue's machines: build the Landing with drive.toml's `on` "
                          "(`research.queue.flags_at(repo, main).on`)")
-    what = f"train.sh {sha[:12]} {driver.on} --deferred {LEAN_STEP}, the records run of candidate {sha[:12]}"
+    what = f"train.sh {sha[:12]} {machines} --deferred {LEAN_STEP}, the records run of candidate {sha[:12]}"
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
-    rec, tail = driver._started(driver.launch_locks(driver.repo, sha, driver.on))
+    rec, tail = driver._started(driver.launch_locks(driver.repo, sha, machines))
     if rec is None:
         driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
         return None
     driver.q.log(f"research queue vqueue: {what}: {' '.join(rec['ids']) or 'launching'}")
-    return {**rec, "tip": sha, "at": driver.now()}
+    return {**rec, "tip": sha, "at": driver.now(), **({"on": on} if on else {})}
 
 
 def judge(driver: Landing, rec: dict | None) -> RecordsRun:
@@ -329,9 +330,9 @@ def lock_outcome(driver: Landing, rec: dict, states: dict, lost: bool) -> tuple[
 
 def resend_locks(driver: Landing, rec: dict, states: dict) -> tuple[str, dict | None, str]:
     """Launch lock run ``rec`` of ``rec["tip"]`` again, once, after its machine failed it (`lock_outcome`), on the machines
-    of `on` its runs (``states``) didn't run on (`Landing._elsewhere`): (where, the new launch's fields, which ``rec`` then holds
-    as a resend; None, with train.sh's output's tail, when it registered no run)."""
-    where = driver._elsewhere(states)
+    of its ``on`` (else `Landing.on`) its runs (``states``) didn't run on (`Landing._elsewhere`): (where, the new launch's
+    fields, which ``rec`` then holds as a resend; None, with train.sh's output's tail, when it registered no run)."""
+    where = driver._elsewhere(states, rec.get("on") or "")
     again, tail = driver._started(driver.launch_locks(driver.repo, rec["tip"], where))
     if again is not None:
         rec.update(**again, at=driver.now(), resend=True)
