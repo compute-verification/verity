@@ -867,10 +867,12 @@ def test_a_stochastic_sampler_on_widened_logits_is_held_to_the_vocabulary_and_th
     assert (off.detail["V"], off.detail["vocab"]) == (V, V + 1)
 
 
-SAMPLE_PINS = {"_temperature_kernel": {"BLOCK_SIZE": 8192},
-               "_topp_sb_stats_kernel": {"BLOCK": 8192},
-               "_topp_sb_step_kernel": {"BLOCK": 2048, "F": 8, "NUM_ROUNDS": 5},
-               "_topp_sb_mask_kernel": {"BLOCK": 8192, "F": 8, "NUM_ROUNDS": 5, "MASK_VALUE": float("-inf")}}
+SAMPLE_PINS: dict[str, dict[str, float]] = {
+    "_temperature_kernel": {"BLOCK_SIZE": 8192},
+    "_topp_sb_stats_kernel": {"BLOCK": 8192},
+    "_topp_sb_step_kernel": {"BLOCK": 2048, "F": 8, "NUM_ROUNDS": 5},
+    "_topp_sb_mask_kernel": {"BLOCK": 8192, "F": 8, "NUM_ROUNDS": 5, "MASK_VALUE": float("-inf")},
+}
 
 
 def _stochastic_step():
