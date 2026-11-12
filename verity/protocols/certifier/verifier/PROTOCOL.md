@@ -2097,7 +2097,7 @@ Which execution phases have a head is the form's:
     hold of a turn-away, each held by a test of the network certifier (`test_network_certifier_phase_ends`):
     - its one cell is a `REFUSED` cell on ordinal 0, the same bytes at every turn-away;
     - the cell leaves with the next tick's bucket, as that bucket's cells do, through the pacer where the network
-      certifier is paced, and never at the arrival; the close follows it;
+      certifier is paced, and never at the arrival; its stream's end leaves with it, from the same hand;
     - which arrivals are turned away is a function of the network certifier's tick count at each arrival, the
       run's length and the schedule: nothing the queue or the lanes hold, so nothing a server does, moves the set.
 
@@ -2106,6 +2106,11 @@ Which execution phases have a head is the form's:
     does set is what the queue holds when those buckets begin, and so which arrivals before them are admitted,
     wait and are cut, or are refused, as at any run's end. A full queue before them refuses as anywhere, and that
     execution phase's records are withheld.
+
+    The link stays open after the cell. The network certifier reads what the client still sends and drops it,
+    none of it reaching a server, and closes the link at the client's end of stream, or at the run's end. A link
+    closed with its client's request unread is reset, and a reset client may lose the cell it has not read; a
+    refusal's link, closed at the arrival, still can be.
   - **The word** is one certificate over SHA-512 of the link, the execution phase and the parameters' digest under a
     tag of its own (`connection_rows.no_head_digest`), for the session and under the key every certificate is. A
     reader tells the three cases apart from public values: a certificate over that digest is the word, a certificate
