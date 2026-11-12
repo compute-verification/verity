@@ -1,0 +1,73 @@
+# The names the period maps' stage 4 (`period_proofs_map.toml`) leaves on a retired word beside a sibling it renames,
+# renamed as their siblings are: the period's game of `security/Proofs/Flock/EndToEnd/` (a monitoring period's "period"
+# -> "monitoring period"), the keyed sample over PoUW's window of `security/Proofs/Flock/Soundness/` (an execution
+# phase), the SPOT challenger's seed tag (its window -> "run"), and the lemmas of Verity's sampled reads and the live
+# salt's ledger about the challenger's functions (its gate session -> "challenge phase").
+# `tools/move/rename.py --map tools/move/kernels_names_map.toml` renames them in one move. Names a listed guarantee's
+# statement reads are not in it: `FlockSoundness.Audit.Law.windowK`, `FlockSoundness.Audit.audit_window_split_of_record`,
+# `Spot.Challenger.MAX_SESSION_ID`, `SESSION_FORM`, `WINDOW_FORM` and `Spot.Supplied.WINDOW_SALT`.
+
+[words]
+# Each holds its word with other parts, and no other declaration holds it in another sense.
+"periodGood_of_plays" = "monitoringPeriodGood_of_plays"
+"periodGood_mono" = "monitoringPeriodGood_mono"
+"periodGood_true" = "monitoringPeriodGood_true"
+"periodE" = "monitoringPeriodE"
+"period_union" = "monitoringPeriod_union"
+"period_horizon" = "monitoringPeriod_horizon"
+"period_prod" = "monitoringPeriod_prod"
+"PlanDraw.window" = "PlanDraw.executionPhase"
+"windowK_le" = "executionPhaseK_le"
+"covers_window" = "covers_executionPhase"
+"closure_escape_le_window" = "closure_escape_le_executionPhase"
+
+[[words_in]]
+# `window` is the file's prose word too; only its declaration and the code span that names it are renamed.
+files = ["security/Proofs/Flock/Soundness/PlanDraw.lean"]
+words = { "def window" = "def executionPhase", "`window key calls L`" = "`executionPhase key calls L`" }
+
+[[words_in]]
+# Whole names, since `audit_window` begins `audit_window_split_of_record`, which keeps its name here.
+files = [
+    "security/Proofs/Flock/Soundness/Audit/README.md",
+    "security/Proofs/Flock/Soundness/Audit/Window.lean",
+    "security/Proofs/Flock/Soundness/KeyedDraw.lean",
+    "verity/protocols/pouw/prover/circuit/plan.py",
+    "verity/protocols/pouw/verifier/tests/test_circuit_plan.py",
+]
+words = { "audit_window" = "audit_executionPhase", "audit_window_of_le" = "audit_executionPhase_of_le", "audit_window_of_record" = "audit_executionPhase_of_record", "audit_window_of_le_slack" = "audit_executionPhase_of_le_slack", "audit_window_split_of_record_of_le_slack" = "audit_executionPhase_split_of_record_of_le_slack", "extraction_audit_window" = "extraction_audit_executionPhase", "extraction_audit_window_of_le_slack" = "extraction_audit_executionPhase_of_le_slack", "extraction_audit_window_split_of_record_of_le_slack" = "extraction_audit_executionPhase_split_of_record_of_le_slack" }
+
+[[words_in]]
+files = ["verity/protocols/spot/verifier/lean/Spot/ChallengerDraw.lean"]
+words = { "SEED_SALT_WINDOW" = "SEED_SALT_RUN" }
+
+[[words_in]]
+# The challenger's own `sessionNamed_ok` and `trustedSessionOf_ok` (`Properties.Challenger.Session`) keep theirs here, so
+# Verity's sampled reads' are renamed only where `namespace Verity.Sampled` reads them.
+files = [
+    "security/Proofs/Properties/Verity/Sampled/Assembled.lean",
+    "security/Proofs/Properties/Verity/Sampled/LinkFirst.lean",
+    "security/Proofs/Properties/Verity/SampledRead.lean",
+]
+words = { "sessionOf_ok" = "challengePhaseOf_ok", "sessionOf_spec" = "challengePhaseOf_spec", "sessionNamed_ok" = "challengePhaseNamed_ok", "trustedSessionOf_ok" = "trustedChallengePhaseOf_ok", "trustedSessionOf_spec" = "trustedChallengePhaseOf_spec" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pouw/LiveSalt.lean",
+    "security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean",
+]
+words = { "sessionOf_spec" = "challengePhaseOf_spec", "sessionNamed_root" = "challengePhaseNamed_root" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Challenger/Session.lean"]
+words = { "lawfulBEqByteArraySession" = "lawfulBEqByteArrayChallengePhase" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# Format ids, notes, art ids, branches and lanes.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
