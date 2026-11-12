@@ -106,6 +106,12 @@ CONFIGURATION_CARD_SCHEMA = "verity-gen/card/v1"
 TIMELINE_SCHEMA = "verity-sweep/timeline/v1"
 #: the `row.json` beside a row, its stages' Attempts, which `pipeline.research._row_json` writes
 ROW_ATTEMPTS_SCHEMA = "verity-sweep/row-v2/v1"
+#: the configuration a row command ran with, `<row dir>/effective_config.json` (`pipeline.row.EFFECTIVE_SCHEMA`), which
+#: `effective_config` writes
+EFFECTIVE_CONFIG_SCHEMA = "verity-vllm/effective-config/v1"
+#: a run's `tree.json`, the tree a row runs from with its export and its release line, which
+#: `pipeline.row_stages.SingleRow.prepare` writes
+EXECUTING_TREE_SCHEMA = "verity-sweep/executing-tree/v1"
 #: the document of `epoch digests`, which `pipeline.epoch`'s `main` writes
 REBASELINE_DIGESTS_SCHEMA = "verity-vllm/rebaseline-digests/v1"
 
