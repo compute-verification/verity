@@ -14,13 +14,14 @@ Each arm of `ARMS` is one speculative config (``off`` has none). Each phase is a
 - ``--phase replay``: an engine built from the trace's header (the scheduler's settings and its ``speculative`` entry), each
   request put back before the step the trace says it arrived before; the scheduler decides the rest. It writes the same.
 
-Without ``--phase`` it runs every arm's serve and replay for each of ``--weights``, compares each replay with its serve
-(steps, draft counts, tokens) and each draft arm's tokens with ``off``'s, writes OUT/specdec_replay.json and exits 0 only if
-every draft arm scheduled draft tokens and every replay equals its serve. A phase that fails is recorded and the rest go on.
+Without ``--phase`` it runs the serve and the replay of each of ``--runs`` (`RUNS`: weights and arm), compares each replay
+with its serve (steps, draft counts, tokens) and each draft arm's tokens with ``off``'s under the same weights, writes
+OUT/specdec_replay.json and exits 0 only if every draft arm scheduled draft tokens and every replay equals its serve. A
+phase that fails is recorded and the rest go on.
 
 In the pod venv, on one idle card, from the tree's root:
 
-    PYTHONHASHSEED=0 $PY adapters/vllm/tests/properties/specdec_replay_gpu.py --out DIR [--weights dummy,scaled] [--arms ...]
+    PYTHONHASHSEED=0 $PY adapters/vllm/tests/properties/specdec_replay_gpu.py --out DIR [--runs dummy:off,dummy:mtp1,...]
 """
 from __future__ import annotations
 
@@ -50,6 +51,8 @@ ARMS: dict[str, dict[str, Any] | None] = {
     "synthetic3": {"method": "mtp", "num_speculative_tokens": 3, "rejection_sample_method": "synthetic",
                    "synthetic_acceptance_rates": [0.8, 0.6, 0.4]},
 }
+#: the default ``--runs``: vLLM's dummy weights first, whose answer stands if redrawing the weights fails
+RUNS = "dummy:off,dummy:mtp1,dummy:synthetic3,scaled:off,scaled:mtp1,scaled:mtp3,scaled:synthetic3"
 #: the served engine's settings; the replay's are the trace header's
 SERVE = {"max_model_len": 4096, "max_num_seqs": 8, "max_num_batched_tokens": 512, "enable_chunked_prefill": True,
          "enable_prefix_caching": True, "async_scheduling": None, "block_size": None, "num_gpu_blocks": 8192}
@@ -277,8 +280,8 @@ def compare(serve: dict[str, Any], replay: dict[str, Any]) -> dict[str, Any]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
-    ap.add_argument("--weights", default="dummy,scaled")
-    ap.add_argument("--arms", default=",".join(ARMS))
+    ap.add_argument("--runs", default=RUNS, help="WEIGHTS:ARM,... (dummy or scaled; an arm of ARMS)")
+    ap.add_argument("--weights", choices=("dummy", "scaled"), default="dummy")
     ap.add_argument("--compiled", action="store_true", help="vLLM's defaults (torch.compile, CUDA graphs) instead of eager")
     ap.add_argument("--phase", choices=("serve", "replay"))
     ap.add_argument("--arm", choices=tuple(ARMS))
@@ -293,9 +296,13 @@ def main() -> int:
     env = {**os.environ, "PYTHONHASHSEED": "0"}
     report: dict[str, Any] = {"layers": LAYERS, "experts": EXPERTS, "compiled": a.compiled, "runs": {}}
     ok = True
-    for weights in a.weights.split(","):
+    runs = [tuple(r.split(":")) for r in a.runs.split(",")]
+    unknown = [r for r in runs if len(r) != 2 or r[0] not in ("dummy", "scaled") or r[1] not in ARMS]
+    if unknown:
+        raise SystemExit(f"specdec-replay: --runs names {unknown}: WEIGHTS:ARM, dummy or scaled, an arm of {list(ARMS)}")
+    for weights in dict.fromkeys(w for w, _ in runs):
         docs: dict[str, dict[str, Any]] = {}
-        for arm in a.arms.split(","):
+        for arm in [arm for w, arm in runs if w == weights]:
             d = out / f"{weights}-{arm}"
             d.mkdir(parents=True, exist_ok=True)
             entry: dict[str, Any] = {"speculative": ARMS[arm]}
@@ -312,17 +319,17 @@ def main() -> int:
                     entry[phase]["log_tail"] = (d / f"{phase}.log").read_text(errors="replace").splitlines()[-25:]
                     ok = False
                     break
-            if entry.get("replay", {}).get("rc") != 0:
-                continue
-            serve, replay = (json.loads((d / f"{p}.json").read_text()) for p in ("serve", "replay"))
-            docs[arm] = serve
-            entry.update(config=serve["config"], redrawn=serve["redrawn"], drafts=acceptance(serve), replay_equal=compare(serve, replay))
-            ok = ok and entry["replay_equal"]["equal"] and (ARMS[arm] is None or entry["drafts"]["draft_tokens"] > 0)
-        for arm, doc in docs.items():
-            if arm != "off" and "off" in docs:
-                report["runs"][f"{weights}-{arm}"]["tokens_against_off"] = token_diff(docs["off"]["tokens"], doc["tokens"], doc["sampling"])
-    report["ok"] = ok
-    (out / "specdec_replay.json").write_text(json.dumps(report, indent=1) + "\n")
+            if entry["serve"]["rc"] == 0:
+                serve = docs[arm] = json.loads((d / "serve.json").read_text())
+                entry.update(config=serve["config"], redrawn=serve["redrawn"], drafts=acceptance(serve))
+                ok = ok and (ARMS[arm] is None or entry["drafts"]["draft_tokens"] > 0)
+                if arm != "off" and "off" in docs:
+                    entry["tokens_against_off"] = token_diff(docs["off"]["tokens"], serve["tokens"], serve["sampling"])
+            if entry.get("replay", {}).get("rc") == 0:
+                entry["replay_equal"] = compare(serve, json.loads((d / "replay.json").read_text()))
+                ok = ok and entry["replay_equal"]["equal"]
+            report["ok"] = ok
+            (out / "specdec_replay.json").write_text(json.dumps(report, indent=1) + "\n")
     for name, e in report["runs"].items():
         print(f"{name}: drafts {e.get('drafts')} replay {e.get('replay_equal')} against off {e.get('tokens_against_off')}", flush=True)
     print(f"specdec-replay: {'ok' if ok else 'FAILED'}: {out / 'specdec_replay.json'}", flush=True)
