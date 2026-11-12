@@ -84393,3 +84393,34 @@ Your 10:02Z section is read, and no section follows it [read: my mailbox, 10:47Z
 - `r20261112-104723-cb73`: the pre-mark suites (`suites.py --changed 33faab2be81c --quick`) at `2d91873146ec`, on `vy-nebius-cpu-4` [run: launched 10:47Z].
 - Then: commit the record as `a8cd` kept it; confirm from its diff that no record but the new guarantees' moved; one records run without `--update` and the pre-mark suites at that final head; open the pull request unmarked; the ready line.
 - **Two things I need from you.** (a) The issue: no id for this change is in my brief, my mailbox or the page. I will open with `--issue PRF-466` and `Refs PRF-466`, the issue the lane's #9220 names for the same goal, unless you name another [read: #9220's body]. (b) I open the pull request when you resume me after `a8cd`; if you want it opened before the record is committed, say so.
+
+## CROSSCLOSE, Thu 12 Nov 10:54Z: `01dea4d2566f` stands at #9091's new head `6227b8397518`; one hit by test, not by name: #9234 on lean's tip puts `FlockVerify.lean` at 2027 lines and the overlong cap fails (727 > 725)
+
+**1. #9091 at `6227b8397518`: `01dea4d2566f` stands as it is** [run, local, trial `117b29cc27cf` = the closed merge `e7343acc7c0d` with the head merged]. One stop, the pin. The pin's own command there writes blob `42fdc26ab089`, the close's. `pins.py --stale` exit 0; `test_pous_trusted.py` 9 passed; `security/Proofs/lean-audit.json` merges with no stop, parses, and holds `Proofs.Properties.Spot.SecondRefused` in `roots` (172 roots). The head's two new commits touch neither a file the pin hashes nor a file lean's side stops in.
+
+**2. vllm's two** (`serve_openai.py`, `dead_code_keep.json`): dropped from my open rows [relayed: your 10:37Z].
+
+**3. The hit: #9234 `9cfb18bdaa9a` (PROGHOLD) × lean's tip** [run, local, trial `d5d725bee781` = the closed merge with #9199, #9234, #9215 merged; all three merge with no stop]
+- Test: `tests/test_lean_packages.py::test_no_long_module_grows` **fails: `verity/protocols/flock/verifier: 727 > 725`**. Not a bookkeeping test: it fails, it does not warn.
+- Why: `FlockVerify.lean` is 1995 lines on `main`, 1997 at #9234 (under 2000, so nothing counts there), 2025 on lean's tip (cap 725 with `HmRow.lean`'s 700), and 2027 merged. No name moved; my by-name script sees nothing.
+- Closes, yours to choose; none is in a file of ours alone:
+  - **none needed if #9190 is in first**: with `a8c9ac795709` the file is 2015, and #9234's two lines give about 717.
+  - else `OVERLONG["verity/protocols/flock/verifier"]` at 727 in `tests/test_lean_packages.py` (lean's file; the lock run raises a cap itself), or PRF-581's split.
+
+**4. #9234 × #9190 stop against each other in `FlockVerify.lean`, on `main` alone too** [run: `git merge-tree`], one line, verifier code, so both sides quoted and not closed by me:
+- #9190 (KEPT): `let programSha := program.bind read.digest`
+- #9234 (PROGHOLD): `let handed := program.map fun b => ProvedScope.programDigestOf (read.jsonAt b)  -- \`some none\`: bytes that are no descriptor`
+- base: `let programSha := program.bind fun b => ProvedScope.programDigestOf (read.jsonAt b)`
+The later of the two to land joins them on `main`; I redo row 9 on that head then.
+
+**5. #9185 × #9087, a test fails with no stop in its files, on `main` alone too** [run: `7b52`]: `benchmarks/spot_figures/tests/test_total_cost.py::test_each_line_starts_at_its_own_tax`. #9112 and #9185 assert every configuration but `every_block` has design `"two-stage, by template"`; #9087 adds `head_units` with `"two-stage, width-stratified"`. Lean's side changes nothing under `benchmarks/spot_figures`. COUNT's and #9087's owner's.
+
+**6. New heads** [run]: #9199 `ce7dab0ab39c`, #9234 `9cfb18bdaa9a`, #9215 `205129204ded`: no stop against `main` or the closed merge. By name: nothing either way (#9199's three candidates are the word "Session" in a docstring). Both sides change, and git merges: `a5.py`, `a0.py`, `spot/device/remote.py`, `Spot.lean`, spot's README (#9199); `FlockVerify.lean` (#9234); `Spot.lean` (#9215). Their Lean files are being tried on the merged tree: `r20261112-105203-bece` (six `lean_changed.py --try`, then the suites), started 10:52Z.
+
+**Runs** [run]
+- `7348` ended (#9116 and `494bd85fb553`): 67 suites, 65 passed, 2 failed, neither ours (my 10:18Z entry).
+- `d64d` ended (#9190 and `a8c9ac795709`): 62 suites, 62 passed.
+- `aa34` (the closed merge on `33faab2be81c`): the four selections exit 0; suites 20 of 126 passed, none failed, `benchmarks/one_stage` 943 and `verity-lean-audit` 721 among them. Its machine runs them on two processes: ETA about 12:45Z, not 11:15Z as I wrote.
+- `fc27` (#9112, #9185 and `f58b4a3ef6e9`): the three selections exit 0; suites 3 passed, none failed.
+- `7b52` (twelve heads in): the two selections exit 0; suites 24 passed, 1 failed (item 5).
+- `02ef` (#8950, #9091 at its old head, #9075): both selections exit 0; suites 7 passed, none failed.
