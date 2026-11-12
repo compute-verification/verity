@@ -29,6 +29,8 @@ from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.certificate import Certificate
 from verity.protocols.certifier.verifier.schedule import SyncSet
 from verity.protocols.certifier.verifier.warden import WardenParams
+from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.spot.verifier.profile import Stratified, Stratum
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
 
@@ -345,9 +347,10 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
     one among them, changes only those bits: the rows form accepts a tied audit at any sample, Lean with the mirror's
     public, in which that audit's link-windows' terms charge every entry its at most `b` incorrect proof blocks can
     set, `faulty_entries` = E_w = lanes · T / every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other
-    link-window's none, and `eps` holds that audit's δ beside the scans'. Each way of sampling in part is charged, the
-    demo's sample at one proof block and at two, and the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`)
-    or don't (`SlotEntry_v1`)."""
+    link-window's none, and `eps` holds that audit's δ beside the scans'. `b` is the count the check reads, never
+    below the sample's own bound, so each way of sampling in part is charged, an answer that states a `bound` of 0
+    among them, the demo's sample at one proof block and at two, and the cases' audits select (`SelectEntry_v1` beside
+    `ScanSlots_v2`) or don't (`SlotEntry_v1`)."""
     seen = Counter()
     for m in SAMPLED_IN_PART:
         for n in range(8):
@@ -359,7 +362,7 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
             pub, (i,) = out["public"], charged(case, out["public"])
             s, prog = p.schedule, PC._scan_widths(case["params"]["scan"])[1]
             assert p.scan.entries == s.lanes * (s.window // s.every) * prog, (m, n, p.scan)
-            c = json.loads(bytes.fromhex(case["commitment"]))
+            c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
             b = pub["audits"][i]["wrong_units"]
             assert [t["faulty_entries"] for t in pub["scans"]] == [
                 p.scan.entries if b and i in PC._tied_audits(c["audits"], reg) else 0
@@ -367,11 +370,11 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
             assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]),
                                          Fraction(pub["audits"][i]["delta"])))
             seen[m, "charged" if b else "uncharged"] += 1
+            seen["stated 0"] += b > e["audits"][i]["public"]["bound"] == 0
             if m == "rows-tied-sampled":
                 seen[f"subset:{pub['audits'][i]['drawn']}"] += 1
             seen["select" if PC.SELECT_KEY in case["params"]["audits"][i]["program"]["definitions"] else "slot"] += 1
-    want = [(m, "charged") for m in SAMPLED_IN_PART] + [("rows-tied-partial", "uncharged"), "subset:1", "subset:2",
-                                                        "select", "slot"]
+    want = [(m, "charged") for m in SAMPLED_IN_PART] + ["stated 0", "subset:1", "subset:2", "select", "slot"]
     assert all(seen[k] for k in want), seen
 
 
@@ -561,6 +564,23 @@ def unheld(level: dict) -> str | None:
     return "sizes" if strata is not None and sum(s["size"] for s in strata) != level["size"] else None
 
 
+def registered(case: dict, c: dict, e: dict, reg: dict, x: dict) -> dict:
+    """`case` with the commitment `c` and the evidence `e` it decodes to, after the registration `reg` of `c` is made
+    to state the sample the profile of its answer `x` of `e` names: its level's size as the `population`, and as the
+    `law` the level's draw, a stratum's units the range after the last stratum's. The answer is for that
+    registration."""
+    (level,) = x["profile"]["levels"]
+    draw, lo, strata = level["draw"], 0, []
+    for s in draw.get("strata", []):
+        strata.append({"k": s["k"], "template": s["name"], "units": [[lo, lo + s["size"]]]})
+        lo += s["size"]
+    reg["population"] = level["size"]
+    reg["law"] = {"k": draw["subset"], "law": "subset"} if "subset" in draw else {
+        "k": sum(s["k"] for s in strata), "law": "stratified", "strata": strata}
+    x["commitment"] = R.digest(reg)
+    return case | {"commitment": D.canonical(c).encode().hex(), "evidence": D.canonical(e).encode().hex()}
+
+
 def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
     """A profile whose level samples more than it holds is no sample of the level. Neither is a stratified one with a
     stratum that samples more than the stratum holds though the level's total holds, or whose strata's sizes do not sum
@@ -569,9 +589,9 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
     stratum in part. Lean and the mirror each refuse the one answer that carries it, where they read its sample: by the
     level a compute audit's in either form, tied to a scan or not, and a scan's, sampled `subset:k` or stratified; by
     the stratum and by the strata's sizes, above the level's and below, the aimed scan's tied audit's. They refuse it
-    before they read the public's bound (with the bound gone too the reason is still the sample's), and for that alone:
-    with the level sampled whole instead, in one stratum where the strata's sizes were not the level's, Lean accepts
-    the period with the mirror's public."""
+    before they read the registration's sample or the public's bound (with the bound gone too the reason is still the
+    sample's), and for that alone: with the level sampled whole instead, in its registration as in its profile and
+    in one stratum where the strata's sizes were not the level's, Lean accepts the period with the mirror's public."""
     seen = Counter()
     for m, why in [*((m, PC.OVERSAMPLED) for m in OVERSAMPLED), (STRATUM_OVERSAMPLED, PC.STRATUM_OVERSAMPLED),
                    (STRATA_SIZES, PC.STRATA_SIZES)]:
@@ -579,6 +599,7 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
             case = build(m, n, small=n % 2 == 0)
             c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
             answers = [("audit", x) for x in e["audits"]] + [("scan", w["answer"]) for w in e["windows"]]
+            regs = c["audits"] + c["windows"]
             (i, kind, x), = [(i, kind, x) for i, (kind, x) in enumerate(answers)
                              if unheld(x["profile"]["levels"][0])]
             level, bound = x["profile"]["levels"][0], x["public"]
@@ -599,12 +620,117 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
             level["draw"] = {"subset": level["size"]} if "subset" in design else design | {"strata": (
                 [design["strata"][0] | {"k": level["size"], "size": level["size"]}] if how == "sizes"
                 else [s | {"k": s["size"]} for s in design["strata"]])}
-            whole = case | {"evidence": D.canonical(e).encode().hex()}
+            whole = registered(case, c, e, regs[i], x)
             assert reference(whole)["verdict"] == ACCEPT, (m, n, reference(whole))
             verdict, out = D.replay(PORT, whole, server)
             assert verdict == ACCEPT and json.loads(out)["public"] == reference(whole)["public"], (m, n, out)
     assert all(seen[k] for k in ("audit", "scan", "subset", "stratified", "tied", "untied", "level", "stratum", "sizes",
                                  "above", "below")), seen
+
+
+#: The changes whose one answer's registration states no sample, or another than the answer's profile names, each
+#: with the refusal's name.
+UNREGISTERED = {"audit-unsampled": PC.NO_SAMPLE, "rows-audit-unsampled": PC.NO_SAMPLE,
+                "rows-answer-unsampled": PC.NO_SAMPLE, "audit-unregistered": PC.NOT_REGISTERED,
+                "rows-audit-unregistered": PC.NOT_REGISTERED, "rows-answer-unregistered": PC.NOT_REGISTERED}
+
+
+def bounds(reg: dict, x: dict) -> tuple[int, dict, int, int]:
+    """Of an accepted answer `x` to the registration `reg`: its level's size and draw, the bound its public states and
+    the bound of its registration's sample at its δ (`PC._sample_bound`)."""
+    (level,) = x["profile"]["levels"]
+    size, draw = PC._sample_of(reg)
+    return level["size"], level["draw"], x["public"]["bound"], PC._sample_bound(size, draw,
+                                                                                Fraction(x["profile"]["delta"]))
+
+
+def test_an_answer_whose_sample_is_not_its_registrations_is_refused(server):
+    """A sample's strata, each stratum's units and how many of them are drawn are the registration's, fixed before any
+    coin; only which units a draw takes comes with the answer. So a compute audit's answer in either form, and a
+    scan's, is refused by name, by Lean and by the mirror, where its registration states no `subset:k` or stratified
+    sample (no law or population, a Bernoulli law, or a count, strata, a template or a range one-stage's profile reads
+    none of) and where its profile is another sample of its level than the registered one (another `k`, a stratum
+    renamed, sampled otherwise or holding another unit, the strata as one subset or the subset as one stratum). It is
+    refused for that alone: with the registration made to state the profile's sample, Lean accepts the period with
+    the mirror's public."""
+    seen = Counter()
+    for m, why in UNREGISTERED.items():
+        for n in range(6):
+            case = build(m, n, small=n % 2 == 0)
+            assert why in reference(case)["reason"], (m, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and why in json.loads(out)["reason"], (m, n, out)
+            c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+            answers = [("audit", reg, x) for reg, x in zip(c["audits"], e["audits"])] + (
+                [("scan", reg, w["answer"]) for reg, w in zip(c["windows"], e["windows"])]
+                if PC.form_of(m) == "rows" else [])
+            (kind, reg, x), = [(kind, reg, x) for kind, reg, x in answers
+                               if PC._sample_of(reg) != tuple(x["profile"]["levels"][0][k] for k in ("size", "draw"))]
+            draw = x["profile"]["levels"][0]["draw"]
+            seen.update([kind, why, "subset" if "subset" in draw else "stratified"])
+            if all(s["size"] for s in draw.get("strata", [])):  # a stratum of no unit has no range to register
+                fixed = registered(case, c, e, reg, x)
+                assert reference(fixed)["verdict"] == ACCEPT, (m, n, reference(fixed))
+                verdict, out = D.replay(PORT, fixed, server)
+                assert verdict == ACCEPT and json.loads(out)["public"] == reference(fixed)["public"], (m, n, out)
+                seen[m, "accepted"] += 1
+    assert all(seen[k] for k in ("audit", "scan", "subset", "stratified", *UNREGISTERED.values(),
+                                 *((m, "accepted") for m in UNREGISTERED))), seen
+
+
+def test_an_answers_count_is_never_below_its_samples_bound(server):
+    """The count of incorrect proof blocks the period reads of an answer is the larger of the `bound` the answer
+    states and the bound of its registration's sample at its δ, which the check computes itself, so an answer that
+    states too small a bound gains nothing and none is refused for it: over accepted periods of both forms, every
+    compute audit's and every scan's `wrong_units` is that maximum, an answer below its sample's bound is read at the
+    sample's and one at or above it as it states, over `subset:k` samples and stratified ones, and Lean's public is
+    the mirror's."""
+    seen = Counter()
+    for m in ("honest", "rows-honest", *SAMPLED_IN_PART):
+        for n in range(4):
+            case = build(m, n, small=n % 2 == 0)
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (m, n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
+            c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+            read = [("audit", reg, x, t) for reg, x, t in zip(c["audits"], e["audits"], out["public"]["audits"])] + [
+                ("scan", reg, w["answer"], t)
+                for reg, w, t in zip(c["windows"], e["windows"], out["public"].get("scans", []))]
+            for kind, reg, x, t in read:
+                size, draw, stated, need = bounds(reg, x)
+                assert (t["units"], t["wrong_units"]) == (size, max(stated, need)), (m, n, kind, t, stated, need)
+                how = "raised" if stated < need else "as stated"
+                seen.update([(kind, how), ("subset" if "subset" in draw else "stratified", how)])
+    assert all(seen[k, how] for k in ("audit", "scan", "subset", "stratified") for how in ("raised", "as stated")), seen
+
+
+def test_a_samples_bound_is_its_stratas_own_summed():
+    """`_sample_bound` and `_facts` on Lean's `#guard`s of `sampleBound` and `factsOf`. 3 of 10 at δ = 1/10 leave at
+    most 4 incorrect, so a `bound` of 3 is read as 4 and one of 5 as 5. Strata of 9 of 10 and 1 of 10 at δ = 1/100 leave
+    at most 1 and 9, each at 1/200, where their totals read as one sample, 10 of 20, would leave 5. Two strata of 4 of
+    8 at δ = 1/10 leave at most 3 each at 1/20, where one-stage's bound of the strata together is 3. A level sampled
+    whole leaves none."""
+    def strata(*ss):
+        return {"law": "stratified", "strata": [{"name": name, "size": size, "k": k} for name, size, k in ss]}
+
+    def count(size, draw, delta, stated):
+        law = {"k": draw["subset"], "law": "subset"} if "subset" in draw else {"law": "stratified", "strata": [
+            {"k": s["k"], "template": s["name"], "units": [[10 * j, 10 * j + s["size"]]]}
+            for j, s in enumerate(draw["strata"])]}
+        prof = {"delta": delta, "levels": [{"draw": draw, "size": size}]}
+        return PC._facts("x", {"law": law, "population": size}, prof, {"bound": stated}).wrong
+
+    tenth, bound = Fraction(1, 10), PC._sample_bound
+    assert [count(10, {"subset": 3}, tenth, b) for b in (3, 4, 5)] == [4, 4, 5]
+    uneven, halves = strata(("a", 10, 9), ("b", 10, 1)), strata(("a", 8, 4), ("b", 8, 4))
+    assert [count(20, uneven, Fraction(1, 100), b) for b in (9, 12)] == [10, 12]
+    assert [bound(10, {"subset": k}, Fraction(1, 200)) for k in (9, 1)] == [1, 9]
+    assert bound(20, {"subset": 10}, Fraction(1, 100)) == 5
+    assert [count(16, halves, tenth, b) for b in (0, 7)] == [6, 7]
+    assert bound(8, {"subset": 4}, Fraction(1, 20)) == 3
+    assert Stratified((Stratum("a", 8, 4), Stratum("b", 8, 4))).count_bound(tenth) == 3
+    assert [count(10, {"subset": 10}, tenth, b) for b in (0, 2)] == [0, 2]
 
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():

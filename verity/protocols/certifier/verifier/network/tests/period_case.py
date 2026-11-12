@@ -52,6 +52,13 @@ So is one with a stratum that samples more than the stratum holds in a level who
 moved to the other (`tied-stratum-oversampled`). So is one whose strata's sizes do not sum to its level's
 (`STRATA_SIZES`): that audit with a stratum holding more than it samples, each holding twice as many, or one holding
 and sampling one fewer (`tied-strata-sizes`).
+Every accepted answer's profile is the sample its registration states, its `population` under its `law`: an answer is
+refused whose registration states no sample (`NO_SAMPLE`: `answer-unsampled`, `audit-unsampled`, `_unsample`) or whose
+profile is another sample of its level than the registration's (`NOT_REGISTERED`: `answer-unregistered`,
+`audit-unregistered`, `_resample`); the clock form's link-window, its one unit proved, reads no sample, so the two
+scan changes are the rows form's alone. An answer's count of incorrect proof blocks is the larger of its `bound` and
+that sample's bound at its δ (`_sample_bound`), and none is refused for its `bound`: the answers' bounds are drawn
+below their samples' as well as above.
 `case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
@@ -82,6 +89,7 @@ from verity.protocols.certifier.verifier.warden import INTEGER_FIELDS, WardenPar
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.spot.verifier.one_stage import registration as R
 from verity.protocols.spot.verifier.one_stage.draw import stratum_k
+from verity.protocols.spot.verifier.profile import Stratified
 from verity.circuits import boolean as BL, codec, population
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.defs import REGISTRY
@@ -987,15 +995,67 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
     if not _prog_tied(audits, reg):
         raise Finding(REJECT, f"{what}: the scan's prog is no compute audit's output")
     prof, pub = _answered(what, reg, x.answer)
-    f = _facts(what, prof, pub)
+    f = _facts(what, reg, prof, pub)
     if f.units != 2 * p.schedule.window:
         raise Finding(REJECT, f"{what}: profile: {f.units} units, not the scan's 2T")
     return f, sum(p.audits[i].free for i in _tied_audits(audits, reg))
 
 
-def _facts(what: str, prof: dict, pub) -> Facts:
+def _sample_of(reg) -> tuple[int, dict] | None:
+    """`sampleOf`: the sample a registration states, its `population` under the design of its `law` as a profile's
+    level writes it (`Spot.Record.profileDraw`: a stratum named by its template, its size its ranges' total); None
+    where it names no `subset:k` or stratified sample."""
+    def get(j, k):
+        return j.get(k) if isinstance(j, dict) else None
+
+    def integer(v) -> bool:
+        return isinstance(v, int) and not isinstance(v, bool)
+
+    def nat(v):
+        return v if integer(v) and v >= 0 else None
+
+    n, law = nat(get(reg, "population")), get(reg, "law")
+    kind = get(law, "law")
+    if n is None or not isinstance(kind, str):
+        return None
+    if kind == "subset":
+        k = nat(get(law, "k"))
+        return None if k is None else (n, {"subset": k})
+    if kind not in ("stratified", "work") or not isinstance(strata := get(law, "strata"), list):
+        return None
+    out = []
+    for s in strata:
+        t, rs, k = get(s, "template"), get(s, "units"), nat(get(s, "k"))
+        if not (isinstance(t, str) and isinstance(rs, list) and rs and k is not None and all(
+                isinstance(x, list) and len(x) == 2 and integer(x[0]) and integer(x[1]) and x[0] < x[1] for x in rs)):
+            return None
+        out.append({"name": t, "size": sum(hi - lo for lo, hi in rs), "k": k})
+    return n, {"law": "stratified", "strata": out}
+
+
+def _subset_bound(n: int, k: int, delta: Fraction) -> int:
+    """`Spot.Bound.boundOf n (.subset k) δ` for `k ≤ n`: one-stage's own bound of a uniform k-subset of n units
+    (`Stratified.count_bound` of the one stratum) where 0 < δ < 1, and outside it what the Lean's fill returns: every
+    unit the sample can miss at δ = 0, all n at δ = 1 when nothing is sampled, and none otherwise."""
+    if 0 < delta < 1:
+        return Stratified.uniform(n, k).count_bound(delta)
+    if delta == 0:
+        return n - k
+    return n if delta == 1 and k == 0 else 0
+
+
+def _sample_bound(n: int, draw: dict, delta: Fraction) -> int:
+    """`sampleBound`: a `subset:k`'s bound at δ, and a stratified sample's the sum of its strata's own, each stratum
+    one `subset:k_s` of its `n_s` units at δ split equally over the strata."""
+    if "subset" in draw:
+        return _subset_bound(n, draw["subset"], delta)
+    return sum(_subset_bound(s["size"], s["k"], delta / len(draw["strata"])) for s in draw["strata"])
+
+
+def _facts(what: str, reg, prof: dict, pub) -> Facts:
     """`factsOf`: one level sampled `subset:k` or stratified, sampling no more than the level holds and no more of a
-    stratum than the stratum holds, its strata's sizes summing to the level's, and the public's bound."""
+    stratum than the stratum holds, its strata's sizes summing to the level's; the level its registration's sample
+    (`_sample_of`); and its count the larger of the public's bound and that sample's (`_sample_bound`)."""
     if len(prof["levels"]) != 1:
         raise Finding(REJECT, f"{what}: profile: not one level")
     (lv,) = prof["levels"]
@@ -1014,10 +1074,15 @@ def _facts(what: str, prof: dict, pub) -> Facts:
                                   f"{STRATUM_OVERSAMPLED}")
     if "strata" in draw and (held := sum(s["size"] for s in draw["strata"])) != lv["size"]:
         raise Finding(REJECT, f"{what}: profile: strata of {held} units in a level of {lv['size']}: {STRATA_SIZES}")
+    if (sample := _sample_of(reg)) is None:
+        raise Finding(REJECT, f"{what}: {NO_SAMPLE}: its population and law name no subset or stratified sample")
+    if sample != (lv["size"], draw):
+        raise Finding(REJECT, f"{what}: profile: {NOT_REGISTERED}: its level of {lv['size']} units and its draw are "
+                              f"not the registration's {sample[0]} units under its law")
     bound = pub.get("bound") if isinstance(pub, dict) else None
     if not isinstance(bound, int) or isinstance(bound, bool) or bound < 0:
         raise Finding(REJECT, f"{what}: no bound")
-    return Facts(lv["size"], drawn, prof["delta"], bound)
+    return Facts(lv["size"], drawn, prof["delta"], max(bound, _sample_bound(lv["size"], draw, prof["delta"])))
 
 
 def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
@@ -1027,7 +1092,7 @@ def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
     if reg.get("program") != audit.program:
         raise Finding(REJECT, f"{what}: registration: not its Program")
     prof, pub = _answered(what, reg, a)
-    f = _facts(what, prof, pub)
+    f = _facts(what, reg, prof, pub)
     if f.units != audit.units:
         raise Finding(REJECT, f"{what}: profile: {f.units} units, not its Program's {audit.units}")
     return f
@@ -1039,6 +1104,10 @@ OVERSAMPLED = "more than the level holds"
 STRATUM_OVERSAMPLED = "more than the stratum holds"
 #: `factsOf`'s refusal of a profile whose strata's sizes do not sum to its level's, after the two sizes.
 STRATA_SIZES = "their sizes do not sum to the level's"
+#: `factsOf`'s refusal of an answer whose registration states no subset or stratified sample.
+NO_SAMPLE = "registration: no sample"
+#: `factsOf`'s refusal of a profile whose level is not the sample its registration states.
+NOT_REGISTERED = "not the registration's sample"
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusal, after its window's number.
@@ -1175,6 +1244,7 @@ EXPECT = {
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
     "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT, "audit-oversampled": REJECT,
+    "audit-unsampled": REJECT, "audit-unregistered": REJECT,
     "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
@@ -1189,12 +1259,13 @@ EXPECT = {
     "rows-schedule": REJECT, "rows-capped": ACCEPT, "rows-cap-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
-    "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
+    "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-answer-unsampled": REJECT,
+    "rows-answer-unregistered": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
-    "rows-audit-oversampled": REJECT, "rows-tied-oversampled": REJECT, "rows-tied-stratum-oversampled": REJECT,
-    "rows-tied-strata-sizes": REJECT,
+    "rows-audit-oversampled": REJECT, "rows-audit-unsampled": REJECT, "rows-audit-unregistered": REJECT,
+    "rows-tied-oversampled": REJECT, "rows-tied-stratum-oversampled": REJECT, "rows-tied-strata-sizes": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
     "rows-first": REJECT, "rows-count-windows": REJECT, "rows-count-audits": REJECT, "rows-evidence-count": REJECT,
     "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT,
@@ -1617,6 +1688,62 @@ def _oversample(r: random.Random, size: int, k: int, strata: list[dict] | None) 
     return k + over
 
 
+def _resample(r: random.Random, size: int, k: int, strata: list[dict] | None) -> tuple[int, list[dict] | None]:
+    """A profile's sample of a level of `size` units, `k` of them sampled `subset:k` or over `strata`, changed to
+    another sample of the same level, as `(k, strata)`: one that samples no more than the level or a stratum holds,
+    with strata the level's size, so that the period check refuses it only for not being its registration's
+    (`answer-unregistered`, `audit-unregistered`). A subset sample at another `k`, or as one stratum; a stratified
+    one with a stratum renamed, a stratum sampled otherwise, a unit moved from one stratum to another, or as the
+    subset of its total."""
+    if strata is None:
+        if r.random() < 0.3:
+            return k, [{"k": k, "name": UNIT, "size": size}]
+        return r.choice([x for x in range(size + 1) if x != k]), None
+    strata = [dict(s) for s in strata]
+    ways = ["rename", "subset"]
+    ways += ["sample"] if any(s["size"] for s in strata) else []
+    ways += ["move"] if len(strata) > 1 and any(s["k"] < s["size"] for s in strata) else []
+    how = r.choice(ways)
+    if how == "subset":
+        return k, None
+    if how == "rename":
+        r.choice(strata)["name"] += "x"
+    elif how == "sample":
+        s = r.choice([s for s in strata if s["size"]])
+        s["k"] = r.choice([x for x in range(s["size"] + 1) if x != s["k"]])
+    else:
+        src = r.choice([s for s in strata if s["k"] < s["size"]])
+        src["size"] -= 1
+        r.choice([s for s in strata if s is not src])["size"] += 1
+    return sum(s["k"] for s in strata), strata
+
+
+def _unsample(r: random.Random, rec: dict) -> dict:
+    """The registration record `rec` stating no sample (`answer-unsampled`, `audit-unsampled`): without its law or
+    its population, with a Bernoulli law, or with a law or a population one-stage's profile reads no sample of (a
+    count that is no natural number, strata that are no list, a stratum without its template, its units or its
+    count, or with an empty range)."""
+    law = rec["law"]
+    laws = [None, {"law": "bernoulli", "p": "1/2"}, {"law": "two-stage", "k": law["k"]}, law | {"law": None},
+            {k: v for k, v in law.items() if k != "law"}]
+    if law["law"] == "subset":
+        laws += [{"law": "subset"}, law | {"k": -1}, law | {"k": str(law["k"])}, law | {"k": True}]
+    else:
+        j = r.randrange(len(law["strata"]))
+        one = law["strata"][j]
+        at = lambda s: law | {"strata": law["strata"][:j] + [s] + law["strata"][j + 1:]}  # noqa: E731
+        lo, hi = one["units"][0]
+        laws += [law | {"strata": None}, law | {"strata": {"0": one}},
+                 at({k: v for k, v in one.items() if k != "template"}), at(one | {"template": 0}),
+                 at(one | {"units": []}), at(one | {"units": [[hi, lo]]}), at(one | {"units": [[lo, lo]]}),
+                 at(one | {"units": [lo, hi]}), at(one | {"units": [[lo, hi, hi]]}), at(one | {"k": -1}),
+                 at({k: v for k, v in one.items() if k != "k"})]
+    n = rec["population"]
+    return r.choice([rec | {"law": x} for x in laws]
+                    + [{k: v for k, v in rec.items() if k != gone} for gone in ("law", "population")]
+                    + [rec | {"population": x} for x in (None, -1, str(n), True, [n])])
+
+
 def _stratum_oversample(r: random.Random, strata: list[dict]) -> None:
     """One of a profile's `strata` raised past its own size, by one to three, and the others lowered by as much, so the
     level's sample is what it was: what no sample of that stratum gives, in a level whose total still holds
@@ -1822,6 +1949,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
         if aimed and m == "answer-oversampled":
             k = _oversample(r, units, k, strata)
+        elif aimed and m == "answer-unregistered":
+            k, strata = _resample(r, units, k, strata)
         fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
         entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
@@ -1830,6 +1959,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                "protocol": ONE_STAGE, where: entries, "window": {"kind": "stand-in", "window": w}}
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
+        elif aimed and m == "answer-unsampled":
+            rec = _unsample(r, rec)
         digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
@@ -1960,6 +2091,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             _stratum_oversample(r, strata)
         elif halves:
             k = _strata_resize(r, strata, seed)
+        elif i == a and m == "audit-unregistered":
+            k, strata = _resample(r, units, k, strata)
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
         if rows:
@@ -1979,6 +2112,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             else:
                 desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),),
                                                    entries, renamed, i in selects, scan_slots))
+        elif i == a and m == "audit-unsampled":
+            rec = _unsample(r, rec)
         digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, prog, rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            wrong, strata)
