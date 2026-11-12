@@ -43,6 +43,8 @@ RELATIONS: dict[str, str] = {
         "test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop",
     "SeedCheck_v2":
         "adapters/vllm/tests/program/test_seed_rule.py::test_the_word_check_accepts_the_rules_seed_alone",
+    "KeptCheck_v1":
+        "adapters/vllm/tests/program/predict/test_draft_rows.py::test_the_kept_check_accepts_the_accepts_own_count_alone",
 }
 
 

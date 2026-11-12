@@ -63,6 +63,7 @@ from .common import (
     with_checks,
     with_edge,
 )
+from . import draft_rows as DR
 from .domain import check_phi
 from .model_shape import _ACTS, ModelShape, model_shape, rank_shape, weight_leaves
 from .phi import Phi
@@ -348,7 +349,7 @@ class _Model:
             prefill = self.cached == P0
             if prefill:
                 self.lp_of[L] = P0 + M
-            own_rows = M if prefill else 1
+            own_rows = M   # one sequence's rows of the launch: a prefill's, a decode's one, a draft pass's token and drafts
             launch_sq = own_rows if self.ctx is None else launch_seqlen_q(self.ctx, own_rows, 0 if prefill else P0 - self.lp_of[L] + 1, S.tp, S.accepted)
             for i in range(M):
                 kh.append(k[i].refs)
@@ -356,7 +357,7 @@ class _Model:
             attn = []
             for i in range(M):
                 P = P0 + i + 1
-                fn = S.attention(P, i if prefill else 0, own_rows, launch_sq)
+                fn = S.attention(P, i, own_rows, launch_sq)
                 pa = _ptypes(fn)
                 attn.append(self.call(fn, Coll(pa[0], q[i].refs), Coll(pa[1], concat(kh[:P])), Coll(pa[2], concat(vh[:P]))))
             o = self.collective(S.all_reduce, self.linear(S.o, attn, lw, "o"))
@@ -460,6 +461,9 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     else:
         Net = _Decoder
     check_phi(phi, Net.DOMAIN)
+    if Net is not _Decoder and (phi.engine or {}).get(DR.ENGINE_ARG):
+        raise Unexpressible(f"vocabulary cannot express: a launch that drafts {phi.engine[DR.ENGINE_ARG]} tokens a decode row on the "
+                            f"{arch} decoder (draft rows are the dense decoder's)")
     return Net(phi, M, history)
 
 
@@ -509,7 +513,8 @@ class _Decoder:
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8, with_desc: bool = True,
                   C: int = 0, dead_free: bool = False, batched: bool = False, table_reads: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None, entries: tuple[int, ...] = ()) -> BuildResult:
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None, entries: tuple[int, ...] = (),
+                  drafts: tuple[tuple[int, int], ...] = (), draft_layer: Any = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -531,7 +536,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     (its wrapper's class unchanged); one chunk is the request wrapper. `entries`: per chunk, its sequence's rows in that launch, of
     which it computes the first (`steps`' ``recompute_hits``), in the SRC config. `edge`: the history groups (`dsa.Net.edge_groups`)
     a request a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples
-    and checks, every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`), in its SRC config."""
+    and checks, every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`), in its SRC config.
+    `drafts`: a request's draft schedule, each decode pass's (drafts, kept), under a launch that decodes speculatively, with
+    `draft_layer` the registration's draft layer (`draft_rows.drive`): its T decode tokens come in those passes, each pass's
+    kept count a check, in its SRC config."""
     from verity_vllm.program.frontend import seed_rule as SEED
     t0 = time.time()
     prompt_rows, decode_steps = request_shape(wrapper, LP, T)
@@ -540,6 +548,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
+    if wrapper != "request" and (phi.engine or {}).get(DR.ENGINE_ARG):
+        raise Unexpressible(f"vocabulary cannot express: a {wrapper} Program of a launch that drafts {phi.engine[DR.ENGINE_ARG]} tokens "
+                            f"a decode row (a draft row is a pass of a request's Program)")
     if (table_reads and not batched) or batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
         raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish; "
                          "table_reads is the batched form's (DSA's long rows by table reads)")
@@ -586,8 +597,12 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if C:
         model.open_with(inputs[history:n_user - resumed], C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
-    toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C, chunks=chunks,
-                 last=inputs[n_user - 1] if resumed else None)
+    if drafts:
+        plain = (wrapper, kind, world) == ("request", "greedy", 1) and dense and not (C or chunks or edge or batch or batched or finish)
+        toks = DR.drive(model, phi, rows, LP=prompt_rows, T=decode_steps, drafts=tuple(drafts), layer=draft_layer, plain=plain)
+    else:
+        toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C, chunks=chunks,
+                     last=inputs[n_user - 1] if resumed else None)
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs):
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
@@ -608,7 +623,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
                                                                   **({"entries": list(entries)} if entries else {}), **edge_config(edge),
-                                                                  **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
+                                                                  **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {}),
+                                                                  **DR.src_config(phi, tuple(drafts), draft_layer)})).hexdigest()[:16]}
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
                                register=False)

@@ -73,6 +73,10 @@ its account in the output accounting (the advice through `reads.gate`):
   (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its caps.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with bound T + 1 (the executed prefix), under the target's lag.
+- Under a launch that decodes speculatively (`draft_rows`), a decode row is its request's last known token and then draft
+  tokens, and the request's Program runs its decode tokens in passes: each draft row's (drafts, kept), the kept count read
+  off the request's next row (`RequestUnit.drafts`), a check of each pass. A draft row is held whole, its samples its kept
+  drafts and one more.
 - On a batch-invariant target, a request a Commit window carries in (admitted in an earlier window) compiles to the Program it has
   whole, at the C its admission had, and each window places its own rows: from where it had reached (its carried `made`), its kept
   outputs counted from its carried `kept`. A request the window leaves with outputs to keep reaches only as far as its rows go. A
@@ -96,7 +100,8 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   past the model's (in class G, past the registered `max_model_len` too); in class G, a request whose Program wouldn't hold every
   launch it ran in (`launch_of`), one the window leaves somewhere its Program doesn't reach (`edge_of`), and a hit on a request
   with no Program in the window; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias,
-  min_tokens, n > 1, or a parameter this compiler doesn't know);
+  min_tokens, n > 1, or a parameter this compiler doesn't know); a KV cache format no Program states, and the draft rows
+  `draft_rows` refuses;
 - a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
 - a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
   batch-mates (R2 a request planned differently alone, which keeps a cache hit on another request's KV only when its tokens are
@@ -129,6 +134,7 @@ from verity_vllm.program.frontend import stop_rule as SR
 from verity_vllm.program.prune import dead_units
 from verity.definitions.registry import io_shell as IO
 
+from . import draft_rows as DR
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
 from .common import cyclic_gc_off, edge_config
@@ -155,7 +161,8 @@ class Registered:
     like the network certifier's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice`
     the string carries under the certified record or a `ValueError` naming why not; ℓ then bounds its strings; and whether
     class G's DSA rows past INDEX_TOPK keys read their history by table (`dsa_table_reads`, `program.dsa_table`; off: the rows
-    network), which no other Program reads and which takes the prefix cache off."""
+    network), which no other Program reads and which takes the prefix cache off; and, for a launch that decodes speculatively
+    (φ's engine arg ``num_speculative_tokens``), the draft layer its Programs call (`draft_rows.StandIn`; None: no draft)."""
 
     phi: Phi
     default_seed: int
@@ -163,6 +170,7 @@ class Registered:
     served_model: str | None = None
     code: Any = None
     dsa_table_reads: bool = False
+    draft_layer: Any = None
 
     def __post_init__(self) -> None:
         if self.phi.requests:
@@ -184,9 +192,9 @@ class Registered:
 
     @classmethod
     def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None, code: Any = None,
-           dsa_table_reads: bool = False) -> Registered:
+           dsa_table_reads: bool = False, draft_layer: Any = None) -> Registered:
         return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits,
-                   served_model, code, dsa_table_reads)
+                   served_model, code, dsa_table_reads, draft_layer)
 
 
 @dataclass(frozen=True)
@@ -227,12 +235,13 @@ class RequestUnit:
     recomputed: int = 0           # recompute_hits: its hit's positions 0..recomputed-1, which its Program computes and no row of it ran
     hit_steps: tuple[int, ...] = ()     # class G, recompute_hits: the advice step each chunk of those positions ran in
     entries: tuple[int, ...] = ()   # class G: per prefill chunk, its sequence's rows in that launch, where a chunk computes fewer
+    drafts: tuple[tuple[int, int], ...] = ()    # with a draft row: each decode pass's (drafts, kept) (`draft_rows.schedule`)
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else []), *([{"chunks": self.chunks}] if self.chunks else []),
                            *([{"launch": self.launch}] if self.launch is not None else []), *([edge_config(self.edge)] if self.edge else []),
-                           *([{"stop": self.stop}] if self.stop else []), *([{"entries": self.entries}] if self.entries else [])],
-                          sort_keys=True)
+                           *([{"stop": self.stop}] if self.stop else []), *([{"entries": self.entries}] if self.entries else []),
+                           *([{"drafts": self.drafts}] if self.drafts else [])], sort_keys=True)
 
     def events(self) -> int:
         """The samples its Program makes: its prefill's when C < LP <= LP + T, then one a decode position from max(C, LP) to LP + T - 1."""
@@ -283,7 +292,8 @@ class Compiled:
                                                      **({"chunks": list(u.chunks)} if u.chunks else {}), **edge_config(u.edge),
                                                      **({"stop": u.stop} if u.stop else {}),
                                                      **({"recomputed": u.recomputed, "hit_steps": list(u.hit_steps)} if u.recomputed else {}),
-                                                     **({"entries": list(u.entries)} if u.entries else {})}
+                                                     **({"entries": list(u.entries)} if u.entries else {}),
+                                                     **({"drafts": [list(p) for p in u.drafts]} if u.drafts else {})}
                              for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
@@ -380,19 +390,25 @@ def shape_of(i: int, prompt_len: int, rows: Rows, output_len: int, carry: WA.Car
 
 
 def place(i: int, LP: int, T: int, C: int, rows: Rows, output_len: int, carry: WA.Carried | None = None,
-          left: bool = False) -> dict[tuple[int, int], Placed]:
+          left: bool = False, drafts: Mapping[tuple[int, int], tuple[int, int]] | None = None) -> dict[tuple[int, int], Placed]:
     """Each of request `i`'s rows by (step, index in the step): the part of it its Program holds, (start, n, samples) or None, and
     its parts no Program holds, [(start, n)]. The Program holds positions C..LP+T-1 once each, in the row that first reaches them:
     a resume's positions up to where its request had reached are a recompute, and the row past the last kept output is past the
     Program. `samples` is 1 where the row's sample is a kept output (I1's rule: the row reaches its request's known tokens). A
     request the window carries in (``carry``) has reached as far as it had computed and kept its carried outputs; one it leaves
-    with outputs to keep (``left``) reaches as far as its rows go."""
+    with outputs to keep (``left``) reaches as far as its rows go. A draft row that emits (``drafts``: `window_advice.drafts`) is
+    held whole, its samples its kept drafts and one more, and the request has then reached its last kept position: the
+    Program computes the rejected drafts' positions in that row and again in the next."""
     out: dict[tuple[int, int], Placed] = {}
     reached, known, kept = C, LP, 0
     if carry is not None:
         reached, known, kept = min(LP + T, max([C, *(hi for _, hi in carry.made)])), LP + carry.kept, carry.kept
     for s, j, row in rows:
         a, b = row.start, row.start + row.n
+        if drafts and (s, j) in drafts:
+            n = drafts[s, j][1] + 1
+            out[s, j], kept, known, reached = ((a, row.n, n), []), kept + n, known + n, a + n
+            continue
         sample = b == known and kept < output_len
         if sample:
             kept, known = kept + 1, known + 1
@@ -478,11 +494,14 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
     its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
     if named:
+        if unit.drafts:
+            raise Unexpressible(f"request {unit.request}: a Program with a draft schedule has no trace to take its names from")
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
     r = build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
                       edge=unit.edge, stop=unit.stop, with_desc=False, batched=not phi.target_profile().batch_invariant,
-                      table_reads=registered.dsa_table_reads, entries=unit.entries)
+                      table_reads=registered.dsa_table_reads, entries=unit.entries, drafts=unit.drafts,
+                      draft_layer=registered.draft_layer)
     return replace(r, digest=program_digest(r.program))
 
 
@@ -563,6 +582,7 @@ def _replan(registered: Registered, solo: WA.Advice, bodies: Mapping[str, Any], 
 
 def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: bytes | None, recompute_hits: bool = False) -> Plan:
     phi0 = registered.phi
+    K = DR.launch(registered)
     if not (bi := phi0.target_profile().batch_invariant):
         launch_class(phi0)
     if not isinstance(ingress, Mapping):
@@ -606,6 +626,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
     carried = dict(enumerate(adv.carried))
     idle = tuple(i for i in carried if not rows[i])
     left = {c.request for c in WA.close(adv) if c.must}
+    counts = WA.drafts(adv)
     prompts, params, wired = {}, {}, set()
     for i, q in enumerate(adv.requests):
         if i in idle:
@@ -643,7 +664,8 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                                         f"max_model_len allow")
                 if not bi:
                     C, T = segment_of(i, LP, T, rows[i], carry, i in left)
-                own = place(i, LP, T, C, rows[i], q.output_len, carry, i in left)
+                drafts = DR.schedule(i, q, rows[i], counts, K, C=C, carried=carry is not None, left=i in left)
+                own = place(i, LP, T, C, rows[i], q.output_len, carry, i in left, counts if drafts else None)
                 if C >= LP + T:
                     spent.add(i)
                     placed.update(own)
@@ -662,6 +684,8 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                 edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
                 policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, salt=salt,
                                          carried=carry is not None)
+                if drafts and policy["kind"] != "greedy":
+                    DR.accept(policy["kind"], 1, f"request {i}: ")
                 if bi and C and not hit and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
                                         f"request wrapper isn't ported)")
@@ -676,7 +700,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             else:
                 parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=V) if i in wired else None
                 units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C - hit, producers, parse, carry is not None, i in left,
-                                         launch, chunks if len(chunks) > 1 else (), edge, stop, hit, hit_steps, entries))
+                                         launch, chunks if len(chunks) > 1 else (), edge, stop, hit, hit_steps, entries, drafts))
                 placed.update(own)
                 continue
         units.append(None)
