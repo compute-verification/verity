@@ -70,9 +70,10 @@ def test_a_measurement_cites_the_run_that_measured_it() -> None:
         "measures it")
 
 
-#: The entries a card of a kind holds only where a run measured them: a figure of one node's VM that no document gives
-#: for another's, so a card without the measurement has no entry rather than an invented one.
-MEASURED_ONLY = {"host": {"disk.read"}}
+#: The entries a card of a kind holds only where a run measured them: a figure of one node's VM, or of one card's
+#: caches, that no document gives for another's, so a card without the measurement has no entry rather than an
+#: invented one.
+MEASURED_ONLY = {"gpu": {"store.l15", "store.l1i", "store.l0i", "store.const_l0"}, "host": {"disk.read"}}
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -114,6 +115,27 @@ def test_shared_memory_alone_is_part_of_its_pool(sku: str) -> None:
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
+def test_the_memory_on_the_board_bounds_the_memory_a_program_gets(sku: str) -> None:
+    """`store.dram_installed` is the second reading of device memory, the memory on the board: a ceiling in whole GiB,
+    at or above `store.dram`, the memory a program gets."""
+    card = load(sku)
+    installed = value(card, "store.dram_installed")
+    assert card["store"]["dram_installed"]["mark"] == "ceiling" and card["store"]["dram_installed"]["unit"] == "B"
+    assert 0 < value(card, "store.dram") <= installed and installed % 2 ** 30 == 0
+
+
+def test_the_caches_a_run_found_are_one_cards() -> None:
+    """The caches an SM serves code and constants from are on the one card a run swept, each in bytes an SM, and the
+    two counted once a warp scheduler are whole multiples of `rate.issue`'s schedulers."""
+    found = MEASURED_ONLY["gpu"]
+    have = {sku: {key for key in entries(load(sku)) if key in found} for sku in skus("gpu")}
+    assert have == {"b200-sxm-180gb": set(), "h200-sxm-141gb": set(), "rtx-pro-6000-server": found}
+    card = load("rtx-pro-6000-server")
+    assert {entries(card)[key]["unit"] for key in found} == {"B/SM"}
+    assert [value(card, f"store.{k}") / value(card, "rate.issue") for k in ("l0i", "const_l0")] == [6144, 3072]
+
+
+@pytest.mark.parametrize("sku", skus("gpu"))
 def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
     """`price.fp32_loop` is an FP32 add's price in a timed loop, so it is at least the add's price at the card's
     ceilings: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction."""
@@ -124,15 +146,20 @@ def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
 @pytest.mark.parametrize("sku", skus("host"))
 def test_derived_host_numbers(sku: str) -> None:
     """A host's ops are its cores' AMX MACs at their clocks, two ops a MAC; its DRAM's bandwidth is its channels'
-    transfers, which bound its reads and are its write ceiling; and its on-chip bytes are its caches and allowances."""
+    transfers, which bound its reads and are its write ceiling; the second reading of the three, at the fastest memory
+    the processor takes, is a ceiling at or above the first; and its on-chip bytes are its caches and allowances."""
     card = load(sku)
     sockets, cores, priority = (value(card, f"cpu.{k}") for k in ("sockets", "cores", "priority_cores"))
     hz = priority * value(card, "clock.priority_turbo") + (cores - priority) * value(card, "clock.turbo")
     assert value(card, "rate.ops") == 2 * value(card, "rate.amx") * sockets * hz * 10 ** 9
+    channels = sockets * value(card, "memory.channels") * 10 ** 6 * value(card, "memory.bus") / 8
     bandwidth = value(card, "memory.bandwidth")
-    assert bandwidth == (sockets * value(card, "memory.channels") * value(card, "memory.speed") * 10 ** 6
-                         * value(card, "memory.bus") / 8)
+    assert bandwidth == channels * value(card, "memory.speed")
     assert value(card, "memory.read") <= bandwidth == value(card, "memory.write")
+    most = value(card, "memory.bandwidth_max")
+    assert most == channels * value(card, "memory.speed_max") == value(card, "memory.write_max")
+    assert value(card, "memory.speed") <= value(card, "memory.speed_max") and bandwidth <= most
+    assert {card["memory"][k]["mark"] for k in ("speed_max", "bandwidth_max", "write_max")} == {"ceiling"}
     per_socket = value(card, "store.l3") + value(card, "store.uncore")
     per_core = sum(value(card, f"store.{k}") for k in ("l2", "l1d", "l1i", "core"))
     assert value(card, "store.chip") == sockets * per_socket + sockets * cores * per_core
@@ -156,10 +183,10 @@ def test_derived_server_numbers(sku: str) -> None:
 
 
 def test_the_quoted_numbers() -> None:
-    """The firmware ceilings, host peaks, bandwidths and measured reads already quoted outside this package, pinned so
-    that a change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host
-    card states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO
-    6000's card states."""
+    """The clocks, host peaks, bandwidths and measured reads already quoted outside this package, pinned so that a
+    change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card
+    states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO 6000's
+    card states."""
     server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
     clocks = ("clock.sm", "clock.tensor", "clock.memory")
     assert [value(server, k) for k in clocks] == [2430, 2430, 12481]
@@ -174,6 +201,23 @@ def test_the_quoted_numbers() -> None:
     timing = ("memory.read", "memory.bandwidth", "memory.write", "store.chip")
     assert [float(value(granite, k)) for k in timing] == [606.8e9, 819.2e9, 819.2e9, 1_000_341_504]
     assert float(value(granite, "disk.read")) == 4.311e9
+
+
+def test_the_second_readings() -> None:
+    """The second reading of each device's memory and of each host's DRAM, pinned so that a change to one is
+    deliberate: the memory on a GPU's board beside the memory a program gets, and a host's channels at the fastest
+    memory its processor takes beside the figures PoUB's timing mirrors, which stay where they were; and the caches a
+    run found on the RTX PRO 6000."""
+    gib = 2 ** 30
+    boards = {"rtx-pro-6000-server": (96, 96), "h200-sxm-141gb": (141, 144), "b200-sxm-180gb": (180, 192)}
+    for sku, (dram, installed) in boards.items():
+        card = load(sku)
+        assert [value(card, "store.dram"), value(card, "store.dram_installed")] == [dram * gib, installed * gib], sku
+    second = ("memory.speed_max", "memory.bandwidth_max", "memory.write_max")
+    assert [float(value(load("xeon-6776p-2s"), k)) for k in second] == [8800, 1.1264e12, 1.1264e12]
+    assert [float(value(load("xeon-platinum-8468-2s"), k)) for k in second] == [4800, 6.144e11, 6.144e11]
+    caches = ("store.l15", "store.l1i", "store.l0i", "store.const_l0")
+    assert [value(load("rtx-pro-6000-server"), k) for k in caches] == [147_456, 65_536, 24_576, 12_288]
 
 
 def test_the_rates_readers_quote() -> None:
