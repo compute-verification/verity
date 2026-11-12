@@ -54,3 +54,6 @@ def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, A
     if plan.unsupported:
         raise IncompletePlan(f"{len(plan.unsupported)} unsupported Value(s): " + "; ".join(f"{v.value_id}: {v.why}" for v in plan.unsupported[:6]))
     return docs
+
+
+__all__ = ["MANIFEST_ENV", "plan_at_stage"]
