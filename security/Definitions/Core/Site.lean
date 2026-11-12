@@ -32,8 +32,9 @@ counts are public.
   second each way and a latency in the Site's units of time. A network certifier is the leaf that splits an uplink: one
   link from a host to it, one from it to the outside. The prover's boundary links are a host's links to the outside or
   to a certifier (`Site.Boundary`), and a link is certified when a certifier is at one of its ends (`Site.Certified`).
-  A boundary link no certifier splits says why none does (`Site.Link.unmediated`), and only such a link may state no
-  capacity.
+  A link may say why no certifier splits it (`Site.Link.unmediated`): onsite a boundary link that is not certified
+  says so, and a link states no capacity only where it says so. The checks ask no more of it: a link that says so may
+  be any link, a certifier's own among them, at a capacity or at none.
 
 The Site is folded from an append-only log, **the registration** (`Verity.Registration`), whose entries each have a
 kind (`Registration.Entry`): the site entry (`Registration.Entry.site`), which adds sheets, locations and links
@@ -214,9 +215,10 @@ keys that sign. -/
 def SCHEMES : List String := ["lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0"]
 
 /-- A link between two ends, with its capacity `β` in bits a second each way and its latency in the Site's units of
-time. `unmediated` is, on a boundary link no certifier splits, the reason none does; none on every other link. A link
-states no capacity (`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and
-no amount is read from it. -/
+time. `unmediated` is the reason no certifier splits the link, where the link states one. A link states no capacity
+(`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and no amount is read
+from it. The checks hold `unmediated` to nothing else: a link that carries it may be any link, a certifier's own among
+them, at a capacity or at none. -/
 structure Link where
   id : String
   ends : String × String

@@ -217,9 +217,10 @@ keys that sign. -/
 def SCHEMES : List String := ["lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0"]
 
 /-- A link between two ends, with its capacity `β` in bits a second each way and its latency in the Site's units of
-time. `unmediated` is, on a boundary link no certifier splits, the reason none does; none on every other link. A link
-states no capacity (`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and
-no amount is read from it. -/
+time. `unmediated` is the reason no certifier splits the link, where the link states one. A link states no capacity
+(`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and no amount is read
+from it. The checks hold `unmediated` to nothing else: a link that carries it may be any link, a certifier's own among
+them, at a capacity or at none; a reader that needs a certifier's link's capacity refuses one that states none. -/
 structure Link where
   id : String
   ends : String × String

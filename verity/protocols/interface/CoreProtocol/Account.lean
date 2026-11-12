@@ -699,18 +699,18 @@ protocols' `answers` read by their `accounts`: the rows of each amount at each p
 what none covers and of the device memory no leaf holds. `S` is the Site at the period's last head: the registration
 only adds, so what an answer read at an earlier head of the period is in `S` unchanged. `digest` and `A` are the
 registration's: the sheets' digest and the auditor, whose estimate compute's `bound` reading reads. No row where the
-Site states no unit of time. Where a boundary link of the Site says no certifier splits it (`Site.mediated` is false),
+Site states no unit of time. Where a link of the Site says no certifier splits it (`Site.mediated` is false),
 bits leave by a way no answer counts, so every row of a link prints no amount, a certified one too, and says why.
 
-A row of record reads a device's drift from the Site alone: the drift the auditor's host it is in states
+A row that takes no premise reads a device's drift from the Site alone: the drift the auditor's host it is in states
 (`Site.drift?`), and a device at the site, or in a host that states none, times nothing. `premised` lists drifts taken
 on a premise, for auditor's hosts whose locations state none. A flow's amount with a series timed on a device in such a
-host has, after its rows of record, the same rows with those series covered at the premised drifts; each names the
-premises it rests on (`Row.premises`). The rows of record are as they are without the list, so a premised row adds to
-none of them and replaces none. A premise for a host that is no auditor's host of the Site is refused, by the
-premise's name: a premise is taken for a clock the registration holds, and no row is printed beside one for a clock it
-does not. -/
-def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Period)
+host has, after its rows that take no premise, the same rows with those series covered at the premised drifts; each
+names the premises it rests on (`Row.premises`). The rows that take no premise are as they are without the list, so a
+premised row adds to none of them and replaces none. A premise for a host that is no auditor's host of the Site is
+refused, by the premise's name: a premise is taken for a clock the registration holds, and no row is printed beside
+one for a clock it does not. -/
+def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Monitored)
     (accounts : List Account) (answers : List Answer) (premised : List Premised := []) : Except String (List Row) := do
   if let some q := premised.find? fun q => S.kind? q.host ≠ some .auditorHost then
     throw s!"premise {q.premise}: {q.host} is no auditor's host of the Site"
