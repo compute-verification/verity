@@ -93506,3 +93506,37 @@ Every try's axioms are `propext`, `Classical.choice`, `Quot.sound` or fewer [run
 - Not written: a corollary for the stratified period statement. `JointStratifiedHorizon`'s budget is `Σ k_s·x_s/n_s ≤ ln(1/δ)`, so with every stratum at the rate the incorrect proof blocks should total at most `ln(1/δ)·DEN/NUM` [derived, not proved]. Say if you want it.
 - PRF-590's branch waits on you: whether to open a pull request, and whether to list the corollaries.
 - #9237 is untouched at `9d4aec0111fb`; its mark is yours [relayed: your 15:06Z section].
+
+## FINDER, Thu 12 Nov 17:06Z: READY: #9346 at `259e4cf1f8f4`, the phase's bound at the prover's expected calls in the three stage forms; both checks pass at that head; one line of it meets #9332
+
+**In plain words.** #9346 is ready for your mark at `259e4cf1f8f422563953375ebc0001839060716f`. The records run and the quick tier both pass at that head, it merges cleanly onto `main` and onto the Lean lane's merge branch, and it lands after #9286 and #9149, whose heads it holds. One thing for you to place: its line in the limits file conflicts with #9332's, so whichever of the two lands second takes a merge of `main` from me. I mark nothing.
+
+### The ready line
+
+- **Head:** `259e4cf1f8f4` on `cursor/proofs-expcalls-4d1e`. Pull request #9346, open, unmarked. Its body has the `Lane proofs` line, names PRF-599 as the second of its two, and says it lands after #9286 and #9149 (their heads `f7902b5a9958` and `1f136cf79060` are merged in, and were still their heads at 17:03Z).
+- **What the push from `a3d9acc38d67` changed:** one file, `tests/lint/allowlists/repo_retired_terms.json`: four entries for the four new modules, 51 sites (2 + 42 + 4 + 3), all identifiers. No Lean.
+- [run] **The records run at the head:** `r20261112-163405-99cc` (cpu-11, ended 17:02Z): pass for `security/Proofs`, `security` and `security/Properties`; `security/Proofs` 195,910 declarations in 3,904 modules, no axiom beyond the three. The lock it wrote for `security/Proofs` under `--update` is byte for byte the tree's, so no lock record changed. It is the fast path: every file built, no kernel replay, no tests. The same run at the head's parent: `r20261112-160117-49b0`, pass.
+- [run] **The quick tier at the head:** `r20261112-163409-4d0e`: 11 suites, 11 passed, 0 failed (`suites.py --changed 06728b3b7c66 --quick`). At the parent: `r20261112-160230-f1ee`, the same.
+- [run] **Each module on a node** (`verity lean try`): `RerunCalls` `r20261112-152755-7a99` (9 theorems), `TwoFirstHitAvg` `r20261112-153512-ea0b` (20), `TwoOffClassAvg` `r20261112-160417-13ac` (9), `TwoOneWaitAvg` `r20261112-155328-2799` (2); the axiom probe clean on each.
+- [run] **Retired terms:** `tests/lint/test_repo_retired_terms.py` at the head on the VM: 13 passed, 1 warning, which is the tree's backlog (634 files) and names none of mine.
+- [run] **`git merge-tree` at the head, 17:03Z:** clean against `main` `4520abe708b0`; clean against `origin/cursor/lean-remote-merge-landing-fc8d` `f3ffe4e2bbcb`. (At 16:32Z that branch stood at `f3837f57d113` and left the 31 files `main` itself left there, none of mine.)
+- [run] **Against #9332** (`a555863cf8d5`): one conflicted file, `tools/verity/lean/unread-caps.json`, the `Proofs/Flock` line (277 / 2,338 here, 273 / 2,286 there). With #9286, #9149 and #9332 all on `main` the line is 278 modules and 2,341 declarations. So: if #9346 lands before #9332, #9332 takes the merge; if after, #9346 does. Either is one merge of `main` by me and both checks again, and I send you the head the same hour. If you would rather mark #9346 once, wait for that head.
+- [derived, by hand from the files] **The limits file:** 273 + 4 = 277 modules; 2,291 + 47 = 2,338 declarations, the 47 being 9 + 24 + 11 + 3 (a structure counts once). The 273 and 2,291 are #9149's. The fast records run does not count the modules no guarantee reads, so the queue's check is the first to count them.
+
+### What is not proved
+
+- No guarantee: the lock is untouched, no file under `security/Definitions/`, no named assumption, no listed statement changed. Today's listed bounds still read a limit on every run.
+- The fork term is as it was: it reads the prover's calls at a phase's largest count and is paid once a phase.
+- Nothing over a monitoring period. The period's figures in the body, and the cell I gave at 16:38Z, are scripted.
+- The counts and the averages are hypotheses (`Compiled.CallsAvg`). SPOT[Flock]'s instance of them is not here, and a run whose selection is refused is modeled as sampling every proof block; the body now says so in its last bullet of "What it does not do".
+- The premises of today's theorems are unchanged and still premises: the linear expected-time bound at the binding finders, that a run's extractions open a class of gates whole or not at all, and the opening checks' count.
+
+### The statement that would be listed, if Daniel lists one
+
+- **In words:** on a statement in scope, an accepted run samples an incorrect proof block with probability at most the sessions' knowledge error, plus the fork term, plus a multiple of (the prover's expected SHA-512 calls a run, times the registration's counts) over 2^256. Today's listed form has the same expression with a limit on the calls of every run where this has the average.
+- **In the Lean:** `Compiled.eventX_le_cls_exp` (one stage), `CompiledTwo.eventTwoX_le_cls_exp` (two stages) and `CompiledTwo.eventTwoX_oneWait_le_cls_exp` (two stages, one wait), each the corollary at counts that hold at every sample of its `_avg` form, which reads the averages of (count × calls). The one a deployed guarantee would read is the third, as `SpotOneWaitTwo` reads `eventTwoX_oneWait_le_cls_at` today.
+- A listing would also need SPOT[Flock]'s counts, which come with section 4's pull request, **by Fri 13 Nov 18:00Z** as said.
+
+### Since 15:11Z, for the 17:30Z line you asked for
+
+- Nothing in the paragraph or the table changed. The one addition is the cell at 1,135,341 sessions a sample in my 16:38Z entry.
