@@ -735,7 +735,7 @@ def _leaf_window():
     return HW.program(LEAF_LINEARS, CALLS, HW.slot(5, LEAF), LEAF, prefix="h1/w/", unit=lambda k: unit(k, LEAF))
 
 
-def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
+def test_a_sampled_leafs_statements_read_its_tiles_rows_at_its_place():
     """Each of a sampled leaf's statements reads its value's leaf-local row (`leaf_lanes.reads`) past the leaf's `place` in
     that value, proofs' ``place`` in `PouwWindow.Lanes.ownOf`: lane l's A row at slot s is the tile's A row
     ``rowOf l s`` where `table_reads` has it, its B row at slot t the tile's ``colOf l t``, its record the tile's, and its
@@ -765,7 +765,7 @@ def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
     assert HW.table(prog, HW.RECEIPTS, 4) == "h1/w/receipt@4"
 
 
-def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_windows_tables():
+def test_a_sampled_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_windows_tables():
     """`leaf_reads_file`: every port of a statement is the verifier's own (`leaf_lanes.own`), each read one row; an A, B or partials read is marked `READ_IN_FULL`, the record and the receipt not;
     the call's A, z and receipt tables bind the execution phase's open root and the weights' b/<K> none, each at its table's rows
     and width (`_shapes`: the receipts one row a unit of the call, a row the tile's receipt); the partials take the given
@@ -959,7 +959,7 @@ def _j10r_window():
                       unit=lambda k: bind(ChunkTileJ10r if W.chunks(k) > 1 else TestTileJ10r, K=k, R=LEAF[0], C=LEAF[1]))
 
 
-def test_a_j10r_windows_drawn_leaf_reads_its_chunk_rows_carries_and_ok_rows_at_its_place():
+def test_a_j10r_windows_sampled_leaf_reads_its_chunk_rows_carries_and_ok_rows_at_its_place():
     """Under J10-R a sampled leaf at a chunked K is its lanes' chunks (`leaf_lanes`' J10-R leaf): chunk c of lane l reads
     its A and B rows' chunk c, the tile's own chunk rows (`table_reads`' leaf n row + c), what chunk c - 1 handed on, and
     its statement's ok row, and the combine every ok row; the carries and ``oks`` are the leaf's own from row 0, like
