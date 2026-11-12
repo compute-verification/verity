@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if doc["ok"] else 1
 
 
-__all__ = ["PARTLY", "check", "compare", "load", "records", "save", "served", "verdict"]
+__all__ = ["PARTLY", "check", "compare", "load", "main", "records", "save", "served", "verdict"]
 
 if __name__ == "__main__":
     sys.exit(main())

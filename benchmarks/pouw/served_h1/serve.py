@@ -1094,6 +1094,9 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 
+__all__ = ["b_fields", "b_rows", "b_tables", "coins_expect", "commit_queue", "gate_rng", "main", "schedule_tap",
+           "static_layout", "step_roots", "tile_admit"]
+
 if __name__ == "__main__":
     try:
         rc = main()

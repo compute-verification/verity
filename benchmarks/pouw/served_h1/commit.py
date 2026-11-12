@@ -107,3 +107,7 @@ def verify(dom: CommitmentDomain, root: bytes, index: int, frame_leaf: bytes, si
 
 def split(frame_leaves: bytes) -> list[bytes]:
     return [frame_leaves[i:i + 64] for i in range(0, len(frame_leaves), 64)]
+
+
+__all__ = ["CommitmentDomain", "INST", "KEY", "SALT_TAG", "SCHEMA", "domain", "leaf", "leaves", "levels", "path",
+           "receipt_rows", "s8_rows", "s8_table", "salt", "split", "step_root", "verify"]
