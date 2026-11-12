@@ -48,7 +48,7 @@ for run in sys.argv[1:]:
             r = json.loads(sj.read_text())
             row.update(staged=True, definition=r.get("census") or r.get("definition"), n=r["n"], ands=r["ands"], k_log=r["k_log"],
                        circuit_bytes=r["circuit_bytes"], statement=r.get("statement"), seconds=r.get("seconds"),
-                       maxrss_gb=r.get("maxrss_gb"), lookups=bool(r.get("lookups")), unit=r.get("unit"))
+                       maxrss_gb=r.get("maxrss_gb"), lookups=bool(r.get("lookups")), unit=r.get("unit"), word=r.get("word"))
             pb = d / "B/program.bytes"
             row["program_bytes"] = int(pb.read_text()) if pb.exists() else None
         else:
