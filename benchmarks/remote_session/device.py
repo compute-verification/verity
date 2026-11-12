@@ -581,7 +581,8 @@ class DeviceStore:
         (the same bytes in the same array, for a check); with -1, by `rs_leaf_pass` with no reading CTA, every tile
         a consumer warp's own, which is a gate's and no way to run a store. The roots, the kept levels and the
         openings are the same either way, and a host segment is always `rs_pass`'s. A caller sets it for the passes
-        it wants and puts it back."""
+        it wants and puts it back. The leaf pass pays only where the read sets a pass's time, so it is asked for per
+        card type, after a measurement on that card type."""
         if leaf_ctas < -1 or (receipts and not leaf_ctas):
             raise ValueError("a leaf pass has reading CTAs or, with -1, none, and only a leaf pass is asked for its "
                              "receipts")
