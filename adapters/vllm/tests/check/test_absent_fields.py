@@ -443,7 +443,7 @@ def test_unsupported_resolutions_name_the_first_ops_the_report_lists(tmp_path):
     assert r.reason == "6 Unsupported resolutions (['aten::op0', 'aten::op1', 'aten::op2', 'aten::op3'])"
 
 
-@pytest.mark.parametrize("path, value", unstated("totals", empty={}))
+@pytest.mark.parametrize("path, value", unstated("totals", empty={}) + [(("totals",), []), (("totals",), ""), (("totals",), 0), (("totals",), False)])
 def test_a_resolution_report_without_totals_is_refused_by_the_first_count_it_lacks(tmp_path, path, value):
     r = gate_over(tmp_path, "G2", RESOLUTION, path, value)
     assert (r.status, r.reason) == ("error", "resolution: key 'totals.unsupported' missing")
