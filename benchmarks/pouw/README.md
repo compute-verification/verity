@@ -19,7 +19,7 @@ uv run python benchmarks/pouw/contents.py   # what is here, from contents/
 ~~~
 
 `verity bench pouw NAME [ARGS]` runs `NAME/`'s runner with ARGS. `run.py` here is that front door: a directory's runner
-is its `run.sh`, else its `run.py`, and given no NAME it names the directories that have one. A runner that needs a GPU
+is its `run.py`, else its `run.sh`, and given no NAME it names the directories that have one. A runner that needs a GPU
 or a whole node is the command of a `research run`, as its header says.
 
 **What a caller may import.** The Python files directly here are the front door (`run.py`), the table (`contents.py`),
