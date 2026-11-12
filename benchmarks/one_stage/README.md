@@ -82,7 +82,12 @@ negatives.
   local development challenger session's coins unless `PP_CHALLENGER` names the live challenger, as the run's COINS line
   says, a deferral's follow-on its own), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The class circuit is the
   class's, whatever the window's requests, and reads no advice, so no advice opening reaches the verifier. V3c writes its audit as the network
-  certifier's period reads it (`period.json`). Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
+  certifier's period reads it (`period.json`). With `V3C_WARM_JOBS` its warm step (`records_audit.py warm`) composes the
+  window's templates before the audit's coins, into the window's own directory or, with `V3C_COMPOSE_CACHE`, into the
+  directory that names: a kept compose cache, from which a later window under the same tree takes the circuits it
+  shares and composes only the rest. No step removes a kept cache, and it holds every template's circuit composed into
+  it, one of which can be past 100 GB.
+  Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
   the tree has its piece and the node holds what the piece reads (its auditor key, the bandwidth audit's registered store).

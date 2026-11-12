@@ -2873,6 +2873,21 @@ def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_
     assert not list(vw.rglob("circuit.txt")) and (vw / "audit" / "window" / "m0-private.bin").read_bytes() == b"\x01"
 
 
+def test_the_follow_on_removes_the_windows_links_to_a_kept_compose_cache_and_leaves_the_cache(tmp_path):
+    """With V3C_COMPOSE_CACHE the warm's cache is a directory outside V3c's: the follow-on removes the window's circuit
+    files as before, a link to a kept circuit freeing no bytes, and the kept circuit stays for the node's next window."""
+    assert _deferred(tmp_path).returncode == 0
+    vw, kept = tmp_path / "serve" / f"v3c-w7-{VTAG}", tmp_path / "kept"
+    audit = COMPOSED_AUDIT.replace('out.parent / "compose-cache" / "a"', 'Path(a[a.index("--compose-cache") + 1]) / "a"')
+    assert audit != COMPOSED_AUDIT
+    rc, lines, order, _limits = _follow(tmp_path, records_audit=audit, V3C_WARM_JOBS="2", V3C_COMPOSE_CACHE=str(kept))
+    assert rc == 0 and order[:3] == ["warm", "audit", "period"], (lines, order)
+    said = "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: "
+    assert [x for x in lines if x.startswith("V3C-CIRCUITS")] == [said + "3 files, 4 bytes freed"], lines
+    assert not list(vw.rglob("circuit.txt")) and not (vw / "compose-cache").exists()
+    assert (kept / "a" / "circuit.txt").read_text() == "A" * 10 and (kept / "a" / "circuit.txt").stat().st_nlink == 1
+
+
 def test_the_follow_on_hands_the_onsite_record_remotes_sampled_proofs_case_before_removing_the_files_it_registers(
         tmp_path):
     """Where the composite step wrote remote's sampled proofs case under the serve dir's private/, the onsite record is
