@@ -288,14 +288,16 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     port, as a record without the port leaves it, round 2 refuses that read at the combine's statement
     (``second-read``). The same holds with each span's history table committed beside the class, as a serve with no
     stop rule commits them (``two_stage_small --tables``): the record lists the tables' roots after the return, which
-    a record of tables names ``<block>/o0`` (`boundary_rows.return_port`), and no unit reads a table. Slow (about 16 s
+    a record of tables names ``<block>/o0`` (`boundary_rows.return_port`), as round 2 names the link from each unit's
+    ``logits`` ``<block>/logits``, and no unit reads a table. Slow (about 16 s
     a case): it lowers the K templates for the references and the sessions' files."""
     v, k = 256, 4
     got, check = SM.serve(tmp_path, v, O, N, inline=True, units=k, tables=tables), BR.check_template(SM.template(v, k))
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
     ret, names = c.layout.returned, list(c.layout.tables)
+    block = f"{BR.descriptor_id(c.layout.replay)}/" if tables else ""
     assert c.layout.inline and len(c.layout.templates) == k and len(names) == (N if tables else 0) and pub["ids"]
-    assert ret == (f"{BR.descriptor_id(c.layout.replay)}/o0" if tables else "o0")
+    assert ret == f"{block}o0"
     assert list(pub["values"]) == [*BR.PORTS, ret, *names]
     first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
@@ -305,9 +307,10 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert d.cells == (O,) * k and [m.template for m in d.members][-1] == combine
     assert [(w.template, w.port, w.wport) for w in d.wires] == [(combine, f"r{j}", "o0") for j in range(k - 1)]
     assert [w.writer for w in d.wires] == [m.template for m in d.members[:-1]]
-    assert [(x.template, x.port, x.value) for x in d.links] == [(m.template, "logits", "logits") for m in d.members]
+    assert [(x.template, x.port, x.value) for x in d.links] == [(m.template, "logits", f"{block}logits") for m in d.members]
     assert d.returns == (IR.Return(combine, "o0", ret, O, tuple(range(O)), True),)
-    assert [e["value"] for e in r.record["registered"]] == ["logits"] and [x.value for x, _v in r.interior.returns] == [ret]
+    assert [e["value"] for e in r.record["registered"]] == [f"{block}logits"]
+    assert [x.value for x, _v in r.interior.returns] == [ret]
     assert sorted(u // O for u in drawn) == sorted(t * Q + s for t in range(k) for s in range(Q))
 
     mine = d.window(again.registration.digest, sample)
