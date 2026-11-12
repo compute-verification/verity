@@ -64,7 +64,7 @@ def _in_process(cheat=None) -> P.Run:
 
 @pytest.mark.parametrize("cheat, verdict", [(None, "accept"), (dropping, "reject")], ids=["honest", "dropping"])
 def test_the_split_session_is_the_periods(monkeypatch, cheat, verdict) -> None:
-    """Registration draws a fresh nonce from the OS; pinned, the two sessions are the same session."""
+    """Registration samples a fresh nonce from the OS; pinned, the two sessions are the same session."""
     monkeypatch.setattr(audit, "register", functools.partial(audit.register, nonce=bytes(audit.NONCE_BYTES)))
     split, passes = _split(cheat)
     assert split == _in_process(cheat)

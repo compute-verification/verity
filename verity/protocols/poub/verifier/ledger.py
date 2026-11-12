@@ -153,9 +153,9 @@ row digest."""
 
 
 def rejection(record: audit.Record) -> float:
-    """The sample's rejection, `PooledSample`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
+    """The sample's rejection, `PooledSample`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt sample t
     requested, k_t the record's `samples` in every sample (the k at which `DrawsOfRecord` holds), one sample a window, or
-    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts sampled (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
+    ⌈W/g⌉ samples at `groups_per_coin` g.  Not the receipts sampled (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
     that opens all its receipts): the statement's error is a constant, and a sample's U_t is the prover's.  Refused for a
     record that states no `samples`.  Exact: the samples are an integer."""
     if record.samples is None:
@@ -194,7 +194,7 @@ def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max
 
 
 def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float:
-    """`binding` over a session of `draws` draws, at most `receipts` receipts a sample (`window_receipts` times the
+    """`binding` over a session of `draws` samples, at most `receipts` receipts a sample (`window_receipts` times the
     windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
     the span."""
     s = min(samples, receipts)
@@ -231,7 +231,7 @@ def binding(record: audit.Record, node: Node) -> float:
 @dataclass(frozen=True, slots=True)
 class SamplingTerms:
     """`PooledSample`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
-    (`binding`), what reading the record's openings as the deployed draw over receipts its roots hold costs.  `total`
+    (`binding`), what reading the record's openings as the deployed sample over receipts its roots hold costs.  `total`
     is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the third term, which `PRF_CLAIM` prices with no
     numeric value: `to_json` names it, and `total` holds none of it."""
 
@@ -249,7 +249,7 @@ class SamplingTerms:
 
 
 def draw(record: audit.Record, node: Node) -> SamplingTerms:
-    """The record's draw terms on `node`."""
+    """The record's sampling terms on `node`."""
     return SamplingTerms(rejection(record), binding(record, node))
 
 
@@ -268,7 +268,7 @@ class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.GammaTerms`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the draw's (`draw`: `PooledSample`'s rejection and binding terms, the PRF
+    ledger's with the sketch's term and the sample's (`draw`: `PooledSample`'s rejection and binding terms, the PRF
     advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float

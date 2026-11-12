@@ -5,7 +5,7 @@ The verifier's side listens and the prover connects; each message is one line of
 store's block count and payload root (`{"register": {"blocks", "payload_root"}}`). The verifier registers it from
 its own coins and answers with the registration (`{"hold": {"registration"}}`). It then sends each pass's challenge,
 its value and the root it was opened after (`{"run": {"challenge", "i", "previous", "t"}}`, the challenge a
-`coins.Released`, answered `{"root"}`), and each window's draws (`{"open": {"draws", "t"}}`, answered `{"openings":
+`coins.Released`, answered `{"root"}`), and each window's samples (`{"open": {"draws", "t"}}`, answered `{"openings":
 hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and `{"end": {"commitment",
 "openings"}}` last, once the session has its outcome: the coin commitment and every released coin's opening, which
 the prover checks each challenge it was sent against (`audit.Prover.end`), or `{"end": {}}` for a session left
