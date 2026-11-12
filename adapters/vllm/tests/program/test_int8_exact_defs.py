@@ -150,7 +150,7 @@ def test_the_replay_s8_chain_clamps_each_step():
     from verity.definitions.ops import prims as CP
 
     K = (4097 + 64) * 32
-    a = np.full(K, -128, dtype=np.int64)
+    a: np.ndarray = np.full(K, -128, dtype=np.int64)
     b = np.concatenate([np.full(4097 * 32, -128), np.full(64 * 32, 127)]).astype(np.int64)
     got = Q.s8_chain(a, np.stack([b, -b.clip(-127)]))
     for row, want in zip((b, -b.clip(-127)), got):

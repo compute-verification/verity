@@ -146,7 +146,7 @@ def test_the_silu_twin_is_the_definition() -> None:
 
 def test_the_silu_is_silu() -> None:
     """Within one bf16 ulp of float64's g / (1 + e^-g) * u on every finite g with |g| < 80 (u = 1)."""
-    g = np.arange(1 << 16, dtype=U16)
+    g: np.ndarray = np.arange(1 << 16, dtype=U16)
     gf = (g.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
     keep = np.isfinite(gf) & (np.abs(gf) < 80)
     g, gf = g[keep], gf[keep]

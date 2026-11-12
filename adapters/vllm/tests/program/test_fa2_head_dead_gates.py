@@ -61,7 +61,7 @@ def _old_head(B, S, q, k, v, *extra, block):
     """`_check_inf_head` before: the first block a Call of `AttnBlock{FIRST=True}` on a zero running state."""
     T, D, BN, DOT, MF = S.T, S.D, S.BN, S.DOT, S.MASKED_FROM
     nb = (T + BN - 1) // BN
-    m = l = o = None
+    m = l_sum = o = None
     zero_row = None
     for b in range(nb - 1, -1, -1):
         lo, hi = b * BN, min(T, (b + 1) * BN)
@@ -79,9 +79,10 @@ def _old_head(B, S, q, k, v, *extra, block):
             z = B.call(ZERO32)
             st = B.call(blk, q, kb, vb, z, Coll(Array(4, F32), concat([z.refs] * 4)), Coll(Array(D, F32), concat([z.refs] * D)), *extra)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o, *extra)
-        m, l, o = st[0], st[1], st[2]
-    total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
+            st = B.call(blk, q, kb, vb, m, l_sum, o, *extra)
+        m, l_sum, o = st[0], st[1], st[2]
+    assert l_sum is not None and o is not None
+    total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l_sum[0], l_sum[2]), B.call(P.F32AddFtz, l_sum[1], l_sum[3]))
     y = B.batch(P.F32MulFtz, o, B.call(S.INV, total), axes=(0, None))
     return B.batch(P.F2fpBf16, y, axes=(0,))
 

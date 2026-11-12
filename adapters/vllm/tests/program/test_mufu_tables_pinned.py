@@ -35,7 +35,8 @@ def test_the_environment_selects_no_table(monkeypatch, tmp_path):
 
 
 def test_a_table_that_is_not_the_pinned_one_does_not_load(monkeypatch):
-    z, other = np.zeros(1, np.uint32), {"sha256": "0" * 64}
+    z: np.ndarray = np.zeros(1, np.uint32)
+    other = {"sha256": "0" * 64}
     monkeypatch.setitem(fa2_relation._TABLES, fa2_relation.tables_dir(), FA.MufuTables(z, z, {"ex2": other, "rcp": other}))
     with pytest.raises(ValueError, match="pinned"):
         fa2_relation.tables()
@@ -64,6 +65,6 @@ def test_the_arch_is_declared_never_read_from_the_environment(monkeypatch):
     monkeypatch.setenv("VERITY_ARCH", "sm_89")
     assert FA.arch_of({}) is None and FA.arch_of({"arch": "sm_89"}) == "sm_89"
     monkeypatch.setenv("VERITY_ARCH", "sm_90")
-    row = {"x": np.zeros(16, np.uint16), "w": np.zeros(16, np.uint16)}
+    row: dict[str, np.ndarray] = {"x": np.zeros(16, np.uint16), "w": np.zeros(16, np.uint16)}
     assert rms_relation.coverage({"extra": {"consts": {"eps": 1e-6}}}, row)["covered"]
     assert not rms_relation.coverage({"extra": {"consts": {"eps": 1e-6, "arch": "sm_90"}}}, row)["covered"]

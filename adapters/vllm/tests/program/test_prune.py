@@ -34,9 +34,9 @@ from verity_vllm.program.prune import (
     without_dead_units,
 )
 
-TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
-        "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
-        "max_position_embeddings": 64, "hidden_act": "silu"}
+TINY: dict = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
+              "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
+              "max_position_embeddings": 64, "hidden_act": "silu"}
 PHI = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [12, 0], "num_sms": 188})
 
 
@@ -188,13 +188,15 @@ def test_an_attentions_key_sequences_renumber_as_cuts_of_one_renumbered_log():
     cuts = [log.cut(j) for j in (2, 3, 4)] + [log.cut(3, [Affine("n", 7, 0, 1)])]
     assert all(c.prefix is not None for c in cuts)
     new = [0, 1, 2, 3, 3, 4, 5, 6]  # node 3 dead: 4, 6 and 7 become 3, 5 and 6
-    memo, logs = {}, {}
+    memo: dict = {}
+    logs: dict = {}
     got = [_renumbered(c, new, memo, logs) for c in cuts]
     assert got[0] is cuts[0] and got[1].prefix[0] is got[2].prefix[0] is got[3].prefix[0] is not log
     assert got[1].parts[0] is log.parts[0] and got[3].parts[2] is got[2].parts[2]
     for c, g in zip(cuts, got):
         assert [p.to_json() for p in g.parts] == [p.to_json() for p in _renumbered(Concat(list(c.parts)), new, {}, {}).parts]
-    read, done = set(), {}
+    read: set = set()
+    done: dict = {}
     for g in reversed(got):
         _read(g, read, done)
     assert read == {0, 2, 3, 5, 6}
@@ -228,7 +230,8 @@ def test_liveness_steps_over_each_part_of_a_layers_key_rows_once_reading_the_lon
         log.append(Affine("n", k, 0, 1))
         cuts.append(log.cut(k + 1, [Affine("n", n + k, 0, 1)]))
     parts.stepped = 0
-    read, done = set(), {}
+    read: set = set()
+    done: dict = {}
     for c in reversed(cuts):
         _read(c, read, done)
     assert read == set(range(2 * n)) and parts.stepped == n

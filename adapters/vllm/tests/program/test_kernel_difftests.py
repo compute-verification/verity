@@ -39,7 +39,7 @@ def test_cases_carry_every_edge_kind_and_bind_their_inputs(mod, n):
 
 
 def _bf16_rne(f: np.ndarray) -> np.ndarray:
-    u = f.astype(np.float32).view(np.uint32).astype(np.uint64)
+    u: np.ndarray = f.astype(np.float32).view(np.uint32).astype(np.uint64)
     return ((u + 0x7FFF + ((u >> 16) & 1)) >> 16).astype(np.uint16)
 
 
@@ -85,10 +85,10 @@ def test_rope_gptj_spec_is_the_interleaved_rotation_of_query_and_key():
 
 def test_moe_spec_reads_each_pairs_expert_and_weight():
     st = {"E": 4, "TOPK": 2, "H": 32, "I": 16, "M": 2}
-    E, TOPK, H, I, M = (st[k] for k in ("E", "TOPK", "H", "I", "M"))
+    E, TOPK, H, inter, M = (st[k] for k in ("E", "TOPK", "H", "I", "M"))
     g = np.random.default_rng(5)
-    x, w13, w2 = A.words_for("random", [M * H], "bfloat16", g), A.words_for("random", [E * 2 * I * H], "bfloat16", g), \
-        A.words_for("random", [E * H * I], "bfloat16", g)
+    x, w13, w2 = A.words_for("random", [M * H], "bfloat16", g), A.words_for("random", [E * 2 * inter * H], "bfloat16", g), \
+        A.words_for("random", [E * H * inter], "bfloat16", g)
     ids = np.array([3, 0, 1, 2], np.uint32)
     wts = np.array([0x3F400000, 0x3E800000, 0x3F000000, 0x3F000000], np.uint32)   # 0.75, 0.25, 0.5, 0.5
     got = A.evaluate_spec(MD.spec(st), [x, w13, w2, ids, wts])
@@ -97,9 +97,9 @@ def test_moe_spec_reads_each_pairs_expert_and_weight():
         dt = []
         for s in range(TOPK):
             p = t * TOPK + s
-            u = list(evaluate(bind(MoeExpertGemm, E=E, K=H, N=2 * I), x[t * H:(t + 1) * H].tolist(), [int(ids[p])], w13.tolist()))
-            a = list(evaluate(bind(b1.SiluMul, I=I), u))
-            d = list(evaluate(bind(MoeExpertGemmW, E=E, K=I, N=H), a, [int(ids[p])], [int(wts[p])], w2.tolist()))
+            u = list(evaluate(bind(MoeExpertGemm, E=E, K=H, N=2 * inter), x[t * H:(t + 1) * H].tolist(), [int(ids[p])], w13.tolist()))
+            a = list(evaluate(bind(b1.SiluMul, I=inter), u))
+            d = list(evaluate(bind(MoeExpertGemmW, E=E, K=inter, N=H), a, [int(ids[p])], [int(wts[p])], w2.tolist()))
             up += u
             act += a
             dt += d
@@ -107,7 +107,7 @@ def test_moe_spec_reads_each_pairs_expert_and_weight():
         out += list(evaluate(bind(MoeSum, TOPK=TOPK, H=H), dt))
     assert got == up + act + down + out
     swapped = A.evaluate_spec(MD.spec(st), [x, w13, w2, ids[[1, 0, 2, 3]], wts])
-    assert swapped[: 2 * I] != got[: 2 * I]
+    assert swapped[: 2 * inter] != got[: 2 * inter]
 
 
 def test_moe_cases_route_distinct_experts_and_take_both_block_schedules():

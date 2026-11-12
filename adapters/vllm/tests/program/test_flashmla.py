@@ -87,7 +87,7 @@ def test_the_primitives_on_their_edge_words():
 
 
 def _ulps(got: np.ndarray, want: np.ndarray) -> np.ndarray:
-    w32 = want.astype(np.float32)
+    w32: np.ndarray = want.astype(np.float32)
     ok = np.isfinite(w32) & (np.abs(w32) >= np.float32(2.0 ** -126))
     return (np.abs(got.view(np.float32).astype(np.float64) - want) / np.spacing(np.abs(w32)).astype(np.float64))[ok]
 
@@ -151,7 +151,7 @@ def _operands(rng, N: int, NW: int, swa: int, extra: int, NH: int = 16):
     return q, nope, (e + 127).astype(np.uint8), rope, idx, lens, rng.standard_normal(NH).astype(np.float32).view(U)
 
 
-def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, NW: int) -> np.ndarray:
+def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, *, NW: int) -> np.ndarray:
     valid = T.row_valid(idx, lens, NW)
     k = _bf16_f64(T.kv_rows(nope, scale, rope, valid, DSV4["QT"]))
     s = np.where(valid[None, :], _bf16_f64(q) @ k.T * DSV4["SCALE"], -np.inf)

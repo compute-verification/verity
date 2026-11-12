@@ -132,7 +132,7 @@ def test_select_signature_has_splits_as_the_sixth_operand():
 
 def test_codec_materialises_the_operand_form_by_name():
     from verity.circuits import codec
-    fams = getattr(codec, "_LAZY_PRIMITIVE_FAMILIES")
+    fams = codec._LAZY_PRIMITIVE_FAMILIES
     hits = [(rx, mk) for rx, mk in fams if rx.match("TopPMaskWordx128256_v1")]
     assert len(hits) == 1
     prim = hits[0][1](hits[0][0].match("TopPMaskWordx128256_v1"))
