@@ -97,6 +97,7 @@ ON_DISK = {
     "WEIGHTS_OF_RECORD_SCHEMA": "verity/commit/weights-of-record/v2",
     "X09_PROFILE_SCHEMA": "cb-a/x09-profile/v1",
     "XRANK_COLLECTIVES_FOLD_SCHEMA": "verity/tp2/xrank-collectives-fold/v1",
+    "XRANK_COLLECTIVES_SCHEMA": "verity/tp2/xrank-collectives/v1",
     "XRANK_PICKS_SCHEMA": "verity/tp2/xrank-picks/v1",
 }
 

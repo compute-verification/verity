@@ -202,6 +202,8 @@ CENSUS_RANK_SCHEMA = "verity-capture/census-rank/v0"
 LATE_READ_CHECK_SCHEMA = "verity/commit-integ/t6_4-check/v1"
 #: the TP Commit's value check, `value_check.json`, which `pipeline.tp.commit`'s `main` writes
 TP_VALUE_CHECK_SCHEMA = "verity/commit-integ/value-check-tp/v1"
+#: one pair's cross-rank check of the ranks' collectives, `xrank_pair<N>.json`, which `pipeline.tp.commit`'s `main` writes
+XRANK_COLLECTIVES_SCHEMA = "verity/tp2/xrank-collectives/v1"
 #: the pairs' cross-rank checks folded, `xrank_collectives.json`, which `pipeline.tp.commit`'s `main` writes
 XRANK_COLLECTIVES_FOLD_SCHEMA = "verity/tp2/xrank-collectives-fold/v1"
 #: the ranks' weights pins folded, `weights_pin.json`, which `pipeline.tp.commit`'s `main` writes
