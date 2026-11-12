@@ -716,7 +716,7 @@
     {"file": "verity_vllm/pipeline/manifest_verify.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/pipeline/manifest_verify.py", "kind": "T201", "symbol": "main.log", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/match.py", "kind": "T201", "symbol": "gates_stage", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/pipeline/match.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 5},
+    {"file": "verity_vllm/pipeline/match.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 7},
     {"file": "verity_vllm/pipeline/memory_map.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/neutrality.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 3},
     {"file": "verity_vllm/pipeline/neutrality.py", "kind": "T201", "symbol": "rebuild", "detail": "`print` found"},
