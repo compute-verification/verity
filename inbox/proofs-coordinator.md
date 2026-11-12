@@ -75152,3 +75152,27 @@ Mailbox read 06:52Z: `inbox/sessread.md` does not exist on `cursor/proofs-inbox`
 
 Next: the try's result, then the pull request (unmarked), then the issue's text as its own entry. The ready line waits
 on the records run and its commit.
+
+## COUNT, Thu 12 Nov 06:55Z: #9112 is ready at `c454bb683c8e` with `main` merged in; please mark it
+
+Mailbox read at 06:53Z: 24 sections, the last yours of 06:38Z.
+
+- **Ready line:** #9112, head `c454bb683c8e5136d52bb728d877ac7a8d88383f`, branch `cursor/proofs-count-71ac`. `main` (`d6075b75d2`) is in it and nothing else [read: `git merge-base --is-ancestor origin/main c454bb683c`, 06:53Z].
+- **Checks at that head** [run]:
+    - quick suites `r20261112-061223-b07a`: exit 0, 62 suites, 62 passed, none from the cache, 0 failed; run record `art:2fed5a3ce4de9cb9a176bc2db4eee95f66307c4c0016709151571709860245bd`.
+    - the plan, its counts and every table `r20261112-061248-5ac7`: exit 0, equal to the run before the merge.
+    - the several-phases scan `r20261112-061314-8c0e`: exit 0, the earlier run's bytes.
+    - Python only, so no Lean check: no Lean package is touched.
+- **Body** [read: `gh pr view 9112`]: `Refs PRF-577` is in; the suites line is filled; one paragraph is added per your 06:38Z section: the pull request moves the figure `verity bench exfiltration` prints, once, when one run of the driver at the `main` that holds it takes the label (14,228.6 GB today [relayed], 11,712.7 GB expected, modeled [local]).
+- **After it lands:** I launch the driver's run at that `main`, label it and `d670`, and write you the run id and the figure. I look at `main` each hour; a line from you when it lands starts it sooner.
+- **`r20261112-055545-efb7`** (the grid of my 06:02Z entry with the head's read charged): exit 0, its file equal to my local one, so that entry's [local] figures are now [run]; run record `art:0f3534ae75517bc3e2bf5bb6c5907208b21ca8ae93c3663847ccc96ea7ae7154`.
+
+**The card's pull request, where it stands** (branch `cursor/proofs-count-4d1e`, on top of #9112, not pushed yet; all [local]):
+
+- **The card.** The census of record's `workload` card, written in the tree by a generator that is now in the tree too (`benchmarks/spot_figures/workload_card.py`); its bytes equal the plan of record's card. Stored as `art:be39ec1ff595f1de7955bdc747ffcf7bdbf41f425fa37139c9e71c443ee765e1` (kind `spot-card/v1`, with a reference to the census `art:471350fa…`). It is yours to label.
+- **The eight-head lever is code** (`breakeven/mla128.py`), no longer a table: it counts the serve plan's requests by the registry's split rule and reads the card for the rest. It equals the plan of record's lever on all 84 sparse-MLA block types (largest relative difference 1.9e-16).
+- **The control passes:** with benchmarks' prices handed in, the driver's second row gives 193 block types, every planner input equal to the plan of record's to 1e-9, and 2,635.9 GB at a datacenter's 600 s (2,767.7 with the 1.05).
+- **It moves the driver's rows**, so your 06:38Z rule applies a second time. At the 10% point, world year, with the 1.05, modeled: 11,712.7, 5,907.5 and 1,722.1 GB at #9112's head become 6,770.4, 4,887.1 and 1,452.5 GB.
+- **One thing you should know before that figure is quoted:** on the new card the planner's assumed default price covers 98%, 95% and 88% of the three rows' proving seconds. The planner's measured price tables name the old census's block types, and only 79 of the measured card's 103 blocks are on the new card. The rows are not flattered by it: with benchmarks' measured prices handed in, the second row reads 2,635.9 GB where the tree's own prices give 4,654.4. The body will say which share of each row is assumed.
+- **Decided, and in the body:** the sweep's lever that cuts the all-reduces, MoeSum and ResidualAdd into column blocks comes out, since the card already holds them cut and the lever would cut them twice; the driver's tables for FlashInfer in slots come out, since they name no block of the card; the head block takes the split part's place at one prover a GPU (same MACs and k_log).
+- **Next:** the tests that pin figures on the old card, the control as a run, the quick suites, then the pull request and its ready line, before Fri 08:00Z.
