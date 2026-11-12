@@ -13,9 +13,8 @@ SIZE, VOCAB, CTX = Size(d_model=32, n_layer=3, n_head=2, d_ff=48), 16, 8
 #: attention's output, the MLP's gate and up, and its down
 BLOCK = 7
 #: how far apart two positions' words may be and still be equal: their largest difference over the larger one's
-#: largest entry. float32 computes the same word at two positions by two orders of sums, so they agree to rounding
-#: and not bit for bit; this is some hundred times the largest difference these batches give, and a fortieth of
-#: one step of a bf16 word
+#: largest entry. float32 sums one word at two positions in two orders, so the two agree to rounding and not bit for
+#: bit; the bound is under a thirtieth of a bf16 word's step
 EQUAL = 1e-4
 #: how far apart a control pair's words are at the least
 APART = 1000 * EQUAL
@@ -109,12 +108,12 @@ def test_without_the_rotation_one_token_after_the_same_proportions_holds_equal_w
     """With no rotation an attention's weights read tokens and not places, so its output at a place is a mean of the
     earlier tokens' values by their numbers: two places with one token whose earlier tokens are in the same
     proportions hold equal words from the first attention to the second, in any order of those tokens. The second
-    attention reads words that already differ along the way, so they part there, which the last line holds. The
-    control is that token after other proportions."""
+    attention reads the words of the places before, which differ between the two, so they part at every product
+    after it, which the last line holds. The control is that token after other proportions."""
     monkeypatch.setattr(model, "rope", lambda x, cos, sin: x)
     at = words(PROPORTIONS)
     first, second = at[3:BLOCK + 3], at[BLOCK + 3:]
     same = [((0, 1), (0, 3)), ((0, 1), (0, 5)), ((0, 1), (1, 3))]
     assert spread(first, same)[1] <= EQUAL
     assert spread(first, [((0, 1), (2, 3))])[0] >= APART
-    assert spread(second, same)[1] >= APART
+    assert all(spread([x], same)[1] >= APART for x in second)

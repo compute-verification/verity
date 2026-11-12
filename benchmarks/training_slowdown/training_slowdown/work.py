@@ -28,7 +28,9 @@ P_MATCH = "elementwise steps don't fan out (P-match)"
 #: returns their one value, so a run of r repeats (r − 1)/n of that row's words; and without the rotation, two
 #: positions with one token whose earlier tokens are in the same proportions hold equal words after the first
 #: attention and not after the second. Equal is to rounding, not bit for bit: a float sums one word at two positions
-#: in two orders. No trace keeps the batch's tokens, so no record checks the premise
+#: in two orders. The equal words are the forward's, which a forward product and a weight gradient read; the
+#: gradients at two such positions differ wherever a target or a later position's reading of them does. No trace
+#: keeps the batch's tokens, so no record checks the premise
 P_BATCH = "past each row's first position, no two positions of the batch hold equal words"
 #: the first training_slowdown whose capture writes a traced step's product rows (training_slowdown.capture.products' `CAPTURE`)
 PRODUCTS_FROM = "4.8"
