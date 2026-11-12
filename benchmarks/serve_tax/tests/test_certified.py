@@ -54,7 +54,7 @@ def test_the_schedule_has_a_lane_and_a_queue_place_for_each_request_in_flight():
     assert S.ceiling(cells) == 384.0 and S.cell_payload(cells) == 4096 - 9
     assert S.certifier_cells("delay=20, lanes=128,max_tokens_cap=256", {"chat": (96,)}) == {
         **S.CELLS, "delay": 20, "lanes": 128, "queue": 96, "max_tokens_cap": 256}
-    for text, why in (("queue=64", "a queue of 64 under the rung 96"), ("cap=256", "NAME=N, NAME one of cell_bytes"),
+    for text, why in (("queue=64", "a queue of 64 under the rung 96"), ("tokens=256", "NAME=N, NAME one of cell_bytes"),
                       ("slots=two", "NAME=N"), ("max_tokens_cap=4096", "max_tokens_cap is a u32 from 1 to"),
                       ("cell_bytes=8", "a cell holds its")):
         with pytest.raises(SystemExit, match=why):

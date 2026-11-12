@@ -4,7 +4,7 @@ vLLM's client (``vllm bench serve``) speaks HTTP: a streamed ``POST /v1/completi
 The network certifier (`verity.protocols.certifier.verifier.warden`) speaks fixed-size cells, one request a connection,
 and in its id egress form takes a canonical token-id request (`active.id_request`) and answers one id event a ``DATA``
 cell (`io_tie.id_event`), then an ``END`` that holds `io_tie.TRAILER`. `HttpShim` listens between them on the client's
-side of the certifier, the client's thin shim (`warden.cells`, `warden.Shim`) with an HTTP face:
+side of the certifier, the client's thin shim (that module's `cells` and `Shim`) with an HTTP face:
 
 - a completion's body becomes the id request of its fields (`id_fields`): its model, its prompt as token ids (a text
   prompt encoded by the served model's tokenizer, as vLLM's server encodes one), ``max_tokens``, ``temperature``,
@@ -25,7 +25,7 @@ check reads as its ``client.json`` (`client_doc`), with the request's id, its to
 them. A request the shim did not send has a line too, with why (``unsent``): one it refused, and one it never read
 whole, its client having closed first. No prompt and no token id is kept.
 
-    python cell_shim.py --deployment WARDEN_OUT/deployment.json --tokenizer CHECKPOINT --log shim.jsonl
+    python cell_shim.py --deployment CERTIFIER_OUT/deployment.json --tokenizer CHECKPOINT --log shim.jsonl
         [--listen 127.0.0.1:0]
 """
 from __future__ import annotations
@@ -37,6 +37,7 @@ import json
 import sys
 import time
 from collections.abc import Awaitable, Callable
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +57,6 @@ SENT = {"top_p": 1.0, "seed": 0}
 FRAMING = ("stream", "stream_options", "ignore_eos")
 #: the fields taken only at the value that changes nothing
 NEUTRAL = {"repetition_penalty": 1.0, "logprobs": None, "n": 1, "echo": False, "stop": []}
-STATUS = {200: b"OK", 400: b"Bad Request", 404: b"Not Found", 502: b"Bad Gateway", 503: b"Service Unavailable"}
 #: why a connection got no answer, by its outcome
 WHY = {"refused": (503, "the network certifier refused the connection: every lane and its queue were taken"),
        "fail": (502, "the network certifier failed the connection"),
@@ -122,7 +122,8 @@ def _chunk(data: bytes) -> bytes:
 
 
 def _head(status: int, headers: list[tuple[bytes, bytes]]) -> bytes:
-    lines = [b"HTTP/1.1 %d %s" % (status, STATUS[status]), *(k + b": " + v for k, v in headers), b"connection: close"]
+    lines = [b"HTTP/1.1 %d %s" % (status, HTTPStatus(status).phrase.encode()), *(k + b": " + v for k, v in headers),
+             b"connection: close"]
     return b"\r\n".join(lines) + b"\r\n\r\n"
 
 
@@ -204,7 +205,7 @@ class HttpShim:
                   "request_bytes": len(request), "request_sha256": hashlib.sha256(request).hexdigest(),
                   "prompt_tokens": len(fields["prompt"]), "max_tokens": fields["max_tokens"]}
         kinds, arrivals, digest, data_bytes, ids, ordinal = [], [], hashlib.sha256(), 0, 0, None
-        outcome = status = None  # the connection's outcome as `warden.Shim` reads one, and the HTTP status answered
+        outcome = status = None  # the connection's outcome as the certifier's own `Shim` reads one, and the HTTP status answered
         name = "cmpl-" + (request_id or str(index))
         stream = _head(200, [(b"content-type", b"text/event-stream"), (b"cache-control", b"no-cache"),
                              (b"transfer-encoding", b"chunked")])
@@ -277,7 +278,7 @@ class HttpShim:
 
 
 def client_doc(lines: list[dict]) -> dict:
-    """The shim's records as the ``client.json`` the certifier's offline check reads (`warden_serve.check`): one
+    """The shim's records as the ``client.json`` the certifier's offline check reads (its program's ``check``): one
     connection each request it sent, in the order sent."""
     return {"connections": [x for x in lines if "unsent" not in x]}
 
@@ -310,7 +311,7 @@ async def serve(a: argparse.Namespace) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--deployment", required=True, help="the network certifier's deployment.json (warden_serve.py serve)")
+    ap.add_argument("--deployment", required=True, help="the network certifier's deployment.json, which its serve command writes")
     ap.add_argument("--tokenizer", required=True, help="the served model's checkpoint, for text prompts")
     ap.add_argument("--log", required=True, help="each connection's record, a line of JSON")
     ap.add_argument("--listen", type=address, default=("127.0.0.1", 0), help="HOST:PORT (port 0: any)")

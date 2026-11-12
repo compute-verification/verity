@@ -1791,7 +1791,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
 SERVER, CLIENT = "server", "client"
 #: the loopback port the id front listens on, on the node, and where the client's side reaches it (a forward's end)
 FRONT_PORT = 18746
-#: the network certifier's schedule such an arm is served under, by `warden.WardenParams`'s fields; its lanes and its
+#: the network certifier's schedule such an arm is served under, by the fields of its parameters; its lanes and its
 #: queue are by default the highest rung (`certifier_cells`). One cell, so one id, leaves a connection each slot of a
 #: bucket, the first ``delay`` buckets after the connection's admission; a request is at most ``ingress_cells`` cells,
 #: read within ``ingress_buckets`` buckets, and an answer at most ``max_tokens_cap`` ids
@@ -1833,11 +1833,9 @@ def certifiable(load: Load) -> bool:
 def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
     """The network certifier's schedule for ``loads``: `CELLS` with ``--cells NAME=N,...`` over it, its lanes and its
     queue by default the loads' highest rung. Refused where it is no schedule of the certifier's in the id form
-    (`warden.WardenParams`), or where its queue is under a rung: vLLM's client opens a rung's connections at once,
+    (`certifier_schedule`), or where its queue is under a rung: vLLM's client opens a rung's connections at once,
     each waits in the queue for the next bucket, and the certifier refuses a connection past it and withholds the
     window. Both sides of an arm take the same one: the server's side reads its bucket and its cell from it."""
-    from verity.protocols.certifier.verifier.warden import WardenParams
-
     top = max(c for rungs in loads.values() for c in rungs)
     cells = {**CELLS, "lanes": top, "queue": top}
     for part in filter(None, (p.strip() for p in (text or "").split(","))):
@@ -1846,7 +1844,7 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
             raise SystemExit(f"--cells: {part!r}: NAME=N, NAME one of {', '.join(cells)}")
         cells[name] = int(n)
     try:
-        WardenParams(**cells, egress="id")
+        certifier_schedule(cells)
     except ValueError as e:
         raise SystemExit(f"--cells: {e}") from None
     if cells["queue"] < top:
@@ -1855,11 +1853,16 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
     return cells
 
 
-def cell_payload(cells: dict[str, int]) -> int:
-    """A cell's payload under a schedule, which is an id event's bytes: the id front's ``--id-payload``."""
+def certifier_schedule(cells: dict[str, int]):
+    """The network certifier's own parameters for a schedule, in the id form; a ValueError where they are none."""
     from verity.protocols.certifier.verifier.warden import WardenParams
 
-    return WardenParams(**cells, egress="id").payload
+    return WardenParams(**cells, egress="id")
+
+
+def cell_payload(cells: dict[str, int]) -> int:
+    """A cell's payload under a schedule, which is an id event's bytes: the id front's ``--id-payload``."""
+    return certifier_schedule(cells).payload
 
 
 def ceiling(cells: dict[str, int]) -> float:
@@ -1883,7 +1886,7 @@ def front_argv(port: int, front: int, payload: int, log: Path) -> list[str]:
 
 
 def certifier_argv(cells: dict[str, int], out: Path, front: int, key: Path, session: str, windows: int) -> list[str]:
-    """The network certifier's command (`warden_serve.py serve`): before the id front on loopback port ``front``, on a
+    """The network certifier's command (`CERTIFIER`'s ``serve``): before the id front on loopback port ``front``, on a
     port of its own choice, under the schedule ``cells`` in the id form for ``windows`` windows, with the watermark
     stream the certified tick admits by; its records in ``out``, its key in ``key``."""
     return [sys.executable, str(CERTIFIER), "serve", "--out", str(out), "--listen", "127.0.0.1:0", "--upstream",
@@ -1929,7 +1932,7 @@ def hold_ends(server: int | None, front: int | None, ended: int, left_s: float |
 
 
 def certifier_record(check: dict | None, lines: Sequence[dict]) -> dict:
-    """What the network certifier's offline check (`warden_serve.py check`: its check.json, None where it wrote
+    """What the network certifier's offline check (`CERTIFIER`'s ``check``: its check.json, None where it wrote
     none) found of a run, with the shim's record of each connection (``lines``, `cell_shim.HttpShim`): whether the
     run is accepted and the first of its problems; the completions the shim sent and those it did not (``unsent``: a
     body it refused, or a request it never read whole, its client having closed first); the connections that ended,
@@ -2120,7 +2123,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
             made = run([sys.executable, str(CERTIFIER), "keys", "--dir", str(key)], stdout=subprocess.DEVNULL,
                        env=env).returncode
             if made:
-                raise RuntimeError(f"the network certifier's key was not made (warden_serve.py keys exited {made})")
+                raise RuntimeError(f"the network certifier's key was not made ({CERTIFIER.name} keys exited {made})")
             with open(out / "certifier.log", "wb") as log:
                 certifier = popen(certifier_argv(cells, cert, a.front, key, secrets.token_hex(32), a.certifier_windows),
                                   stdout=subprocess.PIPE, stderr=log, env=env, text=True)
