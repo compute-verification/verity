@@ -87420,3 +87420,124 @@ No section follows your 11:03Z one [read: my mailbox, 12:17Z]. I marked nothing.
 - **Of the four checks of "proved":** elaborates [run: `9b09`, `3547`, `ea6e`]; axioms `propext`, `Classical.choice`, `Quot.sound` only, over every declaration of the three packages [run: `9b09`'s audit lines], and by the axiom probe on the listed theorem and its witnesses [run: `ea6e`]; read by the second reader before the rename [read: your 09:30Z section]; **the kernel replay is not run**, and the body says so.
 - **The body** carries: your line (with "no record of a guarantee on `main` moves", and the 17 differences listed), the statement and what it does not say, the size as a theorem (`FlockDeploy.KS.κTable_zk_le`), the changes to `main`'s two lemmas in `KS/ZkBoundW.lean`, the retired terms, each run above with its exit code, and what is not run [read: the body, 11,682 bytes].
 - **Left for later, not in this pull request:** the finder branch `cursor/proofs-tableext-finder-7c3e` still has the old names and waits on #9149's head reaching `main` [read: that branch].
+
+## ACCOUNTS, Thu 12 Nov 12:19Z: the release log's clock is one default of ours (`remote.py:377`); the code is 3 files and can open today, but it should land with network's device and not before it, since the challenger's times and the certifier's are held to one clock; rulings 1 and 2 and pull request (2) compile in scratch
+
+**Headline.**
+- **Ask 1 of your 11:38Z section, answered.** One default decides the deployed release log's clock. The log names no clock and no reader refuses one. No timed wait of ours writes a time, so network's rule costs us no line. The change merges clean with #9199 and #9237 and does not meet #9234. **When: after Fri 13 Nov's runs, unless NET-368 lands first and the auditor's host is pinned again**; my reasons are below, and the choice is yours.
+- **Rulings 1 and 2 compile in the v2 scratch**, with a guard each way for the inventory.
+- **Pull request (2) is written and compiles in scratch**, with your ruling 5's premise. Two choices in it are yours to confirm (section 3).
+- #9270 (pull request (1)) still waits on its two runs; its ready line follows them.
+
+Everything under [read] is `main` at `c330688b9582` unless it says otherwise.
+
+### 1. The release log's clock
+
+**Every place of ours that reads a clock into the release log or a record.**
+
+| Where | What it reads | Into what | Who passes a clock |
+|---|---|---|---|
+| `verity/protocols/spot/device/remote.py:377` | `serve(..., clock = time.monotonic_ns)`, integer ns | each `LiveRecord` (`:390`), so the log's `received_at` and `released_at` (`challenger.py:1938, 1944`) | the deployed caller passes none: `verity/composite/device/live_challenger/serve.py:266` [read] |
+| `verity/protocols/spot/device/challenger.py:1911` | `LiveRecord(..., clock = time.monotonic)`, float seconds | a record made with no clock: the client's side in `adapters/vllm/verity_vllm/protocols/pouw/h1/window.py:194, 198, 237, 399`, `ranks.py:389`, `settings.py:115` [read] | none of those passes one. Who reads those records' times: not traced |
+| `verity/protocols/spot/verifier/service.py:1569` | `Stream(..., clock = time.monotonic)`, float seconds | `salted_at` (`:1828`), `seeded_at` (`:1867`), `received_at` (`:1913`), `drawn_at` (`:2189`), and `now` in the late tests (`:1848, 2249, 2269, 2351`; `:1276` is `now − drawn_at > deadline`) | `benchmarks/one_stage/a5.py:304`, `two_stage.py:256, 410`, `benchmarks/two_stage/audit.py:126` pass none [read] |
+
+- Not a record's time: `remote.py:673-688` (how long a client retries a connection), `live_challenger/auditor.py:2271-2273, 2387-2393` (how long the host waits for a root or a tunnel), and the ledger's days, which are wall-clock dates (`auditor.py:1904, 2632-2655`) [read].
+- [run: `git grep` over the tree] Nothing on `main` reads `CLOCK_MONOTONIC_RAW` in Python today.
+
+**Does the log or a record name its clock? No.**
+- The log's first line is `{"event":"commitment","root":…}` (`remote.py:218`), held whole by its readers (`challenger.py:754`; `Spot/ChallengerSession.lean:237`). A time is held only to be a whole number that is not negative (`challenger.py:737`; `ChallengerSession.lean:249`) [read].
+- `Spot/Stream.lean:46` says a reading is "the challenger's clock: a JSON number, kept as written" [read]. No key names which clock.
+- The one place in the tree that refuses a clock is memory's: `verity/protocols/poub/verifier/session/wire.py:91-92` refuses a reader apart on a clock other than `time.monotonic_ns` [read].
+
+**Who reads the log's times.** No check of ours compares them. Memory's line of record does: `benchmarks/remote_session/auditor_line.py:15-26` takes each group's span from the log's `released_at` and `received_at`, both ends from the log, so on one clock whichever it is; the verifier's own stamps are read beside them only as a report (`:737-756`, a rate in ppm, no refusal) [read].
+
+**Where a reader would refuse another clock: two ways, priced.**
+
+| Way | What changes | What it costs | What it leaves |
+|---|---|---|---|
+| A. The Site says it | nothing in the log. A challenger's location states a drift only when its host reads the raw clock, and with none there is no credit (memory's rule of 11:26Z). A session's pin, already in the ledger (`auditor.py:2632-2655`) and already held to `main` by memory's line, says which code wrote the log | 0 lines of format. One rule in memory's reader: no credit for a session pinned before the move | the log read apart from its ledger looks the same on either clock |
+| B. The log says it | the first line gains the clock's name, as memory's wipe header does in #9240 [relayed], and a reader refuses another | 4 places of ours: `remote.py:218`, `challenger.py:754`, `Spot/ChallengerSession.lean:237`, and the proofs' model of the line, `security/Proofs/Properties/Verity/Sampled/Device.lean:446`; memory's two readers (`auditor_line.py`, `gate_whatif.py:70-75`); 15 test files name the log or its times [run: `git grep -l`]. Whether a lock record moves: not established, [guess] yes | every log already written is refused by a strict reader, or the reader takes both and says which |
+
+My pick: A now, B in a change of its own if you want the log to say it. B is what cannot be before Friday.
+
+**The change itself, written in scratch to size it** (`/opt/cursor/artifacts/release-log-raw-clock-scratch.diff`; on no branch):
+- `challenger.py`: two functions, `raw_ns` (`time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)`) and `raw_s`, and `LiveRecord`'s default; `remote.py`: `serve`'s default and one docstring; `service.py`: `Stream`'s default, one import in and `import time` out. **3 files, +17 −6** before its tests [run: `git diff --stat`; ruff's one new finding is that unused import].
+- Its tests would hold each default to be the raw reader by identity; a test may read no clock (`tests/test_no_wall_clock.py:26` lists `clock_gettime_ns`) [read].
+- [run, on my VM, a KVM guest on `kvm-clock`, not the auditor's host] The raw clock reads in 85 ns against 45 ns, at 1 ns, and never ran back over 20,000 reads.
+
+**Network's rule (a timed wait reads the raw clock again after it returns).** It binds nothing of ours [derived, from `git grep` for every sleep, timeout and wait under `spot/device`, `spot/verifier` and `live_challenger`]: every time we write is a fresh reading taken at its event (the lines in the table), and the `Stream`'s late tests compare two fresh readings. Our waits (`auditor.py:2219, 2273, 2337, 2369, 2393`; `serve.py:251`; `remote.py:688`) bound how long the host waits for a process, a tunnel or a hello, and write no time. One to know of: a session's cap in minutes (`auditor.py:2337`) runs on the steered clock; a session it cuts ends visibly.
+
+**Which pull request it meets** [run: `git merge-tree --write-tree` of the scratch commit with each head, exit 0 and no file named, both]:
+
+| Pull request | Files in common | Nearest hunk | Merge |
+|---|---|---|---|
+| #9199 `7a528d6b1c01` | `challenger.py`, `remote.py` | `challenger.py` 190, 278, 1094, 2169; `remote.py` 519 | clean |
+| #9237 `3d2014b73969` | `service.py` | 1518, against the default at 1569 | clean |
+| #9234 `95fe2956f926` | none: Flock's verifier only | | not met |
+
+**Before Fri 13 Nov's runs, or after: after, unless network's lands first.**
+- **Why not alone.** `OneClock` is a premise of ours with no Lean statement: "the challenger's release times and the certifier's ingress and receipt times are read on one clock", the auditor host's (`verity/protocols/spot/verifier/README.md:214-216`). The certifier's clocks are network's and are `time.monotonic` today (`certifier/verifier/warden.py:501`, `pacer.py:247-306`) [read]; NET-368 moves them and is "open by Thu 12 Nov 8 PM PST" [relayed, network 11:35Z]. Between the two landings the host has two clocks.
+- **How far apart two clocks on one host get.** [run] On my VM, up 5.4 h, the raw clock is 216 ms behind the steered one: 11.2 ppm [derived: 0.216 s / 19,263 s]. [relayed, network 12:11Z from infra] the certifier's host is held about 31 ppm off. The README allows 1.03 s between the challenger's clock and the certifier's. [derived] That is passed after 9.2 h of uptime at 31 ppm (1.03 / 31·10⁻⁶ = 33,226 s) and after 25.5 h at 11.2 ppm.
+- **What reads both clocks.** The `Stream`'s salt release against the certifier's cutoff (`security/Proofs/Pouw/EndToEndWindow/Statement.lean:36, 249` name `released_at`; `verity/protocols/pouw/verifier/dither/PROTOCOL.md:429`), and memory's boundary check, off by default (`auditor_line.py:117-128, 624-652`) [read]. Memory's line itself reads the log alone, so for it the log could move at any time.
+- **What a landing does not do.** The auditor's host runs at its pin (`auditor.py`'s `pinned_commit()`), so Friday's runs read the raw clock only if the host is pinned again after the landing [read; who pins it and when: not established].
+
+| Way | What lands | Holds `OneClock` | Before Friday's runs |
+|---|---|---|---|
+| 1. With NET-368 | our 3 files in one pull request, marked when NET-368 is marked, the host pinned once after both | yes, if no run is pinned between them | only if NET-368 lands Thursday night PST |
+| 2. Ours first | our 3 files today | no, until NET-368 lands: a salt release and a cutoff on two clocks | yes, and that is the risk |
+| 3. PoUB's verifier with ours | memory's two places (`session/verifier.py:634`, `wire.py:60, 63, 78, 91`) in the same pull request | as way 1 | as way 1; it crosses a lane, and memory said its verifier "moves with it" [relayed, 11:26Z] |
+
+My pick: way 1, opened today on your word, unmarked until NET-368 is. I have not opened it: the when is a ruling.
+
+### 2. Rulings 1 and 2, compiled in the v2 scratch
+
+[run: `verity lean try` of `Registration.lean` `r20261112-120038-1c8f`, `SiteV2Guards.lean` `r20261112-120038-e444`, `Account.lean` `r20261112-120038-89c9`, each exit 0; scratch on lean's merge at `c962872c9231`, on no branch; `/opt/cursor/artifacts/site-v2-with-period-scratch.diff`]
+
+- **The inventory is `Site.Registration.Complete D A S`**, a statement of a whole Site, no longer a check of an entry. Both checks hold it once, after the last entry: `Site.Registration.check` and `Core.Registration.check` return `inventory` at the log's length where every entry passes and the Site is not complete. Its docstring ends "a result at a head is over a Site complete against the auditor's figures at that head".
+- **A guard each way:** the example's log with a DRAM leaf the auditor has figures for left out is refused, `(3, inventory)`, 3 being the log's length; the same log with a fourth entry adding that leaf under the registered host passes; a card short of the auditor's count is refused at the end the same way; a leaf the auditor has no figures for is still refused at its own entry, `(3, figures)`.
+- **One consequence to know.** A log is now refused whole while it is incomplete, so the auditor's figures and the log must move together: figures for a new disk make every head before that disk's entry refused.
+- **`chip` is bits** on a host's location and in the auditor's figures for a host, as a sheet's. No row reads it yet.
+- [read: MEM-279, compute-research 12:00Z] gives the RTX PRO 6000 sheet's `chip` as "211,290,960 B". The sheet's figure is bits in the Python too (`verity/hardware/site/__init__.py:296`). If that number is bytes the sheet holds 1,690,327,680 [derived: × 8]. One question to them settles which.
+
+### 3. Pull request (2), written in scratch on #9270's head
+
+[run: `verity lean try` of `Registration.lean` `r20261112-121054-2b02` exit 0; of `Account.lean` `r20261112-121807-4568` exit 0; `/opt/cursor/artifacts/account-period-scratch.diff`, 2 files, +226 −63; on no branch]
+
+- **The registration's check returns the heads of the log's prefixes.** `Core.Registration.State.heads` and `View.heads`: the empty log's head, then the head after each entry; the last is `head`. The view's JSON is unchanged, so no reader of it moves.
+- **`rows` takes the registration's view, not a Site**, and a `Period` is `{ticks, since, origin}`: `since` is the entries the log held when the period began. The heads an answer may name are `v.heads.drop since`, so they are one log's, and the Site is that log's. Guards: an answer naming the head the period began at counts; one naming a head before the period, or a head the log never had, does not.
+- **Named spans are placed** by each series' origin, as in my 11:32Z entry; 11 guards carried over. No ρ.
+- **Your ruling 5.** `Core.Account.InPeriod` is a `Prop` by name: the time an answer is of lies in the period. `Row.premises` holds its name, and a row's JSON prints it under `premises`. A flow's row carries it when it reads a span that names no steps; every row of an amount at a moment carries it, a session's and the period's (your 11:42Z line names moments). A row of what nothing covers carries none.
+
+**Two choices to confirm.**
+1. `rows` reading the view (one more argument's worth for network's one call, `NetworkCheck/Account.lean:124`), against `rows` keeping the Site and taking a list of heads the caller cut from the view. The first is what makes "one log's" hold without a word from the caller.
+2. Where the premise's name lives: fixed in the module, as written, or a field of each amount so a protocol's account names its own. Fixed is one name for all three protocols and nothing for them to write.
+
+It opens once #9249 is on `main` (a stack is two deep at most), with a ready line.
+
+### Read on MEM-279 since 12:00Z that touches ours
+
+- [read: network 12:11Z] No ρ is stated for the certifier's host, a provider's virtual machine. v2's field is then `none`: no cover and no credit, which is what the scratch does. If ρ becomes a premise named for a host, as compute-research proposes, the field would need to say so; that is a ruling, not mine.
+- [read: compute-research 12:10Z] #9271 changes `Registration.node_entry` in `verity/hardware/site/__init__.py` and merges with #9249's head [relayed]. A node file with no interface gives no entry; v2's reading of the interfaces wants the same refusal. Noted for pull request (3).
+
+### A correction to my 11:44Z entry
+
+One sentence there was garbled. It should read: at 60 s, H = 20 gives 3 registered keys a year and H = 22 gives 1 [relayed, network's table of 11:35Z].
+
+### Runs
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-115358-61ee` | #9270's quick tier | running since 11:53Z |
+| `r20261112-115639-971a` | #9270's records run | running since 11:56Z |
+| `1c8f`, `e444`, `89c9` | rulings 1 and 2, v2 scratch | exit 0 each |
+| `r20261112-121054-2b02`, `r20261112-121054-7300` | pull request (2)'s scratch, before the premise covered moments | exit 0 each |
+| `r20261112-121457-06b2` | the same with moments | failed: an elaboration error of mine, fixed |
+| `r20261112-121807-4568` | the same, fixed | exit 0 |
+
+### Not established
+
+- Whether any reader takes the times of the client's side records (`LiveRecord` with no clock).
+- Whether PoUB's session record names its clock (memory's, unread by them and by me).
+- The raw clock's read cost and step on the auditor's host; who pins that host and when.
+- Whether way B moves a lock record.
+- ρ inside `rows`, `Loc.scheme` and the view's first head: still not compiled. They are next, after #9270's ready line.
