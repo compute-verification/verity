@@ -232,8 +232,9 @@ merge driver only on a file both sides changed, so a `.lean` file either side ad
 merges onto since the port's base) would stay unported, and a module importing it wouldn't build.  A codemod that fails leaves
 the PR out with why.
 
-Moves.  A PR whose body has a `Move: tools/move/NAME.toml` line (`PR.move`) is a move PR.  The verified queue builds it by its
-merge like any other PR and takes it only on a land verdict, never on the low-risk rule (`World.ready`).  A ready PR whose head
+Moves.  A PR whose body has a `Move: tools/move/NAME.toml` line (`PR.move`) is a move PR.  The verified queue regenerates its
+move on what its batch merged below it and takes it on its ready mark alone once that is certified, never on the low-risk
+rule (`World.ready`, `World._move`).  A ready PR whose head
 doesn't merge onto `main`, as after a move it lacks, goes into no candidate, and its owner is told the files it conflicts in,
 to rebase it onto `main` and to mark the new head, once a head (`Loop._conflicts`); `tools/move/restack.py` carries a branch
 across a move, and a land verdict carries to the restacked head when its own change, mapped across the move, is the same

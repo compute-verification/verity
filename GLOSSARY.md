@@ -420,7 +420,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
-    lands as any PR does, on a land verdict.
+    lands on its ready mark alone once the queue's rerun of its map on its batch's tip is certified (`tools/move/README.md`).
 - **Running jobs** (`tools/research`, `infra/`):
   - **Attempt**: the evidence store's record of one run, completed or failed, with its outputs; `research run` is the
     command that makes one.
