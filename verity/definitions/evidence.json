@@ -90,5 +90,6 @@
                         "fit": "art:22ddf58885c5ecc24a4ca565f4e44e745dd1fb121d0549994f0cf21dae4b261c"},
   "tp4_nccl_tree_replay": {"run_records": ["art:471f07d6e0d54babb6552460ee8c02ac5c94160ba6d03b639848aa44c48132d1",
                                            "art:810937f8e54906606040a9cc3c50a3f64d5bbfd2208b2690a66cff8ae23d175b",
-                                           "art:0100e5b51638084905fb91111c22e76b30993856de32d908d49c2f00db84e0c3"]}
+                                           "art:0100e5b51638084905fb91111c22e76b30993856de32d908d49c2f00db84e0c3"]},
+  "sampled_accept_ptx": {"run_record": "art:d1e9f5cb5c2d7e2a1bbed2a0950123f1f0922fdef7378549ffb7c15ec0e11cf9"}
 }

@@ -85,6 +85,7 @@ import numpy as np
 from verity.circuits.defs import SpecializedDefinition, bind, composite
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
+from verity.definitions.evidence import EVIDENCE
 from verity.definitions.ops.fp32 import F32Add, F32AddFtz, F32Fma, F32Mul
 from verity.definitions.ops.mufu import mufu_ex2_words, table
 from verity.definitions.ops.prims import const
@@ -109,8 +110,8 @@ PART = 4096
 RESAMPLE_N = 32
 NEG_INF = SA.NEG_INF_BITS
 _CONF = ("model-untested: read from the PTX and SASS Triton 3.7.1 compiles for sm_90a from vLLM d9105ea80's "
-         "`rejection_sample` kernels at 154,880 logits and five draft tokens; a capture of those kernels on a cc 9.0 GPU "
-         "would hold it")
+         f"`rejection_sample` kernels at 154,880 logits and five draft tokens ({EVIDENCE['sampled_accept_ptx']['run_record']}); "
+         "a capture of those kernels on a cc 9.0 GPU would hold it")
 
 
 def _refuse(b: dict) -> str | None:
