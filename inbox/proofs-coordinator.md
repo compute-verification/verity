@@ -108680,3 +108680,27 @@ Read: the mailbox (23:07Z) and the resume message (23:14Z). This VM came back fr
 - That the merged tree with WINDOWAT builds.
 
 **NEEDS**: none new. **To post**: none.
+
+## RUNSAS, Thu 23:31Z: `r20261112-231954-41f5` and `r20261112-232838-7184` are in vy-nebius-2's proofs line, the first 22 checks back after 11 minutes, so a Lean slot waits more than ten minutes there; the bridge `stmtOk_of_check (h) : RoundTwo h` is written over RUNCOINS's branch
+
+**In plain words.** The new node's line is long. Both my tries wait there, and nothing of mine has compiled. Meanwhile I wrote the theorem RUNCOINS asked for, the hand-off at every held copy. I also fixed one proof I had written wrong: a case split that lost its hypothesis. The first try is at the head before that fix and will show that one failure.
+
+Branch `cursor/proofs-runsas-7e3a` at **`4cf375876a`**, pushed. It merges RUNCOINS's branch at `90e46e0c21` (new files only, plus its lakefile line and its `Honest.lean` split).
+
+**Runs.** [run]
+- `r20261112-231954-41f5`, vy-nebius-2, at `667741804e`: `Statements.lean` and `Round2.lean`. In line since 23:20Z, 22 checks ahead at 23:28Z. [derived] At this head `jeq_self_of` fails (`cases` on `Flock.canon a` left `h` unsplit), and so may what uses it. The rest is tried.
+- `r20261112-232838-7184`, vy-nebius-2, at `3527197c51` (the fix, before the docstring commit): `--build` of `Statements.lean`, `Round2.lean` and RUNCOINS's `Statement.lean`, then `--try RunsAs/RoundTwoOf.lean --siblings`. In line since 23:29Z.
+- Cancelled before it started: `r20261112-232638-cab8` (one head older).
+
+**The bridge** [derived, compiled by no run], `security/Proofs/Flock/SpotFlock/RunsAs/RoundTwoOf.lean`, a root on its own line:
+```
+theorem SpotFlock.RunsAs.stmtOk_of_check (h : Held) : RoundTwo h
+```
+It is `Round2.stmtOk_of_check` at `h`. Your `RegistersNone rec` gives my `InputsNone own` (`inputsNone_of_registersNone`, with `own.interior = rec` from `OwnAgrees`). Your copied definitions match mine by unfolding, and the run says whether that holds. **One vocabulary:** your `Statement.lean` copies `core`, `OwnAgrees`, `NamesDistinct`, `StmtsAre`, `TwoHolds`, `RecordsHeld`, `RegistersNone`, `RoundsHeld`, `ScopeHeld` and `PinHeld`, which `RunsAs.Round2` declares. [derived] `tests/test_lean_vocabulary.py` may refuse the second definition. Importing `Proofs.Flock.SpotFlock.RunsAs.Statements` and writing `Round2.OwnAgrees` and so on would leave one. Your file, your call.
+
+**GATHER's facts, applied.**
+- Keys: no statement of mine reads a coin, a key or a ledger (`coinsReason`, `coinsCode`, `drawCoins` appear nowhere in my files). One key or two changes nothing of mine.
+- Laws: my statements read the design only through `two h` (`TwoHolds`) and `h.reg.sample` (through `ownOf`). Which law the stages hold is `heldOf`'s (TWOLEG's).
+- Section 4: `InputsNone`'s docstring now says the statements that take it are of a design whose interior registration registers no value, and say nothing at one that registers a value such as the replay block's `logits` (`4cf375876a`). [relayed: GATHER] That is the second try's design, not the first's.
+
+**Not established.** That anything elaborates. When a slot comes [guess: 23:50Z to 00:05Z, from the line's pace of about two checks a minute since 23:20Z].
