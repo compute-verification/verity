@@ -11,9 +11,10 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.types import Array
+from verity.commitments.crypto.turboshake import turboshake128 as native
 from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
 from verity.protocols.pouw.prover.circuit import words as W
-from verity.protocols.pouw.prover.circuit.hashes import Emit, keccak_lanes, sha512, sha_words, shake256
+from verity.protocols.pouw.prover.circuit.hashes import Emit, keccak_lanes, sha512, sha_words, shake256, turboshake128
 
 
 def _definition(name, n_in, n_out, body):
@@ -62,9 +63,6 @@ def test_turboshake128_matches_core(nlanes, nbytes, domain):
     """Core's TurboSHAKE128 (`verity.commitments.crypto.turboshake`): the domain byte and the final bit in one lane (20 lanes), a
     whole padding block (21), a second absorbed block, squeezing past one rate block, and Pearl-C's message (32 words of C̃
     and 32 of U, 64 lanes)."""
-    from verity.commitments.crypto.turboshake import turboshake128 as native
-
-    from verity.protocols.pouw.prover.circuit.hashes import turboshake128
     rng = random.Random(nlanes * 1000 + domain)
     data = bytes(rng.randrange(256) for _ in range(8 * nlanes))
     lanes = keccak_lanes(data)
