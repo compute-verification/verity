@@ -22,10 +22,6 @@ import json
 import os
 from collections import Counter
 
-from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import population as POP
-from verity_vllm.check.replay import sample as SM
-
 from .. import resolver
 
 NAME = "replay_partition"
@@ -84,6 +80,10 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
     correspondence the manifest is built with).  A record that predates the v2 rule (no `addresses.rule`: every reference record) was
     addressed by the retired v1 rule; its partition is recomputed under v2 here (decision `retire-v1` where that moves a count).  Returns a
     `sampled_replay`-shaped document (`lift` reads it)."""
+    # numpy and the core `verity` load with these three, which only a recomputation needs: the module itself loads neither
+    from verity_vllm.check.replay import index as IX
+    from verity_vllm.check.replay import population as POP
+    from verity_vllm.check.replay import sample as SM
     smp, sk = sr.get("sample") or {}, sr.get("strata_keys") or {}
     seed, per_stratum = int(smp["seed"]), int(smp.get("per_stratum") or 2)
     max_evaluate = int(smp.get("max_evaluate") or 2000)
