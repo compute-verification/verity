@@ -70,6 +70,12 @@ suite's own build outputs (`artifacts`, a Lean executable reads only what its ar
 as reading the repository paths it is given, a file with the files beside it and a directory whole, checked against the inputs
 like any read, and `lake build` of them in their package as reading nothing the key doesn't hold (`VERITY_SUITE_PROGRAMS`).
 
+A suite runs in its caller's environment and its log is published, so the guard keeps the environment's values out of a
+failure's text: `os.environ` prints as its names, and a failing comparison that holds the environment or a copy of it names
+the variables that differ and prints neither side. A copy still prints as a call's or a test's argument and in a message, and
+a Python a test starts prints as Python does. To see a value, run the test alone by plain pytest, which loads no guard, in
+an emptied environment (`env -i`).
+
 Per-test verdicts. In a suite that declares `parallel = true`, whose tests run in any order and in any process, each test that
 passed is also kept on its own, even when its suite failed: under its module's key (`module_key`), which is the suite's with the
 suite's test modules that the module's tests can't reach left out (`Modules.reach`: what the module and the conftests mention by
