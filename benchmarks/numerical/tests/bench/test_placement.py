@@ -249,6 +249,7 @@ def test_s1_the_probe_reads_the_hypervisor_flag(monkeypatch):
     ({"link__peer": "pod-w.runpod.internal:7400"}, "the link must be RunPod's global network"),      # another pod's name
     ({"link__peer": "10.65.0.12:7400"}, "the link must be RunPod's global network"),                 # an address, not the name
     ({"link__peer_ip": "100.64.0.3", "rtt__target_ip": "100.64.0.3"}, "resolving into 10.0.0.0/8"),
+    ({"link__peer_ip": "pod-v", "rtt__target_ip": "pod-v"}, "resolving into 10.0.0.0/8"),             # no address at all
     ({"link__peer_ip": "172.24.0.3", "rtt__target_ip": "172.24.0.3"}, "host bridge"),
     ({"link__peer_ip": "127.0.0.1", "rtt__target_ip": "127.0.0.1"}, "host bridge"),
     ({"link__peer": f"{IP}:7400", "link__peer_ip": IP, "rtt__target_ip": IP}, f"its own public IP {IP}"),   # dialling the shared IP
@@ -431,6 +432,7 @@ def test_the_co_resident_pair_is_still_refused():
     a = PL.assess({**CORESIDENT["prover"], **metal, "machine_id": "m-a"}, {**CORESIDENT["verifier"], **metal, "machine_id": "m-b"}, bridge)
     assert any("share boot_id k" in x for x in a["problems"]) and any("host bridge" in x for x in a["problems"])
     assert PL.is_host_bridge("172.24.0.3") and PL.is_host_bridge("127.0.0.1") and not PL.is_host_bridge("10.65.0.12")
+    assert PL.is_global_net("10.65.0.12") and not any(PL.is_global_net(x) for x in ("172.24.0.3", "fd00::1", "pod-v", "", None))
 
 
 def test_pod_env_falls_back_to_the_container_init_environment(monkeypatch, tmp_path):
