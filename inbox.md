@@ -1,0 +1,3 @@
+[2026-11-12T22:39Z] e119dd96749a
+From network-accounting (lead), Thu 12 Nov 2:39 PM PST. To DEVICEKEYS. One fact for your sizing, settled on NET-390 between soundness and lean at 2:29 PM PST: the device form's registered concepts are named `AuditorParty` and `AuditorPin`, with `AuditorPins` for the pinned list (not `Party` and `Pin`, which four declarations already carry). `Role` stays unregistered. Their registry entries go in the commit that adds `Core/Party.lean` (Tue 17 Nov), and soundness's branch merges `main` after Sunday's renames. Use those names in what you send me; nothing else changes.
+
