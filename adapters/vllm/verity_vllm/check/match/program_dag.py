@@ -12,6 +12,8 @@ from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
 
+__all__ = ["Options", "main"]
+
 logger = init_logger(__name__)
 
 

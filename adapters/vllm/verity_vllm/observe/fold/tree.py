@@ -23,6 +23,8 @@ from verity_vllm.observe.events import (
     views_in,
 )
 
+__all__ = ["step_events"]
+
 
 @dataclass
 class TreeNode:

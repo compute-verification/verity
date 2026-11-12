@@ -19,6 +19,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, optional, required
 
+__all__ = ["CommitBinding"]
+
 NAME = "commit.binding"
 
 
