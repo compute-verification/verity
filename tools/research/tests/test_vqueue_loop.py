@@ -377,6 +377,46 @@ def test_a_member_that_conflicts_with_one_merged_before_it_is_left_out_naming_it
     assert len(env.posts) == 1
 
 
+@pytest.mark.parametrize("merges", [True, False])
+def test_a_rebuild_on_a_candidate_the_same_tick_rebuilt_goes_on_what_that_rebuild_pushed(env, merges):
+    """A red drops its candidate and the one above it, and the tick builds each again (`vqueue.Build.replaces`): the upper
+    rebuild names the lower candidate as its base and goes on what the lower rebuild pushed, or, with none of the lower one's
+    members merging, on what that one went on.  Each build's line names the candidate it replaces, and a member that
+    doesn't merge onto what the upper one goes on (#5, on #1) is skipped there."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    env.put(3, {"c.txt": "3\n"})
+    env.o.gh.put(4, env.o.change({"m.txt": "4\n"}, base=main))
+    five = env.put(5, {"a.txt": "5\n"})
+    _main_to(env, {"m.txt": "main\n"})
+    main = env.main()
+    lower = (1,) if merges else (4,)
+
+    def policy(s: Snapshot) -> list:
+        on = {c.members: c.sha for c in s.candidates}
+        if not on:
+            return [Build((1, 2), s.main, 5)]
+        if (1, 2) not in on:
+            return []
+        if (3,) not in on:
+            return [Build((3,), on[1, 2], 4)]
+        return [Drop(on[1, 2], "failed"), Drop(on[3,], "its base failed"), Build(lower, s.main, 5, replaces=on[1, 2]),
+                Build((3, 5), on[1, 2], 4, replaces=on[3,])]
+
+    loop = env.loop(policy)
+    low, up = loop.tick()[-1], loop.tick()[-1]
+    logged = loop.tick()
+    again, top = [r for r in logged if r["action"] == "build"]
+    on = again["sha"] if merges else main
+    assert (again["base"], again["replaces"]) == (main, low["sha"]), again
+    assert (top["base"], top["members"], top["replaces"]) == (on, [3] if merges else [3, 5], up["sha"]), top
+    assert loop.world._changed(main, top["sha"]) == {"a.txt", "c.txt"}             # #1's a.txt, or #5's
+    skips = [(r["number"], r["base"], f"candidate on {on[:12]}:" in r["text"]) for r in logged
+             if r["action"] == "skip" and r["heads"] == [five]]
+    assert skips == ([(5, on, True)] if merges else [])
+
+
 def test_a_member_that_conflicts_with_a_candidate_below_names_its_member_and_one_that_conflicts_with_main_says_main(env):
     """Built on a candidate, a PR that merges onto `main` but not onto the candidate conflicts with the candidate's member,
     named; one that conflicts with `main` itself is told so, whatever was merged before it."""
@@ -3341,7 +3381,7 @@ def test_a_dry_run_starts_no_records_run_judges_none_and_says_what_it_would(env)
     records = Records(env.tmp / "clone")
     dry = env.loop(vqueue.decide, clone="dry", records=records, dry_run=True)
     assert dry.tick() == [] and records.started == [] and env.lines() == []
-    assert any("would build: Build(members=(1,), " in x and "records=True)" in x for x in env.out), env.out
+    assert any("would build: Build(members=(1,), " in x and "records=True" in x for x in env.out), env.out
     loop = env.loop(vqueue.decide, records=records)
     loop.world.slim_driver = lambda: "drive"
     loop.tick()
@@ -3778,29 +3818,38 @@ def test_under_gate_check_an_early_red_is_compared_with_nothing_and_its_drop_can
     assert not [r for r in env.lines() if r["action"] == "compare"]
 
 
-def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_it_once_its_base_has_said(env, monkeypatch):
-    """Four candidates stacked, one PR each: the third one's check fails a suite while those below it still run.  It waits
-    while its base's check runs, which may yet fail the same; in the tick that check passes, while the lowest's still runs,
-    it is decided: its member, meeting the failing test, is ejected, the one above it is dropped as a base failure, each
-    one's shards cancelled, and its PR is built again on its base."""
+@pytest.mark.parametrize("main_said", [True, False])
+def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_it_once_its_base_or_main_has_said(
+        env, monkeypatch, main_said):
+    """Four candidates stacked, one PR each: the third one's check fails a suite while those below it still run.  The
+    failing test meets only its own member's files, so `main`'s run stands for its base's (`vqueue.Failed.main_tests`): once
+    that passed, it is decided at once; while `main`'s runs too, it waits, and in the tick its base's check passes, while the
+    lowest's still runs, it is decided.  Its member, meeting the failing test, is ejected, the one above it is dropped as a
+    base failure, each one's shards cancelled, and that one's PR is built again on its base in the same tick."""
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
     env.put(2, {"b.txt": "1\n"})
     head = env.put(3, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
     env.put(4, {"c.txt": "1\n"})
-    loop, runs = _check(env, monkeypatch, batch=1, depth=4)
+    seen: list[Snapshot] = []
+    loop, runs = _check(env, monkeypatch, lambda s: seen.append(s) or vqueue.decide(s), batch=1, depth=4)
     loop.tick()
     two, three, four = (loop.tick()[0]["sha"] for _ in range(3))
-    runs.end(main)
+    if main_said:
+        runs.end(main)
     runs.fail(three, 1, rows=(_row(NEW),))
-    assert not {"eject", "drop"} & {*_acts(loop.tick())} and not env.withdrawn and not env.cancelled
-    runs.end(two)
+    if not main_said:
+        assert not {"eject", "drop"} & {*_acts(loop.tick())} and not env.withdrawn and not env.cancelled
+        runs.end(two)
     logged = loop.tick()
-    assert _acts(logged) == ["slim", "eject", "drop", "drop", "build", "slim"] and env.withdrawn == [(3, head)]
-    failed, above, rebuilt = logged[2:5]
+    failed = {c.sha: c for c in seen[-1].candidates}[three].verdict.failed
+    assert {f.main_tests for f in failed} == {frozenset() if main_said else None}       # not its base's word, once that said
+    assert _acts(logged)[-5:] == ["eject", "drop", "drop", "build", "slim"] and env.withdrawn == [(3, head)]
+    failed, above, rebuilt = logged[-4:-1]
     assert (failed["sha"], failed["outcome"]["state"], failed["beside_cancelled"]) == (three, FAIL, ["c-10", "c-11", "c-12"])
     assert (above["sha"], above["why"], above["beside_cancelled"]) == (four, "its base failed", ["c-13", "c-14", "c-15"])
-    assert (rebuilt["base"], rebuilt["members"]) == (two, [4]) and "early_red" in failed and "early_red" not in above
+    assert (rebuilt["base"], rebuilt["members"], rebuilt["replaces"]) == (two, [4], four)
+    assert "early_red" in failed and "early_red" not in above
 
 
 #: `PLAN`'s shards of a check that takes lean-audit from its base's: every step but lean-audit
