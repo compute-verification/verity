@@ -93,12 +93,6 @@ class Traced:
 
         return program_digest(Program(self.definition))
 
-    def weight_digest(self) -> str:
-        from verity.circuits.codec import program_digest
-        from verity.circuits.program import Program
-
-        return program_digest(Program(self.weight))
-
     def check_descriptor(self, descriptor: dict) -> None:
         """Refuse a descriptor that is not the verifier's own call Program."""
         from verity.circuits.codec import decode_program, program_digest
