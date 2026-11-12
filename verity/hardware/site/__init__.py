@@ -12,8 +12,9 @@ rate of each operand class) and its memory figures (bits from device memory to t
 bytes of device memory). The auditor's data sheets, public and looked up by SKU, are sheets too, whose figures are its
 estimate of the SKU's (`Auditor.estimate`); they come from the card files (`verity/hardware/cards/<sku>.toml`):
 `Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. A node's entry comes from its files too:
-`Registration.node_entry` reads a node file's table (`verity.hardware.nodes.load(kind)`) and its GPU card's, and
-registers each interface the file states as a boundary link that no certifier splits.
+`Registration.node_entry` reads a node file's table (`verity.hardware.nodes.load(kind)`), its GPU card's and the
+file's ways out (`verity.hardware.nodes.ways_out`), and registers each way out that has a rate, an interface or the
+storage path, as a boundary link that no certifier splits.
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -189,15 +190,18 @@ def _whole(entry: Any, what: str) -> int:
     return int(n)
 
 
-def _line_rate(entry: Any, what: str) -> Fraction:
-    """The bits a second a node file's entry states, read from its value's decimal text."""
+def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
+    """A way out of host `host`'s node as `verity.hardware.nodes.ways_out` gives it: its id under the host, what it
+    carries in whole bits a second, or `None` where its file states no rate, and whether a certifier may split it."""
     try:
-        n, unit = Fraction(str(entry["value"])), entry["unit"]
-    except (KeyError, TypeError, ValueError, ZeroDivisionError):
-        raise Malformed(f"{what}: {entry!r} is not an entry with a number as its value and a unit") from None
-    if unit != "bit/s" or n <= 0:
-        raise Malformed(f"{what}: {n} {unit}; state the interface's line rate, above 0, in bit/s")
-    return n
+        name, bw, split = way
+    except (TypeError, ValueError):
+        raise Malformed(f"a way out is its id, its bits a second and whether a certifier may split it, not {way!r}") from None
+    if (not isinstance(name, str) or not name.startswith(f"{host}/") or not isinstance(split, bool)
+            or isinstance(bw, bool) or not (bw is None or (isinstance(bw, int) and bw > 0))):
+        raise Malformed(f"a way out of {host}: {way!r}; its id is {host}/NAME, its rate a whole number of bits a "
+                        "second above 0, or None where its file states none, and its split a bool")
+    return name, bw, split
 
 
 def within_tolerance(tau: Fraction, e: Fraction, x: Fraction) -> bool:
@@ -453,25 +457,36 @@ class Registration:
         return Entry(self.head, tuple(sheets), tuple(locs), tuple(links))
 
     def node_entry(self, node: Mapping[str, Any], card: Mapping[str, Any], host: str, site: str = "site",
-                   tick: Fraction = TICK, certifier: tuple[str, str] | None = None) -> Entry:
-        """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`)
-        and the table of the GPU card it names (`verity.hardware.cards.load(sku)`) register as host `host` at site
-        `site`. It adds the sheet `Sheet.of_file` gives the card and the site's location, each only where the log has
-        none; the host; the node's `device.count` devices `host/gpuI`, each naming the sheet, with one `hbm` leaf
-        `host/gpuI/hbm` holding the sheet's device memory, whole; for each `memory.NAME` of the file a leaf
-        `host/NAME` under the host, at the tier and bytes it states, in the file's order; and for each
-        `interface.NAME` a link `host/NAME` from the host to the outside, at the bits the interface's `rate` moves in a
-        tick of `tick` seconds, rounded up, and latency 0. The file names no host, so the caller gives its id, and
-        every id under it starts with that.
+                   tick: Fraction = TICK, certifier: tuple[str, str] | None = None, *,
+                   ways: Iterable[tuple[str, int | None, bool]]) -> Entry:
+        """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`),
+        the table of the GPU card it names (`verity.hardware.cards.load(sku)`) and the file's ways out
+        (`ways`: `verity.hardware.nodes.ways_out(node, host)`, the one reader of their rates) register as host `host`
+        at site `site`. It adds the sheet `Sheet.of_file` gives the card and the site's location, each only where the
+        log has none; the host; the node's `device.count` devices `host/gpuI`, each naming the sheet, with one `hbm`
+        leaf `host/gpuI/hbm` holding the sheet's device memory, whole; for each `memory.NAME` of the file a leaf
+        `host/NAME` under the host, at the tier and bytes it states, in the file's order; and for each way out that
+        has a rate a link under the way's id from the host to the outside, at the bits that rate moves in a tick of
+        `tick` seconds, rounded up, and latency 0. The file names no host, so the caller gives its id, and every id
+        under it starts with that.
 
-        An interface's link is the node's own way out, a boundary link that no certifier splits: it says what is so
-        of a node whose interface none of the auditor's hardware sits on, and `onsite` refuses it by `uncertified`.
-        A file with no `interface` table gives no link, so its entry says nothing of how the node reaches the outside.
+        A way out is an interface of the file's (`host/NAME`) or its storage path (`host/storage`: what the disks
+        that are not the server's own carry off the node, at the rate that bounds the node's disks together). Its link
+        is a boundary link that no certifier splits: it says what is so of a node none of whose ways out the
+        auditor's hardware sits on, and `onsite` refuses it by `uncertified`. An interface with no rate registers no
+        link. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, then the storage
+        path's exactly where the file has a `storage` table.
+
+        **An entry always registers a link out.** A file that states no interface is refused: its entry would not say
+        how the node reaches the outside. So is a file none of whose ways out has a rate, whose entry would hold no
+        link out.
 
         `certifier` is the id and the key of a network certifier of the auditor's that stands in front of the node
         without splitting its interface (a process on another machine, say). It adds the certifier under the site and
         the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`),
-        each at the interfaces' rates summed, beside the interfaces' own links, which stay. A certifier splits one
+        each at the interfaces' rates summed, beside the ways' own links, which stay. The storage path's rate is not
+        in that sum and no certifier is linked to the path: a certifier's links say nothing of it. A certifier on a
+        node none of whose interfaces has a rate is refused, since its links would have none. A certifier splits one
         host's way out, so each node names its own, and the key is the one the auditor holds for the id or `owner`
         refuses the entry. None of the auditor's other devices is added.
 
@@ -482,21 +497,40 @@ class Registration:
             sku, count = node["device"]["sku"], _whole(node["device"]["count"], "a node's device.count")
             leaves = [(name, leaf["tier"], _whole(leaf["bytes"], f"a node's memory.{name}.bytes"))
                       for name, leaf in node.get("memory", {}).items()]
-            rates = [(name, _line_rate(port["rate"], f"a node's interface.{name}.rate"))
-                     for name, port in node.get("interface", {}).items()]
+            stated = [(f"{host}/{name}", True) for name in node.get("interface", {})]
+            stated += [(f"{host}/storage", False)] if "storage" in node else []
         except (AttributeError, KeyError, TypeError) as e:
             raise Malformed(f"a node file's table: {e!r}; it has device.sku, device.count, for each memory.NAME a "
-                            "tier and bytes, and for each interface.NAME a rate") from None
-        if certifier is not None and not rates:
-            raise Malformed("the node file states no interface, so a certifier's links have no rate; read the node's "
-                            "interfaces on a node of its kind (`ip route; ip -6 route; ethtool IF` under `research "
-                            "run --on NODE`) and state each one the routes name as an interface.NAME table")
+                            "tier and bytes, and for each interface.NAME a table") from None
+        try:
+            out = [_way(way, host) for way in ways]
+        except TypeError:
+            raise Malformed(f"`ways` is {ways!r}; give the node file's ways out, "
+                            "`verity.hardware.nodes.ways_out(node, host)`") from None
+        if [(name, split) for name, _, split in out] != stated:
+            raise Malformed(f"the ways out given are {[(name, split) for name, _, split in out]}, and the node file "
+                            f"states {stated} under host {host!r} (each interface, then its storage path, with "
+                            "whether a certifier may split it); give `verity.hardware.nodes.ways_out(node, host)`")
         unread = [tier for tier in ("dram", "disk") if all(t != tier for _, t, _ in leaves)]
         if unread:
             raise Malformed(f"the node file states no {' and no '.join(unread)} leaf of its host's, so its entry would "
                             "understate the node's memory; read them on a node of its kind (`lsmem -b --summary=only; "
                             "lsblk -b -d -n -o NAME,SIZE,TYPE` under `research run --on NODE`) and state each as a "
                             "memory.NAME table: the memory the host is given, and every block device")
+        if not any(split for _, _, split in out):
+            raise Malformed("the node file states no interface, so its entry would not say how the node reaches the "
+                            "outside; read the node's interfaces on a node of its kind (`ip route; ip -6 route; "
+                            "ethtool IF` under `research run --on NODE`) and state each one the routes name as an "
+                            "interface.NAME table: its rate, or where it reads none its driver and what was read")
+        if all(bw is None for _, bw, _ in out):
+            raise Malformed(f"no way out the node file states has a rate ({[name for name, _, _ in out]}), so its "
+                            "entry would hold no link out and nothing would bound what leaves the node; state the "
+                            "line rate of an interface that reads one, or the storage path its disks ride")
+        rates = [bw for _, bw, split in out if split and bw is not None]
+        if certifier is not None and not rates:
+            raise Malformed(f"no interface the node file states has a rate ({[name for name, _, split in out if split]})"
+                            ", so a network certifier's links would have none: an interface that reads no line rate "
+                            "registers no link and takes no certifier. Register the node without one")
         sheet = Sheet.of_file(card, tick)
         if sheet.sku != sku:
             raise Malformed(f"the node's devices are {sku!r}, and the card given is {sheet.sku!r}'s")
@@ -507,13 +541,13 @@ class Registration:
             locs += [Loc(gpu, "device", host, sheet=digest),
                      Loc(f"{gpu}/hbm", "memory", gpu, tier="hbm", bytes=sheet.mem)]
         locs += [Loc(f"{host}/{name}", "memory", host, tier=tier, bytes=n) for name, tier, n in leaves]
-        links = [Link(f"{host}/{name}", (host, OUTSIDE), math.ceil(rate * tick), 0) for name, rate in rates]
+        links = [Link(name, (host, OUTSIDE), math.ceil(bw * tick), 0) for name, bw, _ in out if bw is not None]
         if certifier is not None:
             try:
                 device, key = certifier
             except (TypeError, ValueError):
                 raise Malformed(f"`certifier` is a network certifier's id and its key, not {certifier!r}") from None
-            beta = math.ceil(sum(rate for _, rate in rates) * tick)
+            beta = math.ceil(sum(rates) * tick)
             locs.append(Loc(device, "certifier", site, "auditor", key=key))
             links += [Link(f"{host}/{device}", (host, device), beta, 0),
                       Link(f"{device}/{OUTSIDE}", (device, OUTSIDE), beta, 0)]
