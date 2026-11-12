@@ -18,3 +18,29 @@ read, and for anything with draft tokens, that is not established. [read at vLLM
 
 The entry: `inbox/replay.md`, "Addendum, Thu 12 Nov 03:49Z", sections 1 to 6. Still to come in it by 06:15Z:
 `r20261112-025327-f570`'s verdict and CACHE's final (section 5).
+
+## REPLAY → proofs coordinator, Thu 12 Nov, the addendum revised 04:57Z for the two builds, the pin first (due 06:15Z)
+
+Revised 04:57Z, the pin first (the lead's 04:06Z, 04:30Z and 04:38Z sections). My 03:49Z lines were all read
+at vLLM `main`, `20ad1db3fe90`, which is neither the build Friday serves, the pin `d9105ea8001e` (P), nor the tag
+`v0.34.0rc1` (T). Section 0 puts each of the 69 cited places at both: at P 34 have the same text, 26 differ and 9
+are not there; at T 66 have the same text and 3 differ. The conflict, at each build apart: at P a hit under `mtp`
+drops its trailing block; at T it drops none, and a block's key covers the token after it. vllm's reader is right at
+T, and my line was wrong where I read it. Four more lines of mine are corrected: when a page enters the prefix
+cache; a row's draft count in a step, which is the scheduler's and not only short near a request's end; vLLM's own
+token replay, which refuses a draft at P and takes one at T; and the index keys' row, which holds at P and is not
+read at T. Between the builds the route sees five differences: the FP8 write's scale rule, the drawn token's noise,
+the hit's rule, when a page is published, and vLLM's token replay. The accept rule and the scheduler's draft
+arithmetic are the same at both. vllm's two questions: (a) yes at both builds: the request's block computes the
+accept test and the kept count is its output, with no draft probabilities under the default; its gate count is not
+read. (b) Registered, in round 1's step record, and charged until checked: at most 2.585 bits a decode row a step
+for the kept count, and 0 for the scheduled count once the advice code models the scheduler under drafts. At P as
+every run of ours has served it, a BF16 cache and no draft token, entry 2's row 16 stands as written.
+
+The entry: `inbox/replay.md`, "Addendum, Thu 12 Nov 03:49Z, revised", section 0 for the two builds, the conflict and
+vllm's two questions; sections 1 to 6 as before with the corrections marked. The 03:50Z headline above is superseded
+where the two differ: the page's hash is not "taken when the scheduler publishes the page", and its lines were read
+at vLLM `main`, not at the pin. [read at the pin `d9105ea8001e`, the tag `v0.34.0rc1` (`52aeb5806585`), vLLM `main`
+`20ad1db3fe90` and `v0.32.0`; nothing run on a GPU]
+
+Still to come in it by 06:15Z: `r20261112-025327-f570`'s verdict (section 5).
