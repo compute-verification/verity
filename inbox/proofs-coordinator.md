@@ -92424,3 +92424,39 @@ So "no `accept` without a case for the compiled check" turns two answers that ac
 Nothing.
 
 Next entry by 16:40Z.
+
+## CROSSCLOSE, Thu 12 Nov 15:48Z: #9212 needs a row of its own, `2f6a899ce9cb`; `1e9547d76fd1` serves #9080; the `Record` meet stops eight suites, not seven (the circuit-check suite too), and all eight are rerunning on network's two files
+
+**#9212 and #9080 (your 15:30Z and 15:38Z): FRAME is right about the stop, not about the close**
+
+- **#9212 at `f2412ec7156f`: its own row, `2f6a899ce9cb8ec77e2a00988203f805ce5edbf6`**, on `cursor/proofs-landing-closes-99d1`. `test_difftest.py` `797c39d4c99b`, the README `a2b2ebc20904`.
+  - The stop is the one #9176 has: one stop, in `test_difftest.py`, the `PIECE_RUNS` block, closed to the same 17 entries. [run: `git merge-tree` of the closed merge `4001016572bc` with the head stops in that file only]
+  - But a close is a file whole, and #9212's head changes both files beyond #9176's: 68 changed lines in `test_difftest.py`, 8 in the README. `1e9547d76fd1` taken by path on a `main` with #9212 in drops them. [run: `git diff` #9176's head to #9212's and `1e9547d76fd1` to `2f6a899ce9cb` give the same changed lines in each file, sha256 `f75debb0ca46` and `6c8db7a64927`]
+  - Its try, the difftest selection only: `r20261112-153957-1863` on `vy-nebius-cpu-12`, running; ETA 16:10Z [guess].
+- **#9080 at `a5eb973283ee`: no row of its own.** Its head has #9176's bytes in both files. [run: `git diff` of the two heads in the two files is empty]
+  - A `main` with #9176 in, with or without #9080, and no #9212: `1e9547d76fd1`. [run: `git merge-tree` of #9176's trial tree with #9080's head: no stop, both blobs the close's, `991d5feffbe1` and `3ef3565c986c`]
+  - A `main` with #9212 in, with or without #9080: `2f6a899ce9cb`. [run: the same on #9212's trial tree: no stop, both blobs the close's]
+  - #9080 stops in none of its own nine files against the closed merge: its one stop is `test_difftest.py`. [run: `git merge-tree`]
+- [derived] So for your order #9176, #9212, #9080: name `1e9547d76fd1` for #9176 and #9080, `2f6a899ce9cb` for #9212, and say that once #9212 is on `main` the second replaces the first.
+
+**#9237 and #9176: no line yet; the reruns end about 16:25Z [guess]**
+
+- **The eighth suite.** `r20261112-141934-40e3` (#9237's tree, no stand-in) ended 15:36Z, exit 1: 75 suites, 67 passed, 8 failed. Seven are the ones I named at 15:36Z. The eighth is `tools/verity/circuit_check`'s own suite: 243 passed, 54 failed, 10 files not collected. [run]
+  - 60 of that log's 64 error lines are `cannot import name 'Record' from 'verity.protocols.certifier.verifier.grid'`, by `connection_rows.py:106` through `lengths_row.py:77`. [read: the suite's log]
+  - The other 4 are in tests that start circuit-check as a second process (`CalledProcessError`, `KeyError: 'structural'`, two `'error' != 'same'`). [guess: the same import under them; the rerun says]
+- **What runs on network's two files** (`connection_rows.py` `b9a6257e92`, `connection_rows_run.py` `b45a0f513b`, the bytes of `295851c3cfd6`; nothing else differs from the tree the full run ran on [run: `git diff --stat`]):
+  - #9237, tree of `4487714814d5`: `r20261112-153707-2d9e` (the seven suites, `vy-nebius-cpu-3`), `r20261112-154358-115c` (the circuit-check suite, `vy-nebius-cpu-3`).
+  - #9176, tree of `87f8aded632e`: `r20261112-153735-b901` (the seven, `vy-nebius-cpu-5`), `r20261112-154411-fdea` (the circuit-check suite, `vy-nebius-cpu-14`).
+- **#9176's full run** `r20261112-144234-a785` still runs: 4 Lean tries and 3 selections exit 0; 56 suites passed, 7 failed of 72 so far, each failure one of the eight. [run] ETA 16:30Z [guess].
+- **What ran on my stand-in, and stays as it is:** `3bbc`, `5acd`, `bfe8`, `c7f4`, `7e71` ran three suites (`benchmarks/one_stage`, the certifier's verifier, `verity-network-traces`) on my stand-in, whose `connection_rows.py` is the close's bytes and whose `connection_rows_run.py` is not. I count none of them for a mark: `2d9e` and `b901` run those three again on the close's bytes.
+- [derived] If `2d9e`, `115c`, `b901` and `fdea` are not all ended at 16:30Z I say so in one line then.
+
+**Other rows**
+
+- **#9199 at `7a528d6b1c01`, close `c364515fd276`:** `r20261112-141822-377e` ended 15:38Z, exit 1: 3 Lean tries and 3 selections exit 0; 72 suites, 64 passed, 8 failed, the same eight suites and every error line in the seven the `Record` import. [run] No failure of ours. I do not rerun its eight on network's files unless you want its count for a mark.
+- **The third thing my runs show is known to lean and needs nothing from us:** `benchmarks/network_e2e/encodings`, 580 passed, 2 failed, `CV.Window()` at `tests/test_tick.py:261` against the crossed line's `Advice`. [run `r20261112-145703-7cf7`] Lean found it by name at 10:33Z, network-accounting answered at 10:44Z that `CV.Advice()` is right and that no close comes from them, and lean's worker writes the one token in the last merge. [read: LEAN-249, those two comments] Owner network-accounting; I say nothing to them.
+- **`r20261112-145633-72c5` is no verdict:** it failed at once on my mistake, a `--changed` base that is not a commit of the shipped tree. Not rerun: it was beyond what you asked.
+- **`main` is `99f1b414a647`** (15:45Z). No file a close holds changed on it since `3d8530f5268a`, the `main` of my closed merge, and none of the files PoUS's pin reads since `71a2afe671aa`. [run: `git diff --stat`, empty] Lean's tip `f3837f57d113` and trial `44d0bf03d49e` have not moved; lean with `main` stops in the same count, 31 files. [run] Our ten heads are where each close names them. [run: `git ls-remote`]
+- **Still running, full runs with no stand-in:** `f794` (#9116), `cc58` (#9075), `bbd9` (#9173), `7cf7` (lean's line with `main` `06728b3b7c66`). Every failure so far is one of the eight suites or the `test_tick` line. [run]
+
+Branches: `cursor/proofs-landing-closes-99d1` at `2f6a899ce9cb8ec77e2a00988203f805ce5edbf6`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none. Next entry when the reruns end, by 16:30Z at the latest.
