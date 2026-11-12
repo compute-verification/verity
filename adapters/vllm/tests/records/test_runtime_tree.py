@@ -19,6 +19,7 @@ from verity_vllm.records.runtime_tree import (
 )
 
 FIELDS = ("schema", "source", "runner", "modules", "buffers")
+EMPTY: tuple[object, ...] = (None, 0, "", False, [], {})
 
 
 def a_tree() -> RuntimeTree:
@@ -49,7 +50,7 @@ def test_a_field_the_document_leaves_out_or_holds_as_null_or_empty_reads_as_empt
     want = {**whole, field: RuntimeTree().to_json()[field]}
     path.write_text(json.dumps({k: v for k, v in whole.items() if k != field}))
     assert RuntimeTree.load(path).to_json() == want
-    for value in (None, 0, "", False, [], {}):
+    for value in EMPTY:
         assert RuntimeTree.from_json({**whole, field: value}).to_json() == want
 
 
@@ -57,7 +58,7 @@ def test_a_document_that_names_no_schema_is_read_and_one_that_names_another_is_r
     doc = a_tree().to_json()
     for unnamed in ({k: v for k, v in doc.items() if k != "schema"}, {**doc, "schema": None}):
         assert RuntimeTree.from_json(unnamed).to_json() == doc
-    for other in ("verity-vllm/runtime-tree/v0", "", 0, False, [], {}):
+    for other in ("verity-vllm/runtime-tree/v0", *EMPTY[1:]):
         with pytest.raises(ValueError) as e:
             RuntimeTree.from_json({**doc, "schema": other})
         assert type(e.value) is ValueError and str(e.value) == f"runtime tree schema {other!r} != verity-vllm/runtime-tree/v1"
