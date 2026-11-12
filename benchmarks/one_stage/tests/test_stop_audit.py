@@ -1,7 +1,8 @@
 """`stop_audit.py`'s verifier's half on a stop class's hand-off, sampled on a test's own challenger
 (`fake_challenger`): the stop stream built again from ``stage1.json`` alone, the verifier's own ``--registered`` file,
 the audit record's entries and what each refuses, and Lean's verdicts on the read across the class's two streams
-(`Record.across`) held to the Python's on each of its cases. No proof runs here: a session's verdicts are stand-ins of
+(`Record.across`) held to the Python's on each of its cases, and on a list of reads (`Record.acrossAll`) on a chain
+of three records. No proof runs here: a session's verdicts are stand-ins of
 the form `a0.lean_verify` reports, and ``stop_audit_small.sh`` is the run that proves. The class is the two-stage
 driver's tests' (`test_two_stage_driver._stop_class`)."""
 
@@ -256,6 +257,93 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
         assert (lean["earlier"], lean["later"]) == (previous, SA.R.digest(mine["stop"]["record"])), name
         assert why is None or why in lean["order"]["why"], (name, lean)
         assert (order is None) == (why is None), (name, order)
+
+
+def _python(read: dict, outcome: dict | None) -> tuple[bool, str | None, bool | None]:
+    """The Python's three verdicts on one read across streams (`stop_audit.link`'s shape), ``outcome`` the earlier
+    stream's outcome record: whether the earlier stream's log holds the later record's ``previous``,
+    `two_stage.stop_order`'s reason in `Record.across`'s names, and `boundary_entry`'s verdict."""
+    previous = read["later"]["previous"]
+    order = T.TS.stop_order(read["coins"], read["window"], previous, SA.R.digest(read["later"]), bytes.fromhex(read["read"]),
+                            T.AC.lms_verify)
+    return previous in [SA.R.digest(rec) for rec in read["log"]], _generic(order), SA.boundary_entry(previous, outcome)["accepted"]
+
+
+def _reaches(boundary: str, pairs: list[tuple[str, str]]) -> list[bool]:
+    """Whether each read's earlier record is ``boundary`` or the later record of a read that reaches it."""
+    got = {boundary}
+    for _ in pairs:
+        got |= {later for earlier, later in pairs if earlier in got}
+    return [earlier in got for earlier, _ in pairs]
+
+
+def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, monkeypatch):
+    """`Record.acrossAll` (the Lean verifier's piece ``across_all``, as `stop_audit.across_all` calls it) against the
+    Python on a chain of three records: the class's boundary record, its stop record, and a third registration chained
+    after the stop record, the three received in that order by one session of the test's challenger. The first read is
+    the stop record's on the boundary stream, with that stream's accepting audit record; the second is the third
+    record's on the stop stream, whose log holds the stop record and whose audit record is the one `decide` wrote.
+    Each read's verdicts are `Record.across`'s on it alone and the Python's (`_python`), ``reaches`` is `_reaches`'s,
+    and the list's case is 2 when a read does not reach the boundary record or its log or order fails, else 3 when an
+    audit record is missing, else 1. Case 1: the chain in either order, and its first read alone. Case 2: the second
+    read alone, another boundary record, a read with no coin evidence, a read on an empty log, and the third record's
+    coins released before the stop record's. Case 3: the first read's audit record missing. Refused: an empty list, a
+    boundary that is not hex, and a read whose later registration names no previous record, by its index."""
+    stage1 = _stage1(tmp_path, monkeypatch, "across-all")
+    r, s = _resume(stage1), stage1["stop"]
+    boundary, stop = stage1["registration"], s["registration"]
+    refused = SMALL.unaccepted(stage1)
+    accepted = {**refused, "symbol": S.ACCEPT, "audit": {**refused["audit"], "accepted": True}}
+    file = SA.reads(r)
+    assert SA.decide(r, stage1, file, _proved(r, file), accepted)["accepted"] is True
+    stopped = r.stream.records[-1]
+    assert stopped["registration"] == stop == stopped["audit"]["registration_digest"] and stopped["symbol"] == S.ACCEPT
+    third = {**s["record"], "previous": stop}
+    tie = SA.R.digest(third)
+    window = stage1.get("window_root") or r.layout.run
+
+    def chain(seed: str, *commits: tuple[str, int]) -> tuple[dict, dict]:
+        one, got = _released(seed, *commits)
+        return ({"window": window, "log": [dict(x) for x in r.first.stream.log], "audit": accepted["audit"],
+                 "later": dict(s["record"]), "coins": one.evidence(stop), "read": got[stop].hex()},
+                {"window": window, "log": [dict(x) for x in r.stream.log], "audit": stopped["audit"], "later": third,
+                 "coins": one.evidence(tie), "read": got[tie].hex()})
+    first, second = chain("chain", (boundary, 1), (stop, 2), (tie, 2))
+    assert [SA.R.digest(x) for x in second["log"]] == [boundary, stop]
+    _, late = chain("third-first", (boundary, 1), (tie, 1), (stop, 2))
+    a, b = (first, accepted), (second, stopped)
+    cases = {
+        "the chain": (1, boundary, [a, b]),
+        "the chain, its second read first": (1, boundary, [b, a]),
+        "the first read alone": (1, boundary, [a]),
+        "the second read alone": (2, boundary, [b]),
+        "another boundary record": (2, "5a" * 64, [a, b]),
+        "a read with no coin evidence": (2, boundary, [a, ({**second, "coins": None}, stopped)]),
+        "a read on an empty log": (2, boundary, [({**first, "log": []}, accepted), b]),
+        "the third record's coins first": (2, boundary, [a, (late, stopped)]),
+        "no audit record of the boundary stream": (3, boundary, [({**first, "audit": None}, None), b]),
+    }
+    for name, (case, anchor, reads) in cases.items():
+        lean = SA.across_all(anchor, [x for x, _ in reads])
+        assert "refused" not in lean and lean["boundary"] == anchor and len(lean["links"]) == len(reads), (name, lean)
+        mine = [_python(x, outcome) for x, outcome in reads]
+        reaches = _reaches(anchor, [(x["later"]["previous"], SA.R.digest(x["later"])) for x, _ in reads])
+        for (x, _), got, (logged, order, audit), reach in zip(reads, lean["links"], mine, reaches):
+            assert got["logged"]["accepted"] is logged and got["audit"]["accepted"] is audit, (name, got)
+            assert got["order"] == ({"accepted": True} if order is None else {"accepted": False, "why": order}), (name, got)
+            assert got["reaches"] is reach and (got["earlier"], got["later"]) == (x["later"]["previous"], SA.R.digest(x["later"])), (name, got)
+            if name == "the chain":
+                assert {k: v for k, v in got.items() if k != "reaches"} == SA.V.lean("across", x), (name, got)
+        want = (2 if any(not reach or not logged or order is not None for (logged, order, _), reach in zip(mine, reaches))
+                else 1 if all(audit is True for _, _, audit in mine) else 3)
+        assert lean["case"] == case == want, (name, lean)
+    assert [x["received"] for x in SA.across_all(boundary, [first, second])["links"]] == [0, 1]
+
+    assert "no read" in SA.across_all(boundary, [])["refused"]
+    assert "boundary" in SA.across_all("not hex", [first])["refused"]
+    unnamed = {**second, "later": {k: v for k, v in third.items() if k != "previous"}}
+    assert "link 1: the later registration names no previous record" in SA.across_all(boundary, [first, unnamed])["refused"]
+    assert "link 0: exactly" in SA.across_all(boundary, [{**first, "more": 1}])["refused"]
 
 
 def test_the_boundary_audit_entry_reads_the_boundary_streams_outcome_record():
