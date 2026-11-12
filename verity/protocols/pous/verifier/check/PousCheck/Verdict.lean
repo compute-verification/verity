@@ -3,7 +3,7 @@ module
 /-!
 # The PoUS verdict unit as code
 
-`PousVerdict_v1{K, M, LIMIT}` (`verity/ml/protocols/pous/verdict_circuit.py`), the proof block whose one output is a
+`PousVerdict_v1{K, M, LIMIT}` (`verity/protocols/pous/prover/verdict_circuit.py`), the proof block whose one output is a
 memory challenger's session verdict, in executable Lean:
 
 * `prog K M LIMIT`: its gates in layout order and its output wire, builder for builder `verdict_circuit.gates`, on arrays;
