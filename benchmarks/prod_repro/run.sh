@@ -10,7 +10,6 @@
 #   verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [--again ARM|none] [--ours ARM]
 #     [--target 1]
 #   verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
-#   ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...   # the advice line, of a certified serve's trace
 # The serve, the load and the replay are the serving cost benchmark's (benchmarks/serve_tax/run.sh, whose header says
 # what a node needs and what its other variables do: they pass through, among them C4, PLAN_FILE, PRIVATE, VENV,
 # CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the arms at vLLM's published
@@ -36,8 +35,8 @@
 # is replayed on it, and keeps files on the node: PRIVATE names a directory for them outside every run's (the corpus
 # client needs it for such an arm), from which the report reads the top-k's counters and keeps them in
 # OUT/topk_counters.json.
-# The advice line reads the trace directory of a certified serve (ADVICE_TRACE, under the stop ids ADVICE_STOPS, else
-# the served checkpoint's own): no arm of this job is one.
+# The advice line is of the pass the replay re-runs: what its schedule costs as advice, by the scheduler replay's
+# loader (benchmarks/network_e2e/encodings/replay.py).
 # The --replay-of form serves nothing: it copies ours's directory from an earlier job's out/ into this job's and
 # re-runs the replay of the named pass from it, under a lease the benchmark's runner takes for the replay alone; its
 # report is of ours alone, with no cost.
@@ -86,7 +85,6 @@ report() {
   local more=()
   [ "${2:-}" != job ] || [ -z "${PRIVATE:-}" ] || more+=(--private "$PRIVATE")
   [ -z "$REPLAYED" ] || [ "$REPLAYED" = none ] || more+=(--replayed "$REPLAYED" --expect-replay)
-  [ -z "${ADVICE_TRACE:-}" ] || more+=(--advice-trace "$ADVICE_TRACE" ${ADVICE_STOPS:+--advice-stops "$ADVICE_STOPS"})
   "$PY" "$here/prod_repro.py" report "$1" --stock "$STOCK" --again "$AGAIN" --ours "$OURS" --load "${LOAD%%=*}" \
     --replay "$1/replay-${REPLAY_MODES%% *}" --target "${TARGET:-1}" ${more[@]+"${more[@]}"}
 }

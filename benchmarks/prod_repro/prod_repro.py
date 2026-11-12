@@ -3,7 +3,7 @@
     prod_repro.py arms [--model ID] [--out OUT]
     prod_repro.py limit --model ID
     prod_repro.py report OUT [--stock ARM] [--ours ARM] [--again ARM] --load NAME [--replayed PASS] [--rep 1]
-                         [--replay DIR] [--expect-replay] [--private DIR] [--advice-trace DIR [--advice-stops ID,...]]
+                         [--replay DIR] [--expect-replay] [--private DIR]
                          [--target PERCENT] [--json]
 
 ``report`` reads a finished job's out/ as the serving cost benchmark leaves it (`benchmarks/serve_tax`: a directory an
@@ -36,9 +36,10 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   On another load it is the cost over the passes taken as independent, by vLLM's client the benchmark's paired
   ratio at the rung where stock is saturated (`serve_tax.serving_cost`), by the corpus client its tax over reps
   (`serve_tax.tax`), which is a cost only where stock did not keep up with the arrivals; that has no verdict;
-- ``advice``: the bits a request by class, with each class's events, of the certified serve whose trace directory
-  ``--advice-trace`` names, by the tree's reader of it (`BY_CLASS`: its ``report``), under the registered stop ids
-  (``--advice-stops``, EOS first; else the ``eos_token_id`` of the generation_config.json beside the trace's model).
+- ``advice``: what the schedule of the pass the replay re-ran costs as advice, in bits a request, by the scheduler
+  replay's loader (`ENCODINGS`: its ``draft_table`` of that pass's records): the arrivals, which a serve under the
+  certified tick does not send, and the count of drafts each row kept, charged at its measured entropy, with the
+  figure where the audited block derives the count beside it; and how the pass's sampled requests were seeded.
 
 A line is measured from the job's files, or it says ``not measured`` and why; a line whose files can't be read says
 so and the rest of the report stands. Nothing here measures: the metrics, the cost and its interval, the comparison
@@ -84,11 +85,11 @@ CONTEXT_KEYS = ("max_position_embeddings", "n_positions", "max_seq_len", "seq_le
                 "max_seq_length", "seq_len")
 #: how the replayed window was chosen: no audit draws it yet
 WINDOW = "every request of the load's rep, a window the command names: no audit's coins drew it"
-#: the reader of a certified serve's advice by class, where the tree has it: its ``report(label, DIR, stop_ids)``
-#: gives a trace's bits by class with each class's events (its ``OF``), or its refusal
-BY_CLASS = ROOT / "benchmarks/network_e2e/encodings/by_class.py"
-NO_ADVICE = ("no trace directory of a certified serve was given (ADVICE_TRACE=DIR): the advice code codes a serve under "
-             "the network certifier's record and the certified tick, and this job's own arms run under neither")
+#: the scheduler replay's loader, which reads a served pass's schedule as advice: a step trace's records for one
+#: pass (``span``), as a trace (``load_step_trace``), and the bits its two classes of advice cost (``draft_table``)
+ENCODINGS = ROOT / "benchmarks/network_e2e/encodings/replay.py"
+#: what the kept count costs where it is not sent, and what that rests on
+DERIVED = "the kept count is 0 where the audited block derives it, and no Definition holds the accept test yet"
 NO_CIRCUIT = "no: nothing in this job compiles the settings' circuit"
 ON, OFF, UNCONFIRMED = "on", "off", "not confirmed"
 #: why a cost is not shown under its target where stock and ours did not serve at the same settings: the figure is
@@ -472,7 +473,7 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
                                                if meta.get("client") == S.BENCH else f" (no replay.json in {replay_dir})"))
     rec, run = json.loads((replay_dir / "replay.json").read_text()), meta.get("run_id")
     of = (Path(rec["arm_dir"]).name, rec["load"], rec["rep"], rec.get("served_run_id"))
-    arm_dir = next((d for d in dirs if d.name == of[0]), None)
+    arm_dir = replayed_dir(dirs, replay_dir)
     if arm_dir is None or of[1:] != (load, rep, run):
         return not_measured(f"the replay in {replay_dir} is of another window (arm {of[0]}, load {of[1]}, rep {of[2]}, "
                             f"run {of[3]}), not of {ours}'s {load} rep {rep} of run {run}")
@@ -629,75 +630,91 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
 
 # --------------------------------------------------------------------------------------------------------- the advice
 
-def stop_ids(checkpoint: str | None, given: str | None) -> tuple[list[int] | None, str]:
-    """The registered stop ids the advice is read under, EOS first, and what says so: ``given`` (ID,...), else the
-    ``eos_token_id`` of the generation_config.json of the checkpoint this job served."""
-    if given:
-        return [int(x) for x in given.split(",")], "ADVICE_STOPS"
-    f = Path(checkpoint) / "generation_config.json" if checkpoint else None
-    if f is None or not f.is_file():
-        return None, "this machine has no generation_config.json of the checkpoint the job served"
-    eos = json.loads(f.read_text()).get("eos_token_id")
-    ids = [eos] if isinstance(eos, int) else list(eos or [])
-    return (ids or None), f"eos_token_id of {f}"
-
-
-def by_class(reader: Path) -> object:
-    """The tree's reader of a certified serve's advice by class (`BY_CLASS`), loaded from its file with the adapter it
-    reads on the path, as the benchmark's replay puts it there."""
+def encodings() -> object:
+    """The scheduler replay's loader (`ENCODINGS`), loaded from its file under a name of its own, since it is a second
+    replay.py and the one on the path is the benchmark's, with the adapter it reads on the path."""
+    name = "prod_repro_encodings"
+    if name in sys.modules:
+        return sys.modules[name]
     adapter = str(ROOT / "adapters/vllm")
     if adapter not in sys.path:
         sys.path.insert(0, adapter)
-    spec = importlib.util.spec_from_file_location("prod_repro_by_class", reader)
+    spec = importlib.util.spec_from_file_location(name, ENCODINGS)
     if spec is None or spec.loader is None:
-        raise ImportError(f"{reader} is not a module")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+        raise ImportError(f"{ENCODINGS} is not a module")
+    sys.modules[name] = mod = importlib.util.module_from_spec(spec)  # its dataclasses look their module up by name
+    try:
+        spec.loader.exec_module(mod)
+    except BaseException:
+        del sys.modules[name]
+        raise
     return mod
 
 
-def advice(out: Path, trace: Path | None, stops: str | None, checkpoint: str | None) -> dict:
-    """The advice line: the bits a request by class of the certified serve whose trace directory is ``trace``, each
-    class with its standing and its events, as the tree's reader gives them (`BY_CLASS`'s ``report``), kept whole in
-    OUT/advice_by_class.json. Not measured without the directory, where the tree has no reader, where the stop ids are
-    not known, where the reader refuses the trace, or where the advice does not decode back to it."""
-    reader = BY_CLASS
-    if trace is None:
-        return not_measured(NO_ADVICE)
-    if not trace.is_dir():
-        return not_measured(f"ADVICE_TRACE={trace} is not a directory on this machine")
-    if not reader.is_file():
-        return not_measured(f"this tree has no reader of a certified serve's advice by class (no {reader}); the trace is "
-                            f"{trace}")
-    ids, by = stop_ids(checkpoint, stops)
-    if ids is None:
-        return not_measured(f"the registered stop ids are not known ({by}): ADVICE_STOPS=ID,..., EOS first")
-    mod = by_class(reader)
-    row = mod.report("advice", str(trace), ids)
-    (out / "advice_by_class.json").write_text(json.dumps({"trace": str(trace), "stops": ids, "row": row}, indent=1))
-    if "error" in row:
-        return not_measured(f"the reader refuses the trace {trace}: {row['error']}", aborts=row.get("aborts"))
-    if not row["round_trip"]:
-        d = row.get("first_step_that_differs")
-        return not_measured(f"the advice of {trace} does not decode back to it" + (
-            f": the decoder refuses it: {row['refused']}" if row.get("refused") else "") + (
-            f"; its replay's schedule differs from the engine's from step {d['step']}" if d else ""))
-    total, n = row["total"], row["requests"]
-    classes = {}
-    for name, c in row["classes"].items():
-        bits, events = total["classes"].get(name), {e: total["events"][e] for e in mod.OF.get(name, ())}
-        classes[name] = {"standing": c["standing"], "bits": bits, "bits_a_request": bits / n if bits is not None and n else None,
-                         "events": events, "exercised": bool(bits) or any(events.values())}
-    return {"measured": True, "bits": total["charge"], "requests": n, "bits_a_request": total["charge"] / n if n else None,
-            "classes": classes, "round_trip": True, "tick": bool(row.get("tick")), "windows": row["windows"], "T": row["T"],
-            "prefix_caching": row.get("prefix_caching"), "trace": str(trace), "stops": ids, "stops_by": by}
+def replayed_dir(dirs: list[Path], replay_dir: Path) -> Path | None:
+    """The directory of ours whose pass the replay re-ran: the one its record names, which of an arm served in
+    lifetimes is that lifetime's (`arm_dirs`); the first where the replay left no record, the one the runner hands
+    it; None where the record names a directory that is none of ours's."""
+    f = replay_dir / "replay.json"
+    if not f.is_file():
+        return dirs[0]
+    name = Path(json.loads(f.read_text())["arm_dir"]).name
+    return next((d for d in dirs if d.name == name), None)
+
+
+def seeds(w: dict, meta: dict) -> dict:
+    """How a window's sampled requests were seeded, from each one's own arrival (its ``sampling``): the requests at a
+    temperature above 0, those of them with no seed in their arrival, and whether the arm's record says the client
+    sent each seed (``seeded``). A sampled request with no seed there drew its own, which no record holds."""
+    sampled = [r for r in w["requests"] if r["sampling"].get("temperature")]
+    return {"sampled": len(sampled), "unseeded": sum(r["sampling"].get("seed") is None for r in sampled),
+            "by_client": bool(meta.get("seeded"))}
+
+
+def advice(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path) -> dict:
+    """The advice line: what the schedule of ``ours``'s pass ``load`` rep ``rep``, the pass the replay re-ran and the
+    tokens line compares (`replayed_dir`), costs as advice, in bits over the pass, as the scheduler replay's loader
+    gives it (`ENCODINGS`: ``draft_table``): ``arrivals``, the residual advice of when each request arrived, which a
+    serve under the certified tick does not send, and ``kept_count``, the drafts each row kept, as the loader's dict
+    has it (``charged`` at its measured entropy over the rows that verified drafts, ``derived`` where the audited
+    block computes it). ``bits`` is what is charged: the arrivals, unless the serve is under the tick, and the kept
+    count's ``charged``. Not measured where ours holds no such pass or it can't be read back, or where the loader
+    refuses it: a schedule its replay does not reproduce, which it names the step of, or a serve with no draft."""
+    arm_dir = replayed_dir(dirs, replay_dir)
+    if arm_dir is None or not (arm_dir / load / f"rep-{rep}" / "meta.json").is_file():
+        return not_measured(f"{ours} holds no pass {load} rep {rep}, the one the replay re-runs: the advice is that "
+                            "pass's schedule's (--replay PASS names it)")
+    meta, record = json.loads((arm_dir / "meta.json").read_text()), replay_dir / "replay.json"
+    if record.is_file() and (of := json.loads(record.read_text())) and (of["load"], of["rep"]) != (load, rep):
+        return not_measured(f"the replay in {replay_dir} is of another pass ({of['load']} rep {of['rep']}), not of "
+                            f"{ours}'s {load} rep {rep}")
+    traces = S.step_traces(arm_dir)
+    if len(traces) != 1:
+        return not_measured(f"{arm_dir.name} holds {len(traces)} step traces, and the pass's schedule is one engine core's")
+    try:
+        w, trace = R.window(arm_dir, load, rep), traces[0]
+    except (SystemExit, OSError, KeyError, ValueError) as e:
+        return not_measured(f"the pass can't be read back from {ours}'s step trace and ids: {type(e).__name__}: {e}")
+    E = encodings()
+    try:
+        recs = E.span(S.trace_records(trace), lambda rid: f"-{w['tag']}-" in rid)
+        d = E.draft_table(E.load_step_trace(recs, tokens={r["engine_id"]: [*r["prompt_ids"], *r["served"]]
+                                                          for r in w["requests"]}))
+    except (ValueError, RuntimeError, AssertionError) as e:
+        return not_measured(f"the scheduler replay refuses the pass: {e}")
+    sent = 0 if d["tick"] else d["arrivals"]["plain"]
+    bits = sent + d["kept_count"]["charged"]
+    return {"measured": True, **d, "bits": bits, "bits_a_request": bits / d["requests"], "arrivals_sent": sent,
+            "seeds": seeds(w, meta),
+            "window": {"arm": ours, "lifetime": meta.get("lifetime"), "load": load, "rep": rep, "run": meta.get("run_id"),
+                       "replayed": record.is_file()}}
 
 
 # --------------------------------------------------------------------------------------------------------- the report
 
 def report(out: Path, stock: str | None, ours: str, again: str | None, load: str, rep: int = 1, replay_dir: Path | None = None,
            target: float = TARGET, replayed: str | None = None, expect_replay: bool = False,
-           advice_trace: Path | None = None, advice_stops: str | None = None, private: Path | None = None) -> dict:
+           private: Path | None = None) -> dict:
     replay_dir = replay_dir or out / "replay-compiled"
     names = [a for a in (stock, again, ours) if a]
     held = {a: arm_dirs(out, a) for a in names}
@@ -745,7 +762,8 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
             "ran": {"arms": states, "unread": unread, "replay": state, "replay_engine": engine},
             "settings": sets, "circuit_ahead_of_serving": NO_CIRCUIT,
             "tokens": toks, "cost": line,
-            "advice": read("the advice", lambda: advice(out, advice_trace, advice_stops, meta.get("checkpoint")))}
+            "advice": read("the advice", lambda: advice(dirs[ours], ours, replayed or load, rep, replay_dir))
+            if ours in dirs else not_measured(f"{ours} was not served")}
 
 
 def failed(r: dict) -> list[str]:
@@ -896,23 +914,34 @@ def _sampling(t: dict) -> str:
     return ", ".join(one(s) for s in t["sampling"])
 
 
-def _advice(v: dict) -> list[str]:
-    def one(name: str, c: dict) -> str:
-        events = ", ".join(f"{e.replace('_', ' ')} {k:,}" for e, k in c["events"].items())
-        if c["bits"] is None:
-            said = "no field in the code"
-        elif c["exercised"]:
-            said = f"{c['bits']:,} bits, {c['bits_a_request']:.3f} a request"
-        else:
-            said = "0 bits, not exercised: none of its events arose"
-        more = "; ".join(x for x in (c["standing"], events) if x and x != "no field")
-        return f"  {name}: {said}" + (f" ({more})" if more else "")
+def _number(x: object) -> str:
+    return f"{x:,}" if isinstance(x, int) else f"{x:,.3f}" if isinstance(x, float) else str(x)
 
-    tick = "under the certified tick" if v["tick"] else "admitted on arrival, NOT under the certified tick"
-    return [f"advice: {v['bits_a_request']:.3f} bits a request: {v['bits']:,} bits over {v['requests']:,} requests, {tick}; "
-            f"{v['windows']} window{'' if v['windows'] == 1 else 's'} of T = {v['T']} buckets; it decodes back to the trace",
-            *(one(name, c) for name, c in v["classes"].items()),
-            f"  the trace: {v['trace']}; stop ids {','.join(map(str, v['stops']))} ({v['stops_by']})"]
+
+def _advice(v: dict) -> list[str]:
+    """The advice line: the charged bits a request first, then its two classes; under it the loader's own figures of
+    the kept count as it gives them, what the count costs where it is derived, and the seeds."""
+    n, k, s = v["requests"], v["kept_count"], v["seeds"]
+    tick = ("under the certified tick, which sends none" if v["tick"] else
+            "0 under the certified tick, which this serve is not under")
+    if not s["sampled"]:
+        seeded = "no request was sampled, so no seed is read"
+    elif s["unseeded"]:
+        seeded = (f"{s['unseeded']:,} of the {s['sampled']:,} sampled requests carry NO seed in their arrival: each drew "
+                  "its own, which no record holds, so its kept count is not derived and its tokens cannot be replayed")
+    else:
+        seeded = (f"{s['sampled']:,} sampled requests, each "
+                  + ("seed the client's" if s["by_client"] else "with a seed in its arrival"))
+    life = f"lifetime {v['window']['lifetime']} of " if v["window"].get("lifetime") else ""
+    which = "the one the replay re-ran" if v["window"]["replayed"] else "the one a replay re-runs, and none ran"
+    return [f"advice: {v['bits_a_request']:.1f} bits a request charged ({n:,} requests): the arrivals "
+            f"{v['arrivals_sent'] / n:.1f} ({tick}), the kept count {k['charged'] / n:.1f}",
+            "  the kept count over the pass, as the scheduler replay's loader gives it: "
+            + ", ".join(f"{name} {_number(x)}" for name, x in k.items()),
+            f"  {DERIVED}",
+            f"  {seeded}",
+            f"  the pass: {life}{v['window']['arm']}'s {v['window']['load']} rep {v['window']['rep']}, {which}; "
+            f"{v['steps']:,} steps, each reproduced by the scheduler replay"]
 
 
 def _engine(e: dict) -> list[str]:
@@ -1102,8 +1131,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--private", type=Path, metavar="DIR",
                    help="the job's private directory on the node (the benchmark's PRIVATE), where the canonical top-k's "
                         "processes kept their counters: read there and kept in OUT")
-    p.add_argument("--advice-trace", type=Path, metavar="DIR", help="the trace directory of the certified serve")
-    p.add_argument("--advice-stops", metavar="ID,...", help="the registered stop ids the advice is read under, EOS first")
     p.add_argument("--target", type=float, default=TARGET, metavar="PERCENT")
     p.add_argument("--json", action="store_true", help="print the JSON object alone")
     a = ap.parse_args(argv)
@@ -1116,7 +1143,7 @@ def main(argv: list[str] | None = None) -> int:
     stock, again, ours = default_arms(out=a.out)
     r = report(a.out, (stock if a.stock is None else a.stock) or None, a.ours or ours,
                (again if a.again is None else a.again) or None, a.load, a.rep,
-               a.replay, a.target, a.replayed, a.expect_replay, a.advice_trace, a.advice_stops, a.private)
+               a.replay, a.target, a.replayed, a.expect_replay, a.private)
     r["failed"] = failed(r)
     (a.out / "prod_repro.json").write_text(json.dumps(r, indent=1))
     (a.out / "prod_repro.txt").write_text(text(r))

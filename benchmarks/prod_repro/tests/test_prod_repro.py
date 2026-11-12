@@ -145,7 +145,8 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
     assert "\n  noise floor, beside and not added: compiled-again over compiled" in txt
     assert ", passes taken as independent\n" in txt and r["cost"]["noise_floor"]["leaves_out_zero"] is False
     assert "STOCK DIFFERS FROM STOCK" not in txt
-    assert "advice: not measured: no trace directory of a certified serve was given (ADVICE_TRACE=DIR)" in txt
+    # this synthetic trace is not the adapter's step trace, and the scheduler replay's loader refuses it
+    assert "advice: not measured: the scheduler replay refuses the pass: not a verity-vllm/step-trace/v1 trace\n" in txt
     assert txt.endswith("prod_repro: 2 of 3 lines measured\n")
 
 
@@ -659,7 +660,7 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     assert not c["measured"] and "refuses these arms: cost: the arms were served by different builds of vLLM" in c["why"]
 
 
-def test_a_job_served_in_lifetimes_is_read_from_each_lifetimes_directory(tmp_path: Path):
+def test_a_job_served_in_lifetimes_is_read_from_each_lifetimes_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """The arms of a job the benchmark served in lifetimes are ``<arm>.K``: every lifetime is in what ran, an arm's
     reps are all its lifetimes', and the tokens are those of the lifetime the replay's record names."""
     out = tmp_path / "out"
@@ -686,8 +687,11 @@ def test_a_job_served_in_lifetimes_is_read_from_each_lifetimes_directory(tmp_pat
     # a replay of the second lifetime's pass is compared with that lifetime's window
     shutil.rmtree(out / "replay-compiled")
     replayed(out, "record.2")
+    monkeypatch.setattr(P, "encodings", Loader)
     rc, txt, r = run(out, "--again", "")
     assert rc == 0 and r["tokens"]["reproduces"] and r["tokens"]["window"]["lifetime"] == 2
+    # and the advice is of that lifetime's pass
+    assert r["advice"]["window"]["lifetime"] == 2 and "\n  the pass: lifetime 2 of record's burst rep 1, the one the replay" in txt
     # a replay of a directory that is none of ours's lifetimes is of another window
     shutil.rmtree(out / "replay-compiled")
     replayed(out, "record.2", arm_dir=str(out / "record.3"))
@@ -848,80 +852,88 @@ def test_the_tokens_line_counts_the_requests_past_the_indexers_top_k(tmp_path: P
 
 # --------------------------------------------------------------------------------------------------------- the advice
 
-#: a stand-in for the tree's reader of a certified serve's advice by class: `report` gives what the trace directory's
-#: row.json says, and `OF` each class's events
-READER = """import json
-from pathlib import Path
+class Loader:
+    """A stand-in for the scheduler replay's loader: it keeps what the report hands it and gives the figures of a
+    served pass of 32 requests; told to, it refuses the pass, or reads it as served under the certified tick."""
 
-OF = {"hits": ("lookups_hit", "admissions_cut"), "admission": ("waited",), "aborts": ()}
+    def __init__(self, refuse: str | None = None, tick: bool = False) -> None:
+        self.refuse, self.tick = refuse, tick
 
+    def span(self, records: list[dict], mine: object) -> list[dict]:
+        self.span_ids = sorted(r["request"] for r in records if r["kind"] == "arrive" and mine(r["request"]))
+        return list(records)
 
-def report(label, path, stop_ids, T=600, ingress="client"):
-    row = json.loads((Path(path) / "row.json").read_text())
-    return {**row, "stops_seen": list(stop_ids)}
-"""
+    def load_step_trace(self, recs: list[dict], *, tokens: dict[str, list[int]]) -> str:
+        self.tokens = tokens
+        return "trace"
 
-
-def certified(trace: Path, **over: object) -> None:
-    """A certified serve's trace directory, as the stand-in reader reads it: the reader's row for it."""
-    trace.mkdir(exist_ok=True)
-    row = {"trace": "advice", "T": 600, "tick": {"tau_b": 1}, "prefix_caching": True, "requests": 200, "steps": 900,
-           "windows": 2, "round_trip": True, "refused": None, "first_step_that_differs": None,
-           "classes": {"hits": {"standing": "charged", "rules": []}, "admission": {"standing": "closed under the tick", "rules": []},
-                       "aborts": {"standing": "no field", "rules": []}},
-           "total": {"charge": 700, "classes": {"hits": 700, "admission": 0},
-                     "events": {"lookups_hit": 120, "admissions_cut": 3, "waited": 0}}}
-    (trace / "row.json").write_text(json.dumps(row | over))
+    def draft_table(self, trace: str) -> dict:
+        if self.refuse:
+            raise ValueError(self.refuse)
+        return {"requests": 32, "steps": 2040, "tick": self.tick, "arrivals": {"plain": 230},
+                "kept_count": {"K": 5, "rows": 5143, "counts": [665, 553, 442, 257, 150, 3076], "entropy": 1.8400717745206507,
+                               "max": 2.584962500721156, "charged": 9463.489136359707, "derived": 0}}
 
 
-def test_the_advice_line_is_the_readers_split_of_the_certified_serves_trace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    out, trace, reader = job(tmp_path), tmp_path / "trace", tmp_path / "by_class.py"
+def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays_loader_charges_it(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    out = job(tmp_path)
     replayed(out)
-    reader.write_text(READER)
-    monkeypatch.setattr(P, "BY_CLASS", reader)
-    certified(trace)
-    rc, txt, r = run(out, "--advice-trace", str(trace), "--advice-stops", "154820,154827")
-    assert rc == 0 and r["advice"]["measured"] and r["advice"]["bits_a_request"] == 3.5
-    assert ("advice: 3.500 bits a request: 700 bits over 200 requests, under the certified tick; 2 windows of T = 600 buckets; "
-            "it decodes back to the trace\n"
-            "  hits: 700 bits, 3.500 a request (charged; lookups hit 120, admissions cut 3)\n"
-            "  admission: 0 bits, not exercised: none of its events arose (closed under the tick; waited 0)\n"
-            "  aborts: no field in the code\n"
-            f"  the trace: {trace}; stop ids 154820,154827 (ADVICE_STOPS)\n") in txt
+    # the tree's loader is there, loaded once, with the three functions the line is made of
+    E = P.encodings()
+    assert all(callable(getattr(E, name)) for name in ("span", "load_step_trace", "draft_table")) and P.encodings() is E
+    loader = Loader()
+    monkeypatch.setattr(P, "encodings", lambda: loader)
+    rc, txt, r = run(out)
+    assert rc == 0 and r["advice"]["measured"]
+    # the loader is handed the replayed pass's requests alone, each with its prompt ids and then its served ids
+    a, b = rid(f"{LOAD}1", 0), rid(f"{LOAD}1", 1)
+    assert loader.span_ids == [a, b] and loader.tokens == {a: [0, 1, 7, 0], b: [1, 2, 7, 1]}
+    # the charged figure first; the kept count's own figures as the loader gives them
+    assert ("advice: 302.9 bits a request charged (32 requests): the arrivals 7.2 (0 under the certified tick, which this "
+            "serve is not under), the kept count 295.7\n"
+            "  the kept count over the pass, as the scheduler replay's loader gives it: K 5, rows 5,143, counts [665, 553, "
+            "442, 257, 150, 3076], entropy 1.840, max 2.585, charged 9,463.489, derived 0\n"
+            "  the kept count is 0 where the audited block derives it, and no Definition holds the accept test yet\n"
+            "  no request was sampled, so no seed is read\n"
+            "  the pass: record's burst rep 1, the one the replay re-ran; 2,040 steps, each reproduced by the scheduler "
+            "replay\n") in txt
     assert txt.endswith("prod_repro: 3 of 3 lines measured\n")
-    # the reader's whole row is kept beside the report, under the stop ids it was read with
-    kept = json.loads((out / "advice_by_class.json").read_text())
-    assert kept["stops"] == [154820, 154827] == kept["row"]["stops_seen"] and kept["trace"] == str(trace)
-    # without ADVICE_STOPS the stop ids are the served checkpoint's own
-    (out / "ck" / "generation_config.json").write_text(json.dumps({"eos_token_id": [154820, 154827, 154829]}))
-    _, txt, r = run(out, "--advice-trace", str(trace))
-    assert r["advice"]["stops"] == [154820, 154827, 154829]
-    assert f"stop ids 154820,154827,154829 (eos_token_id of {out / 'ck' / 'generation_config.json'})" in txt
-    (out / "ck" / "generation_config.json").unlink()
-    _, txt, r = run(out, "--advice-trace", str(trace))
-    assert ("advice: not measured: the registered stop ids are not known (this machine has no generation_config.json of "
-            "the checkpoint the job served): ADVICE_STOPS=ID,..., EOS first\n") in txt
-    # a trace the reader refuses, one whose advice does not decode back, and a serve off the tick
-    certified(trace, error="the trace holds speculative decoding, which the advice code has no field for")
-    _, txt, r = run(out, "--advice-trace", str(trace), "--advice-stops", "1")
-    assert (f"advice: not measured: the reader refuses the trace {trace}: the trace holds speculative decoding, which the "
-            "advice code has no field for\n") in txt and txt.endswith("prod_repro: 2 of 3 lines measured\n")
-    certified(trace, round_trip=False, refused="window 1: a symbol past the book", first_step_that_differs={"step": 41})
-    _, txt, _ = run(out, "--advice-trace", str(trace), "--advice-stops", "1")
-    assert (f"advice: not measured: the advice of {trace} does not decode back to it: the decoder refuses it: window 1: a "
-            "symbol past the book; its replay's schedule differs from the engine's from step 41\n") in txt
-    certified(trace, tick=None)
-    assert "admitted on arrival, NOT under the certified tick" in run(out, "--advice-trace", str(trace), "--advice-stops", "1")[1]
-    # no directory, a directory the reader can't read, and a tree without the reader
-    (trace / "row.json").unlink()
-    _, txt, _ = run(out, "--advice-trace", str(trace), "--advice-stops", "1")
-    assert "advice: not measured: the advice can't be read from the job's files: FileNotFoundError" in txt
-    _, txt, _ = run(out, "--advice-trace", str(tmp_path / "nowhere"), "--advice-stops", "1")
-    assert f"advice: not measured: ADVICE_TRACE={tmp_path / 'nowhere'} is not a directory on this machine\n" in txt
-    monkeypatch.setattr(P, "BY_CLASS", tmp_path / "no_reader.py")
-    _, txt, _ = run(out, "--advice-trace", str(trace), "--advice-stops", "1")
-    assert (f"advice: not measured: this tree has no reader of a certified serve's advice by class (no "
-            f"{tmp_path / 'no_reader.py'}); the trace is {trace}\n") in txt
+    v = r["advice"]
+    assert v["bits"] == 230 + 9463.489136359707 and v["kept_count"]["counts"][5] == 3076 and v["arrivals_sent"] == 230
+    assert v["window"] == {"arm": "record", "lifetime": None, "load": LOAD, "rep": 1, "run": "r-1", "replayed": True}
+    assert v["seeds"] == {"sampled": 0, "unseeded": 0, "by_client": False}
+    # the seeds are the pass's own arrivals': the client's, in an arrival, or in no record
+    w = {"requests": [{"sampling": {"temperature": 0.6, "seed": 3}}, {"sampling": {"temperature": 0.6, "seed": None}},
+                      {"sampling": {"max_tokens": 2}}]}
+    assert P.seeds(w, {"seeded": True}) == {"sampled": 2, "unseeded": 1, "by_client": True}
+    assert P._advice(v | {"seeds": {"sampled": 32, "unseeded": 0, "by_client": True}})[3] == "  32 sampled requests, each seed the client's"
+    assert P._advice(v | {"seeds": {"sampled": 32, "unseeded": 0, "by_client": False}})[3] == \
+        "  32 sampled requests, each with a seed in its arrival"
+    assert P._advice(v | {"seeds": {"sampled": 32, "unseeded": 5, "by_client": True}})[3] == (
+        "  5 of the 32 sampled requests carry NO seed in their arrival: each drew its own, which no record holds, so its "
+        "kept count is not derived and its tokens cannot be replayed")
+    # a serve under the certified tick sends no arrivals: the kept count alone is charged
+    monkeypatch.setattr(P, "encodings", lambda: Loader(tick=True))
+    assert ("advice: 295.7 bits a request charged (32 requests): the arrivals 0.0 (under the certified tick, which sends "
+            "none), the kept count 295.7\n") in run(out)[1]
+    # a pass the scheduler replay does not reproduce, or a serve with no draft, is the loader's refusal
+    monkeypatch.setattr(P, "encodings", lambda: Loader(refuse="the replay diverges from the trace at step 41 (41/2040 steps match)"))
+    _, txt, r = run(out)
+    assert ("advice: not measured: the scheduler replay refuses the pass: the replay diverges from the trace at step 41 "
+            "(41/2040 steps match)\n") in txt and txt.endswith("prod_repro: 2 of 3 lines measured\n")
+    # a pass ours did not serve has no schedule to read, and a replay of another pass is not this pass's
+    monkeypatch.setattr(P, "encodings", Loader)
+    _, txt, _ = run(out, "--replayed", "other")
+    assert ("advice: not measured: record holds no pass other rep 1, the one the replay re-runs: the advice is that pass's "
+            "schedule's (--replay PASS names it)\n") in txt
+    _, txt, _ = run(out, "--rep", "2")
+    assert (f"advice: not measured: the replay in {out / 'replay-compiled'} is of another pass (burst rep 1), not of "
+            "record's burst rep 2\n") in txt
+    # without a replay the line is of the pass a replay would re-run, and says none ran
+    shutil.rmtree(out / "replay-compiled")
+    _, txt, r = run(out)
+    assert r["advice"]["measured"] and "\n  the pass: record's burst rep 1, the one a replay re-runs, and none ran; 2,040 steps" in txt
 
 
 def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_benchmark_holds(
@@ -975,7 +987,7 @@ def runner(tmp_path: Path) -> Path:
 def bash(script: Path, *argv: str, run_dir: Path | None = None, **env: str) -> subprocess.CompletedProcess:
     base = {k: v for k, v in os.environ.items() if k not in (
         "RESEARCH_RUN_DIR", "LOAD", "REPS", "REQUESTS", "MODEL_ID", "STOCK", "AGAIN", "OURS", "RATE", "SPAN_S", "TARGET",
-        "MAX_MODEL_LEN", "REPLAY", "REPLAY_FROM", "REPLAY_MODES", "PASS_PROMPTS", "STOP_AT", "ADVICE_TRACE", "ADVICE_STOPS",
+        "MAX_MODEL_LEN", "REPLAY", "REPLAY_FROM", "REPLAY_MODES", "PASS_PROMPTS", "STOP_AT",
         "SAMPLED", "PRIVATE", "ARMS", "LIFETIMES", "LEAVE_OUT")}
     if run_dir:
         (run_dir / "started").unlink(missing_ok=True)
@@ -1061,7 +1073,7 @@ def test_the_runner_serves_the_arms_in_lifetimes_and_replays_ours_first(tmp_path
     assert p.returncode == 2 and "--replay-of serves nothing: --lifetimes is of a job that serves its arms" in p.stdout
 
 
-def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms_and_reads_the_advice_trace(tmp_path: Path):
+def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp_path: Path):
     script, run_dir, private = runner(tmp_path), tmp_path / "run", tmp_path / "private"
     limit = ("--max-model-len", "262144")
     bench_arm(run_dir / "out", "prod", {"chat@16": [300.0]}, argv=limit)
@@ -1071,7 +1083,7 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms_and
             "--replay", "chat@16", "--pass-prompts", "chat=8", "--sampled", "--stop-at", "9999-01-01T00:00Z")
     replayed(run_dir / "out", "prod-record", load="chat@16", served_under=TOPK_UNDER)
     topk_log(private / "prod-record/topk-log", 21, 9000, (60, 0, 0))
-    p = bash(script, *argv, run_dir=run_dir, ADVICE_TRACE=str(tmp_path / "nowhere"), PRIVATE=str(private), STAND_IN_TOPK="1")
+    p = bash(script, *argv, run_dir=run_dir, PRIVATE=str(private), STAND_IN_TOPK="1")
     assert p.returncode == 0, p.stdout + p.stderr
     s = started(run_dir)
     assert s["argv"] == "--model glm53 --arms prod prod-record --loads chat=16 --reps 1"
@@ -1088,11 +1100,11 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms_and
             "rows of more than its keys rewritten\n") in p.stdout
     assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {"processes": 1, "calls": 7, "rows_long": 5}
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
-    assert f"advice: not measured: ADVICE_TRACE={tmp_path / 'nowhere'} is not a directory on this machine" in p.stdout
+    assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
     # read again without a GPU and without the node's directory, the earlier job says the same
     shutil.rmtree(private)
     again = bash(script, "--report", str(run_dir / "out"), "--load", "chat=16", "--replay", "chat@16", "--again", "none",
-                 ADVICE_TRACE=str(tmp_path / "nowhere"), PRIVATE=str(private))
+                 PRIVATE=str(private))
     assert again.returncode == 0 and again.stdout == p.stdout
     # the serve ended well and the replay left nothing: the job fails, and says the replay did not end
     shutil.rmtree(run_dir / "out/replay-compiled")
