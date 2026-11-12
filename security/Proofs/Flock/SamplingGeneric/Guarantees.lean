@@ -15,39 +15,50 @@ witnesses are `Flock.SecurityProofs.SampledKSTwo_honest` and `Claims.SamplingGen
 
 `Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo` is the same at SPOT[Flock]'s code at the connected
 program (`SpotFlock.codeConnected`). The verifier, the sessions, their rounds, the samples and the frame are
-`SpotFlock.code`'s. The statement's program is the members' programs wired by the code's own wiring map
-(`SpotFlock.wireMap`: a source bit at a port a wire names is sent to the gate on the same bit of its writer's output
-row, where it has such a gate to go to, `SpotFlock.wireTarget`), returning the written bits at an output port a link
-names (`SpotFlock.returned`); each proof block and replay block is without the gates the wiring moves. The code facts,
-coins and sessions' runs are proved (`SpotFlock.ksTwo_connected`), with the sessions' openings at the connected program
-(`SpotFlock.stmtOpens_connected`) from five premises on the held code:
+`SpotFlock.code`'s. The statement's program is the members' programs with every read sent through the code's own
+wiring map (`SpotFlock.wireMap`), returning the written bits at an output port a link names (`SpotFlock.returned`).
+The map sends a source bit to the gate on the same bit of its writer unit's output row (`SpotFlock.wireTarget`) only
+where a wire names the bit's port and no link does, the port's rows place the unit, the wire's writer is a template's
+name, no link names the writer's output port, and the writer has a written bit there at a gate the program does not
+return; every other position stays where it is, so a port a link and a wire both name stays an input. A gate the map
+moves stays in the program, an input gate that no gate reads and no proof block or replay block holds, and a session's
+opening of a gate is revealed at the gate the map sends it to, under the roots the connected program opens that gate
+under. The code facts, coins and sessions' runs are proved (`SpotFlock.ksTwo_connected`), with the sessions' openings
+at the connected program (`SpotFlock.stmtOpens_connected`) from five premises on the held code, three of them
+conditions that evaluation decides and the verifier does not run, one a fact nothing proves:
 
 * `SpotFlock.BuiltWired`: the registration's frame is SPOT's own at the connected program. Every held code whose frame
   is set to it has it (`SpotFlock.builtWired_spot`).
 * `SpotFlock.AddressesConnected`: each gate's value has one address at the connected program, which holds at every
   checked unit that needs it; it is asked only of a held code with `SpotFlock.SourcesNamed`. Nothing proves it at a
-  registration.
+  registration. It would follow from a fact about what `SpotFlock.V` accepts: that each needed gate's read is held
+  to one entry, a linked gate's to the boundary record.
 * `SpotFlock.SourcesNamed`: every source bit is at a port a link or a wire names. Nothing the verifier runs decides
   it, so the guarantee says nothing of an input the developer supplies or a row round 2 opens off the interior record.
-* `SpotFlock.WiresFirst`: each wire's writer's part is before its reader's. The deployed round 2 decides it
-  (`SecondStage.wiresOk`); the verifier the guarantee is stated about (`SpotFlock.V`) does not run that check.
+* `SpotFlock.WiresFirst`: each wire's writer's part is before its reader's, so each wire's writer names a template.
+  The deployed round 2 decides it (`SecondStage.wiresOk`); the verifier the guarantee is stated about (`SpotFlock.V`)
+  does not run that check. With no wires held it holds, where `wiresOk` fails.
 * `SpotFlock.WiresMove`: every wired source bit has a gate to go to. Nothing the verifier runs decides it. It enters
   no step of the proof: it is in the statement so that the connected program has no wired read left as a free input.
 
 At a held code that fails one of them the guarantee says nothing, though `SpotFlock.V` still accepts its runs. The
 guarantee speaks of what a replay block returns: its served outputs are the written bits at an output port a link
-names, so at a design with no link it says nothing. The connected program of a design with no wire still returns only
-those bits, so the guarantee is not the side-by-side statement there. Its honest instance needs a registration that
-meets the five premises, which nothing proves yet.
+names, so at a design with no link it says nothing. What it covers rests on the links the held code holds: an output
+that leaves and that no held link names is outside it, and `SpotFlock.V` does not run the design's check of the links
+(`SecondStage.linksOk`). Over the members' programs side by side every written bit is returned, whatever the links;
+the connected program of a design with no wire still returns only the linked ones. So at every design, with a wire or
+without, the guarantee speaks only of the linked outputs, where the side-by-side statement speaks of every written
+bit. Its honest instance needs a registration that meets the five premises, which nothing proves yet.
 
 Over the members' programs side by side, `SpotFlock.ksTwo_spot` gives the same knowledge soundness at `SpotFlock.code`
 from `SpotFlock.Built` and `SpotFlock.Addresses` (`SpotFlock.frameIs_built`, `SpotFlock.sessionOpensTwo_of_frameIs`).
 No guarantee reads those.
 
 `Flock.SecurityProofs.SpotExfilTwo : Flock.Guarantees.SpotExfilTwo` is `CompiledTwo.Exfil` at the same code and
-premises, by `CompiledTwo.exfil_of_ks` on `SpotKSTwo` (`SpotFlock.exfilTwo_connected`): what an accepted run serves is
-in the influence set at `δ`, at `SpotKSTwo`'s errors, and that set has at most `Σ_{T admissible} 2^{b(T)}` members. What
-it serves is what the connected program returns. Its nontrivial witness is
+premises, by `CompiledTwo.exfil_of_ks` on `SpotKSTwo` (`SpotFlock.exfilTwo_connected`): the served outputs are in the
+influence set at `δ`, at `SpotKSTwo`'s errors, and that set has at most `Σ_{T admissible} 2^{b(T)}` members. The served
+outputs are the extractor's witness's openings, under the statement's roots, at the gates the connected program
+returns. Its nontrivial witness is
 `Claims.SamplingGeneric.compilerExfilTwo_nontrivial`; its honest instance waits on the same registration.
 -/
 
@@ -112,9 +123,10 @@ def SpotKSTwo : Prop :=
 `SpotKSTwo`'s held code, premises, code, interior roots, design, replay sample and replay cap (`SpotFlock.cap`),
 `CompiledTwo.Exfil` holds at every `δ ≥ 0`: `Pr[acc ∧ the served outputs are outside the influence set at δ]` is at
 most `KSLinOn`'s bound at the two-stage errors and the binding finder `Bext`, and the influence set at any input
-values has at most `Σ_{T admissible} 2^{b(T)}` members. The served outputs are the values opened at the connected
-program's returned gates, the written bits at an output port a link names (`SpotFlock.returned`): at a held code with
-no link nothing is returned and the bound is on nothing. -/
+values has at most `Σ_{T admissible} 2^{b(T)}` members. The served outputs are the extractor's witness's openings,
+under the statement's roots, at the connected program's returned gates, the written bits at an output port a link
+names (`SpotFlock.returned`). An output that leaves and that no held link names is outside the bound, and at a held
+code with no link nothing is returned and the bound is on nothing. -/
 def SpotExfilTwo : Prop :=
   ∀ h : SpotFlock.Held, SpotFlock.WiresFirst h → SpotFlock.WiresMove h → SpotFlock.SourcesNamed h →
     SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) → SpotFlock.AddressesConnected h →

@@ -9,14 +9,16 @@ public import Proofs.Flock.SpotFlock.KS
 
 `code h` (`Code`) reads the members' programs side by side (`bitsProgs h.ms`), where no gate of one proof block's
 circuit reads a gate of another. This file defines the same code at the members' programs wired by a map `ω`
-(`Prog.wired`): the statement's program has every gate `ω` moves replaced by the gate it is sent to, each proof block
-and replay block is without the gates `ω` moves, and a session reveals each opening at the gate `ω` sends it to
-(`partitionWired`, `twoWired`, `revealWired`, `RevealsWired`). The verifier, the sessions, their rounds, the samples
-and the frame are `code h`'s.
+(`Prog.wired`): in the statement's program every gate reads wire `ω i` where it read wire `i`, so a gate `ω` moves
+stays in the program, an input gate that no gate reads and no proof block holds; each proof block and replay block
+is without the gates `ω` moves; and a session reveals each opening at the gate `ω` sends it to, under the roots the
+wired program opens that gate under (`partitionWired`, `twoWired`, `revealWired`, `rootsAtWired`, `RevealsWired`). The
+verifier, the sessions, their rounds, the samples and the frame are `code h`'s.
 
 * `parseWired`, `baseWired`, `codeWired`, `rsWired`: `parse h`, `base h`, `code h` and `rs h` at the wired program.
 * `codeConnected h`, `twoConnected h`, `rsConnected h`: the code, the design and the replay sample at the code's own
-  wiring map (`wireMap h`, `returned h`).
+  wiring map (`wireMap h`, `returned h`). The replay sample reads the registration and the first stage's coins only,
+  so `rsConnected h` is `rs h` itself.
 * `WiresFirst h`, `WiresMove h`, `SourcesNamed h`: three conditions on the code's own wiring, each decided on what the
   verifier holds and none decided by the verifier, as named premises.
 * `rows_of_two`: where the design evaluates, every member with a unit has a computed row.
@@ -96,9 +98,10 @@ noncomputable def rsConnected : (x : Msg) → (Fin ((codeConnected h).V.k x) →
 
 /-! ## The premises on the code's own wiring -/
 
-/-- **Each wire's writer's part is before its reader's** (`writersFirst`), as a premise. The deployed round 2 decides
-it (`SecondStage.wiresOk`, fourth clause, refused as `second-wires`); the verifier a statement about the connected
-code is stated about, `V h`, does not run that check. -/
+/-- **Each wire's writer's part is before its reader's** (`writersFirst`), as a premise. A wire whose writer names no
+template fails it. The deployed round 2 decides it (`SecondStage.wiresOk`, fourth clause, refused as `second-wires`);
+the verifier a statement about the connected code is stated about, `V h`, does not run that check. With no wires held
+it holds, where `wiresOk` fails. -/
 def WiresFirst : Prop := writersFirst h = true
 
 /-- **Every wired source bit has a gate to go to** (`wiresMove`), as a premise. Nothing the verifier runs decides
