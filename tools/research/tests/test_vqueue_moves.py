@@ -710,13 +710,15 @@ def test_a_regeneration_on_a_tip_whose_members_change_the_move_scripts_is_refuse
     assert m.calls() == []
 
 
-def test_a_move_whose_map_doesnt_parse_on_its_tip_is_refused_before_anything_runs(env):
+@pytest.mark.parametrize("text, said", [("[words\n", " doesn't parse ("),
+                                        ("words_in = 1\n", " holds a words_in that is no array of tables (int 1): fix the map")])
+def test_a_move_whose_map_doesnt_parse_on_its_tip_is_refused_before_anything_runs(env, text, said):
     m = Moved(env)
     m.move(1, verdict=False)
-    env.put(2, {MAP: "[words\n"})
+    env.put(2, {MAP: text})
     recs = env.loop(policy).tick()
     (skip,) = [r for r in recs if r["action"] == "skip"]
-    assert f"its map {MAP} at " in skip["why"] and " doesn't parse (" in skip["why"] and m.calls() == [], skip
+    assert f"its map {MAP} at " in skip["why"] and said in skip["why"] and m.calls() == [], skip
 
 
 def test_a_move_isnt_taken_on_its_mark_alone_with_the_low_risk_lane_off(env):

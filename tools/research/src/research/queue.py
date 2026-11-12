@@ -1111,8 +1111,10 @@ def path_rows(text: str) -> list[tuple[str, str]]:
     """The rows of word map ``text`` that rename a path, its old and new words each holding a `/`, `[[words_in]]` rows
     included, in its order: `move_check.py` certifies a word's rename of a path only where the move itself moved it, so each
     goes to it as `--map OLD=NEW`, as `tools/move/stage.py --map` passes it.  A map that doesn't parse raises
-    `tomllib.TOMLDecodeError`."""
+    `tomllib.TOMLDecodeError`, and one whose `words_in` is no array `ValueError`."""
     data = tomllib.loads(text)
+    if not isinstance(got := data.get("words_in") or [], list):
+        raise ValueError(f"holds a words_in that is no array of tables ({type(got).__name__} {got!r:.60})")
     tables = [data.get("words"), *(s.get("words") for s in data.get("words_in") or [] if isinstance(s, dict))]
     rows = [(o, n) for t in tables if isinstance(t, dict) for o, n in t.items()]
     return list(dict.fromkeys((o, n) for o, n in rows if isinstance(n, str) and "/" in o and "/" in n))
@@ -2456,6 +2458,8 @@ class Queue:
             rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
         except tomllib.TOMLDecodeError as e:
             return None, f"its map {pr.move} at {tip[:12]} doesn't parse ({e}): fix the map, then mark the move again", None
+        except ValueError as e:
+            return None, f"its map {pr.move} at {tip[:12]} {e}: fix the map, then mark the move again", None
         with scratch() as tmp:
             wt = Path(tmp, "wt")
             with worktrees_locked(self.workdir):
