@@ -4108,7 +4108,7 @@ def test_a_claim_a_guarantee_takes_as_a_premise_keeps_its_claims_entry():
 
 
 def generic_fixture():
-    """(policy, facts) shaped like GENSAMPLE's compiler statements: `P.Compiler`, a closed `def : Prop` under
+    """(policy, facts) shaped like a generic compiler statement: `P.Compiler`, a closed `def : Prop` under
     `claims.modules` over every proof system, stated by `P.compiler` (`theorem P.compiler : P.Compiler`), which takes
     `P.Arg.KS H A` and `P.Compiled.Sessions H L` inline, reads the claims and the hash vocabulary, has no shape entry, and
     is listed under `claims.generic` with its witnesses."""
@@ -4456,7 +4456,7 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert witness_codes(*witnessed(honest={"body": wbody("P.Other")}, unwitnessed={"P.sound": h})) == \
         ["witnesses.honest-uncovered"]
     assert A.unwitnessed_kept({**pol, "unwitnessed": {"P.sound": h}}, f, {}) == {}
-    half = {"type_hash": h, "missing": "nontrivial", "why": "PRF-212 / #4867: not yet closed"}
+    half = {"type_hash": h, "missing": "nontrivial", "why": "the nontrivial witness is not yet proved"}
     honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
     assert witness_codes(honest_only, f) == []
     assert A.unwitnessed_kept(honest_only, f, {}) == {"P.sound": half}
@@ -4631,7 +4631,7 @@ def test_an_unwitnessed_entry_of_a_restated_definition_fails():
     before = {**bare, "unwitnessed": {"P.sound": u}}
     assert witness_codes(before, f) == [] and A.unwitnessed_kept(before, f, {}) == keyed["unwitnessed"]
     assert witness_codes(before, g) == ["witnesses.unwitnessed-changed"] and A.unwitnessed_kept(before, g, {}) == {}
-    half = {"type_hash": h, "missing": "nontrivial", "why": "PRF-212: not yet closed"}
+    half = {"type_hash": h, "missing": "nontrivial", "why": "the nontrivial witness is not yet proved"}
     honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
     assert witness_codes(honest_only, f) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(honest_only, f, {}) == {}
@@ -7524,7 +7524,7 @@ def graph_reports(monkeypatch, search: list[str], graph: dict) -> None:
 
 
 def test_a_batch_abandons_a_symlinked_olean_whose_target_escapes_its_search_directory(tmp_path, monkeypatch):
-    """top's A/M swap: a build writes `A.olean` in a writable directory as a symlink to a file outside it. `lean` finds the
+    """An A/M swap: a build writes `A.olean` in a writable directory as a symlink to a file outside it. `lean` finds the
     module by name there and loads the target, but a copy's key must be of bytes under the directory `lean` searched, so
     `copied` abandons the batch, which stores nothing; the final replay then checks the module."""
     p = pipeline(tmp_path, monkeypatch, ["P/A.lean"])
@@ -7541,7 +7541,7 @@ def test_a_batch_abandons_a_symlinked_olean_whose_target_escapes_its_search_dire
 
 
 def test_a_batch_abandons_a_read_in_place_module_that_resolves_into_a_writable_root(tmp_path, monkeypatch):
-    """ci's moved module: a module found in a directory no build writes is read in place, uncopied, so its key is of the
+    """A moved module: a module found in a directory no build writes is read in place, uncopied, so its key is of the
     bytes there. If its olean is a symlink into a writable root the prover controls, those bytes are not fixed, so `copied`
     abandons the batch, which stores nothing; the final replay checks it."""
     p = pipeline(tmp_path, monkeypatch, ["P/A.lean"])
