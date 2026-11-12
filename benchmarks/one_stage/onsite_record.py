@@ -134,7 +134,10 @@ more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
 **K** (the record's ``bound``) is the network certifier's accepted answer's public in its rows form, on one-stage
 answers the driver verified; the check read them as given (`GIVEN`, `ANSWERS_VERIFIED`). The record calls it no
 bound, and ``answers`` (`ANSWERS`, `given`) stands beside K wherever the record or one of its lines states it: here, in
-the figure of record, and in the ``ONSITE`` and ``ONSITE-BESIDE`` lines. It holds K and each of its terms in the
+the figure of record, and in the ``ONSITE`` and ``ONSITE-BESIDE`` lines. What a written record is read as comes from
+the record and never from the code reading it (`read_as`): a record written on verified answers says so in its own
+``answers`` (`VERIFIED`), and one that doesn't is read as given, its K and its cells under `ANSWERS`, one written
+before the label included. It holds K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
 (``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
@@ -180,7 +183,8 @@ that run's, never a figure of this one. ``tree`` is the commit the run served fr
 **Periods** are ``missing`` (`NOT_SCALED`) while the period's check reads its answers as given: nothing is scaled,
 pooled or summed from a K read so, no cell is called proved, and K is set against no weights and no egress; the
 ``ONSITE`` line's year's datacenter cell and pooled eps are then None, and ``--beside`` prints the missing as it is, and
-the cells of a record written with them as it wrote them. Once the check verifies them (`ANSWERS_VERIFIED`), they are
+the cells of a record written with them as it wrote them, under what that record is read as (`read_as`). Once the
+check verifies them (`ANSWERS_VERIFIED`), they are
 the figure of record's: the run's own certification period (``run``), proved, and each monitoring period
 of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world, conditional on the coins
 and each open premise of `UNCHARGED` while they are open (``conditional_on``). A node's cell is proved where the run's
@@ -292,10 +296,14 @@ ANSWERS = "answers read as given"
 GIVEN = ("K, on one-stage answers the driver verified; the check read them as given: the period's check, which states "
          "K, verified none of them, and no Lean statement covers a K read so. It is a labelled number and no bound: "
          f"{ANSWERS!r} stands beside it wherever it is stated (answers)")
-#: whether the period's check verifies the one-stage answers it reads. It reads them as given, so `ANSWERS` stands
-#: beside K (`given`) and the record scales nothing from it (`NOT_SCALED`); once it verifies them, the label goes and
-#: the periods' cells are written
+#: whether the period's check verifies the one-stage answers it reads, which decides what a record is written as. It
+#: reads them as given, so `ANSWERS` stands beside K (`given`) and the record scales nothing from it (`NOT_SCALED`);
+#: once it verifies them, a record says so itself (`VERIFIED`) and holds its periods' cells. What a written record is
+#: read as comes from that record, never from this constant (`read_as`)
 ANSWERS_VERIFIED = False
+#: a record's own ``answers``, the one key by which a record written on verified answers says so; a record without it
+#: is read as given (`read_as`)
+VERIFIED = "answers verified by the period's check"
 NOT_SCALED = ("no period's figure: K is a labelled number whose answers the period's check read as given (`GIVEN`), so "
               "nothing is scaled, pooled or summed from it, and it is set against no weights and no egress")
 OVERCOUNT = ("a known overcount, larger than necessary: k_sched and k_fail charge every connection the "
@@ -851,8 +859,7 @@ DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem
 #: why a guarantee of `RESTS_ON` is open at a statement other than the one it names
 RESTATED = ("its statement in the lock isn't the one whose hypotheses and antecedents `RESTS_ON` names: read them again, "
             "name each in its takes, and pin the lock's digest")
-OPEN = ("the figure of record, on answers read as given like its K (`GIVEN`): K as the period's check states it, the "
-        "tight form, only where its Lean verdict performed "
+OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
         "every check of `CHECKS` (the public's held), no premise of it is open (`DISCHARGE`) and the run's COINS line "
         "names the live challenger (`COINS`). While any is open it is K plus ℓ_a + 1 bits for each audit tied to each "
         "execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer "
@@ -1217,9 +1224,17 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def given() -> dict[str, str]:
-    """What stands beside K wherever the record or a line states it: ``answers`` (`ANSWERS`) while the period's check
-    reads its answers as given, nothing once it verifies them (`ANSWERS_VERIFIED`)."""
+    """What a record being written states beside K: ``answers`` (`ANSWERS`) while the period's check reads its answers
+    as given, nothing once it verifies them (`ANSWERS_VERIFIED`), when the record says so itself (`VERIFIED`)."""
     return {} if ANSWERS_VERIFIED else {"answers": ANSWERS}
+
+
+def read_as(rec: Mapping[str, Any]) -> str:
+    """What stands beside a written record's K wherever it is read (`summary`, `beside` and its `cells`), taken from
+    the record itself and never from `ANSWERS_VERIFIED` where it is read: `VERIFIED` where the record's own ``answers``
+    says so, else `ANSWERS`. So a record that doesn't say its answers were verified is read as given, one written
+    before the label included, whatever the reading code's constant is."""
+    return VERIFIED if rec.get("answers") == VERIFIED else ANSWERS
 
 
 def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
@@ -2143,6 +2158,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     held = cond + [c for c in cond_net if c not in cond] if accepted else cond
     needed = {k: x for k, x in v.items() if k not in MEMORY}
     rec: dict[str, Any] = {
+        **({"answers": VERIFIED} if ANSWERS_VERIFIED else {}),
         "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "tree": tree, "node": report.get("node"),
         "serving": {"missing": NO_SERVING} if serving is None else {
             "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
@@ -2205,8 +2221,8 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     `NO_COMPUTE_CLAIM`), and what every figure is conditional on
     (`COINS`; open for a record that read no coins), what is open in Lean (`MEMBER_OPEN`), what the record doesn't
     claim (`DAY`, `POUW`), the drawn members it
-    doesn't credit (`CREDIT`), K of record with the answers it is on (``answers``, `given`: beside K wherever the line
-    states one, None where it states none) and what is open under it, its δ_net's terms, eps's split and connections,
+    doesn't credit (`CREDIT`), K of record with what the record is read as (``answers``, `read_as`: beside K wherever
+    the line states one, None where it states none) and what is open under it, its δ_net's terms, eps's split and connections,
     the tied audits the period reads and eps per window and pooled over each monitoring period (`pooled_eps`), the
     composite's stated error, the year's datacenter cell (both None where the record holds no periods' cells,
     `NOT_SCALED`), sampled proofs' guarantee per window and pooled
@@ -2224,7 +2240,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "open_in_lean": [MEMBER_OPEN],
             "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
             "not_credited": rec["of_record"].get("not_credited", []),
-            "K": fig.get("K"), "answers": None if fig.get("K") is None else given().get("answers"),
+            "K": fig.get("K"), "answers": None if fig.get("K") is None else read_as(rec),
             "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
@@ -2255,14 +2271,15 @@ def guarantee(g: Mapping[str, Any] | None) -> Any:
     return {"per_window": {k: g["per_window"][k] for k in ("epsilon", "delta", "units", "law")}, "pooled": pooled}
 
 
-def cells(p: Mapping[str, Any] | None) -> Any:
-    """``p`` (`periods`) as each cell's bits, share and how, the run's own period's with its phases and its figure over
-    one, under the answers they are on (`given`: a record written with its cells is printed as it wrote them); ``p`` as
-    it is where it holds no figure (its ``missing`` or ``error``, or None)."""
+def cells(p: Mapping[str, Any] | None, answers: str = ANSWERS) -> Any:
+    """``p`` (a record's `periods`) as each cell's bits, share and how, the run's own period's with its phases and its
+    figure over one, printed as the record wrote them under ``answers``, what its record is read as (`read_as`: as
+    given, unless the record says otherwise); ``p`` as it is where it holds no figure (its ``missing`` or ``error``, or
+    None)."""
     if not isinstance(p, Mapping) or "run" not in p:
         return p
     run = p["run"]
-    return given() | ({"conditional_on": p["conditional_on"]} if "conditional_on" in p else {}) | {
+    return {"answers": answers} | ({"conditional_on": p["conditional_on"]} if "conditional_on" in p else {}) | {
         "run": {"bits": run["bits"], "share": run["share"], "phases": run["phases"],
                 "per_phase": run["per_phase"]["bits"]},
         **{name: {where: {k: p[name][where][k] for k in ("bits", "share", "how")}
@@ -2287,7 +2304,7 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
                      "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
                      "not_credited": line["not_credited"], "K": line["K"], "answers": line["answers"],
                      "open": line["open"],
-                     "periods": cells(rec.get("periods")), "sampled_proofs": line["sampled_proofs"]})
+                     "periods": cells(rec.get("periods"), read_as(rec)), "sampled_proofs": line["sampled_proofs"]})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
 
 

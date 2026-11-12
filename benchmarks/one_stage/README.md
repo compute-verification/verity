@@ -302,8 +302,11 @@ negatives.
   error as the sum of its subprotocols' errors (four, or three without PoUW's), each δ with where the
   run states it and the terms no check computes named. While the period's check reads its answers as given the record
   makes no period's figure from K (`periods` is missing, with why: nothing scaled, pooled or summed, no cell called
-  proved, no share of weights or egress; `ANSWERS_VERIFIED` in `onsite_record.py` is the one switch). Once the check
-  verifies them, it states that K over the
+  proved, no share of weights or egress; `ANSWERS_VERIFIED` in `onsite_record.py` is the one switch for what a record
+  is written as). A written record is read by what it says: one written on verified answers says so in its own
+  `answers`, and any other, one written before the label included, is read as given whatever the reading code's
+  switch, so `--beside` prints its K and its cells under "answers read as given". Once the check
+  verifies them, a record states that K over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
   whose sources the record states, beside its figure over one execution phase, and its share of one copy of the

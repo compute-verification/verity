@@ -555,8 +555,9 @@ def test_wherever_K_is_stated_the_answers_it_is_on_stand_beside_it_and_nothing_i
     assert OR.ANSWERS_VERIFIED is False and OR.ANSWERS == "answers read as given" and OR.given() == {"answers": OR.ANSWERS}
     assert OR.GIVEN.startswith("K, on one-stage answers the driver verified; the check read them as given")
     assert (b["K"], b["answers"], b["is"]) == (K, OR.ANSWERS, OR.GIVEN)
-    assert (b["of_record"]["K"], b["of_record"]["answers"]) == (KR, OR.ANSWERS) and "`GIVEN`" in OR.OPEN
+    assert (b["of_record"]["K"], b["of_record"]["answers"]) == (KR, OR.ANSWERS)
     assert rec["periods"] == {"missing": OR.NOT_SCALED} and OR.cells(rec["periods"]) == rec["periods"]
+    assert "answers" not in rec and OR.read_as(rec) == OR.ANSWERS
     assert "read as given" in OR.NOT_SCALED and "labelled number" in OR.NOT_SCALED
     assert '"how"' not in json.dumps({k: rec[k] for k in ("bound", "periods")}) and '"how": "proved"' not in text
     assert not {"share", "share_served", "share_of_capacity"} & set(re.findall(r'"(\w+)":', json.dumps(rec["periods"])))
@@ -567,19 +568,54 @@ def test_wherever_K_is_stated_the_answers_it_is_on_stand_beside_it_and_nothing_i
 
 
 @pytest.mark.usefixtures("verified")
-def test_once_the_check_verifies_its_answers_nothing_stands_beside_K_and_the_periods_cells_are_written(tmp_path, capsys):
-    """The other side of `ANSWERS_VERIFIED`: no label in the record or its line, and the cells as `periods` makes them."""
+def test_once_the_check_verifies_its_answers_the_record_says_so_itself_and_writes_its_periods_cells(tmp_path, capsys):
+    """The other side of `ANSWERS_VERIFIED`: the record says in its own ``answers`` that its answers were verified, no
+    read-as-given label is in it or its line, and its cells are as `periods` makes them."""
     out = accepted(tmp_path)
     assert main([str(out)]) == 0
     text = (out / "record" / "onsite.json").read_text()
     rec, line = json.loads(text), json.loads(capsys.readouterr().out.strip()[7:])
-    assert OR.given() == {} and '"answers"' not in text and OR.GIVEN not in text and OR.NOT_SCALED not in text
-    assert (rec["bound"]["K"], rec["bound"]["of_record"]["K"], line["K"], line["answers"]) == (K, KR, KR, None)
+    assert OR.given() == {} and OR.ANSWERS not in text and OR.GIVEN not in text and OR.NOT_SCALED not in text
+    assert rec["answers"] == OR.VERIFIED == OR.read_as(rec) and text.count('"answers"') == 1
+    assert (rec["bound"]["K"], rec["bound"]["of_record"]["K"], line["K"], line["answers"]) == (K, KR, KR, OR.VERIFIED)
     p = rec["periods"]
     assert p["run"]["bits"] == KR and p["run"]["how"] == "proved" and set(LB.PERIODS) <= set(p)
     assert all(p[n][w]["how"] == "scaled" for n in LB.PERIODS for w in ("datacenter", "world"))
     assert line["year_datacenter"]["bits"] == p["year"]["datacenter"]["bits"] and line["eps_pooled"] is not None
-    assert "answers" not in OR.cells(p) and OR.cells(p)["run"]["bits"] == KR
+    assert OR.cells(p, OR.read_as(rec))["answers"] == OR.VERIFIED and OR.cells(p)["run"]["bits"] == KR
+
+
+@pytest.mark.parametrize("reading", [False, True])
+def test_a_record_that_doesnt_say_its_answers_were_verified_is_read_as_given_whatever_the_reading_code_is(
+        tmp_path, capsys, monkeypatch, reading):
+    """The label a record is read with comes from the record, never from the code reading it. A kept record with its
+    periods' cells and no ``answers`` of its own, as one written before the label is, prints `ANSWERS` beside its K and
+    at the head of its cells, in its line and under ``--beside``, with `ANSWERS_VERIFIED` False and with it True; and
+    so does one whose ``answers`` says anything but `VERIFIED`. One that says `VERIFIED` is read as it says, on both."""
+    out = accepted(tmp_path / "run", registration=published(2 ** 23))
+    with monkeypatch.context() as mp:
+        mp.setattr(OR, "ANSWERS_VERIFIED", True)
+        assert main([str(out), "--window-steps", "4", "--max-tokens", "8"]) == 0
+    said = json.loads((out / "record" / "onsite.json").read_text())
+    kept = {k: x for k, x in said.items() if k != "answers"}
+    assert said["answers"] == OR.VERIFIED and "run" in kept["periods"] and '"answers"' not in json.dumps(kept)
+    capsys.readouterr()
+    monkeypatch.setattr(OR, "ANSWERS_VERIFIED", reading)
+    for name, rec, label in (("kept", kept, OR.ANSWERS), ("other", kept | {"answers": "verified"}, OR.ANSWERS),
+                             ("said", said, OR.VERIFIED)):
+        assert OR.read_as(rec) == label
+        line = OR.summary(rec)
+        assert (line["K"], line["answers"]) == (KR, label) and line["year_datacenter"] is not None
+        f, to = tmp_path / f"{name}.json", tmp_path / f"{name}-beside.json"
+        f.write_text(json.dumps(rec))
+        assert main(["--beside", str(f), "--to", str(to)]) == 0
+        (run,) = json.loads(to.read_text())["runs"]
+        assert (run["K"], run["answers"], run["periods"]["answers"]) == (KR, label, label)
+        assert run["periods"]["run"]["bits"] == rec["periods"]["run"]["bits"] == KR
+        assert all(run["periods"][n][w] == {k: rec["periods"][n][w][k] for k in ("bits", "share", "how")}
+                   for n in LB.PERIODS for w in ("node", "datacenter", "world"))
+        (printed,) = json.loads(capsys.readouterr().out.strip()[14:])
+        assert (printed["K"], printed["answers"]) == (KR, label)
 
 
 @pytest.mark.usefixtures("verified")
@@ -3264,7 +3300,7 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
     assert [(r["record"], r["run"], r["tree"], r["serving"], r["ell_a"]) for r in runs] == [
         (str(p), "toy-run", TREE, {"window_steps": s, "max_tokens": m}, [cap]) for p, (s, m, cap) in zip(paths, SETTINGS)]
     assert [(r["of_record"], r["conditional_on"], r["not_claimed"], r["not_credited"], r["K"], r["answers"], r["open"])
-            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, None, ["free", "circuit"])
+            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, OR.VERIFIED, ["free", "circuit"])
                                for _, _, cap in SETTINGS]
     for p, r in zip(paths, runs):
         rec = json.loads(p.read_text())
@@ -3275,24 +3311,25 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
                    for n in LB.PERIODS for w in ("node", "datacenter", "world"))
         assert r["sampled_proofs"] == OR.guarantee(rec["sampled_proofs"]) and "year" in r["sampled_proofs"]["pooled"]
         assert "conditional_on" not in r["periods"] and not {"K_tight", "periods_tight"} & set(r)
-        assert "answers" not in r["periods"]
+        assert r["periods"]["answers"] == OR.VERIFIED
     assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
     said = (OR.ONSITE, "none", f"no verified compute is credited: {OR.ONSITE}'s verdict is no compute claim")
     assert [(r["composite"], r["verified_compute"], r["compute"]) for r in runs] == [said] * len(SETTINGS)
     line = capsys.readouterr().out.strip()
     assert line.startswith("ONSITE-BESIDE ") and [
         (x["serving"], x["K"], x["answers"], x["composite"], x["verified_compute"], x["compute"])
-        for x in json.loads(line[14:])] == [(r["serving"], r["K"], None, *said) for r in runs]
+        for x in json.loads(line[14:])] == [(r["serving"], r["K"], OR.VERIFIED, *said) for r in runs]
 
 
 def test_beside_states_the_answers_beside_each_runs_K_and_prints_a_records_periods_as_it_wrote_them(
         tmp_path, capsys, monkeypatch):
-    """Read as given, each run's K has `ANSWERS` beside it in the document and in the line, and a record's periods are
-    printed as it wrote them: the missing with its why, and the cells of a record written with them, under the label."""
+    """Each run's K has beside it, in the document and in the line, what its own record is read as, and a record's
+    periods are printed as it wrote them: the missing with its why, and the cells of a record written with them, under
+    that record's label."""
     paths = []
     for i, (s_, m, cap) in enumerate(SETTINGS):
         with monkeypatch.context() as mp:
-            mp.setattr(OR, "ANSWERS_VERIFIED", i == 0)    # the first record holds its periods' cells and no label
+            mp.setattr(OR, "ANSWERS_VERIFIED", i == 0)    # the first record says its answers were verified
             out = accepted(tmp_path / f"s{s_}", registration=published(cap))
             assert main([str(out), "--window-steps", str(s_), "--max-tokens", str(m)]) == 0
         paths.append(out / "record" / "onsite.json")
@@ -3301,14 +3338,17 @@ def test_beside_states_the_answers_beside_each_runs_K_and_prints_a_records_perio
     assert main(["--beside", *map(str, paths), "--to", str(f)]) == 0
     with_cells, without = json.loads(f.read_text())["runs"]
     wrote = json.loads(paths[0].read_text())["periods"]
-    assert "answers" not in wrote and with_cells["periods"]["answers"] == OR.ANSWERS
+    assert "answers" not in wrote and with_cells["periods"]["answers"] == OR.VERIFIED
     assert with_cells["periods"]["run"]["bits"] == wrote["run"]["bits"] == K + SETTINGS[0][2] + 1
     assert all(with_cells["periods"][n][w] == {k: wrote[n][w][k] for k in ("bits", "share", "how")}
                for n in LB.PERIODS for w in ("node", "datacenter", "world"))
     assert without["periods"] == {"missing": OR.NOT_SCALED}
-    assert [(r["K"], r["answers"]) for r in (with_cells, without)] == [(K + cap + 1, OR.ANSWERS) for _, _, cap in SETTINGS]
+    labels = (OR.VERIFIED, OR.ANSWERS)
+    assert [(r["K"], r["answers"]) for r in (with_cells, without)] == [
+        (K + cap + 1, label) for (_, _, cap), label in zip(SETTINGS, labels)]
     line = capsys.readouterr().out.strip()
-    assert [(x["K"], x["answers"]) for x in json.loads(line[14:])] == [(r["K"], OR.ANSWERS) for r in (with_cells, without)]
+    assert [(x["K"], x["answers"]) for x in json.loads(line[14:])] == [
+        (r["K"], label) for r, label in zip((with_cells, without), labels)]
 
 
 def test_beside_refuses_by_path_a_record_of_another_format_or_one_stating_no_serving_settings(tmp_path, capsys):
