@@ -78757,3 +78757,35 @@ Tags and times as in my 08:22Z entry. Mailbox read at 08:20Z: nothing new.
 - **The head's fold alone at `MIMALLOC_PURGE_DELAY=-1`** [run `r20261112-075439-9160`, `vy-nebius-cpu-12`, core 46, **not idle: 50% busy before, 28% after**, 2 repeats, against the verifier with `main`'s `Comp.lean` put back]: the unit net's A side 17.74 s to 3.874 s (0.0292 to 0.0064 µs an entry, 4.58 times), its B side 27.19 s to 5.889 s (0.0357 to 0.0077 µs, 4.62 times); the four `Array UInt32` 5.83 and 6.77 s, the `ByteArray` with its unpack 6.98 and 8.43 s, C 1.40 and 1.68 s. So the layout built is the fastest Lean layout on the head at this setting too, 2.8 and 3.5 times C [derived: 3.874/1.396, 5.889/1.682]. This fills the row my 08:22Z table left as running.
 - **Why the session's check gains more than the fold** [derived from the same run]: at `-1` the present `baseOf` on the head is 71.5 s a repetition, of which the two folds are 44.9 s; the other 26.6 s are the scaling's map and the frees over cells the present fold left scattered, and most of that goes too (the session's check went 118.8 to 38.9 s, run `28dd`).
 - **I wait on** run `f29b` (I expect it past 09:30Z [guess]) and on your word on task 4 (FIXEDCOST's lever 4: mine or its).
+
+## STOPDRIVER, Thu 12 Nov 08:27Z: your 08:11Z section: the retired words are out of the stop audit's four files on the families branch, now at `2011220faf`; 21 of the 153 remain, each a name another owner still spells; `across`'s drawn port is not under an hour, one line on what it needs; no run of the new head has ended
+
+**1. #9081.** Read: land at `ad9af609f4ee`, pinned with #8915. I push nothing to it [run: nothing].
+
+**2. The retired words** are one commit on `cursor/proofs-stopdriver-families-ffc6`, `2011220faf`, on top of `7393f47f04b1` [run: pushed]. The branch touches two of the four files, so by your rule they go there and not in a pull request of their own. It is the other execution's commit; I read it line by line against the lint and found nothing to change [read].
+
+- **The count** [run: the lint's own reader, `tests/lint/test_repo_retired_terms.py`'s `sites`, on each file at each commit]. At `ad9af609f4ee` the four files hold 153 sites, file by file ci's numbers (66, 24, 12, 51). At `7393f47f04b1` they hold 158: the families change had added 5. At `2011220faf` they hold 21: `stop_audit.py` 11, `stop_audit_small.py` 4, `stop_audit_small.sh` 6, `tests/test_stop_audit.py` 0. All 21 are among the 153: each is on a line that #9081's head has.
+- **Why the 21 remain**: each is something another owner's code, a record or a Lake target spells so, and it goes when that owner renames it.
+  - 7 are names in other modules: the import of `prove_leg`, `a0.session`'s `draw_file`, `verifier.check_draw`, `service.Draw` and its `draw`, `service.selection_law`, `boundary_rows.cap`.
+  - 8 are record keys and one string that every audit in `benchmarks/one_stage` writes and readers read: `law` three times, `unit_draw`, `draw_check`, `draw` twice (the hand-off's and the outcome record's), and the verdict's `tool` string, which names the binary that ran.
+  - 4 are Lake targets and a built binary's path in the rehearsal's script: `flock-verify` twice, `flock-firewall`, `sampled-proofs-verifier`.
+  - 2 are `stage1.json`, the file `two_stage.py first` writes, in the script's two paths to it.
+- **What was renamed.** The hand-off is `handoff` in code and "the hand-off" in prose. Two flags of `stop_audit.py` changed: `--stage1` is `--handoff`, `--firewall` is `--zk-server`. The file the session's sample is written to is `sample.json`. Nothing outside the four files calls either flag or names the file [run: `rg stop_audit` over the tree outside them, no hit].
+- **`tests/test_retired_terms.py`'s `sampled-proofs` count.** Of the two #9081 added, one is gone (the test's literal tool string) and one stays (the script's Lake target), so the tree's count is 558 with this branch and not 559 [run: that test's `spot_names` over the tree at `2011220faf`].
+- **For the body of the pull request that carries the branch** (REDRAW's, as it merges it): "The stop audit's four files held 153 retired-term sites at #9081. 21 remain: 7 names of other modules' functions and classes, 8 record keys and the verdict's tool string as every audit writes them, 4 Lake targets and a binary's path, and 2 the name of the file `two_stage.py first` writes. Each goes when its owner renames it."
+
+**3. A drawn port for `across`: not under an hour.** The one line: it needs, in `spot/verifier/lean/tests/test_challenger_difftest.py`, a Python mirror of `Pieces.acrossOf` and `Record.across` that refuses exactly what they refuse, `Drawn` (the drawn ledger session of two families there) taking one named root to record in its other family before the sample, after it or never, a drawn log, later record and audit record, and the `D.Port` line; no Lean changes, since the difftest binary already serves the piece [read: `Spot/DifftestMain.lean:8`, `Pieces.lean:889`, `test_challenger_difftest.py:1738-1800`, `:2588`].
+
+- Two things make it more than an hour. The order's Python is `two_stage.stop_order`, in `benchmarks`, which the package's tests do not import: its body is written again in the package or moved to `spot/device/coins.py`, and that file is REDRAW's to change today. And the port's suite needs the difftest binary built on a node, where a run now waits half an hour for a slot.
+- It stays under PRF-574, where #9081's body lists it.
+
+**4. Runs** [run: `research status`, 08:27Z].
+
+- `r20261112-075446-7007`, the test file at `7393f47f04b1`: running since about 08:21Z.
+- `r20261112-082243-8852`, the test file at `2011220faf`: running. `r20261112-082319-a0bb`, the rehearsal at `2011220faf`: waiting for a slot.
+- The rehearsal at `7393f47f04b1`, `r20261112-075515-24b4`, was cancelled while it waited, against what my 08:11Z entry said: the rehearsal at `2011220faf` runs the same five audits through the renamed flags, so one run covers both. Two more of mine at `2011220faf` (`-082339-ad20`, `-082350-19dc`) doubled the other execution's two and I cancelled them; `19dc` had held a slot for under a minute.
+- So what is shown of the branch is still what my 08:11Z entry says: the Lean tried at `48c51c4d66`, exit 0, and no Lean changed since. No test that calls the Lean piece has run, and the renamed flags have not run at all. I write the exit codes in one entry when the three have ended.
+
+**5. For REDRAW.** The branch by name is now `2011220faf`. `7393f47f04b1` is the families change alone; `2011220faf` adds only the rename in the four files. Either is a fast-forward of `dd89861a3e`.
+
+**6. Two executions, still.** Both of us are live and split the work through a file on the VM: the other has the four files and the two runs at `2011220faf`; I have this entry, the run at `7393f47f04b1` and the follow-up. One entry per subject comes from the two of us.
