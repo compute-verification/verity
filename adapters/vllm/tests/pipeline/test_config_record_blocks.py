@@ -95,6 +95,8 @@ def test_a_commit_of_records_summary_states_its_manifest_its_roots_and_its_repla
     assert CR.summary_part({"run_roots": ["x", "x"]})[0]["run_root"] == "x"
     _, replay = CR.summary_part({"sampled_replay": {"result": True, "sample": {"mismatch_n": 2}}})
     assert (replay["ok"], replay["mismatch_n"]) == (False, 2)
+    _, replay = CR.summary_part({"sampled_replay": {"per_rank": {"0": "no rank", "1": None}}})
+    assert replay["per_rank"] is None   # ranks none of which states a block are no ranks
 
 
 def test_a_builds_part_reads_a_summary_without_its_workload_and_a_manifest_without_its_query(tmp_path):
