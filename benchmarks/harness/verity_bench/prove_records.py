@@ -56,6 +56,10 @@ nothing and is listed under "Refused".
 
 The serving rate isn't a record: it is modeled from the census's MACs a served token, the fleet's assumed serving MFU
 (`FLEETS`) and the card's data-sheet peak, and the output says so.
+
+Under a research run, a runner that names metric ids for the table's totals (`benchmarks/prove/run.py`'s `METRICS`)
+has `record` write them through the harness kit: a measurement a total with every block proved, its mark (measured,
+modeled or partial, as the table says it) the first of its inputs, and `CHECKS` as the run's validation.
 """
 
 from __future__ import annotations
@@ -67,7 +71,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs, overhead_records, steady
+from verity_bench import jobs, kit, overhead_records, settings, steady
 from verity_bench import lean_verify as L
 from verity_bench import overhead as O
 from verity_bench import prove as P
@@ -105,6 +109,14 @@ LEAN_FIELDS = ("block.k_log", "block.blocks", "block.full", "proof.bytes", "veri
 #: each fleet's assumed serving MFU
 FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
 SYSTEMS = ("flock", "spot")
+#: the totals of a table with every block proved that a runner records under its metric ids, by their key in the
+#: table's `totals`, with the unit each measurement carries
+FIGURES = {"gpus_per_serving_gpu": "prover GPUs a serving GPU",
+           "gpu_seconds_per_token": "prover GPU-seconds a served token",
+           "lean_verifier_seconds_per_token": "Lean verifier seconds a served token",
+           "proof_bytes_per_token": "proof bytes a served token"}
+#: the table a run's result keeps beside its measurements, relative to the run's directory
+TABLE = "out/prove.json"
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
 MISSING_NAMED = 8
 CENSUS, CUT, STEADY, SINGLE, SAMPLING = "census", "cut", "flock-steady", "flock-single", "spot-sampling"
@@ -608,6 +620,91 @@ def _periods(root: Path, rate: P.Serving, ratio: float, sampled: P.SamplingPlan 
             "rows": [{"compute": fleet, "serving_gpus": gpus, "prover_gpus": ratio * gpus, "period": name, "period_s": span,
                       "served_gates": gpus * span * gates, "prover_gpu_seconds": ratio * gpus * span}
                      for fleet, gpus in fleets.items() for name, span in spans.items()]}
+
+
+# ---- the result ------------------------------------------------------------------------------------------------------------
+
+
+def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
+    """A total's value and its mark, in the table's words. The proving totals: their status (`measured`, `modeled`, or
+    `partial` with how many block types it leaves out), the share of the proving time steady-state rows measure and
+    the range's other end. The Lean verifier's seconds and the proof's bytes: `not measured`, with no value, else the
+    status, the block type measured with what its accept holds (its record's `label`) and what was scaled."""
+
+    t = doc["totals"]
+    if figure in ("gpus_per_serving_gpu", "gpu_seconds_per_token"):
+        status = (f"partial: {len(t['missing'])} block type(s) with no figure, whose proving it leaves out"
+                  if t["missing"] else t["status"])
+        low, high = t[f"{figure}_range"]
+        other = "" if low == high else f"; range {low:.6g} to {high:.6g}, the other end {t['range_basis']}"
+        return t[figure], (f"{status}: steady-state measurements cover {t['steady_time_share']:.1%} of the proving time"
+                           f"{' it prices' if t['missing'] else ''}{other}")
+    v = t[figure]
+    if v is None:
+        return None, ("not measured: no Lean verifier run of record measures a block type "
+                      f"(`{RUN_OF_RECORD}={record_name(doc['workload'], LEAN)}`)")
+    m = t["lean_verify"][0]
+    status = "modeled, not measured" if v["status"] == "modeled" else v["status"]
+    scaled = (f"; scaled: the other {v['scaled_block_types']} block types, {1 - v['measured_share']:.1%} of it: "
+              f"{v['basis']}" if v["scaled_block_types"] else "")
+    one = "one block type" if len(t["lean_verify"]) == 1 else f"{len(t['lean_verify'])} block types, the most proving time first"
+    return v["value"], f"{status}: measured on {one}, `{m['block']}` ({m['label']}, run {m['run']}){scaled}"
+
+
+def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dict]:
+    """The kit writer's measurements of a table with every block proved, one a metric id of `metrics`: the total its
+    key names (`FIGURES`), in that total's unit. A total with a value has its mark as the first of its inputs, since
+    the kit holds a `why` only for a measurement with no value, then (for the prover GPUs a serving GPU) the stated
+    serving rate, then the records the table read; a total with none has its mark as its `why`."""
+
+    if bad := sorted(set(metrics.values()) - FIGURES.keys()):
+        raise ValueError(f"no total of the table is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
+    targets = list(dict.fromkeys(t for i in doc["inputs"] for t in i["targets"]))
+    s, out = doc["serving"], []
+    for name, figure in metrics.items():
+        value, mark = _mark(doc, figure)
+        if value is None:
+            out.append({"name": name, "value": None, "unit": FIGURES[figure], "why": mark, "inputs": targets})
+            continue
+        serving = [f"serving rate ({s['status']}, a stated input): {s['basis']}"] if figure == "gpus_per_serving_gpu" else []
+        out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [mark, *serving, *targets]})
+    return out
+
+
+def validation(doc: Mapping[str, Any]) -> tuple[str, str]:
+    """The run's validation of a table, its status and detail: `CHECKS` hold a figure when some block type is priced
+    from steady-state rows, each of which passed them all, and no block type is left out of the totals; else it
+    failed, and the detail says which."""
+
+    t, checks = doc["totals"], ", ".join(f"`{c.__name__}`" for c in CHECKS)
+    steady_types = next(x["block_types"] for x in doc["sources"] if x["source"] == P.STEADY)
+    priced = (f"{steady_types} block type(s), {t['steady_time_share']:.1%} of the proving time, priced from steady-state "
+              f"rows that each passed {checks}; a row that didn't prices nothing and is named on its type's row")
+    if not steady_types:
+        return "failed", f"no steady-state row passed {checks} and priced a block type: no total rests on one"
+    if t["missing"]:
+        return "failed", f"{priced}; {len(t['missing'])} block type(s) have no figure, and every total leaves them out"
+    return "passed", priced
+
+
+def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
+    """Writes a table with every block proved into this research run's result (`kit.writer`): the table as `TABLE`,
+    named a measurement file and the validation's evidence, what ran in the fingerprint, `measurements` under
+    `metrics`' ids and `validation`. A table at a sampling plan records nothing: each metric is every block proved's."""
+
+    if doc["system"] != "flock":
+        return
+    writer = kit.writer(settings.RESEARCH_RUN_DIR)
+    table = writer.out / TABLE
+    table.parent.mkdir(parents=True, exist_ok=True)
+    table.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    writer.fingerprint(benchmark="prove", system=doc["system"], workload=doc["workload"], provers=doc["provers"],
+                       cores=doc["cores"])
+    writer.measurement_file(TABLE)
+    for m in measurements(doc, metrics):
+        writer.measurement(**m)
+    status, detail = validation(doc)
+    writer.validation(status, "verity_bench.prove_records.CHECKS", detail, [TABLE])
 
 
 # ---- rendering -----------------------------------------------------------------------------------------------------------------

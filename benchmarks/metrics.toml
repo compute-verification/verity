@@ -29,3 +29,43 @@ better = "lower"
 command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
 every = "7d"
 goal = "network/period-bound-checked"
+
+[[metric]]
+id = "benchmarks/prover-gpus-per-serving-gpu"
+title = "GLM-5.3 with every block proved by Flock: prover GPUs for each serving GPU"
+owner = "benchmarks"
+unit = "prover GPUs a serving GPU"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system flock --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/prover-gpu-seconds-per-token"
+title = "GLM-5.3 with every block proved by Flock: prover GPU-seconds for each served token"
+owner = "benchmarks"
+unit = "prover GPU-seconds a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system flock --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/lean-verifier-seconds-per-token"
+title = "GLM-5.3 with every block proved by Flock: the Lean verifier's seconds for each served token"
+owner = "benchmarks"
+unit = "Lean verifier seconds a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system flock --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/proof-bytes-per-token"
+title = "GLM-5.3 with every block proved by Flock: proof bytes for each served token"
+owner = "benchmarks"
+unit = "proof bytes a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system flock --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
