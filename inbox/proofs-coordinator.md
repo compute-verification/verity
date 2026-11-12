@@ -95321,3 +95321,98 @@ and no pull request is opened.
 
 Next of ours without your word, if you agree: gap 2 when the units file is final. Gaps 4 and 7, and the command's
 half of gap 5, I can write on your word; gap 6 waits for you.
+
+## KEPT, Thu 12 Nov 18:41Z: run 2 passed, all eight members accepted: holding the served program, the first member takes 749 s and the next three 73, 85 and 97 s; on the statement's own small Program 160 s, then 54 to 56 s. The read is paid once; each later member still pays 18 to 41 s more than with the small Program. One run, a loaded node, a scratch merge, a staged statement's proofs
+
+**What every figure below is** (each line holds for the whole entry):
+
+- **The run:** `r20261112-175921-dd43`, exit 0, vy-nebius-cpu-14, 18:05:22Z to 18:33:26Z, record `art:83961e57ed601f448640f3a8933d235cd1e45128bfc8483d73da6f2b3ae998b6`. One run.
+- **The node:** load 55 to 118 on 192 cores through the run; its other eleven slots were taken when the run joined. Each process pinned to core 127, started by the slot under `nice 19`; its CPU seconds equal its wall seconds to 0.1%, so it had the core. No `MIMALLOC_` variable (none in the job's environment).
+- **The verifier:** built from the scratch merge `6b7d33e2a5c2` (`main` `15662e7c40ae` with #9253, #9209, #9234), pushed nowhere. On a scratch merge, not on `main`.
+- **The members:** two kept proofs of one staged statement, the head block at `NVIS=64, FIRST=false`, 256 blocks of 2^27, circuit file 12.19 GB. Own is KSTEADY's (`art:75593450…`); kernel is the kernel step kept by today's card run (`art:fd008960…`). They are not members of the served window. Their public files are the same bytes.
+- **The served program:** the one of eleven templates, 2.77 GB (`art:a6102446…`), as #9190's head builds it; not the one `main` builds since #9087.
+- **The verdicts:** all eight accepted, each saying "the Program was handed and not held to the circuit" (the provisional unit cover). A kept process's verdicts are per member only, and a window of more than one member gets no counted verdict.
+- **Units:** GB is 10^6 kB as the kernel reports it. Every figure is [run] unless marked.
+
+**1. The table** (seconds; the session's line holds its setup, since `inputs` plus the session's line is the wall)
+
+| process kept on | member | `inputs` | `setup (drawn)` | session's line | wall | resident at its `MEMBER` line, GB | greatest sample, GB |
+|---|---|---|---|---|---|---|---|
+| the word Program, 216 kB | 0 own | 110.9 | 3.0 | 48.6 | 159.6 | 18.5 | 42.5 |
+| | 1 kernel | 5.2 | 2.9 | 49.3 | 54.6 | 18.5 | 30.5 |
+| | 2 own | 5.2 | 2.9 | 49.0 | 54.2 | 18.5 | 30.5 |
+| | 3 kernel | 5.3 | 2.9 | 50.9 | 56.2 | 18.5 | 30.5 |
+| the served program, 2.77 GB, handed by every member | 0 own | 507.1 | 180.7 | 235.3 | 748.7 | 64.7 | 124.1 |
+| | 1 kernel | 20.3 | 3.1 | 53.0 | 73.3 | 64.7 | 76.6 |
+| | 2 own | 26.2 | 3.3 | 58.6 | 84.8 | 64.7 | 76.6 |
+| | 3 kernel | 39.4 | 3.2 | 58.0 | 97.4 | 64.7 | 76.6 |
+
+The two processes whole: 324.8 s and peak 42.9 GB; 1,044.0 s and peak 124.1 GB. I expected 120 to 146 GB.
+
+**2. The first member, apart**
+
+- **With the small Program:** 159.6 s. It reads, hashes and parses the circuit file (110.9 s on one core), then the session's check (45.7 s after its setup).
+- **With the served program: 589.1 s more.** `inputs` holds 396.2 s of it (the program's digest), `setup` 177.8 s (the description, which the check for a registered input reads), the session 8.9 s, and 6.3 s pass before `inputs` starts.
+- **That read is 1.8 times what my scratch reader took** for the same two readings on another node (325.7 s, `e495`). Not explained; the load is my first suspect [guess].
+- **Memory:** the peak, 124.1 GB, comes 252 s after the member's line is written, inside `inputs`. The process then holds 64.7 GB between members: 46.2 GB more than with the small Program. That is the program kept as parsed JSON, which these members never release because none reads the decoded program [derived: `e495` read 46.3 GB at that point].
+- **The system's share of the CPU:** 370.9 of 1,043.5 s in this process, 32.3 of 324.7 s in the other.
+
+**3. The later members: the two processes do not agree**
+
+- **Wall:** 54.2 to 56.2 s with the small Program; 73.3, 84.8 and 97.4 s with the served one. That is 18.8, 30.6 and 41.2 s more.
+- **Most of it is `inputs`:** 5.2 to 5.3 s against 20.3, 26.2 and 39.4 s. Each member hands its own copy of the served program, and the verifier reads it, hashes it to its archive key and compares it with the kept bytes [read: `archiveGet`, `ProgramRead.orOf`; derived]. Why it grows from member to member is not explained.
+- **The session after its setup:** 46.1 to 48.0 s against 49.8 to 55.3 s.
+- **Own and kernel proofs cost the same:** in the first process 54.2 s (own) and 54.6, 56.2 s (kernel). Members of one proof get the same verdict bytes, first or later.
+- **Memory of a later member:** 18.5 GB held and 30.5 GB at most; 64.7 GB held and 76.6 GB at most. The 12 GB more is the circuit file's bytes while they are compared.
+
+**4. The saving against a fresh process on the same bytes**
+
+- **The first member stands for the fresh process** [derived]: it does all a fresh `verify` does. This job ran no `verify` alone.
+- **With the served program:** 748.7 s fresh, 73.3 to 97.4 s kept. A member saves 651 to 675 s, 87% to 90%.
+- **With the small Program:** 159.6 s fresh, 54.2 to 56.2 s kept. A member saves 103 to 105 s, 65% to 66%.
+- **Beside it, `main`'s verifier alone** on these proofs with the small Program took 310 to 376 s at 42.9 GB [run: `ef6c`, `a07c`, `2fa5`, other nodes]. It has neither the fold nor a kept process.
+
+**5. The rows at 935.3, 710.8 and 683.5 GB**
+
+This run measures that a process holding the served program pays its read once (589 s in the first member, none of it in the next three), and it shows one cost the model's kept process does not hold: every later member took 18 to 41 s more than with its own small Program. The many-sessions premise (how many sessions and cores a process serves in its life; four members on one core here) and the memory (64.7 GB held, 124.1 GB at the peak, not priced) stay modeled.
+
+- **The read:** the model spreads 609.3 to 692.0 s over a process's life [relayed: COUNT's 11:52Z note]. 589 s here is that size.
+- **The cost it does not hold:** the model's only charge for the kept process is that read [read: the same note]. A session with the served program handed cost 1.34 to 1.73 times the same session with the small Program. Whether the model's own seconds for a session already hold a program handed at this size I have not read. I book nothing; COUNT's rows are COUNT's.
+- **Where that cost comes from:** the member's own copy of the program, read and hashed again. A member that names the kept program by its archive key could be given the kept bytes with no read. That changes what `verify-members` is proved equal to. Not written; no lever is ordered.
+
+**6. For the bodies** (each figure with the labels above: one run, loaded node, scratch merge, a staged statement's proofs)
+
+- **#9190:** a kept process on the served sparse-attention program checked four kept proofs at a 12.19 GB circuit file in 748.7 s, then 73.3, 84.8 and 97.4 s, holding 64.7 GB between members and 124.1 GB at its peak; on the statement's own 216 kB Program, 159.6 s, then 54.6, 54.2 and 56.2 s, 18.5 GB held, 42.9 GB at its peak.
+- **#9253:** with the circuit file kept, a later member's `inputs` is 5.2 to 5.3 s where the first's is 110.9 s. What a later member pays without it at this size is not measured; 110.9 s is its size [derived].
+
+**7. Still unmeasured after Friday**
+
+- **The checks that read the kept program for a member:** its units from the description under a template query, the Linking check, and the registered reads' cover on the decoded program. They need a proof under a template query whose program is the served one. No job makes one.
+- **The program `main` builds since #9087** (six templates): its size, its read and its held memory.
+- **More than one core, and more than four members.**
+- **A quiet node.** Every figure here is from a node at load 55 to 118.
+
+**8. The ids and the two command lines** (Friday changes only `PROOF_OWN` and `PROOF_KERNEL`)
+
+- **The served program:** `out/program.json` of `art:a6102446adae7d2b0e22743a4910e1222418234299e43f8e4ad869bd48f67fd3`, 2,765,984,170 bytes, SHA-512 `6a15009d…7739` (whole in my 17:51Z entry).
+- **Run 1**, from a worktree at the tree whose program is wanted; files in my notes under `kept-leverd/served/`:
+
+      research run --on NODE --pool research --as proofs --project verity --source . --cwd clone --mem-gb 170 --timeout 6000 --send leverd.py --send inputs_named.py --send served.sh -- bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/served.sh"'
+
+- **Run 2**, from a worktree at the scratch merge; files under `kept-leverd/members/`:
+
+      research run --on NODE --pool research --as proofs --project verity --source . --cwd clone --store-read --mem-gb 160 --timeout 9000 --env PROOF_OWN=art:75593450aae30f7caf09fc82bda7f83157ecea32e9f7da2afa968a7b3f965b0a --env PROOF_KERNEL=art:fd0089608abfd616a9619618e87c865cb85ede59f61c3e9288aa9ec4da3d37ec --env SERVED_ART=art:a6102446adae7d2b0e22743a4910e1222418234299e43f8e4ad869bd48f67fd3 --send kept_members.py --send members.sh -- bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/members.sh"'
+
+**9. Friday, corrected by this run's length**
+
+- **The job took 28 minutes from its slot** (fetch 2.5, build 2, the first process 5.4, the second 17.4) after 6 minutes in line.
+- **The table is in your inbox about 75 minutes after the slot**, with a fresh `verify` of one proof on each program added (about 15 minutes) and the reading. With the ids by 16:30Z: by 18:00Z. With the ids after the rows end at 19:45Z: by 21:15Z.
+- **What I need is in my 18:09Z entry:** the two ids a run and early, each proof's `pin.txt` on this circuit file, a place for 160 GB, and the commit Friday's served run builds from.
+
+**10. Three things I would run tonight, on your word** (none is launched)
+
+1. **The served program as `main` builds it now** (run 1 at `main`): about 50 minutes at `--mem-gb 170` [guess].
+2. **Run 2 again on a quieter node, with a fresh `verify` of one proof on each program added**: about 45 minutes at `--mem-gb 160`. It tests Friday's script before Friday, makes the saving two runs' difference, and says whether the later members' `inputs` grow again.
+3. **Run 2 on the new program**, once 1 has ended.
+
+**Held:** nothing pushed to a PR head, nothing marked, nothing on Linear or Slack, nothing quoted to another lane. No body edited.
