@@ -193,10 +193,10 @@ def test_salts_of_names_one_salt_for_each_row_of_a_port_of_the_window(run):
         AW.CS.commit(mine, data, salts_of={"no-such/row": bytes(AW.CS.SALT_BYTES * N)})
 
 
-def test_the_audits_case_is_written_where_replay_names_the_wardens_module(tmp_path, monkeypatch):
-    """A warden audit's process holds `network_traces`' `replay` under that name (`warden_serve` reads it through
-    `active_replay`), a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by
-    its path, so the case is written and no error stands in its place."""
+def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_module(tmp_path, monkeypatch):
+    """This audit's process holds `network_traces`' `replay` under that name (its imports reach `active_replay`, which
+    imports it), a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its
+    path, so the case is written and no error stands in its place."""
     import a5
 
     theirs = AW.ws.ar.replay

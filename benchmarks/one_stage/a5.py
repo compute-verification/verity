@@ -1104,7 +1104,7 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 
 def own_replay():
     """The `replay.py` beside this file, loaded by its path and never by its name: a process with `network_traces` on its
-    path (`a5_warden`'s, `a5_tp_gates`') holds that directory's `replay` under the name."""
+    path, as the audit over a network certifier's run has, holds that directory's `replay` under the name."""
     return AC._module("one_stage_replay", HERE / "replay.py")
 
 
