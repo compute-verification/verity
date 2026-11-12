@@ -1,0 +1,1 @@
+2026-11-12 13:46Z DRAFTKERNELS: eh norm read from CPU PTX/SASS (r20261112-134044-8a1d) as TritonBlockRMSNorm_v1{6144,8192,4,1e-5} twice, pos==0 a select to +0; indexer at next_n 6 flattens to next_n 1 on sm_90; next: module + sidecar, capture scripts.
