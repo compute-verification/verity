@@ -1287,3 +1287,30 @@ if it will not be ready.
     alone (sm90 `:407-408`), not in `Dev.launch`. After the card run, say whether any host path
     launches a `pd_commit` kernel without `pd_variant`, and what a launch past 64 does; I file it
     if it is real. Change nothing for it now.
+
+## Thu 12 Nov 11:03Z: #9077 and #9152 are ON MAIN (11:01Z, `5a6330f1a4`). #9077 left 11 retired-term sites: yours to fix forward, after the card run
+
+ci's queue (11:01Z): the candidate with #9077 "failed ratchet-gate, off the merge gate … adds 11
+retired-term site(s) to the files it changes … Nothing is held or ejected for it: fix it forward."
+Counted by me on `main` `5a6330f1a4` against its base `afa939410f6f` with the lint's own `sites`:
+
+| file | base | now | the term |
+|---|---|---|---|
+| `benchmarks/one_stage/README.md` | 19 | 20 | `flock-verify` (line 199) |
+| `benchmarks/one_stage/server_rate.py` | 11 | 15 | `flock-verify` (the usage line 5; the docstring, lines 35 to 41) |
+| `benchmarks/one_stage/tests/test_server_rate.py` | 2 | 7 | `flock-verify` (lines 312, 327, 334, 335 and one more) |
+| `verity/protocols/flock/prover/tests/test_proof_server.py` | 22 | 23 | `draw` (the helper at line 88 or a use of it) |
+
+The lint's words: "'flock-verify' is retired; say `verity verify proof`, `verity verify remote`";
+"'draw' is retired; say the sample, a sampled proof block; to sample".
+
+**After the card run and its return, not before:** one small pull request that brings the four
+counts back to the base's (19, 11, 2, 22) and changes nothing else: the prose says the Lean verifier
+without the retired name, the usage line names a placeholder for the binary, the tests hand
+`--lean` a stand-in path and not the name, the helper is not called `draw`. No behaviour moves; the
+changed suites pass; `python3 tests/lint/test_repo_retired_terms.py` holds without `--record`. I
+mark it on reading it (low risk). **The lesson for both of us: run the lint's count on the files a
+pull request changes before I mark it; I did not ask for it on #9077.**
+
+Also for your Thursday screen: #9077 is on `main`, so the screen's tree can be `main` at or after
+`5a6330f1a4`; say at the 15:25Z go which commit it runs.
