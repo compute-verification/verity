@@ -129,6 +129,24 @@ evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and 
 ASCII without DEL as `Core.canonicalJson` does. `verity.hardware.registration` is its Python, held to it by the
 composition suite's difftest (`../remote/verifier/composition/tests/test_registration_difftest.py`).
 
+## What a protocol accounts for (`CoreProtocol/Account.lean`)
+
+`Core.Account` is a value beside a `Core.Protocol`, not a field of it. For each amount the protocol publishes
+(`Account.Amount`) it states the part of the registered hardware the amount is about (`Account.Part`: the devices'
+compute, a tier's memory, a tier's read rate, a link) and the form it is published in: its key, in the public output or
+the profile (`Account.Key`), its unit, the side of the capacity it bounds (the verified amount from below, the free
+amount from above), a moment or the key of its span, the key of its error and of the share the error leaves out, how a
+period's error forms from its answers' (`Account.Pool`), the key of the capacity an answer carries, what an answer holds
+when nothing is certified, and the terms the error names and does not price. `Account.head` is the key under which an
+accepted answer names the registration's head; a protocol that names none is held to no registration.
+
+`Account.rows` reads a Site, the head of its registration, the answers and their accounts into the accounting rows
+(`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). A row's capacity is a function of
+the Site (`Account.Part.capacity`), at each reading the registration can be read at, and is never copied from an answer.
+A flow has one row for the period; an amount at a moment has one for each accepted answer and one for the period. An
+error of 1 or more prints "no bound at this period", and what no accepted answer covers is "not audited: charged at
+capacity". `Account.Example.account` is the example protocol's value; every other protocol's is written with that protocol.
+
 ## Properties
 
 A protocol's properties go in `security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
