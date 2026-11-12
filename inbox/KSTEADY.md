@@ -2079,3 +2079,8 @@ in the section above; its item 1 is then done.
   latest; your start check exits 11 if its process is still there at 17:30Z. If it takes the
   second, a fourth busy card sits on your socket from 17:35Z: the rows say so. I tell you which at
   the go. It writes nothing under `/workspace/jobs/kernels-ksteady` or `/dev/shm/kernels-ksteady`.
+- **Added 10:42Z: proofs took the FIRST window (HASH-123, 10:42Z): card 7, cores 82-91, 15:45Z to
+  17:15Z**, a 65-minute lease, off the card by 16:55Z if it starts at the open; not started in that
+  window after 16:05Z (then it asks for card 6 from 17:35Z). proofs says on HASH-123 when its run
+  has ended. **At the go: read that it has ended and that card 7 holds no process before your
+  first launch there.**
