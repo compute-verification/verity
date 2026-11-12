@@ -66,9 +66,9 @@ class Recorded(P.Local):
         self.calls.append(("run", challenge))
         return super().run(challenge, t, i, previous)
 
-    def open(self, t, draws):
+    def open(self, t, sampled):
         self.calls.append(("open", t))
-        return super().open(t, draws)
+        return super().open(t, sampled)
 
     def end(self, commitment, openings) -> None:
         self.calls.append(("end", commitment, tuple(openings)))
