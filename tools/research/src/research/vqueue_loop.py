@@ -183,12 +183,13 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import carry, policy, vqueue, vqueue_records
-from .landing import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Landing, cancel_runs, gating, merge_thread_post
+from .landing import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Landing, authed, cancel_runs, gating, merge_thread_post
 from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (LEAN_SOURCES, PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, _who, base_drivers,
-                    conflicting_files, flags_at, forces_cold, label_verifier, lean_change, lowrisk, merged_tree,
-                    moves_between, priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
+from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git,
+                    _out, _who, base_drivers, conflicting_files, flags_at, forces_cold, label_verifier, lean_change, lowrisk,
+                    merged_tree, move_of, moves_between, priority_list, queue_commit, queue_log, review_owners, rules_at,
+                    touched_by, unreviewed)
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
@@ -693,10 +694,13 @@ class World:
         #: the tests each candidate's check leaves out (`DESELECT`, `vqueue_slim.deselection`)
         self.deselect_file = deselect_file
         self.keys = cache / "issuer-keys.json" if cache is not None else None
+        #: the moves regenerated on candidates of the `main` they landed on, as `Queue._made` holds them (`_keep_moves`)
+        self._made_at = cache / "moves-made.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
             q._kept_at, q._mapped_at = cache / "own-changes.json", cache / "mapped-changes.json"
             q._kept = json.loads(q._kept_at.read_text()) if q._kept_at.is_file() else {}
+            q._made = json.loads(self._made_at.read_text()) if self._made_at.is_file() else {}
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
         self.absent: set[str] = set()
@@ -721,6 +725,10 @@ class World:
         self.prs: dict[int, PR] = {}
         self.left: dict[int, tuple[str, str]] = {}
         self.pulled: set[int] = set()
+        #: the move PRs the last `ready` took on their ready marks alone (`_uncertified`), and {number: what the last `build`
+        #: regenerated of each move PR: its map, tip, commit and `move_check.py --json` report} (`_move`)
+        self.on_mark: set[int] = set()
+        self.certified: dict[int, dict] = {}
 
     def log(self, text: str) -> None:
         self.q.log(text)
@@ -793,6 +801,10 @@ class World:
         gone = self._missing(p.head for p in prs)
         left = {p.number: (p.head, "its head can't be fetched" if p.head in gone else "its head is on `main`")
                 for p in prs if p.head in gone or self._ancestor(p.head, main)}
+        if any(p.move and p.number not in left for p in prs):
+            landed_heads = queue_log(self.repo, main)[0]
+            left.update((p.number, (p.head, "its move, regenerated from its head, is on `main`")) for p in prs
+                        if p.move and p.number not in left and p.head in landed_heads)
         prs = [p for p in prs if p.number not in left]
         labels.prefetch([(p.number, p.head) for p in prs])
         old = _git(self.repo, "rev-parse", "-q", "--verify", f"{CHECKED}^{{commit}}", check=False).stdout.strip()
@@ -818,7 +830,8 @@ class World:
             carried, self.carried = set(), {}
         with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
             files = dict(zip(admitted, pool.map(lambda n: self._changed(main, entries[n].pr.head), admitted)))
-            took = []
+            took, self.on_mark = [], set()
+            uncertified = {n: self._uncertified(entries[n].pr, main) for n in admitted if entries[n].pr.move}
             for n in admitted:
                 p, held = entries[n].pr, (why[n] or "").startswith("held")
                 if why[n] is None or n in carried or not p.move and not held and lowrisk(files[n], excludes):
@@ -827,8 +840,11 @@ class World:
                     left[n] = (p.head, why[n])
                     if (unreviewed([r for r in reviews[n] if self._another(n, r.by)], ()) or "").startswith("held"):
                         pulled.add(n)
+                elif p.move and not uncertified[n]:
+                    took.append(n)
+                    self.on_mark.add(n)
                 else:
-                    left[n] = (p.head, f"{why[n]}, and " + ("a move lands only with one" if p.move else "it isn't low-risk"))
+                    left[n] = (p.head, f"{why[n]}, and " + (uncertified[n] if p.move else "it isn't low-risk"))
             specs, clears = self._frozen()
             if specs:
                 below = self._frozen_base(main)
@@ -872,7 +888,22 @@ class World:
         for n in order:
             place(n)
         self.prs, self.left, self.pulled = {n: entries[n].pr for n in chosen}, left, pulled
-        return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
+        self.on_mark &= set(chosen)
+        # a move regenerated on its batch's tip doesn't merge its head, so whether that merges is moot
+        return [Ready(n, (p := entries[n].pr).head, *chosen[n][:2], rank=i, conflict=chosen[n][2] and uncertified.get(n) != "",
+                      move=bool(p.move), scripts=vqueue.meets(chosen[n][0], MOVE_SCRIPTS)) for i, n in enumerate(placed)]
+
+    def _uncertified(self, p: PR, main: str) -> str:
+        """Why move PR ``p``, with no land verdict, doesn't land on its ready mark alone: its map isn't on ``main``, where it
+        was reviewed as it landed (`tools/move/stage.py` refuses one that isn't on its base), or its move regenerated on a
+        candidate on ``main`` wasn't certified (`Queue._regenerate`, kept by the move's key); "" when it lands on its mark,
+        once its regeneration on its batch's tip is certified (`build`)."""
+        if _git(self.repo, "cat-file", "-e", f"{main}:{p.move}", check=False).returncode:
+            return f"a move lands on its mark alone only once its map {p.move} is on `main`"
+        tail = Queue._move_key("", p, main)
+        if why := next((v["why"] for k, v in self.q._made.items() if k.endswith(tail) and v.get("why")), None):
+            return f"its move isn't certified on a candidate on `main` {main[:12]} ({why}), and an uncertified move lands only with one"
+        return ""
 
     def _carry(self, landed: list[str], entries: dict[int, Entry], why: dict[int, str | None], mode: str) -> set[int]:
         """The verdict carry (`carry`), as drive.toml's `verdict_carry` at `main` says: an admitted PR with no land verdict at
@@ -1433,7 +1464,17 @@ class World:
         (`Skip.by`), not `main`."""
         main = main or base
         tip, merged, left = base, [], []
-        for p in prs:
+        self.certified = {}
+        for p in sorted(prs, key=lambda p: bool(p.move)):
+            if p.move:
+                regenerated, skip = self._move(p, tip, main)
+                if regenerated is not None:
+                    merged.append(Member(p.number, p.head, p.owner or "", regenerated))
+                    tip = regenerated
+                    continue
+                if skip is not None:
+                    left.append(skip)
+                    continue
             commit, why = self.q._merge(tip, p, merged)
             if commit == tip:
                 held = self._holder(p.head, base, main, merged)
@@ -1444,6 +1485,35 @@ class World:
                 merged.append(Member(p.number, p.head, p.owner or "", commit))
                 tip = commit
         return tip, merged, left
+
+    def _move(self, p: PR, tip: str, main: str) -> tuple[str | None, Skip | None]:
+        """Move PR ``p`` regenerated last in a build on ``tip``, landing tip ``main`` (`Queue._regenerate`, with ``main``'s
+        `tools/move/rename.py` and `move_check.py`, kept in the loop's cache): (its certified commit, None), its certificate in
+        `certified`; or (None, why it's left out) while members below it change what judges a move, or when its move isn't
+        certified and it came on its mark alone (`on_mark`); or (None, None) when it isn't certified and has a land verdict,
+        which covers its head: merged as any PR."""
+        if below := self.q._scripts_below(tip, main):
+            return None, Skip(p, f"the members below it change {', '.join(below)}, which judge its move: it waits until they "
+                                 "land")
+        commit, why = self.q._regenerate(tip, p, main)
+        self._keep_moves(main)
+        if commit is not None:
+            self.certified[p.number] = {"map": p.move, "tip": tip, "commit": commit, "on_mark": p.number in self.on_mark,
+                                        "certificate": self.q._made[Queue._move_key(tip, p, main)].get("certificate")}
+            return commit, None
+        if p.number in self.on_mark:
+            return None, Skip(p, f"it came on its mark alone, and {why}")
+        self.log(f"research queue vqueue: #{p.number}'s move isn't regenerated on {tip[:12]} ({why}): its land verdict covers "
+                 "its head, merged as any PR's")
+        return None, None
+
+    def _keep_moves(self, main: str) -> None:
+        """The moves regenerated on candidates on ``main`` (`Queue._made`), kept in the loop's cache for the next tick, which
+        `_uncertified` and `Queue._regenerate` read; those on an older `main` are dropped."""
+        q = self.q
+        q._made = {k: v for k, v in q._made.items() if k.split(":")[1] == main}
+        if self._made_at is not None:
+            self._made_at.write_text(json.dumps(q._made, sort_keys=True) + "\n")
 
     def _above(self, base: str, main: str, merged: list[Member]) -> list[Member]:
         """The members of a build on ``base`` above ``main`` so far, oldest first: the candidates' below it (`_walk`), then
@@ -1522,6 +1592,16 @@ class World:
         whose owners were told, is the list it extends as it tells."""
         self.driver()._on_main({"told": told, "stale_closed": self.q.load_state().get("drive", {}).get("stale_closed", {})},
                                members, base, sha, "")
+        moved = [(m, p) for m in members if m.commit and (p := self.open().get(m.pr)) is not None and p.head == m.head
+                 and move_of(self.repo, m.commit)]
+        with authed(self.q.auth):
+            for m, p in moved:
+                try:
+                    self.q.github.close(m.pr, f"Landed on `main` at {sha[:12]} as {m.commit[:12]}: its move ({p.move}) "
+                                              f"regenerated there by the verified queue and certified by `{MOVE_CHECK}`. Its "
+                                              "head was only the request.")
+                except QueueError as e:                     # `ready` leaves it out while it stays open
+                    self.log(f"research queue vqueue: #{m.pr} landed as its regenerated move, but isn't closed: {e}")
 
     def withdraw(self, number: int, head: str, why: str) -> PR:
         """`Queue.eject` under the clone's queue lock, as `research queue eject` takes it: it writes drive's state, which a
@@ -2038,8 +2118,10 @@ class Loop:
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
                         tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)), wide=wide,
                         pinned=pinned, pulled=frozenset(w.pulled | set(out) | set(taken)),
-                        flying=tuple(Ready(m, h, frozenset() if h in gone else w._changed(main, h),
-                                           lean=h not in gone and w._judge(main, h)[0]) for m, h in sorted(flying)),
+                        flying=tuple(Ready(m, h, (f := frozenset() if h in gone else w._changed(main, h)),
+                                           lean=h not in gone and w._judge(main, h)[0],
+                                           move=bool(getattr(w.open().get(m), "move", "")),
+                                           scripts=vqueue.meets(f, MOVE_SCRIPTS)) for m, h in sorted(flying)),
                         records=self.records is not None)
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
                     riding=riding)
@@ -2365,6 +2447,8 @@ class Loop:
             w.push(tip, branch(tip))
         line = {"sha": tip, "base": a.base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
                 "priority": a.priority, **({"adopted": True} if adopted else {})}
+        if moves := [{"pr": m.pr, **w.certified[m.pr]} for m in merged if m.pr in w.certified]:
+            line["moves"] = moves                           # each regenerated move's certificate, which it lands on
         if a.records:
             return [*recs, self.record(t, "build", **line, why="its records run first: its check waits for it", enqueued=False,
                                        records_first=True, done=True), *self._regenerate(t, line)]
