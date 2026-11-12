@@ -24,7 +24,7 @@ import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan
 from verity_vllm.acquire.sources import call_boundary_source as CB
@@ -43,9 +43,10 @@ NAMED = 100
 
 
 def run(manifest: Mapping[str, Any], rt: RuntimeTree, *, programs: Iterable[str | Path] = ()) -> AcquisitionPlan:
-    kw = dict(wrapper_prefix=str(manifest.get("wrapper_prefix") or ""), aliases=manifest.get("op_path_aliases") or {})
+    prefix, aliases = str(manifest.get("wrapper_prefix") or ""), manifest.get("op_path_aliases")
     programs = list(programs)
-    corr = AcquireCorrespondence.from_programs(rt, programs, **kw) if programs else AcquireCorrespondence(rt, **kw)
+    corr = (AcquireCorrespondence.from_programs(rt, programs, wrapper_prefix=prefix, aliases=aliases) if programs
+            else AcquireCorrespondence(rt, wrapper_prefix=prefix, aliases=aliases))
     return acquisition_plan(manifest, corr)
 
 
@@ -94,7 +95,7 @@ def call_boundaries(manifest: Mapping[str, Any], *roots: str | None) -> dict[str
 def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
     """`call_boundaries` of `manifest` with its host plan given (None when it names no identity the call-boundary source evaluates)."""
     on = taps.attached(manifest)
-    ids = sum(1 for r in manifest.get("identities") or [] if r.get("family") == CB.FAMILY)
+    ids = sum(1 for r in manifest["identities"] if r.get("family") == CB.FAMILY)
     uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(manifest, on)
     return {"schema": CALL_BOUNDARIES_SCHEMA, "pass": not uncovered and not unattached, "identities": ids,
             "claimed": ids - (plan.identities if plan else 0), "covered": plan.covered if plan else 0, "uncovered": len(uncovered),
@@ -124,7 +125,7 @@ class PlanOptions:
                                 help="a request Program dir (repeatable); alternative to --programs-root")
     against: str | None = option("--against", default=None,
                                  help="another acquisition_plan.json to compare Value by Value (-> plan_compare.json)")
-    cmd: str = field(default="plan", init=False)
+    cmd: Literal["plan"] = field(default="plan", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -133,7 +134,7 @@ class CallBoundariesOptions:
 
     row_dir: str = option("row_dir", help="the row dir after its Build: manifest.json and the Build dirs (build_request*/) under it")
     out: str | None = option("--out", default=None, help="the record (call_boundaries.json)")
-    cmd: str = field(default="call-boundaries", init=False)
+    cmd: Literal["call-boundaries"] = field(default="call-boundaries", init=False)
 
 
 COMMANDS = {"plan": PlanOptions, "call-boundaries": CallBoundariesOptions}
@@ -178,3 +179,5 @@ def main(a: PlanOptions | CallBoundariesOptions) -> int:
             rc = 1
     return rc
 
+
+__all__ = ["COMMANDS", "call_boundaries_line", "call_boundaries_of", "main", "run"]

@@ -219,10 +219,11 @@ def scope_gate(node: TreeNode, ctx: StepContext, gate: TreeNode | None, before: 
     M = hidden.shape[0]
     if not isinstance(scores, ViewDesc):
         return unsupported(node, f"{router}'s scores are not a view", scores=repr(scores))
+    w: ViewDesc | None
     if gate is not None:
         tier, at = GATE_CUBLAS, gate
         a = bound_args(gate)
-        x, wt, y = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), (gate.output_views() or [None])[0]
+        x, wt, y = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), next(iter(gate.output_views()), None)
         if not (isinstance(x, ViewDesc) and isinstance(wt, ViewDesc) and isinstance(y, ViewDesc)) or not _same(x, hidden):
             return unsupported(node, "the in-scope mm is not the gate over hidden_states", args={k: repr(v) for k, v in a.items()})
         try:

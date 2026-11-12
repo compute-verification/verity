@@ -140,4 +140,7 @@ def expand(wired: dict[str, Any], moe: dict[str, Any] | None) -> tuple[dict[str,
                 raise Unmodelled(f"{pn}: a value of the piece already has the name of a fused-MoE plane")
             values[pn] = {"width": width, "piece": val["piece"]}
         values[name] = val
-    return {**wired, "calls": calls, "values": values}, expert_plans(keys, moe.get("configs") or {})
+    return {**wired, "calls": calls, "values": values}, expert_plans(keys, moe["configs"])
+
+
+__all__ = ["REQUIRED", "expand"]
