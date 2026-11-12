@@ -617,10 +617,13 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     assert c["value"] == own["value"] / 100 and c["lifetimes"]["ci95"] == [x / 100 for x in own["ci95"]]
     assert c["lifetimes"]["pairs"] == 3 and c["lifetimes"]["ci95"][1] < 0.01
     assert [round(100 * x["value"], 2) for x in c["lifetimes"]["each"]] == [x["value"] for x in own["by_lifetime"]] == [0.5, 0.6, 0.45]
+    # the line that says how the cost is taken ends with the benchmark's own words on each request's length; no arm
+    # here kept its served ids, so there is no line on the requests that went on past an end-of-text token
+    assert c["lifetimes"]["past_end"] == {"said": [], "sides": {"prod": None, "prod-record": None}}
     assert P._lifetimes(c) == [
         "  the cost is the mean of the lifetimes' costs, a lifetime's being ours's seconds for the passes both arms counted "
         "in it over stock's, less one, a pass's seconds from its users' first send to the last one's last answer "
-        "(serve_tax.session_cost)",
+        "(serve_tax.session_cost); each request decoded to its recorded length, past any end-of-text token",
         "  by lifetime: +0.50% (2 passes), +0.60% (2 passes), +0.45% (2 passes)",
         f"  the cost's spread (standard deviations): {own['spread']['between']:.2f} points between lifetimes, 0.00 points "
         "between a lifetime's passes"]
@@ -674,6 +677,19 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
         "accepted, 4.00 tokens a draft; prod-record 2,100 engine steps a pass, 70.0% of its draft tokens accepted, 3.80 "
         "tokens a draft"]
     assert P._verdict(c | {"settings_differ": ["the context limit"]}) == "not shown, the arms are not at the same settings"
+    # where ours's server kept the served ids, the benchmark's own line counts its requests that served an end-of-text
+    # token and went on, word for word under the line that says how the cost is taken; stock's server keeps none
+    assert P._lifetimes(c)[0].endswith(f"(serve_tax.session_cost); {S.TO_LENGTH}")
+    for rep in by["prod-record"]["loads"]["agentic@4"]:
+        rep |= {"ids_kept": 96, "past_end": 12, "after_end_tokens": 6000}
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    own = S.session_cost(list(by.values()), "prod-record", "prod")
+    assert c["lifetimes"]["past_end"] == {"said": S.past_end_text(own), "sides": {
+        "prod": None, "prod-record": {"requests": 72, "of": 576, "tokens_after_share": 10.0}}}
+    assert P._lifetimes(c)[1] == (
+        "  past an end-of-text token, in the passes counted: 72 of prod-record's 576 requests served an end-of-text token "
+        "before their end and went on, 10.00% of its output tokens after one; prod's server keeps no ids, so the count is "
+        "prod-record's alone")
     # a twin of stock is the floor, a lifetime pair its unit too
     by = {n: sessions_arm(n, x) for n, x in (("prod", [2.0] * 6), ("prod-again", [1.998] * 6), ("prod-record", ours))}
     c = P.cost(tmp_path, by, "prod", "prod-record", "prod-again", S.AGENTIC, 1.0)

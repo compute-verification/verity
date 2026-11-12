@@ -572,7 +572,9 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     has no such interval, shows nothing, nor does one whose arms did not do the same work. Beside it and in no
     verdict: the cost over the passes taken as independent with its interval (``passes``), each lifetime's cost, the
     spread between lifetimes and between a lifetime's passes, the same cost under the benchmark's other readings of
-    a pass's rate of work (``readings``) and each side's engine steps and accepted drafts (``sides``: `SIDE`), all
+    a pass's rate of work (``readings``), each side's engine steps and accepted drafts (``sides``: `SIDE`) and its
+    requests that went on past an end-of-text token (``past_end``: each side's count, None for one whose server kept
+    no ids, and the benchmark's own line of them, `serve_tax.past_end_text`), all
     in ``lifetimes``, and the noise floor, a lifetime
     pair its unit too: stock again over stock where a twin of stock was served, else stock's own lifetimes, each
     second one over the one before it. On another load the cost is the one over the passes taken as independent, the
@@ -609,12 +611,13 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
                 return not_measured(f"the benchmark's own cost on a sessions load is of {own['load'] if own else 'none'}, "
                                     f"not of {load}: a job serves one sessions load", how=how)
             same, value, verdict, n = own["same_work"], _frac(own["value"]), VERDICTS[own["verdict"]], own["noise_floor"]
+            both = dict(zip((stock, ours), (own["sides"]["reference"], own["sides"]["arm"])))
             lives = {"pairs": own["lifetimes"], "ci95": own["ci95"] and [x / 100 for x in own["ci95"]],
                      "each": own["by_lifetime"] and [{**x, "value": _frac(x["value"])} for x in own["by_lifetime"]],
                      "spread_points": own["spread"], "left_out": own["left_out"],
                      "readings": {k: _frac(v) for k, v in (own.get("readings") or {}).items()},
-                     "sides": {a: {k: x.get(k) for k in SIDE} for a, x in zip((stock, ours), (
-                         own["sides"]["reference"], own["sides"]["arm"]))}}
+                     "sides": {a: {k: x.get(k) for k in SIDE} for a, x in both.items()},
+                     "past_end": {"said": S.past_end_text(own), "sides": {a: x.get("past_end") for a, x in both.items()}}}
             noise = n and {"arm": n["arm"], "over": "lifetimes", "value": _frac(n["value"]),
                            "ci95": n["ci95"] and [x / 100 for x in n["ci95"]], "pairs": n["pairs"],
                            "own": "lifetimes" in n}
@@ -1044,7 +1047,9 @@ def _verdict(c: dict) -> str:
 
 
 def _lifetimes(c: dict) -> list[str]:
-    """A sessions load's cost by lifetime: how the cost is taken, each lifetime's own and the spread."""
+    """A sessions load's cost by lifetime: how the cost is taken, with the benchmark's own words on each request's
+    length (`serve_tax.TO_LENGTH`) and its line on the requests that went on past an end-of-text token, each
+    lifetime's own and the spread."""
     life, points = c["lifetimes"], c["lifetimes"]["spread_points"]
 
     def spread(x: float | None) -> str:
@@ -1061,7 +1066,9 @@ def _lifetimes(c: dict) -> list[str]:
     return ["  the cost is the mean of the lifetimes' costs, a lifetime's being ours's seconds for the passes both arms "
             "counted in it over stock's, less one, a pass's seconds from its users' first send to the last one's last "
             "answer (serve_tax.session_cost)"
-            + (f"; the first {left['passes']} of each lifetime's passes, its warm-up, served and left out" if left else ""),
+            + (f"; the first {left['passes']} of each lifetime's passes, its warm-up, served and left out" if left else "")
+            + f"; {S.TO_LENGTH}",
+            *(life.get("past_end") or {}).get("said", ()),
             *(["  by lifetime: " + ", ".join(f"{_pct(x['value'])} ({x['reps']} pass{'es' * (x['reps'] != 1)})"
                                              for x in life["each"])] if life.get("each") else []),
             f"  the cost's spread (standard deviations): {spread(points['between'])} between lifetimes, "
