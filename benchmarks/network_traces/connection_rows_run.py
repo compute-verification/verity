@@ -17,7 +17,10 @@ process, which alone holds the key, lays the tables (`connection_rows.tables`), 
 head: a line of `rows.jsonl` (the registration, or the execution phase under `refused`, and the cost: the tables,
 their rows and bytes, and the build's, the commit's and the signature's ms) and the rows' salts in `rows.salts`
 (witness, table by table). It keeps no row: the prover, who holds the records, lays the tables again from them
-(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase.
+(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. A hand the tables refuse
+has no line and no salts: under form 2 one that files more than R = `WardenParams.phase_releases` releases in a
+class is no execution phase's of the schedule, the keep raises naming the release, the class and R, and `serve`'s
+publisher process ends on it, which fails the run at its next record's close.
 
 Under form 2 the network certifier ends every execution phase of the run, the last at the run's last close, and one
 it doesn't hand without releases. For that one the publisher's process signs the word that it has no head

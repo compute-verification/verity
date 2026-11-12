@@ -545,10 +545,11 @@ def test_the_registration_of_a_schedule_with_content_rows_refuses_anything_but_i
 def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads):
     """Under form 2 the same hand lays, for each class, the rows form 1 lays first and nothing after them: a row a
     release filed in the class, in release order, and three tables of no row where none is filed. The lengths and
-    fails tables are form 1's. A class's rows are all held at R: a release past them is unfiled, as one past a
-    form-1 class's rows is, and its lengths slot is the one it had. The commitment takes a class's three tables only
-    at one count of at most R. The device hands under form 2 what it hands under form 1, and its last execution
-    phase, of no release, too; the records' reading agrees."""
+    fails tables are form 1's. A class's rows are all held at R: R releases filed in it are laid, and with one more
+    the hand is refused, naming the release, the class and R, where form 1 leaves a release past a class's rows
+    unfiled. The commitment takes a class's three tables only at one count of at most R. The device hands under
+    form 2 what it hands under form 1, and its last execution phase, of no release, too; the records' reading
+    agrees."""
     for load, strides in loads.items():
         one, two = CR.tables(CON, strides), CR.tables(HELD, strides)
         assert list(two) == list(one) and all(two[name] == one[name] for name in ("lengths", "fails"))
@@ -560,11 +561,23 @@ def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads
     a = loads["first"][0][0]
     assert CT.file(HELD, a) == CT.file(CON, a) == 0
     many = [a._replace(order=n) for n in range(R + 1)]
-    full = CR.tables(HELD, tuple(tuple(many[j * K:(j + 1) * K]) for j in range(STRIDES)))
+
+    def by_stride(releases: list) -> tuple:
+        return tuple(tuple(releases[j * K:(j + 1) * K]) for j in range(STRIDES))
+
+    full = CR.tables(HELD, by_stride(many[:R]))
     assert {name: full[name] for name in CT.names(0)} == \
         {name: [row] * R for name, row in zip(CT.names(0), rows_of(CR.tables(HELD, loads["first"]), 0, 0))}
-    assert sum(map(len, CR.releases(HELD, full["lengths"], full["fails"]))) == R + 1
+    assert sum(map(len, CR.releases(HELD, full["lengths"], full["fails"]))) == R
     assert [e.rows for e in CR.Rows.commit(LINK, 0, full, HELD, signers.SESSION).head.tables[2:5]] == [R] * 3
+    past = f"release {R} is filed in class 0 past the class's {R} rows: R = {R} \\(WardenParams.phase_releases\\)"
+    with pytest.raises(ValueError, match=past):
+        CR.tables(HELD, by_stride(many))
+    with pytest.raises(ValueError, match=past):
+        CT.tables(HELD, many, [0] * (R + 1))
+    form_1 = CR.tables(CON, by_stride(many))
+    assert [CT.held(row) for row in form_1["request.0"]] == [True] * CLASSES[0][2] and CLASSES[0][2] < R + 1
+    assert sum(map(len, CR.releases(CON, form_1["lengths"], form_1["fails"]))) == R + 1 <= STRIDES * K
     row = full["request.0"][0]
     for changed, why in (({"request.0": [row] * (R + 1)}, f"request.0 table is at most {R} rows of 418 bytes"),
                          ({"response.0": full["response.0"][:-1]}, "response.0 table has 5 rows, and the request.0 "

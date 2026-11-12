@@ -33,7 +33,8 @@ its request's bytes and its ids (`content_rows`' "The tables"): `request.i`, `re
 i the schedule lists, a release's rows in the class `content_rows.file` gives it. Under the lengths rows' form 1
 each is of the class's rows, the held ones first and zero rows after them. Under form 2 each is the class's held
 rows and no other, so a class's three tables have one count of rows, the execution phase's releases filed in it,
-at most R = `WardenParams.phase_releases`, and none where none is filed. `tables` is the filing rule's one caller.
+at most R = `WardenParams.phase_releases`, and none where none is filed; a hand that files more than R in a class
+is refused (`content_rows.tables`). `tables` is the filing rule's one caller.
 They rest on `trusted-host` as the lengths and fails tables do.
 
 **A row's slots** (`check_slots`): the lengths row's proof block returns the whole row after its two words, and a
