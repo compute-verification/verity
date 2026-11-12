@@ -7690,8 +7690,9 @@ def test_the_modules_a_replay_checks_first_are_read_from_the_file_beside_the_too
 def test_a_replay_checks_each_listed_module_in_a_step_of_its_own_and_the_last_step_reuses_it(tmp_path, monkeypatch):
     """`replay_in_steps` on a stubbed `Replay.lean`, with two of the package's modules listed and one it does not have.
     Each listed module goes to a `Replay.lean` that names it alone, at its stated threads and never more than the
-    replay's own, and is stored under the key the whole replay computes; the last step names them `--reused` and checks
-    the rest at the replay's own threads. The stats count each stored module as checked, so the modules checked, the
+    replay's own, stated to `lean` as its `-j` (the pool of its tasks is the machine's without it), and is stored under
+    the key the whole replay computes; the last step names them `--reused` and checks the rest as a replay without a
+    list does, with no `-j`. The stats count each stored module as checked, so the modules checked, the
     failures and the cache's entries are the one step's. A listed step the kernel rejects stores nothing, so the last
     step checks its module with the rest and fails as the one step does. A second replay plans no step. Without a cache
     it may write, the replay is the one step and says so."""
@@ -7708,7 +7709,9 @@ def test_a_replay_checks_each_listed_module_in_a_step_of_its_own_and_the_last_st
     def run(cmd, cwd, log, timeout=None):
         rest = cmd[cmd.index("--run") + 3:]
         cut = rest.index("--reused") if "--reused" in rest else len(rest)
-        calls.append((next((a.split("=")[1] for a in cmd if a.startswith("LEAN_NUM_THREADS=")), None), rest[:cut], rest[cut + 1:]))
+        flag = cmd[cmd.index("-j") + 1] if "-j" in cmd[:cmd.index("--run")] else None
+        assert flag == next((a.split("=")[1] for a in cmd if a.startswith("LEAN_NUM_THREADS=")), None), cmd
+        calls.append((flag, rest[:cut], rest[cut + 1:]))
         bad = sorted(rejected & set(rest[:cut]))
         A.Path(cmd[cmd.index("--run") + 2]).write_text(json.dumps({"rejected": bad} if bad else {"axioms": []}))
         return (1 if bad else 0), ""
