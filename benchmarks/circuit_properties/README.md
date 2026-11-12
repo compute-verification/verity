@@ -48,17 +48,19 @@ The products are a reader-side table of registered Definitions (`work.PRODUCTS`:
 and the lookups another (`work.LOOKUPS`, the gathers). The update θ′ is a scan's carried words that a fresh input
 reaches; every input is free like θ (the carry is iterated to a fixed point, so a loop's iterations cost what its
 distinct contexts do). A product is charged where both operands depend on θ′ in every word, each is specific or a weight
-(`work.may_repeat`: an operand that reads the current inputs and is not specific may repeat its rows, however the
-Program writes them), the two are no one array and not two activations; `Work.left_out` holds the rest by why. Nothing is stated
+(`work.may_repeat`: an operand that reads the current inputs, or rows an earlier iteration carried from them, and is not
+specific may repeat its rows, however the Program writes them), the two are no one array and not two activations;
+`Work.left_out` holds the rest by why. Nothing is stated
 beside the circuit. A gather's rows by the batch stay a gather's rows until one rule makes them specific: a softmax over
 a constant whose rows (or columns) differ, as a causal mask's do, through one-to-one ops and products by distinct rows.
 The rule rests on one premise, `SHARED_PREFIX`'s: past each row's first position, no two positions of the batch hold
 equal words. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
 the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
 linear layers, is charged nothing, since two rows of values may be equal, as two tokens may, and a product of its rows
-by a shared weight would then read one pair of values twice. Two more premises hold the reading below the work, each
-held as a fact by a test: every carried word is a parameter's or the optimizer's, so rows carried into the next
-iteration are charged as weights, and θ′ is by data flow, so an update that changes nothing still makes θ′.
+by a shared weight would then read one pair of values twice. Rows carried into the next iteration may still repeat,
+until an op one to one in a weight ends them, as a weight's update does, and a multiply by a stated 0 reaches nothing.
+One more premise holds the reading below the work, held as a fact by a test: an update that can't change a weight, or
+cancels it, for a reason no constant shows (W plus z plus -1 times z) still makes θ′ and keeps a weight's rows distinct.
 `work.bound(work, c)` is the most blocks over its
 sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
 has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a

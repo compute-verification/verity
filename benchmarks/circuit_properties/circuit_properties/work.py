@@ -11,7 +11,9 @@ For `min_cut.bound`'s inputs it reads:
   gates and an input node at none; a primitive with no Boolean version is refused by name.
 * What depends on the update, θ′: a scan's carried word that an earlier iteration reached from a fresh input (a run
   input outside `θ`) or from θ′. Every input is free like `θ`, the batch included: it is what makes a carried word
-  updated, and nothing more. A carry's first iteration is `θ`'s, so a Program with no scan has no θ′ and no bound.
+  updated, and nothing more. A multiply by a stated 0 (a constant `INJECTIVE`'s test fails, finite) gives a stated
+  0, so an input that reaches a word only through one doesn't reach it. A carry's first iteration is `θ`'s, so a
+  Program with no scan has no θ′ and no bound.
 * The rate of each array: the bits a block of k bits pays a word of it, at the policy's k. A carried word of θ′ is
   paid at its width; a word θ′ doesn't reach costs nothing; a registered gather (`LOOKUPS`) whose index reads the
   batch and not θ′ gives rows at 0, whatever its table; a product's output is `_gemm_rate`'s (`gemm_rate`); any other
@@ -25,10 +27,13 @@ For `min_cut.bound`'s inputs it reads:
   and the product's token side.
 * Which are charged (`Work.groups`; the others are `Work.left_out` by why): a product both of whose operands depend on
   θ′ in every word ("theta" else), neither of which may repeat its rows (`may_repeat`: it carries a gather's rows, or
-  reads the current inputs and is not specific; "gathered"), whose operands are no one array ("self") and not two
-  activations ("activations"). A gather's rows stay a gather's rows through every op until
-  the rule below makes them specific, but not through a carry: a carried word reads no current input, so it is no
-  row's. A weight gradient and attention's products are both products of two activations, which a Program tells apart
+  reads the current inputs or rows carried from them and is not specific; "gathered"), whose operands are no one
+  array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op until
+  the rule below makes them specific. A carry makes them no gather's, but its rows may still repeat (`Status.rows`):
+  an iteration's slice of an input of more than one word, a gather's rows and every value computed from them have
+  rows, until an op one to one in a weight (`rows_status`) ends them, as an update W + u does wherever u sums a
+  gradient over the positions. Where the Program doesn't show a carried word a weight by that op, it is taken as rows,
+  the smaller bound. A weight gradient and attention's products are both products of two activations, which a Program tells apart
   only by where their outputs go, which its author chooses.
 * Each operand's `β`, as `he_of_rows` derives it from the rate ρ at the operand's width w (its type's, at most the
   source bits its values hold): w where ρ pays it, else w·ρ/(w + ρ). Where an adapter's rank shows (`Work.r_step`,
@@ -47,8 +52,8 @@ status is its callee's returned runs. A value depends on θ′ only where every 
 where any may, and two arrays are one where any references overlap. A rule's branch that a Program can't decide is
 the one with the smaller bound: a product with an activation is token-indexed by every dim its activations span, of
 the branches of `_gemm_rate` the least the Program doesn't exclude, from `HEAD_K` no bound, since a Program doesn't
-say which products are the head's. So, under the reading's three premises (`SHARED_PREFIX`'s, carried words and θ′
-by data flow, below), every error of the reading is less work or a smaller `β` than the trace's reading of the same
+say which products are the head's. So, under the reading's two premises (`SHARED_PREFIX`'s and the updates', below),
+every error of the reading is less work or a smaller `β` than the trace's reading of the same
 step, and a bound true but weak: a product the tables don't name is not counted, a value with any
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
@@ -75,15 +80,14 @@ gives a gathered value:
   op with a specific argument is not specific by that alone, and none is where another argument is an input's whose
   values the Program doesn't state (a rope table, which may hold a 0).
 
-The reading rests on three premises, each held as a fact by a test where a Program breaks it. The rule rests on the
+The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
 one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens): past
 each row's first position, no two positions of the batch hold equal words. A batch breaks it three ways, each making
 two positions' values equal at every layer, under this rule and the trace's reading alike: two rows sharing a prefix
 of two tokens or more, a row starting with a run of one token, and, where no positional table reaches the rows, two
-positions whose prefixes hold the same tokens in the same proportions. Carried words: every carried word is a
-parameter's or the optimizer's, a weight that reads no input and carries no rows (`carried`), so a Program that
-carries an iteration's rows into the next has them charged as weights. θ′ by data flow: a carried word an input
-reaches is θ′, even where the update can't change it, as W plus an input times a stated 0.
+positions whose prefixes hold the same tokens in the same proportions. The updates': a carried word an input reaches is
+θ′, and an op one to one in a weight keeps its rows distinct, even where the update can't change the weight or cancels
+it for a reason the constant test doesn't see, as W plus z plus -1 times z is θ′.
 
 The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
 attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,
@@ -176,6 +180,9 @@ class Status(NamedTuple):
     specific: bool = False
     #: every word is a view of a constant the Program states
     stated: bool = False
+    #: two of its rows may be equal, as two rows of the current inputs may: rows of an input or a gather, which a carry
+    #: keeps (`carried`) and an op one to one in a weight ends (`rows_status`)
+    rows: bool = False
 
 
 THETA = Status(False, False, False, False, frozenset())
@@ -187,9 +194,10 @@ def unknown(st: Status) -> bool:
 
 
 def may_repeat(st: Status) -> bool:
-    """Whether two rows of an array may hold one word: it carries a gather's rows, or reads the current inputs and is
-    not specific, however the Program writes its rows (a batch, a call a row, a scan, two inputs)."""
-    return st.gathered or (bool(st.data) and not st.specific)
+    """Whether two rows of an array may hold one word: it carries a gather's rows, or reads the current inputs or rows
+    an earlier iteration carried from them and is not specific, however the Program writes its rows (a batch, a call a
+    row, a scan, two inputs)."""
+    return st.gathered or ((bool(st.data) or st.rows) and not st.specific)
 
 
 def unspecific(st: Status, sts) -> Status:
@@ -256,6 +264,8 @@ def _nonzero(b: int) -> bool:
 #: the primitives that keep a specific word's outputs distinct, each with what a constant it reads must be
 INJECTIVE = {"F32Add": _finite, "F32Sub": _finite, "F32Mul": _nonzero, "F32Div": _nonzero, "F32Fma": _nonzero,
              "F32Neg": _finite, "F32ExpRn": _finite, "F32Sqrt": _finite, "Bf16ToF32": _finite}
+#: those of them one to one in each argument whatever finite words the others hold
+SHIFTS = {"F32Add", "F32Sub", "F32Neg", "F32ExpRn", "F32Sqrt", "Bf16ToF32"}
 #: the reference registry's softmax over a row
 SOFTMAXES = (re.compile(r"SoftmaxRef_v\d+"),)
 
@@ -277,7 +287,7 @@ def join(sts, weights=None) -> Status:
     gathered = any(s.gathered for s in sts)
     return Status(all(s.aff for s in sts), any(s.dep for s in sts), any(s.reach for s in sts), gathered,
                   frozenset().union(*(s.data for s in sts)), rate, bits, any(s.specific for s in sts) and not gathered,
-                  all(s.stated for s in sts))
+                  all(s.stated for s in sts), any(s.rows for s in sts))
 
 
 def computed(sts, rate: float, bits: float) -> Status:
@@ -288,7 +298,7 @@ def computed(sts, rate: float, bits: float) -> Status:
     specific = any(s.specific for s in sts)
     return Status(any(s.aff for s in sts), dep, any(s.reach for s in sts),
                   any(s.gathered for s in sts) and not specific, frozenset().union(*(s.data for s in sts)),
-                  rate if dep else 0.0, bits, specific)
+                  rate if dep else 0.0, bits, specific, rows=any(s.rows for s in sts))
 
 
 #: an array's status by leaf: runs (end, status), ends rising, the last the array's leaves
@@ -347,7 +357,7 @@ def capped(p: Profile, rate: float, bits: float) -> Profile:
 def carried(p: Profile, t) -> Profile:
     """A carry ``p`` of type ``t`` as an iteration's input: a word reached from a fresh input or θ′ is θ′, paid at
     and holding its width, any other is free and holds nothing. A carried word reads none of the iteration's inputs,
-    so it is no token's and carries no gather's rows."""
+    so it is no token's and carries no gather's rows; where two of its rows may repeat (`Status.rows`) they still may."""
     cuts = sorted({e for e, _ in p} | {e for e, _ in _width_runs(t)})
     widths = _width_runs(t)
     out, i, j = [], 0, 0
@@ -881,6 +891,29 @@ class Reader:
                     ok = all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in cs)
             return base if ok else unspecific(base, sts)
 
+        def constants_pass(f, sts: list, nd) -> bool:
+            return all(all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in (value(*w) for w in words(a)))
+                       for s, a in zip(sts, nd.args) if s.stated)
+
+        def zero(a) -> bool:
+            """Whether argument ``a`` is a stated 0 in every word (`INJECTIVE`'s constant test fails on a finite word),
+            so that a multiply by it gives 0 whatever its other argument holds."""
+            cs = [value(*w) for w in words(a)]
+            return bool(cs) and all(isinstance(c, tuple) and _finite(c[1]) and not _nonzero(c[1]) for c in cs)
+
+        def rows_status(f, nd, sts: list, st: Status) -> Status:
+            """``st`` without `Status.rows` where an `INJECTIVE` op reads one to one an argument whose rows can't
+            repeat and that isn't stated, so its outputs' rows differ where that argument's do: whatever the others
+            hold for a shift (`SHIFTS`), and where no other argument is an input's unstated values for any other."""
+            if not st.rows or f.name not in INJECTIVE or not constants_pass(f, sts, nd):
+                return st
+            free = f.name in SHIFTS or not any(unknown(s) for s in sts)
+            if free and any(not s.rows and not s.stated and
+                            (nd.form != "batch" or (nd.axes[i] is not None and one_to_one(nd.args[i])))
+                            for i, s in enumerate(sts)):
+                return st._replace(rows=False)
+            return st
+
         for k, nd in enumerate(body.nodes):
             f, leaves = nd.fn, nd.out.leaves
             if is_input(f):
@@ -895,13 +928,16 @@ class Reader:
                 if lk is not None:
                     names = [n for n, _t in f.params]
                     t, x = sts[names.index(lk.table)], sts[names.index(lk.index)]
-                    st = Status(t.aff, t.dep, True, True, t.data | x.data, 0.0, bits) \
+                    st = Status(t.aff, t.dep, True, True, t.data | x.data, 0.0, bits, rows=True) \
                         if x.reach and not x.dep else computed(sts, rate, bits)
                     prof.append(((leaves, st),))
                 elif not nd.args:
                     prof.append(((leaves, THETA._replace(stated=True)),))
+                elif f.name == "F32Mul" and any(s.stated and zero(a) for s, a in zip(sts, nd.args)):
+                    prof.append(((leaves, THETA._replace(stated=True)),))
                 else:
-                    prof.append(((leaves, primitive_status(f, nd, sts, computed(sts, rate, bits))),))
+                    st = primitive_status(f, nd, sts, computed(sts, rate, bits))
+                    prof.append(((leaves, rows_status(f, nd, sts, st)),))
                 continue
             p = self.product(f)
             if p is not None and nd.form in ("call", "batch"):
@@ -970,7 +1006,7 @@ class Reader:
         for j in range(nx):
             a, per = nd.args[1 + j], params[1 + j][1].leaves
             s = arg_status(a)
-            xs.append(((per, s._replace(data=s.data | {inner})),))
+            xs.append(((per, s._replace(data=s.data | {inner}, rows=s.rows or (bool(s.data) and per > 1))),))
         xs = tuple(xs)
         shared = tuple(drop(arg_profile(a), outer) for a in nd.args[1 + nx:])
         carry_leaves = params[0][1].leaves
