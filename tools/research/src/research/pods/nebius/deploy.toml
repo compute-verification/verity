@@ -231,10 +231,14 @@ src = "tools/research/src/research/pods/nebius/vm_setup.sh"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
+# The command the lease loop stops its machine with, on the nodes lease.sh's entry names: the two are installed together.
 [[file]]
 path = "/usr/local/sbin/vy-nebius-stop"
 src = "tools/research/src/research/pods/nebius/vm_stop.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2",
+         "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-8",
+         "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13", "vy-nebius-cpu-14",
+         "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 owner = "infra"
 
 [[file]]  # after installing it, `systemctl --user daemon-reexec` as research (the file says why)
@@ -682,10 +686,19 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy
 run = ["systemd:vy-lean-prune.timer"]
 owner = "infra"
 
+# The lease loop, on every node that runs it from this file: each node with a lease unit or a deadline below, and every CPU
+# node, where vm_setup.sh writes the unit at first boot. vy-nebius-stop, the command the loop stops its machine with, goes to
+# the same nodes, and the two are installed together, so deploy keeps the pair in step. Install restarts no unit a setup
+# script writes: after installing them, `sudo systemctl try-restart vy-lease`, which leaves a stopped loop stopped. Each
+# start of the unit grants the boot lease (its ExecStartPre): a lease with less left is extended to it, a longer one is
+# kept, and the deadline bounds either.
 [[file]]
 path = "/home/research/.research/lease.sh"
 src = "tools/research/src/research/pods/sh/lease.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2",
+         "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-8",
+         "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13", "vy-nebius-cpu-14",
+         "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 run = ["systemd:vy-lease"]
 owner = "infra"
 
