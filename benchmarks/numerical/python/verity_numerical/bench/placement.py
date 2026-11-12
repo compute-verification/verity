@@ -68,6 +68,7 @@ __all__ = [
     "from_job",
     "from_runpod",
     "gate",
+    "is_global_net",
     "is_host_bridge",
     "is_host_private",
     "is_hypervisor_vendor",
