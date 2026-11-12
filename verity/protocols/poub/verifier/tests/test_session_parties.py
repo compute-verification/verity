@@ -54,7 +54,7 @@ window 0 closed once window 1's root is in, and the last window just past its de
 @pytest.mark.parametrize("cheat, verdict, log", [(None, "accept", WINDOWS + [("close", 700 * MS + 1), ("verify", None)]),
                                                  (dropping, "reject", WINDOWS)], ids=["honest", "dropping"])
 def test_the_parties_session_is_the_periods(tmp_path, monkeypatch, cheat, verdict, log) -> None:
-    """The verifier draws the period's secret and the registration's nonce from its coins: on those, and on the clock
+    """The verifier samples the period's secret and the registration's nonce from its coins: on those, and on the clock
     readings its log holds, `period.session` makes the same answer and case."""
     r = simulated(tmp_path, cheat=cheat)
     assert r.status == "completed", r.outcomes

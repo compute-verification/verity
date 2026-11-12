@@ -278,9 +278,9 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window t
     requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
     record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
-    more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts draw 70, 60 and 60: the ledger
+    more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts sample 70, 60 and 60: the ledger
     charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its five additions'
-    rounding.  A record whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
+    rounding.  A record whose samples aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
     s, prover, passes, clock = drive(store, params(samples=70), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)

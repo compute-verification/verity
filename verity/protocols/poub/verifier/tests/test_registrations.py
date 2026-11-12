@@ -1,4 +1,4 @@
-"""One live registration a node: each registration draws a fresh codec seed, so a prover that registered R times and
+"""One live registration a node: each registration samples a fresh codec seed, so a prover that registered R times and
 kept the key that suits it would choose log₂ R bits of it, a retry that resamples.  The verifier's `Registry` refuses a second registration while one is live,
 and a registration ends only when the verifier closes it, counting its sessions, a failed or unended one as failed."""
 
