@@ -80,8 +80,8 @@ theorem scanFits : ScanFits := by
 /-- **An accepted scan's statements are in the sampled audit's scope.** -/
 theorem scanScopeAcc : ScanScopeAcc := scanScopeAcc_of_scanFits scanFits
 
-/-- One slot of one lane and a window of one step: the schedule of the nontrivial instances. -/
-def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, none⟩
+/-- One slot of one lane and two ticks (T = 2): the schedule of the nontrivial instances. -/
+def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 2, none⟩
 
 /-- A circuit that returns nothing fits no layout over a horizon of at least one step: step 0's egress presence gate
 isn't returned. -/

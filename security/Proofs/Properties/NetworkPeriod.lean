@@ -144,10 +144,10 @@ def tiedWindow : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
 
 /-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
-digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
+digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 2, `every` 2). -/
 def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
 
-def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, none⟩
+def slotSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, none⟩
 
 /-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
 def slotReg : Lean.Json :=
