@@ -93,14 +93,9 @@
     {"file": "verity_vllm/engine/code_identity.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "schema-literal", "symbol": "build_manifest", "detail": "verity-vllm/profile/v1"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/engine/int8_checkpoint.py", "kind": "schema-literal", "symbol": "report", "detail": "verity-vllm/int8-error-report/v1"},
-    {"file": "verity_vllm/engine/int8_checkpoint.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/engine/int8_k_scales.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/int8-k-scales/v1"},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/meta-inventory/v1"},
-    {"file": "verity_vllm/engine/profiles/dense_generic.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/engine/profiles/devices.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/engine/profiles/family_facts.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/engine/run_facts.py", "kind": "schema-literal", "symbol": "profile_manifest", "detail": "verity-capture/profile-fallback/v1"},
     {"file": "verity_vllm/engine/run_facts.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/engine/served.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/served-switches/v1"},
@@ -261,7 +256,7 @@
     {"file": "verity_vllm/program/predict/build.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/greedy-request/v1"},
     {"file": "verity_vllm/program/predict/build.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/stochastic-engine-step/v1"},
     {"file": "verity_vllm/program/predict/build.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/stochastic-request/v1"},
-    {"file": "verity_vllm/program/predict/build.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
+    {"file": "verity_vllm/program/predict/build.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/predict/cli.py", "kind": "schema-literal", "symbol": "node_main", "detail": "verity-predict/node/v1"},
     {"file": "verity_vllm/program/predict/compiled.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/program/predict/dsa.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
@@ -348,6 +343,7 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "verity-capture/tp2-param-hashes/v0"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "schema-literal", "symbol": "TP2CaptureWorkerExtension.tp2_profiler_stop", "detail": "verity-capture/census-rank/v0"},
     {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
-    {"file": "verity_vllm/target_family.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3}
+    {"file": "verity_vllm/target_family.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
+    {"file": "verity_vllm/program/predict/model_shape.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2}
   ]
 }
