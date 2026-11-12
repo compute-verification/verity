@@ -126,12 +126,12 @@ def test_a_field_the_commit_record_leaves_out_null_or_empty_decides_alike(make, 
 
 @pytest.mark.parametrize("path", [("openings", "deferred_positions"), ("binding", "openings_population", "deferred_positions"),
                                   ("openings_after_release", "deferred_received_positions")])
-def test_a_deferred_positions_key_tells_a_record_that_knows_positions_from_an_older_one(path):
-    assert decided(put(one_pick_deferred(), path, ABSENT)) == (True, SCOPED, V.PASS)
-    for stated in (None, []):
-        assert decided(put(one_pick_deferred(), path, stated)) == (False, BY_COUNT, V.FAIL)
-        assert check(put(one_pick_deferred(), path, stated), AFTER_RELEASE).differences == [
-            {"name": "deferred_positions_missing", "challenge": 1, "population": 0, "positions": [0, 0]}]
+@pytest.mark.parametrize("stated, decision", [(ABSENT, (True, SCOPED, V.PASS)), (None, (False, BY_COUNT, V.FAIL)), ([], (False, BY_COUNT, V.FAIL))])
+def test_a_deferred_positions_key_tells_a_record_that_knows_positions_from_an_older_one(path, stated, decision):
+    commit = put(one_pick_deferred(), path, stated)
+    assert decided(commit) == decision
+    assert check(commit, AFTER_RELEASE).differences == ([] if decision[0] else [
+        {"name": "deferred_positions_missing", "challenge": 1, "population": 0, "positions": [0, 0]}])
 
 
 def test_a_pick_deferred_without_a_record_of_the_openings_after_release_is_not_enough():
