@@ -59,7 +59,7 @@ MMA_KIND_TOKEN = {"IMMA": "IMMA", "HMMA": "HMMA", "QMMA": "QMMA", "OMMA": "OMMA"
                   "HGMMA": "HGMMA", "IGMMA": "IGMMA", "QGMMA": "QGMMA", "OGMMA": "OGMMA", "BGMMA": "BGMMA",
                   "UTCHMMA": "UTCHMMA", "UTCIMMA": "UTCIMMA", "UTCQMMA": "UTCQMMA", "UTCOMMA": "UTCOMMA",
                   "UTCBMMA": "UTCBMMA"}
-#: the cheapest int8/FP word an unpriced form could head, by base opcode (the red-team's "smallest escape")
+#: the cheapest int8/FP word an unpriced form could head, by base opcode: its smallest escape
 ESCAPE = {
     "DMMA": "an int8xint8 product is exact in f64 (|a*b|<2^24), so one DMMA.8 heads 8 exact int8 MACs a warp "
             "instruction; with no f64 tensor peak the sheet prices it at 0. Measured, it runs 64 f64 MACs a SM-clock on "
@@ -224,8 +224,8 @@ def diff(family: str, census: dict, with_unused: bool) -> dict:
 
 
 def report(d: dict) -> str:
-    out = [f"== {d['family']} (ISA table: {d['isa_table']}; DS_tensor types: {', '.join(d['ds_tensor_types'])}; "
-           f"census tensor rows: {', '.join(d['priced_tensor_tokens'])})",
+    out = [(f"== {d['family']} (ISA table: {d['isa_table']}; DS_tensor types: {', '.join(d['ds_tensor_types'])}; "
+            f"census tensor rows: {', '.join(d['priced_tensor_tokens'])})"),
            "buckets: " + ", ".join(f"{b} {n}" for b, n in d["counts"].items())]
     if d["disagreements"]:
         out.append("class_of disagreements (the lane classifier's UNIFORM regex mis-maps these): "

@@ -57,13 +57,19 @@ for one server block and the Lean check's answer for it. It extends the all-prot
   S0, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
   and 1/10^6, its run ids, and `source: real|fixture`. S0 is PoUS's state bound ⌊ρ·|C|⌋; the schema also reads
   `S_cert`, that quantity's older name, which nothing writes;
+- the terms an error leaves out, `named_terms`. The bandwidth audit's error has one, with no number and in no total:
+  the PRF advantage of the keyed stream its openings are sampled from. Its entry carries PoUB's `ledger.NAMED_TERMS` as
+  its answer's profile names it, and a bandwidth answer that names none is refused: no entry is built from it, and
+  `check` and the schema refuse a record whose bandwidth entry has none. The error, its certificates at each δ and
+  every sum over it read with the term beside them (`error_form`, the ledger's `DELTA_FORM` with the error for δ);
 - the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0` or
   `verity/remote/v0`, as the composite Lean check writes its `answer.json`), `accept`, `reject` or `undecided`, and
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;
 - what the product's subprotocols say (`compose`) and the error of `Accounting.Guarantees.JointPooledLive` over the
-  block: the accepted subprotocols' errors summed. The product (`PRODUCTS`) is onsite's, every subprotocol, unless
-  `composed.product` names remote's, sampled proofs and PoUW, whose other subprotocols are `dropped`: not run and not
-  composed;
+  block: the accepted subprotocols' errors summed, with `joint_horizon.named_terms` naming, by subprotocol, the terms
+  those errors leave out, which the sum and the monitoring period's bounds leave out too. The product (`PRODUCTS`) is
+  onsite's, every subprotocol, unless `composed.product` names remote's, sampled proofs and PoUW, whose other
+  subprotocols are `dropped`: not run and not composed;
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointPooledLive's
   union bound over that many blocks and the per-block error each δ needs.
 
@@ -72,7 +78,9 @@ for one server block and the Lean check's answer for it. It extends the all-prot
     python -m verity_e2e_demo.block_record check tests/fixtures/block-record-r2-period0.json
     python -m verity_e2e_demo.block_record from-runs --r2 R2/reports.jsonl --r1 R1/reports.jsonl --wipe WIPE/results.json --out DIR
 
-The fixtures are records of real runs. `block-record-r2-period0` is one period of an all-protocols run: five
+The fixtures are records of real runs, in the record's form of today: a bandwidth entry names the term its error leaves
+out, which those runs' answers did not, so `from-runs` refuses a report of theirs that has a bandwidth row.
+`block-record-r2-period0` is one period of an all-protocols run: five
 subprotocols accept, and a wipe is carried but not composed, since it ran on another server. It has no Lean answer, so the
 verdict is undecided, and the error sum is at least sampled proofs' 1/2 from its 2-unit sample. `block-record-b71a-w30`
 carries its window's Lean `onsite check` answer, which accepts. `block-record-r1-window10` is one window with
