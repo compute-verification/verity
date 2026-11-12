@@ -192,11 +192,11 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
 
 
 def test_every_rounds_members_frame_domains_are_one_set_their_templates_and_counts(tmp_path):
-    """A scan member's statement's input set is its template's (`scan_zk.set_of`), naming no round and no
-    link-window, so its o0's frame domain (`scan_zk.frame_domain`, which `stage` holds the staged one to) is a function
-    of its template and its unit count: the domains computed once from the honest round's members are those of every
-    round's, a link-window's member's those of the next's, and the unread round's one unit's the last ingress unit's.
-    The block's set is its run's (`block_set`), so its o0's domain, the `prog` tree's, is no other run's."""
+    """A scan member's statement's input set is its template's (`scan_zk.set_of`), naming no round and no execution
+    phase, so its o0's frame domain (`scan_zk.frame_domain`, which `stage` holds the staged one to) is a function of
+    its template and its unit count: the domains computed once from the honest round's members are those of every
+    round's, an execution phase's member's those of the next's, and the unread round's one unit's the last ingress
+    unit's. The block's set is its run's (`block_set`), so its o0's domain, the `prog` tree's, is no other run's."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path / "a", setup=sz.TEST, group=G)
     honest = {m.name: m for m in h.rounds["honest"]}

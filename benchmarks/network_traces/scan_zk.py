@@ -63,8 +63,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
   unit, whose o1 has no leaf to open), every unit sampled by the verifier's Lean. `program` refuses a Program whose
   one-stage partition or reads (`registered.reads`) aren't the members'. A member's statement's input set is its
-  template's (`set_of`), naming no round and no link-window, so its frame domains are its template's and its unit
-  count's in every round. Ingress unit t reads ``row`` (the warden's
+  template's (`set_of`), naming no round and no execution phase, so its frame domains are its template's and its unit
+  count's in every round.
+  Ingress unit t reads ``row`` (the warden's
   ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog`` leaf
   j·nb + ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
   `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1, and ``o2``, its view,
@@ -388,8 +389,8 @@ def block_binding(set_name: str, n: int) -> bytes:
 
 def set_of(template: str) -> str:
     """A scan template's statements' input set, which their frame domains bind (`frame_domain`): the template's alone,
-    naming no round and no link-window, so a member's frame domains are its template's and its unit count's, the same
-    in every round and in every link-window of a group. The block's is its run's (`block_set`)."""
+    naming no round and no execution phase, so a member's frame domains are its template's and its unit count's, the
+    same in every round and in every execution phase of a group. The block's is its run's (`block_set`)."""
     return f"unit-scan-{template}"
 
 
