@@ -259,3 +259,9 @@ the table for `torch_gpu/` (the words "the decoder's non-matmul ops (`units`)" t
   named run, push, and tell me the head: I mark it again.
 - If `main` has not changed that file by your return, say so; I look again then.
 - HASH-117 comes first only while you are in the middle of a step: #9260 is what top waits for.
+- **Added 12:36Z: the pull request ahead of #9260 is #9231** (compute-accounting's move of
+  `benchmarks/pouw/machine_model/` to `benchmarks/machine_model/`, head `4439c56350`, not on `main`
+  yet): it rewrites the `pouw/` row of `benchmarks/README.md`, the line under the `torch_gpu/` row
+  you edit, and adds a `machine_model/` row lower down. So the conflict is two adjacent rows, each
+  side's own: keep both. It is a move, so it lands only with a reviewer's verdict; when it is on
+  `main`, merge `main` as the section above says. ci's notice repeats every tick until then.
