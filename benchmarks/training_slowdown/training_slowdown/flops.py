@@ -85,6 +85,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch._prims_common import ELEMENTWISE_TYPE_PROMOTION_KIND, elementwise_dtypes
 from torch.utils import flop_counter
 from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils._pytree import tree_flatten
@@ -242,17 +243,32 @@ def _tensors(x) -> list[torch.Tensor]:
 CAST_RESULTS = frozenset({"_scaled_mm"})
 
 
-def dtype_of(name: str, results: list, first: list) -> str:
+def in_place(name: str) -> bool:
+    """Whether the op named `name` is an in-place form (`mul_`, `addcmul_`, `_foreach_lerp_`), which computes in its
+    tensor operands' promoted dtype and writes its first operand's: not a fused kernel (`_fused_adamw_`), which
+    computes in its own."""
+    return name.endswith("_") and not name.endswith("__") and not name.startswith("_fused_")
+
+
+def dtype_of(name: str, results: list, first: list, operands: list = ()) -> str:
     """The dtype the op named `name` computes in, which its gates are priced in (`gates.kind_of`), by its result's
-    tensors and its first operand's (traced ones too): its result's. Its first operand's where it returns none (an
-    in-place `_foreach_` form and a fused optimizer step write it; an op inside a fused kernel has a stand-in at the
-    kernel's dtype) or casts its result (`CAST_RESULTS`). It is the name of their floating-point dtype (a
+    tensors, its first operand's and all its tensor operands (traced ones too): its result's. Its first operand's
+    where it returns none (an in-place `_foreach_` form and a fused optimizer step write it; an op inside a fused
+    kernel has a stand-in at the kernel's dtype) or casts its result (`CAST_RESULTS`). An in-place form (`in_place`)
+    computes in its operands' promoted dtype, torch's `result_type` over them, and writes its first operand's: it is
+    named the one it computes in (`bf16.mul_(f32)` float32). It is the name of their floating-point dtype (a
     decomposition's pivots and flags beside it are not its work), or of the dtype they have where none is floating
     (a comparison, an integer op). Tensors in more than one are named together ("bfloat16+float32"), which no price
     reads: a trace holds a list op as one node at one price (`capture.structure`), so a row split by dtype would
     have nothing to equal there."""
-    names = {str(t.dtype).removeprefix("torch."): t.is_floating_point()
-             for t in (first if name in CAST_RESULTS or not results else results)}
+    named = _named({t.dtype for t in (first if name in CAST_RESULTS or not results else results)})
+    if operands and in_place(name) and "+" not in named:
+        return _named({elementwise_dtypes(*operands, type_promotion_kind=ELEMENTWISE_TYPE_PROMOTION_KIND.DEFAULT)[1]})
+    return named
+
+
+def _named(dtypes: set) -> str:
+    names = {str(d).removeprefix("torch."): d.is_floating_point for d in dtypes}
     return "+".join(sorted(n for n, floating in names.items() if floating or not any(names.values())))
 
 
@@ -853,7 +869,8 @@ class Counter(TorchDispatchMode):
                 macs, cls = _work(func, args, kwargs, out), "elementwise"
         if not macs:
             return tag
-        return self._count(func, ins, tags, macs, cls, tag, bwd, dtype_of(p.__name__, _tensors(out), _tensors(args[:1])))
+        return self._count(func, ins, tags, macs, cls, tag, bwd,
+                           dtype_of(p.__name__, _tensors(out), _tensors(args[:1]), ins))
 
     def _attention(self, func, args, kwargs, tags: dict[int, Tag], bwd: bool) -> Tag:
         """A fused attention kernel, counted as the ops the math kernel computes attention by, each on its own operands'

@@ -1100,7 +1100,8 @@ def _computed_in(n) -> str | None:
         vals = [x.meta.get("val") for x in nodes]
         return [t for v in vals for t in (v if isinstance(v, (list, tuple)) else [v]) if isinstance(t, torch.Tensor)]
 
-    return dtype_of(_pk(n.target), tensors([n]), tensors(_arg_nodes_of(n.args[:1]))) or None
+    return dtype_of(_pk(n.target), tensors([n]), tensors(_arg_nodes_of(n.args[:1])),
+                    tensors(_arg_nodes_of([*n.args, *n.kwargs.values()]))) or None
 
 
 def _storage_positions(v: torch.Tensor) -> np.ndarray:

@@ -302,6 +302,31 @@ def test_an_op_that_returns_nothing_is_in_the_dtype_of_the_operand_it_writes():
         gates.of_log({"ops": {f"other param {op} [[4, 5], [5, 3]] {dtype}": [1, macs] for op, macs, dtype in mixed}})
 
 
+def test_an_in_place_op_over_two_dtypes_is_named_in_the_one_it_computes_in():
+    """An in-place form computes in its tensor operands' promoted dtype, torch's `result_type`, and writes its first
+    operand's: `bf16.mul_(f32)` computes its products in float32 and rounds them to bf16, so its row names float32,
+    and so does the trace's node (`capture.structure._computed_in`). A 0-dim operand doesn't widen it, as it doesn't
+    in torch (`lerp_` takes no other operand of another dtype than its first's but a 0-dim weight), and a `_foreach_`
+    form whose lists are each of one dtype is named the promoted one too."""
+    from torch.fx.experimental.proxy_tensor import make_fx
+
+    from training_slowdown.capture.structure import _computed_in
+
+    x, y = torch.randn(4, 5).bfloat16(), torch.randn(4, 5)
+    s, (p, q, r, t, u) = y.sum(), (x.clone() for _ in range(5))
+    assert logged(lambda: p.mul_(y)) == [["mul_", 20, "float32"]]
+    assert logged(lambda: q.addcmul_(y, y)) == [["addcmul_", 20, "float32"]]
+    assert logged(lambda: r.lerp_(x, s)) == [["lerp_", 20, "bfloat16"]]
+    assert logged(lambda: t.mul_(s)) == [["mul_", 20, "bfloat16"]]
+    assert logged(lambda: torch._foreach_mul_([u], [y])) == [["_foreach_mul_", 20, "float32"]]
+    assert dtype_of("mul_", [x], [x], [x, y]) == "float32" and dtype_of("mul_", [x], [x]) == "bfloat16"
+    for body, (a, b), dtype in ((lambda a, b: a.mul_(b), (x, y), "float32"),
+                                (lambda a, b: a.addcmul_(b, b), (x, y), "float32"),
+                                (lambda a, b: a.lerp_(a, b), (x, s), "bfloat16")):
+        graph = make_fx(body)(a.clone(), b).graph
+        assert [_computed_in(n) for n in graph.nodes if n.op == "call_function"] == [dtype]
+
+
 def test_a_kernel_that_casts_its_result_is_in_its_first_operands_dtype():
     """The second named exception: `_scaled_mm` computes in its FP8 operands' dtype and casts its result out of it,
     so its row names its first operand's dtype and is priced at the FP8 GEMM. By its result's dtype it would be

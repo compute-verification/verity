@@ -258,7 +258,8 @@ same under either kernel in its ops, their shapes and their MACs, and its counte
 (`tests/test_run.py`). Each row of a record's op
 log names the dtype its op computed in, its result's (`flops.dtype_of`): its first operand's for an op that returns
 nothing (an in-place list form, a fused optimizer step) and for `_scaled_mm`, whose result is cast out of the FP8 it
-computes in. The op's gates are priced in that dtype, never by its phase or its class (`gates.kind_of`), and the trace's
+computes in; for an in-place form (`flops.in_place`), its tensor operands' promoted dtype, torch's `result_type`, which
+it computes in before it writes its first operand's (`bf16.mul_(f32)` is float32). The op's gates are priced in that dtype, never by its phase or its class (`gates.kind_of`), and the trace's
 circuit prices each node by the same rule. So a counted step is its trace's circuit in gates, attention's products and
 scalings excepted: a job runs them under a fused kernel, in its operands' dtype, bf16 under the routes' autocast, and
 its rows name that; a trace runs them under the math kernel, which casts half-width operands to float32, and its
