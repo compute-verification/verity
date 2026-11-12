@@ -94543,3 +94543,31 @@ Both 40,960-key units prove whole on one RTX PRO 6000. "Proves whole" here means
 5. **Way (3)**, the split at `WHOLE_MAX`: untouched. Your condition, "until the whole mask has proved", is met in the sense of part A and no further.
 6. **Small, for infra through you.** [run] The lease's own line for the whole mask says "busy 0m00s of 1m40s sampled (0%)", while the card held 18,359 MiB and read busy on 7 of my 212 samples. Its utilisation sampling is too coarse for a session this short.
 7. **Next.** The `unit_block` read and what moves by name under the row, by Fri 13 Nov 20:00Z.
+
+## KEPT, Thu 12 Nov 18:09Z: run 2 is `r20261112-175921-dd43` on cpu-14, building the verifier since 18:07:52Z after 6 minutes in line; its members are two different proofs now; the served program on `main` changed with #9087, so Friday needs one more build; what Friday needs and its hour
+
+**1. Run 2** [run]
+
+- **Id and place:** `r20261112-175921-dd43`, vy-nebius-cpu-14, research pool, `--mem-gb 160`, launched 17:59:29Z. It took a slot at 18:05Z after 6 minutes in line (cores 112 to 127, the process pinned to one), had its files by 18:07:51Z and is building the verifier.
+- **No node had a place at 17:53Z.** Every research pool was full or short of memory for 160 GB. cpu-14 had the most free memory (246 to 314 GB) and twelve slots, so I joined its line. It holds two other proofs jobs and its load is 63 to 100 on 192 cores, so every figure of this run is from a loaded node.
+- **The scratch merge was remade on today's `main`** `15662e7c40ae`, because the 14:57Z commit was lost with the VM. #9253 `cf5587e216`, #9209 `4c8742d0d4` and #9234 `95fe2956f9` each merge with no file named; the commit is `6b7d33e2a5c2`, pushed nowhere. The verifier's four directories have the same tree ids as in the 14:57Z merge, so the verifier built is the one I prepared.
+- **One change from what I prepared: the kernel member is a kernel step's proof.** Kernels' card run of today kept one, `art:fd0089608abfd616a9619618e87c865cb85ede59f61c3e9288aa9ec4da3d37ec` (step `2-on` of `r20261112-154501-4949`) [read: their `lean-runs.tsv`; run: the art's `pin.txt` is this circuit file's SHA-512]. `main`'s Lean verifier accepted it alone in 310.4 s at 40.9 GiB with the arguments my members use [run: `r20261112-163017-2fa5`, theirs]. So the members are own (KSTEADY's `art:75593450…`), kernel, own, kernel, as Friday's will be. As prepared, both names were KSTEADY's proof.
+- **What the swap cost:** I cancelled the first copy, `r20261112-175435-e936`, before it took a slot. It was first in line; the new one joined behind three others.
+- **Expected:** peak 120 to 146 GB [guess]; its end about 18:50Z [guess].
+
+**2. The served program on `main` is no longer the one in the store** [read: the diff of `benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json`]
+
+- #9087 changed the served partition file: six templates (two `SparseMlaHeadScores_v2`, two `SparseMlaHeadValues_v2`, `SparseMlaSplitEnd_v1`, `SparseMlaCombine_v1`) where it had eleven.
+- `art:a6102446…` is the program of the eleven, as #9190's head builds it. Run 2 holds that one. Its 609 to 692 s read and its held memory are that program's; the new program's size, read and memory are not measured.
+- **To hold Friday's program I need one more build**, from `main`: the same job as run 1, about 50 minutes at `--mem-gb 170` if the new program costs what the old did [guess]. I have not launched it: your word, and from vllm the commit Friday's served run builds from.
+
+**3. Friday**
+
+- **From kernels, the two ids a run, and early.** Their plan puts the kept proofs in the store once a run has ended, and Friday's rows are 15:45Z to 19:45Z [read: their plan]. The two sessions kept are the first of the first own step and of the first kernel step, so they exist early in a run. A put right after those two steps gives the ids hours sooner; that is the ask. Today the kept proof was in the store within 45 minutes of the card opening [run: the Lean run on it started 16:30:17Z] and in their notes' `lean-runs.tsv`; no relay had reached my mailbox at 17:58Z, and I can read that file myself if I am awake.
+- **Each proof's `pin.txt` must be this circuit file's SHA-512.** A proof of another statement needs two more ids, its circuit file's and its word Program's; the job takes them as variables.
+- **Card 2's keyed proofs should need no other verifier** [read: `cursor/proofs-keyedsalts-811d` changes two Rust files of the prover and no Lean; not tried].
+- **A place for 160 GB at that hour.** Today there was none on any node at 17:53Z.
+- **The hour:** the table is in your inbox about 75 minutes after the job takes a slot [guess, to be corrected by run 2's own length]. With an early put and a resume at 16:30Z: launched by 16:40Z, the table by 18:00Z. With the put after the runs end: launched by 20:00Z, the table by 21:15Z. Both with no wait for a place.
+- **One addition I would make for Friday:** each member's proof also checked by `verify` alone in a fresh process, same verifier, same core, same node, so the saving is two runs' difference and not the first member's stand-in. About 10 minutes more for the word Program, 15 for the served one [guess].
+
+**4. Held:** nothing pushed to a PR head, nothing marked, nothing on Linear or Slack, nothing quoted to another lane.
