@@ -349,6 +349,18 @@ def loaded_code_objects() -> dict[str, Any]:
         return {"error": repr(e)[:200]}
 
 
+def _kernels_of(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """A snapshot's kernels by name; none where it leaves `per_kernel` out or holds none."""
+    held = snapshot.get("per_kernel")
+    return held if held else {}
+
+
+def _listed(kernel: dict[str, Any], key: str) -> list[Any]:
+    """The list a kernel's record holds under `key`; an empty one where it leaves the key out or holds none."""
+    held = kernel.get(key)
+    return held if held else []
+
+
 def loaded_code_objects_delta(start: dict[str, Any], end: dict[str, Any]) -> dict[str, Any]:
     """Compare two loaded_code_objects() snapshots of ONE process (after engine build = compile + Inductor autotune + CUDA-graph capture,
     and after the last measured run), so that repeated graph replay is covered and not only compilation/warm-up: the graphs replay
@@ -356,13 +368,13 @@ def loaded_code_objects_delta(start: dict[str, Any], end: dict[str, Any]) -> dic
     recorded at build is the identity of every replayed step; anything new (a recompile, a re-tune, a new specialization) is named."""
     if not isinstance(start, dict) or not isinstance(end, dict) or start.get("error") or end.get("error"):
         return {"ok": None, "why": f"snapshot unavailable: start {str((start or {}).get('error'))[:80]} end {str((end or {}).get('error'))[:80]}"}
-    ps, pe = start.get("per_kernel") or {}, end.get("per_kernel") or {}
+    ps, pe = _kernels_of(start), _kernels_of(end)
     new_k = sorted(set(pe) - set(ps))
     gone_k = sorted(set(ps) - set(pe))
     changed_exec = sorted(k for k in set(ps) & set(pe)
-                          if json.dumps([(e.get("id"), e.get("config")) for e in ps[k].get("executed") or []], sort_keys=True)
-                          != json.dumps([(e.get("id"), e.get("config")) for e in pe[k].get("executed") or []], sort_keys=True))
-    changed_bins = sorted(k for k in set(ps) & set(pe) if sorted(ps[k].get("binaries") or []) != sorted(pe[k].get("binaries") or []))
+                          if json.dumps([(e.get("id"), e.get("config")) for e in _listed(ps[k], "executed")], sort_keys=True)
+                          != json.dumps([(e.get("id"), e.get("config")) for e in _listed(pe[k], "executed")], sort_keys=True))
+    changed_bins = sorted(k for k in set(ps) & set(pe) if sorted(_listed(ps[k], "binaries")) != sorted(_listed(pe[k], "binaries")))
     changed_src = sorted(k for k in set(ps) & set(pe) if ps[k].get("src_sha256") != pe[k].get("src_sha256"))
     out = {"modules_start": start.get("modules"), "modules_end": end.get("modules"), "new_modules": (end.get("modules") or 0) - (start.get("modules") or 0),
            "kernels_start": start.get("kernels"), "kernels_end": end.get("kernels"), "new_kernels": new_k[:40], "kernels_gone": gone_k[:40],
