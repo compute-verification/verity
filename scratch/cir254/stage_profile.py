@@ -235,17 +235,22 @@ def _forms(x, out: list) -> list:
     return out
 
 
-def _hist(sizes) -> dict:
-    """entries and bytes by the form's length: 1, 2-4, 5-16, 17-64, ..."""
-    h: dict[int, list] = {}
-    for n, b in sizes:
-        k = 0 if n <= 1 else 1 if n <= 4 else (n - 1).bit_length() // 2
-        e = h.setdefault(k, [0, 0, 0])
+class _Hist:
+    """sets, entries and bytes by the set's length: 1, 2-4, 5-16, 17-64, ..."""
+
+    def __init__(self):
+        self.h: dict[int, list] = {}
+
+    def add(self, n: int, b: int) -> None:
+        k = 0 if n <= 1 else 1 if n <= 4 else (n - 1).bit_length() + 1 >> 1
+        e = self.h.setdefault(k, [0, 0, 0])
         e[0] += 1
         e[1] += n
         e[2] += b
-    lab = lambda k: "<=1" if k == 0 else "2-4" if k == 1 else f"{(1 << (2 * k - 2)) + 1}-{1 << (2 * k)}"  # noqa: E731
-    return {lab(k): {"forms": v[0], "entries": v[1], "bytes": v[2]} for k, v in sorted(h.items())}
+
+    def table(self) -> dict:
+        lab = lambda k: "<=1" if k == 0 else "2-4" if k == 1 else f"{(1 << (2 * k - 2)) + 1}-{1 << (2 * k)}"  # noqa: E731
+        return {lab(k): {"sets": v[0], "entries": v[1], "bytes": v[2]} for k, v in sorted(self.h.items())}
 
 
 class _Owners:
@@ -275,40 +280,36 @@ class _Owners:
 def count_wires(C, wires: dict, circ=None) -> dict:
     """What the lowering holds at the end of its gates: ``wires``' forms (each distinct `L` and each distinct set once, by
     identity; ``by_owner`` the sets by the Definition whose gate first holds each, `_owner`) and the circuit's AND operands."""
-    seen_l: set[int] = set()
     seen_s: set[int] = set()
     forms = entries = set_bytes = words = 0
-    sizes = []
+    hist = _Hist()
     owners: dict[str, list] = {}
     owner = None if circ is None else _Owners(circ)
     for j, word in wires.items():
         words += 1
         own = None
         for f in word:
-            if id(f) in seen_l:
-                continue
-            seen_l.add(id(f))
             forms += 1
             if id(f.s) in seen_s:
                 continue
             seen_s.add(id(f.s))
-            b = sys.getsizeof(f.s)
-            entries += len(f.s)
+            n, b = len(f.s), sys.getsizeof(f.s)
+            entries += n
             set_bytes += b
-            sizes.append((len(f.s), b))
-            if circ is not None:
+            hist.add(n, b)
+            if owner is not None:
                 if own is None:
                     own = owners.setdefault(owner(j), [0, 0, 0, 0])
                     own[0] += 1
                 own[1] += 1
-                own[2] += len(f.s)
+                own[2] += n
                 own[3] += b
     out = {"words": words, "word_list_bytes": sum(sys.getsizeof(w) for w in wires.values()), "dict_bytes": sys.getsizeof(wires),
            "forms": forms, "form_bytes": forms * 48, "sets": len(seen_s), "set_entries": entries, "set_bytes": set_bytes,
-           "sets_by_length": _hist(sizes),
+           "sets_by_length": hist.table(),
            "by_owner": {k: {"gates": v[0], "sets": v[1], "entries": v[2], "set_bytes": v[3]}
                         for k, v in sorted(owners.items(), key=lambda kv: -kv[1][3])}}
-    del seen_l, seen_s, sizes
+    del seen_s
     ands = a_n = b_n = tup = 0
     for kind, data in zip(C.kind, C.data):
         if kind == "and":
