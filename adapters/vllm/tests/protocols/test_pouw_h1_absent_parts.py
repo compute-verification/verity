@@ -48,7 +48,8 @@ def _released(extra: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-@pytest.mark.parametrize("stated", [{}, {"errors": None}, {"errors": []}])
+@pytest.mark.parametrize("stated", [{}, {"errors": None}, {"errors": []}, {"errors": 0}],
+                         ids=["absent", "null", "empty", "a false value"])
 def test_a_rank_whose_committer_states_no_errors_releases_none(stated):
     assert _released({**COUNTS, **stated}) == {"lo": 3, "run_root": bytes(ROOT_BYTES).hex(), "commit_scheme": SCHEME,
                                                "name": "stand-in", **COUNTS, "errors": []}
@@ -96,7 +97,8 @@ def test_the_first_ranks_acquisitions_are_the_windows_and_its_ids_the_steps():
     assert (tap.took, tap.refused) == ([("site/0", 2, None), ("ids", 2, 2)], [])
 
 
-@pytest.mark.parametrize("none", [{}, {"acquired": None}, {"acquired": []}])
+@pytest.mark.parametrize("none", [{}, {"acquired": None}, {"acquired": []}, {"acquired": 0}],
+                         ids=["absent", "null", "empty", "a false value"])
 def test_a_rank_that_shipped_no_acquisitions_feeds_nothing_and_is_still_the_first_rank(none):
     """The rank holding linear 0 answers with no ``acquired`` (it has no Commit): the tap takes nothing of it, and the
     next rank's ids are still not the first rank's."""
