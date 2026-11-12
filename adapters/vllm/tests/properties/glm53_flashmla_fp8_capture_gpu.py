@@ -101,8 +101,9 @@ JOB_TOKENS = 4
 #: the cases whose every token is held to the Definition's own evaluator, whatever ``--definition`` (above 0) says: the planted rows
 DEFINITION_WHOLE = ("edge",)
 SASS_KEEP = re.compile(r"fp8_sparse|sparse_fp8|mla_combine_kernel|get_mla_metadata_kernel")
-#: the V32, 64-head instance's template arguments as the Itanium ABI mangles them (`ModelType::V32` is 0)
-SASS_INSTANCE = re.compile(r"flash_fwd_splitkv_mla_fp8_sparse_kernel.*ModelTypeE0ELi64E")
+#: the V32, 64-head instance's template arguments as the Itanium ABI mangles them (`ModelType::V32` is 0; `ModelType` is
+#: declared outside any namespace, `L9ModelType0E`, and the nested form is taken too)
+SASS_INSTANCE = re.compile(r"flash_fwd_splitkv_mla_fp8_sparse_kernel.*9ModelTypeE?0ELi64E")
 F32 = np.float32
 U32 = np.uint32
 

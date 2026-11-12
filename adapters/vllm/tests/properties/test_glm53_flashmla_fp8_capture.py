@@ -175,9 +175,11 @@ arch = sm_90a
     assert "FMUL" in got[0][2] and "EXIT" not in got[0][2] and "ptx" not in got[1][2]
     assert X.SASS_KEEP.search("_ZN4sm906decode10sparse_fp839flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateIL"
                               "NS1_9ModelTypeE0ELi64EEENS1_9TMAParamsEEEvx")
+    assert X.SASS_INSTANCE.search("flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateIL9ModelType0ELi64EEE")
     assert X.SASS_INSTANCE.search("flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateILNS1_9ModelTypeE0ELi64EEE")
+    assert not X.SASS_INSTANCE.search("flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateIL9ModelType1ELi64EEE")
     assert not X.SASS_INSTANCE.search("flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateILNS1_9ModelTypeE1ELi64EEE")
-    assert not X.SASS_INSTANCE.search("flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateILNS1_9ModelTypeE0ELi128EEE")
+    assert not X.SASS_INSTANCE.search("flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateIL9ModelType0ELi128EEE")
 
 
 def test_the_comparison_takes_the_kernel_words(made) -> None:
