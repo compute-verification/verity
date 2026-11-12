@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+import pytest
 import torch
 from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import credit as CR
@@ -89,7 +90,8 @@ class Window:
     def roots(self, c: int) -> tuple[bytes, bytes]:
         """Call c's (root(a/<K>@<s>), root(b/<K>)) as the record registers them."""
         k, s = int(self.calls[c]["k"]), int(self.calls[c]["step"])
-        return tuple(bytes.fromhex(self.entry(f"{self.prefix}{v}")["root"]) for v in (f"a/{k}@{s}", f"b/{k}"))
+        a, b = (bytes.fromhex(self.entry(f"{self.prefix}{v}")["root"]) for v in (f"a/{k}@{s}", f"b/{k}"))
+        return a, b
 
     def operands(self, c: int) -> tuple[np.ndarray, np.ndarray]:
         """Call c's A over the Program's M slots (its served codes as the prover kept them, then zero rows) and its B."""
@@ -143,6 +145,21 @@ def test_serving_computes_on_the_served_weights_in_place_and_binds_the_run_once_
     handed: np.ndarray = np.ones((32, 64), np.int8)
     got = bare.weight_of(call, handed)
     assert got is not layers[1].weight and np.array_equal(got.numpy(), handed) and bare.weight_of(call, handed) is got
+
+
+def test_a_windows_roots_are_the_roots_its_record_registers_once_for_the_calls_operands():
+    """`Window.roots`: call c's pair is the root of ``a/<K>@<s>`` and the root of ``b/<K>`` under the window's prefix,
+    each the record's one entry of that name; a name the record registers twice, or not at all, is the reader's refusal."""
+    window = object.__new__(Window)
+    window.prefix, window.calls = "p/", {3: {"k": 64, "step": 2}}
+    window.entries = {"p/a/64@2": [{"root": RA.hex()}], "p/b/64": [{"root": RB.hex()}]}
+    assert window.roots(3) == (RA, RB)
+    window.entries["p/b/64"].append({"root": RA.hex()})
+    with pytest.raises(AssertionError, match=r"^the window registers p/b/64 2 times, not once"):
+        window.roots(3)
+    del window.entries["p/a/64@2"]
+    with pytest.raises(AssertionError, match=r"^the window registers p/a/64@2 0 times, not once"):
+        window.roots(3)
 
 
 def test_the_producers_receipt_is_the_word_references_and_its_lane_partials_xor_to_it():
