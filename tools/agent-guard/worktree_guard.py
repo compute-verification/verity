@@ -60,8 +60,8 @@ from task_hook import REGISTRY, holders
 
 STATE = Path(os.environ.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
 OWNER_FILE = "agent-owner"
-#: an owner with no hook run for this long is gone: six times the longest one command may block (shell_hook.BLOCK_CAP_S), so
-#: an agent that is waiting on a command never reads as gone
+#: an owner with no hook run for this long is gone: six times the longest the shell hook lets one command block, so an agent
+#: that is waiting on a command never reads as gone
 GONE_S = 2 * 3600
 RECLAIM = "python3 tools/agent-guard/worktree_guard.py reclaim"
 

@@ -757,7 +757,7 @@ WORKTREE_GUARD = HOOK.parent / "worktree_guard.py"
 @pytest.fixture
 def vm(tmp_path, event_log):
     """A coordinator's VM: its checkout `ws` on branch `lead`, a worker's worktree `wt` on `work` and one nobody has run git
-    in, `fresh`; LEAD holds @infra in the registry the hooks read. `ask` is the hook's answer to a command an agent types,
+    in, `fresh`; LEAD holds a handle in the registry the hooks read. `ask` is the hook's answer to a command an agent types,
     `reclaim` the command as that agent's shell runs it, and `long_ago` moves every hook run recorded so far back to 1970."""
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0",
            "AGENT_GUARD_REGISTRY": str(tmp_path / "registry.json"), "AGENT_GUARD_PUSH_REMOTES": str(tmp_path / "origin.git")}
