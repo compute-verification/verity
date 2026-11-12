@@ -15,7 +15,7 @@ Three things in your brief change from open or recommended to ruled:
 Also: he wants it on `main` soon. Keep the PR small enough to read in one sitting, and open it as early as you can
 today rather than at 6 PM; the metric commit can follow in a second PR if it slows you.
 
-## Thu 12 Nov 3:16 PM PST
+## Thu 12 Nov 3:08 PM PST
 
 Three more, from reading the tree against your brief:
 

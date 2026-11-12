@@ -1,4 +1,4 @@
-# The layout's moves: what every mover of top's reads first (TOP-398), Thu 12 Nov 3:15 PM PST
+# The layout's moves: what every mover of top's reads first (TOP-398), Thu 12 Nov 3:08 PM PST
 
 You are a worker of `top`, lane `top`, issue TOP-398. This file is the part of your brief you share with the other
 movers. Your launch message names your pieces.
