@@ -32,7 +32,8 @@ session on it (`Committed`); the session can be sampled when its open's layout h
   has exactly one accepted audit; every other root the lane committed in it is published among the other sessions;
   and each published window is such a root.
 
-What these do not say: that the ledger presented is the auditor's device's own and whole; that a session whose
+What these do not say: that the ledger presented is the auditor's device's own and whole, which
+`Properties.Spot.PeriodLedger` states; that a session whose
 layout does not hold the sample's family was audited (it is published, and nothing is held of it); and anything of a
 window whose session sampled several registrations, which the check refuses.
 -/
