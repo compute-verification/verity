@@ -16,8 +16,9 @@ both ways, one connection at a time, in the challenger's order:
   bucket's tick, and so do a direction's end and a connection's close, so what either side sees of the other's timing is
   the grid's occupancy, T·log2(r + 1) bits an execution phase (the K charge's unit). Nothing the prover does moves a
   tick or slows the link: a prover that doesn't take what a tick releases fails the link closed, so there is no flow
-  control from inside. The ticks read one clock, this host's monotonic one, which the challenger's release log reads
-  too.
+  control from inside. The ticks read one clock, the network certifier's (`pacer.raw_clock`, this host's raw monotonic
+  one), which the challenger's release log reads too; a tick whose wait ends early waits again, so none runs before
+  its time on that clock.
 - **Content (RP5).** Each challenger frame answers the prover's oldest unanswered frame (`remote.serve` answers in order).
   It is exempt, a `COIN`, only when that frame asked for coin (label, index) after `after` and the answer is an opening
   of that coin that opens against the session's committed coin root (`live_reason` against `commitment`, the one the
@@ -41,7 +42,6 @@ import asyncio
 import json
 import math
 import re
-import time
 from collections import Counter, deque
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
@@ -49,6 +49,7 @@ from functools import cached_property
 from typing import Any
 
 from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, Record, row_count
+from verity.protocols.certifier.verifier.pacer import raw_clock
 from verity.protocols.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.protocols.spot.device.remote import HEADER, MAX_HEAD
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
@@ -237,7 +238,7 @@ class CoinLink:
 
     def __init__(self, params: CoinLinkParams, commitment: LiveCommitment,
                  connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
-                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+                 clock: Callable[[], float] = raw_clock, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  slack: float = 0.025, buckets: int | None = None, backlog: int = BACKLOG,
                  publish: Callable[[Record, GridParams], None] | None = None) -> None:
         self.params, self.connect = params, connect
@@ -296,7 +297,8 @@ class CoinLink:
             while not ((self.stopping or (self.buckets is not None and t >= self.buckets)) and t % T == 0):
                 deadline = self.origin + t * tau
                 await self.sleep(deadline - self.clock())
-                late = self.clock() - deadline
+                while (late := self.clock() - deadline) < 0:  # a wait that ended early: no tick runs before its time
+                    await self.sleep(-late)
                 self.max_late = max(self.max_late, late)
                 if late > self.slack:
                     self.late += 1

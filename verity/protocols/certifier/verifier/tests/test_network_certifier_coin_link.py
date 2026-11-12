@@ -10,6 +10,7 @@ whole, cells queued when their connection is cut and a late tick each fail the e
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import math
 import random
@@ -23,8 +24,11 @@ from verity.protocols.certifier.verifier.active import VirtualClock
 from verity.protocols.certifier.verifier.coin_link import (COIN, COINS, COUNTED, REQUESTS, CoinLink, CoinLinkParams,
                                                        canonical, recut)
 from verity.protocols.certifier.verifier.grid import Reason
+from verity.protocols.certifier.verifier.pacer import raw_clock
 from verity.protocols.spot.device import remote as R
 from verity.protocols.spot.device.challenger import CoinError, LiveChallenger, LiveOpening, live_reason
+
+from test_network_certifier_warden import EarlyClock
 
 SCHEME = "verity/test/coins/v1"
 FAMILIES = [("positions", 3), ("replay", 2)]
@@ -428,6 +432,33 @@ def test_the_link_stops_at_its_window_boundary():
     """Stopped at tick 7 with no connection, the link ticks on to the end of its execution phase and no further."""
     link, _, _ = session([], stop_at=7)
     assert link.ticks == PARAMS.window and statuses(link) == [(None, None)] and link.summary()["complete"]
+
+
+def test_the_links_clock_is_the_network_certifiers_and_a_tick_whose_wait_ends_early_waits_again():
+    """Unless a caller injects one, the link's ticks read the network certifier's clock. A wait may end before its time
+    (a timer against another clock, a signal): here every tick's first wait ends at once, and each tick still runs only
+    once the clock reads its time, none of them late and the execution phase complete."""
+    assert inspect.signature(CoinLink).parameters["clock"].default is raw_clock
+
+    async def go():
+        clock = EarlyClock(-TAU / 2)
+        link = CoinLink(PARAMS, live().commitment, Challenger(live(), clock).connect, origin=0.0, clock=clock,
+                        sleep=clock.sleep, buckets=PARAMS.window)
+        running = asyncio.create_task(link.run())
+        before, after = [], []
+        for t in range(PARAMS.window):
+            await settle()
+            before.append(link.ticks)
+            clock.advance(t * TAU)
+            await settle()
+            after.append(link.ticks)
+        await running
+        return link, before, after, clock
+
+    link, before, after, clock = asyncio.run(go())
+    assert before == list(range(PARAMS.window)) and after == list(range(1, PARAMS.window + 1))
+    assert (link.max_late, link.late, len(clock.waits)) == (0.0, 0, 2 * PARAMS.window)
+    assert statuses(link) == [(None, None)] and link.summary()["complete"]
 
 
 # --- fail closed -----------------------------------------------------------------------------------------------------
