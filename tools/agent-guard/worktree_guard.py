@@ -17,7 +17,8 @@ them), and a `git config` that prints values, since the checkout's http.*.extrah
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
 git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
 It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
-after the hook has read it.
+after the hook has read it. A push the agent doesn't type (a script's, a tool's) meets the same push rule, `PROTECTED_REASON`
+and `owner_reason`, in git's pre-push hook (pre_push.py), branch by branch.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged. Where a command names no directory (`git -C DIR`, or a `cd DIR` before it in the same command) the hook judges the
 event's cwd, else the workspace root, since the shell's remembered directory never reaches it.
@@ -162,6 +163,34 @@ CONFIG_DUMPS = {"--list", "-l", "--get-regexp", "--show-origin", "--get-all", "-
 CREDENTIAL_KEYS = ("extraheader", "insteadof", "token", "password", "credential")
 
 
+PROTECTED_REASON = ("this push would update `main`, `checked` or `next`, which only drive and the lander move (AGENTS.md). Push "
+                    "your own branch instead: `git push origin HEAD:refs/heads/<your-branch>` (create it first with "
+                    "`git switch -c <your-branch>` if this checkout is on main).")
+
+
+def next_repaired(targets: set[str], ok: str, record: dict) -> bool:
+    """Whether a push to the protected `targets` is a lander's hand repair of `next` alone, named by its reason `ok`
+    (AGENT_GUARD_PUSH_NEXT_OK); `record`, with the reason, then goes to `$AGENT_GUARD_STATE/push-next-ok.jsonl`."""
+    if not (ok and targets == {"next"}):
+        return False
+    STATE.mkdir(parents=True, exist_ok=True)
+    with open(STATE / "push-next-ok.jsonl", "a") as f:
+        f.write(json.dumps({**record, "reason": ok}) + "\n")
+    return True
+
+
+def owner_reason(branches: list[str], agent: str) -> str | None:
+    """Why `agent` may not push `branches`: the first that is registered to another agent, until that agent hands it over.
+    An unregistered branch passes."""
+    reg = registry()
+    for b in branches:
+        if reg.get(b, agent) != agent:
+            return (f"branch {b} belongs to agent {reg[b]} (it created it, or its checkout had it): push a branch of "
+                    f"your own (`git push -u origin <your-branch>`), or have its owner hand it to you: `python3 "
+                    f"tools/agent-guard/worktree_guard.py hand {b} {agent}`.")
+    return None
+
+
 def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_ok: list[str], agent: str) -> str | None:
     """Whatever agent runs it: a push that would update `main` or `next` (a worker whose VM comes back from a snapshot reset
     to `main` would push onto it, and drive would rebuild every queued PR), or a `git config` that prints credential-bearing
@@ -171,15 +200,10 @@ def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_o
         if sub == "push":
             opts = {a for a in args[1:] if a.startswith("-")}
             targets = PROTECTED & set(push_targets(d, args[1:]))
-            if ok and targets == {"next"} and not opts & {"--all", "--mirror"}:
-                STATE.mkdir(parents=True, exist_ok=True)
-                with open(STATE / "push-next-ok.jsonl", "a") as f:
-                    f.write(json.dumps({"agent": agent, "dir": d, "args": args, "reason": ok}) + "\n")
+            if not opts & {"--all", "--mirror"} and next_repaired(targets, ok, {"agent": agent, "dir": d, "args": args}):
                 continue
             if opts & {"--all", "--mirror"} or targets:
-                return ("this push would update `main`, `checked` or `next`, which only drive and the lander move (AGENTS.md). Push "
-                        "your own branch instead: `git push origin HEAD:refs/heads/<your-branch>` (create it first with "
-                        "`git switch -c <your-branch>` if this checkout is on main).")
+                return PROTECTED_REASON
         if sub == "config":
             rest = args[1:]
             names = [a for a in rest if not a.startswith("-")]
@@ -231,13 +255,8 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
                     f"../wt-<name> -b <branch>` (or `git worktree add ../wt-<name> <existing-branch>`), then run git there "
                     f"(`git -C ../wt-<name> ...`, or `cd ../wt-<name> && ...` in the same command). One agent per checkout "
                     f"(AGENTS.md).")
-        if sub == "push":
-            reg = registry()
-            for b in push_targets(d, args[1:]):
-                if reg.get(b, agent) != agent:
-                    return (f"branch {b} belongs to agent {reg[b]} (it created it, or its checkout had it): push a branch of "
-                            f"your own (`git push -u origin <your-branch>`), or have its owner hand it to you: `python3 "
-                            f"tools/agent-guard/worktree_guard.py hand {b} {agent}`.")
+        if sub == "push" and (why := owner_reason(push_targets(d, args[1:]), agent)):
+            return why
         if (b := created_branch(sub, args[1:])) and sub in ("checkout", "switch", "worktree"):
             register(b, agent)
     return None
