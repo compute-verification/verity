@@ -210,11 +210,6 @@ def _flip_checkpoint(d):
     p.write_bytes(bytes(b))
 
 
-def _refusal(caplog) -> str:
-    """The last line `node_registration` logged: `main`'s refusal, by which it returns 2."""
-    return [r.getMessage() for r in caplog.records if r.name == NR.logger.name][-1]
-
-
 @pytest.mark.parametrize("tamper,named", [
     (lambda d: _runs(d, lambda c: c.update(commit_pass=False, commit_fail_reason="replay")), "did not pass"),
     (lambda d: _runs(d, lambda c: c["per_rank"]["1"]["weight_registration"].update(root=c["per_rank"]["0"]["weight_registration"]["root"])),
@@ -232,28 +227,27 @@ def _refusal(caplog) -> str:
     (lambda d: _retree(d, 0, lambda ns: next(n for n in ns if n[0] == "model.norm.weight").__setitem__(0, "model.final_norm.weight")),
      "rank 0: rank0.weights[13] is 'model.norm.weight', which the rank's committed weights tree does not register"),
 ])
-def test_a_commit_that_is_not_the_nodes_is_refused_by_name(commit, tamper, named, caplog):
+def test_a_commit_that_is_not_the_nodes_is_refused_by_name(commit, tamper, named, capsys):
     tamper(commit)
     assert NR.main(commit["o"]) == 2
-    said = _refusal(caplog)
+    said = capsys.readouterr().out
     assert "REFUSED" in said and named in said, said
     assert not Path(commit["o"].out, "record.json").exists()
 
 
-def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, caplog):
+def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     step = build_node_program(PHI, "step", M=1, pos0=8)
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(step.desc)))
-    assert NR.main(NR.Options(**{**commit["o"].__dict__, "workers": 2})) == 2 and "these are not its parameters" in _refusal(caplog)
-    caplog.clear()
+    assert NR.main(NR.Options(**{**commit["o"].__dict__, "workers": 2})) == 2 and "these are not its parameters" in capsys.readouterr().out
     desc = copy.deepcopy(NODE.desc)
     desc["annotations"]["theta"] = desc["annotations"]["theta"][1:]
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
-    assert NR.main(commit["o"]) == 2 and "the descriptor's θ is" in _refusal(caplog)
+    assert NR.main(commit["o"]) == 2 and "the descriptor's θ is" in capsys.readouterr().out
 
 
-def test_a_checkpoint_its_manifest_does_not_pin_is_refused(commit, caplog):
+def test_a_checkpoint_its_manifest_does_not_pin_is_refused(commit, capsys):
     o = NR.Options(**{**commit["o"].__dict__, "checkpoints_manifest": _manifest(commit, "0" * 64)})
-    assert NR.main(o) == 2 and "shards ['model.safetensors'] (1 of 1) are not the ones" in _refusal(caplog)
+    assert NR.main(o) == 2 and "shards ['model.safetensors'] (1 of 1) are not the ones" in capsys.readouterr().out
 
 
 def test_salts_never_go_under_the_published_out(commit):

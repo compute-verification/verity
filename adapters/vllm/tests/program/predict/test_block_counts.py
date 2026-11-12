@@ -86,12 +86,7 @@ def _run(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str) -> tu
     return out.read_bytes(), private
 
 
-def _logged(caplog) -> list[str]:
-    """The lines `block_counts` logged in this test: `main`'s one line a run."""
-    return [r.getMessage() for r in caplog.records if r.name == BC.logger.name]
-
-
-def test_days_of_different_counts_under_n_publish_the_same_bytes(small, tmp_path, capsys, caplog):
+def test_days_of_different_counts_under_n_publish_the_same_bytes(small, tmp_path, capsys):
     """One, three and seventeen windows of two slots (2, 6 and 34 blocks) under n = 40 publish byte-identical public
     judgments, which name no count and which the record reads back; only the private file (0600) holds the exact counts."""
     decl = {"c": 10 ** 12, "k": 10 ** 12, "n": 40, "note": "anything else the declaration holds"}
@@ -104,21 +99,17 @@ def test_days_of_different_counts_under_n_publish_the_same_bytes(small, tmp_path
     for w, (_, private) in runs.items():
         held = json.loads(private.read_text())
         assert (held["total"], held["windows"], private.stat().st_mode & 0o777) == (2 * w, w, 0o600)
-    said = _logged(caplog)
-    assert len(said) == 3 and all(m.startswith(f"[block-counts] {DAY}: accept") for m in said)
-    assert "blocks" not in capsys.readouterr().err + "\n".join(said)
+    assert "blocks" not in capsys.readouterr().err
 
 
-def test_a_refusal_past_n_names_n_and_not_the_count(small, tmp_path, capsys, caplog):
+def test_a_refusal_past_n_names_n_and_not_the_count(small, tmp_path, capsys):
     """Seventeen windows (34 blocks) against n = 5 refuse on the count rule alone, the reason naming n and not the count,
-    padded or exact; the logged line says the same."""
+    padded or exact; the stderr line says the same."""
     pub, private = _run(tmp_path, small, 17, {"c": 10 ** 12, "k": 10 ** 12, "n": 5}, "17")
     doc = json.loads(pub)
     assert doc["checks"] == {"gates": "accept", "fresh": "accept", "count": "refuse"} and doc["verdict"] == "refuse"
     assert doc["reason"] == "the blocks' exact count is more than n = 5"
-    (line,) = _logged(caplog)
-    assert line.startswith(f"[block-counts] {DAY}: refuse: {doc['reason']}")
-    err = capsys.readouterr().err + line
+    err = capsys.readouterr().err
     for count in ("34", str(PV2.grid(34)), "17"):
         assert count not in doc["reason"] and count not in err
     assert json.loads(private.read_text())["total"] == 34

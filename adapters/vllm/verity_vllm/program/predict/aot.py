@@ -62,7 +62,6 @@ from verity_vllm.config import (
 )
 from verity_vllm.correspondence.runtime import correspondence_digest
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-from verity_vllm.log import init_logger
 from verity_vllm.pipeline import epoch
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query.required import QUERY_OF_RECORD
@@ -73,8 +72,6 @@ from . import score as S
 from .build import build_program
 from .naming import named_program, write_build
 from .phi import Phi
-
-logger = init_logger(__name__)
 
 SCHEMA = AOT_COMPARISON_SCHEMA
 #: what a predicted row's `build_workload/workload_program.json` names as its maker
@@ -354,20 +351,18 @@ def main(a: EmitOptions | CompareOptions | RowOptions) -> int:
         if a.wrapper == "request" and (a.LP is None or a.T is None):
             raise UsageError("--wrapper request needs --LP and --T")
         block = emit(phi_at(a.row, a.rank, a.config), a.wrapper, a.trace, a.out, M=a.M, pos0=a.pos0, LP=a.LP, T=a.T, aot=json.loads(a.aot))
-        sys.stdout.write(json.dumps({"out": a.out, "digest": block["predicted_digest"], "timings": block["timings"]}) + "\n")
+        print(json.dumps({"out": a.out, "digest": block["predicted_digest"], "timings": block["timings"]}))
         return 0
     if isinstance(a, RowOptions):
-        rec = write_row(a.row, a.out, config=a.config, jobs=a.jobs, log=logger.info)
-        sys.stdout.write(json.dumps({k: getattr(rec, k) for k in ("row", "workload_digest", "manifest_digest", "program_digest", "identities",
-                                                                  "secs")}) + "\n")
+        rec = write_row(a.row, a.out, config=a.config, jobs=a.jobs, log=lambda s: print(s, file=sys.stderr, flush=True))
+        print(json.dumps({k: getattr(rec, k) for k in ("row", "workload_digest", "manifest_digest", "program_digest", "identities", "secs")}))
         return 0
     doc = compare(a.row_dir, a.row, a.config, a.workers, a.predicted)
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
-    said = [f"rank {r}: " + "  ".join(f"{n} {'=' if v['equal'] else '≠'}" for n, v in p.items() if n not in ("errors", "secs"))
-            for r, p in doc["ranks"].items()]
+    for r, p in doc["ranks"].items():
+        print(f"rank {r}: " + "  ".join(f"{n} {'=' if v['equal'] else '≠'}" for n, v in p.items() if n not in ("errors", "secs")), flush=True)
     if "predicted" in doc:
-        said.append(f"predicted {doc['predicted']['dir']}: " + "  ".join(f"{n} {'=' if v['equal'] else '≠'}" for n, v in doc["predicted"]["parts"].items()))
-    said.append(f"[predict] {doc['row']}: {'EQUAL on every rank' if doc['equal'] else 'NOT EQUAL'} -> {a.out}")
-    sys.stdout.write("\n".join(said) + "\n")
-    sys.stdout.flush()
+        print(f"predicted {doc['predicted']['dir']}: " + "  ".join(f"{n} {'=' if v['equal'] else '≠'}" for n, v in doc["predicted"]["parts"].items()),
+              flush=True)
+    print(f"[predict] {doc['row']}: {'EQUAL on every rank' if doc['equal'] else 'NOT EQUAL'} -> {a.out}", flush=True)
     return 0 if doc["equal"] else 1

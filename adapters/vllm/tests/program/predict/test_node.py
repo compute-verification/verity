@@ -121,9 +121,9 @@ def test_a_world_of_one_has_no_node_program():
         build_node_program(_phi(TINY), "step")
 
 
-def test_the_node_command_writes_the_descriptor_and_logs_the_summary(tmp_path, monkeypatch, caplog):
+def test_the_node_command_writes_the_descriptor_and_prints_the_summary(tmp_path, monkeypatch, capsys):
     """`predict node` (`verity_vllm.program.predict.cli`) writes the node Program's descriptor and, in `node.json`, its summary, θ
-    and spans; the summary is its one logged line."""
+    and spans; the summary is the last line on its stderr."""
     pytest.importorskip("torch")  # `predict.cli` loads `predict.compiled`, which imports torch; this file is collected without it
     from verity_vllm.program.predict import cli as CLI
     phi = _phi(TINY, tp={"world": 2, "rank": 0})
@@ -135,8 +135,7 @@ def test_the_node_command_writes_the_descriptor_and_logs_the_summary(tmp_path, m
     timings = doc.pop("timings")
     assert doc == {"schema": "verity-predict/node/v1", "row": "row", "context_digest": phi.digest(),
                    **{k: v for k, v in node.summary().items() if k != "timings"}, "theta": list(node.theta), "spans": [list(s) for s in node.spans]}
-    (said,) = [r.getMessage() for r in caplog.records if r.name == CLI.logger.name]
-    assert said.startswith("[predict node] ") and json.loads(said.removeprefix("[predict node] ")) == {**node.summary(), "timings": timings}
+    assert json.loads(capsys.readouterr().err.splitlines()[-1]) == {**node.summary(), "timings": timings}
 
 
 def _first_layers(phi: Phi, n: int) -> Phi:

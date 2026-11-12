@@ -46,13 +46,10 @@ from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles.dense_generic import find_hf_config
-from verity_vllm.log import init_logger
 from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
 from verity_vllm.program.model import config_of
 from verity_vllm.query.manifest.format import SERVED_IDS as IDS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
-
-logger = init_logger(__name__)
 
 PINS = resources.files("verity_vllm") / "pins" / "served"
 KINDS = ("first", "middle", "last")
@@ -369,8 +366,8 @@ def main(a: Options | PinOptions) -> int:
         with open(a.out, "w") as f:
             json.dump(pin, f, indent=1)
             f.write("\n")
-        logger.info("[predict compiled-pin] %s on %s: %d kernel launches, %d winners -> %s", a.role, device,
-                    sum(map(len, pin["kernels"].values())), len(pin["artifact"]["winners"]), a.out)
+        print(f"[predict compiled-pin] {a.role} on {device}: {sum(map(len, pin['kernels'].values()))} kernel launches, "
+              f"{len(pin['artifact']['winners'])} winners -> {a.out}")
         return 0
     wl = json.loads(Path(a.workload).read_text())
     steps = a.steps or int(wl.get("expected_engine_steps") or 0)
@@ -379,14 +376,14 @@ def main(a: Options | PinOptions) -> int:
     try:
         m = predict(a.role, a.device, C.schedule_of_workload(wl), steps)
     except Unmodelled as e:
-        logger.error("[predict compiled] refused: %s", e)
+        print(f"[predict compiled] refused: {e}")
         return 3
     with open(a.out, "w") as f:
         json.dump(m, f, indent=1)
-    logger.info("[predict compiled] program %s manifest %s artifact %s identities %d complete %s -> %s", m["program_digest"][:16],
-                m["manifest_digest"][:16], m["artifact"]["digest"][:16], len(m["identities"]), m["complete"], a.out)
+    print(f"[predict compiled] program {m['program_digest'][:16]} manifest {m['manifest_digest'][:16]} artifact {m['artifact']['digest'][:16]} "
+          f"identities {len(m['identities'])} complete {m['complete']} -> {a.out}")
     if a.compare:
         diff = differences(m, json.loads(Path(a.compare).read_text()))
-        logger.info("[predict compiled] against %s: %s", a.compare, "equal" if not diff else "\n  ".join(["differs", *diff]))
+        print(f"[predict compiled] against {a.compare}: " + ("equal" if not diff else "\n  ".join(["differs"] + diff)))
         return 5 if diff else 0
     return 0 if m["complete"] else 4

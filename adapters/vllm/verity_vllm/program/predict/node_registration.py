@@ -35,6 +35,7 @@ import gzip
 import json
 import multiprocessing
 import os
+import sys
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -43,11 +44,8 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option
 from verity_vllm.errors import Refused
-from verity_vllm.log import init_logger
 from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
 from verity_vllm.records.schema_ids import NODE_REGISTRATION_SCHEMA
-
-logger = init_logger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -278,8 +276,8 @@ def register(o: Options) -> dict[str, Any]:
     ranks = []
     for rk in each_rank(jobs, o.workers):
         ranks.append(rk)
-        logger.info("[node-registration] rank %s: %d values committed (%s) in %s s", rk["rank"], len(rk["entries"]),
-                    rk["opened_by_source"], rk["wall_s"])
+        print(f"[node-registration] rank {rk['rank']}: {len(rk['entries'])} values committed ({rk['opened_by_source']}) in "
+              f"{rk['wall_s']} s", flush=True)
     ranks.sort(key=lambda rk: rk["rank"])
     entries = {k: v for rk in ranks for k, v in rk.pop("entries").items()}
     reg = RL.record(digest, P.params, theta, entries, window)
@@ -300,8 +298,9 @@ def main(o: Options) -> int:
     try:
         doc = register(o)
     except Refused as e:
-        logger.error("[node-registration] REFUSED: %s", e)
+        print(f"[node-registration] REFUSED: {e}", flush=True)
         return 2
-    logger.info("[node-registration] record %s registers %s θ parameters (%s rows) of Program %s in %s s", doc["record_digest"][:16],
-                doc["theta_parameters"], doc["rows"], doc["program_digest"][:16], doc["timings"]["total_s"])
+    print(f"[node-registration] record {doc['record_digest'][:16]} registers {doc['theta_parameters']} θ parameters "
+          f"({doc['rows']} rows) of Program {doc['program_digest'][:16]} in {doc['timings']['total_s']} s", flush=True)
+    sys.stdout.flush()
     return 0
