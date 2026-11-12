@@ -31,6 +31,9 @@
 #             machine's name, the card's index and its model)
 #   inplace   inplace_gate.py --no-timing at 64 and at 16 rows: the in-place pass against the reference
 #
+# OWN_TILES_16=1 (off by default): the rows step's gate and the in-place gate run their pass with no receipt grid at 16
+# rows too (`--own-tiles-16`), where every tile is a consumer's own; without it nothing at 16 rows differs.
+#
 #   research run --on NODE --project verity --source TREE --cwd clone --send main-session.cu -- \
 #     env CARDS=0 CORES=0-7 ARCH=90a NOT_AFTER=2026-11-11T11:30Z bash benchmarks/remote_session/rows.sh
 #   ... env CARDS=0,1,2,3,4,5,6,7 CORES=0-15 ARCH=90a STEPS=rows ROWS='16 64 16 64' GIB=496 CAL=4000 LEASE_MIN=60 ...
@@ -196,11 +199,12 @@ for step in $STEPS; do
       # shellcheck disable=SC2086
       leased rows "$PY" $RS/rows.py --lib "$B/session.so" --kv "$B/kv.so" --out "$O" --rows $ROWS --gib "$GIB" \
         --gpus "$N" --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" ${CTAS_AT:+--ctas-at $CTAS_AT} \
-        ${ROWS_ARGS:-} ;;
+        ${OWN_TILES_16:+--own-tiles-16} ${ROWS_ARGS:-} ;;
     inplace)
       # shellcheck disable=SC2016
       leased inplace bash -c 'rc=0; for k in 64 16; do mkdir -p "$O/inplace-$k"
-        "$PY" $RS/inplace_gate.py --lib "$B/session.so" --out "$O/inplace-$k" --rows $k --no-timing || rc=$?; done
+        "$PY" $RS/inplace_gate.py --lib "$B/session.so" --out "$O/inplace-$k" --rows $k --no-timing \
+          ${OWN_TILES_16:+--own-tiles-16} || rc=$?; done
         exit $rc' ;;
     session)
       # The verifier's Lean, built on the cores before the card is taken.

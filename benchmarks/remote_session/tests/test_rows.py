@@ -104,3 +104,25 @@ def test_a_backend_builds_its_store_with_the_stores_own_shape(monkeypatch, tmp_p
                                                  "payload_kept_from": 6}
     with pytest.raises(TypeError, match="side_priority"):
         store(None, None, None, None, 1 << 20, b"", 7, **backend.shape)
+
+
+def test_the_16_row_own_tile_gate_is_off_unless_asked(monkeypatch):
+    """`--own-tiles-16` reaches the backend, and without it the backend's gate runs its pass with no receipt grid at
+    64 rows only."""
+    import argparse
+    import inspect
+    from types import SimpleNamespace
+
+    device = rows.device
+    assert inspect.signature(device.GpuBackend.__init__).parameters["own_tiles_16"].default is False
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seed", type=int, default=0)
+    device.add_arguments(ap)
+    seen = []
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace())
+    monkeypatch.setattr(device, "GpuBackend", lambda *args, **kwargs: seen.append(kwargs))
+    for extra, want in (([], False), (["--own-tiles-16"], True)):
+        device.from_arguments(ap.parse_args(["--lib", "session.so", "--kv", "kv.so", *extra]))
+        assert seen[-1]["own_tiles_16"] is want
+    script = (Path(__file__).resolve().parents[1] / "rows.sh").read_text()
+    assert script.count("${OWN_TILES_16:+--own-tiles-16}") == 2   # the rows step's gate and the in-place gate

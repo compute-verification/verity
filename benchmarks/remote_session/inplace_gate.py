@@ -20,8 +20,9 @@ check is against the driver's reference over each chunk as the binder reads it (
 
 Every buffer a gate's pass or opening writes holds 0xA5 first (`InPlace.poison`). After each plan's pass, a control
 under the same seed launches neither the receipts nor the pass, and the plan's own comparisons must refuse what it
-returns (`no_write`). At 64 rows each plan has one more pass with no receipt grid, so every tile is a consumer's own
-(`consumer_tiles`): its receipts and root are the reference's, and no receipt CTA started.
+returns (`no_write`). At 64 rows, and under `--own-tiles-16` at 16, each plan has one more pass with no receipt grid,
+so every tile is a consumer's own (`consumer_tiles`): its receipts and root are the reference's, and no receipt CTA
+started.
 
 Timing is at Llama-3.1-8B's weights as vLLM holds them in bf16 (the embedding; per layer qkv, o, gate_up, down and two
 norms; the final norm and lm_head: 195 tensors, 16.06 GB), and then with a KV pool beside them (`--pages` pages a layer,
@@ -127,7 +128,7 @@ def unfused_pass(ip: InPlace, seed: bytes, plan: rb.Plan) -> bytes:
     return digests(nodes[-1:].cpu())[0]
 
 
-def gate(torch, lib: Lib, rng, log, rows: int = skr.ROWS) -> dict:
+def gate(torch, lib: Lib, rng, log, rows: int = skr.ROWS, own_tiles_16: bool = False) -> dict:
     dev = torch.device("cuda", torch.cuda.current_device())
     gen = torch.Generator(device=dev)
     gen.manual_seed(int(rng.integers(1 << 62)))
@@ -172,7 +173,7 @@ def gate(torch, lib: Lib, rng, log, rows: int = skr.ROWS) -> dict:
                          "root": ip.run_pass(seed, plan)[0] == want}
         ip.write = True
         tiles = {"receipts": True, "root": True, "receipt_ctas_started": 0}
-        if rows == skr.ROWS64:
+        if rows == skr.ROWS64 or own_tiles_16:
             keep = {}
             root_c, _ = ip.run_pass(seed, plan, own_tiles=True, keep=keep)
             r["consumer_tiles"] = {"receipts": digests(keep["ys"].cpu()) == ys, "root": root_c == want,
@@ -407,11 +408,13 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-timing", action="store_true")
     ap.add_argument("--rows", type=int, default=skr.ROWS, choices=rb.ROWS, help="the sketch's rows k_s")
+    ap.add_argument("--own-tiles-16", action="store_true",
+                    help="each plan's pass with no receipt grid (`consumer_tiles`) at 16 rows too, not only at 64")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(a.seed)
     lib = Lib(a.lib, torch)
-    res = {"gate": gate(torch, lib, rng, print, a.rows)}
+    res = {"gate": gate(torch, lib, rng, print, a.rows, a.own_tiles_16)}
     if res["gate"]["ok"] and not a.no_timing:
         torch.cuda.empty_cache()
         res["timing"] = timing(torch, lib, rng, a.reps, a.pages, print, a.rows)

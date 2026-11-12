@@ -43,7 +43,8 @@ seed and signs against the reference's. Every buffer a gate store's pass or open
 (`DeviceStore.poison`), and after the first pass a control under the same seed launches nothing: the gate must refuse
 its receipts and root (`no_write`), which are what the poison left of the first pass's. So what the gates accept, the
 pass they ran wrote. At 64 rows one more pass has no receipt grid
-(`rs_pass` at −1 CTAs), so every tile is a consumer's own (`consumer_tiles`), which no other pass is sure to run.
+(`rs_pass` at −1 CTAs), so every tile is a consumer's own (`consumer_tiles`), which no other pass is sure to run; at
+16 rows only under `--own-tiles-16`.
 """
 from __future__ import annotations
 
@@ -1213,8 +1214,9 @@ class GpuBackend:
                  calibration_passes: int = 4000, warm_openings: int = 2773, warm_passes: int = 64,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
                  trace_allocator: bool = False, host_blocks: int = 0, host_ctas: int = 16,
-                 host_consumers: int = 8, hbm=None) -> None:
+                 host_consumers: int = 8, hbm=None, own_tiles_16: bool = False) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks + host_blocks, warm_openings
+        self.own_tiles_16 = own_tiles_16
         self.host = {"host_ctas": host_ctas, "host_consumers": host_consumers}
         self.trace_allocator, self.calibration_trace = trace_allocator, None
         self.calibration_parts = None
@@ -1488,10 +1490,10 @@ class GpuBackend:
         out["no_write"] = {"receipts": small.receipts() == ys, "root": got == ref.commitment.root}
         out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and not any(out["no_write"].values())
                      and out["pass_receipts"] and out["pass_root"])
-        if small.rows == skr.ROWS64 and small.h0 <= 8:
+        if (small.rows == skr.ROWS64 or self.own_tiles_16) and small.h0 <= 8:
             # A consumer warp (there are none above h0 = 8) computes a tile itself only where it is on an SM before any
-            # receipt CTA (`help64_tile`), which no pass can be counted on to do. With no receipt grid every tile is a
-            # consumer's.
+            # receipt CTA (`help64_tile`, at 16 rows `help_tile`), which no pass can be counted on to do. With no
+            # receipt grid every tile is a consumer's.
             ctas, small.sketch_ctas = small.sketch_ctas, -1
             got, _ = small.run_pass(seed)
             small.sketch_ctas = ctas
@@ -1586,6 +1588,8 @@ def add_arguments(ap) -> None:
                          "share on its NUMA node, read in the same pass over that GPU's PCIe link")
     ap.add_argument("--host-ctas", type=int, default=16, help="a host segment's receipt CTAs")
     ap.add_argument("--host-consumers", type=int, default=8, help="a host segment's consumer CTAs")
+    ap.add_argument("--own-tiles-16", action="store_true",
+                    help="the gate's pass with no receipt grid (`consumer_tiles`) at 16 rows too, not only at 64")
 
 
 def from_arguments(a, log=print) -> GpuBackend:
@@ -1599,4 +1603,4 @@ def from_arguments(a, log=print) -> GpuBackend:
                       warm_openings=a.warm_openings, chunk=a.chunk_blocks, kept_from=a.kept_from,
                       sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
                       trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
-                      host_consumers=a.host_consumers)
+                      host_consumers=a.host_consumers, own_tiles_16=a.own_tiles_16)
