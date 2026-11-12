@@ -80,7 +80,7 @@ def _check(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int,
             return rec | {"result": None, "why": why}
     else:
         got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
-        if why is not None:
+        if got is None:
             return rec | {"result": None, "why": why}
         bit = _interior_slice(got, lo, hi)
         if bit is None or bit.size != 1:

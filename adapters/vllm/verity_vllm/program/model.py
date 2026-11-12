@@ -62,7 +62,7 @@ INT8_EXACT_LMHEAD_QUANT = {**INT8_EXACT_QUANT, "modules_to_not_convert": []}
 
 
 def is_int8_exact(qc: dict[str, Any] | None) -> bool:
-    return bool(qc) and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"]
+    return qc is not None and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"]
 
 
 def _moe_routers(cfg: dict[str, Any] | None) -> set[str]:
@@ -205,7 +205,7 @@ def moe_layer_weights_type(C: dict[str, Any]) -> RecordType:
     `mlp.gate.weight [E][H]`, `mlp.experts.routed_experts.w13_weight [E][2I][H]` (gate|up fused), `w2_weight [E][H][I]`.
     Field order = parameter order in the checkpoint's layer (b1's order for the shared fields).  With `C["FP8_BLOCK"]` the linears but
     the router are e4m3, each followed by its block scales (`_fp8_fields`)."""
-    H, QKV, E, I = C["H"], C["QKV"], C["NUM_EXPERTS"], C["I"]
+    H, QKV, E, inter = C["H"], C["QKV"], C["NUM_EXPERTS"], C["I"]
     fields: list[tuple[str, Any]] = [("ln1", Array(H, BF16)), ("qkv_w", Array(QKV, Array(H, BF16)))]
     if C.get("BIAS", True):
         fields.append(("qkv_b", Array(QKV, BF16)))
@@ -220,10 +220,10 @@ def moe_layer_weights_type(C: dict[str, Any]) -> RecordType:
         fields += [("q_norm", Array(C["NH"] * C["D"] * W, BF16)), ("k_norm", Array(C["KVH"] * C["D"] * W, BF16))]
     fields += [("o_w", Array(H, Array(C["NH"] * C["D"], BF16))), ("ln2", Array(H, BF16)),
                ("gate_w", Array(E, Array(H, BF16))),
-               ("w13", Array(E, Array(2 * I, Array(H, BF16)))),
-               ("w2", Array(E, Array(H, Array(I, BF16))))]
+               ("w13", Array(E, Array(2 * inter, Array(H, BF16)))),
+               ("w2", Array(E, Array(H, Array(inter, BF16))))]
     G = int(C.get("FP8_BLOCK") or 0)
-    return RecordType(*(_fp8_fields(fields, G, fp8_moe_block(G, I, H)) if G else fields))
+    return RecordType(*(_fp8_fields(fields, G, fp8_moe_block(G, inter, H)) if G else fields))
 
 
 def fp8_moe_block(G: int, I_r: int, H: int) -> int:
@@ -278,13 +278,13 @@ def layernorm_layer_weights_type(C: dict[str, Any]) -> RecordType:
     [H][I], `down_b` [H].  The base field names (`ln1`, `qkv_w`, `qkv_b`, `o_w`, `ln2`, `down_w`) keep b1's meaning; the
     bias / `up_w` fields are the family's additions.  Selected by `C["NORM"] == "layernorm"` (a hand fact of the family's
     profile: `nn.LayerNorm` with bias, `use_parallel_residual`); RMSNorm families are unchanged."""
-    H, QKV, I = C["H"], C["QKV"], C["I"]
+    H, QKV, inter = C["H"], C["QKV"], C["I"]
     return RecordType(("ln1", Array(H, BF16)), ("ln1_b", Array(H, BF16)),
                   ("qkv_w", Array(QKV, Array(H, BF16))), ("qkv_b", Array(QKV, BF16)),
                   ("o_w", Array(H, Array(C["NH"] * C["D"], BF16))), ("o_b", Array(H, BF16)),
                   ("ln2", Array(H, BF16)), ("ln2_b", Array(H, BF16)),
-                  ("up_w", Array(I, Array(H, BF16))), ("up_b", Array(I, BF16)),
-                  ("down_w", Array(H, Array(I, BF16))), ("down_b", Array(H, BF16)))
+                  ("up_w", Array(inter, Array(H, BF16))), ("up_b", Array(inter, BF16)),
+                  ("down_w", Array(H, Array(inter, BF16))), ("down_b", Array(H, BF16)))
 
 
 def rotary_dim(C: dict[str, Any]) -> int:

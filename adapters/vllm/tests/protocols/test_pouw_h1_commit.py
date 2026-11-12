@@ -14,12 +14,16 @@ import hashlib
 import itertools
 import json
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
-# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
+
 from torch import nn
 from verity.circuits.codec import canonical_json
 from verity.protocols.pouw.prover.circuit import h1window as HW

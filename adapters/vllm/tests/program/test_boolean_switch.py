@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.circuits import boolean as BL
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate, evaluate_words
 from verity.circuits.program import Program
@@ -164,8 +164,6 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
-    from verity.circuits.codec import encode_program, program_digest
-
     from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import DeriveReport
 
