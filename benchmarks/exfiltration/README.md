@@ -30,8 +30,9 @@ verity bench exfiltration --help          every parameter and its default
 - **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
   the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
-  stop block and once one has. The command reads that command's document (`certifier-term/v2`) and refuses another
-  schema.
+  stop block and once one has. The design's two rows are also charged the count: how many of a link's releases
+  each content class holds in an execution phase. The command reads that command's document (`certifier-term/v2`)
+  and refuses another schema.
   - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
     record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
     `all three`), is what a network certifier with a set-time card would be charged. That card is simulated: none
