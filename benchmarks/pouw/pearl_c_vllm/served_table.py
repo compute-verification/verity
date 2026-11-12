@@ -1,6 +1,7 @@
-"""The FP8 served table at a scheme's cap: per model, its served pass's per-input measurement (`served_debit.py --per-input`'s
-``inputs.json``), the verdicts of its reference verify (`verify_run.py`'s ``verify.json``) where one was run, and the ε that
-`HonestTileCapRate`'s served citation takes: the largest of the model's inputs' upper limits, each recomputed at
+"""The FP8 served table at a scheme's inert-work bound: per model, its served pass's per-input measurement
+(`served_debit.py --per-input`'s ``inputs.json``), the verdicts of its reference verify (`verify_run.py`'s
+``verify.json``) where one was run, and the ε that `HonestTileCapRate`'s served citation takes: the largest of the
+model's inputs' upper limits, each recomputed at
 δ = 0.05/m with m every input the table measures (all its models, and a model's fresh trials beside its pass-salt
 measurement), so the limits are 95% simultaneous over the whole table.
 
