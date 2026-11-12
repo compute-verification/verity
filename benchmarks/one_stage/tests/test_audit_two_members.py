@@ -63,6 +63,7 @@ HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 sys.path.insert(0, str(HERE))
+import a5_coins as AC  # noqa: E402
 import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
@@ -173,7 +174,9 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
     and the per-member case names the challenger and carries its coins. On that case Lean's check passes everything
     before the per-member form's refusal and answers `MULTI_REFUSED`, with exit 1; with one proof file of the first
-    session changed after its closing round, it refuses the session's coins as the driver's check of the log does."""
+    session changed after its closing round, it refuses the session's coins as the driver's check of the log does. The
+    Python run of the form (`members.members_run`) answers the same on both: every session accepted with the units it
+    proved, which maps to the refusal, and the changed file's reason."""
     window = _window(tmp_path / "window")
     rc, row, out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "1", "A5_LOCAL_KEY": "deployed"})
     assert rc == 0 and row.get("ok") is True, said
@@ -195,7 +198,16 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     named = list(zip(evidence["sessions"], dirs))
     assert MT.trees_reason(log, named) is None and MT.trees_reason(log, named[::-1]) == C.MEMBERS_ORDER
 
-    assert M.case_refusal(case) == (M.ALL_PASSED, True)
+    program, _ = IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES)).program()
+    record = json.loads(bytes.fromhex(case["commitment"]))
+
+    def twin(c: dict, e: dict):
+        return M.members_run(params, record, e, M.blobs_of([Path(b) for b in c["blobs"]]), program=program,
+                             verify=AC.lms_verify)
+    run, refused = twin(case, evidence)
+    assert refused is None and run.all and sorted(run.proved) == evidence["proved_units"], (run, refused)
+    assert [f.session for f in run.findings] == evidence["sessions"] and all(f.units for f in run.findings)
+    assert M.case_refusal(case) == (M.run_reason(run, refused), True) == (M.ALL_PASSED, True)
 
     rep = sorted(dirs[0].glob("*.bin"))[0]
     changed = tmp_path / "changed" / rep.name
@@ -206,7 +218,8 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
              "evidence": json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False).encode().hex()}
     assert str(rep) in case["blobs"] and other["blobs"] != case["blobs"]
     why = f"session {evidence['sessions'][0]}'s coins are not the challenger's: {C.NO_CLOSING}"
-    assert M.case_refusal(other) == (f"proofs: {why}", True)
+    assert twin(other, evidence) == (None, why)
+    assert M.case_refusal(other) == (M.run_reason(None, why), True) == (f"proofs: {why}", True)
 
 
 def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
