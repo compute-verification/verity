@@ -81581,3 +81581,20 @@ Tags as before; a line's tag covers its sentences. Mailbox read 09:35Z, newest 0
 - [run] At 09:39Z the records run `r20261112-091524-0110` and the try `r20261112-092227-e399` were both still in line for vy-nebius-cpu-4's one Lean slot, which `r20261112-091522-402b` (a try of `security/Proofs/Flock.lean` with `--siblings`, by proofs) had held since 09:19Z. [guess] So the records run ends about 50 minutes after `402b` does, not at 10:30Z as I wrote.
 - [run] At 09:39Z the quick tier `r20261112-091943-438b` had 2 suites passed and 2 from the cache, none failed.
 - Evidence: `/opt/cursor/artifacts/return-merge-difftest-file-e69e.log`.
+
+## ONSITE, Thu 12 Nov 09:40Z: #9202's quick tier is rc 0 (`r20261112-092127-1b3e`, at `dcf868aa1f3a`); `main` moved, it is merged in clean, and the head to mark is `da424cacf6c7`
+
+**Ready line:** #9202, head `da424cacf6c7`, branch `cursor/proofs-mover-lake-paths-4e7a`. `main` (`33faab2be81c`) is in it and nothing else [read: `git merge-base --is-ancestor origin/main HEAD`; `git diff --name-only origin/main HEAD` lists the five files].
+
+- **The run you asked for:** `r20261112-092127-1b3e`, `suites.py --changed 19fb19a21e40 --quick` at `dcf868aa1f3a`, rc 0. Five suites, all passed: tools/move 211, verity-check 912, repository 340, verity-graph 208, research 4444 (3 skipped) [read: the run's `stdout.log`].
+- **`main` then moved** from `19fb19a21e40` to `33faab2be81c` (32 pull requests; #9174, the maps, is among them, and top's #9175, and #9011, which adds `tools/move/resolve_check.py`) [read: `git log --first-parent`]. I merged it into the branch: no conflict; the four code files are the same at both heads, and `tools/move/README.md` differs only by `main`'s own paragraph [read: `git diff dcf868aa1f3a da424cacf6c7`].
+- **At the merged head, locally:** the ratchet gate passed; the mover's ten files 227 passed (16 are `main`'s new `test_resolve_check.py`); `test_move_check.py` and the silent-except lint 145 passed [run locally].
+- **The quick tier at the merged head** is `r20261112-093349-e4ed` on `vy-nebius-cpu-2`, waiting for a slot at 09:40Z. I write one line when it ends. Mark now on the run above or wait for it, as you judge; the mark's own tier runs the head on `main` in any case.
+- **The step** at lean's `f3837f57d113`: 23 files stop, the same 23 as for `origin/main` alone, none of the five; lean's side changes none of the five [run locally: `git merge-tree --write-tree --name-only`]. Four of the 23 are files the carve's move edits in place (`demos/README.md`, `demos/lifecycle/README.md`, `tools/verity/check/check.py`, `verity/protocols/spot/verifier/README.md`); that is lean's merge to settle, and one more reason the move is staged only after it.
+- **The staging, with the change:**
+  - On `main` `19fb19a21e40`, a node, with the change before its last commit: `r20261112-083632-f2b7`, rc 0, both commits certified (12 renames and 38 path-only edits; 12 and 28), each rerun changes nothing, 0 of 361 Lake paths unresolved on the base and after each [run]. It is the run my 09:02Z entry said was still waiting; its tree is the one my local trial made.
+  - With the last commit too, locally on the same base: the same two certificates, 0 of 361 unresolved, the same moved tree [run locally].
+  - `main`'s new `resolve_check.py PARENT COMMIT` on those two commits: 0 issues on each (8 and 6 of 5364 Lean files compared by identifier) [run locally]. Its README asks for it on a word map's commits; ours are path maps, and I add it to what I run before "certified" anyway.
+- **What the last commit changes for a reader:** a tracked `lakefile.toml` or `lake-manifest.json` that does not parse now stops every map, naming the file. All 82 tracked today parse [run locally]. The alternative I set aside was an entry in the lint's allowlist: it would have left the new guard failing open.
+- **#9202's body** is replaced with these runs (the head did not move for it).
+- Not run: any Lean build; the check.
