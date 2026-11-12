@@ -79,6 +79,10 @@ directory without it, removed when it stops. The run's directory keeps each clas
 
 `replay.py` replays one load of a `record` arm in this process under its recorded schedule (each request added before
 the step it arrived before), compiled or eager, and counts the step rows and tokens that differ from the served ones.
+It takes each request's prompt ids from the plan and its served ids from the corpus client's `client.jsonl`. vLLM's
+client keeps neither, so a pass it sent (`REPLAY=agentic@4`, the pass with its rung) is replayed from an arm whose
+server kept them, `prod-record` (`REPLAY_FROM=OUT/prod-record`): a line a finished request in
+`<arm>/server/ids.PID.jsonl`, its engine id, prompt ids and served ids.
 It starts from an empty engine. `restore.py` starts mid-traffic instead: it puts a restore arm's boundary state at one
 edge into a fresh engine (the KV bytes into the same block ids, then the state, `boundary.restore`), replays to a later
 edge, adding each request that arrived in between before the step it arrived before, and compares every step's

@@ -70,7 +70,9 @@
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
 # REPLAY then replays LOAD's first rep of the record arm (by default this job's) in each of REPLAY_MODES (replay.py)
 # into OUT/replay-<mode>; a mode listed again replays into OUT/replay-<mode>-<k>, its tokens compared with the first's too
-# (REPLAY_MODES="compiled compiled": does the replay agree with itself?). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
+# (REPLAY_MODES="compiled compiled": does the replay agree with itself?). A pass vLLM's client sent is named with its
+# rung (REPLAY=agentic@4) and replayed from an arm whose server kept each request's ids (REPLAY_FROM=$OUT/prod-record:
+# that client keeps none). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
 # checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
 # qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be d9105ea80, the integration's pin.
 set -uo pipefail
@@ -287,7 +289,7 @@ else
   fi
 fi
 [ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
-gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
+gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/ids.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
