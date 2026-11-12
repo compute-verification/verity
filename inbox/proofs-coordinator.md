@@ -97141,3 +97141,64 @@ Has not:
 Where it stands, in the page's words: in review, waiting to merge behind lean's merge.
 
 Nothing marked; nothing written to Linear or Slack. The pull request's body is brought up to this head. Mailbox `inbox/dupnames.md`: nothing at 19:20Z.
+
+## PERIODREAD, Thu 12 Nov 19:23Z: PR 1's Lean is pushed on the wider type and not yet built; the one-statement check refuses a tree with a closing round as an extra opening; reading the gate changes two things in the design (the monitoring period is a run of the ledger's entries, not its stamps; step 5 drops `complete`); #9416 has no ready line yet because `4ac7` ran no audit and its rerun still waits for a slot
+
+Mailbox read at `52e37590b5` (your 19:06Z section). I am at a point that can pause: everything written is pushed, and I wait on two runs.
+
+### Correction to my 18:55Z entry
+
+- **`4ac7` ran no audit.** It ended at 18:56Z, exit 0, with its three tests skipped: vy-nebius-cpu-14 has no Rust toolchain or Flock checkout, so the fixture that builds the binaries skipped [run: `r20261112-183105-4ac7`, `3 skipped`]. My 18:55Z entry said it had taken a slot and would end by 19:20Z with a result. That was wrong.
+- **Its rerun is `r20261112-185813-3849`**, the same probe with check's flock-circuit-build step first and the skip reasons printed. It has waited for a slot on vy-nebius-cpu-9 since 18:58Z: every check slot there is taken [run: its `slot.json`, read 19:22Z].
+- **So #9416 has no ready line.** Its head is unchanged, `4f9e065fa33a`. Its body's section on what the compiled check answers is still "by reading". Your choice: I give the ready line when `3849` ends, with its table in the body (my default); or now, with that section saying in its first line that no real case was run.
+
+### The closing round: the one-statement check refuses it
+
+- **A session's tree with a closing round is refused as an extra opening** [read]. `treesHeld` calls `Challenger.sessionsTreeReason` (`Spot/OneStageZk.lean:705-711`). Its `sessionTreeReason` ends: every round the tree shows opened must be below the rounds the record gives that stream, else `EXTRA_OPENING` (`Spot/ChallengerTrees.lean:254`). The record gives the `session` stream one round (`recordRounds`, `:185`, the guard at `:203`), and the closing round is that stream's round 1 (`CLOSING_ROUND`, `:355`).
+- **The file's own guards say both halves** (`:533-534`): one session's log without its closing round passes the one-statement check; with it, the answer is `EXTRA_OPENING`.
+- **Only the member form takes it, and requires it**: `memberTreeReason` (`:385-392`) drops the last opening when it closes the session and refuses `NO_CLOSING` otherwise.
+- **So a real v2 accept of a one-member window needs the audit not to ask for the closing round.** Two conditions in `benchmarks/one_stage/a5.py`: `window_trees` (`:1391`, today `len(members) >= 2`) and `closed` (`:913-931`), which asks for the round whenever the relay is on. Not built, as you said.
+
+### PR 1: pushed, not built
+
+- **Branch `cursor/proofs-prf600-period-ledger-3b1f` at `d5bea51e0a9d`**, two commits on `main` `0582899c4392` (the second removes a stray `uv.lock` the first added by mistake). Not opened as a pull request: I open it unmarked when the build and the difftest pass.
+- **Files:** `Spot/Period.lean` (new, 254 lines), one line each in `Spot.lean` and `Spot/DifftestMain.lean` (the piece `period_windows`), `tests/test_period_difftest.py` (new, 434 lines) and its name in the suite's `untraced` list. No statement, no lock entry.
+- **The reader, as you ruled at 19:06Z.** `sessionsOf` returns every session of the lane that a v2 open opens on a root in the monitoring period, whatever its layout: `{session, root, families, withheld, place, period}`. `place` counts the lane's reserves over the whole ledger, a one-step open counted at its open, as a period counts it. `windowsOf` returns `{windows, others}`: the windows are the sessions whose layout holds `label`, each `{period, phase, session, root}`; `others` are the rest, nothing held of them.
+- **Refusals, in order:** `coin` (the ledger does not verify), `early` (no entry stamped at or after `stop`), `missing` (no window), `outside` (a window in no period), `period` (a window's period is open, or lists an opened session that is no window), `missing` (a reserve never opened; a window not ended).
+- **Its run is `r20261112-192123-b281`**: the Lean build of `Spot` and the difftest executable, then the new test file. It waits for a slot on vy-nebius-cpu-6 [run: status, 19:22Z]. Nothing of the Lean has been compiled yet.
+- **The Python reference alone agrees with what each case is named for** [run: on this VM, no Lean]: 14 named cases over 6 seeds each give the code they are named for, 20 malformed requests are rejected, the hand-written ledger reads as written.
+
+### Two things reading the gate changed
+
+**1. The clock (your ruling 5, my call): a run of entries, and no refusal.**
+
+- **Your default would refuse honest ledgers.** Each gate step reads the clock before its entry takes the ledger's lock: `now=datetime.now(...)` at `auditor.py:2632`, `:2635`, `:2645`, the lock inside `append` at `:827`; an end is stamped at `:2363` and appended at `:2364`. The steps are separate processes [read]. So two entries written together can carry their stamps out of order [derived; I looked at no real ledger for one].
+- **What I built.** The monitoring period is a run of the ledger's entries: from the first entry stamped at or after `start` up to, not including, the first stamped at or after `stop`. A session is in it when its open is. There is no `clock` code.
+- **What that gives.** Monitoring periods that follow one another split the entries with none in two and none between, whatever the stamps say; and a ledger read again with entries appended gives each earlier period the same run [derived; the test `test_monitoring_periods_one_after_another_split_the_sessions` checks the first on ledgers with stamps in no order, not yet run against the Lean].
+- **What it costs.** The sketch's `Started` changes from "the open's `started_utc` is in `[start, stop)`" to "the open is in the run". A window stamped inside the week but written after the first entry stamped past `stop` counts in the next monitoring period.
+- **If you want the default instead** it is about ten lines under a code `clock`, and then one such pair of entries in a week refuses that week for an honest prover, with no retry.
+
+**2. Step 5 drops "each window's end says `complete`".**
+
+- **An honest audit's end says `complete: false`** [read, derived]. The gate's `complete` means every coin of every family was released (`auditor.py:2356`). The audit reserves at least 16 coins a rank (`benchmarks/one_stage/a5_coins.py:79`, `:123`) and releases what the sample needs. I looked at no served audit's end entry.
+- **PR 1 asks only that each window has ended.** "Ended closed" is `auditedOpen`'s, at step 6. "A coin of `label` released after a registration" is step 7's, from the signed release log. Both are PR 2.
+
+### Smaller points
+
+- **`holds` errs toward auditing.** A layout holds `label` when any entry of it is a list whose first element is that string. A malformed entry that names `draw` is a window, not an `other`.
+- **The layout read is the ledger's**, the request the open carries. That the session's own signed commitment has that layout is PR 2's to hold for the windows. For `others` no session file is presented, so it rests on the gate.
+- **The split of `auditedOpen` moves to PR 2, and it is not body-only for the proofs.** PR 1 calls `checked` once and does not need it. `auditedOpen_ok` unfolds `auditedOpen` (`security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean:479-495`), so that proof has to follow the split. No statement changes.
+
+### Not established
+
+- **The Lean is not compiled.** Nothing above about `Spot/Period.lean` is run.
+- **No real ledger.** The test's ledgers are written by the test under a small key. I read no ledger the gate wrote, for stamps out of order or for an audit's `complete`.
+- **The clock is still trusted for where the two ends fall.** A clock that jumps past `stop` early ends the monitoring period early; the windows after it count in a later one, none is lost [derived].
+- **Nothing says a reserve never opened released no coin** except the gate's own rule that nothing serves before its open (`auditor.py:1165-1186`) [read].
+
+### State
+
+- #9416 at `4f9e065fa33a`, unmarked, no ready line: waits on `r20261112-185813-3849` (in line; once it has a slot, about 20 to 30 minutes).
+- PR 1's branch `cursor/proofs-prf600-period-ledger-3b1f` at `d5bea51e0a9d`: waits on `r20261112-192123-b281` (in line; about 10 minutes once it has a slot).
+- (b) is done: `r20261112-184540-ece6`, as my 18:55Z entry.
+- From you: the choice on #9416's ready line, and a word if you want the clock's default instead of the run of entries.
