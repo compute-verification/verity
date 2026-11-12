@@ -6,11 +6,11 @@ products pack more, inside class P: an R-only word times a U-only word is a mixe
 φ = R[i, 32ℓ+p]·U[j, p] (129 values each), every one a field no input holds.
 - IMAD, 8-bit slots (s = 16, 2 rows × 2 columns): 4 in one 32-bit word.
 - IMAD.WIDE, 8-bit slots (s = 24, 3 rows × 2 columns): 6. At radix 129 (`isa_cap.c`): 8, four in each destination word.
-- IDP.4A.U8.S8 at radix 129 (`isa_cap.c`): a 1-entry and a 4-entry field in one 32-bit word, 5. So no cap below 5 holds
+- IDP.4A.U8.S8 at radix 129 (`isa_cap.c`): a 1-entry and a 4-entry field in one 32-bit word, 5. So no bound below 5 holds
   even counted per destination word.
 - IDP.2A.LO.U16.S8 at radices 129 and 129·257: fields of 1, 2 and 2 entries in one word, 5.
 Each is checked over every R bit and U entry (U ∈ ±1..±64). The joint statement's load bound is then restated as a
-function of the cap κ: Ld ≥ (28 − 1.03κ)N/(c_L − κ).
+function of κ: Ld ≥ (28 − 1.03κ)N/(c_L − κ).
 
   uv run python benchmarks/pouw/theory/isa_cap_check.py [--mutations] [--verdict PATH]
 """
@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 U_VALUES = np.r_[-64:0, 1:65]
 
 
-def outer_imad(rows, cols, s, width, signed=True):
+def outer_imad(rows: int, cols: int, s: int, width: int, signed: bool = True) -> bool:
     """Every (R bits, U values): the destination of a·b + c mod 2^width, and whether each slot (i, j) at bit 8i + s·j holds
     R[i]·U[j] + 64 exactly. IMAD.WIDE is signed s32 × s32 → s64, so b keeps its sign there (signed=False is .U32); IMAD's
     low word is the same either way."""
@@ -56,7 +56,7 @@ def outer_imad(rows, cols, s, width, signed=True):
     return ok
 
 
-def idp2a_lo(a, b, c):
+def idp2a_lo(a: np.ndarray | np.int64, b: np.ndarray, c: int) -> np.ndarray:
     """IDP.2A.LO.U16.S8: c + a's halfwords (unsigned) · b's bytes 0 and 1 (signed), mod 2^32."""
     d = np.asarray(c, dtype=np.int64)
     for k in range(2):
@@ -65,7 +65,7 @@ def idp2a_lo(a, b, c):
     return d & 0xFFFFFFFF
 
 
-def idp2a_packing(m2=129, m3=129 * 257):
+def idp2a_packing(m2: int = 129, m3: int = 129 * 257) -> bool:
     """Every R ∈ {0,1}^5 and U ∈ (±1..±64)²: a's halfwords r1 + m2·r2_0 + m3·r3_0 and m2·r2_1 + m3·r3_1, b's bytes u0, u1
     (bytes 2 and 3 junk), and whether the word decodes as r1·u0 (129 values) under Σ_k r2_k·u_k and Σ_k r3_k·u_k
     (257 values each) at radices m2 and m3."""
@@ -82,7 +82,7 @@ def idp2a_packing(m2=129, m3=129 * 257):
     return True
 
 
-def radix_packings(radix, tmp):
+def radix_packings(radix: int, tmp: Path | str) -> dict[str, tuple[int, int]]:
     """`isa_cap.c` at this radix: {"IDP4A": (cases, fails), "IMADW": (cases, fails)}."""
     exe = Path(tmp) / f"isa_cap{radix}"
     subprocess.run(["gcc", "-O2", "-fopenmp", f"-DRADIX={radix}", "-o", str(exe), str(HERE / "isa_cap.c")], check=True)
@@ -90,16 +90,16 @@ def radix_packings(radix, tmp):
     return {name: (int(cases), int(fails)) for name, cases, fails in (line.split() for line in out.splitlines())}
 
 
-def load_bound(cap, c_load, bytes_per_load=32):
+def load_bound(kappa: float, c_load: float, bytes_per_load: int = 32) -> float:
     """Bytes of table loads a word, from 28N ≤ κA + c_L·Ld with A + Ld < 1.03N (G < 2.03N)."""
-    return bytes_per_load * (28 - 1.03 * cap) / (c_load - cap)
+    return bytes_per_load * (28 - 1.03 * kappa) / (c_load - kappa)
 
 
-def table_eps(a, cap, c_load, honest=1.877):
+def table_eps(a: float, kappa: float, c_load: float, honest: float = 1.877) -> float:
     """The table route read as one route (D2): words at 1 + A + Ld slots and Ld = (28 − κA)/c_L loads, as many as the
     level's bytes allow, each saving (honest − slots)/32. Up to the bandwidth and bytes a load, which scale it, this is
     the saving per load; honest is VF3o-16's Dither-like threshold."""
-    ld = (28 - cap * a) / c_load
+    ld = (28 - kappa * a) / c_load
     return (honest - 1 - a - ld) / ld
 
 
@@ -117,7 +117,7 @@ def main() -> int:
     cases, fails = got["IDP4A"]
     checks.check("IDP.4A.U8.S8 with a = (r1 + 129 r2_0, 129 r2_1, 129 r2_2, 129 r2_3) and b = U[j, p_0..3] writes "
                  "r1·u_0 and Σ_k r2_k·u_k into one 32-bit word, at every R ∈ {0,1}^5 and U ∈ (±1..±64)^4: 5 incidences "
-                 "in one word, so no cap below 5 holds even per destination word", cases == 1 << 33 and fails == 0,
+                 "in one word, so no bound below 5 holds even per destination word", cases == 1 << 33 and fails == 0,
                  f"{cases} cases, {fails} wrong")
     checks.check("IDP.2A.LO.U16.S8 with a's halfwords (r1 + 129 r2_0 + 33153 r3_0, 129 r2_1 + 33153 r3_1) and b's bytes "
                  "(u0, u1) writes r1·u0 under Σ_k r2_k·u_k and Σ_k r3_k·u_k (radices 129, 129·257) into one word, at "
@@ -133,9 +133,9 @@ def main() -> int:
                  "4 fields of 129 values (8·129^4 ≤ 2^32 for the low word's ×8), IDP.4A's a 129-value field under a "
                  "513-value one (M_2 = 129), IDP.4A's operand bytes ≤ 255, IMAD.WIDE's b in s32", p_ok,
                  f"8·129^4 = {8 * 129 ** 4}, 129·513 = {129 * 513}, |b| ≤ {b_wide}")
-    caps = {"32/7": 32 / 7, "5 a word": 5, "8": 8, "27": 27}
-    table = {k: (load_bound(v, 128), load_bound(v, 216)) for k, v in caps.items()}
-    checks.check("the joint statement's load bound as a function of the cap κ, single-field L2 tables (c_L = 128) / any "
+    kappas = {"32/7": 32 / 7, "5 a word": 5, "8": 8, "27": 27}
+    table = {k: (load_bound(v, 128), load_bound(v, 216)) for k, v in kappas.items()}
+    checks.check("the joint statement's load bound as a function of κ, single-field L2 tables (c_L = 128) / any "
                  "format (216): 6.0 / 3.5 B at 32/7, 5.9 / 3.5 B at 5 a destination word (IMAD.WIDE as 2 slots), "
                  "5.3 / 3.0 B at 8 an instruction, 0.06 B at Theorem C's own 27; the 1.22 issue floor needs only κ ≤ 128",
                  abs(table["32/7"][0] - 6.04) < 0.01 and abs(table["32/7"][1] - 3.53) < 0.01
@@ -143,16 +143,16 @@ def main() -> int:
                  "; ".join(f"κ = {k}: {a:.2f} / {b:.2f} B" for k, (a, b) in table.items()))
     formats = (128, 216, 32, 108)
 
-    def best_a(cap, c_load):
-        a_max = min(28 / cap, (1.877 - 1 - 28 / c_load) / (1 - cap / c_load))
+    def best_a(kappa, c_load):
+        a_max = min(28 / kappa, (1.877 - 1 - 28 / c_load) / (1 - kappa / c_load))
         grid = np.linspace(0, a_max * (1 - 1e-9), 2001)
-        return grid[int(np.argmax([table_eps(a, cap, c_load) for a in grid]))]
+        return grid[int(np.argmax([table_eps(a, kappa, c_load) for a in grid]))]
 
     flip = 28 / (1.877 - 1)
     checks.check("the per-level table ε doesn't move with κ: read as one route, d(saving per load)/dA has the sign of "
                  "κ(honest − 1) − 28 whatever c_L, so no ALU creation pays below κ = 28/0.877 ≈ 31.9; the best point "
                  "stays at A = 0 at κ = 32/7, 5 and 8 on every format, and leaves it at κ = 33",
-                 all(best_a(cap, c) == 0 for cap in (32 / 7, 5, 8) for c in formats)
+                 all(best_a(kappa, c) == 0 for kappa in (32 / 7, 5, 8) for c in formats)
                  and all(best_a(33, c) > 0 for c in (128, 216, 108)) and 31.8 < flip < 32,
                  f"flip at κ = {flip:.2f}; best A at κ = 33: {[round(float(best_a(33, c)), 3) for c in (128, 216, 108)]}")
     if checks.mutations:
