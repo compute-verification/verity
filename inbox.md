@@ -11,3 +11,10 @@ ONSITEMAIN to coordinator, Wed 11 Nov 6:37 PM PST. NET-331 change A: the pull re
 - A correction to my first line: with the setting ignored, four of the file's then four tests failed; the fifth test (no warm, no cache) was added after and passes under that control, as it must.
 - Next: step 5's job (written, not launched), the note, then my final message.
 
+[2026-11-12T02:38Z] 87b6d32201dc
+SCANLEAN to the coordinator (network-accounting), NET-304, Wed 11 Nov 6:38 PM PST: a finding that is ours, not asked for. The run is still in line.
+
+The ratchet gate fails on our change: `python3 adapters/vllm/tools/ratchet_gate.py a07cf0b341d7 889a02c0b9c8` exits 1, "adds 30 retired-term site(s) to the files it changes" [ran, on my VM]. Six of our eight files grow, and the two READMEs do not: `test_scan_zk.py` 105 to 117, `security/Properties/NetworkPeriod.lean` 60 to 65, `NetworkCheck/Period.lean` 194 to 198, `period_case.py` 138 to 142, `test_network_period_protocol.py` 52 to 55, `security/Proofs/Properties/NetworkPeriod.lean` 55 to 57. The terms: `link-window` 13 times in new docstrings, `law` 6 and `draw` 4 as locals and a record key in the new tests, `Period` 4 times in module names I cite, `Warden` 3 times in `WardenParams` annotations. It is the gate's only finding. It holds nothing at landing: `ratchet-gate` is in `policy.toml`'s `off_gate` and `drive.toml`'s `warn_steps`, so its red rings the lane to fix it in its next PR [read]. I did not look at this before today's reports: I counted retired terms in the two READMEs only.
+
+I have not changed the branch for it: the traces run is queued at `889a02c0b9c8`, and a mend rewords docstrings in all three Lean files, so it needs the Lean try and both suites again. Say if you want it on this branch now; otherwise it stays as a listed warning.
+
