@@ -29,11 +29,11 @@ step, every non-root tensor argument / output is copied D2H (async, pinned arena
 call) as the raw bytes of the storage range the view spans; the files are content-addressed (sha256) under
 `values/<step>/` with an index in `snapshots.json`.  Tensors larger than `snapshot_max_bytes` whose one dimension
 equals the KV cache's block count are snapshotted per (leading index, block-in-use) sub-view; other oversize
-tensors are listed in the index as skipped.  `snapshot_max_bytes_op` (optional, lower) is the cap applied at
+tensors are listed in the index as skipped.  `snapshot_max_bytes_op` (optional, lower) is the limit applied at
 dispatcher-call events only: a large buffer produced by a Triton launch is then copied once, at the launch (where the
 Compute's output snapshot is looked up), and not again at every aten view / custom-op call that touches it (the
 pinned copies of one step are the capture's peak host memory; OLMoE's fused-MoE intermediates at a 2048-token
-prefill are 64 MiB x ~23 events x 16 layers).  Skipped entries record which cap applied.
+prefill are 64 MiB x ~23 events x 16 layers).  Skipped entries record which limit applied.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ class ObserverConfig:
     snapshot_steps: frozenset = frozenset()
     snapshot_dir: Path | None = None
     snapshot_max_bytes: int = 32 << 20
-    snapshot_max_bytes_op: int | None = None   # cap at dispatcher-call events (None: snapshot_max_bytes); Triton launches keep the full cap
+    snapshot_max_bytes_op: int | None = None   # limit at dispatcher-call events (None: snapshot_max_bytes); Triton launches keep the full limit
     arena_bytes: int = 1 << 30
 
 
