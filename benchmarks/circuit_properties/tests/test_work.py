@@ -2,11 +2,11 @@
 registry's products whose work is known by hand: a training loop's scan, whose carried weights are charged from
 their second iteration, whose batch is free, and whose value input's rows are left out however the Program writes
 them; carried rows no one node shows distinct left out, one multiply by an input's words however it is written, a
-stated 0's update `θ`'s, a weight rounded to bf16 charged, rows times an input however a product reads them,
-a weight cancelled against itself, the updates' premise held as facts; a lookup whose table is the registered one or the loop's own; a Program with
-no scan; one array times itself; two activations; the largest set of arrays a work multiplies pairwise; a weight
-decoded from a ternary code; a one-hot row; a rank-4 bottleneck between two carried weights; each operand's β at
-min(16, β(k)); and |C| in Boolean gates."""
+stated 0's update `θ`'s, a weight rounded to bf16 charged, rows times an input however a product reads them, a
+weight cancelled against itself or times its own rows in another order, the updates' premise held as facts; a lookup
+whose table is the registered one or the loop's own; a Program with no scan; one array times itself; two
+activations; the largest set of arrays a work multiplies pairwise; a weight decoded from a ternary code; a one-hot
+row; a rank-4 bottleneck between two carried weights; each operand's β at min(16, β(k)); and |C| in Boolean gates."""
 
 from __future__ import annotations
 
@@ -660,6 +660,34 @@ def test_a_weight_cancelled_against_itself_still_counts_as_a_weight():
     for kind in ("thetas-cancel", "carried-cancel"):
         (g,) = WK.read(_scaled(kind), KB).groups
         assert g.weight == (True, True) and g.macs == (T - 1) * K * N
+
+
+def _swap(order: str, carried: bool) -> Program:
+    """prev′ = the PN rows looked up by the iteration's tokens, plus M times M's rows in ``order`` ("swap": the other
+    order; "same": its own), M carried and updated by an input (``carried``) or unchanged; and prev W^T."""
+    def step(B, c, tok, z, zr):
+        table, w, prev, m = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        other = Coll(ROWS_T, concat([m[(p + 1) % PN].refs for p in range(PN)])) if order == "swap" else m
+        return (_add(B, table, z), _add(B, w, z), _add(B, rows, _mul(B, m, other)), _add(B, m, zr) if carried else m), \
+            B.batch(LIN, prev, w, axes=(0, None))
+
+    return _loop("Swap" + order.title() + ("Carried" if carried else "Own"),
+                 (("table", TABLE_T), ("w", W_T), ("prev", ROWS_T), ("m", ROWS_T)),
+                 (("tok", Array(PN, I32)), ("z", X_T), ("zr", ROWS_T)), Array(PN, Y_T), step)
+
+
+@pytest.mark.parametrize("carried", [True, False], ids=["carried", "own"])
+def test_a_weight_times_its_own_rows_in_another_order_still_counts_as_a_weight(carried):
+    """The updates' premise for a weight combined with its own words, held as a fact. With PN = 2, M times swap(M) has
+    two rows equal for every M (M0 M1 = M1 M0), so the looked-up rows plus it repeat with the tokens and the work is
+    the first iteration's PN K N, as `_rows_plus("weight")`'s; the reading charges them as two weights from the second
+    iteration on, M carried or `θ`'s own. M times M in its own order has distinct rows, and is charged as is right."""
+    assert PN == 2
+    for order in ("swap", "same"):
+        w = WK.read(_swap(order, carried), KB)
+        assert w.N == (T - 1) * PN * K * N and {g.weight for g in w.groups} == {(True, True)}
+
 
 def _cast(B, a: Coll) -> Coll:
     flat = Array(a.type.leaves, F32)

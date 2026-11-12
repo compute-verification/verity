@@ -65,9 +65,11 @@ batch reads, or one whose own rows are shown distinct (a weight times a weight);
 a multiply by a stated 0 reaches nothing. One more premise holds the reading below the work, its parts each held as a
 fact by a test: θ's rows differ at every width a rounding reads them, and a word no input reaches is nonzero; an update
 that can't change a weight or cancels it for a reason no constant shows (W plus z plus -1 times z) still makes θ′ and
-keeps its rows distinct, and a weight cancelled against itself still counts as a weight (M plus -1 times M, so the
-looked-up rows plus such a sum are charged as weights though they repeat with the tokens; a multiplier v plus -1 times
-v, v registered or carried); so does one word every member of every batch reads as a multiplier (a learning rate, a
+keeps its rows distinct; a weight combined with its own words still counts as a weight with distinct rows, though the
+combination may make its rows equal whatever the weight: cancelled against itself (M plus -1 times M; a multiplier v
+plus -1 times v, v registered or carried), or times its own rows in another order (M times swap(M), whose two rows are
+equal for every M), so the looked-up rows plus such an array are charged as weights though they repeat with the
+tokens; so does one word every member of every batch reads as a multiplier (a learning rate, a
 decay, an input's or computed from inputs, taken as nonzero); and two nodes that compute rows from one array's words
 into two arrays give each distinct rows.
 `work.bound(work, c)` is the most blocks over its

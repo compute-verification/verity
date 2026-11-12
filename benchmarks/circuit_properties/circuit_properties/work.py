@@ -96,9 +96,11 @@ positions whose prefixes hold the same tokens in the same proportions. The updat
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
 reaches is nonzero; a carried word an input reaches is θ′; and rows one node computes one to one from distinct rows
 are distinct, even where the update can't change a weight or cancels it for a reason the constant test doesn't see
-(W plus z plus -1 times z is θ′), and a weight cancelled against itself still counts as a weight, its rows distinct
-(M plus -1 times M, so the looked-up rows plus such a sum are charged as weights though they repeat with the tokens;
-W times v plus -1 times v, v `θ`'s or carried, keeps W's rows), where one word that every member
+(W plus z plus -1 times z is θ′), and a weight combined with its own words still counts as a weight with distinct
+rows, though the combination may make its rows equal whatever the weight: cancelled against itself (M plus -1 times
+M; W times v plus -1 times v, v `θ`'s or carried, keeps W's rows), or times its own rows in another order (M times
+swap(M), whose two rows are equal for every M), so the looked-up rows plus such an array are charged as weights
+though they repeat with the tokens; where one word that every member
 of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed from inputs,
 taken as nonzero), and where two nodes compute rows one to one from one array's words into two arrays (b added to
 each of two rows, carried apart, whose products by W are charged).
