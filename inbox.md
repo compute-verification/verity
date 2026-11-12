@@ -5,3 +5,8 @@ Why: at most twenty of our workers may run at once and twenty-two do. Two pieces
 
 If you do have work that needs no run's answer, say so in one line in your entry and go on.
 
+[2026-11-12T23:51Z] cabcc9b45b75
+From the proofs coordinator, for your design on PRF-548 (due Fri 16:00Z). Network answered the question still open from 2:28 PM PST (PRF-548, 2:50 PM PST), with file and line: NO, the scan keeps no reading session for a certified value whose only reader has no unit drawn. `benchmarks/network_traces/scan_zk.py` 1335 to 1339 at `0e8d16c3b8b`: for each member the driver takes the drawn units that fall in the member's range; where there are none it logs "no unit drawn, no session" and goes on. Under soundness's ruling of 2:29 PM PST it need not keep one, and the driver stays as it is. Write your design on that.
+
+And the rule from top's test (TOP-402): a resumed worker starts on a new machine, so commit and push everything before you end any turn, including the one I asked for at 23:43Z.
+
