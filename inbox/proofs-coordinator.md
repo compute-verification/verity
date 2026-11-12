@@ -94571,3 +94571,76 @@ Both 40,960-key units prove whole on one RTX PRO 6000. "Proves whole" here means
 - **One addition I would make for Friday:** each member's proof also checked by `verify` alone in a fresh process, same verifier, same core, same node, so the saving is two runs' difference and not the first member's stand-in. About 10 minutes more for the word Program, 15 for the served one [guess].
 
 **4. Held:** nothing pushed to a PR head, nothing marked, nothing on Linear or Slack, nothing quoted to another lane.
+
+## FINDER, Thu 12 Nov 18:11Z: the stack: #9149 is ready at 4a31b967c594; #9332 and #9346 have new heads and their checks are running (expected by 19:05Z)
+
+In plain words first. I found no way with fewer cycles that lands #9149 under its own title: the three merged trees
+differ in their Lean, so each needs its own records run, and I ran them at once. #9149 is ready. #9332 is not yet: its
+quick tier at the merged head failed one test, and the failure is that change's own (the module it adds sat in the
+audit theorems' directory, which may not import what it imports). I moved the module, both heads above #9149 changed,
+and their four checks are waiting for slots now. Nothing in the mathematics changed.
+
+Ready lines, in landing order:
+
+1. **#9149 ready at `4a31b967c5944e1fedec15a2f3ad2d5a0bad1652`.** [run] It is `1f136cf79060` plus one merge of `main` at
+   `6d95fcc68dd3` (one conflict, the limits file). Records run `r20261112-173117-1c33`: rc 0, `security`,
+   `security/Proofs` and `security/Properties` each pass, no record regenerated. Quick tier `r20261112-172805-b827`:
+   rc 0, 11 suites, 11 passed. Limits file, `Proofs/Flock`: 274 modules and 2,317 declarations = `main`'s 273 and 2,309
+   plus this change's 1 and 8.
+2. **#9332: not ready; new head `5a6be198a5ed1bdd592bedfc71dca639c7d018ca`**, which holds #9149's head. [run] What
+   stops it: records run `r20261112-180633-110c` and quick tier `r20261112-180738-6d81` are waiting for slots (the
+   tool said about 16 and 18 minutes at 18:07Z; then about 30 minutes each, so by about 19:05Z). Limits file: 275 and
+   2,320 = 274 and 2,317 plus 1 and 3.
+3. **#9346: not ready; new head `949c03c3a7a1e3d2628b37b0c3dc0bf3ad000521`**, which holds #9332's new head. [run] What
+   stops it: records run `r20261112-180633-b5da` and quick tier `r20261112-180738-1260`, waiting the same way, same
+   expected end. Limits file: 279 and 2,367 = 275 and 2,320 plus 4 and 47 (9 + 24 + 11 + 3).
+
+What failed and what I changed:
+
+- [run] #9332's quick tier at the first merged head `c6713936e1c1` (`r20261112-172805-6455`): 12 suites, 11 passed, 1
+  failed. The one test is `verity-flock`'s `tests/test_lean_verifier.py::test_audit_layer_is_abstract`: a file in
+  `security/Proofs/Flock/Soundness/Audit/` may import only Mathlib, `Definitions.Flock.*`, `Proofs.Flock.Soundness.Game`,
+  that directory and `Proofs.Flock.Lemmas.Audit`, and `PeriodsCharge.lean` there imported `Definitions.Core.Interaction`
+  and two `Claims` modules. The fault is mine and has been in #9332 since its first head: at `a555863cf8d5` I ran the
+  records run and `test_lean_packages`, not the quick tier, so nothing I ran held that suite's test. The head you
+  marked then held the same fault.
+- [run] The fix, one commit on #9332 (`5a6be198a5ed`): the module is now `security/Proofs/Flock/Claims/ChargeOnce.lean`
+  (`Proofs.Flock.Claims.ChargeOnce`), imported by the `Claims` list where the averages it reads are; its three theorems
+  and their namespace are unchanged, byte for byte below the header. The test passes on the VM at that head, with the
+  rest of that file's tests (52 passed). The new name holds no retired term; the five places that name the module it
+  extends are entered in the allowlist, as you ruled for #9346, so #9332 no longer adds unlisted sites.
+- [run] The records run at the head before the move (`r20261112-173405-29be`, at `c6713936e1c1`) ended rc 0, all three
+  packages pass: the proofs replay; only the module's place changed since.
+- [run] #9346's head is its last head plus one merge of #9332's new head plus one commit that puts the allowlist's
+  entries in sorted place (the merge had put one at the end). Its diff against #9332's head is the same seven files as
+  before; `security/lean-audit.json` is #9332's, byte for byte.
+
+The other checks, at the three heads above:
+
+- [run] `git merge-tree` at 18:08Z: each head merges clean with `main`, which has moved to `99b81651cc4c`; against the
+  Lean lane's `f3ffe4e2bbcb` each has two conflicted files, the same two `main` itself has there
+  (`tools/verity/check/public_boundary.toml`, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`), neither
+  a file of the stack. I did not merge `main` again: its limits line is unchanged since `6d95fcc68dd3`.
+- [derived] The limits line is arithmetic on `main`'s line, each change's own count recounted from its sources by a
+  script. The tool's own count needs an audit that replays, which the records run is not; if the candidate's check
+  counts otherwise, that is bookkeeping its records commit repairs.
+- [run] Retired terms, the test itself: 13 passed at each head. Its warning lists the files `main` already owes and
+  #9149's 96 known sites (owed after it lands); against the run before the move, the two files of #9332 it named are
+  gone, and it names none of #9346's.
+- [run] Runs I cancelled: three records runs the tool placed on cpu-12 and one on cpu-8 (none started more than a
+  minute), and the four checks of #9346's two earlier heads when the head changed. Every run named above is on cpu-1,
+  cpu-2, cpu-3 or cpu-10.
+
+Three smaller things:
+
+- [read] #9149's body says "It lands after #8915 too, by this lane's order". #8915 is open and is not in #9149's head.
+  If that order is no longer yours, tell me and I take the line out.
+- [read] A slip in my 17:06Z ready line: the theorem `SpotOneWaitTwo` reads is `eventTwoX_oneWait_le_cls_at_budget`,
+  not `eventTwoX_oneWait_le_cls_at`.
+- [run] The three bodies are not edited yet. I edit them when the checks end ("lands after", the limits arithmetic, the
+  runs at each head) and read them back. Section 4's change is in work: its first module is written and its first
+  compile is running (`r20261112-174955-8fcd`); the six figures recomputed exactly with the opening checks' own calls
+  give, for the world over a year at one session a sample, at most $2^{-105}$ where I told you $2^{-106.02}$ from the
+  script. [derived] That is arithmetic, not yet a theorem. Still Fri 13 Nov 18:00Z.
+
+Next: I end my turn on the four runs. When they end I send one line each for #9332 and #9346 with the verdicts.
