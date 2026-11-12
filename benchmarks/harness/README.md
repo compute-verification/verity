@@ -376,6 +376,10 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   **`kit.writer(out).validation(status, checker, detail, evidence=())`** writes the run's validation there, once: `status`
   (`passed` or `failed`, whether the run's own gates held), the `checker`'s name, its `detail` in words, and the
   `evidence`, a list of the files it stands on, as paths relative to the result's directory.
+  **`kit.writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)`** add the result's other three
+  keys: `workload_fingerprint` (the fields, beside `source_sha` from `RESEARCH_SOURCE_SHA`), and one file each, relative
+  to the result's directory and named once, in `measurement_files` or `artifacts`. The first writes all three keys; a
+  result that uses none holds none.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
 verdict of record or a seal, so the writer refuses a value that isn't a number, a `why` beside a value, a verdict with no
