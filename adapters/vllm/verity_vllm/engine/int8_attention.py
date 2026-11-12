@@ -40,6 +40,8 @@ import torch.nn.functional as F
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.program.frontend.kernel_readback import is_attention_impl
 
+__all__ = ["window_of"]
+
 ARM = E.ARM
 TOP = E.TOP
 #: |P| <= 127 and |V'| <= 127 over s keys stay within int32

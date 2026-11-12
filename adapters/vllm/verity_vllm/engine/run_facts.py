@@ -29,6 +29,8 @@ from verity_vllm.engine.build import (
 from verity_vllm.engine.code_identity import generated_kernels_of_this_process
 from verity_vllm.engine.profiles.cases import ACCEPTED
 
+__all__ = ["model_config_subset", "profile_manifest"]
+
 ACCEPTED_PROFILE_ID = ACCEPTED["B0"]["profile_id"]
 ACCEPTED_RECORD = ACCEPTED["B0"]["record"]
 

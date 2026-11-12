@@ -34,6 +34,9 @@ from verity_vllm.config import row_world
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine.profiles import transport
 
+__all__ = ["DEFAULTS", "ENFORCE_EAGER", "apply", "declared", "execution", "execution_env", "of_summary", "read_rank",
+           "record", "require"]
+
 SCHEMA = "verity-vllm/served-switches/v1"
 #: The default of a switch vLLM resolves from the rest of the config: whatever it resolves is its own.
 RESOLVED = "resolved by vLLM"

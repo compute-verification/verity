@@ -28,6 +28,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+__all__ = ["Hooks", "OnImport", "Patch", "live", "patch", "patched", "triton_launch", "wrap"]
+
 
 class _Absent:
     __slots__ = ()

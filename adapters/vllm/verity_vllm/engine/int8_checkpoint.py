@@ -85,6 +85,8 @@ from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
+__all__ = ["COMMANDS", "main"]
+
 RECIPE = "verity-int8-channel127/v1"
 RECIPE_V2 = "verity-int8-channel127/v2"
 RECIPE_V3 = "verity-int8-channel127/v3"

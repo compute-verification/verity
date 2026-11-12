@@ -23,6 +23,8 @@ from verity_vllm.config import checkpoint_entries, checkpoints_hf_home
 from verity_vllm.engine import env, handle
 from verity_vllm.engine.profiles.cases import CASES
 
+__all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profile_id_of", "verify_local_weights"]
+
 DECLARED_ENV = env.ENGINE
 
 MAX_MODEL_LEN = 4096

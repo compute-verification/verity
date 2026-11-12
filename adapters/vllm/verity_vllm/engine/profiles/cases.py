@@ -4,6 +4,8 @@
 `ACCEPTED` names the accepted production record of the cases that have one.
 Imports nothing, so every layer may read it."""
 
+__all__ = ["CASES"]
+
 CASES = {
     "B0": {"repo": "HuggingFaceTB/SmolLM2-135M"},
     # the second-model cases: SMOL360 = SmolLM2-360M (B0's architecture, larger), QWEN05 = Qwen2.5-0.5B (B1's architecture at head

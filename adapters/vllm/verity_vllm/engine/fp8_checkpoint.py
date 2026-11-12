@@ -66,6 +66,8 @@ from verity_vllm import config as C
 from verity_vllm.config import UsageError, option
 from verity_vllm.log import init_logger
 
+__all__ = ["COMMANDS", "main"]
+
 logger = init_logger(__name__)
 
 RECIPE = "verity-fp8-block128/v1"
