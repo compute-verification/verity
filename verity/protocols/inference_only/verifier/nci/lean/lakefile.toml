@@ -53,6 +53,10 @@ name = "nci-record-difftest"
 root = "NciCheck.RecordDifftestMain"
 
 [[lean_exe]]
+name = "nci-record-check"
+root = "NciCheck.RecordCheckMain"
+
+[[lean_exe]]
 name = "nci-baseline-difftest"
 root = "NciCheck.BaselineDifftestMain"
 

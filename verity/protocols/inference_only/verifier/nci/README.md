@@ -13,13 +13,23 @@ and no console script.
   - `nci-check [--unrolled] INSTANCE TRUSTED`, or with `--policy [--unrolled] INSTANCE` or
     `--count [--detail] INSTANCE`: the verdict on one instance, as JSON on stdout. `benchmarks/verifier_cost` builds
     and runs it;
+  - `nci-record-check CASE`: the record form (`NciCheck.Record`) on one case of its difftest's, such as
+    `lean/scripts/served_record_case.py` writes from a served run's files. It prints two lines, the rate rule's whole
+    verdict (`[S s] check: JSON`, `Record.checkDetail`) and the count's (`[S s] count: JSON`,
+    `RecordCount.checkDetail`), each with the seconds since it started, for the private record only. It checks the
+    record against the Program and the registration log, as the form does, and not the values the record commits
+    or SPOT's openings of its rows. Of the record's `registered` the form reads `params`, `tables`, `reads`, `roots`
+    and `openings`, takes `values` unread, and refuses any other key (`inputs`), `formats` among them.
+    `test_nci_record_check.py` (under "Not here") builds and runs it;
   - the difftests: the other executables `lean/lakefile.toml` declares, each printing its arguments as its `usage:`.
     The Lean check runs each one's main on the data `lean/lean-audit.json` pins (`runs`), which the tests named
     under "Not here" hold to its generator. No other code runs them.
 - **Scripts**: `lean/scripts/nci_reference.py`, the check's Python reference, loaded by path by the tests of
   `adapters/vllm`, by `demos/lifecycle` and by `benchmarks/verifier_cost`; and the difftests' generators,
   `python scripts/NAME.py CHECKOUT --out DIR`, as `lean/lean-audit.json` runs them (`runs`). The tests of
-  `verity/protocols/flock/prover` load `desc_difftest_vectors.py` by path.
+  `verity/protocols/flock/prover` load `desc_difftest_vectors.py` by path. `lean/scripts/served_record_case.py`
+  writes a served run's files as a case for `nci-record-check`, with the record reference's verdicts on it
+  (`nci_record_reference.check_detail` and `count`, form-only); its docstring has its options.
 - **Documents**: it reads registration records (`verity/registration/v2`), which `adapters/vllm` writes as the
   check's trusted input. A case and its answer under `verity/inference-only/v0` are one subprotocol's in a
   composite's case, as `benchmarks/one_stage/composite.py` reads them.
