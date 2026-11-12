@@ -1332,7 +1332,8 @@ def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(w
 
 def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
     """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
-    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger."""
+    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
+    ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     import a5_coins as AC
 
     args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
@@ -1356,11 +1357,19 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
         raise Opened
 
     monkeypatch.setattr(AC, "start", start)
+    gate = ["--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json", "--gate-key", "gate.key"]
     with pytest.raises(Opened):
-        RA.main([*args, "--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json",
-                 "--gate-key", "gate.key"])
+        RA.main([*args, *gate])
     assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
-                    "peer": "vy-nebius-1", "key_record": "key.json"}
+                    "peer": "vy-nebius-1", "key_record": "key.json", "deployed": False}
+    seen.clear()
+    with pytest.raises(SystemExit, match="2"):
+        RA.main([*args, *gate, "--deployed-key"])
+    assert seen == {}
+    with pytest.raises(Opened):
+        RA.main([*args, "--challenger", "local", "--deployed-key"])
+    assert seen == {"challenger": "local", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": None, "peer": None,
+                    "key_record": None, "deployed": True}
 
 
 def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):

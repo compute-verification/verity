@@ -17,8 +17,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import arm as A  # noqa: E402
-import verify as V  # noqa: E402
+import arm as A
+import verify as V
 
 RUN, COMMIT = "r20260930-120000-abcd", "0123456789abcdef0123456789abcdef01234567"
 SHAPES = {"m8192-n8192-k8192": "prefill", "m32-n8192-k8192": "decode"}
