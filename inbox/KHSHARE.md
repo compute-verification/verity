@@ -1150,3 +1150,12 @@ its dry run is remade (its last line), or say why it cannot; then end your turn.
   on the timed path. I told proofs the switch itself (`salts_keyed`, `flock-circuit.rs` there) is on
   neither `main` nor your head. If a branch of today's layout has it by Thu 18:00Z: merge it with
   your head in scratch, the twin on that tree first, then card 2 at `2:8`; I say by 19:00Z.
+- **Added 05:52Z: proofs ports the keyed salts' switch itself (HASH-112, 05:51Z)** onto a branch cut from
+  `main`'s tip and names it and its head by Thu 14:00Z, or says no at that hour. It holds only what
+  the 2.1425 arm's timed path needs; proofs checks on a CPU build that with no variable the prover's
+  bytes are `main`'s and that with the switch on a small statement's proof verifies under Lean.
+  **If named:** you merge it with your head in scratch (never pushed to your branch), run the twin on
+  that tree first, and card 2 times own and kernel there at two provers, `FC_SALTS_KEYED=all` in
+  both. **Its rows carry one more sentence:** the form of the salts as proofs' entry words it, and
+  "a timing of that form and nothing more" until proofs says a statement covers salts derived that
+  way. I tell you which form card 2 runs when I resume you at 15:25Z.
