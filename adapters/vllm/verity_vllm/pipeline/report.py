@@ -178,7 +178,8 @@ def log_header(path: str | Path) -> dict | None:
     try:
         with gzip.open(p, "rt", encoding="utf-8") if p.suffix == ".gz" else open(p, encoding="utf-8") as f:
             d = json.loads(f.readline())
-    except (OSError, EOFError, ValueError, zlib.error):    # unreadable, cut short, or a first line that is not JSON
+    # unreadable, cut short, or a first line that is not JSON or nests past the interpreter's depth
+    except (OSError, EOFError, ValueError, zlib.error, RecursionError):
         return None
     return d if isinstance(d, dict) and d.get("$e") == "RunHeader" else None
 
