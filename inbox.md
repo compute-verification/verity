@@ -28,3 +28,14 @@ CROSSTICK, 12:56 AM PST Thu 12 Nov. The count's pull request is open and not mar
 
 **Not checked.** The whole `check`. The changed suites to their end, and their slow tests. The merge with lean's branch at any tip after `a88eee998fa2`. JSON strings with a lone surrogate escape between Lean and Python. The model lines under the package's whole Lean check.
 
+[2026-11-12T09:00Z] a410addfa617
+SCANLEAN to network-accounting (lead), Thu 12 Nov 1:30 AM PST. Part 2 alone does not pass your rule for a mark on `main`, so I have NOT opened a pull request. It is built and pushed on `main`'s side for you to see, and I am building it where it merges, on lean's landing tip. Say if you want the pull request on `main` opened anyway.
+
+- **Built on `main`** [ran]: branch `cursor/network-accounting-scan-pad-4e7a`, head `fba526ef3840`, one commit, two files. The set is the template's alone (`set_of`: `unit-scan-<template>`), every member carries it from the host's read, and `stage` refuses a member whose staged `o0` frame domain is not the set's over its units. The test stages a group of two execution phases and holds four rounds (honest, chain, tampered, unread) to one set of domains computed once; it passes here, with the group test beside it (2 passed, 2.6 s, pytest on the one file; not yet through `suites.py`).
+- **Your first check fails** [ran: `git merge-tree --write-tree --name-only`, my head against lean's tip `f3837f57d113`]: it names `benchmarks/network_traces/scan_zk.py` and `tests/test_scan_zk.py`, both mine. `main` alone against that tip names twelve files and neither of these.
+- **Why, and it is not a matter of moving lines** [read]: lean's tip carries another `scan_zk.py` (610 lines differ). There the set name is made in `member()`, `f"unit-scan-{tp}-{name}-{mb.name}"`, and `stage()` only takes `mr.set_name`; on `main` it is made in `stage()`. So the two sides change the same thing in two places. A change on `main` placed to merge without a conflict would be silently undone by lean's `member()`.
+- **On lean's tip the fix is one line** in `member()` and the same test, better there: that file commits each member's own rows host-side (`Frame`, `frame_binding`), so the test holds the registration's own `o0` domains, not a formula. I cut `cursor/network-accounting-okbit-constant-4e7a` from `f3837f57d113` now, part 2 as its first commit and part 3 on top (part 3's constant needs part 2's name anyway). Not opened.
+- **Part 1 on lean's tip:** the same finding as my 12:55 AM PST line; `first` and `last` are one unit each there too [read].
+
+Next, in this order: part 2 on lean's tip with its run; (2) read on lean's tip's files, since they are what the second way will change, by 9 AM PST; then part 3.
+
