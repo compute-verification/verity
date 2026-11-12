@@ -108428,3 +108428,81 @@ The every-member files change (#9441, `ce41e7c92e8e`) waits on my commit of its 
 ### Next
 
 The Python twins and the tests of section 4; then the tries' answers by 01:30Z.
+
+## FRAME, Thu 12 Nov 23:23Z: `NeededBits.lean` is in two runs and no run has compiled it yet; the whole SpotFlock build passed at L1's head; the base moved to `241c9bf91ac2` (RUNCOINS's split, `run`'s `form` argument, the wiring's conditions stated); answers to 22:50Z, 23:06Z and 23:08Z and to NEEDEDBITS and ADDRWC
+
+**In plain words.** The first change of the two-round proof (round 2 refuses a run whose first-round record registers a value a replay block may not read, and checks the design's links and wires) now compiles with every file of SPOT's proofs that reads it. The base branch took three things since 22:45Z: the split one worker asked for, the switch as an argument of the run (the same text the composite's line has), and a new file that states, on what the verifier holds, every condition the address proof asks of the wiring. Two of my earlier words were wrong and are withdrawn below: condition (f) is not needed, and the schema of a linked read is the circuit's port's, not the reference reads'. One case is still open that no condition on the registration closes by itself: a session may read, at an output port no link or wire names, a value the boundary registration registers instead of its own port of the interior record; round 2 passes it and the address proof is false there. It needs one lemma about round 2's `second-values` check, which is a worker's job (section 5). Nothing below is called proved unless a run compiled it.
+
+Clock: `date -u` read 23:23Z. Mailbox read to its 22:50Z section, and the hook's 23:06Z and 23:08Z messages.
+
+### 1. Runs
+
+- `r20261112-221956-8bf1` (cpu-9), at `4f5280953983`: the whole `SpotFlock/*.lean` build with `SamplingGeneric/Guarantees.lean`: `BUILD_EXIT 0` [run]. Its guard part is still running.
+- `r20261112-222624-48d4` (cpu-8), at `b84b20ed6516`: `AddressOf.lean` (its text before the wiring map entered), `AddressFactsGive.lean`, `ReadsDesign.lean`: built, 11107 jobs [run].
+- `r20261112-231115-cc88` (vy-nebius-2), at `be14a7d24856` (the `form` argument): Spot's package built (`Spot.Pieces`, 242 jobs) [run]; the proofs' whole build was at module 11119 of 11144 at 23:21Z with no error line [run].
+- `r20261112-230048-af8a` (cpu-7), at `b8ca16854990`: `NeededBits.lean`, `AddressOf.lean` as they stood: running, no error line at module 10970 of 11106 [run].
+- `r20261112-231910-b82b` (vy-nebius-2), at `4deaf713899b`: `NeededBits.lean`, `AddressOf.lean`, `WiringOk.lean`, `AddressFactsGive.lean`: waiting for a Lean slot since 23:19Z.
+- #9229's guard `r20261112-204759-aacf` (cpu-10): still running; its ready line waits on it and on a records run.
+
+### 2. The base: `cursor/proofs-two-round-base-84b5` at `241c9bf91ac2`
+
+Workers: merge it in. Since `b8ca16854990`:
+
+- `8eaf94fa15`: RUNCOINS's `83155094dc` taken as it is (`Honest.lean`, `accepts_seqCoins`; no statement changed) [read].
+- `be14a7d24856`: `Spot.Run.run (i) (form : Bool := SecondStage.FORM)` and `interiorAudit (form)`, the `Spot/Run.lean` half of TWOLEG's `42808f6998`, made by hand: TWOLEG's commit does not apply (its other half is `VStarRecursive/SampledTwo.lean`, which the base does not have, and the two trees' `Run.lean` differ by L1: the base's round 2 is handed the verifier's `supplied`, `fixed` and `reads`). So RUNCOINS and RUNSAS can state at `run i true` on the base now; for one tree TWOLEG's line has to merge the base, which brings it L1. Nothing changes at the default [read]; compiled only as far as `cc88` says above.
+- `4deaf713899b` and `241c9bf91ac2`: `SpotFlock/WiringOk.lean` (sections 4 and 5) and one change of `slotAt` (section 3). Not compiled yet (`b82b` holds the first of the two).
+
+### 3. Two corrections of my own words
+
+- **(f) is withdrawn** (no port named by both a link and a wire). `wireCell` asks `heldLink = none` before it reads the wire (`WireMap.lean:99-104`), so the wiring map treats a port both name as linked, which is how round 2 reads it (`readOk`'s first arm). Nothing to add to the design's evaluation for it [read].
+- **The schema of a slot is the circuit's port's**, at a linked port too. I had `slotAt` take it from the template's reference reads; that needs `second-values` read in the proof and is not needed: Flock's own registered check refuses a registered read whose schema is not its circuit's port's (`Registered.checkPort`, lemma `Flock.Registered.checkPort_ok`, with `setup_checkRegistered`) [read]. `slotAt` now takes `PortRoots.schemaOf (memberCircuit h t) (portNamed h t r.row)` in both arms and `refSchema` is gone. HONEST2: your second file reads `slotAt`; this changes its linked arm's schema only.
+
+### 4. `WiringOk.lean`: the conditions, stated (texts on the base)
+
+Decided on what the verifier holds, to go into the design's evaluation (`two h`) with L1's rest:
+
+- `wiresAlike h`: for each wire and each template of its reader's name, the reader port's `words` equal the writer's output port's, and their row schemas (`PortRoots.schemaOf`) are equal. `wiresAlike_spec` gives both at `heldWire … = some w`, `heldWriter h w.writer = some tw`. **ADDRWC: this is your width condition** (B17); prove `WidthFact h (addressOf h)` against `wiresAlike h = true`. Your twin question: the bit is the same by construction, `wireTarget` finds the written bit at `RowPos.mk wport u r.bit` (`wireTarget_at` in the same file states it at the source bit's own entry).
+- `returnedWhole h`: no gate the boundary record holds is a written bit at a port no link names.
+- `writtenUnwired h`: no wire names a port a member writes that no link names.
+
+Facts of the members' programs, each a `Prop` with its exact text, none proved:
+
+- `WrittenOnce h`: a gate is at one written position at most. `RowsArePorts h`: a commitment position's row is the name of a port of its member's circuit. Both are facts of `keyProg`'s rows, NEEDEDBITS's ground; coordinator, they want an owner, NEEDEDBITS if it can take them after `NeededBits`.
+- `PortsMember h`: a checked unit's session's first table has its template's member circuit's ports. It is ADDRWC's `CheckedRun.ports_member` restated at `memberCircuit`; ADDRWC, please give it from yours when `e334` passes.
+- `Inside h`: a needed gate the wiring sends to a gate the boundary record doesn't hold, no input, is sent to a gate of the unit's replay block that the connected program doesn't commit as that block sees it. True because a wire's writer unit is in its reader's replay block (`wireUnit_block`, `filesReplay`, `filesOk`) and so is every unit that reads a gate through a wire. It wants an owner too; I take it after the entry fact if nobody has.
+
+Proved in the file's text, uncompiled: `wiresAlike_spec`, `returned_of_whole`, `unwired_of_written`, `written_find`, `portNamed_spec`, `topological_of_two`, `source_none_of_written`, `written_not_input`, `wireUnit_wire`, `wireTarget_at`.
+
+### 5. The open case, and the lemma it needs
+
+At a port no link or wire names, round 2 passes a registered read two ways (`readOk`'s third arm): the read's value is a port of the interior record, and then it must be the template's own port there; or neither record has a port of that name and a registration registers a value of that name. The second way is how a unit reads a registered value (weights, a table) at an input port. At an OUTPUT port it is wrong for the proof: the connected program opens the unit's output under the replay block's roots, at its own port of the interior record, while the session would read it under the statement's roots at the registered value. Round 2 cannot tell an input port from an output port, so it passes it [read, derived].
+
+What closes it without a new premise on the run: round 2's `second-values` (`valuesOk`) holds each session's registered reads to its template's reference reads but for the run's fields, so a read's value at a port is the reference's. Then the condition is decided on what the verifier holds: for each template, each reference read at a port no link or wire names has a value that is one of the interior registration's ports. I state it as `refReadsOwn h` and the fact it gives about runs as `OwnReads h`; the lemma between them is JSON work on `jeq`, `blankReads` and `setKey` that no file has started [read: no lemma on `valuesOk` exists under `security/Proofs`]. **Coordinator: this is a piece for a worker**, in a new file, against the two statements, which are on the base in `WiringOk.lean`. The same lemma is what a later widening needs to cover a unit that reads a registered value at an input port (today `SourcesNamed` leaves every such unit out: see "not established").
+
+### 6. Answers
+
+- **22:50Z item 3 (where the refusal sits in the running check)**: it does not exist. `Run.interiorAudit` hands round 2 the verifier's `supplied`, `fixed` (pinned and outputs) and `reads`, and `second-inputs` passes a value the verifier holds or the opened row of a read; the model's `ownOf` has none of the three, so the model refuses every value round 1's record registers [read]. Where it goes: the switch. Today the form's last refusal `two-stage-form` refuses every run; at the switch it becomes "refuse a run the theorem does not cover": the interior record registers a value. That is L5's text, on its branch, and RUNCOINS's `RegistersNone` is its premise meanwhile. It can also be decided on the registration instead of the run: `recordsOk` holds the interior record's registered values to `h.interiorNames.values`, so `h.interiorNames.values = []` in the design's evaluation gives `RegistersNone` with `RecordsHeld` and no premise on the run [read, derived]. I prefer that form; say if you want it in L1's rest.
+- **22:50Z item 4 (the resolved rule)**: RUNCOINS's `HeldMatches.first` hands the model the resolved rule: `Spot.Select.resolve i.rule program query = .ok resolved` and `h.reg.first = ⟨…, resolved, i.closure⟩` [read at `24a822196311`]. TWOLEG's `heldOf` was not on its branch at `9d61e66bd491`; it must set `first`'s rule to `Select.resolve`'s to meet `HeldMatches`.
+- **22:50Z item 5, 23:08Z item 3**: taken (`8eaf94fa15`).
+- **23:08Z item 1 (B17), the exact conjunct**: in the model, `wiresAlike h` as above, in `two h`. In the running check there is no place for it today, and the same is true of every condition `two h` already decides: `scopeOk`, `filesOk` and `templateOk` read the auditor's copies of the circuits, which `Run.run` does not hold (RUNCOINS states this as its premise `TwoHolds`). So `wiresAlike` joins `TwoHolds`: a condition on the registration, decided when the code is registered, not a refusal of round 2. Round 2 could refuse it only if it held both ports' widths: a read's entry carries its own (`words`, `word_bits`), the interior record's port entry carries root, domain and leaves only (`sameAt`). Making it a refusal of the running round 2 therefore needs the width in round 1's record, serving's format; I do not make that change and RUNSAS should not tonight. What is owed instead is one running check of the whole of `two h` at registration, which nobody owns: that is the gap `TwoHolds` names, and B17 is one line of it.
+- **23:08Z item 2 (B21)**: read. I change the model to hold the verifier's `fixed`, `supplied` and `reads` only on GATHER's answer.
+- **23:08Z, TWOLEG's `42808f6998`**: section 2.
+- **NEEDEDBITS's NEEDS** (`scopeOkH` in `templateOk`): yes, in `templateOk`, as you write it, in the one change that is L1's rest; prove against it as a hypothesis meanwhile, as you do. `SideBySide h` is proved nowhere on the base. I have not checked that Friday's templates pass `scopeOkH`; HONEST2 or GATHER should say.
+- **ADDRWC's gap**: section 4.
+
+### 7. The design's evaluation after L1's rest (not made yet)
+
+`two h` will also require: `sourcesNamed`, `wiresMove`, `writersFirst`, `SecondWires.namesOnce`, `wiresAlike`, `returnedWhole`, `writtenUnwired`, no proof block always checked, `refReadsOwn`, and `scopeOkH` in `templateOk`. (d) and (f) of 22:32Z are dropped: (d) follows from the scope, (f) from `wireCell`. `WiresFirst`, `WiresMove` and `SourcesNamed` leave the premises. I make it as one change once the entry fact's proof says the list is complete, with the premises' before and after in the entry that names its head.
+
+### 8. Next
+
+The entry fact and the second half of one tree a gate at `addressOf h`, from `NeededBits h`, `Inside h`, `WrittenOnce h`, `RowsArePorts h`, `PortsMember h`, `OwnReads h` and the decided conditions: I write it now, in tries on vy-nebius-2. Then the assembly with ADDRWC's and ADDRROW's facts.
+
+**To post.** Nothing.
+
+**Not established.**
+- Nothing of `WiringOk.lean`, `NeededBits.lean` or the changed `AddressOf.lean` is compiled.
+- The entry fact and the roots fact at `addressOf h`: not written.
+- `SourcesNamed` (a premise today, in the design's evaluation after L1's rest) leaves out every unit that reads a registered value at a port no link names: weights or a table read the usual way. If Friday's templates read any value that way, the two-round theorem as it stands says nothing of Friday's run, whatever else is proved. GATHER's answer on (a) to (f) decides this; I have not read Friday's circuits.
+- That the list of section 7 is complete: only the finished proof says so.
+- That Friday's registration meets `wiresAlike`, `returnedWhole`, `writtenUnwired`, `refReadsOwn`, `scopeOkH`.
