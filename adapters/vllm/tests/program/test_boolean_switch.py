@@ -123,27 +123,17 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
     assert list(e.value.missing) == ["Twice_v1{N=4}"]
 
 
-def test_a_reader_of_a_program_takes_the_version_it_names_and_not_the_newest(monkeypatch):
-    """Two registered Boolean versions name one word: the newest is its Boolean version, ``family`` takes the other, and a
-    family that does not name the word is refused by name.  The two answers are kept apart.  The registry has no word with two
-    Boolean Definitions, so the test makes one."""
-    def sig(t):
-        return lambda S: ((("x", Array(S.N, t)),), Array(S.N, t))
+def test_a_reader_of_a_program_takes_the_version_it_names_and_not_the_newest():
+    """`MoeSum_v1` is the word of two registered Boolean Definitions: the newest is its Boolean version, ``family`` takes the
+    other, and a family that does not name the word is refused by name.  The two answers are kept apart."""
+    from verity.definitions.registry import moe as M
 
-    word = CompositeDefinition("Twice", 1, ("N",), sig(F32), lambda B, S, x: B.batch(W.F32AddFtz, x, x, axes=(0, 0)), register=False)
-    add = BB.boolean_version(W.F32AddFtz)
-    older, newer = (CompositeDefinition("Twice", v, ("N",), sig(BL.bit_type(F32)), lambda B, S, x: B.batch(add, x, x, axes=(0, 0)),
-                                        register=False) for v in (2, 3))
-    older.word = newer.word = lambda b: bind(word, N=b["N"])
-    exact, by_name, errors = BB._load()
-    monkeypatch.setattr(BB, "_TABLE", [(exact, {**by_name, "Twice": [older, newer]}, errors)])
-    monkeypatch.setattr(BB, "_VERSIONS", {})
-    w = bind(word, N=3)
-    assert descriptor_id(BB.boolean_version(w)) == "Twice_v3{N=3}"
-    assert descriptor_id(BB.boolean_version(w, family="Twice_v2")) == "Twice_v2{N=3}"
-    assert descriptor_id(BB.boolean_version(w)) == "Twice_v3{N=3}" and BB.boolean_version(w, family="Twice_v3") is BB.boolean_version(w)
-    with pytest.raises(BB.NoBooleanVersion, match=r"no Boolean version of Twice_v1: Twice_v1\{N=3\}: no registered Twice_v4 names it"):
-        BB.boolean_version(w, family="Twice_v4")
+    w = bind(M.MoeSum, TOPK=2, H=8)
+    assert descriptor_id(BB.boolean_version(w)) == "MoeSum_v3{TOPK=2,H=8}"
+    assert descriptor_id(BB.boolean_version(w, family="MoeSum_v2")) == "MoeSum_v2{TOPK=2,H=8}"
+    assert descriptor_id(BB.boolean_version(w)) == "MoeSum_v3{TOPK=2,H=8}" and BB.boolean_version(w, family="MoeSum_v3") is BB.boolean_version(w)
+    with pytest.raises(BB.NoBooleanVersion, match=r"no Boolean version of MoeSum_v1: MoeSum_v1\{TOPK=2,H=8\}: no registered MoeSum_v4 names it"):
+        BB.boolean_version(w, family="MoeSum_v4")
 
 
 def test_a_boolean_primitive_is_its_own_version_under_its_own_family_only():

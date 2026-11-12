@@ -286,11 +286,24 @@ def test_the_gates_are_compared_on_the_self_check_s_own_inputs(monkeypatch):
 
 def test_a_boolean_row_s_gates_are_its_bits_family_s_with_the_functions_its_build_binds(monkeypatch):
     """A row whose ``bits`` is of a family that does not name the kernel's check specialisations as its word is refused: no
-    gates of that family were compared.  So is one whose Build binds a function at another version than the gates were checked
-    with; a function the Build binds nowhere (the check's other dot) is this tree's."""
+    gates of that family were compared.  The gates compared are those of the version the row names, not of the newest that
+    names the word (`MoeSum_v1` has two).  A row whose Build binds a function at another version than the gates were checked
+    with is refused; a function the Build binds nowhere (the check's other dot) is this tree's."""
+    from verity.circuits import evaluation as EV
+
     _unchecked(monkeypatch)
     assert DF.kernel_refusal([(SILU, "SiluMul_v4{I=4}")]) == \
         "SiluMul_v1: no Boolean version of SiluMul_v1: SiluMul_v1{I=8}: no registered SiluMul_v4 names it as its word"
+    right, evaluated = EV.evaluate_words, []
+
+    def recorded(b, *inputs):
+        evaluated.append(descriptor_id(b))
+        return right(b, *inputs)
+
+    monkeypatch.setattr(EV, "evaluate_words", recorded)
+    assert DF.kernel_refusal([("MoeSum_v1{TOPK=4,H=16}", "MoeSum_v2{TOPK=4,H=16}")]) is None
+    assert DF.kernel_refusal([("MoeSum_v1{TOPK=4,H=16}", "MoeSum_v3{TOPK=4,H=16}")]) is None
+    assert evaluated == ["MoeSum_v2{TOPK=2,H=8}", "MoeSum_v3{TOPK=2,H=8}"]
     gemm = 'Gemm_v2{K=4,N=4,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 
     def bits(dot: str) -> str:
