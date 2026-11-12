@@ -57,6 +57,7 @@ whole: a shared-row member's table of them, each unit's ref its writer's row, or
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import io
 import json
@@ -931,17 +932,31 @@ def own_value(port: str) -> str:
     return f"committed/{port}"
 
 
-def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = ()) -> dict[str, dict[str, Any]]:
+def held_ports(win: Mapping[str, Any], k: int) -> dict[str, str]:
+    """Member ``k``'s wired ports with no tree of its own (``wired_trees`` false), each to the port whose tree holds it,
+    ``<writer member>/<out>`` (`Binding.held`), from the window document ``win`` (``window.json``)."""
+    ms, mem = win["members"], win["members"][k]
+    if mem.get("wired_trees", True):
+        return {}
+    bases = [int(x["base"]) for x in ms]
+    return {w["port"]: f"{ms[bisect.bisect_right(bases, int(w['writers'][0])) - 1]['name']}/{w['out']}" for w in mem["wired"]}
+
+
+def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = (),
+                held: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
     """Header ``registered`` entries (`registered_header`'s form) for shared-row member ``mem``'s ports but ``without``, from
     its public ``body`` (`Committed.public_body`): each port whose table is one row per instance, instance i's row i, as rows
     of the value `own_value` names, its own tree, whose root and domain the registration holds (``frame_v3``'s), row i at
-    position i with its path. A statement checked against registered reads must have every port registered
+    position i with its path; and each port of ``held`` (`held_ports`: a wired port with no tree of its own, its table its
+    writer's output rows, whole), as rows of its writer's port's value, table row t at position t with its path (each
+    instance reads the row its ref names). A statement checked against registered reads must have every port registered
     (`Flock.Registered.checkComplete`); these are the reads of the ports its registered values' reads leave, which the
     verifier makes at the registration's roots (`own_reads`). A port of another table layout gets none: its readers'
     positions are the prover's refs. Refused where a port's rows don't make its ``frame_v3`` root."""
     shared = mem.get("shared_rows")
     if not shared:
         return {}
+    held = held or {}
     n, ports, fv = int(mem["n"]), [p for p, _w in mem["ports"]], mem["frame_v3"]
     starts, at = {}, 0
     for p in ports:
@@ -951,15 +966,16 @@ def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = 
     refs = np.frombuffer(body, dtype="<u4", offset=at).reshape(n, len(ports))
     out = {}
     for j, p in enumerate(ports):
-        if p in without or int(shared[p]) != n or not np.array_equal(refs[:, j], np.arange(n)):
+        rows = int(shared[p])
+        if p in without or (p not in held and (rows != n or not np.array_equal(refs[:, j], np.arange(n)))):
             continue
-        dom = CommitmentDomain(bytes.fromhex(fv["bindings"][p]), OWNER, RangeIndexedDomain(0, n), hash="sha512")
-        bcs = [body[starts[p] + BC_BYTES * i:starts[p] + BC_BYTES * (i + 1)] for i in range(n)]
+        dom = CommitmentDomain(bytes.fromhex(fv["bindings"][p]), OWNER, RangeIndexedDomain(0, rows), hash="sha512")
+        bcs = [body[starts[p] + BC_BYTES * i:starts[p] + BC_BYTES * (i + 1)] for i in range(rows)]
         lv = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bc), fv["schemas"][p]) for i, bc in enumerate(bcs)])
         if dom.domain_id.hex() != fv["domain_ids"][p] or lv[-1][0].hex() != fv["roots"][p]:
             raise ValueError(f"{mem['name']} {p}: its rows' tree is not its frame_v3 root")
-        out[p] = {"value": own_value(f"{mem['name']}/{p}"), "positions": list(range(n)),
-                  "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(n)]}
+        out[p] = {"value": own_value(held.get(p, f"{mem['name']}/{p}")), "positions": list(range(rows)),
+                  "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(rows)]}
     return out
 
 

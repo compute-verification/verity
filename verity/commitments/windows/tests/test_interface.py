@@ -433,6 +433,55 @@ def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch)
         replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (5, 4)),)), *ms[2:]))
 
 
+def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_verifier_reads(tmp_path, monkeypatch):
+    """A shared-row member holding a wired port in its writer's tree (no wired trees, a table of its writer's rows): its
+    header entry (`rows.held_ports`, `rows.own_entries`) is the writer's output value, one position and one path per row of
+    its table, each path climbing to the writer's root, and the verifier's read of it (`rows.own_reads`, seeded with no
+    port) names the same value, that root, a leaf count of the table's rows and each unit's writer row, so the header opens
+    every row the verifier reads and no other. A member holding none gets no entry, and a body whose held rows are not its
+    writer's is refused."""
+    win = I.Window(chain(), RUN, LAW, 2)
+    ins, outs = chain_values()
+    win.record(GEMM, ins, outs, {"chain": 0})
+    given = {}
+    monkeypatch.setattr(CS, "commit", lambda window, data, **kw: given.setdefault("data", data))
+    win.close(salt_key=bytes(32))
+    monkeypatch.undo()
+    plain = replace(win.window, members=tuple(replace(m, wired_trees=False) for m in win.window.members))
+    n_of = {m.port("o0"): m.n for m in plain.members}
+    ms = tuple(replace(m, tables=tuple((p, n_of[plain.held(m, p)] if p == "x" else m.n) for p, _w in m.rows)) if m.wired else m
+               for m in plain.members)
+    w = replace(win.window, members=ms)
+    data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}},
+             **({"refs": np.stack([np.array(w.held_leaves(m, p)) if m.wired else np.arange(m.n) for p, _w in m.rows], axis=1)}
+                if m.tables else {})} for d, m in zip(given["data"], ms)]
+    c = CS.commit(w, data, salt_key=bytes(32))
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
+                         "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
+    CS.write(c, tmp_path, {"by": "test"}, {}, registrar=reg)
+    doc = json.loads((tmp_path / "window.json").read_text())
+    roots = {q: {"root": r.hex(), "domain": c.domains[q].domain_id.hex(), "leaves": c.domains[q].count} for q, r in c.roots.items()}
+    files = CS.own_reads({m.key: {"format": REG.READS_V1, "ports": {}} for m in ms if m.wired}, w, roots, registered=REG)
+    assert CS.held_ports(doc, 0) == {} and CS.own_entries(doc["members"][0], c.public_body(0), (), {}) == {}
+    for k, m in enumerate(ms[1:], 1):
+        writer = w.held(m, "x")
+        assert CS.held_ports(doc, k) == {"x": writer} != {"x": m.port("x")} and m.port("x") not in c.roots
+        e = CS.own_entries(doc["members"][k], c.public_body(k), (), CS.held_ports(doc, k))["x"]
+        read = files[m.key]["ports"]["x"]
+        rows = dict(m.tables)["x"]
+        assert e["value"] == read["value"] == CS.own_value(writer) and read["root"] == c.roots[writer].hex()
+        assert e["positions"] == list(range(rows)) == list(range(read["leaves"])) and len(e["paths"]) == rows
+        assert read["reads"] == list(w.held_leaves(m, "x")) and set(read["reads"]) <= set(e["positions"])
+        dom, bc = c.domains[writer], c.bc[writer]
+        for i, path in zip(e["positions"], e["paths"], strict=True):
+            leaf = row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]), m.schema("x"))
+            assert _climb(dom, i, leaf, bytes.fromhex(path)) == c.roots[writer]
+    body = bytearray(c.public_body(1))
+    body[0] ^= 1                                                       # the held port's first table row
+    with pytest.raises(ValueError, match="not its frame_v3 root"):
+        CS.own_entries(doc["members"][1], bytes(body), (), CS.held_ports(doc, 1))
+
+
 def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_them():
     win = I.Window(chain(), RUN, LAW, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
