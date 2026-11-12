@@ -280,7 +280,7 @@ def test_an_honest_scans_answer_names_its_lanes_tied_or_nothing(server):
         sched = case["params"]["schedule"]
         shared = sched["every"] > 1
         windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
-        want = PC.prog_params(sched["lanes"]) if shared else None
+        want = list(PC.prog_params(sched["lanes"])) if shared else None
         assert all(x["answer"]["public"].get(PC.TIED_KEY) == want for x in windows), n
         out = reference(case)
         assert out["verdict"] == ACCEPT, (n, out)

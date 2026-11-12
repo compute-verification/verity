@@ -864,12 +864,6 @@ def prog_name(j: int) -> str:
     return f"{PROG}{j}"
 
 
-def prog_params(lanes: int) -> list[str]:
-    """`progParams`: the scan root's parameters that are its lanes' Programs' rows, lane `j`'s ``prog<j>``, the names
-    one-stage's registration check publishes where it lets several proof blocks read them."""
-    return [f"prog{j}" for j in range(lanes)]
-
-
 def _index(s: str) -> bool:
     """`indexChars`: a lane's or a chunk's index, ASCII digits with no leading zero."""
     return s != "" and all("0" <= c <= "9" for c in s) and (s[0] != "0" or len(s) == 1)
@@ -1564,7 +1558,7 @@ TIED_UNHELD = ("next", "state", "entry", "first", "alone", "bare", "string", "ne
 
 def tied_list(kind: str, lanes: int):
     """What a change of `TIED_HELD` or `TIED_UNHELD` puts under `TIED_KEY`, for a scan of `lanes` lanes."""
-    names = prog_params(lanes)
+    names = list(prog_params(lanes))
     return {"all": names, "subset": names[:-1], "order": names[::-1], "twice": [*names, names[0]], "empty": [],
             "next": [*names, f"prog{lanes}"], "state": [*names, "state"], "entry": [*names, prog_name(0)],
             "first": ["state", *names], "alone": ["state"], "bare": ["prog"], "string": names[0],
@@ -1903,7 +1897,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         if sched.every > 1:
             # every `every` units read one slot entry of each lane, which one-stage's registration check lets through
             # only tied, and its verdict then names each lane's
-            answer["public"][TIED_KEY] = prog_params(sched.lanes)
+            answer["public"][TIED_KEY] = list(prog_params(sched.lanes))
         if aimed:
             if m == "answer-tied-held":
                 answer["public"][TIED_KEY] = tied_list(rt.choice(TIED_HELD), sched.lanes)
