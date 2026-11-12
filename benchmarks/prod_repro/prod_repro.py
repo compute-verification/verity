@@ -81,6 +81,16 @@ def flag(argv: list[str], name: str) -> str | None:
     return out
 
 
+def flags(argv: list[str], prefixes: tuple[str, ...]) -> str:
+    """Every flag of a launch line that begins with one of ``prefixes``, each with the value the line gives it."""
+    out = []
+    for i, a in enumerate(argv):
+        if a.startswith(prefixes):
+            value = "=" not in a and i + 1 < len(argv) and not argv[i + 1].startswith("--")
+            out.append(f"{a} {argv[i + 1]}" if value else a)
+    return " ".join(out)
+
+
 def trace_header(arm_dir: Path) -> dict:
     """The engine's own configuration, from the header of an arm's step trace; empty for an arm that kept none."""
     traces = S.step_traces(arm_dir)
@@ -122,13 +132,13 @@ def settings(arm_dir: Path, arm: dict, load: str) -> dict:
         cache = (ON, served[2:])
     else:
         cache = (UNCONFIRMED, "the launch line does not turn it off, and the arm kept no step trace and counted no hit")
-    spec = [a for a in argv if a.startswith("--speculative") or a.startswith("--num-speculative")]
+    spec, kv = flags(argv, ("--speculative", "--num-speculative")), flag(argv, "--kv-cache-dtype")
     limit = header.get("max_model_len") or flag(argv, "--max-model-len")
     own = model_limit(Path(meta["checkpoint"])) if meta.get("checkpoint") else None
     return {"prefix_caching": {"state": cache[0], "by": cache[1], "cached_share": share},
-            "speculative_decoding": {"state": ON if spec else OFF,
-                                     "by": (flag(argv, "--speculative-config") or " ".join(spec)) if spec else
-                                     "no --speculative-config in the launch line"},
+            "speculative_decoding": {"state": ON if spec else OFF, "by": spec or "no --speculative-config in the launch line"},
+            "kv_cache": {"state": kv or "the engine's default",
+                         "by": "--kv-cache-dtype" if kv else "no --kv-cache-dtype in the launch line"},
             "context_limit": {"tokens": int(limit) if limit is not None else None, "model": own,
                               "models_own": None if limit is None or own is None else int(limit) >= own["tokens"]},
             "compiled": {"state": OFF if "--enforce-eager" in argv else ON,
@@ -138,7 +148,7 @@ def settings(arm_dir: Path, arm: dict, load: str) -> dict:
 def settings_differ(a: dict, b: dict) -> list[str]:
     """The settings two arms' serves differ in."""
     names = {"prefix_caching": "prefix caching", "speculative_decoding": "speculative decoding",
-             "compiled": "torch.compile and CUDA graphs"}
+             "kv_cache": "the KV cache's type", "compiled": "torch.compile and CUDA graphs"}
     out = [name for k, name in names.items() if a[k]["state"] != b[k]["state"]]
     return out + ["the context limit"] * (a["context_limit"]["tokens"] != b["context_limit"]["tokens"])
 
@@ -325,6 +335,7 @@ def text(r: dict) -> str:
              _setting("prefix caching", "prefix_caching", sets, stock, ours),
              _setting("speculative decoding", "speculative_decoding", sets, stock, ours),
              _limit(sets, stock, ours),
+             _setting("KV cache", "kv_cache", sets, stock, ours),
              _setting("torch.compile and CUDA graphs", "compiled", sets, stock, ours),
              f"  circuit compiled ahead of serving: {r['circuit_ahead_of_serving']}"]
     if not t["measured"]:

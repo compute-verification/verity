@@ -183,11 +183,18 @@ def test_a_setting_the_serve_did_not_turn_on_is_off(tmp_path: Path):
 
 def test_speculative_decoding_and_the_models_own_limit_are_read_from_the_launch_line(tmp_path: Path):
     out = tmp_path / "out"
-    spec = '{"method":"mtp","num_speculative_tokens":1}'
-    for name in ("compiled", "record"):
-        corpus_arm(out, name, [100.0, 101.0], argv=("--speculative-config", spec, "--max-model-len=131072"))
+    spec = ("--speculative-config.method", "mtp", "--speculative-config.num_speculative_tokens", "5")
+    corpus_arm(out, "compiled", [100.0, 101.0], argv=(*spec, "--max-model-len=131072"))
+    corpus_arm(out, "record", [100.0, 101.0], argv=(*spec, "--kv-cache-dtype", "fp8", "--max-model-len=131072"))
     _, txt, r = run(out)
-    assert r["settings"]["record"]["speculative_decoding"] == {"state": "on", "by": spec}
+    assert r["settings"]["record"]["speculative_decoding"] == {"state": "on", "by": " ".join(spec)}
+    assert ("  speculative decoding: on (--speculative-config.method mtp --speculative-config.num_speculative_tokens 5); "
+            "compiled: on (") in txt
+    # the KV cache's type is the launch line's, and an arm that does not share it is not at the same settings
+    assert ("  KV cache: fp8 (--kv-cache-dtype); DIFFERS; compiled: the engine's default (no --kv-cache-dtype in the "
+            "launch line)\n") in txt
+    assert r["cost"]["settings_differ"] == ["the KV cache's type"]
+    assert P.flags(["--speculative-config={}", "--seed", "0"], ("--speculative",)) == "--speculative-config={}"
     assert r["settings"]["record"]["context_limit"] == {
         "tokens": 131072, "model": {"tokens": 131072, "key": "max_position_embeddings"}, "models_own": True}
     assert "  context limit: 131,072 tokens, the model's own 131,072 (config.json max_position_embeddings)\n" in txt
