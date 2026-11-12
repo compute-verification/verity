@@ -77,6 +77,7 @@ def serve(sched, requests):
 
     for r in requests:
         sched.add_request(r)
+    done: dict[str, tuple[int, str | None]]
     rows, done = [], {}
     for _ in range(4 * FITTED):
         so = sched.schedule()
