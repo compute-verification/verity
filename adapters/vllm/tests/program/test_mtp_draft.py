@@ -12,6 +12,7 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.commitments.windows import interface as IF
 from verity.definitions.numerics import dsa_norm_rows as NR
 from verity.definitions.registry import dsa_norm as DN
 from verity.definitions.registry import mtp_draft as MD
@@ -68,3 +69,40 @@ def test_only_position_zero_zeroes_the_embedding(pos: int, zeroed: bool) -> None
     assert got[:768] == list(evaluate(norm, [0] * 768 if zeroed else e, ew))
     assert got[768:] == list(evaluate(norm, p, hw))
     assert (got[:768] == list(evaluate(norm, [0] * 768, ew))) == zeroed
+
+
+def _staged(whole, pos: int, e: list[int], p: list[int], ew: list[int], hw: list[int]) -> list[int]:
+    """`eh_cut`'s units run in turn: the select, then each half's scale and its apply units in column order."""
+    (zero, n0), (sumsq, n1), (apply, n2) = MD.eh_cut(whole)
+    assert (n0, n1, n2) == (1, 2, 2 * whole.bindings["H"] // MD.APPLY_G)
+    G, out = MD.APPLY_G, []
+    for x, w in ((list(evaluate(zero, pos, e)), ew), (p, hw)):
+        (r,) = evaluate(sumsq, x)
+        out += [v for j in range(len(x) // G) for v in evaluate(apply, x[j * G:(j + 1) * G], w[j * G:(j + 1) * G], r)]
+    return out
+
+
+def test_the_cut_returns_the_launchs_words() -> None:
+    """At a 768 row in its 1024 block, each edge row as e at positions 0 and 7 and as p; at the served statics one served-scale pair
+    at each position: the select, two scales and 2H / 64 apply units joined are `MtpEhNorm_v1`'s words."""
+    rng = np.random.default_rng(67)
+    small = bind(MD.MtpEhNorm, H=768, BLOCK=1024, WARPS=4, EPS=EPS)
+    ew, hw = _w(rng, 768).tolist(), _w(rng, 768).tolist()
+    served = _bf16_row(rng, 768, 1.0).tolist()
+    for i, x in enumerate(_edge_rows(np.random.default_rng(68), 768)):
+        for pos, e, p in ((0, x.tolist(), served), (7, x.tolist(), served), (7, served, x.tolist())):
+            assert _staged(small, pos, e, p, ew, hw) == list(evaluate(small, pos, e, p, ew, hw)), (i, pos)
+    whole = bind(MD.MtpEhNorm, H=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS)
+    e, p, ew, hw = (_bf16_row(rng, H, 1.0).tolist() for _ in range(4))
+    for pos in (0, 7):
+        assert _staged(whole, pos, e, p, ew, hw) == list(evaluate(whole, pos, e, p, ew, hw)), pos
+
+
+def test_each_unit_of_the_cut_fits_a_proof_block() -> None:
+    """At the served statics each unit fits a proof block: the select reads the 8 B position and e and writes e, a scale reads a
+    half and writes its 4 B word, and an apply unit reads 64 words of a half, their weights and the scale and returns 64 words."""
+    whole = bind(MD.MtpEhNorm, H=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS)
+    rows = {u.id: [2 * w for _, w in IF.layout(u).rows + IF.layout(u).outs] for u, _ in MD.eh_cut(whole)}
+    for u, _ in MD.eh_cut(whole):
+        IF.check_proof_block(u)
+    assert list(rows.values()) == [[8, 2 * H, 2 * H], [2 * H, 4], [128, 128, 4, 128]], rows

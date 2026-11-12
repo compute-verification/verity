@@ -22,8 +22,12 @@ and weights.  The SASS selects +0 before the chain (`FSEL R, R, RZ, P0`), so sel
 `cvt.f32.bf16`, as this body does, gives the same f32 word.
 
 Registered: `MtpEhNorm_v1{H, BLOCK, WARPS, EPS}` (pos: i64, e: H bf16, p: H bf16, ew: H bf16, hw: H bf16) -> 2H bf16, one token's
-row of the launch.  `fused_embed_eh_norm` (`model_executor/layers/fused_embed_norm.py`), which folds the embedding gather in, is
-not stated: it needs the whole table on a rank (tensor parallel size 1).
+row of the launch: `MtpEhZero_v1{H}` (pos: i64, e: H bf16) -> H bf16, the position select, then each half's
+`TritonBlockRMSNorm_v1`.  A whole row of 6144 is past a Flock proof block, so it is staged as its cut (`CUTS`, `eh_cut`): the
+select, each half's scale `TritonBlockRMSNormSumSq_v1{N, BLOCK, WARPS, EPS}` (x: N bf16) -> f32, the one word every normed
+element reads, and N / `APPLY_G` of `dsa_norm.DsaRMSNormApply_v1{G}` a half, whose `bf16(r * x * f32(w))` is the block norm's
+too.  `fused_embed_eh_norm` (`model_executor/layers/fused_embed_norm.py`), which folds the embedding gather in, is not stated: it
+needs the whole table on a rank (tensor parallel size 1).
 """
 from __future__ import annotations
 
@@ -32,13 +36,19 @@ from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import BitAnd, SelectBf16
-from verity.definitions.registry.dsa_norm import TritonBlockRMSNorm
-from verity.definitions.registry.prims import BF16
+from verity.definitions.registry import dsa as D
+from verity.definitions.registry import dsa_norm as DN
+from verity.definitions.registry.prims import BF16, F32
 from verity.definitions.registry.sampling import I64
 from verity.definitions.registry.torch_words import I64Le
 
 _CONF = ("model-untested: read from vLLM d9105ea80's _fused_eh_norm_kernel and the cc 9.0 PTX and SASS Triton 3.7.1 compiles from "
          "it (the module docstring); adapters/vllm/tests/properties/glm53_mtp_eh_norm_capture_gpu.py is its hardware check")
+_CUT_CONF = ("model-untested: MtpEhNorm_v1 cut at the select and at each half's scale; the units return its words "
+             "(adapters/vllm/tests/program/test_mtp_draft.py)")
+
+#: the columns of a half one apply unit takes, `dsa_norm`'s bound `DsaRMSNormApply_v1` width
+APPLY_G = 64
 
 
 def _sig(S):
@@ -46,16 +56,48 @@ def _sig(S):
     return (("pos", I64), ("e", row), ("p", row), ("ew", row), ("hw", row)), Array(2 * S.H, BF16)
 
 
-@composite("MtpEhNorm", 1, ["H", "BLOCK", "WARPS", "EPS"], _sig, conformance=_CONF)
-def MtpEhNorm(B, S, pos, e, p, ew, hw):
-    """One token's row of `_fused_eh_norm_kernel`: e with every word +0 where pos is 0 (signed `pos <= 0` and `0 <= pos`), normed by
-    `TritonBlockRMSNorm_v1{H, BLOCK, WARPS, EPS}` with ew, then p normed by the same Definition with hw."""
+@composite("MtpEhZero", 1, ["H"], lambda S: ((("pos", I64), ("e", Array(S.H, BF16))), Array(S.H, BF16)), conformance=_CUT_CONF)
+def MtpEhZero(B, S, pos, e):
+    """e with every word +0 where pos is 0, the whole int64 compared (signed `pos <= 0` and `0 <= pos`)."""
     zero = B.call(const(64, 0))
     first = B.call(BitAnd, B.call(I64Le, pos, zero), B.call(I64Le, zero, pos))
-    e0 = B.batch(SelectBf16, first, B.call(const(16, 0)), e, axes=(None, None, 0))
-    norm = bind(TritonBlockRMSNorm, N=S.H, BLOCK=S.BLOCK, WARPS=S.WARPS, EPS=S.EPS)
+    return B.batch(SelectBf16, first, B.call(const(16, 0)), e, axes=(None, None, 0))
+
+
+@composite("TritonBlockRMSNormSumSq", 1, ["N", "BLOCK", "WARPS", "EPS"], lambda S: ((("x", Array(S.N, BF16)),), F32),
+           conformance=_CUT_CONF)
+def TritonBlockRMSNormSumSq(B, S, x):
+    """`TritonBlockRMSNorm_v1`'s scale on its own: ``r = rsqrt.approx.ftz(fma(DivFullScaleA(sum, N), DivFullRcp(N), eps))`` over
+    its masked block, the one f32 word each output element reads."""
+    DN.check_block(S.N, S.BLOCK, S.WARPS, S.EPS)
+    o = D.word_ops(B)
+    return DN.rms_scale(o, S, [o.cvt(x[i]) for i in range(S.N)], DN.WARP * S.WARPS, S.BLOCK, fused_eps=True)
+
+
+@composite("MtpEhNorm", 1, ["H", "BLOCK", "WARPS", "EPS"], _sig, conformance=_CONF)
+def MtpEhNorm(B, S, pos, e, p, ew, hw):
+    """One token's row of `_fused_eh_norm_kernel`: `MtpEhZero_v1{H}` of e, normed by `TritonBlockRMSNorm_v1{H, BLOCK, WARPS, EPS}`
+    with ew, then p normed by the same Definition with hw."""
+    e0 = B.call(bind(MtpEhZero, H=S.H), pos, e)
+    norm = bind(DN.TritonBlockRMSNorm, N=S.H, BLOCK=S.BLOCK, WARPS=S.WARPS, EPS=S.EPS)
     en, pn = B.call(norm, e0, ew), B.call(norm, p, hw)
     return Coll(Array(2 * S.H, BF16), concat([en.refs, pn.refs]))
 
 
-MTP_DRAFT_COMPOSITES = [MtpEhNorm]
+def eh_cut(row) -> list[tuple[object, int]]:
+    """The units an `MtpEhNorm_v1` binding ``row`` is staged as, each bound with how many of it: the select, each half's scale and
+    its H / `APPLY_G` apply units."""
+    if getattr(row, "defn", None) is not MtpEhNorm:
+        raise ValueError(f"eh_cut cuts an MtpEhNorm_v1 binding, not {row!r}")
+    S = row.bindings
+    H = int(S["H"])
+    if H % APPLY_G:
+        raise ValueError(f"eh_cut: H = {H} is not whole apply units of {APPLY_G}")
+    return [(bind(MtpEhZero, H=H), 1),
+            (bind(TritonBlockRMSNormSumSq, N=H, BLOCK=S["BLOCK"], WARPS=S["WARPS"], EPS=S["EPS"]), 2),
+            (bind(DN.DsaRMSNormApply, G=APPLY_G), 2 * H // APPLY_G)]
+
+
+CUTS = {"MtpEhNorm_v1": eh_cut}
+
+MTP_DRAFT_COMPOSITES = [MtpEhZero, TritonBlockRMSNormSumSq, MtpEhNorm]

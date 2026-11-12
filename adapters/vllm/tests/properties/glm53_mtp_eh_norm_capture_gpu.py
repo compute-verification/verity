@@ -22,7 +22,7 @@ that capture's `served`.
   ptx      the Triton cache holds one specialisation of `_fused_eh_norm_kernel`; its code (the text before the first `.file`, its
            `.loc` lines and their labels removed: they name the source's lines) is the PTX `MtpEhNorm_v1` was read from
            (PTX_CODE_SHA256, PTX_COUNTS); its SASS takes rsqrt of `FFMA sum, rcp(6144), eps` (SASS_COUNTS).
-  bind     MtpEhNorm_v1 and TritonBlockRMSNorm_v1 bind at the served statics.
+  bind     MtpEhNorm_v1, TritonBlockRMSNorm_v1 and the units of MtpEhNorm_v1's cut (`mtp_draft.eh_cut`) bind at the served statics.
 
 GO = the gate, the switches, both launches deterministic, every word of every row equal to the twin, the reference equal to the
 twin on every sampled row, every alternative refuted on at least PER_ALT words, the PTX, the SASS and the bindings, no error.
@@ -334,14 +334,16 @@ def bind_check() -> dict[str, Any]:
     from verity.definitions.registry import mtp_draft as MD
 
     out: dict[str, Any] = {}
-    for make in (lambda: bind(MD.MtpEhNorm, H=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
-                 lambda: bind(DN.TritonBlockRMSNorm, N=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS)):
+    whole = lambda: bind(MD.MtpEhNorm, H=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS)  # noqa: E731
+    makes = [whole, lambda: bind(DN.TritonBlockRMSNorm, N=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
+             *((lambda i=i: MD.eh_cut(whole())[i][0]) for i in range(3))]
+    for make in makes:
         try:
             fn = make()
             out[fn.id] = bool(fn.signature())
         except Exception as e:  # noqa: BLE001
             out[f"error/{len(out)}"] = DS._error(e)
-    return {"bindings": out, "ok": len(out) == 2 and all(v is True for v in out.values())}
+    return {"bindings": out, "ok": len(out) == len(makes) and all(v is True for v in out.values())}
 
 
 # ------------------------------------------------------------------------------------------------------------------------ compare
