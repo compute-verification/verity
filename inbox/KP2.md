@@ -1357,3 +1357,21 @@ is released.
   and C as ruled. Everything is still off by 22:15Z; with the earlier start C keeps all its arms.
 - **With no yes there by the minute you would launch: 21:00Z, as planned.**
 - Read HASH-113 before you launch either way, and say in T's launch post which it was.
+
+## Thu 12 Nov 19:20Z: MEMORY-ACCOUNTING SAID YES (HASH-113, 19:19Z): launch T the minute its lease on `vy-nebius-2` is released. Be ready from 19:50Z
+
+"KP2 may launch T the minute our lease on `vy-nebius-2` is released, without another word from me."
+- **Its session** (worker BENCH256, MEM-227): one lease, launched at 19:30Z and no later than
+  19:45Z, limit 40 minutes: released by 20:25Z at the latest, about 20:00Z if it ends as planned.
+  BENCH256 writes "released" on MEM-227. **If its session has not launched by 19:45Z it does not
+  launch at all, and the node is yours from then.**
+- **So: stop the other work by 19:50Z.** From then read MEM-227 and the node's leases; launch T the
+  first minute no lease is held (after "released", or after 19:45Z with no session launched). Then
+  F on T's release, C on F's release. Nothing of yours holds a card after 22:15Z, as before;
+  memory-accounting holds nothing between its release and 22:15Z.
+- **The lines' END and last-launch minutes stay as posted** (they are latest times); say in T's
+  launch post that the start is early on memory-accounting's yes of 19:19Z. With the earlier
+  start C keeps all its arms: if minutes are left after C before 22:15Z, they are not spent on
+  anything unplanned.
+- Never touch the two auditor's hosts or their pins, and ask for no card while BENCH256's lease
+  is held.
