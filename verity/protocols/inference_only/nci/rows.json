@@ -21,11 +21,6 @@
    "crossings": 2,
    "flops_per_token": 207000000000.0
   },
-  "chain": {
-   "kappa": 0.0695,
-   "d": 1536,
-   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 2.07e11."
-  },
   "notes": "kappa = 0.60 (kappa.py, from the config and the report's schedule): 2|M| = 1.24e11 per token, the forward and the backward to the activations of the 3.05e10 active weights outside the embedding and LM head plus the LM head's backward, over 2.07e11 gates per token: the weight matmuls 1.90e11, attention's score and value products 1.5e10 at 4k (1.2e11 at 32k), Muon's step 7e8 and softmax, norms, SwiGLU and routing 1e8, averaged over 15.9T tokens at 4k and 60B at 32k (0.603 at 4k, 0.396 at 32k). The LM head's forward products (2.3e9 per token) stay out of M, since no fan-out bound below 163,840 covers them, and the embedding is a lookup, not a product. U = 1.04e12 x 2.5 bits; U_token = active 3.2e10 x 2.5. (d, e) = (10, 37,248), what Nci.SecurityProofs.ReferenceThreaded certifies at S = 2e7 bits for Kimi K2 as a keyed circuit written in Dot16 steps, as the declarations are (d = d0 - E with d0 = 17, a step's accumulator and 16 activations, and E = 7 bf16 embedding columns; e = an MoE input value's 2,328 steps, 37,248 products), with layer 0's attention-input projections and the LM head's forward products out of the counted set (about 0.05% of M); a run that trains its embedding gets d = 1, its later gathers being no lookups. w_cut = 7168 x 4 bits.",
   "sources": [
    "tseng-2024-qtip",
@@ -55,11 +50,6 @@
    "crossings": 2,
    "flops_per_token": 207000000000.0
   },
-  "chain": {
-   "kappa": 0.0695,
-   "d": 1536,
-   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 2.07e11."
-  },
   "notes": "The activation-compression attack at its most aggressive published claim (Subspace Networks; its one replication, at 8x and matched tokens, loses 14-15% in loss at 1B). Moves the construction, and the proven bound through its cap of b_a at w_cut / d.",
   "sources": [
    "ramasinghe-2025-protocolmodels"
@@ -86,11 +76,6 @@
    "w_cut": 28672,
    "crossings": 2,
    "flops_per_token": 207000000000.0
-  },
-  "chain": {
-   "kappa": 0.0695,
-   "d": 1536,
-   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 2.07e11."
   },
   "notes": "U = 1.04e12 x 0.1 bits; U_token = 3.2e10 x 0.1. kappa and the work per token are pretrain-full's at 4k; SFT on 32k sequences would be 0.40 at 3.14e11 per token (kappa.py).",
   "sources": [
@@ -119,11 +104,6 @@
    "w_cut": 28672,
    "crossings": 2,
    "flops_per_token": 316000000000.0
-  },
-  "chain": {
-   "kappa": 0.0455,
-   "d": 1536,
-   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 3.16e11."
   },
   "notes": "kappa = 0.39 (kappa.py's ROWS): the update needs the backward through every sampled token, so the policy-gradient circuit per sampled token is pretraining's at the rollout's length. Its loss is the advantage times the sampled token's log-probability, the same softmax-minus-one-hot gradient as cross-entropy, and attention carries it back through the prompt. The minimal circuit is on-policy, the rollout's forward reused as the training forward: 2|M| = 1.24e11 per token over 3.16e11 gates per token at R1-Zero's 32,768-token cap (deepseek-2025-r1/3): the weight matmuls 1.90e11, attention's score and value products 1.23e11, Muon's step at 512 sequences a step 2.9e9 and the rest 6e8. 0.56 at 8k, 0.28 at 64k. R1-Zero's recipe adds forwards (deepseek-2025-r1/4): the reference model's for the KL term and a fresh one for the 15 of each rollout's 16 minibatches trained after the weights moved, 2.94 forwards a sampled token, which gives 0.47 at 32k (0.66 at 8k, 0.34 at 64k); the row takes the minimal circuit, the lower kappa. A group whose samples all score alike has zero advantage and needs no backward, which would raise kappa; none is assumed. The old 0.9 priced the rollout's forward alone (0.89 at 4k in kappa.py), but the update's backward has twice the forward's weight products. crossings 2: the backward crosses each cut too.",
   "sources": [
@@ -403,11 +383,6 @@
    "w_cut": 49152,
    "crossings": 2,
    "flops_per_token": 651000000000.0
-  },
-  "chain": {
-   "kappa": 0.255,
-   "d": 12288,
-   "path": "per layer q, o, up and down of a d_model = 12288 transformer with a 4x MLP, forward only: 10 d^2 of the layer's 12 d^2 products, 8.3e10 per token over 55 layers; kappa = 2 x 8.3e10 / 6.51e11."
   },
   "notes": "kappa = 0.61 (kappa.py's dense-100b): 2|M| = 4.02e11 per token, the forward and the backward to the activations of the 9.97e10 weights outside the embedding and LM head (55 layers of 12 d^2: q, k, v and o, and a 4x GELU MLP) plus the LM head's backward, over 6.51e11 gates per token: the weight matmuls 6.07e11, attention's score and value products 3.3e10 at 8k (5.3e11 at 128k) and the rest 3e8. The draft states no context schedule, so the row assumes Llama 3 405B's, the one reported dense frontier schedule (grattafiori-2024-llama3/3, /4): 252M tokens at 4k, then 8k, with about 800B of the 15.6T in six stages to 128k, taken as equal tokens at 8k x 16^(k/6); Llama 3's 128,256-entry vocabulary and AdamW. 0.644 at 4k, 0.627 at 8k, 0.35 at 128k. The draft's 'about 3e6 with FP4' took e = 7168, which is false: one MLP input value multiplies the up projection's 4 x 12288 = 49152 weights, so the thread bound is 6.9x weaker than the draft's. w_cut assumes d_model = 12288.",
   "sources": [
