@@ -4176,12 +4176,9 @@ def crossed(repo: Path, main: str, head: str, moves: Iterable[tuple[str, str]], 
     land: those whose map retires nothing ``head``'s own change names (`own_text`), as `lacked_moves` judges a move `main`
     landed.  A map is read at its PR's head and, where ``main`` has one at that path, there too, since a move regenerated on
     its batch's tip runs the tip's (`map_retires`, kept in ``maps`` by where and path); a move whose map can't be read at its
-    head is crossed by nothing, and nothing is crossed while ``head``'s own change can't be read."""
+    head is crossed by nothing.  `QueueError` while ``head``'s own change can't be read."""
     maps = {} if maps is None else maps
-    try:
-        text = own_text(repo, main, head, files)
-    except QueueError:
-        return frozenset()
+    text = own_text(repo, main, head, files)
 
     def read(at: str, path: str) -> Retired | None:
         if (at, path) not in maps:

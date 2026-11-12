@@ -1290,14 +1290,19 @@ class World:
     def crossing(self, main: str, ready: list[Ready], moves: dict[str, str]) -> list[Ready]:
         """``ready`` with each PR's `Ready.crosses`: those of ``moves`` ({a move PR's head, ready or in flight: its map's path})
         whose map retires nothing its own change against ``main`` names (`queue.crossed`), kept by its head, ``main`` and
-        ``moves``, each map read once.  A move PR crosses none."""
+        ``moves``, each map read once.  A move PR crosses none, nor, this tick, a PR whose own change can't be read."""
         if not moves:
             return ready
         rows = frozenset(moves.items())
 
         def of(x: Ready) -> Ready:
             if (key := (x.head, main, rows)) not in self._crossings:
-                self._crossings[key] = crossed(self.repo, main, x.head, sorted(rows), x.files, self._retires)
+                try:
+                    self._crossings[key] = crossed(self.repo, main, x.head, sorted(rows), x.files, self._retires)
+                except QueueError as e:
+                    self.log(f"research queue vqueue: #{x.number} at {x.head[:12]} waits for the moves in flight to land: "
+                             f"its own change can't be read: {e}")
+                    return x
             return replace(x, crosses=self._crossings[key])
 
         with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:

@@ -617,9 +617,14 @@ def test_a_pr_waits_above_a_move_whose_map_can_t_be_read_at_its_head_or_while_it
         own = Q.own_text
         monkeypatch.setattr(Q, "own_text", lambda repo, main, head, files=None: (
             (_ for _ in ()).throw(Q.QueueError("git diff: bad object")) if head == two else own(repo, main, head, files)))
+    said: list[str] = []
+    monkeypatch.setattr(loop.world, "log", said.append)
     builds = _builds(loop.tick())
     assert [(b["members"], b["heads"], b["base"]) for b in builds] == (
         [([6], [six], first["sha"])] if why == "the change can't be read" else []), builds
+    unread = [x for x in said if "own change can't be read" in x]
+    assert unread == ([f"research queue vqueue: #2 at {two[:12]} waits for the moves in flight to land: its own change "
+                       "can't be read: git diff: bad object"] if why == "the change can't be read" else []), said
 
 
 @pytest.mark.parametrize("unmark", [False, True])

@@ -4740,7 +4740,7 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
     """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
     whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read
-    at its head; a head whose own change can't be read crosses nothing."""
+    at its head; it raises for a head whose own change can't be read, which `World.crossing` takes as crossing nothing."""
     main = _move_main(world, {"tools/move/x_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'})
     move = world.change({"tools/move/x_map.toml": '[paths]\n"d.txt" = "moved/d.txt"\n'})
     bad = world.change({"tools/move/x_map.toml": "[paths\n"})
@@ -4749,7 +4749,8 @@ def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retir
     moves = [(move, "tools/move/x_map.toml"), (bad, "tools/move/x_map.toml")]
     assert {n: Q.crossed(world.origin, main, h, moves) for n, h in heads.items()} == {
         1: frozenset({move}), 2: frozenset(), 3: frozenset()}
-    assert Q.crossed(world.origin, main, "f" * 40, moves, files=()) == frozenset()
+    with pytest.raises(Q.QueueError):
+        Q.crossed(world.origin, main, "f" * 40, moves, files=())
 
 
 def test_the_status_command_refuses_a_head_lacking_a_move_whose_change_names_what_it_retires_and_admits_the_rest(world):
