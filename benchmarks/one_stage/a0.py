@@ -379,7 +379,11 @@ class VerifyMembers:
     member the process does not answer (it ended, it wrote nothing for `MEMBER_WAIT` seconds, or it answered another place)
     has no verdict, and neither has any member after it: the process is ended, by its PID, and never started again.
     `close` ends it and writes its own log (``log``); until then its standard error is the ``.stderr`` file beside it.
-    It runs in `verifier_env`, as a `verify` process does."""
+
+    It runs in this process's environment as it is, not in `verifier_env`. A `verify` process exits after its member;
+    this one stays for the run, beside the run's provers, and under the verifier's allocator setting it would hold
+    every page it freed once it had read the program. So it starts under the allocator's default unless this process's
+    environment sets a value."""
 
     def __init__(self, lean: str, archive: Path, program: str, log: Path):
         self.cmd = [lean, "verify-members", "--archive", str(archive), "--program", program]
@@ -388,7 +392,7 @@ class VerifyMembers:
         # are unbuffered, read and written through their descriptors
         with self.stderr.open("wb") as err:
             self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, bufsize=0,
-                                         env=verifier_env())
+                                         env=environ(None))
         self.members, self.ended = 0, None
         self._buf, self._err_read, self._ends = b"", 0, []
 
@@ -499,8 +503,8 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
-    holds each statement to. `verify` runs in `verifier_env`, and so does the kept verifier: under the verifier's allocator
-    setting unless this process's environment sets its own."""
+    holds each statement to. `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's
+    environment sets its own. The kept verifier does not (`VerifyMembers`)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}

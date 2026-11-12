@@ -1,8 +1,9 @@
 """The benchmarks' runs of the Lean verifier (`a0.lean_verify`, `server_rate.Lean`) start `flock-verify verify` in
 `verifier_env`: under the verifier's allocator setting where this process's environment sets none, and under the
-caller's own value where it does, with the rest of the environment as it is. So does a run's kept verifier
-(`a0.VerifyMembers`, its ``verify-members``). The children are stand-ins that record the environment they were
-given."""
+caller's own value where it does, with the rest of the environment as it is. A run's kept verifier
+(`a0.VerifyMembers`, its ``verify-members``) starts in this process's environment as it is: under the allocator's
+default where the caller sets no value, and under the caller's own where it does. The children are stand-ins that record
+the environment they were given."""
 from __future__ import annotations
 
 import io
@@ -51,18 +52,20 @@ def test_a0s_lean_verify_runs_under_the_allocator_setting_unless_the_caller_sets
     assert children["verify"] == {**os.environ, NAME: want}
 
 
-@CASES
-def test_a0s_kept_verifier_runs_under_the_allocator_setting_unless_the_caller_sets_its_own(tmp_path, monkeypatch, own, want):
+@pytest.mark.parametrize("own", [None, "0", "-1"], ids=["unset", "the caller's own", "the caller's -1"])
+def test_a0s_kept_verifier_runs_under_the_allocators_default_unless_the_caller_sets_a_value(tmp_path, monkeypatch, own):
     children = {}
 
     def child(cmd, **kw):
-        children[cmd[1]] = kw["env"]
+        # a child handed no environment inherits this process's
+        children[cmd[1]] = dict(os.environ if kw.get("env") is None else kw["env"])
         return SimpleNamespace()
 
     caller(monkeypatch, own)
     monkeypatch.setattr(a0.subprocess, "Popen", child)
     a0.VerifyMembers("lean", tmp_path / "archive", "0" * 128, tmp_path / "verify-members.log")
-    assert children["verify-members"] == {**os.environ, NAME: want}
+    assert children["verify-members"] == dict(os.environ)
+    assert children["verify-members"].get(NAME) == own
 
 
 @CASES
