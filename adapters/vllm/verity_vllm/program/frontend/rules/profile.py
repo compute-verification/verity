@@ -533,7 +533,8 @@ class ProfileLinearRule(LinearRule):
         return _without_batch_invariance("aten.linear", "the batch-invariant matmul the 'gemm' kind states") or super().applies(node, ctx)
 
 
-PROFILE_RULES = [ProfileLinearRule(), EmbeddingRule(), ArgmaxTokenSelectRule(), ResidualAddRule(), BroadcastBiasAddRule(),
-                 RmsNormRule(), FusedAddRmsNormRule(), RotaryEmbeddingRule(), SiluAndMulRule(), UnifiedAttentionRule()]
+PROFILE_TORCH_RULES = [ProfileLinearRule(), EmbeddingRule(), ArgmaxTokenSelectRule(), ResidualAddRule(), BroadcastBiasAddRule()]
+PROFILE_VLLM_RULES = [RmsNormRule(), FusedAddRmsNormRule(), RotaryEmbeddingRule(), SiluAndMulRule(), UnifiedAttentionRule()]
+PROFILE_RULES = PROFILE_TORCH_RULES + PROFILE_VLLM_RULES
 
-__all__ = ["PROFILE_RULES"]
+__all__ = ["PROFILE_RULES", "PROFILE_TORCH_RULES", "PROFILE_VLLM_RULES"]
