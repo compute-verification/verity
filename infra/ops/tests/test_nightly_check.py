@@ -542,7 +542,7 @@ def test_how_a_check_ran_is_no_difference_and_several_differences_are_each_named
 def test_a_reused_lean_pass_carrying_how_the_run_that_stored_it_ran_agrees_with_the_uncached_one():
     """A recorded check reuses a pass a records run stored, whose report names its build's facts document (`facts_key`, a
     hash of `.olean` bytes, written only under `--facts-cache`), or one a node without the sandbox stored, which says it
-    used no replay cache; the uncached run's own node caps its threads and measures its memory. Each says how and where an
+    used no replay cache; the uncached run's own node sets its threads and measures its memory. Each says how and where an
     audit ran, not what it found, so the package agrees: under the same inputs key, with the same findings."""
     mine, theirs = uncached(), recorded()
     package(theirs[SHARDS[0]], "lean/x").update(facts_key="c3" * 32, judged_from=key("9"),
