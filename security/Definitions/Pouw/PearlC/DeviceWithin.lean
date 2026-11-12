@@ -12,8 +12,8 @@ two definitions:
   `pearlCDomainDevAt d s` is it at `(· = s)`, and `pearlCDomainDevShapes d nks` at the shapes whose `(n, k)` is in
   `nks`, both by unfolding.
 * `KernelWithin d ρ c Ss ω`: on those shapes the honest kernel's `W_ref` is non-negative and at most `ω` times the
-  credit left under the cap `ρ`. It is the one hypothesis such a statement takes about the record, and the statement's
-  gap is `1 − (1 − 1/400)/ω`, a function of `ω` alone.
+  credit left after the inert-work share `ρ`. It is the one hypothesis such a statement takes about the record, and
+  the statement's gap is `1 − (1 − 1/400)/ω`, a function of `ω` alone.
 -/
 
 @[expose] public section
@@ -26,7 +26,7 @@ def pearlCDomainDevOn (d : PearlCDevice) (Ss : Shape → Prop) (L : Layout) : Pr
 
 /-- **What a gap statement over every device record asks of the record**: `ω` is positive and, at every shape `Ss`
 holds of, the honest kernel's `W_ref` under rev1 with `c` per activation element (`wrefDevRev1K d c`) is non-negative
-and at most `ω` times the credit left under the cap `ρ`, `(1 − ρ)·creditDevRev1 d`. -/
+and at most `ω` times the credit left after the inert-work share `ρ`, `(1 − ρ)·creditDevRev1 d`. -/
 def KernelWithin (d : PearlCDevice) (ρ c : ℚ) (Ss : Shape → Prop) (ω : ℚ) : Prop :=
   0 < ω ∧ ∀ s, Ss s → 0 ≤ wrefDevRev1K d c s ∧ wrefDevRev1K d c s ≤ ω * ((1 - ρ) * creditDevRev1 d s)
 

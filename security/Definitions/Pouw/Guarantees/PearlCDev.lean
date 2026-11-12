@@ -30,9 +30,9 @@ namespace Pouw.Guarantees.PearlC
 open Pouw.PearlC Pouw.PearlC.Assumptions Pouw.PearlC.FlockTile
 
 /-- **The served form's gap per unit, at every device record.** For every W1 setting `dv`, salt bytes `salt`, device
-record `d`, semantics `sem`, cap `ρ`, kernel forming `c` and shapes `Ss`: if the honest kernel's `W_ref` is within `ω`
-of the capped credit on `Ss` (`KernelWithin`), TT_OUT rev1 at W1 gives `G_g` on the domain restricted to `Ss` at
-`g = 1 − (1 − 1/400)/ω`. -/
+record `d`, semantics `sem`, inert-work share `ρ`, kernel forming `c` and shapes `Ss`: if the honest kernel's `W_ref` is
+within `ω` of the credit left after the inert-work share on `Ss` (`KernelWithin`), TT_OUT rev1 at W1 gives `G_g` on
+the domain restricted to `Ss` at `g = 1 − (1 − 1/400)/ω`. -/
 def GapDevRev1K : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Pouw.PearlC.Shape → Prop) (ω : ℚ),
