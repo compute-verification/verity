@@ -114,7 +114,8 @@ def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: 
     assert (cfg["out"], cfg["private"]) == (str(tmp_path), str(private))
     # the arms it is made of carry the same pieces: the boundary commitment without the tables, the top-k alone
     cfg = json.loads(S.server_env(rows, tmp_path, tmp_path, None, 3600.0, 600.0, check=glm.check, private=private)[S.PLUGIN_ENV])
-    assert cfg["boundary_rows"] == {"window_s": 3600.0, "check": glm.check, **S.ROWS} and "tables" not in S.ROWS
+    assert cfg["boundary_rows"] == {"window_s": 3600.0, "check": glm.check, **S.ROWS}
+    assert "tables" not in S.ROWS and "ids" not in S.ROWS
     assert cfg["private"] == str(private)
     alone = S.server_env(S.ARMS["canonical-topk"], tmp_path, tmp_path / "site", None, 600.0, 600.0, private=private)
     assert S.PLUGIN_ENV not in alone and alone["VERITY_DSA_TOPK"] == "canonical"

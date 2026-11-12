@@ -232,12 +232,14 @@ PRIVATE = "{private}"
 TOPK = (("verity_dsa_topk = dsa_topk:register", "benchmarks/dsa_topk"),)
 TOPK_ENV = {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{PRIVATE}/topk-log"}
 #: the boundary commitment's object (`verity_vllm.pipeline.boundary_windows.BoundaryWindows.of`): a replay block of
-#: one check a served id with the check template's body in place, the ids served committed as what it returns
-#: (`boundary_rows.Layout.ids`), a window closed when it drains
-ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True, "ids": True}
+#: one check a served id with the check template's body in place, a window closed when it drains
+ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
+#: the two-stage serve's boundary object: `ROWS`, the ids served committed as what its replay block returns
+#: (`boundary_rows.Layout.ids`), which round 2 holds the check's output to, and `TABLES`
+TWO_STAGE_ROWS = {**ROWS, "ids": True, "tables": TABLES}
 ARMS = {
     "compiled": Arm(None, "stock vLLM, its defaults (CUDA graphs, and torch.compile where vLLM compiles the model)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
@@ -278,7 +280,7 @@ ARMS = {
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
                      "layer's history tables in the boundary commitment, prefix caching off",
                      ("--no-enable-prefix-caching",),
-                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
+                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows=TWO_STAGE_ROWS),
     "prod": Arm("published", "that server, as the stock arm the arms made from it are costed over", published=True),
     "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by",
                       published=True),
