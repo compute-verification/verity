@@ -2033,7 +2033,10 @@ _POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] &
 
 def _train_repo(tmp_path):
     """A clone of a local origin with a root commit on main, and train.sh's environment with `uv` and `sleep` stubbed: `uv` records
-    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock."""
+    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock.  Each call of
+    ``train`` has its own launch (`launched.$TEST_CALL`): train.sh returns once it reads the launch line, so a launcher can
+    still be running, and mark its launch, after a later call has begun, whose 720 polls would each return at once on that mark
+    and could all end before its own launcher writes (on a loaded node)."""
     import os
     import subprocess
 
@@ -2053,19 +2056,20 @@ def _train_repo(tmp_path):
     bin_, done, argv = tmp_path / "bin", tmp_path / "launched", tmp_path / "argv"
     bin_.mkdir()
     (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}printf '%s\\n' \"$@\" > {argv}\n"
-                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n" f"touch {done}\n")
-    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")
+                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n"
+                             f"touch {done}.$TEST_CALL\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done}.$TEST_CALL ]; do :; done\n")
     for f in bin_.iterdir():
         f.chmod(0o755)
     env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
            "R2_ENDPOINT": "dummy"}
     for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
         env.pop(k, None)
+    calls = iter(range(1, 1000))
 
     def train(*a, **extra):
-        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
-                              cwd=tmp_path / "repo", env={**env, **extra})
+                              cwd=tmp_path / "repo", env={**env, "TEST_CALL": str(next(calls)), **extra})
 
     return git, train, argv
 
@@ -2258,7 +2262,7 @@ def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
     origin.rename(gone)
     # the first backoff gives origin back; a poll for the launch waits on it, not on a clock
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\nif [ -e {gone} ]; then mv {gone} {origin}; '
-                                            f'else while [ ! -e {tmp_path / "launched"} ]; do :; done; fi\n')
+                                            f'else while [ ! -e {tmp_path / "launched"}.$TEST_CALL ]; do :; done; fi\n')
     p = train("HEAD", "vy-x")
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
     assert sleeps.read_text().split()[0] == "5"
