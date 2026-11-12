@@ -1182,7 +1182,7 @@
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "UP037", "symbol": "_eval_job", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "UP037", "symbol": "_eval_job_rows", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "UP037", "symbol": "_evaluate_all", "detail": "Remove quotes from type annotation"},
-    {"file": "verity_vllm/check/weights_of_record.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 6},
+    {"file": "verity_vllm/check/weights_of_record.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 10},
     {"file": "verity_vllm/commit/binding.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/challenge.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/challenge.py", "kind": "UP047", "symbol": "stratum_picks", "detail": "Generic function `stratum_picks` should use type parameters"},

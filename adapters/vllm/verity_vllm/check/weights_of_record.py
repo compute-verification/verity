@@ -964,7 +964,7 @@ def main(a: Options) -> int:
     if not pdir:
         cands = component_program_dirs(given)
         if not cands:
-            logger.error("weights_of_record: no component Program (build_request*/instances.json.gz) under %s", a.programs_root)
+            print(f"weights_of_record: no component Program (build_request*/instances.json.gz) under {a.programs_root}")
             return 2
         pdir = cands[0]
     rec = build_record(pdir, a.checkpoint_dir, checkpoints_manifest=a.checkpoints, model=a.model, revision=a.revision,
@@ -975,15 +975,15 @@ def main(a: Options) -> int:
     rec["derived"] = derivation_provenance(pdir, a.checkpoint_dir, a.checkpoints, None, supersedes=a.supersedes)
     with open(out, "w") as f:
         json.dump(rec, f, indent=1)
-    logger.info("weights_of_record: root %s fields %s/%s pinned (%s analytic), unpinned %s, unresolved %s, shards pinned %s, complete %s, of_record %s -> %s",
-                rec["root_of_record"][:16], rec["n_pinned"], rec["n_fields"], rec["n_analytic"], len(rec["unpinned"]), len(rec["unresolved"]),
-                rec["checkpoint"].get("all_shards_pinned"), rec["complete"], rec["of_record"], out)
+    print(f"weights_of_record: root {rec['root_of_record'][:16]} fields {rec['n_pinned']}/{rec['n_fields']} pinned ({rec['n_analytic']} analytic), unpinned {len(rec['unpinned'])}, "
+          f"unresolved {len(rec['unresolved'])}, shards pinned {rec['checkpoint'].get('all_shards_pinned')}, complete {rec['complete']}, "
+          f"of_record {rec['of_record']} -> {out}")
     if rec.get("of_record_set"):
         ors = rec["of_record_set"]
-        logger.info("  of-record set: %s digests (%s components%s); struct equal on all: %s%s", len(ors["program_digests"]), len(ors["components"]),
-                    ", workload " + ors["workload_digest"][:16] if ors.get("workload_digest") else "", not ors.get("why"),
-                    f" -- {rec.get('of_record_why')}" if ors.get("why") else "")
+        print(f"  of-record set: {len(ors['program_digests'])} digests ({len(ors['components'])} components"
+              f"{', workload ' + ors['workload_digest'][:16] if ors.get('workload_digest') else ''}); struct equal on all: {not ors.get('why')}"
+              + (f" -- {rec.get('of_record_why')}" if ors.get("why") else ""))
     if rec["unresolved"]:
         for u in rec["unresolved"][:20]:
-            logger.warning("  UNRESOLVED %s: %s", u["field"], u["why"])
+            print(f"  UNRESOLVED {u['field']}: {u['why']}")
     return 0 if rec["of_record"] else 2

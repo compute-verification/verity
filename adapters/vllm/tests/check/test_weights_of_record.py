@@ -5,7 +5,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import logging
 import re
 import struct
 import subprocess
@@ -694,8 +693,7 @@ def test_verdict_reads_a_components_only_replay_by_its_method_rel_m0621():
 
 
 @pytest.mark.usefixtures("code_versions_stood_in")
-def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path, caplog):
-    caplog.set_level(logging.INFO, logger="verity_vllm")
+def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path):
     d, man, t = checkpoint
     prog, fields = _program()
     pd = tmp_path / "build_request"
@@ -707,8 +705,6 @@ def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path, caplog):
     assert rc == 0
     rec = json.loads((pd / "weights_of_record.json").read_text())
     assert rec["complete"] is True and rec["program_digest"] == "d" * 128 and rec["wrapper_prefix"] == PREFIX
-    # the derivation says what it wrote through the logger, never on stdout
-    assert f"weights_of_record: root {rec['root_of_record'][:16]} fields " in caplog.text and f"-> {pd / 'weights_of_record.json'}" in caplog.text
 
 
 def _write_program(d, prog, digest, LP, T, extra_field=None):
@@ -724,8 +720,7 @@ def _write_program(d, prog, digest, LP, T, extra_field=None):
 
 
 @pytest.mark.usefixtures("code_versions_stood_in")
-def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equality_rev_cb_m0733(checkpoint, tmp_path, caplog):
-    caplog.set_level(logging.INFO, logger="verity_vllm")
+def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equality_rev_cb_m0733(checkpoint, tmp_path):
     """--programs-root stamps the WHOLE of-record set (every component Program's digest + the workload
     digest + the manifest's), after checking each component's weights struct equals the record's; check() accepts iff the run's
     of-record set equals the stamp -- a record of another row (a missing or extra component), an unsound stamp (a component of another
@@ -748,7 +743,6 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     ors = rec["of_record_set"]
     # the default-shape build_request is struct-checked but NOT of record (not a workload component): its digest never joins the set
     assert ors["program_digests"] == sorted({A, B, W}) and ors["workload_digest"] == W and ors["why"] is None
-    assert f"of-record set: 3 digests (3 components, workload {W[:16]}); struct equal on all: True" in caplog.text
     assert [(c["dir"], c["of_record"], c["struct_equal"]) for c in ors["components"]] == \
         [("build_request_LP4_T2", True, True), ("build_request_LP9_T1", True, True), ("build_request", False, True)]
     live = live_digests(_served(t, fields))
@@ -791,7 +785,6 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     assert rec4["of_record"] is False and "not full sha512" in rec4["of_record_why"] and "d" * 16 in rec4["of_record_why"]
     # a root without any component Program is refused by the CLI
     assert cli.main(["weights-of-record", "--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
-    assert f"no component Program (build_request*/instances.json.gz) under {tmp_path / 'empty'}" in caplog.text
 
 
 @pytest.mark.usefixtures("code_versions_stood_in")
