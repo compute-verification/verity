@@ -5,13 +5,13 @@ Inductor output code the process compiled.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.engine import env as engine_env
-
 
 _VERITY_INDUCTOR_DIR_MARK = engine_env.INDUCTOR_DIR_MARK
 
@@ -84,7 +84,7 @@ def _split_path_strings(data: bytes) -> tuple[bytes, list[str]]:
         _PATH_STRING_RE = re.compile(rb"/[\x21-\x7e]{3,}")
     found: list[str] = []
 
-    def _sub(m: "re.Match[bytes]") -> bytes:
+    def _sub(m: re.Match[bytes]) -> bytes:
         found.append(m.group().decode("latin1"))
         return b"<PATH>"
 
@@ -141,10 +141,8 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
 
     root = settings.TRITON_CACHE_DIR or os.path.join(os.path.expanduser("~"), ".triton", "cache")
     cands = [os.path.join(root, str(h))]                          # Triton <= 3.3: <hex hash>/
-    try:                                                           # Triton >= 3.4: base32(sha256 digest)/ (52 chars, no padding)
+    with contextlib.suppress(ValueError):                          # Triton >= 3.4: base32(sha256 digest)/ (52 chars, no padding)
         cands.append(os.path.join(root, base64.b32encode(bytes.fromhex(str(h))).decode().rstrip("=")))
-    except ValueError:
-        pass
     d = next((c for c in cands if os.path.isdir(c)), None)
     if d is None:
         # last resort: the metadata json of every entry carries "hash": <hex> (indexed once per root)
@@ -155,7 +153,8 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
                 if os.path.basename(mj).startswith("__grp__"):
                     continue
                 try:
-                    md = json.load(open(mj))
+                    with open(mj) as f:
+                        md = json.load(f)
                     if isinstance(md, dict) and md.get("hash"):
                         idx[str(md["hash"])] = os.path.dirname(mj)
                 except (OSError, ValueError):
@@ -167,15 +166,14 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
     out: dict[str, Any] = {"dir": d}
     cub = sorted(glob.glob(os.path.join(d, "*.cubin")))
     if cub:
-        try:
-            out["cubin"] = open(cub[0], "rb").read()
-        except OSError:
-            pass
+        with contextlib.suppress(OSError), open(cub[0], "rb") as f:
+            out["cubin"] = f.read()
     for mj in sorted(glob.glob(os.path.join(d, "*.json"))):
         if os.path.basename(mj).startswith("__grp__"):
             continue
         try:
-            md = json.load(open(mj))
+            with open(mj) as f:
+                md = json.load(f)
             if isinstance(md, dict) and ("num_warps" in md or "target" in md):
                 out["meta"] = {k: md.get(k) for k in ("name", "num_warps", "num_stages", "num_ctas", "cluster_dims", "enable_fp_fusion", "debug", "shared",
                                                       "ptx_version", "target", "maxnreg", "launch_cooperative_grid") if k in md}
@@ -246,7 +244,8 @@ def loaded_code_objects() -> dict[str, Any]:
             for k, m in items:
                 if id(m) in seen:
                     continue
-                seen.add(id(m)); reg.append((str(k), m))
+                seen.add(id(m))
+                reg.append((str(k), m))
         mods: list[dict[str, Any]] = []
         kernels: dict[str, dict[str, Any]] = {}
         bins_all: set[str] = set()
@@ -275,9 +274,9 @@ def loaded_code_objects() -> dict[str, Any]:
                 # running the same code objects can execute differently configured binaries
                 executed: list[dict[str, Any]] = []
                 cfgs = []
-                for l in list(getattr(obj, "launchers", None) or []):
-                    c = getattr(l, "config", None)
-                    b = getattr(l, "bin", None)
+                for launcher in list(getattr(obj, "launchers", None) or []):
+                    c = getattr(launcher, "config", None)
+                    b = getattr(launcher, "bin", None)
                     e_: dict[str, Any] = _binary_identity(b, c) if b is not None else ({"config": None, "id": None})
                     if b is None and c is not None:
                         # no `bin` on the launcher (older Inductor): the executed binary is the compile result whose config equals the launcher's
