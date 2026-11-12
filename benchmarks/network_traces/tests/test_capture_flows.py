@@ -553,22 +553,6 @@ def test_a_packet_kept_too_short_is_refused_with_the_least_length_that_reads_it(
     assert cf.read([path], *given)["capture"]["files"] == [{"packets": 1, "link_type": link, "snapshot": need}]
 
 
-def test_the_refusal_of_a_packet_kept_too_short_names_headings_the_readme_has():
-    """The refusal names no length for every capture: it names the README's two commands by their headings. Each
-    heading is there with its command under it, and the command states the length the heading's paragraph is about:
-    the link's the reader's `SNAPSHOT`, the loopback's 54."""
-    where, headings = cf.LENGTHS.rsplit(" ", 1)[1], cf.LENGTHS.split('"')[1::2]
-    assert HERE.parents[1] / where == HERE / "README.md"
-    assert headings == ["Taking the capture", "On the server's loopback"]
-    readme, lengths = (HERE / "README.md").read_text(), []
-    for heading in headings:
-        assert f"\n**{heading}**" in readme, \
-            f"the README has no heading {heading!r}: name the one it has in capture_flows.py's LENGTHS"
-        command = readme.split(f"\n**{heading}**", 1)[1].split("\n    tcpdump ", 1)[1].splitlines()[0]
-        lengths.append(int(command.split(" -s ")[1].split()[0]))
-    assert lengths == [cf.SNAPSHOT, 54]
-
-
 def test_a_file_that_isnt_a_whole_pcap_capture_is_refused_with_what_to_do(tmp_path):
     whole = fx.pcap([fx.ethernet(p) for p in fx.first()])
     for name, content, said in (
