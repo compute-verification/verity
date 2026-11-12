@@ -26,6 +26,9 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
 | `two-stage-tick` | the two-stage serve's launch line admitting on the certified tick: `two-stage`'s data with the tick on, served by the corpus's client | `two-stage` |
+| `prod` | nothing: `published`'s server, as the stock arm the arms made from it are costed over | `published` |
+| `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
+| `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -83,6 +86,13 @@ directory without it, removed when it stops. The run's directory keeps each clas
 
 `replay.py` replays one load of a `record` arm in this process under its recorded schedule (each request added before
 the step it arrived before), compiled or eager, and counts the step rows and tokens that differ from the served ones.
+It takes each request's prompt ids from the plan and its served ids from the corpus client's `client.jsonl`. vLLM's
+client keeps neither, so a pass it sent (`REPLAY=agentic@4`, the pass with its rung) is replayed from an arm whose
+server kept them, `prod-record` (`REPLAY_FROM=OUT/prod-record`): a line a finished request in
+`<arm>/server/ids.PID.jsonl`, its engine id, prompt ids and served ids.
+An arm that served on the canonical DSA top-k (`canonical-topk`, `two-stage`, `prod-record`) is replayed on it: the
+replay's processes load the plugin under the arm's environment (`replay.served_under`), and keep its counters under
+`--private` (`PRIVATE/replay-<mode>`) where one is given.
 It starts from an empty engine. `restore.py` starts mid-traffic instead: it puts a restore arm's boundary state at one
 edge into a fresh engine (the KV bytes into the same block ids, then the state, `boundary.restore`), replays to a later
 edge, adding each request that arrived in between before the step it arrived before, and compares every step's
@@ -270,6 +280,101 @@ requests are sent as they arrive, and its figures' readings are beside it (`cost
 `ttft`, `itl_p99`). A job in which a load of the
 number or load `prefix` has not run writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
 
+## The recipe's line and the agentic load
+
+`prod` is `published`'s server, stock vLLM as its recipe for GLM-5.3 on eight H200s starts it (above), under the
+name of the stock arm two arms are made from: `prod-again` is its second lifetime, and `prod-record` adds the
+scheduler's step trace and keeps each request's prompt ids and served ids (`servetax_plugin.ServedIds`,
+`server/ids.PID.jsonl`), since vLLM's client keeps neither and a replay of a pass is given the first and compared with
+the second (`replay.window`). It serves on the canonical DSA top-k too (`serve_tax.TOPK`, `TOPK_ENV`): vLLM's own
+kernels order a row of more than 2,048 keys differently run to run, and the agentic load's prompts are longer, so a
+replay is to give the served tokens only where both select by the canonical rule. Its cost over `prod` holds the
+top-k's with the record's. An arm is costed over the nearest stock arm above it (`serve_tax.STOCK`, `stock_of`),
+so `serve_tax.py cost --arm prod-record` is over `prod`, stock at the same settings, with `prod-again`'s cost over
+`prod` as its noise floor, printed beside it. The three start from one environment, the job's (`VENV`), and `cost` refuses arms that
+different builds of vLLM served. Where `prod`'s server and its requests differ from the recipe's line, beside
+`published`'s two departures (above), and why:
+
+| the recipe's line | `prod` | why |
+|---|---|---|
+| no seed, uvicorn's access log on | `--seed 0`, `--disable-uvicorn-access-log` | every arm's (`serve_tax.BASE_ARGS`): the same engine seed on both sides, and no line a request in the server's log |
+| requests as an agent's client sends them: the chat endpoint, tools, sampled as the model's own configuration says, no seed | `/v1/completions` with token ids, each request decoding to its recorded length; greedy, or under `SAMPLED=1` sampled at temperature 1.0 and top-p 0.95, each request naming its `user` and carrying no seed | every arm then serves the same number of tokens whatever it generates; the parsers are loaded and parse nothing |
+
+Under `SAMPLED=1` the client sends `prod-record`, as it sends every arm that keeps the record, each user's seed with
+the request (`serve_tax.user_seed`, `sends_seed`): its replay samples the request again under that seed. `prod` is
+sent none, so vLLM samples its requests as it samples any without a seed, and what a seed changes in vLLM's sampling
+is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k. The seed is the client's; a
+served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
+pass's users have the same names in every lifetime, and a server samples much the same tokens again under one seed,
+so with the name alone every lifetime of `prod-record` would serve one sample of text where `prod`'s serve a new one
+each. The share of its drafts' tokens a text accepts sets how many steps it takes to serve, so that one sample's
+chance would be in the cost and in no interval over the lifetimes.
+
+The loads `agentic`, `agentic-full` and `agentic-256k` are a coding agent's recorded sessions: SemiAnalysis's AgentX
+traces (`serve_tax.AGENTX`, Apache-2.0), a line a session, each request its prompt's and its output's tokens and an id
+for each 64-token block of its prompt, with no token and no text. vLLM's client makes a block's tokens from its id
+(its `timed_trace` dataset), so a turn's prompt begins with the tokens of the turn before it and the engine's prefix
+cache serves them. The tokens are synthetic, so the share of its drafts the engine accepts is a synthetic prompt's;
+`cost` prints it. A session is its own chain of requests, without the groups its subagents sent, up to the first
+request that does not fit the load's context with its output: 131,072 tokens for `agentic`, the model's own limit for
+`agentic-full` (`serve_tax.session_lines`). `agentic-256k` reads the publisher's own cut of the same sessions for a
+context of 262,144 tokens (`serve_tax.AGENTX_256K`), the recipe's limit on these cards, in which no request passes
+that context, so no session of it is cut by ours. The load is closed-loop. Its rung is its users (`--loads
+agentic=4`), each a client of its own with one request in flight that sends its sessions' turns in order, each once
+the turn before has ended, so no turn arrives before the prompt it repeats is computed; `PASS_PROMPTS=agentic=N` is
+the turns each user sends in a pass. A pass's rate is its tokens over its seconds, from its users' first send to the
+last one's last answer (`serve_tax.merged`): every arm serves the same requests and as many output tokens, so the
+cost is ours's seconds for them over stock's, less one. The users end at different times, so the sum of each user's
+own rate is another figure, which counts a user that ended early as if it served the whole pass; it, the users'
+seconds summed and the GPUs' busy seconds are printed beside the cost as other readings of the same passes, in no
+verdict. Its users' sessions must fit the engine's KV pool together, or the prefix cache evicts what a later turn
+repeats: `agentic-256k` sends 12 turns a user where the others send 24, since four users' sessions of it at 24 turns pass the KV cache the
+recipe's server has on eight of these cards. Sessions loads share a job's servers (`--loads agentic=4,agentic-256k`),
+which no other load joins, and the job has a cost of each: `cost` prints the first's and then the others', each
+written beside the first's as `serving_cost.<load>.{json,txt}`.
+
+`cost` on such a load prints `serve_tax.session_cost`: the arm's cost over its stock arm, whose unit is a server
+lifetime. A lifetime's cost is the arm's seconds for the passes both arms counted in it, summed, over stock's, less
+one; the cost is the mean of the lifetimes' costs, and its 95% interval is Student's t over the lifetimes an arm. The verdict against `--target` or
+`serve_tax.SESSION_TARGET` reads that interval's upper end alone: "meets" where it is under the target. One lifetime
+an arm has no such interval, and its verdict is "cannot tell". Beside the cost and in no verdict it prints the cost
+over the passes taken as independent (the median over them with its interval, too narrow where the lifetimes' costs
+spread more than a lifetime's passes do), the spread between lifetimes and between a lifetime's passes, and the noise
+floor, stock over stock a lifetime apart, saying so where the floor's own interval leaves out zero. It says the share
+of prompt tokens the load plans to repeat beside the share each side's prefix cache served, and gives no verdict where
+a side left a request unserved, the sides served different counts of output tokens in a rep or the two caches served
+different shares in it: the sides then did not do the same work. The same work is the same requests and as many
+tokens, not the same token ids: two passes of the same prompts can serve other tokens, sampled or greedy. The count of
+output tokens is the same because every request is decoded to its recorded length whatever it generates, past any
+end-of-text token, as vLLM's own client measures; the cost's line on the load says so, and where an arm's server kept
+the served ids (`ids` in its plugin's configuration, which no stock arm has) the next line counts that arm's requests
+that served one of the checkpoint's end-of-text ids before their end and went on, with the share of its output tokens
+after one: text an agent's client would not have asked for. Beside each
+side's output tokens a second it prints its prompt and output tokens a second a GPU, the output tokens a second a
+user gets at the P90 time a token, the engine steps a pass took, and the share of its draft tokens the model accepted
+with the tokens a draft gave (the engine's own counters), so a reader sees whether a cost came with more steps or
+fewer accepted drafts; no figure is adjusted for either.
+
+~~~text
+bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record prod-again" --loads agentic=4 --reps 6
+~~~
+
+A node drifts over a job's hours, and the passes of one server lifetime share whatever that server had of its own.
+`LIFETIMES=L` serves the arms `L` times, each time a server of its own, in the arms' order and then that order turned
+round, and so on, so that the two arms' lifetimes of one number are neighbours in time and the order's effect falls on
+both alike; `TURNED=1` begins with the order turned round, so the last arm named, ours, is served first. `LEAVE_OUT=N`
+leaves each lifetime's first `N` passes out of every figure: a lifetime's first pass after its warm-up is still
+warming (compiled graphs, the prefix cache's first fill), so it is served and recorded like the rest and not counted,
+and the table and the cost say how many were left out. `WARM_S=0` sends no warm-up before a lifetime's passes: a pass
+that is left out warms the server as the warm-up does, which then only adds to the lifetime's time. The cost then pairs pass `r` of lifetime
+`k` of its two arms (`serve_tax.lifetimes`), prints each lifetime's own cost under the cost over all of them, and
+takes its noise floor from stock's own lifetimes, each second one over the one before it, where no twin of stock was
+served. Two lifetimes an arm are the fewest that give the cost an interval, and so a verdict.
+
+~~~text
+LIFETIMES=6 LEAVE_OUT=1 WARM_S=0 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record" --loads agentic=4 --reps 6
+~~~
+
 ## Running it
 
 On a node with the pinned vLLM venv, under `research run`, the C4 shard `benchmarks/ppl/datasets.json` pins sent with
@@ -316,7 +421,9 @@ utilization integrated), and `table.md` lays them out per thousand output tokens
 ## What it writes
 
 Under the job's `out/`: `plan.jsonl` (the requests), one directory per arm with its `meta.json` (the server's command,
-the plugin's changes, τ, versions, each load's start), `server/` (the server's log and the plugin's records: the step
+the plugin's changes, τ, versions, each load's start, and under `settings` the integration's value settings in force in
+the environment its server is started with, `verity_vllm.settings.record`: each variable set there that can change what
+an engine computes, a credential by name only, and their digest), `server/` (the server's log and the plugin's records: the step
 trace, each window's token roots, each KV edge's bytes and kernel time) and `<load>/rep-<r>/client.jsonl` (each request's
 send, streamed chunks and tokens), then `table.md` and `table.json` (`serve_tax.py table`): per arm and load, output tokens
 and requests a second, goodput at the SLO (TTFT and time per output token), TTFT and ITL at p50 and p99, each a mean over
@@ -324,8 +431,9 @@ reps with a 95% interval, the requests sent and not served, each load's schedule
 scheduled and the rows each sampled, from the server's `/metrics` before and after the load), and each arm's tax, its
 compute per token over the reference's at the same load less one, against `compiled` and against its parent. Below capacity the throughput is set
 by the arrivals, so the tax there reads the drain and the cost shows in the latencies; a tax beside unserved requests
-isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts, its differing requests and
-its wall time beside the served window's, and `replay_tokens.jsonl.gz` its tokens. Each request decodes to its cap, so the
+isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts, its differing requests,
+its wall time beside the served window's and the same record of its engine's environment (`settings`), and
+`replay_tokens.jsonl.gz` its tokens. Each request decodes to its cap, so the
 schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
 in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from
 serving from one that differs from itself; `REPLAY_FROM` with no `ARMS` replays an earlier job's window alone, reading
