@@ -31,6 +31,7 @@ untraced = [
     "tests/test_lean_records.py",
     "tests/test_markdown_caps_gate.py",
     "tests/test_merge_map.py",
+    "tests/test_merge_rows.py",
     "tests/test_move_check.py",
     "tests/test_mutants.py",
     "tests/test_pins.py",

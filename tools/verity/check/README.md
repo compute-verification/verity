@@ -85,6 +85,7 @@ follows.
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
+| `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
