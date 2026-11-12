@@ -82122,3 +82122,20 @@ Tags as before. Mailbox read 09:58Z, newest 09:06Z [run].
 - **#9080** [run; derived]: `main` moved to `33faab2be81c` and its `Proofs/Flock` cap to 267 and 2,141, so the merge I prepared at `19fb19a21e40` now conflicts in `unread-caps.json`. Nothing of it was pushed. I redo it once, after #9176's ready line, against `main` as it then is, the line at `main`'s cap plus 7 modules and 206 declarations (274 and 2,347 at today's cap). `fc52` and `e9fe` stand as evidence at the older `main` only.
 - **Waiting on**: `r20261112-084450-9ae4` (cpu-12, #9176's quick tier, about 11:10Z); `r20261112-093345-2f31` (cpu-13, #9212 at `40fedb72abd3`: `TRIES_BAD 0`, `BUILD_EXIT 0`; difftest, read-template tests, quick tier by about 12:00Z, timeout 12:24Z); `r20261112-083515-978c` (cpu-4, #9212's earlier head: `VLLM_EXIT 0`, quick tier by about 10:30Z) [guess for each hour].
 - **Not done**: #9176's ready line; #9080's merge, runs and ready line; #9229's records run; the 15:00Z answer (indexer check and `BlockKey`, drafted in `drafts/frame-indexer-check.md`).
+
+## COUNT, Thu 12 Nov 09:59Z: #9185 is ready at `5a4b6dc7102b`: `r20261112-090213-b15c` read exit 0, 57 suites, 57 passed, 0 failed; its control at that head is the earlier one's bytes. It sits on #9112's marked head. The new artifact to label is `art:be39ec1ff595…`
+
+Mailbox read: 31 sections, the last 09:57Z, read at 09:58Z.
+
+**Ready line, #9185.** Head `5a4b6dc7102b13f9716835b7006f6e9890972702` on `cursor/proofs-count-4d1e`. `Lane proofs`, `Refs PRF-577`. No Lean touched; every file of its own is under `benchmarks/spot_figures/`.
+- **Base:** #9112's marked head `366a6ece9985` (with `main` at `19fb19a21e40`), merged in at this head. Two files met by hand, both this pull request's own: `breakeven/headline.py` and `tests/test_headline.py`. Until #9112 lands its diff against `main` shows #9112's files too. If #9112's head moves I merge again and rerun. [read]
+- **Quick suites** at this head: `r20261112-090213-b15c`, exit 0, "57 suites: 57 passed (2 cached), 0 failed", ended 09:58Z. [run] (`r20261112-072155-f420` at the old head `d5b8ad2f528c`: exit 0, 62 passed of 62.)
+- **Control** at this head: `r20261112-090208-7acb`, exit 0, every output the bytes of `r20261112-072030-0564`: 193 block types, no planner input differing by more than 1e-9 from the plan of record's, 2,635.9 GB (2,767.7 at ×1.05, with the assumed 60.56 s). [run]
+- **The driver's three rows**, world year, the 10% point, ×1.05, modeled, before → after: 11,712.7 → **6,770.4** GB; 5,907.5 → **4,887.1**; 1,722.1 → **1,452.5**. Share of the proving seconds at the planner's assumed default price: 91% → **98%**; 80% → **95%**; 73% → **88%**. The share sentence goes beside the figure wherever it is quoted. [run `7acb`, `c645`]
+- **Against lean's branch** at `f3837f57d113` (read 09:58Z): 13 stops, `main` at `33faab2be81c` has 23 by itself; the one this head adds is #9112's `verity/protocols/spot/optimize.py`, which `f012fd5887e6` closes. None is this pull request's own. Against `main` at `33faab2be81c` it merges with no conflict. [local]
+- **Body** (14,276 bytes): the new base, the line you asked for (the card's FP8 block matmul is the census's word form at N=4, which no served partition names), both suites' verdicts, the control.
+- **To label:** the workload card's census artifact, `art:be39ec1ff595f1de7955bdc747ffcf7bdbf41f425fa37139c9e71c443ee765e1`.
+- **When it lands** the run of record moves a second time: expect **6,770.4 GB** at the first row by the driver's own reading, with 98% of its proving seconds at the planner's assumed default price. The bench's reader fits the total over all nine budgets and may print 0.1 GB more, as it does for #9112 (11,712.8 against 11,712.7); I give both when I label.
+- Please mark.
+
+**Next:** PRF-589 item 1, the entry after this one. Then, when you tell me #9112 is on `main` (I also look each hour): the run of record by the tree's own command, checked with the bench's reader, and the two labels.
