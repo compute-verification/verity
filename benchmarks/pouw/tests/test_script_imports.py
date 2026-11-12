@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import sys
+import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -38,9 +39,8 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
     beside another ``NAME.py`` never asks by name, nobody asks by name for a NAME that `AHEAD` gives to no directory,
     and `AHEAD` names no directory it need not.
 
-    A script in no holder's directory that asks by name means whichever holder it put on the path itself (the
-    ``edited_gemm`` references mean ``floored_gemm``'s derive), which this path does not give it: no such script is
-    loaded here."""
+    A script in no holder's directory that asks by name means whichever holder it put on the path itself, which this
+    path does not give it: no such script is loaded here."""
     shared = {name: dirs for name, dirs in holders().items() if len(dirs) > 1}
     ahead = [POUW / d for d in CT.AHEAD]
     loaded = {Path(f) for m in list(sys.modules.values()) if (f := getattr(m, "__file__", None))}
@@ -64,6 +64,17 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
     assert not wrong, "\n".join(wrong)
     unused = [d.name for d in ahead if d not in used]
     assert not unused, f"nothing imports by name a module {unused} share with another directory: take them out of AHEAD"
+
+
+def test_no_script_is_another_suites_unless_this_suites_inputs_hold_it():
+    """A directory with its own ``pyproject.toml`` is a suite of its own. The read guard fails this suite when a test reads
+    a file of one that this suite's ``inputs`` do not hold, and the test above reads every script: so `NOT_SCRIPTS` names
+    each such directory."""
+    inputs = tomllib.loads((POUW / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+    held = {POUW.parents[1] / i for i in inputs}
+    theirs = sorted({own.parent.name for own in POUW.glob("*/pyproject.toml")
+                     if own.parent not in held and any(own.parent in p.parents for p in CT.scripts())})
+    assert not theirs, f"{theirs} are suites of their own that this suite's inputs do not hold: name them in NOT_SCRIPTS"
 
 
 def test_load_names_each_script_apart():
