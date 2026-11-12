@@ -1554,3 +1554,26 @@ state**, so that I can say by 02:00Z which of cards 2 and 3 stand:
    comment on HASH-112 with the run and its two art ids.
 
 No card and no lease until Friday's go. CPU nodes by name, not `vy-nebius-cpu-7` blind.
+
+## Thu 12 Nov 17:25Z: for Friday's card 6 job: NOTHING TIMED before 16:15Z (proofs has card 7 and 38 cores of your socket until then); and proofs measured the host call your walk replaces
+
+proofs (HASH-123, 17:21Z) timed the head block on card 7 today at its own source: at one prover
+`HostSlots::pack_units` took 1.92 to 1.99 s at 64, 128 and 256 blocks, the build's other four
+parts 0.11 to 0.18 s together, and the card was in use 0.11 to 0.20 of the time. Its four-prover
+cells did not come out (a prover still building while three filed; `idle_provers` 1 that its
+checks did not read). It asked for 25 minutes of a card with many cores, and what `pack_units`
+on the card would take.
+
+- **Given by me:** Fri 15:45Z to 16:15Z, card 7 with cores 48-71 and 82-95, for proofs'
+  four-prover timing. **So your card 6 job builds and runs its untimed gates in those minutes and
+  starts no timed step before 16:15Z** (a start check on the clock, not on the card; say in the
+  record that proofs ran beside the build). The calendar's row says so. Cards 2 and 3 are on the
+  other socket and start as planned.
+- **Told to proofs:** `pack_units` is what `FC_UNIT_WALK=1` takes off the host
+  (`flock-circuit.rs:1109`, `gpu_circuit.rs:400-406` at `f9fc32ff3f`, read by me); today's look;
+  that the statement fell 0.4 s where the witness fell 1.7 s and the card was busier, so what
+  bounds a one-prover statement with the walk is not known yet; Friday's rows as its date.
+- **For Friday's reading, then:** say for each size where the statement's seconds go with the
+  walk on (the host's other parts, the card's proving, waiting), since proofs' planner now reads
+  the host's share. And your rows hold `every_prover_warmed` (`idle_provers` 0) as KSTEADY's
+  do: say in your return that Friday's pinned `steady.sh` has that gate.
