@@ -11,16 +11,14 @@ off the registered hardware (`Core.Site`, the site of an accepted registration l
 a network certifier and a host, the half of an uplink the certifier splits that is the host's boundary
 (`Core.Site.Boundary`, `Core.Site.Certified`), and the key is the one that certifier registered. It returns what the
 registration states of them (`Registered`): the link's id, its host end, the certifier's id and registered key, the
-link's capacity `β` in bits a second each way, and the head of the log the site was read at, which it carries and
-doesn't read.
+link's capacity `β` in bits a tick each way, and the head of the log the site was read at, which it carries and doesn't
+read.
 
 It refuses, by name:
 
 * a link that is no link of the site;
 * a link that doesn't join a network certifier and a host: the certifier's other half, to the outside, a host's bare
   uplink, a link between two hosts, a memory challenger's link;
-* a network certifier's link that states no capacity: a valid Site has none, since a link states none only where no
-  certifier splits it (`Core.Site.Link.unmediated`);
 * a certifier whose registered key is not lower-case hex, and a key that is not the certifier's registered key
   (`keyRefusal`).
 
@@ -42,7 +40,7 @@ open Lean (Json)
 open Flock (V)
 
 /-- What the registered hardware states of a network certifier's link: the link's id, its host end, the certifier's id
-and registered key, the link's capacity `β` in bits a second each way, and the head of the log it was read at. -/
+and registered key, the link's capacity `β` in bits a tick each way, and the head of the log it was read at. -/
 structure Registered where
   head : String
   link : String
@@ -94,9 +92,8 @@ def keyRefusal (c : Core.Site.Loc) (key : String) : Option String :=
 /-- **The network certifier's link and key, as registered.** `link` names a link of `S` that joins a network certifier
 and a host, and `key` is that certifier's registered key (`keyRefusal`): the link's id, its host end, the certifier's id
 and key and the link's `β`, with `head`, the head of the log `S` was read at, carried unread. A link that is no link of
-`S`, one that doesn't join a network certifier and a host, a key that is not the certifier's and a link that states no
-capacity are each refused, the first three naming the network certifiers' links of `S` or the certifier's registered
-key. -/
+`S`, one that doesn't join a network certifier and a host, and a key that is not the certifier's are each refused,
+naming the network certifiers' links of `S` or the certifier's registered key. -/
 def registered (S : Core.Site) (head link key : String) : V Registered := do
   let some k := S.links.find? (·.id == link)
     | throw s!"link {link}: no link of the registered hardware; {rightLinks S}"
@@ -106,9 +103,7 @@ def registered (S : Core.Site) (head link key : String) : V Registered := do
   let (c, host) := if S.kind? k.ends.1 = some .certifier then k.ends else (k.ends.2, k.ends.1)
   let some x := S.loc? c | throw s!"link {link}: network certifier {c} is not registered"
   if let some why := keyRefusal x key then throw s!"link {link}: {why}"
-  let some β := k.β
-    | throw s!"link {link}: it states no capacity; a network certifier's link states its line rate"
-  pure { head, link := k.id, host, certifier := c, key := x.key, β }
+  pure { head, link := k.id, host, certifier := c, key := x.key, β := k.β }
 
 /-! ## The registration's example
 
@@ -136,9 +131,9 @@ private def exampleLocs (key : String) : List Loc :=
 
 /-- The example's links: the host's uplink, which the certifier splits, and the memory challenger's link. -/
 private def exampleLinks : List Link :=
-  [{ id := "up0", ends := ("node0", "cert0"), β := some 100, latency := 1 },
-   { id := "up1", ends := ("cert0", outside), β := some 100, latency := 1 },
-   { id := "mc0", ends := ("chal0", "node0"), β := some 10, latency := 1 }]
+  [{ id := "up0", ends := ("node0", "cert0"), β := 100, latency := 1 },
+   { id := "up1", ends := ("cert0", outside), β := 100, latency := 1 },
+   { id := "mc0", ends := ("chal0", "node0"), β := 10, latency := 1 }]
 
 /-- The example's site with its certifier's key in the registered form, and beside it a second host behind a second
 network certifier, a link between the two hosts and the second host's bare uplink. -/
@@ -148,10 +143,10 @@ private def site : Core.Site :=
      [{ id := "node1", kind := .host, parent := some "site0" },
       { id := "cert1", kind := .certifier, parent := some "site0", owner := .auditor, key := key1 }],
    exampleLinks ++
-     [{ id := "up2", ends := ("cert1", "node1"), β := some 40, latency := 1 },
-      { id := "up3", ends := ("cert1", outside), β := some 40, latency := 1 },
-      { id := "hh0", ends := ("node0", "node1"), β := some 400, latency := 1 },
-      { id := "up4", ends := ("node1", outside), β := some 10, latency := 1 }]⟩
+     [{ id := "up2", ends := ("cert1", "node1"), β := 40, latency := 1 },
+      { id := "up3", ends := ("cert1", outside), β := 40, latency := 1 },
+      { id := "hh0", ends := ("node0", "node1"), β := 400, latency := 1 },
+      { id := "up4", ends := ("node1", outside), β := 10, latency := 1 }]⟩
 
 private def refusal (S : Core.Site) (link key : String) : Option String :=
   match registered S "h" link key with
@@ -174,24 +169,18 @@ private def links : String := "the network certifiers' links there are [up0, up2
   some s!"link hh0: it joins host node0 and host node1, not a network certifier and a host; {links}"
 #guard refusal site "mc0" key0 ==
   some s!"link mc0: it joins challenger chal0 and host node0, not a network certifier and a host; {links}"
--- a network certifier's link that states no capacity
-#guard refusal { site with links := [{ id := "up0", ends := ("node0", "cert0"), β := none, latency := 1 }] }
-    "up0" key0 ==
-  some "link up0: it states no capacity; a network certifier's link states its line rate"
 -- a link to an end nothing registers
-#guard refusal { site with links := [{ id := "up0", ends := ("cert0", "node9"), β := some 1, latency := 1 }] }
-    "up0" key0 ==
+#guard refusal { site with links := [{ id := "up0", ends := ("cert0", "node9"), β := 1, latency := 1 }] } "up0" key0 ==
   some "link up0: it joins certifier cert0 and node9, which is not registered, not a network certifier and a host; \
     the network certifiers' links there are []"
 -- the outside is the outside, whatever is registered under its name
 #guard refusal { site with locs := site.locs ++ [{ id := outside, kind := .host }],
-                           links := { id := "up5", ends := ("cert0", outside), β := some 9, latency := 1 } ::
-                             site.links }
+                           links := { id := "up5", ends := ("cert0", outside), β := 9, latency := 1 } :: site.links }
     "up5" key0 ==
   some s!"link up5: it joins certifier cert0 and the outside, not a network certifier and a host; {links}"
 -- a name the site gives twice: the first link and the first location of it
 #guard (registered { site with locs := site.locs ++ [{ id := "cert0", kind := .certifier, key := key1 }],
-                               links := site.links ++ [{ id := "up0", ends := ("node1", "cert1"), β := some 7,
+                               links := site.links ++ [{ id := "up0", ends := ("node1", "cert1"), β := 7,
                                                          latency := 1 }] }
     "h" "up0" key0).toOption == some ⟨"h", "up0", "node0", "cert0", key0, 100⟩
 -- another certifier's key, and a key no certifier registers
