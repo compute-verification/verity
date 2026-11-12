@@ -54,6 +54,7 @@ from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
 from verity_vllm.program.predict import aot as A
 from verity_vllm.program.predict.node import node_parameters
+from verity_vllm.records.schema_ids import NODE_REGISTRATION_SCHEMA
 
 logger = init_logger(__name__)
 
@@ -274,7 +275,7 @@ def register(o: Options) -> dict[str, Any]:
     reg = RL.record(digest, P.params, theta, entries, window)
     for name in ("record", "trusted", "provenance"):
         (out / f"{name}.json").write_text(json.dumps(reg[name], separators=(",", ":")) + "\n")
-    doc = {"schema": "verity-vllm/node-registration/v1", "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
+    doc = {"schema": NODE_REGISTRATION_SCHEMA, "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
            "wrapper": o.wrapper, "shape": shape, "commit_out": str(commit_out), "pair": pair, "window": window,
            "theta_parameters": len(P.theta), "theta_nodes": len(theta), "rows": sum(e["leaves"] for e in entries.values()),
            "checkpoint": checkpoint, "ranks": ranks, "salts": str(salts),

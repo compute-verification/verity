@@ -68,6 +68,7 @@ from verity_vllm.pipeline import manifest as MN
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query.required import QUERY_OF_RECORD
 from verity_vllm.records.predicted_row import FILE, PredictedRow
+from verity_vllm.records.schema_ids import AOT_COMPARISON_SCHEMA
 
 from . import score as S
 from .build import build_program
@@ -76,7 +77,7 @@ from .phi import Phi
 
 logger = init_logger(__name__)
 
-SCHEMA = "verity-vllm/aot-comparison/v1"
+SCHEMA = AOT_COMPARISON_SCHEMA
 #: what a predicted row's `build_workload/workload_program.json` names as its maker
 ROW_BUILT_BY = "verity_vllm.program.predict.aot"
 #: the traced derive dir's files a switched row's carries as written; `instances.json.gz` is the predicted Program's own

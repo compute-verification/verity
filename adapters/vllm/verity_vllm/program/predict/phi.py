@@ -22,9 +22,9 @@ import json
 from dataclasses import dataclass, field, fields
 from typing import Any
 
-__all__ = ["Phi"]
+from verity_vllm.records.schema_ids import PHI_SCHEMA
 
-PHI_SCHEMA = "verity-predict/phi/v1"
+__all__ = ["Phi"]
 
 
 @dataclass

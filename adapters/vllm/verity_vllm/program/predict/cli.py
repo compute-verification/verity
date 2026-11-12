@@ -23,6 +23,7 @@ from verity.circuits.codec import canonical_json
 
 from verity_vllm.config import UsageError, option
 from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import PREDICT_NODE_SCHEMA
 
 from . import aot as A
 from . import compiled as PC
@@ -66,7 +67,7 @@ def node_main(a: NodeOptions) -> int:
     os.makedirs(a.out, exist_ok=True)
     with gzip.open(os.path.join(a.out, "node_descriptor.json.gz"), "wb") as f:
         f.write(canonical_json(r.desc))
-    doc = {"schema": "verity-predict/node/v1", "row": a.row, "context_digest": phi.digest(), **r.summary(),
+    doc = {"schema": PREDICT_NODE_SCHEMA, "row": a.row, "context_digest": phi.digest(), **r.summary(),
            "theta": list(r.theta), "spans": [list(s) for s in r.spans]}
     with open(os.path.join(a.out, "node.json"), "w") as f:
         json.dump(doc, f, indent=1, sort_keys=True)
