@@ -72,6 +72,7 @@ from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.telemetry.admission import CALIBRATION
 from verity_vllm.pipeline.timeline import Timeline
 from verity_vllm.program.compiled_relations import warm_vml
+from verity_vllm.records.schema_ids import REPLAY_SLIM_SCHEMA
 
 __all__ = ["OnRead", "Options", "Refused", "WORDS", "main", "manifest_of", "of_record", "open_weights", "opener",
            "provider", "registered_roles", "replay_args", "tensor_root_of", "tree_refusal", "weights_attest",
@@ -84,7 +85,7 @@ ATTESTS = ("every weight field the replay consumed, composed from the checkpoint
 #: registered dtype -> (the Program's value bits, the words the replay reads): the widths the live provider serves
 WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn": (8, np.uint8), "float8_e4m3fnuz": (8, np.uint8),
          "uint8": (8, np.uint8), "int8": (8, np.uint8), "int32": (32, np.uint32)}
-SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
+SLIM_SCHEMA = REPLAY_SLIM_SCHEMA
 SLIM_DOC = "slim.json"
 PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick, in draw order"
 

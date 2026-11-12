@@ -20,6 +20,7 @@ from verity_vllm.check.replay import driver
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.timeline import Timeline
+from verity_vllm.records import schema_ids
 
 DEFERRED, _ = RB.deferred_records(RB.path("/o", 1))
 
@@ -183,3 +184,8 @@ def test_a_discarded_bundle_leaves_nothing(tmp_path):
     (RB.partial(tmp_path, 1) / "store").mkdir(parents=True)
     RB.discard(tmp_path, 1)
     assert not RB.partial(tmp_path, 1).exists() and not RB.path(tmp_path, 1).exists()
+
+
+def test_the_bundle_and_the_slim_keep_read_their_schema_ids_from_the_records_package():
+    """Each record's id is written once, in `records.schema_ids`: a writer here and a reader elsewhere cannot hold two."""
+    assert RB.SCHEMA is schema_ids.REPLAY_BUNDLE_SCHEMA and CPU.SLIM_SCHEMA is schema_ids.REPLAY_SLIM_SCHEMA

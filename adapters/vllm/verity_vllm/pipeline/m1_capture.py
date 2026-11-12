@@ -35,6 +35,7 @@ import time
 from typing import TYPE_CHECKING
 
 from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import SPEC_TOKENS_SCHEMA
 
 if TYPE_CHECKING:
     from verity_vllm.acquire.plan import AcquisitionPlan
@@ -297,7 +298,7 @@ def main(args: Options) -> None:
     # loader produced from the checkpoint's tokenizer, per-request output limits, arrival steps, sampling parameters, and the engine
     # kwargs the harness resolved.  Written before the warm-up; nothing observed from the run goes in here (tokens.json is the record).
     (out / "spec_tokens.json").write_text(json.dumps({
-        "schema": "verity-gen/spec-tokens/v1", "known_before_execution": True,
+        "schema": SPEC_TOKENS_SCHEMA, "known_before_execution": True,
         "tokenizer": {"repo": eng.cp["repo"], "revision": eng.cp.get("revision")},
         "requests": [{"request_id": r["request_id"], "prompt_token_ids": r["prompt_token_ids"], "prompt_len": len(r["prompt_token_ids"]),
                       "max_tokens": r["max_tokens"], "arrive_step": int(r.get("arrive_step") or 0)} for r in wl["requests"]],
