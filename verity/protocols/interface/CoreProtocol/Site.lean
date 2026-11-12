@@ -173,7 +173,8 @@ empty on every other location. `key` is the public key one of the auditor's devi
 both empty on every other location.
 `drift` is how far the clock of one of the auditor's devices may run from real time, as a share of it; none
 on every other location, and a device that states none times nothing. `timeUnit` is the Site's unit of time in seconds,
-on a location of kind `site` and none on every other (`Site.timeUnit`). -/
+on a location of kind `site` and none on every other (`Site.timeUnit`). `timebase` is the SKU of the time base the
+clock of an auditor's host runs on, the card the auditor reads the clock's drift from; none on every other location. -/
 structure Loc where
   id : String
   kind : Kind
@@ -189,6 +190,7 @@ structure Loc where
   shared : List (Tier × Nat) := []
   drift : Option Figure := none
   timeUnit : Option Figure := none
+  timebase : Option String := none
   deriving DecidableEq
 
 /-- The auditor's figures for one memory leaf directly under a host: the host it is under, the bits a second read from
@@ -351,9 +353,9 @@ structure Digests where
 /-- What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
 SKU's; the tolerance registration allows around an estimate; the key of each of its own devices and hosts, by its id;
 its figures for each memory leaf directly under a host, by the leaf's id; its figures for each host of the prover's, by
-the host's id; and how far each of its own devices' clocks may run from real time, by the device's id. That these
-figures are the hardware is a public input: no check holds it and no premise says it, and a result is over the
-registered hardware. -/
+the host's id; how far each of its own devices' clocks may run from real time, by the device's id; and the time base
+of each of its own hosts, its SKU by the host's id. That these figures are the hardware is a public input: no check
+holds it and no premise says it, and a result is over the registered hardware. -/
 structure Auditor where
   sheet : String → Option Sheet
   tolerance : Figure
@@ -362,6 +364,7 @@ structure Auditor where
   memory : List (String × MemoryFigures) := []
   hosts : List (String × HostFigures) := []
   drift : List (String × Figure) := []
+  timebases : List (String × String) := []
 
 /-- The auditor's estimate its sheet `a` states: `a`'s figures, at the auditor's tolerance. -/
 def Auditor.estimate (A : Auditor) (a : Sheet) : DeviceEstimate := ⟨a.figures, A.tolerance⟩
@@ -452,13 +455,15 @@ def Capacity : Prop :=
     ∀ x ∈ (S.add e).locs, x.kind = .device → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
 
 /-- `owner`: each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key, its
-key's scheme, one the check knows (`SCHEMES`), and the auditor's figure for its clock, below 1 where there is one; and
-every other new location is the prover's and states no scheme and no clock. -/
+key's scheme, one the check knows (`SCHEMES`), and the auditor's figure for its clock, below 1 where there is one; every
+other new location is the prover's and states no scheme and no clock; and each new auditor's host states its time
+base, the auditor's for it, held as its key is, and no other new location states one. -/
 def Owners : Prop :=
   ∀ x ∈ e.locs,
     (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key ∧ A.scheme x.id = some x.scheme ∧
       x.scheme ∈ SCHEMES ∧ x.drift = A.drift.lookup x.id ∧ (x.drift.all fun (q : Figure) => decide (q.1 < 1)) = true) ∧
-    (x.kind.auditor = false → x.owner = .prover ∧ x.scheme = "" ∧ x.drift = none)
+    (x.kind.auditor = false → x.owner = .prover ∧ x.scheme = "" ∧ x.drift = none) ∧
+    if x.kind = .auditorHost then ∃ t ∈ A.timebases.lookup x.id, x.timebase = some t else x.timebase = none
 
 /-- `uncertified`, onsite: every boundary link is certified, or says why no certifier splits it. -/
 def Covered : Prop :=
@@ -724,7 +729,8 @@ def Loc.toJson (x : Loc) : Json :=
     ("drift", optJson Figure.toJson x.drift), ("id", .str x.id), ("key", .str x.key), ("kind", .str x.kind.name),
     ("owner", .str x.owner.name), ("parent", optJson .str x.parent), ("scheme", .str x.scheme),
     ("shared", .arr (x.shared.map sharedJson).toArray), ("sheet", .str x.sheet),
-    ("tier", optJson (fun t : Tier => .str t.name) x.tier), ("time_unit", optJson Figure.toJson x.timeUnit)]
+    ("tier", optJson (fun t : Tier => .str t.name) x.tier), ("time_unit", optJson Figure.toJson x.timeUnit),
+    ("timebase", optJson .str x.timebase)]
 
 def Link.toJson (k : Link) : Json :=
   Json.mkObj [("beta", optJson Lean.toJson k.β), ("ends", .arr #[.str k.ends.1, .str k.ends.2]), ("id", .str k.id),
@@ -796,7 +802,7 @@ private def sharedOf (j : Json) : V (Tier × Nat) := do
 
 def Loc.ofJson (j : Json) : V Loc := do
   exactly j ["bw", "bytes", "chip", "drift", "id", "key", "kind", "owner", "parent", "scheme", "shared", "sheet",
-    "tier", "time_unit"] "a location"
+    "tier", "time_unit", "timebase"] "a location"
   let get := fun k => Flock.J.get j k "a location"
   pure { id := ← Flock.J.str j "id" "a location",
          kind := ← byName [.site, .host, .device, .memory, .certifier, .challenger, .auditorHost, .outside] Kind.name
@@ -811,7 +817,8 @@ def Loc.ofJson (j : Json) : V Loc := do
          chip := ← optOf (Flock.J.asNat · "a location's chip") (← get "chip"),
          shared := ← (← Flock.J.arr j "shared" "a location").toList.mapM sharedOf,
          drift := ← optOf (Figure.ofJson · "a location's drift") (← get "drift"),
-         timeUnit := ← optOf (Figure.ofJson · "a location's time unit") (← get "time_unit") }
+         timeUnit := ← optOf (Figure.ofJson · "a location's time unit") (← get "time_unit"),
+         timebase := ← optOf (Flock.J.asStr · "a location's time base") (← get "timebase") }
 
 def Link.ofJson (j : Json) : V Link := do
   exactly j ["beta", "ends", "id", "latency", "unmediated"] "a link"
@@ -847,10 +854,13 @@ def Registration.ofJson (j : Json) : V (Registration.Composite × Registration) 
   pure (← Registration.Composite.ofJson (← Flock.J.get j "composite" "the log"),
     ← (← Flock.J.arr j "entries" "the log").toList.mapM Registration.Entry.ofJson)
 
-/-- The auditor as `Auditor.to_json` writes it: its devices' keys, its data sheets, the first under an SKU or a device
-being the one the check reads, and its tolerance. -/
+/-- The auditor as `Auditor.to_json` writes it: its devices' and hosts' keys, its data sheets, the first under an SKU
+or a device being the one the check reads, its hosts' time bases and its tolerance. -/
 def Registration.Auditor.ofJson (j : Json) : V Registration.Auditor := do
-  exactly j ["drift", "hosts", "keys", "memory", "sheets", "tolerance"] "the auditor"
+  exactly j ["drift", "hosts", "keys", "memory", "sheets", "timebases", "tolerance"] "the auditor"
+  let timebases ← (← Flock.J.arr j "timebases" "the auditor").toList.mapM fun t => do
+    exactly t ["id", "sku"] "a host's time base"
+    pure (← Flock.J.str t "id" "a host's time base", ← Flock.J.str t "sku" "a host's time base")
   let drift ← (← Flock.J.arr j "drift" "the auditor").toList.mapM fun d => do
     exactly d ["drift", "id"] "a device's drift"
     pure (← Flock.J.str d "id" "a device's drift",
@@ -878,7 +888,7 @@ def Registration.Auditor.ofJson (j : Json) : V Registration.Auditor := do
         shared := ← (← Flock.J.arr h "shared" "a host's figures").toList.mapM sharedOf }
     pure (← Flock.J.str h "id" "a host's figures", f)
   let sheets ← (← Flock.J.arr j "sheets" "the auditor").toList.mapM Sheet.ofJson
-  pure { sheet := fun sku => sheets.find? (·.sku == sku), memory, hosts, drift,
+  pure { sheet := fun sku => sheets.find? (·.sku == sku), memory, hosts, drift, timebases,
          tolerance := ← Figure.ofJson (← Flock.J.get j "tolerance" "the auditor") "the auditor's tolerance",
          key := fun i => (keys.find? (·.1 == i)).map (·.2.1),
          scheme := fun i => (keys.find? (·.1 == i)).map (·.2.2) }
