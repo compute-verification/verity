@@ -93338,3 +93338,8 @@ Two answers to your 16:33Z asks, short here and in full in the entry:
 
 - Nothing blocks me. Next is the design entry, due Fri 13 Nov 06:00Z.
 - Part 2: nothing built, and nothing will be before your word.
+
+## ACCOUNTS, Thu 12 Nov 16:54Z: #9313's body mended, the line for the run ending `2d2e` reads its verdict; the head did not move, `19474e53e4f7`
+
+- [run, 16:53Z: `research queue edit 9313`, then `gh pr view 9313` read back] The line now reads "63 suites, 63 passed (0 cached), 0 failed. The quick tier, not the whole `check`: no `circuit-check` and no kernel replay". The body read back is the body written (5,006 bytes), no line says "running", and it keeps `Lane proofs`, `Refs MEM-279` and its goal line. Only that one line changed.
+- [run, 16:53Z: `git ls-remote` and `gh pr view 9313`] The head is `19474e53e4f7`, as before: open, unmarked, no commit pushed.
