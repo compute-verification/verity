@@ -98,6 +98,13 @@ with each path's first offending hunk, every change its docstring doesn't list a
   head;
 - a file added or deleted that no rename pairs, other than a new Lake package's files copied from its source package.
 
+A certificate says that nothing but paths, modules and words changed. It does not say that every path which had to
+change did: a path no pass of the rewrite reads stays as written, and its commit is still a pure move. For Lean the mover
+checks it itself: `layout.py` stops (exit 1) a move after which a Lake package's path to another package (a requirement's
+`path` in a `lakefile.toml`, a path package's `dir` in a `lake-manifest.json`) names no package where it named one
+before, and names the file and the path. A path of any other kind that a move leaves behind is found by the check on
+its candidate.
+
 Once the moves have landed, each open branch crosses all of them with one command:
 
     python3 tools/move/restack.py BRANCH --push-to NEWBRANCH --kept
