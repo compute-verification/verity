@@ -3171,6 +3171,36 @@ def test_the_tick_that_puts_a_staged_batch_on_main_s_chain_builds_on_what_it_put
     assert (drop["action"], drop["sha"]) == ("drop", sha)
 
 
+def test_at_lean_0_a_pin_puts_no_lean_batch_ahead_of_a_pr_changing_a_lean_input_which_is_built_before_the_next_is_staged(env):
+    """End to end at `--lean 0`, pinned Lean batches back to back: #2 is pinned while pinned #1 is staged, and #3, which
+    changes check's code, a Lean input, is marked beside it and kept out of every build.  The tick that puts #1 on main's
+    chain stages no batch of #2: #3 goes first, built on #1's candidate, and the next tick stages #2 on #3's, its records
+    run started then."""
+    head = env.put(1, LEAN)
+    env.put(2, {"other/B.lean": "theorem b : True := trivial\n", "other/lean-audit.json": '{"records": 1}\n'})
+    (pins := env.tmp / "pins").write_text("1\n")
+    records = Records(env.tmp / "clone")
+    loop = env.loop(vqueue.decide, records=records, lean=0)
+    loop.world.slim_driver, loop.world.pins_file = (lambda: "drive"), pins
+    staged, started = loop.tick()
+    sha = staged["sha"]
+    assert (staged["members"], staged["heads"], staged["records_first"], started["action"]) == ([1], [head], True, "regenerate")
+    pins.write_text("1\n2\n")
+    env.put(3, {"tools/verity/check/notes.txt": "3\n"})
+    assert loop.tick() == [] and records.started == [("drive", sha)]
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, fixed, built = loop.tick()
+    assert (fixed["action"], fixed["members"], fixed["repairs"], fixed["enqueued"]) == ("build", [1], sha, True), fixed
+    assert (built["action"], built["members"], built["base"], built["enqueued"]) == ("build", [3], fixed["sha"], True), built
+    assert records.started == [("drive", sha)]
+    drop, next_, began = loop.tick()
+    assert (drop["action"], drop["sha"]) == ("drop", sha)
+    assert (next_["action"], next_["members"], next_["base"], next_["records_first"], next_["enqueued"]) == (
+        "build", [2], built["sha"], True, False), next_
+    assert (began["action"], began["sha"]) == ("regenerate", next_["sha"])
+    assert records.started == [("drive", sha), ("drive", next_["sha"])]
+
+
 def test_a_tick_whose_commit_stages_its_batch_again_or_is_held_builds_nothing_after_it(env):
     """A build after a Commit goes on what the Commit put on main's chain.  Staged again on a top whose Lean inputs aren't
     the batch's, or its records commit held, it put nothing there: the tick builds nothing after it, logs nothing of that

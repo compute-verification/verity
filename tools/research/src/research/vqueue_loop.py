@@ -222,7 +222,7 @@ KEEP_RUNS = Path("/data/vqueue/live/keep-runs")
 WIDE = Path("/data/vqueue/live/wide")
 #: the pinned PRs, one number a line (`#` comments and blank lines allowed): while a pinned Lean PR waits, a Lean batch holds
 #: pinned Lean PRs only, under no `LEAN` cap: a pin orders a Lean batch or cuts it, and at `--lean 0` only a pinned Lean PR
-#: opens one (`vqueue._next`)
+#: opens one; it puts no batch ahead of a PR changing a Lean input, which goes first (`vqueue._next`)
 PINS = Path("/data/drive/pins")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
@@ -3193,10 +3193,10 @@ def main(argv: list[str]) -> int:
                                                              f"its check (default {DEPTH})")
     ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a Lean candidate, each with a Lean change "
                                                            f"that compiles (a spec's or a Lean source's, not a lock's "
-                                                           f"alone): one opens whenever none is staged, of the first in "
-                                                           f"rank, whether or not a PR with no Lean change waits; 0: only "
-                                                           f"pinned ones open one, which take no cap (--pins-file) (default "
-                                                           f"{LEAN})")
+                                                           f"alone): one opens whenever none is staged and no PR "
+                                                           f"changing a Lean input with no Lean change waits, of the first "
+                                                           f"in rank, whether or not another PR waits; 0: only pinned ones "
+                                                           f"open one, which take no cap (--pins-file) (default {LEAN})")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
@@ -3205,7 +3205,8 @@ def main(argv: list[str]) -> int:
                     help=f"the pinned PRs, one number a line, `#` comments and blank lines allowed, read each tick as "
                          f"--priority-file is: while a pinned Lean change waits, a Lean candidate holds pinned Lean changes "
                          f"only, under no --lean cap, so a pin orders a Lean candidate or cuts it, and with --lean 0 it is the "
-                         f"only way into one; none while the file is missing or empty (default {PINS})")
+                         f"only way into one; it puts none ahead of a PR changing a Lean input, which goes first; none while "
+                         f"the file is missing or empty (default {PINS})")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")

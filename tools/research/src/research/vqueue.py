@@ -64,10 +64,11 @@ change.  A Lean batch opens whenever none is staged, whether or not PRs with no 
 in rank, up to `lean`, so none at 0; or, while a pinned Lean PR (`Snapshot.pinned`) that a batch may take waits, the pinned
 ones alone, up to `batch` and under no `lean` cap.  A pin orders a Lean batch or cuts it, and at `lean` 0 it is the only way
 into one.  Staged, the batch takes no build from the PRs with no Lean change: the tick that stages it builds theirs beside it.
-It keeps those changing a Lean input out for its whole records run, though, so one of them in the tick's batch that ranks
-before a Lean batch with no pin goes first, and that batch is staged once it is built.  With no records run (`Snapshot.records`
-off) a Lean batch takes the tick's build and a place on the chain, so it is built only on `main` or on a top candidate holding
-no Lean change, at most every second build; while it waits for such a top the tick's batch is of PRs with no Lean change, and
+It keeps those changing a Lean input out for its whole records run, though, so they go first: no Lean batch is staged,
+pinned or not, while one of them that a batch may take waits, whatever its rank.  So only a batch staged before such a PR
+was ready keeps it out, and it is in a build before the next is staged.  With no records run (`Snapshot.records` off) a
+Lean batch takes the tick's build and a place on the chain, so it is built only on `main` or on a top candidate holding no
+Lean change, at most every second build; while it waits for such a top the tick's batch is of PRs with no Lean change, and
 with none to take nothing is built (`Wait`), as while the chain holds a wide Lean change (`Snapshot.wide`) or, with a records
 run, a lone PR set aside before that changes a Lean input, whose next erring check would stage again a batch staged on it.
 """
@@ -96,7 +97,8 @@ class Ready:
     rank: int = 0                  # the queue's order, lowest first (drive's priority file, then mark time)
     conflict: bool = False         # it doesn't merge onto `main`: the queue skips it until its head changes
     lean_input: bool = False       # a path of ``files`` is a Lean input (`vqueue_slim.lean_inputs`, what `lean_key` hashes),
-                                   # Lean change or not: no batch takes it beside a staged batch (`_pool`)
+                                   # Lean change or not: no batch takes it beside a staged batch (`_pool`), and with no Lean
+                                   # change no Lean batch is staged while it waits (`_next`)
 
 
 @dataclass(frozen=True)
@@ -313,12 +315,12 @@ def decide(s: Snapshot) -> list[Action]:
     records run calls for, then the tick's builds on the chain's top: a Lean batch while none is staged (`_next`), and, while
     the chain is shorter than `depth`, one batch of PRs with no Lean change: one a tick, since the batch above it would sit on
     the sha the loop gives this one.  The Lean batch is staged with its records run first (`Build.records`), ahead of the batch
-    built beside it; it takes no place in the chain, so it is built on the top of a full chain too, and one with no pin lets a
-    PR changing a Lean input that ranks before it go first (`_next`).  With no records run (`Snapshot.records` off) it takes a
-    place in the chain and is the tick's one build.  While the chain holds a wide member (`Snapshot.wide`), no Lean batch
-    opens: built on it, a Lean change would build again what the wide one built; nor while it holds a PR set aside before that
-    changes a Lean input (`_next`); and while Lean PRs wait so with no PR with no Lean change to take, nothing is built and
-    `Wait` says why.
+    built beside it; it takes no place in the chain, so it is built on the top of a full chain too, and none is staged while a
+    PR changing a Lean input that a batch may take waits: it goes first (`_next`).  With no records run (`Snapshot.records`
+    off) it takes a place in the chain and is the tick's one build.  While the chain holds a wide member (`Snapshot.wide`), no
+    Lean batch opens: built on it, a Lean change would build again what the wide one built; nor while it holds a PR set aside
+    before that changes a Lean input (`_next`); and while Lean PRs wait so with no PR with no Lean change to take, nothing is
+    built and `Wait` says why.
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
@@ -765,9 +767,10 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
     no Lean change waits: while a pinned one (`Snapshot.pinned`) that a batch may take (`_takes`) waits, the pinned ones alone,
     up to `batch` and under no `lean` cap; else the first in rank, up to `lean`, so at 0 none but a pinned one set aside.  A
     lone one set aside opens a batch only in its turn, behind every PR of ``pool`` a batch may take and every one set aside
-    longer, whatever their change (`_batch`; at `lean` 0, no Lean PR but a pinned one).  With a records run, a batch with
-    no pin waits while the next batch of PRs with no Lean change holds one changing a Lean input (`Ready.lean_input`) that
-    ranks before it: staged, it would keep that PR out for its whole run, and each batch staged after it again.  None opens
+    longer, whatever their change (`_batch`; at `lean` 0, no Lean PR but a pinned one).  With a records run, none opens,
+    pinned or not, while ``pool`` holds a PR with no Lean change that changes a Lean input (`Ready.lean_input`) and that a
+    batch may take, whatever its rank: staged, the batch would keep that PR out of every build for its whole run, and each
+    batch staged after it again, so the PR goes first, in the tick's batch or a later one.  None opens
     while the chain holds a wide Lean change; nor, with a records run, while it holds a lone PR set aside before at its
     head (`_told`) that changes a Lean input: when its check errs again it leaves the chain, and a batch staged on it is
     staged again; nor, with no records run (`Snapshot.records` off: it takes the tick's build and a place on the chain), on
@@ -780,10 +783,8 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
     if members and not _takes(leans[members[0]], newest) and members != _batch(
             [r for r in pool if not r.lean or s.lean or r in pinned], outcomes, s.batch, s.batch, s.wide):
         return (), ""
-    if s.records and members and members[0] not in s.pinned:
-        first, plain = (leans[members[0]].rank, members[0]), _batch(pool, outcomes, s.batch, 0, s.wide)
-        if any(r.lean_input and _takes(r, newest) and (r.rank, r.number) < first for r in pool if r.number in plain):
-            return (), ""
+    if s.records and members and any(r.lean_input and not r.lean and _takes(r, newest) for r in pool):
+        return (), ""
     wide = [m for c in chain for m in c.members if m in built and _wide(built[m], s.wide)]
     aside = [c.members[0] for c in chain if s.records and len(c.members) == 1 and _told(c, outcomes)
              and (r := built.get(c.members[0])) is not None and (r.lean or r.lean_input)]
