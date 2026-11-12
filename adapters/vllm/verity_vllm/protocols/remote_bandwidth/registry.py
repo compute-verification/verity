@@ -58,6 +58,7 @@ from verity_vllm.protocols.remote_bandwidth.interface import (
     Append,
     Backing,
     BlockOpening,
+    ChainHead,
     Codec,
     Counters,
     Layout,
@@ -65,7 +66,6 @@ from verity_vllm.protocols.remote_bandwidth.interface import (
     PassCommitment,
     Receipt,
     RegionInfo,
-    Registration,
     Segment,
     Source,
     Stale,
@@ -365,8 +365,8 @@ class NodeMemory:
                    "filler": KV_FILLER})
         return tuple(self._by_name[n].info for n in names)
 
-    def registration(self) -> Registration:
-        return Registration(self._log_count, self._log_root)
+    def registration(self) -> ChainHead:
+        return ChainHead(self._log_count, self._log_root)
 
     def layout(self) -> Layout:
         by_tier: dict[str, int] = {}
