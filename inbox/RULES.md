@@ -59,6 +59,13 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 
 ## Agents, today
 
+- **Daniel on models, Thu 12 Nov (top, TOP-402, 17:45Z): "Opus 5.5 does the work; Fable 5.2 plans it."** Every
+  launch names its model, never `inherit`: `claude-opus-5-5-high` for a worker (moving files, reading code, a
+  count, a specified change with its tests, a merge, a review, a timed job from a prepared launcher);
+  `claude-fable-5-2-xhigh` only for a worker whose task is to plan, design or decide where no check catches an
+  error. If you launch a subagent of your own, name its model and say it in its brief. A worker on the lead's
+  model finishes its turn; what is left that is Opus's goes to a new Opus worker, so **write your note and your
+  return so that someone who was not there can go on from them**: commands, sha256, run ids, traps.
 - **Changed at 03:37Z Wed: the move is on `main`, so the agent cap is 100 again** (top, TOP-398 03:34Z; 66 were
   running). When your work has ended, or you only wait (on a run, on an owner's answer), end your turn at once,
   note written and pushed, saying what you wait on. Runs you queued keep running without you. One worker (KMOVE)
