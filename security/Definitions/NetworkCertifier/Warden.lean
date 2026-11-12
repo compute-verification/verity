@@ -17,6 +17,10 @@ late: the network certifier fails the connection closed there, with one fail cel
 lane to its scheduled end with padding. The end of the data counts as a cell too: the server's end of stream must reach
 the network certifier by the bucket of the cell after the data's last, or the connection fails there.
 
+**What crosses the wire** (`laneWire`) is each connection's frames, bucket by bucket (`wireFrames`): `r` padding frames
+in each bucket from its admission to `adm c + D`, then its lane's cells, its end or its fail cell the last, then padding
+to `r` frames in the bucket of its last cell (`tailPads`).
+
 The transfer gates are these cells' bits: their number per window is the schedule's, so it is public.
 
 **What is abstract.** A cell's `B` bytes are a value of `Cell`. Whatever the server does (its accept time, its send
@@ -74,6 +78,30 @@ def certifierLane {Cell : Type} (a : Arrivals Cell) (t : ℕ → ℕ) : ℕ → 
 client receives on each connection, each with its bucket. -/
 def certifierCode {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) : κ → List (ℕ × CellView Cell) :=
   fun c => certifierLane (arr c) (s.bucket c) 0 (s.cells c)
+
+/-- The padding after connection `c`'s last cell in bucket `b`: in the bucket of its lane's last cell, the slots of the
+bucket's `r` after it; none in any other bucket, or for a lane of no cells. -/
+def tailPads {κ : Type} (s : CertifierSchedule κ) (c : κ) (b : ℕ) : ℕ :=
+  if 0 < s.cells c ∧ b = s.bucket c (s.cells c - 1) then s.r - 1 - (s.cells c - 1) % s.r else 0
+
+/-- **The frames connection `c` sends in bucket `b`**: `r` padding frames in each bucket from its admission to
+`adm c + D`, then the cells `v c` of its lane in bucket `b`, in order, then the padding after its last cell
+(`tailPads`). -/
+def wireFrames {κ Cell : Type} (s : CertifierSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) (b : ℕ) :
+    List (CellView Cell) :=
+  (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r .pad else []) ++
+    ((v c).filter fun x => x.1 == b).map Prod.snd ++ List.replicate (tailPads s c b) .pad
+
+/-- The buckets connection `c`'s frames fall in, from the first: its admission padding ends at `adm c + D`, and its
+cells' buckets, which number at most its cells, follow. -/
+def CertifierSchedule.span {κ : Type} (s : CertifierSchedule κ) (c : κ) : List ℕ :=
+  List.range (s.adm c + s.D + s.cells c)
+
+/-- **What crosses the wire on connection `c`**: its frames (`wireFrames`), bucket by bucket over its span, each with
+its bucket. The padding is included: the admission padding, and the padding after its lane's last cell. -/
+def laneWire {κ Cell : Type} (s : CertifierSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) :
+    List (ℕ × CellView Cell) :=
+  (s.span c).flatMap fun b => (wireFrames s v c b).map (b, ·)
 
 /-- **The fail cell** of connection `c`: the first cell of its lane, among the data's cells and the end of the stream,
 that reached the network certifier after its bucket, or none. -/
