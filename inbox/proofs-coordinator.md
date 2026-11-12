@@ -104960,3 +104960,165 @@ Branch `cursor/proofs-addrwc-60f3`, SHA `66b95e4e7e`. Runs:
 **To post.** Nothing.
 
 **Not established.** That anything compiles. Whether a template's circuit today has an input row with no registered read; until I read the templates, `CoverFact` may be false at some deployment.
+
+## REDRAW, Thu 12 Nov 22:21Z: PRF-583's statements: the challenger's key and `main`'s line become arguments and leave the evidence; nothing is built yet; two points need your word, and the base branch does not hold #9237
+
+**Where it stands.** Branch `cursor/proofs-keyheld-3c9a` is cut from #9237's head `9d4aec0111fb7f2704171f06e467b7a789e3c2fd` and pushed at that commit; it holds no commit of mine yet. [run] The signatures below are the ones I build to; none has been compiled. [derived]
+
+### 1. The new signatures
+
+**Lean, `Spot/ChallengerCoins.lean`** (today `coinsReason (coins : Json) (window label : String) (after read : ByteArray)`, `:117`). [read]
+
+```lean
+def coinsReason (key : ChallengerKey) (main coins : Json) (window label : String) (after read : ByteArray) :
+    Option String
+```
+
+- The evidence `coins` becomes `{ledger, pins, segment, session}`. Its `key` and `main` fields are gone, and evidence that still carries either is refused in form (`COINS_FORM`). [derived]
+- `key` and `main` go to `trustedSessionOf` where `ChallengerKey.ofJson (getD coins "key")` and `getD coins "main"` stand today (`:120-121`). [read]
+
+**Lean, `Spot/Run.lean`** (`Interior` at `:83`, `Input` at `:100`, `coinsCode` at `:170`). [read]
+
+```lean
+structure Interior where
+  ...
+  coins : Json := Json.null
+  family : Option String := none
+  key : Option Challenger.ChallengerKey := none   -- new
+  ...
+
+structure Input where
+  ...
+  coins : Json := Json.null
+  family : Option String := none
+  key : Option Challenger.ChallengerKey := none   -- new
+  main : Json := Json.null                        -- new
+  interior : Option Interior := none
+
+def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json) (window family : Option String)
+    (read : ByteArray) : Option String
+```
+
+- `run` calls `coinsCode i.key i.main i.coins i.record v.windowRoot i.family ...`, and `interiorSteps` calls `coinsCode it.key i.main it.coins it.record v.windowRoot it.family ...`. [derived]
+- A sample that read coins and has no key is refused with code `coins`, as one with no window or no family is today. [derived]
+- What a proof against `Spot.Run.run` gets from an accepted run changes from `coinsReason i.coins w label after read = none` to `i.key = some key` and `coinsReason key i.main i.coins w label after read = none`. [derived]
+
+**Lean, `Spot/RecordAcross.lean`** (the order check also parses the key from its evidence, `:107`). [read]
+
+```lean
+def receivedOf (key : Challenger.ChallengerKey) (main coins : Json) (window : String) : V (List ByteArray)
+def orderReason (key : Option Challenger.ChallengerKey) (main : Json) (window : String) (family : Option String)
+    (earlier later : ByteArray) (coins : Json) (read : ByteArray) : Option String
+```
+
+`Record.Across` gains `key : Option Challenger.ChallengerKey` and `main : Json`. [derived]
+
+**The difftest's pieces (`Spot/Pieces.lean`).** Each gains the verifier's key as `{H, W, public}` and `main` as a list of commit ids. [derived]
+
+| Piece | Input today | Input after |
+|---|---|---|
+| `challenger_draw_coins` (it runs `coinsReason`; no piece is named `challenger_coins_reason`) | `{after, coins, label, read, window}` | `{after, coins, key, label, main, read, window}` |
+| `run` | `coins`, `family`, and the same two under `interior` | adds `key` and `main` at the top, and `key` under `interior` |
+| `across` | `{audit, coins, family, later, log, read, window}` | `{audit, coins, family, key, later, log, main, read, window}` |
+
+**Python, `verity/protocols/spot/device/coins.py`** (today `coins_reason(coins, window, label, after, read, verify)`, `:332`). [read]
+
+```python
+def coins_reason(key: ChallengerKey, main: Sequence[str], coins: Any, window: str, label: str, after: bytes,
+                 read: bytes, verify: Verify) -> str | None
+```
+
+**Python, `verity/protocols/spot/verifier/service.py`** (`Stream.__init__` at `:1573`, `outcome` at `:2297`). [read]
+
+```python
+Stream(spec, unit, *, budget, delta, challenger, coins=None,
+       key: ChallengerKey | None = None, main: Sequence[str] = (), clock=..., ...)   # key and main are new
+Stream.outcome(draw, verdicts, statement, *, ..., coins=None, interior_coins=None,
+               interior_key: ChallengerKey | None = None, ...)                        # interior_key is new; see 3b
+```
+
+- The stream holds the key and the copy of `main`'s line it was made with, and `outcome` holds both stages' evidence to them. [derived]
+- `verifier.run` gains `key=` and `main=`, and its `interior` gains `"key"`. [derived]
+
+### 2. The guarantee's text: `Properties.Challenger.FamilyOneCommitmentRead`
+
+**Before** (`security/Properties/Challenger.lean:433-441` at `9d4aec0111fb`). [read]
+
+```lean
+def FamilyOneCommitmentRead : Prop :=
+  ∀ (dev : History) (w label : String) (after read : ByteArray) (coins : Json),
+    coinsReason coins w label after read = none →
+      ∃ key, ChallengerKey.ofJson (getD coins "key") = .ok key ∧
+        ((∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧
+            (s.released label after).extract 0 read.size = read ∧
+            (read.size + COIN_BYTES - 1) / COIN_BYTES = (s.released label after).size / COIN_BYTES ∧
+            ∀ r ∈ s.roots label, r = after) ∨
+          Break dev key label coins)
+```
+
+**After.** [derived]
+
+```lean
+def FamilyOneCommitmentRead : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (main : Json) (w label : String) (after read : ByteArray) (coins : Json),
+    coinsReason key main coins w label after read = none →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧
+          (s.released label after).extract 0 read.size = read ∧
+          (read.size + COIN_BYTES - 1) / COIN_BYTES = (s.released label after).size / COIN_BYTES ∧
+          ∀ r ∈ s.roots label, r = after) ∨
+        Break dev key label coins
+```
+
+- **What an auditor gains.** When the run's check accepts a sample's coins, they are coins the challenger released under the key the auditor's own verifier holds; before, the statement held only for whichever key the checked file named, so it said nothing against a prover who wrote that file. [derived]
+- The docstring's last sentence ("The key is the one the evidence names: this reader takes none from the verifier, and what holds the evidence's to the verifier's is its caller") goes; in its place: the key and `main`'s line are the reader's arguments, and nothing in the evidence names either. [derived]
+- `FamilyOneCommitment` (over `drawCoins`) keeps its text. [derived]
+- The proof changes in three places: `Coins.coinsReason_none` loses its `∃ k`, `Drawn.session_run` and `Drawn.session_family` take `main` as a variable in place of `getD coins "main"`, and `Drawn.familyOneCommitmentRead` follows. [read] The lemmas under them (`Session.trustedSessionOf_ok`, `Coins.trustedSession_record`) are already stated for any `main`. [read]
+
+### 3. What I chose, what I left out, and two points for you
+
+- **The fields go; they are not compared.** PRF-583 allows either "evidence whose `key` differs is refused, or the field is gone". [read] I dropped both fields because a kept `main` would have to be either unread or compared, and a comparison refuses honest evidence written before `main` moved. [derived] The cost: evidence written by an earlier tree (six fields) is refused in form until its reader drops the two. [derived] Evidence signed under another key is still refused, by the signature checks under the verifier's key. [derived]
+- **Not in this change: `drawCoins` still reads `main` from its evidence.** It takes the key from the verifier, but its evidence is `{ledger, main, pins, segment, session}` (`Spot/ChallengerDraw.lean:38-39`). [read] PRF-583's goal says no path reads `main`'s line from the evidence it checks, and also that `drawCoins` is not affected; its done-when names only `coinsReason` and `coins_reason`. [read] Changing `drawCoins` moves the records of `drawnByDevice` and `familyOneCommitment` and the one-stage parameters' form, so I left it; say if you want it here. [derived]
+- **(a) Does `Interior` get a key of its own, or read the run's?** The issue asks for both to carry one, and I did that. [read] The two can then differ, and an accepted run says each stage's coins are under the key that stage's input carries. [derived] If RUNCOINS wants one key for the whole run, `Interior.key` goes and the interior reads `i.key`. [derived]
+- **(b) A `--challenger local` second stage has a key the first stage never had.** `second` opens a development challenger of its own (`a5_coins.Local` in a fresh temporary directory, `a5_coins.py:762-764`), whose key is made there, so under `local` the two stages' evidence is signed under two keys. [read] Under a gate both stages are under the one key record of `--challenger-key`. [read] The issue's line "passes the key of `--challenger-key` or of the local session" does not cover the first stage's evidence under `local`. [derived] My default: `second` holds the first stage's evidence to the key of `--challenger-key` in every mode (a local first stage writes its key record into its own output, and `second --challenger local` without `--challenger-key` refuses), and holds its own session's evidence to that session's key through `interior_key`. [derived] The other way is one local challenger kept on disk for both stages, which I set aside as a larger change to the driver. [derived]
+
+### 4. Whose files this touches
+
+- **The base branch has moved and does not hold #9237.** `cursor/proofs-two-round-base-84b5` is at `3aeb727bea12cc75565b70aee9c272f8578ce057`, not `cb0dbe2ba3df`, and `9d4aec0111fb` is not its ancestor. [run] Its `coinsReason` is still `(coins) (window) (after read)`, with no `label`, and its `Run.lean` has no `coinsCode`. [run] So RUNCOINS and RUNSAS meet two changes to that function when the base takes #9237 and then this: the family argument and the key. [derived]
+- **RUNCOINS, RUNSAS, FRAME (the base).** Of the files I change, the base has changed these since the commit it shares with #9237 (`7a528d6b1c01`). [run]
+
+| File | What I change in it | The base's own change |
+|---|---|---|
+| `Spot/Run.lean` | the two structures, `coinsCode`, its two calls | +45 −14 |
+| `Spot/Pieces.lean` | the `run` and `across` pieces' reads | +80 −14 |
+| `Spot/RecordAcross.lean` | `receivedOf`, `orderReason`, `Record.Across` | the file, 272 lines |
+| `verifier/service.py` | `Stream.__init__`, the two `V.run` calls in `outcome` | +52 −19 |
+| `verifier/lean/tests/test_difftest.py` | the cases of `challenger_draw_coins` and `run` | +422 −25 |
+| `benchmarks/one_stage/two_stage.py`, its `tests/test_two_stage_driver.py` | see GATHER | +54 −11, +68 −2 |
+| `security/Proofs/Properties/Verity/SampledDraw.lean`, `.../Sampled/RecordDraw.lean` | the calls of `coinsReason` and `coinsCode` in what they unfold | 4 lines, 1 line |
+| `security/Properties/lean-audit.json` | one record moves | merges itself |
+
+- `Spot.SecondStage.check` is not touched: `Spot/SecondStage.lean` reads no coins and no key. [run]
+- **GATHER (#9480, `bdf9fd108628`, which holds #9237's head).** [run] `benchmarks/one_stage/two_stage.py` (its change above #9237: +96 −92): `first` and `resume` make the stream with `key=` and `main=`; `_second` takes the key from `--challenger-key` and `main` from `--main`, never from `stage1["evidence"]`; `outcome_of` passes `interior_key` under `local`. [derived] `a5_coins.evidence` returns four fields, so `stage1.json`'s `evidence` and `coins.json` lose `key` and `main`. [derived] Also `benchmarks/one_stage/a5.py` (+32 −5 on #9480): `coins_reason`'s call at `:442`, and the one-stage parameters' key at `:1276`, which reads `coins["key"]` today (lines at `9d4aec0111fb`). [read]
+- **STOPDRIVER, if it still holds `benchmarks/one_stage/stop_audit.py`.** Its `link` builds the `across` piece's input with `"coins": s.get("evidence")` (`:326`), so it gains the verifier's key and `main`. [read]
+- **Mine alone:** `Spot/ChallengerCoins.lean`, `coins.py`, `a5_coins.py`, `scan_zk.py`, `verifier/one_stage/verifier.py`, the tests' `fake_challenger.py` and `test_challenger_coins.py`, `security/Properties/Challenger.lean`, and `Coins.lean` and `Drawn.lean` under `security/Proofs/Properties/Challenger/`: neither branch changes them. [run]
+
+### 5. PRF-582 (the honest withheld session)
+
+**There is no branch to read yet.** `cursor/soundness-live-deployment-8fb2` is not on the remote; of soundness's 16 heads the nearest by name are `cursor/soundness-onsite-deployed-8fb2` (#9410) and `cursor/soundness-prf579-8fb2` (#9475), and neither title is the challenger's session. [run] So this says what the witness needs, for you to hold against the session when it appears. [derived] A session built in Lean gives the honest witness of the three guarantees only if it has all of the following. [derived]
+
+1. **It is the JSON the readers parse**, not a model of the device: the ledger's lines with their signed open, the pins log, the session's `record`, `close` and `log`, and `main` holding the pinned commit, so that `trustedSessionOf ledger {root: w} key pins main session = .ok (c, roots)` is a theorem. [read: the three lock entries' `why`]
+2. **It is opened withheld** (`withheldOn ledger w = true`), which all three need. [read]
+3. **It has one family's coins opened**, with salts and paths, as a `segment` that `challengerStream c segment after roots` accepts, the log showing that family's coins released after the one root `after`. This is the part a session without a sample would lack. [derived]
+4. **For `familyOneCommitmentRead`, the bytes read**: a `read` that is the start of those coins and ends inside the last, under `coinsReason` in the form above (key and `main` as arguments, four-field evidence). So the witness should be built after this change, or it is built twice. [derived]
+5. **For `drawWithheld`, more than the session**: its lock entry asks for a whole credited window, a canonical Commit record and a live draw coin under that session's commitment. [read]
+6. **No evaluation of the signatures in the kernel.** `wipeSigned_honest` shows the way: a key from `Lms.keygen Lms.deployed` and the lemma `Properties.CertifierDevice.Proofs.Lms.lmsSigns`, by which that key's signatures verify (`security/Proofs/Properties/Pous/WipeSigned.lean:595`, `:692`). [read]
+
+With 1, 2 and 6 the session is most of the work for `familyOneCommitment` and `familyOneCommitmentRead`, which then need 3 and 4 on top; `drawWithheld` needs 5 as well. [derived]
+
+### 6. The small things
+
+- **#9373's close (`16f9e1089587`).** Both runs are still waiting for a slot, 75 minutes after launch: `r20261112-210155-fead` (records, vy-nebius-cpu-12) and `r20261112-210412-0e68` (quick suites, vy-nebius-cpu-10). [run, 22:18Z] Once a slot is taken the records took about 30 minutes and the suites 31 at the last head. [run, earlier] No READY line yet.
+- **#9375 is not on `main`.** It is open at `bafae2eaec2e`; `main` is `783b526ab6f5`. [run, 22:18Z] #9237's merge waits on it, and comes first when it lands, as your 21:18Z section orders.
+- **Mailbox:** 168 lines, its last section yours of 21:18Z. [run, 22:18Z]
+
+**Next.** I build to the signatures above on `cursor/proofs-keyheld-3c9a`, Lean first (`ChallengerCoins`, `Run`, `RecordAcross`, `Pieces`, then the property and its proof), then Python and the negative test. [derived] If you rule otherwise on 3(a), 3(b), the dropped fields or `drawCoins`, the change is small while only the Lean is written. [guess]
