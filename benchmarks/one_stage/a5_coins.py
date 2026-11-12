@@ -6,8 +6,8 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
   (`verity/composite/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone, so its samples show the path, not an auditor's coins; and since that key is
-  not at `Lms.deployed`, sampled proofs' v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Under
-  ``A5_LOCAL_KEY=deployed`` (`LOCAL_KEY`) the key is made at `lms.DEPLOYED` instead, its whole tree, about a quarter of
+  not at `Lms.deployed`, SPOT's v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Where its
+  caller asks (`start`'s ``deployed``) the key is made at `lms.DEPLOYED` instead, its whole tree, about a quarter of
   an hour of one core spread over this machine's: still this run's alone, and one v2 reads signatures under. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins the challenger host only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
@@ -78,8 +78,6 @@ SCHEME = "verity/one-stage/a5-draw/v1"
 FAMILY = "draw"
 COINS_PER_RANK = 16
 LOCAL_PARAMS = (4, 5)
-#: the environment variable that puts a ``local`` session's key at `lms.DEPLOYED` (its value ``deployed``; module docstring)
-LOCAL_KEY = "A5_LOCAL_KEY"
 LOCAL_HOST, LOCAL_PEER = "local-challenger", "local"
 MINUTES = 240
 
@@ -307,7 +305,7 @@ class Draws:
         with self._lock:
             if self._closed.is_set():
                 raise Ch.CoinError(f"the challenger's session has closed: rank {rank} holds it for its sessions' coin "
-                                   "trees before its draw ends")
+                                   "trees before its sample ends")
             self._held.add(rank)
 
     def release(self, rank: int) -> None:
@@ -322,7 +320,7 @@ class Draws:
             raise Ch.CoinError(self._refused)
         if self._client is None or self._closed.is_set():
             raise Ch.CoinError("the challenger's session is not open: a session's coin tree is sampled and opened between "
-                               "the session's open and its close, by a rank that holds it (Draws.hold)")
+                               "the session's open and its close, by a rank that holds it (hold)")
         return self._client
 
     def layout(self) -> dict:
@@ -728,7 +726,7 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
-          reserve: Callable[[Mapping[int, int]], list] = families):
+          reserve: Callable[[Mapping[int, int]], list] = families, deployed: bool = False):
     """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its samples' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
     `ranks` has planned its sample (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
@@ -736,13 +734,10 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     rank's sample, when a rank ended before planning (refused before its sample, or failed) or `reserve_reason` refuses the
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
-    origin/main``)."""
+    origin/main``). With `deployed`, a ``local`` session's key is made at `lms.DEPLOYED` (module docstring)."""
     first_parent = R.main_lines(main)
     if challenger == "local":
-        key = os.environ.get(LOCAL_KEY, "")
-        if key not in ("", "deployed"):
-            raise SystemExit(f"{LOCAL_KEY} is deployed (a local session's key at lms.DEPLOYED) or unset, not {key!r}")
-        at = dict(params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0))) if key else {}
+        at = dict(params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0))) if deployed else {}
         session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent, **at)
     elif challenger.startswith("loopback:"):
         session = Loopback(challenger.removeprefix("loopback:"))

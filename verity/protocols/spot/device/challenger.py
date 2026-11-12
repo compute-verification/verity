@@ -1118,11 +1118,10 @@ def member_tree_reason(trees: dict[str, LoggedTree], tables: Mapping[str, int | 
 def _open_of(line: str) -> tuple[str, bool] | None:
     """The tree release log line `line` opens a round of (its root) and whether the round is of the stream ``session``;
     None of a line that opens no round (Lean `Challenger.openOf`)."""
-    try:
-        doc = _event(line)
-    except CoinError:
+    if not open_line(line):
         return None
-    if not isinstance(doc, dict) or doc.get("event") != OPEN_EVENT or type(doc.get("tree")) is not str:
+    doc = _event(line)
+    if type(doc.get("tree")) is not str:
         return None
     return doc["tree"], doc.get("stream") == CT.SESSION
 

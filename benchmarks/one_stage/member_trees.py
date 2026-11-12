@@ -1,14 +1,14 @@
 """The sessions of a window of several members on the window's own challenger session: each session's coin tree
 sampled and opened in the session the sample's coins come from, and closed there before the next session's first coin.
 
-Sampled proofs' v2 reads a window of several members' audit in its per-member form (`a5.case_members`), and holds the
+SPOT's v2 reads a window of several members' audit in its per-member form (`a5.case_members`), and holds the
 sessions' coins to one release log, the window's challenger session's (`OneStageZk.membersTreesHeld`,
 `challenger.members_tree_reason`): the sample, then each session's tree, its rounds together and its closing round last
 (`challenger.closes`: the tree's ``session`` round `challenger.CLOSING_ROUND` of no coins, opened after the SHA-512 of
 the session's evidence, `closing.closing_after`), the trees one after another in the sessions' order. The challenger
-serves one client, the driver's, whose samples already read it (`a5_coins.Draws`). So a driver:
+serves one client, the driver's, whose samples already read it (`a5_coins`). So a driver:
 
-* holds the session open past its sample (`a5_coins.Draws.hold`), until its sessions have closed (`release`);
+* holds the session open past its sample (`a5_coins`' `hold`), until its sessions have closed (`release`);
 * runs a `Relay` to it and starts each verifier on the relay (`Relay.flags`, `serve --tree-from`'s): the verifier's
   ``tree`` and ``tree-open`` frames (`remote`'s) go to the driver's one client and its answers back, and the challenger
   logs each before it answers;
@@ -18,12 +18,13 @@ serves one client, the driver's, whose samples already read it (`a5_coins.Draws`
   window's root and the coins' evidence with the case (`a5.case_coins`).
 
 `Relay(session, listener)` and `closing_round(session, directory)` take any ``session`` with a client's `layout()`,
-`tree(spec, nonce)` and `tree_open(root, stream, rnd, n, after)`: a `Draws` proxy, or a `remote.RemoteChallenger`
+`tree(spec, nonce)` and `tree_open(root, stream, rnd, n, after)`: `a5_coins`' proxy, or a `remote.RemoteChallenger`
 itself. The relay adds no rule: what the challenger refuses it refuses, which ends the challenger's session, and what
 the log must show is the verifier's to check.
 """
 from __future__ import annotations
 
+import errno
 import json
 import secrets
 import shutil
@@ -69,7 +70,7 @@ class Relay:
     challenger's or the relay's own of another frame, is sent back and ends the connection.
 
     `flags` is what a verifier is started with. `close` ends the relay and returns why each connection that did not end
-    with its client's ``close`` ended."""
+    with its client's ``close`` ended, and why the relay stopped accepting before it, if it did."""
 
     def __init__(self, session: Any, listener: socket.socket) -> None:
         self.session, self._listener = session, listener
@@ -89,7 +90,10 @@ class Relay:
         while True:
             try:
                 sock, _ = self._listener.accept()
-            except OSError:
+            except OSError as e:
+                with self._lock:
+                    if not self._closing:  # `close` ends the accept by shutting the listener down
+                        self.ended.append(f"the relay's listener broke ({e})")
                 return
             with self._lock:
                 if self._closing:
@@ -101,19 +105,25 @@ class Relay:
 
     def _serve(self, sock: socket.socket) -> None:
         why = R.greet(sock, self._secret)
-        if why is None:
+        greeted = why is None
+        if greeted:
             wire = R._Wire(sock)
             why = self._frames(wire)
-            if why is not None:
+            with self._lock:
+                cut = self._closing  # `close` cut every connection still listed: no client is left to tell
+            if why is not None and not cut:
                 try:
                     wire.send({"type": "refused", "reason": why})
-                except OSError:
-                    pass
+                except OSError as e:
+                    why = f"{why} (its refusal went unsent: {e})"
+        with self._lock:
+            # past here the connection ends by itself, and `close` cuts only those still listed
+            self._serving.pop(threading.current_thread(), None)
+            if why is not None:
+                self.ended.append(why)
+        if greeted:
             R._hang_up(sock)
         sock.close()
-        if why is not None:
-            with self._lock:
-                self.ended.append(why)
 
     def _frames(self, wire: Any) -> str | None:
         """Serve one greeted connection: None once its client closed it, else why it ended."""
@@ -145,19 +155,18 @@ class Relay:
         """End the relay: no connection more, each one still open cut, and its secret deleted. -> `ended`."""
         with self._lock:
             self._closing = True
-            open_ = list(self._serving.items())
-        try:
-            self._listener.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        self._listener.close()
-        self._accepting.join()
-        for t, sock in open_:
-            if t.is_alive():
+            open_ = list(self._serving)
+            for sock in self._serving.values():
                 try:
                     sock.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
+                except OSError as e:
+                    # already disconnected: nothing to cut, and its thread says how it ended
+                    if e.errno != errno.ENOTCONN:
+                        raise
+        self._listener.shutdown(socket.SHUT_RDWR)
+        self._listener.close()
+        self._accepting.join()
+        for t in open_:
             t.join()
         shutil.rmtree(self._work, ignore_errors=True)
         return list(self.ended)

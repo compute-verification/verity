@@ -77,8 +77,8 @@ quotes the warm's beside it.
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W --tie-prefix P] [--skip-negatives] \\
-        [--compose-cache DIR]
+        [--deployed-key] [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W --tie-prefix P] \\
+        [--skip-negatives] [--compose-cache DIR]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
@@ -121,7 +121,8 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
 ``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
-takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
+takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
+LMS parameters, the only ones SPOT's v2 reads a challenger's signatures under), ``loopback:HOST:PORT``, that session on the challenger
 party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
@@ -860,7 +861,7 @@ def audit(a: argparse.Namespace) -> int:
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                          peer=a.peer, key_record=a.challenger_key)
+                                          peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
@@ -983,6 +984,9 @@ def main(argv: list[str] | None = None) -> int:
                    "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
                    "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
+    p.add_argument("--deployed-key", action="store_true",
+                   help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
+                   "about a quarter of an hour of one core over this machine's")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
@@ -1065,6 +1069,8 @@ def main(argv: list[str] | None = None) -> int:
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
         if not a.main:
             ap.error("--challenger needs --main")
+        if a.deployed_key and a.challenger != "local":
+            ap.error("--deployed-key is a local session's key: it goes with --challenger local")
     return audit(a)
 
 

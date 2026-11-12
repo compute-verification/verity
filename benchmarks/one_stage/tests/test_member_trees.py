@@ -1,4 +1,4 @@
-"""A window of several members' sessions on the window's own challenger session (`member_trees`, `a5_coins.Draws`'s
+"""A window of several members' sessions on the window's own challenger session (`member_trees`, `a5_coins`'
 `hold`, `release`, `tree` and `tree_open`), against the challenger as its host serves it (`remote.serve`, withheld):
 a rank holds the session open past its sample; each verifier reaches it through the relay, as `serve --tree-from`
 does, under the relay's own secret; each session's tree is closed after its evidence once its files are written; and the
@@ -36,7 +36,7 @@ ROOT_F, ROOT_B = bytes([20]) * 64, {"circuit": bytes([21]) * 64}
 
 
 class Host:
-    """The challenger's host: one withheld session of two ``draw`` coins, served to the one client that connects to
+    """The challenger's host: one withheld session of two coins of the samples' family, served to the one client that connects to
     `address`; `log` is its release log once `ended`."""
 
     def __init__(self, tmp: Path) -> None:
@@ -76,21 +76,21 @@ class Host:
 
 @pytest.fixture
 def held(tmp_path):
-    """The host, and rank 0's `Draws` on its session: planned, connected, held for its sessions' trees, its sample of
+    """The host, and rank 0's proxy on its session: planned, connected, held for its sessions' trees, its sample of
     one coin read after `REGISTRATION` and ended. A test releases the rank, or the fixture does."""
     host = Host(tmp_path)
-    draws = AC.Draws(WINDOW, [0])
-    planning = threading.Thread(target=draws.plan, args=(0, 1))
+    proxy = AC.Draws(WINDOW, [0])
+    planning = threading.Thread(target=proxy.plan, args=(0, 1))
     planning.start()
-    assert draws.wait_planned() == {0: 1}
-    draws.connect(host.address, None, None, True)
+    assert proxy.wait_planned() == {0: 1}
+    proxy.connect(host.address, None, None, True)
     planning.join()
-    draws.hold(0)
-    draws.commit(0, REGISTRATION.hex())
-    assert len(draws.read(0, C.COIN_BYTES)) == C.COIN_BYTES
-    assert draws.drawn(0)["label"] == AC.FAMILY
-    yield host, draws
-    draws.skip(0)
+    proxy.hold(0)
+    proxy.commit(0, REGISTRATION.hex())
+    assert len(proxy.read(0, C.COIN_BYTES)) == C.COIN_BYTES
+    assert proxy.drawn(0)["label"] == AC.FAMILY
+    yield host, proxy
+    proxy.skip(0)
     host.ended()
 
 
@@ -133,25 +133,25 @@ def test_two_sessions_on_the_windows_session_each_closed_after_its_evidence_pass
     release, under its signed close; its log is the sample, then the link, then the other rounds, and holds the two
     sessions in the order they ran, and in no other. A session's file changed after its closing round, or a session
     left open, is refused."""
-    host, draws = held
-    relay = MT.Relay(draws, MT.listener())
+    host, proxy = held
+    relay = MT.Relay(proxy, MT.listener())
     first, second = verifier(relay), verifier(relay)
-    assert first.layout() == second.layout() == draws.layout() == {"epoch": 0, "families": [[AC.FAMILY, 2]],
+    assert first.layout() == second.layout() == proxy.layout() == {"epoch": 0, "families": [[AC.FAMILY, 2]],
                                                                     "scheme": AC.SCHEME}
     a = session(first, tmp_path / "a", bytes(range(32)))
-    after_a = MT.closing_round(draws, a)
+    after_a = MT.closing_round(proxy, a)
     assert after_a == K.closing_after(a).hex() == hashlib.sha512(K.session_evidence(
         (a / "session.json").read_bytes(), [(f.name, f.read_bytes()) for f in sorted(a.glob("*.bin"))])).hexdigest()
     b = session(second, tmp_path / "b", bytes(range(32, 64)))
     still_open = MT.trees_reason(R.log_lines(host.directory / R.RELEASES), [("a", a), ("b", b)])
     assert still_open == f"session b's coins are not the challenger's: {C.NO_CLOSING}"
-    MT.closing_round(draws, b)
+    MT.closing_round(proxy, b)
     hang_up(first)
     hang_up(second)
     assert relay.close() == [] and not Path(relay.flags[3]).exists()
     assert not (host.directory / R.CLOSE).exists()
-    draws.release(0)
-    assert draws.wait_closed() is None and host.ended() is None
+    proxy.release(0)
+    assert proxy.wait_closed() is None and host.ended() is None
     log = host.log
     events = [json.loads(line)["event"] for line in log]
     assert events == ["commitment", "root", "release", "root", "release", *(["coin-tree"] + ["tree-open"] * 4) * 2]
@@ -170,8 +170,8 @@ def test_the_relay_passes_on_tree_frames_alone_and_a_refusal_ends_its_own_connec
     """A hello without the relay's secret is refused before anything is asked of the challenger; a coin's ``open``
     through the relay is refused by the relay, which ends that connection alone: the challenger's session takes the
     next verifier's tree. A closing round asked twice is the challenger's to refuse, which ends its session."""
-    host, draws = held
-    relay = MT.Relay(draws, MT.listener())
+    host, proxy = held
+    relay = MT.Relay(proxy, MT.listener())
     with pytest.raises(C.CoinError, match="the hello's secret is not the session's"):
         R.RemoteChallenger.connect(relay.address, bytes(32))
     with pytest.raises(C.CoinError, match="a client's first frame is hello with the session's secret"):
@@ -181,46 +181,38 @@ def test_the_relay_passes_on_tree_frames_alone_and_a_refusal_ends_its_own_connec
         stray.open(AC.FAMILY, 1, bytes(64))
     left_open = verifier(relay)
     a = session(left_open, tmp_path / "a", bytes(range(32)))
-    MT.closing_round(draws, a)
+    MT.closing_round(proxy, a)
     assert sorted(relay.close()) == sorted(["the hello's secret is not the session's",
                                             "a client's first frame is hello with the session's secret", MT.FRAMES,
                                             "the stream closed"])
     with pytest.raises(C.CoinError, match="the challenger refused: the next round of the coin tree's session stream is 2"):
-        MT.closing_round(draws, a)
+        MT.closing_round(proxy, a)
     with pytest.raises(C.CoinError, match="a retry never redraws"):
-        draws.tree(SPEC, bytes(32))
-    draws.release(0)
-    assert draws.wait_closed() is not None
+        proxy.tree(SPEC, bytes(32))
+    proxy.release(0)
+    assert proxy.wait_closed() is not None
     assert "the next round of the coin tree's session stream is 2" in host.ended()
 
 
-def test_a_rank_holds_the_session_before_its_draw_ends_and_no_tree_is_drawn_once_it_closed(tmp_path):
+def test_a_rank_holds_the_session_before_its_sample_ends_and_takes_no_tree_once_it_closed(tmp_path):
     """Without a hold the session closes with the last rank's sample, as it always did; a hold after that is refused,
     and so is a tree."""
     host = Host(tmp_path)
-    draws = AC.Draws(WINDOW, [0])
-    planning = threading.Thread(target=draws.plan, args=(0, 1))
+    proxy = AC.Draws(WINDOW, [0])
+    planning = threading.Thread(target=proxy.plan, args=(0, 1))
     planning.start()
-    draws.wait_planned()
-    draws.connect(host.address, None, None, True)
+    proxy.wait_planned()
+    proxy.connect(host.address, None, None, True)
     planning.join()
-    draws.commit(0, REGISTRATION.hex())
-    draws.read(0, C.COIN_BYTES)
-    draws.drawn(0)
-    assert draws.wait_closed() is None and host.ended() is None
-    with pytest.raises(C.CoinError, match="rank 0 holds it for its sessions' coin trees before its draw ends"):
-        draws.hold(0)
+    proxy.commit(0, REGISTRATION.hex())
+    proxy.read(0, C.COIN_BYTES)
+    proxy.drawn(0)
+    assert proxy.wait_closed() is None and host.ended() is None
+    with pytest.raises(C.CoinError, match="rank 0 holds it for its sessions' coin trees before its sample ends"):
+        proxy.hold(0)
     with pytest.raises(C.CoinError, match="one rank's sessions take their coin trees from it"):
         AC.Draws(WINDOW, [0, 1]).hold(0)
     with pytest.raises(C.CoinError, match="the challenger's session is not open"):
-        draws.tree(SPEC, bytes(32))
+        proxy.tree(SPEC, bytes(32))
     with pytest.raises(C.CoinError, match="the challenger's session is not open"):
-        draws.layout()
-
-
-def test_a_local_sessions_key_is_at_the_deployed_parameters_only_when_asked(monkeypatch, tmp_path):
-    """`A5_LOCAL_KEY` is ``deployed`` or unset: anything else is refused before a key is made."""
-    (tmp_path / "main.txt").write_text("c81c31e6d51f9c481cdead96221d65ad6d7afd2c\n")
-    monkeypatch.setenv(AC.LOCAL_KEY, "small")
-    with pytest.raises(SystemExit, match="A5_LOCAL_KEY is deployed"):
-        AC.start("local", WINDOW, [0], tmp_path / "challenger", tmp_path / "main.txt")
+        proxy.layout()
