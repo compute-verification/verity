@@ -1668,3 +1668,147 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     git(repo, "checkout", "-q", "a2")
     git(repo, "merge", "--no-edit", "b2")
     assert caps.read_text() == packages({SEC: 358}, inline, above="b2")
+
+
+_uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parent / "unread.py")
+U = importlib.util.module_from_spec(_uspec)
+_uspec.loader.exec_module(U)
+UNREAD = f"{M.DIR}/{M.UNREAD_CAPS}"
+FL, PW, NCI, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/Nci", "Proofs/Hash"
+
+
+def unread(**areas: tuple[int, int]) -> str:
+    """`unread-caps.json` with ``areas`` (each `Proofs_Flock=(modules, declarations)`), as `unread.py` writes it."""
+    return U.caps_text({a.replace("_", "/"): {"modules": m, "declarations": d} for a, (m, d) in areas.items()})
+
+
+def _unread(tmp: Path, base: str, ours: str, theirs: str) -> tuple[int, str]:
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp / n).write_text(t)
+    return M.main(["--caps", *(str(tmp / n) for n in ("base", "ours", "theirs")), UNREAD]), (tmp / "ours").read_text()
+
+
+def test_the_driver_reads_and_writes_the_unread_caps_as_unread_py_does():
+    assert (M.UNREAD_SCHEMA, M.UNREAD_KEYS, M.UNREAD_CAPS) == (U.CAPS_SCHEMA, U.CAP_KEYS, U.CAPS.name)
+    caps = U.load_caps(U.CAPS)
+    assert M.unread_areas(U.CAPS.read_text(), "ours") == caps and U.CAPS.read_text() == U.caps_text(caps)
+
+
+def test_two_branches_that_each_raise_an_area_s_unread_cap_merge_as_counters(tmp_path, capsys):
+    """Every PR that adds proof modules no guarantee reads yet writes its area's cap as main's count plus its own, so any two
+    conflict on that line as text. Each area's `modules` and `declarations` merge as theirs' count plus ours' change against
+    the base, whichever side is which: two raises both count, a lowering (drive's lock run) and a raise both apply, and the
+    merged cap is never above one side's count plus the other's own change."""
+    base = U.CAPS.read_text()
+    caps = U.load_caps(U.CAPS)
+    flock, pouw = caps[FL], caps[PW]
+
+    def with_(**areas: dict[str, int]) -> str:
+        return U.caps_text(caps | {a.replace("_", "/"): v for a, v in areas.items()})
+    ours = with_(Proofs_Flock={"modules": flock["modules"] + 5, "declarations": flock["declarations"] + 142})
+    theirs = with_(Proofs_Flock={"modules": flock["modules"] + 2, "declarations": flock["declarations"] + 20},
+                   Proofs_Pouw={"modules": pouw["modules"] + 1, "declarations": pouw["declarations"] + 4})
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp_path / n).write_text(t)
+    plain = subprocess.run(["git", "merge-file", "-p", *(str(tmp_path / n) for n in ("ours", "base", "theirs"))],
+                           capture_output=True, text=True)
+    assert plain.returncode == 1, "git alone conflicts on the area both sides raised"
+    want = with_(Proofs_Flock={"modules": flock["modules"] + 7, "declarations": flock["declarations"] + 162},
+                 Proofs_Pouw={"modules": pouw["modules"] + 1, "declarations": pouw["declarations"] + 4})
+    assert _unread(tmp_path, base, ours, theirs) == _unread(tmp_path, base, theirs, ours) == (0, want)
+    assert capsys.readouterr().err == ""
+    lowered, raised = unread(Proofs_Flock=(270, 2290)), unread(Proofs_Flock=(278, 2400))
+    assert _unread(tmp_path, unread(Proofs_Flock=(273, 2309)), lowered, raised) == (0, unread(Proofs_Flock=(275, 2381)))
+    for o, a, b in ((base, ours, theirs), (unread(Proofs_Flock=(273, 2309)), lowered, raised)):
+        sides = [json.loads(t)["areas"] for t in (o, a, b)]
+        _, merged = _unread(tmp_path, o, a, b)
+        for area, cap in json.loads(merged)["areas"].items():
+            for k, n in cap.items():
+                assert n <= sides[2].get(area, {}).get(k, 0) + sides[1].get(area, {}).get(k, 0) - sides[0].get(area, {}).get(k, 0)
+
+
+def test_an_unread_area_one_side_adds_or_drops_and_a_count_below_zero(tmp_path):
+    """An area the base lacks counts 0 there: one side adds is that side's, and one both add holds both. An area a side
+    lacks counts 0 on that side: one the lock run dropped (its modules all read) while the other side raised it keeps only
+    that raise. No count goes below 0, and an area left with no modules is dropped, as `ratchet` drops it."""
+    base = unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4))) == (
+        0, unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(1, 3))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(3, 12)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(2, 7))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 3)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))) == (
+        0, unread(Proofs_Flock=(273, 2309)))
+    assert _unread(tmp_path, unread(Proofs_Nci=(3, 10)), unread(Proofs_Nci=(2, 2)), unread(Proofs_Nci=(3, 3))) == (
+        0, unread(Proofs_Nci=(2, 0)))
+    assert _unread(tmp_path, unread(Proofs_Nci=(2, 5)), unread(), unread(Proofs_Nci=(1, 2))) == (0, unread())
+    assert _unread(tmp_path, "", unread(Proofs_Nci=(1, 2)), unread(Proofs_Nci=(2, 3))) == (0, unread(Proofs_Nci=(3, 5)))
+
+
+def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict(tmp_path, capsys):
+    """Another schema on any side, a side that is not the JSON object `unread.py` writes, an area that isn't a map of its
+    two fields, or a field that isn't a count: git's conflict, saying why on stderr."""
+    good = json.loads(unread(Proofs_Flock=(273, 2309)))
+    flock = good["areas"][FL]
+    def area(**fields) -> str:
+        return json.dumps({**good, "areas": {FL: {**flock, **fields}}})
+    shape, fields = "is not a JSON object of `schema` and `areas`", "area 'Proofs/Flock' is not a map of modules, declarations"
+    cases = [("is schema 'lean-unread-caps/v2'", json.dumps({**good, "schema": "lean-unread-caps/v2"})),
+             ("is not JSON", "{\"schema\": "), (shape, "[]"), (shape, json.dumps({**good, "areas": []})),
+             (shape, json.dumps({**good, "owner": "@lean"})), (fields, json.dumps({**good, "areas": {FL: 273}})),
+             (fields, area(room=2)), ("Proofs/Flock.modules is '274', not a count", area(modules="274")),
+             ("Proofs/Flock.modules is True, not a count", area(modules=True)),
+             ("Proofs/Flock.declarations is -1, not a count", area(declarations=-1)),
+             ("Proofs/Flock.declarations is 2310.5, not a count", area(declarations=2310.5))]
+    sides = {"base": unread(Proofs_Flock=(273, 2309)), "ours": unread(Proofs_Flock=(275, 2320)),
+             "theirs": unread(Proofs_Flock=(274, 2312))}
+    for why, bad in cases:
+        for side in sides:
+            code, text = _unread(tmp_path, *(bad if s == side else t for s, t in sides.items()))
+            err = capsys.readouterr().err
+            said = (f"merge.py: {UNREAD}: {side} {why}", f"merge.py: {UNREAD}: {side}'s {why}")
+            assert code == 1 and any(s in err for s in said), (why, side, err)
+            assert err.rstrip().endswith("left to git's merge, as a conflict")
+            assert "<<<<<<< ours\n" in text or side == "base", (why, side, text)
+
+
+def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installed_driver(tmp_path, monkeypatch):
+    """The `lean-caps` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
+    path (`%P`), so `.gitattributes` naming it for `unread-caps.json` is all a clone needs: `git merge` of two branches that
+    each raise an area's cap merges, and a side in another schema leaves git's conflict."""
+    from research.clone import RECORD_DRIVER
+
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "PYTHONDONTWRITEBYTECODE": "1"}.items():
+        monkeypatch.setenv(k, v)
+    repo = tmp_path / "repo"
+    (repo / M.DIR).mkdir(parents=True)
+    for f in ("merge.py", "check.py", "modules.py"):
+        shutil.copy(HERE.parent / f, repo / M.DIR / f)
+    (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.CAPS}\n")
+    caps = repo / UNREAD
+    git(repo, "init", "-q", "-b", "main")
+    for name, start, text in (("main", None, unread(Proofs_Flock=(273, 2309), Proofs_Pouw=(49, 412))),
+                              ("a", "main", unread(Proofs_Flock=(278, 2451), Proofs_Pouw=(49, 412))),
+                              ("b", "main", unread(Proofs_Flock=(275, 2329), Proofs_Pouw=(50, 416))),
+                              ("v2", "main", unread(Proofs_Flock=(275, 2329)).replace("caps/v1", "caps/v2"))):
+        if start:
+            git(repo, "checkout", "-q", "-b", name, start)
+        caps.write_text(text)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", name)
+    git(repo, "checkout", "-q", "a")
+    plain = git(repo, "merge", "--no-edit", "b", check=False)
+    assert plain.returncode and f"CONFLICT (content): Merge conflict in {UNREAD}" in plain.stdout
+    git(repo, "merge", "--abort")
+    subprocess.run([sys.executable, f"{M.DIR}/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
+    assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ") and '"$f" --caps %O %A %B %P;' in driver
+    git(repo, "merge", "--no-edit", "b")
+    assert caps.read_text() == unread(Proofs_Flock=(280, 2471), Proofs_Pouw=(50, 416))
+    refused = git(repo, "merge", "--no-edit", "v2", check=False)
+    assert refused.returncode and f"CONFLICT (content): Merge conflict in {UNREAD}" in refused.stdout
+    assert "theirs is schema 'lean-unread-caps/v2'" in refused.stderr + refused.stdout
