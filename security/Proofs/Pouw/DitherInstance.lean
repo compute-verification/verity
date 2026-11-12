@@ -22,6 +22,8 @@ public import Proofs.Core.Accel.Model
 * `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting (P1) and (P2), and at the `x`
   `CardWithinAccel` gives; `WorkSoundH200`, `WorkSoundSm120`, `WorkSoundOnCardH200` and `WorkSoundOnCardSm120` from
   `Proofs.Pouw.Dither.WorkSound`. None reads a premise beyond `WorkSound`'s and the statement's.
+* `WorkSoundAtTables`: `workSoundAt_of_workSound` at every card table, menu and host row, the statement that names no
+  table.
 * `h200_semantics`, `sm120_semantics`: the exact `s8` semantics (`Verity.Accel.s8Open`) meets (P1) and (P2) on each
   card, so `WorkSoundAt`'s hypotheses on `x` are not empty.
 * `h200_onCard`, `sm120_onCard`: at that semantics, on any period's devices, `cardAccel` (programs as runs within the
@@ -92,6 +94,7 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
       linarith [h4.2.1, h4.2.2]
     show G.use (A.answer b) (A.answerIn o x b) r ≤ G.rate r * Pd.T
     exact h1.2.trans (mul_le_mul_of_nonneg_left hwa (g2.1 r).le)
+  unfold WorkBound
   refine ⟨h G P nsb Reg Obs _ dev Pd μ Wmm Wsha Wans (fun b => pubCost e μ pb.mm (macs b))
     (fun b => pubCost e μ pb.sha (comps b)) ηw δ (nmax * Wmac) (Ein + Eout) κS Q κdmm κdsha sel Badv ξ κx κsha
     hdual hinst' hH hη hδ hδ1 (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc'
@@ -145,6 +148,10 @@ theorem workSoundH200_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : Work
 
 theorem workSoundSm120_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundSm120 :=
   workSoundAt_of_workSound h _ _ _
+
+/-- **The headline on every card table at θ**, from `WorkSound`'s proof. -/
+theorem WorkSoundAtTables : Pouw.Guarantees.DitherInstance.WorkSoundAtTables :=
+  fun c pb hr => workSoundAt_of_workSound Pouw.SecurityProofs.Dither.WorkSound c pb hr
 
 /-- **The headline on the H200 at θ**, from `WorkSound`'s proof. -/
 theorem WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200 :=

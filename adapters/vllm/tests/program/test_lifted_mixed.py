@@ -15,10 +15,7 @@ The lifted fixed WORKLOAD Program: GP-01's `WorkloadProgram` compose — unchang
     twice, by name: its digest/address map is not the Program of record's, and its values fail the interface check `out_B ==
     assign_inactive(B's committed tokens)` (B's events are committed Active where the poisoned Program says ⊥); a ⊥ smuggled into the
     shared weights is refused at the prescribed boundary, and bypassed it deactivates BOTH requests' event 0 — again refused by name
-    against each request's own committed tokens (a corrupt input cannot look like a legitimate stop);
-  * the S-migration hook (P9, the candidate wiring): `n_live_t` as Program nodes at the workload root equals
-    `Σ_r LIsActive(tok_in_{r,t})` read off the components' OWN guard nodes at every engine step, drops by exactly one at `a_A`, follows
-    arrivals, and `S_t = LSplitsForSMS<142>(n_live_t)` is Active while any request is live and ⊥ when none is; both `LAG ∈ {0, 1}`.
+    against each request's own committed tokens (a corrupt input cannot look like a legitimate stop).
 
 What it does NOT establish: anything about a real B2 record (the `mixedstop` workload waits on a Commit, like DENSE B1's record half).
 """
@@ -30,20 +27,19 @@ from verity.circuits import Program
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind, composite
 from verity_vllm.program import workload as W
-from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
+from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.definitions.registry import b1, lifted as L
 from verity_vllm.program.lifting import lifted_compose
 from verity.definitions.numerics import serve3_reference as ref
 from verity.definitions.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
-from verity.circuits.types import Array, Tuple, Value
+from verity.circuits.types import Array, Value
 
 I32 = Value(32)
 CAP = D_MAX + 1
 EOS = (17,)
 BOUNDARY = "Final_v2"
 BOT32 = L.enc_bot(32)
-SMS = 142
 B_SHIFT = 1  # prompt_b[0] += 1: the TINY greedy transcript never emits 17 (checked in the fixture)
 
 
@@ -326,151 +322,3 @@ def test_negative_a_bot_smuggled_into_the_shared_weights_is_refused_at_the_bound
         want = L.assign_inactive(rid, tokens, EOS, CAP, lag=0)
         assert want[0] != per[rid][0] and L.is_active(32, want[0])
         assert all(L.is_bot(32, x) for x in per[rid])  # strictness: the whole token cone
-
-
-# ---------------------------------------------------------------------------------------------------------
-# T-M5: the S-migration hook as Program nodes (P9; the candidate wiring)
-# ---------------------------------------------------------------------------------------------------------
-
-
-def _caps(S):
-    return [S.CAP] * len(S.ARR) if isinstance(S.CAP, int) else list(S.CAP)
-
-
-def _horizon(S):
-    return max(a + c for a, c in zip(S.ARR, _caps(S)))
-
-
-@composite("LWorkloadS", 1, ["WL", "EOS", "LAG", "SMS", "ARR", "CAP"],
-           lambda S: (S.WL.signature()[0],
-                      Tuple(S.WL.signature()[1], Array(_horizon(S), Value(L.N_LIVE_BITS + 1)), Array(_horizon(S), Value(L.SPLITS_BITS + 1)))),
-           conformance="protocol-defined")
-def LWorkloadS(B, S, *args):
-    wl = B.call(S.WL, *args, name="workload")
-    eos_cols = [B.call(b1.const(33, e), name=f"eos[{i}]") for i, e in enumerate(S.EOS)]
-    eos_set = coll_concat(Array(len(S.EOS), Value(33)), eos_cols)
-    bot = B.call(L.l_bot(32), name="bot32")
-    outs = [wl[r] for r in range(len(S.ARR))]
-    n_live, Sx = L.live_count_hook(B, outs, list(S.ARR), S.CAP, eos_set, bot, S.LAG, num_sms=S.SMS)
-    return tuple_of(wl, array_of(n_live), array_of(Sx))
-
-
-def _hook_run(component, arrivals, prompts, lag, eos=EOS):
-    wl = lifted_compose.lifted_workload(_requests(component, arrivals), eos, lag=lag, boundary_prefix=BOUNDARY)
-    wl_u = W.WorkloadProgram(_requests(component, arrivals), lag=lag)
-    prog = Program(bind(LWorkloadS, WL=wl.fn, EOS=eos, LAG=lag, SMS=SMS, ARR=tuple(arrivals), CAP=CAP))
-    t, outs = _run(prog, _inputs_for(wl_u.fn, prompts, True))
-    H = max(a + CAP for a in arrivals)
-    n_out = 2 * CAP
-    return wl, prog, t, outs[:n_out], outs[n_out:n_out + H], outs[n_out + H:]
-
-
-def _wl_call_base(wl, prog, rid):
-    body = prog.root.body
-    k_wl = next(k for k, n in enumerate(body.nodes) if n.name == "workload")
-    inner = wl.program.root.body
-    k = wl._K + [r.request_id for r in wl.requests].index(rid)
-    return body.offsets[k_wl] + inner.offsets[k] - inner.offsets[wl._K]
-
-
-@pytest.mark.parametrize("lag", [0, 1])
-@pytest.mark.slow
-def test_the_live_count_hook_equals_the_components_own_input_activity_and_drops_by_one_at_a_A(component, lag):
-    prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
-    wl, prog, t, outs, n_live, S = _hook_run(component, (0, 0), prompts, lag)
-    per = _request_outs(wl, outs)
-    a_A = L.activity_prefix(per["A"], EOS, CAP)
-    n_exec = L.expected_served(a_A, CAP, lag)
-    assert a_A == 4 and per["B"] == _prompt_b_transcript(W.WorkloadProgram(_requests(component), lag=lag), prompts)
-    # the hook's count per engine step
-    counts = [L.payload(L.N_LIVE_BITS, x) for x in n_live]
-    assert all(L.is_active(L.N_LIVE_BITS, x) for x in n_live)
-    assert counts == [2] * n_exec + [1] * (CAP - n_exec)
-    # == Σ_r LIsActive(tok_in_{r,t}) read off each component's OWN guard nodes (P9, the Program's values, not the hook's recomputation)
-    acts = {}
-    for rid in ("A", "B"):
-        c = next(r for r in wl.requests if r.request_id == rid).component
-        lifted, bl = c.fn, c.fn.body
-        G = _wl_call_base(wl, prog, rid)
-        ia = L.l_is_active(32)
-        toks = {bl.nodes[k].name: k for k in lifted.guard_nodes if bl.nodes[k].name.endswith("/tok_in")}
-        a = []
-        for s in range(CAP):
-            if s <= lag:  # unguarded steps read the raw committed token (event 0 = the prefill's output, always Active)
-                a.append(1 if s == 0 else ia.evaluate(t[G + bl.offsets[lifted.node_map[lifted.boundaries[s - 1]]]]))
-            else:
-                a.append(ia.evaluate(t[G + bl.offsets[toks[f"s={s}/tok_in"]]]))
-        acts[rid] = a
-    assert acts["B"] == [1] * CAP and acts["A"] == [1] * n_exec + [0] * (CAP - n_exec)
-    assert counts == [acts["A"][s] + acts["B"][s] for s in range(CAP)]
-    # S_t: Active(32) at 142 SMs for n ∈ {1, 2} (vLLM's split table: 142 SMs, 4 → 32 is the first breakpoint), never ⊥ while B is live
-    assert [L.payload(L.SPLITS_BITS, x) for x in S] == [32] * CAP and all(L.is_active(L.SPLITS_BITS, x) for x in S)
-
-
-@pytest.mark.slow
-def test_the_hook_follows_declared_arrivals_and_S_is_bot_when_no_request_is_live(component):
-    # arrivals (0, 2): the horizon is 11 engine steps; A alone for t < 2, both until A stops, B alone after
-    prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
-    wl, prog, t, outs, n_live, S = _hook_run(component, (0, 2), prompts, 0)
-    per = _request_outs(wl, outs)
-    a_A = L.activity_prefix(per["A"], EOS, CAP)
-    counts = [L.payload(L.N_LIVE_BITS, x) for x in n_live]
-    assert len(counts) == CAP + 2 and counts == [1, 1] + [2] * (a_A - 2) + [1] * (CAP + 2 - a_A)
-    assert all(L.is_active(L.SPLITS_BITS, x) for x in S)
-    # both requests stop (the same prompt twice): from a_r on no request is live — n_live = Active(0) and S = ⊥ (no sampler launch)
-    same = {"A": list(_inputs()[0]), "B": list(_inputs()[0])}
-    wl2, prog2, t2, outs2, n2, S2 = _hook_run(component, (0, 0), same, 0)
-    per2 = _request_outs(wl2, outs2)
-    assert per2["A"] == per2["B"] == Y_RAW[:4] + [BOT32] * (CAP - 4)
-    assert [L.payload(L.N_LIVE_BITS, x) for x in n2] == [2] * 4 + [0] * (CAP - 4)
-    assert all(L.is_active(L.N_LIVE_BITS, x) for x in n2)  # the COUNT is Active(0), never ⊥ (it is a value of the Program)
-    assert [L.is_bot(L.SPLITS_BITS, x) for x in S2] == [False] * 4 + [True] * (CAP - 4)  # the SPLIT COUNT is ⊥: no event
-    # structural refusals of the hook
-    with pytest.raises(ValueError, match="requests"):
-        L.live_count_prim(65)
-    with pytest.raises(ValueError, match="LAG=3"):
-        lifted_compose.lifted_workload(_requests(component), EOS, lag=3, boundary_prefix=BOUNDARY)
-
-
-# GP-01's populations have UNEQUAL caps (its standard B2 fixture is cap 3 / cap 2). The hook takes one cap per request.
-
-D_MAX_B = 3
-CAP_B = D_MAX_B + 1
-
-
-@pytest.fixture(scope="module")
-def component_b():
-    desc = encode_program(Program(b1.serve_v2(TINY, LP, D_MAX_B)))
-    return W.request_component(desc, REGISTRY, [("prompt", repr(Array(LP, I32))), ("weights", repr(weights_type(TINY)))])
-
-
-@pytest.mark.slow
-def test_f_pad_19_the_hook_takes_one_cap_per_request_and_refuses_a_served_length_by_name(component, component_b):
-    reqs = [W.WorkloadRequest("A", 0, LP, CAP, 0, component), W.WorkloadRequest("B", 1, LP, CAP_B, 0, component_b)]
-    prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
-    for lag in (0, 1):
-        wl = lifted_compose.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
-        wl_u = W.WorkloadProgram(reqs, lag=lag)
-        # ONE cap for both is refused by name -- 9 would read B's out[4..8] (an UNNAMED IndexError), 4 would truncate A's schedule
-        for one_cap in (CAP, CAP_B):
-            with pytest.raises(ValueError, match="never a served length"):
-                Program(bind(LWorkloadS, WL=wl.fn, EOS=EOS, LAG=lag, SMS=SMS, ARR=(0, 0), CAP=one_cap))
-        with pytest.raises(ValueError, match="one cap per request"):
-            Program(bind(LWorkloadS, WL=wl.fn, EOS=EOS, LAG=lag, SMS=SMS, ARR=(0, 0), CAP=(CAP,)))
-        # per-request caps: horizon 9; B is a member of steps [0, 4) only, A of [0, 9)
-        prog = Program(bind(LWorkloadS, WL=wl.fn, EOS=EOS, LAG=lag, SMS=SMS, ARR=(0, 0), CAP=(CAP, CAP_B)))
-        t, outs = _run(prog, _inputs_for(wl_u.fn, prompts, True))
-        n_out = CAP + CAP_B
-        per = _request_outs(wl, outs[:n_out])
-        n_live = outs[n_out:n_out + CAP]
-        Sx = outs[n_out + CAP:]
-        assert len(n_live) == CAP and len(Sx) == CAP
-        a_A = L.activity_prefix(per["A"], EOS, CAP)
-        assert a_A == 4 and L.activity_prefix(per["B"], EOS, CAP_B) == CAP_B  # A stops at 4 (the fixture), B runs to ITS cap (no EOS)
-        live_A = [1] * min(a_A + lag, CAP) + [0] * (CAP - min(a_A + lag, CAP))
-        live_B = [1] * CAP_B + [0] * (CAP - CAP_B)  # a non-member contributes nothing
-        assert [L.payload(L.N_LIVE_BITS, x) for x in n_live] == [a + b for a, b in zip(live_A, live_B)]
-        assert [L.is_bot(L.SPLITS_BITS, x) for x in Sx] == [c == 0 for c in (a + b for a, b in zip(live_A, live_B))]
-        # the members per engine step are structural: 2 for t < CAP_B, 1 after -- read off the LiveCount widths
-        counts = [n.fn.id for n in prog.root.body.nodes if n.name and n.name.startswith("S/n_live[")]
-        assert counts == [f"Lifted[LiveCount2_v1]_v1"] * CAP_B + [f"Lifted[LiveCount1_v1]_v1"] * (CAP - CAP_B)

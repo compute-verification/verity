@@ -36,7 +36,8 @@ PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU
   Outputs: the replay record {result True|False|None, grade, sample{seed, seed_source, challenge}, strata, population{query_total,
     not_executed_by_rule, ...}, uncovered_by_name, query_checks, catch_probability}; the linkage record {result, why, pairs, linked, unlinked}.
   Invariants: result True only if EVERY sampled VU replays bit-exactly AND every non-empty stratum was evaluated (None = partial,
-    never PASS); the seed is never prover-choosable in advance (run root after commitment, or sha256(challenge|root)[:8]); Calls at
+    never PASS); the seed is the run root's first 8 bytes (no coin: a measurement, steerable by committing again), sha256(challenge|root)[:8]
+    under a challenge, or a targeted one (prover-chosen), and the record says which (`sample.seed_form`); Calls at
     request-relative steps >= n_exec leave the pool into a NAMED class before sampling; a request linked over fewer steps than its
     cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
     False fails the replay by name.
@@ -65,6 +66,7 @@ from verity.commitments.randomness import Key
 from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
+from verity_vllm.check.replay import recomputed_prefix as RP
 from verity_vllm.check.replay.checks import checks_of, fold as fold_checks
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.fork import WorkerDied
@@ -75,16 +77,16 @@ from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu, replay_vu
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
 from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
-from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon, splits_of_record
+from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon
 
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
-           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "splits_of_record", "V2_QUERY"]
+           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
 
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
@@ -479,7 +481,9 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
     """`sampled_replay`'s enumeration: every Program's index and its request's population, with the not-evaluable counts, their codes,
     the manifest addresses, the `last` anchors and the address correspondence.  ``memo`` keeps the indices and the populations across calls
     on the same Programs objects (the slim planner fills it before the run's seed exists).  ``cached_prefixes``: per warm request
-    {"cached": C, "producers": [request label per cached block]} (`program.prefix_plan`), what its `prefix` reads resolve to."""
+    {"cached": C, "producers": [request label per cached block], "prompt": its certified prompt ids} (`program.prefix_plan`): a
+    Program with a cached prefix of C reads it from what its producers committed; a Program without one recomputes it
+    (`recomputed_prefix`: its prefix rows leave the population, and its replay computes them from the prompt)."""
     memo = {} if memo is None else memo
     all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
     addresses: dict[tuple, dict] = {}                                             # manifest address -> class of the rows producing it
@@ -498,12 +502,13 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         # the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
         # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
         anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
-        key = ("population", id(pi), rid, rank, int(arrivals.get(rid, 0)), ring_slots, int(anchors[rid]["last_step"]))
+        skip = RP.adopt(pi, rid, (cached_prefixes or {}).get(rid))                # a warm request whose Program recomputes its hit
+        key = ("population", id(pi), rid, rank, int(arrivals.get(rid, 0)), ring_slots, int(anchors[rid]["last_step"]), len(skip))
         if key not in memo:                                                       # a request's addresses are its own (keyed by it)
             got_a: dict[tuple, dict] = {}
             got_c: dict[str, dict] = {}
             memo[key] = (*population(pi, rid, rank=rank, arrive=int(arrivals.get(rid, 0)), ring_slots=ring_slots, addresses=got_a,
-                                     last_step=int(anchors[rid]["last_step"]), codes=got_c), got_a, got_c)
+                                     last_step=int(anchors[rid]["last_step"]), codes=got_c, recomputed=skip), got_a, got_c)
         vus, ne, nef, got_a, got_c = memo[key]
         all_vus.extend(vus)
         not_ev.update(ne)
@@ -513,11 +518,11 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         indices[rid] = pi
     for rid, pc in (cached_prefixes or {}).items():
         pi = indices.get(rid)
-        if pi is None or not int(pc.get("cached") or 0):
+        if pi is None or not int(pc.get("cached") or 0) or rid in pi.recomputed:
             continue
-        if pi.kv_prefix is None or int(pi.kv_prefix["C"]) != int(pc["cached"]):
-            raise ValueError(f"{rid} is served {pc['cached']} cached prompt rows but its Program of record takes "
-                             f"{pi.kv_prefix['C'] if pi.kv_prefix else 'no'} cached prefix")
+        if int(pi.kv_prefix["C"]) != int(pc["cached"]):
+            raise ValueError(f"{rid} is served {pc['cached']} cached prompt rows but its Program of record takes a cached prefix of "
+                             f"{pi.kv_prefix['C']}")
         pi.cached_prefix[rid] = CP.CachedPrefix(pi.kv_prefix, [str(q) for q in pc["producers"]], indices, arrivals)
     return all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec
 
@@ -525,7 +530,8 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
 def planned(picked: list[dict], indices: dict, store: CommittedStore, arrivals: dict[str, int], t_start: float) -> dict[str, Any]:
     """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the sample's size, its
     picks ([request, request-relative step, Program row, op_path] in sample order) and the VUs whose inputs did not resolve."""
-    unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], store, vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
+    own = RP.stores(indices, store, None, arrivals, plan=True)
+    unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], own.get(vu["request_id"], store), vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
     return {"plan": True, "picked": len(picked), "picks": [[vu["request_id"], int(vu["step"]), int(vu["i"]), vu["op_path"]] for vu in picked],
             "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
 
@@ -602,10 +608,11 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     strata_eval: Counter = Counter()
     strata_mism: Counter = Counter()
     fam_time, fam_n = Counter(), Counter()
+    own = RP.stores(indices, store, weights, arrivals)                            # warm requests whose Programs recompute their hits
 
     def _one(vu: dict) -> tuple[dict, dict, float]:
         t0 = time.perf_counter()
-        rec = replay_vu(indices[vu["request_id"]], store, weights, vu, arrive=int(arrivals.get(vu["request_id"], 0)))
+        rec = RP.replay_vu(own, indices[vu["request_id"]], store, weights, vu, arrive=int(arrivals.get(vu["request_id"], 0)))
         return vu, rec, time.perf_counter() - t0
 
     # PARALLEL evaluation: the numpy k16-chain evaluators are GIL-bound (many small array ops), so threads gave ~2x on 16 cores; a FORKED
@@ -766,6 +773,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             # Not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)
             "unreplayable": [{"family": f, "n": int(not_ev_fam[f]),
                               "why": NOT_YET.get(f.split(" (")[0], "structure / interior: no identity" if "(structure" in f
+                                                 else "recomputed prefix: computed by the warm request's replay, never served by it" if "(recomputed prefix" in f
                                                  else ("interior producer: composed into its consumer's VU" if "(interior" in f
                                                        else ("MoE plane row -> plane slice mapping failed: see population.not_evaluable" if "(plane mapping failed)" in f
                                                              else "no registered evaluator")))}

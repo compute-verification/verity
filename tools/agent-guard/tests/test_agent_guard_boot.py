@@ -1,5 +1,6 @@
-"""`tools/agent-guard/boot.sh` puts the shell hook on a VM whose branch predates it: cloud agents read project hooks only, so
-a VM on a branch without `.cursor/hooks.json` would run no hook."""
+"""`tools/agent-guard/boot.sh` puts the guard's files on a VM and gives a checkout that tracks no `.cursor/hooks.json` a
+fail-closed one. It can't give a branch a hook: a session runs the hooks of the branch its VM boots on, checked out after
+the environment's `start`, so boot leaves a tracked hooks.json alone and writes none anywhere else."""
 import json
 import os
 import shutil
@@ -24,9 +25,9 @@ def cursor_reads(path: Path) -> dict:
     return json.loads(text)
 
 
-def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_one(tmp_path):
+def test_boot_gives_a_checkout_that_tracks_no_hooks_file_a_fail_closed_one_and_leaves_a_tracked_one_alone(tmp_path):
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_SKIP_INSTALL": "1",
-           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc"), "AGENT_GUARD_ROOTS": str(tmp_path / "agent")}
+           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc")}
 
     def git(*a, cwd=tmp_path / "ws"):
         return subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, text=True, env=env).stdout
@@ -69,7 +70,8 @@ def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_o
     git("checkout", "-q", "main")
     assert json.loads((tmp_path / "ws/.cursor/hooks.json").read_text()) == json.loads((ROOT / ".cursor/hooks.json").read_text())
     p = boot()
-    assert p.returncode == 0 and "tracks .cursor/hooks.json" in p.stdout, (p.stdout, p.stderr)
+    assert p.returncode == 0 and "tracks .cursor/hooks.json, left as it is" in p.stdout, (p.stdout, p.stderr)
+    assert "its hook runs" not in p.stdout, "boot can't know: Cursor may read no hook from a tracked file"
     assert git("status", "--porcelain") == ""
     path_lines = [ln for ln in (tmp_path / "bashrc").read_text().splitlines() if "/workspace/.venv/bin" in ln]
     assert path_lines == ["export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH"], "research on PATH, once"
@@ -77,7 +79,7 @@ def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_o
 
 def test_boot_refuses_without_origin_or_an_earlier_copy(tmp_path):
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_SKIP_INSTALL": "1",
-           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc"), "AGENT_GUARD_ROOTS": str(tmp_path / "agent")}
+           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc")}
     subprocess.run(["git", "init", "-q", str(tmp_path / "ws")], check=True, env=env)
     p = subprocess.run(["bash", str(BOOT), str(tmp_path / "ws")], capture_output=True, text=True, env=env)
     assert p.returncode == 1 and "no guard on this VM" in p.stderr, p.stderr
@@ -85,46 +87,27 @@ def test_boot_refuses_without_origin_or_an_earlier_copy(tmp_path):
     assert entry["failClosed"] is True and not (tmp_path / "opt/shell_hook.py").exists()
 
 
-def test_boot_puts_the_hook_at_a_task_launched_agents_root_above_its_checkout(tmp_path):
-    """A Task-launched cloud agent's workspace root is /agent with the repository under /agent/repos/, and Cursor reads hooks
-    from the root only: Task-launched workers ran no hook, so no inbox message and no secret refusal reached them. The
-    root's hooks.json runs the checkout's hook.sh, or DEST's copy while there is no checkout, and a root that is itself a
-    checkout gets none."""
+def test_boot_writes_no_hooks_file_above_the_checkout(tmp_path):
+    """A Task-launched cloud agent's workspace root is /agent with the repository under /agent/repos/, and Cursor reads the
+    checkout's hooks.json, never one at the root: a file boot wrote there ran no hook in any session. So boot writes a hooks
+    file nowhere but in WORKSPACE, and the variable that named such roots does nothing."""
+    ws = tmp_path / "agent/repos/verity"
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_SKIP_INSTALL": "1",
-           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc"),
-           "AGENT_GUARD_ROOTS": f"{tmp_path / 'agent'} {tmp_path / 'ws'} {tmp_path / 'absent'}"}
+           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc"), "AGENT_GUARD_ROOTS": str(tmp_path / "agent")}
 
-    def git(*a, cwd=tmp_path / "ws"):
+    def git(*a, cwd=ws):
         return subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, text=True, env=env).stdout
 
     git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
-    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "ws"), cwd=tmp_path)
-    shutil.copytree(ROOT / "tools/agent-guard", tmp_path / "ws/tools/agent-guard",
-                    ignore=shutil.ignore_patterns("__pycache__"))
-    shutil.copytree(ROOT / ".cursor", tmp_path / "ws/.cursor")
+    git("clone", "-q", str(tmp_path / "origin.git"), str(ws), cwd=tmp_path)
+    shutil.copytree(ROOT / "tools/agent-guard", ws / "tools/agent-guard", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(ROOT / ".cursor", ws / ".cursor")
     git("add", "tools", ".cursor")
     git("commit", "-q", "-m", "guard")
     git("push", "-q", "origin", "HEAD:main")
-    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "agent/repos/verity"), cwd=tmp_path)
 
-    p = subprocess.run(["bash", str(BOOT), str(tmp_path / "ws")], capture_output=True, text=True, env=env)
-    assert p.returncode == 0 and f"wrote {tmp_path / 'agent'}/.cursor/hooks.json" in p.stdout, (p.stdout, p.stderr)
-    assert not (tmp_path / "absent").exists()
-    assert json.loads((tmp_path / "ws/.cursor/hooks.json").read_text()) == json.loads((ROOT / ".cursor/hooks.json").read_text())
-    hooks = cursor_reads(tmp_path / "agent/.cursor/hooks.json")["hooks"]
-    (entry,) = hooks["beforeShellExecution"]
-    assert entry["failClosed"] is True and entry["command"].endswith(" guard shell_hook.py")
-    assert [h["matcher"] for h in hooks["preToolUse"]] == ["Task", "CallDynamicTool", "^MCP:"]
-    assert [h["command"].rsplit(" ", 1)[1] for h in hooks["stop"]] == ["stop_hook.py"]
-
-    def verdict():
-        out = subprocess.run(entry["command"], shell=True, cwd=tmp_path / "agent", capture_output=True, text=True, check=True,
-                             input=json.dumps({"hook_event_name": "beforeShellExecution", "command": "env | cut -d= -f1",
-                                               "cwd": str(tmp_path / "agent"), "workspace_roots": [str(tmp_path / "agent")]}),
-                             env={**env, "AGENT_GUARD_CACHE": str(tmp_path / "cache"), "AGENT_INBOX_POLL_S": "off"})
-        return json.loads(out.stdout)["permission"]
-
-    assert verdict() == "deny"
-    assert any((tmp_path / "cache").iterdir()), "the checkout's hook.sh ran origin/main's guard"
-    shutil.rmtree(tmp_path / "agent/repos")
-    assert verdict() == "deny", "DEST's copy runs while there is no checkout"
+    p = subprocess.run(["bash", str(BOOT), str(ws)], capture_output=True, text=True, env=env)
+    assert p.returncode == 0, (p.stdout, p.stderr)
+    assert (tmp_path / "opt/shell_hook.py").is_file(), "the guard's files are on the VM"
+    assert sorted(tmp_path.rglob("hooks.json")) == [ws / ".cursor/hooks.json"], "the checkout's tracked file, and no other"
+    assert git("status", "--porcelain") == ""

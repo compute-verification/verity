@@ -50,11 +50,11 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
+from verity.definitions.circuits.targets import target as _target
+from verity.definitions.circuits.targets.target import TARGETS, Target
 from verity.definitions.silicon import models as _models
 from verity.definitions.silicon.instructions import INSTRUCTIONS, Instruction
 from verity.definitions.silicon.models import Model
-from verity.definitions.circuits.targets import target as _target
-from verity.definitions.circuits.targets.target import TARGETS, Target
 
 __all__ = [
     "ANCHOR_SKU", "CANONICAL_FAMILIES", "Criterion", "DOSSIER_KIND", "EvidenceRef", "HONEST_MIN", "INDEPENDENT_REFERENCES",

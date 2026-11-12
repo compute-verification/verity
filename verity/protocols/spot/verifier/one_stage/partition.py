@@ -22,6 +22,9 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   proof blocks in canonical order (node order, then member, for a template query; Call order, then the Call's own, for
   `Q_word` and `Q_call`), and `unit_gates` gives
   each proof block's root gates. `in_order` holds when the proof blocks read stratum by stratum are the population in order.
+  `fanout` gives a template query's fan-out F, at least the most proof blocks one group joined by reads of each other's
+  results holds, and `shared_inputs` the run Input nodes its proof blocks don't each read alone, both a root node at a
+  time (R8, `registration.check`).
 * **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
   `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
   templates by descriptor id, are `verity.circuits.population`'s, named here too: a serving stack builds its window's
@@ -34,7 +37,8 @@ proof block index on the prover's word.
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Mapping, Sequence
+from collections import Counter
+from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 from verity.circuits import partition_object as PO
 from verity.circuits.cut import boundary_widths, call_scope
@@ -44,7 +48,8 @@ from verity.circuits.partition_object import (FORMAT, QueryRefused, program_sha5
                                         template_instance_query, template_instances_query)
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 from verity.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
-from verity.circuits.program import Program, is_input
+from verity.circuits.program import Program, is_input, is_registered
+from verity.circuits.refs import Affine, Concat, Strided
 from verity.circuits.types import Value
 
 _PRE_CANONICAL = {"program", "query"}
@@ -170,6 +175,13 @@ def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition
                        f"X <= {QUERY_X}, not {q['name']} v{q['version']} at X = {x}", {"query": q})
 
 
+def is_template_query(query: Mapping[str, Any]) -> bool:
+    """Whether `query` names a template query, whose proof blocks are the root nodes' instances (`fanout`,
+    `shared_inputs`)."""
+    return isinstance(query, Mapping) and (query.get("name"), query.get("version")) in (PO.Q_TEMPLATE_INSTANCE,
+                                                                                         PO.Q_TEMPLATE_INSTANCES)
+
+
 def ranges(program: Program, query: Mapping[str, Any]) -> list[tuple[str, int, int]]:
     """`query` applied to `program`: (template or Definition id, first proof block index, proof block count) per root node computing
     proof blocks (a template query's) or per Call with proof blocks (`Q_word`'s and `Q_call`'s), in canonical order."""
@@ -236,6 +248,151 @@ def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
     return us == list(range(n)) and all(u < len(gates) for u in us)
 
 
-__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "in_order", "mixed_population_program", "partition",
-           "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "strata", "template_instance_query",
-           "template_instances_query", "unit_gates", "units", "QUERY_X"]
+def _once(inner: int, outer_stride: int, inner_stride: int, count: int) -> bool:
+    """Whether a strided run of `count` references names each of its leaves at most once: its rows (or its columns) lie
+    apart. A run whose rows and columns interleave counts as naming a leaf twice."""
+    rows, cols = -(-count // inner), min(inner, count)
+    if rows == 1 or cols == 1:
+        return (cols == 1 or inner_stride != 0) and (rows == 1 or outer_stride != 0)
+    return (inner_stride != 0 and abs(inner_stride) * (cols - 1) < abs(outer_stride)
+            or outer_stride != 0 and abs(outer_stride) * (rows - 1) < abs(inner_stride))
+
+
+def _runs(refs: Any) -> Iterator[tuple[int, int, int, bool]]:
+    """`(node, lo, hi, once)` per run of root references in `refs`: each leaf of the run is one of leaves `[lo, hi)` of root
+    node `node`'s result, and with `once` no two of the run's references name the same leaf. A strided run is taken at its
+    span; an explicit one is a run a reference, which the description lists."""
+    if not refs.count:
+        return
+    if isinstance(refs, Concat):
+        for p in refs.parts:
+            yield from _runs(p)
+    elif isinstance(refs, Affine):
+        if refs.space == "n":
+            yield refs.idx, refs.base, refs.base + refs.count, True
+    elif isinstance(refs, Strided):
+        if refs.space == "n":
+            q, r = divmod(refs.count - 1, refs.inner)
+            corners = [(0, 0), (0, min(refs.inner, refs.count) - 1), (q, 0), (q, r), *([(q - 1, refs.inner - 1)] if q else [])]
+            at = [refs.base + a * refs.outer_stride + b * refs.inner_stride for a, b in corners]
+            yield (refs.idx, min(at), max(at) + 1,
+                   _once(refs.inner, refs.outer_stride, refs.inner_stride, refs.count))
+    else:
+        yield from ((i, j, j + 1, True) for s, i, j in refs if s == "n")
+
+
+def _template(program: Program, query: Mapping[str, Any], what: str) -> PO.TemplatePartition:
+    part = evaluate(program, query)
+    if not isinstance(part, PO.TemplatePartition):
+        raise QueryRefused(f"{what} is a template query's, not {query.get('name')}'s", {"query": dict(query)})
+    return part
+
+
+def fanout(program: Program, query: Mapping[str, Any]) -> int:
+    """F, the fan-out of a template query's partition of `program`, as the verifier summarizes it a root node at a time:
+    at least the most proof blocks one group holds, two proof blocks joined when one reads part of the other's result and
+    the groups closed under joining. F is 1 when no proof block reads another's result, as in every population program,
+    whose instances each read only their own share of each Input node; the requests a group's proof blocks serve then
+    read in no other group's, so a bound of S served bits per proof block holds each group's served bits to F S (the
+    capped form at N = F, `plancheck.two`'s `fanout`). The summary joins root nodes, not proof blocks: a node reading
+    any part of another's result joins the two, and F is the most proof blocks the nodes of one joined set hold, so it
+    is the group's size exactly where every joined node is a call, and at least it where a joined batch's members read
+    other proof blocks' results in parts. It reads each node's references once, never its members or its gates. A
+    read of another proof block's values counts only as a reference to that block's result: a value another proof block
+    writes that the program takes as an Input node joins nothing, which is why `shared_inputs` refuses a run Input two
+    proof blocks read. `QueryRefused` for a query other than a template query."""
+    part = _template(program, query, "fan-out")
+    nodes = program.root.body.nodes
+    members = {k: n for k, _t, _lo, n in part.ranges}
+    parent = {k: k for k in members}
+
+    def group(k: int) -> int:
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    joined: set[int] = set()
+    for k in members:
+        for a in nodes[k].args:
+            for i, _lo, _hi, _once_ in _runs(a.refs):
+                if i in members:
+                    parent[group(i)] = group(k)
+                    joined.update((i, k))
+    held = Counter()
+    for k in joined:
+        held[group(k)] += members[k]
+    return max([1, *held.values()])
+
+
+def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[range] = ()) -> list[int]:
+    """The run Input nodes of `program` (`program.INPUT_ID`; a registered input, and an Input node whose gates lie in one
+    of `held`, the gates of the parameters the verifier expects registered, are registered values, held by R7) whose
+    leaves a template query's proof blocks don't each read alone, in node order: a batch of more than one member reading
+    one whole (an argument it broadcasts), or two proof blocks reading one of its leaves, as the summary sees them a root
+    node at a time. A batch's members read disjoint elements of each argument it maps (`cut.member_refs`), so a batch
+    reads an Input node's leaves alone when no two of its references to them name one leaf; a call is one proof block,
+    whatever it reads twice. A strided run is taken at its span, and one that names a leaf twice, or two of a batch's
+    runs that overlap, count as shared. A served port's rows reach a proof block either as its own leaves or through a
+    registered value: a run Input two proof blocks read could hold rows one of them computed, which `fanout` can't see.
+    `QueryRefused` for a query other than a template query."""
+    part = _template(program, query, "an Input's readers")
+    nodes, offsets, held = program.root.body.nodes, program.root.body.offsets, list(held)
+    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
+                 and not any(h.start <= offsets[k] and offsets[k + 1] <= h.stop for h in held)}
+    shared: set[int] = set()
+    spans: dict[int, list[tuple[int, int]]] = {}
+    for k, _t, _lo, n in part.ranges:
+        node = nodes[k]
+        axes = node.axes if node.form == "batch" else (None,) * len(node.args)
+        mine: dict[int, list[tuple[int, int]]] = {}
+        for a, ax in zip(node.args, axes):
+            for i, lo, hi, once in _runs(a.refs):
+                if i not in run_input:
+                    continue
+                if n > 1 and (ax is None or not once):
+                    shared.add(i)
+                mine.setdefault(i, []).append((lo, hi))
+        for i, rs in mine.items():
+            rs.sort()
+            if n > 1 and any(b[0] < a[1] for a, b in zip(rs, rs[1:])):
+                shared.add(i)
+            spans.setdefault(i, []).extend(_merged(rs))
+    for i, rs in spans.items():
+        rs.sort()
+        top = None
+        for lo, hi in rs:
+            if top is not None and lo < top:
+                shared.add(i)
+            top = hi if top is None else max(top, hi)
+    return sorted(shared)
+
+
+def within(program: Program, gates: range, k: int) -> bool:
+    """Whether root node `k`'s gates lie in `gates`. The Lean's `Partition.within` is this."""
+    offsets = program.root.body.offsets
+    return gates.start <= offsets[k] and offsets[k + 1] <= gates.stop
+
+
+def run_inputs(program: Program, gates: range) -> bool:
+    """Whether the root's nodes whose gates lie in `gates` are run Input nodes, and one does: a parameter R8 may let
+    through as tied is one the run binds. The Lean's `Partition.runInputs` is this."""
+    nodes = program.root.body.nodes
+    inside = [k for k in range(len(nodes)) if within(program, gates, k)]
+    return bool(inside) and all(is_input(nodes[k].fn) and not is_registered(nodes[k].fn) for k in inside)
+
+
+def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Sorted spans `rs` with the overlapping ones merged."""
+    out: list[tuple[int, int]] = []
+    for lo, hi in rs:
+        if out and lo < out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], hi))
+        else:
+            out.append((lo, hi))
+    return out
+
+
+__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "mixed_population_program", "partition",
+           "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+           "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

@@ -138,7 +138,8 @@ def session_of(raw: Any) -> dict[str, Any] | None:
     """The pouw setting ``session``: None, or the gate's answer to the window's ``open`` (its ``session``, ledger ``seq``,
     window ``root`` (the served Commit's root) and coin ``commitment``'s root, each root 128 lowercase hex, and optionally
     the challenger's ``host``, ``port`` and ``peer``, the reserve's ``by``, ``for`` and ``seq`` (``reserve``), the
-    ``opened_by`` and the hello's ``secret``, 64 lowercase hex); ValueError otherwise."""
+    ``opened_by`` and the hello's ``secret``, 64 lowercase hex); ValueError otherwise, which quotes the answer without
+    its secret."""
     if raw is None:
         return None
     ok = (isinstance(raw, Mapping) and set(SESSION_FIELDS) <= set(raw) <= {*SESSION_FIELDS, *REPLY_FIELDS}
@@ -146,10 +147,12 @@ def session_of(raw: Any) -> dict[str, Any] | None:
           and all(isinstance(raw[k], str) and bool(_ROOT.match(raw[k])) for k in ("root", "commitment"))
           and (raw.get("secret") is None or (isinstance(raw["secret"], str) and bool(_SECRET.match(raw["secret"])))))
     if not ok:
+        held = isinstance(raw, Mapping) and "secret" in raw
         raise ValueError("pouw setting 'session' is the challenger gate's open answer for the window, {'session', 'seq', "
                          "'root', 'commitment'} (the served Commit's root and the session's coin commitment root, 128 "
                          "lowercase hex; the commitment from 'status SESSION' when the answer's is null) and optionally "
-                         f"{', '.join(repr(k) for k in REPLY_FIELDS[:-1])} and 'secret' (64 lowercase hex), not {raw!r}")
+                         f"{', '.join(repr(k) for k in REPLY_FIELDS[:-1])} and 'secret' (64 lowercase hex), not "
+                         f"{carried(raw) if held else raw!r}{' with a secret (not quoted)' if held else ''}")
     return dict(raw)
 
 

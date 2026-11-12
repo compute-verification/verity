@@ -20,12 +20,17 @@
 #      PT_PERF=1: each prover process under `perf record -F PT_PERF_HZ` (default 499), its flat profile by symbol in perf.txt
 #      beside prove.tsv (the samples themselves are not kept); upstream's phase traces pass through as arguments
 #      (LIGERITO_TRACE=1 PCS_TRACE=1 LINCHECK_TRACE=1, into prove.err)
+#      PT_STATEMENTS="DIR ...": statement directories staged elsewhere (stage_window.py's served members), each proved as it
+#      is under its directory's name after PT_UNITS' (which then defaults to none)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/served-units-time}/out; mkdir -p $O
 DEV=${PT_DEVICE:-gpu}; case $DEV in gpu | cpu) ;; *) echo "PT_DEVICE is gpu or cpu, not $DEV"; exit 1 ;; esac
 FW=${FLOCK_WORK:-/workspace/tmp/served-units-time-$DEV}; mkdir -p $FW || exit 1
-UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}; NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}
+STMTS=${PT_STATEMENTS:-}; [ -n "$STMTS" ] && UNITS=${PT_UNITS:-} || UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}
+NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}
+for s in $STMTS; do for f in circuit.txt pub.bin inst.bin stage.json; do
+  [ -s $s/$f ] || { echo "PT_STATEMENTS: $s has no $f (stage_window.py stages one)"; exit 1; }; done; done
 WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=${STEPS:-"build stage prove"}
 TIMEV="/usr/bin/time -v -o"  # each step's time-*.txt record, where GNU time is installed
 [ -x /usr/bin/time ] || { TIMEV=; echo "no GNU time at /usr/bin/time (apt-get install time): no time-*.txt records"; }
@@ -41,7 +46,7 @@ BUILT=$FW/flock-gpu-link/flock/target/release/flock-circuit; B=${PT_BINARY:-$BUI
 has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 { echo "device=$DEV cpus=$CPUS prover=$PCPU verifier=$VCPU"; lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2
   [ $DEV = gpu ] && has prove && nvidia-smi --query-gpu=name,driver_version,memory.total,clocks.max.sm --format=csv; } > $O/host.txt 2>&1
-echo "device=$DEV units=$UNITS ns=$NS warm=$WARM runs=$RUNS" > $O/config.txt
+echo "device=$DEV units=$UNITS ns=$NS statements=$STMTS warm=$WARM runs=$RUNS" > $O/config.txt
 # PAIRS: one UNIT@N a statement, each unit at its own Ns or PT_NS
 PAIRS=$(for t in $UNITS; do
   u=${t%@*}; ns=$NS; [ "$u" = "$t" ] || ns=$(echo "${t##*@}" | tr , ' ')
@@ -60,8 +65,16 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $PY ] || { $UV venv -q --python 3.12 $FW/py && $UV pip install -q --python $PY numpy blake3; } || exit 1
 export PYTHONPATH=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
-KEY=$(cd $REPO && find benchmarks/served_units/stage.py verity/ml adapters/vllm/verity_vllm tools/verity/circuit_check/src \
-  -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+# KEY: the staging tree's digest, over the Python under KEY_PATHS, the list window.py's KEY_PATHS repeats. A path the tree no
+# longer holds would leave the key without what was under it, and a statement staged before a change there would be proved
+# as current: the run stops instead
+KEY_PATHS="benchmarks/served_units/stage.py verity/circuits verity/definitions verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src"
+for p in $KEY_PATHS; do
+  [ -e $REPO/$p ] || { echo "prove_time.sh: no $p in $REPO, a path of the staging key: correct KEY_PATHS in" \
+    "benchmarks/served_units/prove_time.sh and window.py together"; exit 1; }
+done
+KEY=$(cd $REPO && find $KEY_PATHS -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16) \
+  || { echo "prove_time.sh: no staging key: find, xargs or sha256sum failed under KEY_PATHS (its own message is above)"; exit 1; }
 
 # name UNIT N: the statement's directory name, a census name's past 96 characters cut to 80 and its digest's first 12
 name() {
@@ -109,9 +122,11 @@ gpu_sample() {
     sleep 0.2
   done > $1/smi.tsv
 }
-# session UNIT N: a verifier process and WARM + RUNS prover sessions against it, into $O/$DEV/NAME
-session() {
-  local nm=$(name "$1" $2) G= GS=; local d=$FW/data/$nm-$KEY o=$O/$DEV/$nm
+# session UNIT N: stage.py's statement's sessions (session_at)
+session() { local nm=$(name "$1" $2); local d=$FW/data/$nm-$KEY; session_at $nm $d; }
+# session_at NAME DIR: a verifier process and WARM + RUNS prover sessions against DIR's statement, into $O/$DEV/NAME
+session_at() {
+  local nm=$1 d=$2 G= GS=; local o=$O/$DEV/$nm
   [ $DEV = gpu ] && G=--gpu
   mkdir -p $o $O/stage/$nm; rm -rf $d/sessions $o/done $o/exit; cp $d/stage.json $O/stage/$nm/; date +%s.%N > $o/start
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
@@ -140,13 +155,15 @@ session() {
 if has prove; then
   echo "== prove ($DEV) $(date -u +%T)"
   if [ $DEV = gpu ]; then
-    export -f session name gpu_sample free_port wait_serving stamp
-    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS PAIRS TIMEV
+    export -f session session_at name gpu_sample free_port wait_serving stamp
+    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS PAIRS TIMEV STMTS
     GPU_LEASE_WHO=${GPU_LEASE_WHO:-served-units-time} gpu-lease 1 --wait --max-min ${LEASE_MIN:-30} -- bash -c '
       set -f; nvidia-smi -L > $O/lease-gpu.txt
-      for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done'
+      for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done
+      for s in $STMTS; do session_at $(basename $s) $s; done'
   else
     for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done
+    for s in $STMTS; do session_at $(basename $s) $s; done
   fi
 fi
 echo "== summary $(date -u +%T)"

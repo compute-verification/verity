@@ -20,7 +20,7 @@ ship_fresh
 ship_toolchain
 ship_cubin_flags sm_90a
 ship_stage benchmarks/torch_gpu/s8_linear adapters/vllm/verity_vllm
-"$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/s8_wgmma.cubin" "$SRC/benchmarks/torch_gpu/s8_linear/s8_wgmma.cu" 2> "$OUT/ptxas.txt" \
+"$SHIP_NVCC" "${FLAGS[@]}" -o "$OUT/s8_wgmma.cubin" "$SRC/benchmarks/torch_gpu/s8_linear/s8_wgmma.cu" 2> "$OUT/ptxas.txt" \
   || { cat "$OUT/ptxas.txt" >&2; exit 1; }
 "$CUDA/bin/cuobjdump" -sass "$OUT/s8_wgmma.cubin" > "$OUT/s8_wgmma.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/s8_wgmma.sass" "$OUT/sass.json"
@@ -32,7 +32,7 @@ if [ -x "$PY" ]; then
 else
   echo "no Python at $PY: no row_table build in the ship"
 fi
-echo "nvcc ${FLAGS[*]} -o s8_wgmma.cubin s8_wgmma.cu" >> "$OUT/toolchain.txt"
+echo "ship_nvcc ${FLAGS[*]} -o s8_wgmma.cubin s8_wgmma.cu" >> "$OUT/toolchain.txt"
 ship_source benchmarks/torch_gpu/s8_linear adapters/vllm/verity_vllm/commit \
   adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda
 ship_manifest

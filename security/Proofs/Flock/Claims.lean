@@ -14,6 +14,7 @@ public import Proofs.Flock.Claims.NumbersTable
 public import Proofs.Flock.Claims.NumbersPads
 public import Proofs.Flock.Claims.NumbersGamma
 public import Proofs.Flock.Claims.NumbersNMin
+public import Proofs.Flock.Claims.NumbersFinder
 public import Proofs.Flock.Claims.Recursion
 public import Proofs.Flock.Claims.NumbersDeploy
 public import Proofs.Flock.Claims.NumbersRadius
@@ -245,6 +246,7 @@ public import Proofs.Flock.Claims.Recursion.VStarTrace
 public import Proofs.Flock.Claims.Recursion.HpLast
 public import Proofs.Flock.Claims.Recursion.VStarTraceOk
 public import Proofs.Flock.Claims.Recursion.VStarNets
+public import Proofs.Flock.Claims.Recursion.VStarNetsStaged
 public import Proofs.Flock.Claims.Recursion.VStarDeployed
 public import Proofs.Flock.Claims.Recursion.HpEarly
 public import Proofs.Flock.Claims.Recursion.SlotsOk

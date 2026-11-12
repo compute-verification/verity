@@ -1,8 +1,9 @@
 # core_composition: the onsite and remote protocols as compositions of subprotocols
 
 Verity's two composite protocols, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
-hold them, each on Flock's verifier and the core interface (`../../../interface`) by path, onsite and remote also on their
-subprotocols' packages, with no Mathlib:
+hold them, each on the core interface (`../../../interface`) by path, with no Mathlib: `core_composition` also on the base
+package (`core_base`: canonical JSON, bytes and SHA-512), onsite and remote also on Flock's verifier and their
+subprotocols' packages:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id subprotocols`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`);

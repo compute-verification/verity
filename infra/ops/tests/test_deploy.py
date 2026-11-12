@@ -397,6 +397,29 @@ def test_an_admin_only_node_is_read_only_when_named(world, capsys):
         deploy.load(manifest, manifest.read_text().replace("admin = true", 'admin = "yes"'))
 
 
+def test_install_and_attic_reach_a_node_as_the_login_they_are_given(world, monkeypatch, capsys):
+    """A node whose lock-out took root from research takes an install only from vy-admin's login, on the same machine entry."""
+    from research import remote
+
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"name": name, "provider": "ssh", "host": "node.example",
+                                                                         "port": 22, "user": "research"})
+    seen: list[str] = []
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, **kw: seen.append(ssh[-1]) or local("n", argv, kw.get("stdin")))
+    deploy.ssh_runner()("n", ["true"], None)
+    deploy.ssh_runner(login="vy-admin")("n", ["true"], None)
+    assert seen == ["research@node.example", "vy-admin@node.example"]
+    logins: list[str | None] = []
+    monkeypatch.setattr(deploy, "ssh_runner", lambda project=deploy.PROJECT, login=None: logins.append(login) or local)
+    kw = dict(manifest=world["manifest"], repo=world["repo"])
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch", "--login", "vy-admin"], **kw) == 0
+    assert deploy.main(["attic", "n", "--by", "lane-x", "--no-fetch", "--backups", "--login", "vy-admin"], **kw) == 0
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], **kw) == 0
+    assert logins == ["vy-admin", "vy-admin", None]
+    with pytest.raises(SystemExit):
+        deploy.main(["drift", "--no-fetch", "--login", "vy-admin"], **kw)
+    capsys.readouterr()
+
+
 def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(world, monkeypatch, capsys):
     """A node added to deploy.toml before its VM is registered failed every relay drift with Refused."""
     from research import remote
@@ -489,6 +512,19 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
 
 
+def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
+    """vy-nebius-cpu-14 to -17 get what a live node of their kind runs, so a staged one's first install, the hour it exists, is
+    one cpu-12 has already run: cpu-12's entries, its managed patterns and its record."""
+    nodes = deploy.load()
+    twin = nodes["vy-nebius-cpu-12"]
+    want = sorted(twin.entries, key=lambda e: e.path)
+    assert want
+    for n in range(14, 18):
+        node = nodes[f"vy-nebius-cpu-{n}"]
+        assert sorted(node.entries, key=lambda e: e.path) == want, node.name
+        assert (node.managed, node.record, node.admin, node.quiet) == (twin.managed, twin.record, twin.admin, twin.quiet), node.name
+
+
 def test_every_switched_unit_is_one_deploy_installs_on_its_node():
     """The lock-out switches each tmux loop to its unit: every unit it starts, and every file of its own, is one deploy.toml installs."""
     import importlib.util
@@ -527,6 +563,87 @@ ROOT_UNITS = {"vy-write-probe@.service": "reads every thread's /proc/PID/task/TI
 
 def _keys(path: Path) -> list[str]:
     return [ln.split("=", 1)[0] for ln in path.read_text().splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+
+
+def _apt_conf(text: str) -> tuple[dict[str, str], dict[str, list[str]], list[str]]:
+    """An apt.conf file's scalars, its lists, and the lists a `#clear` emptied before the file filled them."""
+    scalars, lists, cleared, cur = {}, {}, [], None
+    for ln in (raw.strip() for raw in text.splitlines()):
+        if not ln or ln.startswith("//"):
+            continue
+        if cur is not None:
+            if ln == "};":
+                cur = None
+            else:
+                lists[cur].append(re.fullmatch(r'"([^"]*)";', ln).group(1))
+        elif m := re.fullmatch(r"#clear ([\w:-]+);", ln):
+            assert m.group(1) not in lists, f"{m.group(1)} is cleared after it is filled"
+            cleared.append(m.group(1))
+        elif m := re.fullmatch(r"([\w:-]+) \{", ln):
+            cur = m.group(1)
+            lists.setdefault(cur, [])
+        else:
+            key, value = re.fullmatch(r'([\w:-]+) "([^"]*)";', ln).groups()
+            scalars[key] = value
+    assert cur is None
+    return scalars, lists, cleared
+
+
+UPGRADES = {"/etc/apt/apt.conf.d/52vy-trust": "apt-security-updates.conf",
+            "/etc/needrestart/conf.d/50-vy.conf": "needrestart-list-only.conf"}
+#: the nodes that take neither file, each with why in one line. A VM whose systemd timers run apt's daily passes is never one.
+UPGRADES_EXEMPT = {
+    "vy-control-verity": "a RunPod container whose watchers run under their own supervisor, with no systemd timers: the files would never act",
+}
+# package names as apt has them on a node: what an unattended pass never moves, and what it must be free to
+HELD = ["linux-image-6.11.0-1016-nvidia", "linux-modules-6.11.0-1016-nvidia", "linux-modules-nvidia-580-open-6.11.0-1016-nvidia",
+        "linux-headers-6.8.0-149-generic", "linux-image-virtual", "linux-tools-common", "linux-firmware", "linux-libc-dev",
+        "amd64-microcode", "intel-microcode", "grub-efi-amd64-signed", "grub2-common", "shim-signed", "nvidia-driver-580-open",
+        "nvidia-dkms-580-open", "nvidia-utils-580", "libnvidia-compute-580", "xserver-xorg-video-nvidia-580",
+        "cuda-toolkit-13-config-common", "cuda-drivers"]
+FREE = ["ca-certificates", "libnss3", "libc6", "libc6-dev", "libssl3t64", "openssl", "libcurl4t64", "curl", "openssh-server",
+        "systemd", "udev", "containerd", "docker.io", "nginx", "git", "python3.12", "python3-twisted", "sudo", "apt", "libpcre2-8-0",
+        "libcurl3t64-gnutls", "liblinux-epoll-perl", "util-linux", "libshine3", "libgrubby1"]
+
+
+def test_every_node_takes_ubuntus_security_pocket_unattended_and_holds_the_kernel_and_the_driver():
+    """A node's unattended upgrades. Every node gets both files but the ones `UPGRADES_EXEMPT` names, which get neither, and
+    installing them restarts nothing. An exemption is stale, and fails, once deploy.toml has no such node or gives it a file.
+    The origins are Ubuntu's release and security pockets alone, with the stock file's cleared first, so -updates or a
+    third-party repository listed there stays out. No whitelist: a strict one holds every other package back, a relaxed one
+    changes nothing. The kernel, the driver and the boot chain are held by the start of their names, and nothing a node needs
+    current is. No reboot, a journal line a pass, and needrestart only lists what a window should restart."""
+    nodes, rel = deploy.load(), PODS.relative_to(deploy.SRC).as_posix()
+    assert not [n for n in UPGRADES_EXEMPT if n not in nodes], "UPGRADES_EXEMPT names a node deploy.toml no longer has: delete its row"
+    for node in nodes.values():
+        entries = {e.path: e for e in node.entries}
+        if node.name in UPGRADES_EXEMPT:
+            assert not [p for p in UPGRADES if p in entries], f"{node.name} takes an unattended-upgrades file: delete its UPGRADES_EXEMPT row"
+            continue
+        for path, name in UPGRADES.items():
+            assert path in entries, f"{node.name} lacks {path}"
+            assert (entries[path].src, entries[path].run, entries[path].hold) == (f"{rel}/{name}", [], None), (node.name, path)
+    scalars, lists, cleared = _apt_conf((PODS / UPGRADES["/etc/apt/apt.conf.d/52vy-trust"]).read_text())
+    # both of unattended-upgrades' origin lists are emptied, and only one is filled again
+    assert cleared == ["Unattended-Upgrade::Allowed-Origins", "Unattended-Upgrade::Origins-Pattern"]
+    assert set(lists) == {"Unattended-Upgrade::Allowed-Origins", "Unattended-Upgrade::Package-Blacklist"}
+    origins = lists["Unattended-Upgrade::Allowed-Origins"]
+    assert "${distro_id}:${distro_codename}-security" in origins
+    assert not [o for o in origins if not re.fullmatch(r"\$\{distro_id\}(ESM|ESMApps)?:\$\{distro_codename\}(-[a-z]+)*-security", o)
+                and o != "${distro_id}:${distro_codename}"]
+    assert not [k for k in scalars if "Whitelist" in k]
+    held = lists["Unattended-Upgrade::Package-Blacklist"]
+    # unattended-upgrades matches each at the start of the name with Python's `re`, and pins it in apt as a POSIX regular
+    # expression: plain characters mean the same to both
+    assert not [h for h in held if not re.fullmatch(r"[a-z0-9-]+", h)]
+    assert not [p for p in HELD if not any(re.match(h, p) for h in held)], "a package that needs a planned window is not held"
+    assert not [(p, h) for p in FREE for h in held if re.match(h, p)], "a hold catches a package the security pocket must keep current"
+    assert not [h for h in held if not any(re.match(h, p) for p in HELD)], "a hold no package here needs"
+    assert scalars == {"APT::Periodic::Update-Package-Lists": "1", "APT::Periodic::Unattended-Upgrade": "1",
+                       "Unattended-Upgrade::Remove-Unused-Kernel-Packages": "false", "Unattended-Upgrade::Automatic-Reboot": "false",
+                       "Unattended-Upgrade::SyslogEnable": "true"}
+    code = [ln for ln in (PODS / UPGRADES["/etc/needrestart/conf.d/50-vy.conf"]).read_text().splitlines() if not ln.startswith("#")]
+    assert code == ["$nrconf{restart} = 'l';"]
 
 
 def test_each_unit_is_installed_with_the_environment_files_and_scripts_it_names_on_its_nodes():
