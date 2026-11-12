@@ -11,8 +11,8 @@ import random
 from collections import defaultdict
 
 import pytest
-
 from test_appends import N, Run, payload, salts, store, units_mapped
+
 from verity.protocols.poub.verifier import audit, codec
 from verity.protocols.poub.verifier.memory_map import Header, Replay, Step, Written
 

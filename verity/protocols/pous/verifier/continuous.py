@@ -43,7 +43,13 @@ from dataclasses import dataclass
 
 from verity.commitments.randomness import Key
 
-from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, AuditResult, ChallengeReply, UnsignedRounds
+from .audit import (
+    DEADLINE_NS,
+    RTT_ALLOWANCE_NS,
+    AuditResult,
+    ChallengeReply,
+    UnsignedRounds,
+)
 from .verifier import VerifierKey
 
 

@@ -14,20 +14,20 @@ import socket
 import sys
 from pathlib import Path
 
+from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import wipe_party as WP
 from verity.protocols.pous.verifier import wipe_stream as WS
-from verity.commitments.crypto import lms
 
 WINDOW = (1_793_088_000_123_456_789, 1_793_088_183_000_001_000)
 """The session's `(t0, t1)` it reports, in ns since the Unix epoch: the window `test_pous_wipe_period` reads back."""
 
 
 class _SparseTree:
-    def __init__(self, I: bytes, seed: bytes) -> None:
+    def __init__(self, identifier: bytes, seed: bytes) -> None:
         self.root = b""
-        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")  # type: ignore[arg-type]
-        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
+        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, identifier, seed, self), 0, b"probe")  # type: ignore[arg-type]
+        self.root = lms.root_of(lms.DEPLOYED, identifier, b"probe", probe)
 
     def __getitem__(self, r: int) -> bytes:
         return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
@@ -39,8 +39,9 @@ class LeafZero:
     scheme = mc.LMS
 
     def __init__(self) -> None:
-        I, seed = hashlib.sha512(b"wipe-side/I").digest()[:16], hashlib.sha512(b"wipe-side/seed").digest()
-        self.key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
+        identifier, seed = hashlib.sha512(b"wipe-side/I").digest()[:16], hashlib.sha512(b"wipe-side/seed").digest()
+        tree = _SparseTree(identifier, seed)
+        self.key = lms.PrivateKey(lms.DEPLOYED, identifier, seed, tree)  # type: ignore[arg-type]
         self.public_key = lms.public_key(self.key)
 
     def sign(self, session: bytes, record: bytes) -> bytes:

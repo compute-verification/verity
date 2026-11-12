@@ -10,6 +10,7 @@ back as the `audit.Record` the ledger reads (`record_of`)."""
 from __future__ import annotations
 
 import collections
+import contextlib
 import fcntl
 import functools
 import hashlib
@@ -93,10 +94,8 @@ class Lean:
                 self.proc.stdin.flush()
             except (BrokenPipeError, ValueError, OSError) as e:
                 self._end(f"the process is gone: {e}")
-        try:
+        with contextlib.suppress(OSError):
             self.proc.stdin.close()
-        except (BrokenPipeError, OSError):
-            pass
 
     def _read(self) -> None:
         for line in self.proc.stdout:
@@ -222,8 +221,8 @@ def summary_json(rec: audit.Record) -> dict:
 
 def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float, samples: int) -> audit.Record:
     """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Record`: the rest from the
-    registration its digest names, the coin commitment's root `coins`, each window's openings law at `delta` over
-    the Lean's lengths and draws (`audit.window_profile`), and the session's `samples`, which each window's samples
+    registration its digest names, the coin commitment's root `coins`, each window's sampling design at `delta` over
+    the Lean's lengths and samples (`audit.window_profile`), and the session's `samples`, which each window's samples
     must be min(samples, U_t) at (`audit.Record`)."""
     if j["registration"] != registration.digest.hex():
         raise ValueError(f"the Lean's record is of registration {j['registration'][:16]}…, not "
@@ -323,3 +322,6 @@ class DifftestCase:
             self.result = {"path": str(self.path), "error": f"{type(e).__name__}: {e}"}
             while not closed:
                 closed = self.items.get()[0] == "close"
+
+
+__all__ = ["Lean", "LeanError", "build", "registration_json"]

@@ -19,12 +19,12 @@ import threading
 from pathlib import Path
 
 import pytest
-
 from test_remote_bandwidth import SCHEDULE, Entropy, drive, finish, params, store  # noqa: F401
+
+from verity.commitments.crypto import lms
 from verity.protocols.poub.verifier import coins
 from verity.protocols.spot.device import challenger as C
 from verity.protocols.spot.device import remote as R
-from verity.commitments.crypto import lms
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 """The challenger key: sixteen leaves, enough for a period's open and two sessions' opens, records, closes and ends."""

@@ -7,10 +7,10 @@ import hashlib
 import random
 
 import numpy as np
-import pytest
-
 import pous_test_signer as ts
+import pytest
 from pous_fakes import Clock
+
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
@@ -21,7 +21,7 @@ from verity.protocols.pous.prover import verdict_circuit as V
 
 RNG = random.Random(27)
 KINDS = ("hit", "zero", "edge", "wrong", "late", "early", "round")
-"""How a drawn round turns out: a hit, a hit with no time elapsed or exactly LIMIT, a digest one bit off, past LIMIT,
+"""How a sampled round turns out: a hit, a hit with no time elapsed or exactly LIMIT, a digest one bit off, past LIMIT,
 received before it was sent, or a record of another round."""
 
 
@@ -156,4 +156,4 @@ def test_statics_refused(statics):
         V.gates(**statics)
     if not any(isinstance(v, bool) for v in statics.values()):  # `bind` keys True as 1
         with pytest.raises(ValueError):
-            bind(V.PousVerdict, **statics).gates
+            _ = bind(V.PousVerdict, **statics).gates

@@ -12,12 +12,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
-from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
+
+from verity.commitments.randomness import frame
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun, Params, SessionError
-from verity.commitments.randomness import frame
+from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
 
 N = 20
 NODE = b"node-under-test"
@@ -141,10 +141,10 @@ def finish(s: AuditRun, prover: audit.Prover, passes, clock: Clock, open_=None):
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
     for t in range(s.params.windows):
-        draws = s.close(t)
-        if isinstance(draws, audit.Verdict):
-            return out + [draws]
-        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], p) for i, p in draws]))
+        sampled = s.close(t)
+        if isinstance(sampled, audit.Verdict):
+            return out + [sampled]
+        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], p) for i, p in sampled]))
         if not out[-1].accepted:
             return out
     return out
@@ -171,7 +171,7 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     assert all(a < b for w in r.windows for a, b in zip(w.steps, w.steps[1:])) and len(w1["steps"]) == 3
     assert w1["opened_ns"] == 3000 + A + 1
     assert w1["profile"]["levels"] == [{"name": "receipt", "query": None, "size": 3 * N, "draw": {"subset": 7}}]
-    assert r.end_ns == SCHEDULE.span_ns and A == timing.deadline(300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
+    assert r.end_ns == SCHEDULE.span_ns and timing.deadline(300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5) == A
 
 
 def partial(t: int, i: int) -> receipts.Plan:
@@ -338,7 +338,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.to_json()["worst"]["window"] == g.worst.window == 1 and g.to_json()["windows"][1] == g.windows[1].to_json()
     with pytest.raises(ValueError, match="understated"):
         audit.ledger(r, capacity_bytes_per_s=capacity / 2, chip_bytes=0, rebuild=no_rebuild(r))
-    with pytest.raises(ValueError, match="link term"):                 # an unbound receipt is of the block alone
+    with pytest.raises(ValueError, match="μ_link"):                    # an unbound receipt is of the block alone
         audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=no_rebuild(r), link=0.001)
     assert audit.ledger(dataclasses.replace(r, bind=True), capacity_bytes_per_s=capacity, chip_bytes=0,
                         rebuild=no_rebuild(r), link=0.001).link == 0.001
@@ -421,7 +421,7 @@ def test_the_ledger_refuses_a_window_its_capacity_cannot_have_read() -> None:
 
 def test_the_horizon_puts_the_shortfall_where_it_hides_most() -> None:
     """Windows of unequal size: the pooled bound's shortfall goes to the largest windows first, each capped where its
-    samples would have found it (s distinct draws found s correct receipts), and a window opened whole has none."""
+    samples would have found it (s distinct samples found s correct receipts), and a window opened whole has none."""
     lengths, s, delta = (5000, 1000, 1000, 40), 40, 1e-6
     wrong, floor = audit.pooled(synthetic(lengths, s, delta))
     budget = -math.expm1(math.log(delta) / (4 * s)) * 4 * s
@@ -648,7 +648,7 @@ def test_a_64_row_sketch_is_its_own_signs_and_hashes_256_bytes(store) -> None:
 
 def test_an_honest_64_row_session_is_accepted_and_names_its_rows(rows64_store) -> None:
     """The verifier recomputes each opened receipt at the registration's 64 rows, and the record names them; receipts
-    made at 16 rows under the 64-row registration fail the first draw."""
+    made at 16 rows under the 64-row registration fail the first sample."""
     st = rows64_store
     s, prover, passes, clock = drive(st, params_of(st), SCHEDULE, plan=partial)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
@@ -694,7 +694,7 @@ def committed_with(receipter):
 ], ids=["signs-known-before-the-session", "block-sha512"])
 def test_sketch_receipts_not_under_the_passs_signs_reject(sketch_store, receipter) -> None:
     """Sketches under signs fixed before the session, or block-sha512 receipts, committed on the chain: each opening's
-    paths and decoding check, and the first draw fails the receipt."""
+    paths and decoding check, and the first sample fails the receipt."""
     s, prover, passes, clock = drive(sketch_store, params(receipt=receipts.SKETCH_SHA512), SCHEDULE,
                                      run=committed_with(receipter))
     assert finish(s, prover, passes, clock) == [audit.Verdict(0, False, "receipt", s.windows[0].draws[0])]
@@ -768,7 +768,7 @@ def test_passes_off_the_chain_are_rejected(store, run, verdicts) -> None:
 def test_a_root_after_its_deadline_rejects_the_session(store) -> None:
     late = dataclasses.replace(SCHEDULE, arrivals=tuple((t, i, a + 100 if (t, i) == (0, 3) else a)
                                                         for t, i, a in SCHEDULE.arrivals))
-    assert SCHEDULE.arrivals[3] == (0, 3, 1293) and 1293 + 100 > SCHEDULE.deadlines[0]
+    assert SCHEDULE.arrivals[3] == (0, 3, 1293) and SCHEDULE.deadlines[0] < 1293 + 100
     s, *_ = drive(store, params(), late)
     assert s.failed == audit.Verdict(0, False, "late")
     with pytest.raises(SessionError, match="rejected"):
@@ -1054,7 +1054,7 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
     assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
     assert timing.CHIP_BYTES == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
     assert timing.HOST_CHIP_BYTES == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
-    assert timing.SQUARINGS_PER_S == {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()}
+    assert {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()} == timing.SQUARINGS_PER_S
     assert timing.SHA512_PER_S == 8 * timing.GPU_SHA512_PER_S
     gpu = 94 * 10 ** 9
     host = timing.spanning(gpu) - 8 * gpu

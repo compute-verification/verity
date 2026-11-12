@@ -26,8 +26,16 @@ from .codec import Codec
 from .labels import salt_value, tag
 from .oracle import KeyQuery, PiInvQuery, PiQuery, Prog, Query, parallel, run
 from .params import SALT_BITS
-from .primitives import (CAPACITY_BITS, FeistelPi, IdealPermutation, OverwriteStepper, Permutation, Primitives,
-                         key_program, pi2_call_ns)
+from .primitives import (
+    CAPACITY_BITS,
+    FeistelPi,
+    IdealPermutation,
+    OverwriteStepper,
+    Permutation,
+    Primitives,
+    key_program,
+    pi2_call_ns,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,3 +224,6 @@ def decode_segment(params: DenseParams, prims: Primitives, salt: bytes, s: int, 
 
 DENSE = Codec("dense-chain/v1", encode_segment, decode_segment)
 """The dense scheme as a codec (a selectable alternative to the band, `band.BAND12`)."""
+
+
+__all__ = ["DenseParams", "dom", "encode_segment", "reference"]

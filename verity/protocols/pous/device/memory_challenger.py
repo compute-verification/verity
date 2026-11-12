@@ -67,6 +67,7 @@ import fcntl
 import gc
 import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -78,16 +79,23 @@ from types import MappingProxyType
 from typing import Any, Protocol
 
 from verity.commitments import hm96
+from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.limits import VerificationLimits
-from verity.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
-from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.commitments.crypto import lms
+from verity.commitments.merkle import (
+    Commitment,
+    CommitmentDomain,
+    Opening,
+    tree_levels,
+    verify_opening,
+)
 from verity.commitments.randomness import derive
-
+from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.pous.verifier.params import SALT_BITS
 from verity.protocols.pous.verifier.protocol import CapacityBound, Scheme
 from verity.protocols.pous.verifier.verifier import DIGEST_BYTES
+
+log = logging.getLogger(__name__)
 
 PROTOCOL = "verity-pous/memory-challenger/v1"
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
@@ -665,7 +673,8 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     else:
         try:
             ok = bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
-        except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
+        except Exception:
+            log.debug("the signature check raised: a malformed signature verifies nothing", exc_info=True)
             ok = False
         if not ok:
             reasons.append("the signature does not verify")
@@ -690,10 +699,10 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
+__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMPLETE", "HM96", "LATE", "LMS", "PROTOCOL",
            "RECORDS_TREE", "RECORD_SCHEMA", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening",
            "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog", "SessionCommitment", "SessionLog",
            "SessionLogError", "SignedSession", "Signer",
-           "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "coin_leaf", "collector_paused",
+           "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
            "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of", "verdict",
            "verify_coin"]

@@ -1,10 +1,10 @@
-"""The remote bandwidth session (`period.session`) as two parties of the deployment layer (`verity.configuration.deploy`): the
+"""PoUB's session (`period.session`) as two parties of the deployment layer (`verity.configuration.deploy`): the
 verifier and its challenger (`Verifier`), on a machine the developer doesn't control, and the prover (`Prover`) on its node.
 
 ~~~text
 prover   -> verifier   Register {blocks} + payload root; per pass Root {t, i} + root; per window Openings {t} + openings
 verifier -> prover     Hold {registration}; per pass Run {t, i, challenge} + the root before (the challenge a
-                       `coins.Released`); per window Open {t} + draws (u32be pass ‖ u64be position each); End + the
+                       `coins.Released`); per window Open {t} + samples (u32be pass ‖ u64be position each); End + the
                        session's coins disclosed once it has its outcome ({commitment, openings}, `audit.AuditRun.disclose`)
 ~~~
 
@@ -34,11 +34,18 @@ import struct
 from collections.abc import Callable
 from typing import Any
 
+from verity.commitments.identity import canonical_json_bytes
 from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
+from verity.configuration.deploy.party import (
+    Finish,
+    Identity,
+    LogEntry,
+    Received,
+    Send,
+    Timer,
+)
 from verity.configuration.deploy.runtime import ProtocolDef
 from verity.configuration.wire import Body, Int, Json, Message, Phase, Refused, Schema
-from verity.commitments.identity import canonical_json_bytes
 
 from . import audit, receipts
 from . import coins as C
@@ -49,7 +56,7 @@ ID = "verity/remote-bandwidth/session"
 VERSION = 1
 VERIFIER, PROVER = "verifier", "prover"
 SECRET_BYTES = 64
-"""The period's live secret, which the registration's codec seed and the challenger's coins are drawn from."""
+"""The period's live secret, which the registration's codec seed and the challenger's coins come from."""
 DRAW = struct.Struct(">IQ")
 MAX_DRAWS = 1 << 20
 MAX_DISCLOSED = 1 << 24
@@ -196,8 +203,8 @@ class Verifier:
         if isinstance(self.s.close(t), audit.Verdict):
             return self._finish()
         self.opening = t
-        draws = b"".join(DRAW.pack(i, p) for i, p in self.s.windows[t].draws)
-        return [Send(PROVER, Message("Open", {"t": t}, draws))]
+        body = b"".join(DRAW.pack(i, p) for i, p in self.s.windows[t].draws)
+        return [Send(PROVER, Message("Open", {"t": t}, body))]
 
     def _verify(self, body: bytes, now: int) -> list[Any]:
         t, self.opening = self.opening, None
@@ -256,8 +263,8 @@ class Prover:
             self.passes += 1
             return [Send(VERIFIER, Message("Root", {"t": t, "i": m.fields["i"]}, root))]
         if m.type == "Open":
-            draws = [DRAW.unpack_from(m.body, k) for k in range(0, len(m.body), DRAW.size)]
-            return [Send(VERIFIER, Message("Openings", {"t": t}, W.encode_openings(self.store.open(t, draws))))]
+            sampled = [DRAW.unpack_from(m.body, k) for k in range(0, len(m.body), DRAW.size)]
+            return [Send(VERIFIER, Message("Openings", {"t": t}, W.encode_openings(self.store.open(t, sampled))))]
         if m.body:
             try:
                 doc = json.loads(m.body)

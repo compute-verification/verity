@@ -10,10 +10,20 @@ from __future__ import annotations
 import itertools
 
 import pytest
-
-from test_appends import CAP, HONEST_SCHEDULE, N, P512, Run, Verdict, honest_session, salts, store
+from test_appends import (
+    HONEST_SCHEDULE,
+    P512,
+    SCHEDULE_CAP,
+    N,
+    Run,
+    Verdict,
+    honest_session,
+    salts,
+    store,
+)
 from test_deferred_map import STEPS, deferred, drive, history
 from test_memory_map import page, serving
+
 from verity.protocols.poub.verifier import audit, memory_map, schedule
 from verity.protocols.poub.verifier.memory_map import Header, Replay
 from verity.protocols.poub.verifier.receipts import Plan
@@ -51,8 +61,8 @@ def test_the_honest_session_s_plans_are_its_schedule_s_and_the_verdict_carries_t
     assert r.s.appended == HONEST_SCHEDULE.append_runs(N) == ((N, 4), (N + 4, 2))
     v = r.s.scheduled(HONEST_SCHEDULE)
     rec = r.s.record()
-    assert v.of(rec) and v.cap == r.p.schedule_cap == CAP
-    assert HONEST_SCHEDULE.bits == 8 * len(HONEST_SCHEDULE.encode()) == 200 <= CAP
+    assert v.of(rec) and v.cap == r.p.schedule_cap == SCHEDULE_CAP
+    assert HONEST_SCHEDULE.bits == 8 * len(HONEST_SCHEDULE.encode()) == 200 <= SCHEDULE_CAP
 
 
 def test_the_cap_committed_before_the_coins_is_credited_and_a_schedule_over_it_is_refused(honest) -> None:
@@ -67,9 +77,9 @@ def test_the_cap_committed_before_the_coins_is_credited_and_a_schedule_over_it_i
     rec = r.s.record()
     padded = Schedule(HONEST_SCHEDULE.registered + ((7, 1, 2**40),), HONEST_SCHEDULE.appends, HONEST_SCHEDULE.steps)
     assert [padded.plan(N, s) for s in padded.steps] == [HONEST_SCHEDULE.plan(N, s) for s in HONEST_SCHEDULE.steps]
-    assert (HONEST_SCHEDULE.bits, padded.bits, CAP) == (200, 264, 256)
+    assert (HONEST_SCHEDULE.bits, padded.bits, SCHEDULE_CAP) == (200, 264, 256)
     v = r.s.scheduled(HONEST_SCHEDULE)
-    assert audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True), schedule=v).steering == CAP
+    assert audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True), schedule=v).steering == SCHEDULE_CAP
     with pytest.raises(Refused) as e:
         r.s.scheduled(padded)
     assert str(e.value) == "the schedule is 264 bits, over the cap of 256 committed before the coins"
@@ -111,7 +121,7 @@ def test_at_a_fixed_schedule_every_coin_steered_layout_but_the_schedule_s_is_ref
         held = [0, 1, *range(3, 9), *(j for j, keep in zip(range(10, 14), y) if keep)]
         steered = passes[:3] + [(3, runs(held))] + passes[4:]
         try:
-            accepted.append((y, schedule.check(HONEST_SCHEDULE, N, CAP, steered, appends)))
+            accepted.append((y, schedule.check(HONEST_SCHEDULE, N, SCHEDULE_CAP, steered, appends)))
         except Refused as e:
             assert str(e) == "pass 3's plan is not the schedule's at step 3"
     assert accepted == [((True, True, True, True), 200)]
@@ -149,7 +159,8 @@ def test_a_layout_the_session_accepts_is_refused_credit_unless_the_schedule_give
     late = Schedule(HONEST_SCHEDULE.registered, (HONEST_SCHEDULE.appends[0], ((3, None), (2, None))),
                     HONEST_SCHEDULE.steps)
     v = r.s.scheduled(late)
-    assert late.bits == 200 and audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True), schedule=v).steering == CAP
+    assert late.bits == 200
+    assert audit.ledger(rec, **COMMON, credit_post_seed=Verdict(True), schedule=v).steering == SCHEDULE_CAP
 
 
 def test_the_ledger_refuses_a_verdict_on_another_session_or_not_the_check_s(honest) -> None:
@@ -209,7 +220,7 @@ def test_the_schedule_of_a_memory_map_gives_the_plans_replay_takes() -> None:
     sched = memory_map.schedule(head, steps, run.s.appended, passes)
     assert sched.registered == ((4, 2, 0), (6, 1, 3))
     assert sched.appends == (((0, 3), (0, 5), (0, 3)), ((3, None), (3, None)), ((5, 6),))
-    assert sched.bits <= CAP and run.s.scheduled(sched).cap == CAP
+    assert sched.bits <= SCHEDULE_CAP and run.s.scheduled(sched).cap == SCHEDULE_CAP
 
 
 @pytest.mark.parametrize("seed", [0, 1, 2, 3])

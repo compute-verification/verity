@@ -9,11 +9,11 @@ from __future__ import annotations
 import inspect
 import shutil
 
+import pous_test_signer
 import pytest
 
-import pous_test_signer
-from verity.protocols.pous.verifier import audit, streamed_wipe, wipe_stream
 from verity.protocols.pous.device import memory_challenger
+from verity.protocols.pous.verifier import audit, streamed_wipe, wipe_stream
 from verity.protocols.pous.verifier.continuous import ContinuousMemoryChallenger
 
 

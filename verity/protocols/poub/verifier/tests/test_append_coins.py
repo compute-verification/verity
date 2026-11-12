@@ -8,8 +8,8 @@ from __future__ import annotations
 import hashlib
 
 import pytest
-
 from test_appends import N, Run, honest_session, pages, salts, store
+
 from verity.protocols.poub.verifier import audit, codec, coins
 from verity.protocols.spot.device.challenger import CoinError
 
@@ -43,7 +43,7 @@ def test_an_honest_session_opens_one_live_coin_an_append_and_each_page_decodes_u
 def test_a_prover_that_encodes_an_append_before_its_coin_is_rejected(early) -> None:
     """A prover that encodes its pages before the verifier's coin for them arrives: under the pre-coin bound form,
     under a coin it picked itself, or under the coin of an earlier append.  Its receipts are of those blocks, but each
-    decodes under no key the verifier holds for it, so the first draw on a page is the session's `codec` rejection."""
+    decodes under no key the verifier holds for it, so the first sample on a page is the session's `codec` rejection."""
     st = store()
     r = Run(st, windows=1)
     first = r.append(1)

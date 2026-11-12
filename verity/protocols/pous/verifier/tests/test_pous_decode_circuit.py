@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import random
 from pathlib import Path
 
 import numpy as np
 import pytest
+import settings
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
@@ -126,7 +126,7 @@ def test_sq_and_sigma_match_the_field():
     assert [int.from_bytes(_bytes(r), "little") for r in sg] == [f.sigma(x, k) for x, k in zip(xs, ks)]
 
 
-SLOW = pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="minutes at P2's width: VERITY_POUS_SLOW=1")
+SLOW = pytest.mark.skipif(not settings.SLOW, reason="minutes at P2's width: VERITY_POUS_SLOW=1")
 
 
 @SLOW
