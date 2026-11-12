@@ -33,8 +33,7 @@ that only moves one leaves each cubin they compile with it as it was. The progra
 so `ship_nvcc.sh` refuses one that names a file (`__FILE__`, or an assert, which expands to it, gives the name as its
 `#include` spells it, which a move changes). Each build first holds its compiler to that (`ship_probe.sh`): a probe that
 nvcc itself compiles to two cubins at two places must be one cubin with `ship_nvcc.sh`, and a toolkit or a wrapper with
-which it isn't builds no ship. That leaves out the row tables' cubins in `s8_linear`'s ship, which the adapter's own
-build compiles. A library a job builds off the card outside a ship (`j10r_sm90/job.sh`'s, and
+which it isn't builds no ship. A library a job builds off the card outside a ship (`j10r_sm90/job.sh`'s, and
 `benchmarks/hash/dither/job.sh`'s) compiles with `job_nvcc.sh`, that wrapper without the frame and its probe: its cubin
 doesn't follow its place either, and nothing holds a rebuild to the same bytes from run to run.
 
