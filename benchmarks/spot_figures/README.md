@@ -135,8 +135,10 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     takes the phase's statements only where they cost less than its own (`optimize.two_stage_statements`). The
     verifier's second stage reads one session of one table for each template of a verification phase
     (`Spot.SecondStage`: `second-template`, `second-tables`), and a table holds at most 2^35 witness bits
-    (`total_cost.table_blocks`: 32,768 proof blocks of 2^20 bits, 256 of 2^27), so a point with more sessions than
-    block types (`sessions`, in each series and caption) prices sessions the verifier refuses. Beside each such
+    (`total_cost.table_blocks`: 32,768 proof blocks of 2^20 bits, 256 of 2^27; a type's blocks are sized as the
+    `proof_overhead` card's block that prices it is staged, not by the strata's own estimate), so a point with more
+    sessions than block types (`sessions`, in each series and caption) prices sessions the verifier refuses. Beside
+    each such
     line's bound at β = 1%, and in `total_cost.py counts` at any β, are the designs it could be instead
     (`total_cost.session_designs`), all modeled at the seconds a proof block the line's own statements are priced
     at. Two have one session a block type (`optimize.SESSIONS`): one whose session holds whatever the design
@@ -144,12 +146,17 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     where every session is within the tables a session of the proof system holds (`SESSION_TABLES`, 200), and
     otherwise with its largest session in proof blocks and in tables; and one whose sessions are each at most one
     table, the form the verifier's second stage reads, which samples far fewer proof blocks and bounds far more. The
-    others have sessions of at most 1, 16 and 200 tables of the type (`TABLES`), as many as hold its sampled proof
-    blocks, each with its sessions a verification phase and the seconds between them if they run one at a time; the
-    verifier's second stage refuses more than one session a template. (A) and (A′) are plotted at each of the three sizes, dark to
-    light, and (B) at one machine's; each series gives K, its sessions and the shares of its proving in the phase's
-    statements and on padding. No code builds a verification phase of a datacenter's size, one committer over every
-    machine's boundary rows: that line is the cost model's.
+    others have sessions of at most 1, 16, 64 and 200 tables of the type (`TABLES`), as many as hold its sampled
+    proof blocks, each with its sessions a verification phase and the seconds between them if they run one at a
+    time; the verifier's second stage refuses more than one session a template. A design, the line's own or one
+    beside it, is printed as out of reach where it meets a limit of the code that runs a second stage today, with
+    the first it meets (`total_cost.limits`): a session of more tables than the GPU prover (1), the CPU prover and
+    the Lean verifier (64), the challenger's coin commitment (127) or the proved scope (200) takes; more lines of
+    session coins than one challenger session's release log holds; or a second draw of more bytes of live coins
+    than one layout holds. Its bound is then the cost model's alone, of a deployment no code runs. (A) and (A′) are
+    plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its sessions
+    and the shares of its proving in the phase's statements and on padding. No code builds a verification phase of
+    a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's verification phase beside each, thin and dashed;

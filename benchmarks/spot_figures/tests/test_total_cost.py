@@ -312,7 +312,8 @@ def test_a_by_template_designs_strata_are_its_cells():
 def test_the_designs_beside_a_line_say_what_no_session_holds():
     """`beside_parts` prints one session whatever it holds with its bound only while its largest session is within
     the tables a session of the proof system holds, and says so past it; a design with several sessions a block type
-    comes with its sessions and the seconds between them over the verification phase; one with no design says so."""
+    comes with its sessions and the seconds between them over the verification phase; one with no design says so;
+    and one that meets a limit of today's second-stage code is out of reach, the limit said before its bound."""
     row = {"y": 8e12, "count": 8e12, "registration_sample": 4, "sessions": 3.0, "largest": 512, "tables": 2.0,
            "over": 1, "status": "modeled"}
     got = {"template": row | {"held": True}, "table": None, "tables": {"1": row | {"sessions": 120.0}, "16": None}}
@@ -328,6 +329,41 @@ def test_the_designs_beside_a_line_say_what_no_session_holds():
                     f"largest in tables 201 of its type, and a session of the proof system holds at most "
                     f"{t.SESSION_TABLES}")
     assert "TB" not in past
+    limit = "its largest session in tables is 2 of its type, past the GPU prover's 1"
+    met = t.beside_parts({"template": row | {"held": True, "limit": limit}, "table": row | {"limit": None},
+                          "tables": {"16": row | {"limit": limit}}}, 600.0)
+    assert met[0].startswith(f"{t.ONE_SESSION['template']}, out of reach ({limit}); modeled, 1 TB at K = 4, ")
+    assert met[1].startswith(f"{t.ONE_SESSION['table']}, 1 TB at K = 4, ")
+    assert met[2] == (f"sessions of at most 16 tables a block type, out of reach ({limit}); modeled, 1 TB at K = 4 in "
+                      "3 sessions, one each 200 s if they run one at a time")
+
+
+def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monkeypatch):
+    """`limits` counts what a design asks of the code that runs a second stage: the lines of session coins its
+    sessions write (2 a session and `TABLE_LINES` a table, at least) and the bytes its second draw reads (a stream of
+    2 k width(n) + 64 for each block type in each sampled replay block), and names the first limit met: a session's
+    tables, then the release log's lines, then one layout's bytes; none where it is within all three."""
+    cells = [Cell(100.0, 16.0, prove=1e-3, fixed=5.0, cap=64, commit_bytes=2.0, table=64),
+             Cell(4.0, 4096.0, prove=1e-2, fixed=5.0, cap=8, commit_bytes=512.0, table=4)]
+    row = {"merged": None, "form": "statements", "registration_sample": 3, "k": {0: 10, 1: 2}, "tables": 2.0}
+    got = t.limits(cells, row)
+    assert t.draw_width(100) == (7 + 64 + 7) // 8 == 9 and t.draw_width(4) == (3 + 64 + 7) // 8
+    assert got["draw_bytes"] == 3 * ((2 * 10 * 9 + 64) + (2 * 2 * 9 + 64))
+    # each type's sampled blocks of the phase are one session: 30 blocks within a table of 64, 6 blocks 1.5 tables of 4
+    assert got["lines"] == pytest.approx(2 * 2 + t.TABLE_LINES * (1 + 1.5))
+    assert got["limit"] == "its largest session in tables is 2 of its type, past the GPU prover's 1"
+    one = row | {"tables": 1.0}
+    assert t.limits(cells, one)["limit"] is None
+    monkeypatch.setattr(t, "DRAW_BYTES", got["draw_bytes"] - 1)
+    assert t.limits(cells, one)["limit"] == (f"its second draw reads {got['draw_bytes']:,.0f} bytes of live coins, and "
+                                             f"one layout of the challenger's holds {t.DRAW_BYTES:,}")
+    monkeypatch.setattr(t, "LOG_LINES", got["lines"] - 1)
+    assert t.limits(cells, one)["limit"] == (f"its sessions write at least {got['lines']:,.0f} lines of session "
+                                             f"coins, and one challenger session's release log holds {t.LOG_LINES:,}")
+    past = t.limits(cells, row | {"tables": 200.5})["limit"]
+    assert past == ("its largest session in tables is 201 of its type, past the GPU prover's 1, the CPU prover's and "
+                    "the Lean verifier's 64, the challenger's coin commitment's 127 and the proved scope's 200")
+    assert [n for n, _ in t.TABLE_LIMITS] == [1, 64, 127, t.SESSION_TABLES]
 
 
 def test_a_lines_counts_are_one_whole_count_a_block_type(tmp_path):
@@ -337,8 +373,10 @@ def test_a_lines_counts_are_one_whole_count_a_block_type(tmp_path):
     than one a block type.  Beside it are the two designs with one session a block type: the one whose session holds
     whatever it samples bounds less in sessions of many tables, more than a session of the proof system holds, and
     the one held to one table a session, the form the verifier's second stage reads, bounds more; and the designs
-    with sessions of at most 1, 16 and 200 tables, fewer sessions and a smaller bound as a session holds more.  A β that pays for no sampled request of the line's verification
-    phase has no counts, and neither has (C), which samples one-stage."""
+    with sessions of at most 1, 16, 64 and 200 tables, fewer sessions and a smaller bound as a session holds more.
+    Each design carries the first limit of today's second-stage code it meets: at a datacenter's verification phase
+    only the design held to one table a session meets none.  A β that pays for no sampled request of the line's
+    verification phase has no counts, and neither has (C), which samples one-stage."""
     out = t.counts("GLM-5.3", "tokens_datacenter", "world year", 0.1)
     strata = t._lines("GLM-5.3", "census")[4]["tokens_datacenter"]["partition"].value["strata"]
     assert list(out["k"]) == [x["block"] for x in strata if x["per_token"] > 0]
@@ -352,10 +390,16 @@ def test_a_lines_counts_are_one_whole_count_a_block_type(tmp_path):
     assert table["over"] == 0 and table["tables"] <= 1
     assert whole["count"] < out["bound_bits"] < table["count"]
     several = out["beside"]["tables"]
-    assert list(several) == [str(j) for j in t.TABLES] == ["1", "16", "200"]
+    assert list(several) == [str(j) for j in t.TABLES] == ["1", "16", "64", "200"]
     assert several["1"]["over"] == 0 and all(several[str(j)]["tables"] <= j for j in t.TABLES)
-    assert several["1"]["sessions"] > several["16"]["sessions"] > several["200"]["sessions"] > len(out["k"])
-    assert table["count"] > several["1"]["count"] > several["16"]["count"] > several["200"]["count"] > whole["count"]
+    sessions, bounds = ([several[str(j)][key] for j in t.TABLES] for key in ("sessions", "count"))
+    assert sessions == sorted(sessions, reverse=True) and sessions[-1] > len(out["k"])
+    assert table["count"] > bounds[0] and bounds == sorted(bounds, reverse=True) and bounds[-1] > whole["count"]
+    assert table["limit"] is None and "the proved scope's 200" in whole["limit"]
+    assert "lines of session coins" in several["1"]["limit"]
+    assert several["16"]["limit"].endswith("16 of its type, past the GPU prover's 1")
+    assert several["200"]["limit"].endswith("the challenger's coin commitment's 127")
+    assert out["limit"] and out["lines"] > t.LOG_LINES and out["draw_bytes"] > 0
     assert (out["schema"], out["line"], out["scope"], out["beta"]) == (t.COUNTS_SCHEMA, "tokens_datacenter",
                                                                       "world year", 0.1)
     t.main(["counts", "--scope", "world year", "--beta", "0.1", "--out", str(tmp_path / "counts.json")])
