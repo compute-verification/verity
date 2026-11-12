@@ -16,15 +16,13 @@ import hashlib
 import json
 import struct
 import subprocess
-import sys
 from pathlib import Path
 
+import ieee_pin
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-
-import sass_gate as SG
-
+#: the gate as the harness's scripts hold it: one module a process, which `ieee_pin` loads from its repository path
+SG = ieee_pin.SG
 FIX = Path(__file__).parent / "fixtures" / "sass_gate"
 NOTES = json.loads((FIX / "tool_notes.json").read_text())
 PLAIN_COVERED = {"int-seed": 10, "__cuda_sm20_rem_s64": 1, "__cuda_sm20_div_u64": 1, "__cuda_sm20_div_u16": 1,
