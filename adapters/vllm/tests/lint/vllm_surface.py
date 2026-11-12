@@ -25,7 +25,7 @@ SURFACE = {
     "vllm.v1.core.sched.scheduler:Scheduler": "the V1 scheduler, which engine.handle returns and the tick's gate and PoUB's "
                                               "binder hook",
     "vllm.v1.core.block_pool:BlockPool": "the KV block pool, whose allocations PoUB's binder records",
-    "vllm.v1.worker.gpu_model_runner:GPUModelRunner": "the model runner, which engine.handle returns",
+    "vllm.v1.worker.gpu.model_runner:GPUModelRunner": "Model Runner V2, which engine.env.ENGINE selects and engine.handle returns",
     "vllm.v1.executor.multiproc_executor:WorkerProc": "the tensor-parallel worker process, which the TP lease hooks",
     # configuration and the platform
     "vllm.envs": "vLLM's environment switches, which engine.build, the inventory and the served facts read back",
@@ -38,8 +38,6 @@ SURFACE = {
     "vllm.utils:flashinfer": "vLLM's FlashInfer verdict, which the build inventory records",
     "vllm.utils.flashinfer:has_flashinfer": "vLLM's FlashInfer verdict for this process, which engine.build records",
     "vllm.utils.platform_utils:num_compute_units": "the SM count that fixes the top-p split's launch geometry",
-    "vllm.utils.torch_utils:is_quantized_kv_cache": "whether the KV cache is quantized, which the int8 attention backend "
-                                                    "refuses",
     "vllm.utils.torch_utils:set_default_torch_dtype": "the dtype a meta-device model is built under",
     "vllm.ir": "vLLM's IR ops, which the frontend makes torch-wrapped so that its export sees through them",
     # distributed
@@ -120,6 +118,8 @@ SURFACE = {
                                                                 "frontend's profile knob",
     "vllm.v1.attention.backends.registry:register_backend": "registers the int8 attention backend as CUSTOM",
     "vllm.v1.attention.ops.triton_decode_attention:decode_attention_fwd": "the Triton MLA decode the MLA capture calls",
+    "vllm.v1.kv_cache_interface:is_quantized_kv_cache": "whether the KV cache is quantized in any of vLLM's modes, which "
+                                                        "the int8 attention backend refuses",
     "vllm.v1.kv_cache_layout:KVCacheLayout": "the KV layout the int8 attention backend declares",
     "vllm._custom_ops": "vLLM's custom ops: the MoE router and sum the MoE sources hook, and the silu-mul difftest",
     "vllm:_custom_ops": "vLLM's custom ops: the rotary embedding the RoPE difftests call",
