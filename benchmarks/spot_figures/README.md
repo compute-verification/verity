@@ -161,10 +161,10 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     the first it meets (`total_cost.limits`): a session of more tables than the GPU prover (1), the CPU prover and
     the Lean verifier (64), the challenger's coin commitment (127) or the proved scope (200) takes; more lines of
     session coins than one challenger session's release log holds; or a second draw of more bytes of live coins
-    than one layout holds. Its bound is then the cost model's alone, of a deployment no code runs. (A) and (A′) are
-    plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its sessions
-    and the shares of its proving in the phase's statements and on padding. No code builds a verification phase of
-    a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
+    than one layout holds. Its bound is then the cost model's alone, of a deployment no code runs. (A), (A′) and
+    (A″) are plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its
+    sessions and the shares of its proving in the phase's statements and on padding. No code builds a verification
+    phase of a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's verification phase beside each, thin and dashed;
