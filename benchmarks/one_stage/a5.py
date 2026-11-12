@@ -789,9 +789,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
     # a member reading an outside registered value, against the root its owner signed; and either's other ports, against the
-    # registration's own roots, since Lean takes registered reads only when they name every port
-    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})},
-                         mine, roots, registered=REG)
+    # registration's own roots, since Lean takes registered reads only when they name every port; a member holding a wired
+    # port in its writer's tree (no tree of its own) reads it at its writer's root, its other ports at their own
+    held = {m.key: {"format": REG.READS_V1, "ports": {}} for m in mine.members if m.wired and not m.wired_trees}
+    reads = CS.own_reads({**held, **(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
+                          **(registered or {})}, mine, roots, registered=REG)
     for mm in members:
         if mm["m"].key in reads:
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
