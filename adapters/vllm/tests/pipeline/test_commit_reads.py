@@ -1,6 +1,8 @@
 """`verity_vllm.pipeline.commit` on records that leave a block out: the stop rule of record over versions that record no engine
-arguments, and the summary over an instrumented run with no Commit record.  A block that is absent, null, empty or zero reads
-alike: each is tested for its truth.  The stand-in engine, the workload and the rows are `test_commit_main.py`'s.  CPU only."""
+arguments, the summary over an instrumented run with no Commit record, and the readers `main` reads a workload, a stop rule of
+record, a collector's extra, a run's Commit record, an oracle compare and the versions through.  A block that is absent, null,
+empty or zero reads alike: each is tested for its truth.  The stand-in engine, the workload and the rows are
+`test_commit_main.py`'s.  CPU only."""
 from __future__ import annotations
 
 import json
@@ -85,3 +87,63 @@ def test_the_summary_lists_each_instrumented_runs_tensor_counts_and_the_reason_o
     made = summary(tmp_path, monkeypatch, rows)
     assert (made["pairs"], made["commit_pass"]) == (0, False)
     assert (made["commit_fail_reasons"], made["expected_tensors"], made["committed_tensors"]) == (["openings"], [3, 3], [3, 3])
+
+
+@pytest.mark.parametrize("required", NOTHING)
+def test_a_workload_that_requires_no_engine_argument_gives_none(required: Any) -> None:
+    assert commit.required_engine_args(holding("engine_args_required", required)) == {}
+
+
+def test_a_workloads_required_engine_arguments_are_the_ones_it_holds() -> None:
+    required = {"max_num_seqs": 4}
+    assert commit.required_engine_args({"engine_args_required": required}) is required
+
+
+@pytest.mark.parametrize("srule", [*NOTHING, {"eos_token_ids": [2]}])
+def test_a_stop_rule_of_record_that_read_no_rule_or_no_source_names_no_eos_source(srule: Any) -> None:
+    assert commit.eos_source(holding("srule", srule)) is None
+
+
+def test_a_stop_rule_of_record_names_the_source_its_rule_read_the_eos_ids_from() -> None:
+    assert commit.eos_source({"srule": {"eos_token_ids": [2], "source": "generation_config.json"}}) == "generation_config.json"
+
+
+@pytest.mark.parametrize("errors", NOTHING)
+def test_a_collector_that_gives_no_count_and_lists_no_error_counts_none(errors: Any) -> None:
+    assert commit.collector_errors_n(holding("errors", errors)) == 0
+
+
+def test_a_collectors_count_is_its_own_and_where_it_gives_none_the_length_of_its_list() -> None:
+    assert commit.collector_errors_n({"errors": ["e1", "e2"]}) == 2
+    assert commit.collector_errors_n({"errors": ["e1", "e2"], "errors_n": 5}) == 5
+    assert commit.collector_errors_n({"errors_n": None}) is None
+
+
+@pytest.mark.parametrize("binding", [*NOTHING, {"error": "KeyError('step')"}, *({"coverage": c} for c in NOTHING[1:]),
+                                     {"coverage": {"ok": False}}, {"coverage": {"missing_n": 1}}])
+def test_a_run_whose_binding_records_no_covered_population_is_not_covered(binding: Any) -> None:
+    assert commit.coverage_ok(holding("binding", binding)) is False
+
+
+def test_a_run_whose_binding_covered_its_population_is_covered() -> None:
+    assert commit.coverage_ok({"binding": {"coverage": {"ok": True, "missing_n": 0}}}) is True
+
+
+@pytest.mark.parametrize("attribution", NOTHING)
+def test_an_oracle_compare_that_made_no_attribution_gives_an_empty_one(attribution: Any) -> None:
+    assert commit.attribution_of(holding("attribution", attribution)) == {}
+
+
+def test_an_oracle_compares_attribution_is_the_one_it_holds() -> None:
+    attribution = {"complete": True, "pairs": 3}
+    assert commit.attribution_of({"attribution": attribution}) is attribution
+
+
+@pytest.mark.parametrize("compilation", [*NOTHING, "eager", ["x"], {"compilation_mode": "NONE"}])
+def test_versions_that_record_no_compilation_or_no_generated_kernels_give_none(compilation: Any) -> None:
+    assert commit.generated_kernels_of(holding("compilation", compilation)) is None
+
+
+def test_the_generated_kernels_are_the_ones_the_versions_compilation_holds() -> None:
+    kernels = {"loaded": {"modules": 3}}
+    assert commit.generated_kernels_of({"compilation": {"generated_kernels": kernels}}) is kernels

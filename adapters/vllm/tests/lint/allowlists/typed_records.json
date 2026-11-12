@@ -88,7 +88,7 @@
     {"file": "verity_vllm/pipeline/build.py", "kind": "schema-literal", "symbol": "construction_version", "detail": "cb-a/aot-artifact/v1"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "schema-literal", "symbol": "run", "detail": "cb-a/derive_step/v3"},
     {"file": "verity_vllm/pipeline/build_instances.py", "kind": "schema-literal", "symbol": "write_instances", "detail": "cb-a/instance-sequence/v2"},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 49},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 34},
     {"file": "verity_vllm/pipeline/components.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/config_record.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 35},
     {"file": "verity_vllm/pipeline/deferred_rows.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},

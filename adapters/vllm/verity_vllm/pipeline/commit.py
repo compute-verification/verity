@@ -251,6 +251,12 @@ def admission_lag(wl: dict) -> int:
     return int(_GP.workload_target(wl.get("target")).lag())
 
 
+def engine_async_scheduling(versions: dict) -> Any:
+    """The engine's resolved `async_scheduling` as the versions record it; None where they record no engine arguments."""
+    kwargs = versions.get("engine_kwargs")
+    return kwargs.get("async_scheduling") if kwargs else None
+
+
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     """the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
@@ -269,9 +275,9 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
         _decl_lag = _GP.workload_target(wl.get("target")).lag()
-        _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
+        _eng_async = engine_async_scheduling(versions)
         # one field, one reader: GP-01's eos_lag_rows_declared over the engine's resolved read-back
-        _eng_lag = eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
+        _eng_lag = eos_lag_rows_declared({"async_scheduling": _eng_async})
         out["declared_lag"], out["engine_lag"], out["async_scheduling"] = _decl_lag, _eng_lag, _eng_async
         if _eng_lag is None:
             out["notes"].append(f"the Program declares LAG {_decl_lag} but this engine does not attest async_scheduling: EOS stops fail by name")
@@ -955,6 +961,43 @@ class Options:
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by `verity-vllm compiled-merge` from both processes")
 
 
+def required_engine_args(wl: dict) -> dict:
+    """The engine arguments a workload requires; none where it names none."""
+    required = wl.get("engine_args_required")
+    return required if required else {}
+
+
+def eos_source(stop_of_record: dict) -> Any:
+    """Where the stop rule of record took its EOS ids from; None where no stop rule was read."""
+    srule = stop_of_record.get("srule")
+    return srule.get("source") if srule else None
+
+
+def collector_errors_n(extra: dict) -> Any:
+    """How many errors a run's collector counted; where it gave no count, how many it listed, none where it listed none."""
+    errors = extra.get("errors")
+    return extra.get("errors_n", len(errors) if errors else 0)
+
+
+def coverage_ok(commit: dict) -> bool:
+    """Whether a run's binding covered its population; False where the run recorded no binding, or the binding no coverage."""
+    binding = commit.get("binding")
+    coverage = binding.get("coverage") if binding else None
+    return bool(coverage.get("ok")) if coverage else False
+
+
+def attribution_of(oc: dict) -> dict:
+    """An oracle compare's attribution; an empty one where the compare made none."""
+    attribution = oc.get("attribution")
+    return attribution if attribution else {}
+
+
+def generated_kernels_of(versions: dict) -> Any:
+    """What the versions' compilation records of its generated kernels; None where they record no compilation."""
+    compilation = versions.get("compilation")
+    return compilation.get("generated_kernels") if isinstance(compilation, dict) else None
+
+
 def main(args: Options) -> None:
     _rs = RS.session_of(args)
     if (tracedump := settings.VERITY_TRACEDUMP) is not None:
@@ -1008,7 +1051,7 @@ def main(args: Options) -> None:
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
-    engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
+    engine_args = {**required_engine_args(wl), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload))
     # `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
     # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
@@ -1455,7 +1498,7 @@ def main(args: Options) -> None:
     # the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
     stop_of_record = stop_rule_of_record(eng, wl, versions)
-    versions["stop_rule_of_record"] = {k: v for k, v in stop_of_record.items() if k != "srule"} | {"eos_source": (stop_of_record.get("srule") or {}).get("source")}
+    versions["stop_rule_of_record"] = {k: v for k, v in stop_of_record.items() if k != "srule"} | {"eos_source": eos_source(stop_of_record)}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
     # the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
@@ -1583,7 +1626,7 @@ def main(args: Options) -> None:
                 # X-03: fail-closed verdict per instrumented run (recorded; the process exits non-zero if any run fails)
                 row["commit"]["expected_tensors"] = rc.extra.get("expected_tensors")
                 row["commit"]["committed_tensors"] = rc.extra.get("committed_tensors")
-                row["commit"]["errors_n"] = rc.extra.get("errors_n", len(rc.extra.get("errors") or []))
+                row["commit"]["errors_n"] = collector_errors_n(rc.extra)
                 # binding map + identity coverage against the collector-independent expected population, and openings sampled
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
@@ -1611,7 +1654,7 @@ def main(args: Options) -> None:
                     site = " | ".join(ln.strip() for ln in traceback.format_exc().splitlines() if ln.strip().startswith("File "))[-400:]
                     row["commit"]["binding"] = {"error": repr(e)[:300], "site": site, "rules_version": "r14-v1"}
                     print(f"[delta] BINDING ERROR (pair {pair}): {e!r} at {site}", flush=True)
-                TL.end("validate.binding_coverage", pair=pair, ok=bool(((row["commit"].get("binding") or {}).get("coverage") or {}).get("ok")))
+                TL.end("validate.binding_coverage", pair=pair, ok=coverage_ok(row["commit"]))
                 _ids_full = None                                                          # the engine-step-annotated identities the reconciler re-derives the cell counts from
                 if required_manifest is not None and hasattr(com, "layouts_dump"):
                     TL.start("validate.manifest_coverage", pair=pair)
@@ -1762,7 +1805,7 @@ def main(args: Options) -> None:
                         vc["result"] = False
                     elif oc.get("result") is True and vc_result in (None, True):
                         vc["result"] = True
-                    _at = oc.get("attribution") or {}
+                    _at = attribution_of(oc)
                     TL.end("validate.oracle_compare", pair=pair, ok=oc.get("result"), n=oc.get("compared"))
                     print(f"[delta] C2 ORACLE COMPARE (pair {pair}): {'MISMATCH' if oc.get('result') is False else ('OK complete' if oc.get('complete') else str(oc.get('grade') or 'partial'))} "
                           f"attribution {_at.get('complete')} ({_at.get('pairs')} step/request pairs, unverified {_at.get('unverified_n')}, ambiguous {_at.get('ambiguous_steps')}) compared {oc.get('compared')} "
@@ -1888,7 +1931,7 @@ def main(args: Options) -> None:
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):
     # the CUDA graphs replay the launchers that existed at capture, so an unchanged executed set (no new module / kernel / binary / config)
     # is the evidence that the artifact identity recorded at build is the identity of every replayed and eager step of every run
-    _gk0 = (versions.get("compilation") or {}).get("generated_kernels") if isinstance(versions.get("compilation"), dict) else None
+    _gk0 = generated_kernels_of(versions)
     if isinstance(_gk0, dict) and isinstance(_gk0.get("loaded"), dict) and not _gk0["loaded"].get("error"):
         _end = va.loaded_code_objects()
         _delta = va.loaded_code_objects_delta(_gk0["loaded"], _end)
@@ -1950,8 +1993,8 @@ def main(args: Options) -> None:
     print(f"[delta] wrote {out}", flush=True)
     # X-03 fail-closed: Commit PASS only if every instrumented run passed `commit_verdict` (manifest count == bound count, no collector
     # error, openings all verified, tokens equal); otherwise the first reason is printed and recorded and the process exits 3
-    fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass") and not RB.awaits_replay(r["commit"])]
-    pending = [r["pair"] for r in rows if r["arm"] != "control" and RB.awaits_replay(r.get("commit") or {})]
+    fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not RB.commit_of(r).get("commit_pass") and not RB.awaits_replay(r["commit"])]
+    pending = [r["pair"] for r in rows if r["arm"] != "control" and RB.awaits_replay(RB.commit_of(r))]
     verdict = {"commit_pass": RB.pass_of(rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
                "runs_failed": len(fails), "first_fail_reason": (fails[0][2] if fails else None),
                "required_classes": list(required_classes), "required_classes_source": (
@@ -2089,7 +2132,7 @@ def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: 
             "backlog_max": backlog_max, "tokens_equal": tokens_eq, "versions": versions, "declaration": decl, "table_md": "\n".join(lines),
             # X-03 fail-closed verdict over the instrumented runs (see commit_verdict)
             "commit_pass": RB.pass_of(rows),
-            "commit_fail_reasons": [(r.get("commit") or {}).get("commit_fail_reason") for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass")],
-            "expected_tensors": [(r.get("commit") or {}).get("expected_tensors") for r in rows if r["arm"] != "control"],
-            "committed_tensors": [(r.get("commit") or {}).get("committed_tensors") for r in rows if r["arm"] != "control"],
+            "commit_fail_reasons": [RB.commit_of(r).get("commit_fail_reason") for r in rows if r["arm"] != "control" and not RB.commit_of(r).get("commit_pass")],
+            "expected_tensors": [RB.commit_of(r).get("expected_tensors") for r in rows if r["arm"] != "control"],
+            "committed_tensors": [RB.commit_of(r).get("committed_tensors") for r in rows if r["arm"] != "control"],
             "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
