@@ -270,13 +270,14 @@ CANDIDATES = [
         "name": "PRMT / FMNMX / LOP3 packing tricks", "device": "all", "cls": "NO-MULTIPLY", "D": None, "escape": False,
         "isa": "PRMT selects bytes, LOP3 is a 3-input bitwise truth table, I/FMNMX is min/max; none multiplies",
         "reason": "byte-select / bitwise / min-max carry no product; the outer-product PACKING that DOES multiply is "
-                  "IMAD/IMAD.WIDE/IDP, priced on the lane route and capped by ISA-CAP (<= 4 fields a word)",
+                  "IMAD/IMAD.WIDE/IDP, priced on the lane route and bounded by ISA-CAP (<= 4 fields a word)",
     },
     {
         "name": "IMAD.WIDE (two destination words)", "device": "all", "cls": "PRICED", "D": 1, "escape": False,
         "isa": "IMAD.WIDE: s32 x s32 -> s64 into a register pair (two words a lane)",
         "reason": "the two words are one s64 product's halves (the high word is carry/sign, not an independent fresh "
-                  "word); priced IMADW at the pi32 floor; ISA-CAP caps its packing at 4 fields a word = IMAD's density",
+                  "word); priced IMADW at the pi32 floor; ISA-CAP holds its packing to 4 fields a word = IMAD's "
+                  "density",
     },
     {
         "name": "IADD.64 / IMNMX.64 / SEL.64 (two destination words, no multiply)", "device": "sm_120",

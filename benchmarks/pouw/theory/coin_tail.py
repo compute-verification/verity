@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The lead's coin-branch tail (`Tail.coinTail_le`, security/Proofs/Pouw/Lead/Tail/Repeats.lean), checked against the
-coins as the layout draws them: a word is a prefix sum over steps, and the tag weights `G` (one set a column), the
+coins as the layout flips them: a word is a prefix sum over steps, and the tag weights `G` (one set a column), the
 step-0 bits `a₁` (a row's) and the tag bits `b` (a row's and step's) are shared across blocks.
 
 **The route** (`Tail/Blocks.lean`). A block is a step, coin tile and column block, holding the coin tile's `ρ` row
@@ -27,7 +27,7 @@ evaluates it on every step and column-block count up to `--dense` past the small
 geometrically (`--growth`) beyond, each step count at its smallest `K ≥ 4,096` (the least slack), and finds the least
 slack `t` (a share of stock, against `coinSlack`'s `8/10000`) that brings each call to `2^−42`, and `gapFixed` there.
 
-**The coins as drawn.** On a small layout and the exact `word`, it checks each order's read sets (resampling the
+**The coins as flipped.** On a small layout and the exact `word`, it checks each order's read sets (resampling the
 later coordinates leaves the earlier events' tiles), that two tiles of one block differ by `G`, `a₁` and `b` alone
 (their coin lanes cancel), that a step's tag bit moves every later word of its row by one (the persistence that
 makes `b` the per-slot charge), and `repeats ≤ ρ X + (ρ − 1) W` on random tile values.
@@ -163,7 +163,7 @@ def needed_slack(L: dict) -> Fraction:
 
 def grid(m_rows: int, tiles_log2: int, dense: int, growth: float):
     rb = (16 * ((m_rows + 15) // 16)) // 16
-    cap = 2**tiles_log2
+    limit = 2**tiles_log2
 
     def axis(lo: int, top: int) -> list[int]:
         xs = list(range(lo, min(top, lo + dense) + 1))
@@ -174,8 +174,8 @@ def grid(m_rows: int, tiles_log2: int, dense: int, growth: float):
         xs.append(top)
         return sorted(set(x for x in xs if lo <= x <= top))
 
-    for S in axis(147, cap // (rb * 512)):
-        for cb in axis(512, cap // (rb * S)):
+    for S in axis(147, limit // (rb * 512)):
+        for cb in axis(512, limit // (rb * S)):
             yield S, cb
 
 
@@ -228,7 +228,7 @@ def structure(seed: int) -> dict:
     tag = [bal13(i // 2 + 1 if i % 2 == 0 else -(i // 2 + 1)) for i in range(m)]
     code = [bal13(j + 1) for j in range(n)]
 
-    def draw() -> dict:
+    def flip() -> dict:
         return {"b": [[rng.randrange(2) for _ in range(S)] for _ in range(m)],
                 "a": [[rng.randrange(2) for _ in range(4)] for _ in range(m)],
                 "g": [[rng.randrange(7) for _ in range(n)] for _ in range(4)],
@@ -259,10 +259,10 @@ def structure(seed: int) -> dict:
     slots = [(t, ct) for t in range(S) for ct in range(m // 64)]
     for _ in range(3):
         kap = [[[rng.randrange(-50, 51) for _ in range(n)] for _ in range(S)] for _ in range(m)]
-        w = draw()
+        w = flip()
         base = tiles(kap, w)
         for bi, (t, ct, cb) in enumerate(blocks):
-            w2, fresh = copy(w), draw()
+            w2, fresh = copy(w), flip()
             for (t2, ct2, cb2) in blocks[bi + 1:]:
                 for ell in range(3):
                     for j in range(8 * cb2, 8 * cb2 + 8):
@@ -272,7 +272,7 @@ def structure(seed: int) -> dict:
                    for rb in range(4 * ct2, 4 * ct2 + 4)):
                 fails.append(("block order", t, ct, cb))
         for si, (t, ct) in enumerate(slots):
-            w2, fresh = copy(w), draw()
+            w2, fresh = copy(w), flip()
             for (t2, ct2) in slots[si + 1:]:
                 for i in range(64 * ct2, 64 * ct2 + 64):
                     if t2 == 0:
@@ -283,7 +283,7 @@ def structure(seed: int) -> dict:
             if any(new[rb, cb, t] != base[rb, cb, t] for rb in range(4 * ct, 4 * ct + 4) for cb in range(n // 8)):
                 fails.append(("slot order", t, ct))
         for cb in range(n // 8):
-            w2, fresh = copy(w), draw()
+            w2, fresh = copy(w), flip()
             for q in range(4):
                 for j in range(n):
                     if j // 8 != cb:
@@ -292,7 +292,7 @@ def structure(seed: int) -> dict:
             if any(new[rb, cb, t] != base[rb, cb, t] for rb in range(m // 16) for t in range(S)):
                 fails.append(("column-block order", cb))
         w2 = copy(w)
-        w2["u"] = draw()["u"]
+        w2["u"] = flip()["u"]
         new = tiles(kap, w2)
         for (rb, cb, t), v in base.items():
             for rb2 in range(4 * (rb // 4), 4 * (rb // 4) + 4):
@@ -324,7 +324,8 @@ def main() -> int:
     ap.add_argument("--tiles-log2", type=int, default=30)
     ap.add_argument("--dense", type=int, default=160, help="every step and column-block count this far past the least")
     ap.add_argument("--growth", type=float, default=1.06)
-    ap.add_argument("--also-log2", type=int, nargs="*", default=[40], help="cap sizes to evaluate coarsely, bound only")
+    ap.add_argument("--also-log2", type=int, nargs="*", default=[40],
+                    help="tile limits to evaluate coarsely, bound only")
     ap.add_argument("--json")
     args = ap.parse_args()
     report: dict = {"target_log2": TARGET, "slack_pct": float(SLACK * 100), "tiles_log2": args.tiles_log2,
@@ -341,7 +342,7 @@ def main() -> int:
         with open(args.json, "w") as f:
             json.dump(report, f, indent=1)
     ok = report["structure"]["ok"] and all(v["holds"] for v in report["layouts"].values())
-    print("coinTail_le's 2^-42 at 2^%d tiles:" % args.tiles_log2, "holds" if ok else "FAILS")
+    print(f"coinTail_le's 2^-42 at 2^{args.tiles_log2} tiles:", "holds" if ok else "FAILS")
     return 0 if ok else 1
 
 
