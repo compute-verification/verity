@@ -1051,15 +1051,16 @@ def select_second(j):
 
 def template_circuits(j):
     """A two-stage run's params naming each template's circuit file and its statements' reference header and registered
-    reads (`service.template_circuits`), in the order the check's template query names the templates; a missing `proofs`
-    names none."""
+    reads (`service.template_circuits`), in the order the check's template query names the templates, and the templates
+    they record as table reads, each with its table's rows (`service.template_reads`); a missing `proofs` names none."""
     j = _json(j)
     proofs, query = (j.get("proofs"), j.get("query")) if isinstance(j, dict) else (None, None)
     try:
         named = service.template_circuits(proofs, query)
     except ValueError as e:
         raise D.Reject(str(e)) from None
-    return {"circuits": [[t, c, h, r] for t, c, h, r in named]}
+    return {"circuits": [[t, c, h, r] for t, c, h, r in named],
+            "reads": [[t, v] for t, v in service.template_reads(proofs)]}
 
 
 def slots(j):
@@ -3509,6 +3510,12 @@ def second_stages(draw) -> dict:
 SELECT_SECOND = D.Port(PIECES, "select_second", select_second, st.one_of(second_stages(), second_stages(), JSON),
                        package=PACKAGE)
 
+#: What a params entry may add to record its template as a table read (`service.template_reads`): nothing, a read of
+#: V rows of H words, and records that are not two positive counts.
+_READ_RECORDS = [{}, {}, {"read": {"V": 8, "H": 2}}, {"read": {"V": 131072, "H": 576}}, {"read": {"V": 0, "H": 2}},
+                 {"read": {"V": 8}}, {"read": {"V": True, "H": 2}}, {"read": None}, {"read": {"V": 8, "H": 2, "x": 1}},
+                 {"read": {"V": "8", "H": 2}}, {"read": {"V": -1, "H": 2}}, {"read": [8, 2]}]
+
 _PARAMS_CHANGES = {
     "a template dropped": lambda p, q: ({"templates": p["templates"][:-1]}, q),
     "a template added": lambda p, q: ({"templates": [*p["templates"], {"template": "z/9", "circuit": "0" * 128,
@@ -3574,8 +3581,9 @@ def template_circuit_cases(draw) -> dict:
         None, {"format": "verity/registered-reads/v1", "ports": {"x": {"value": BX}}},
         {"ports": {"x": {"value": "x", "root": "aa" * 64}, "o0": {"value": BOUT}}}]),
         min_size=len(ids), max_size=len(ids)))
-    proofs = {"templates": [{"template": t, "circuit": c, "header": h, "registered": r}
-                            for t, c, h, r in zip(ids, circuits, headers, reads)]}
+    recorded = draw(st.lists(st.sampled_from(_READ_RECORDS), min_size=len(ids), max_size=len(ids)))
+    proofs = {"templates": [{"template": t, "circuit": c, "header": h, "registered": r, **x}
+                            for t, c, h, r, x in zip(ids, circuits, headers, reads, recorded)]}
     if draw(st.booleans()):
         proofs, query = _PARAMS_CHANGES[draw(st.sampled_from(sorted(_PARAMS_CHANGES)))](proofs, query)
     return {"query": query} if proofs is None else {"proofs": proofs, "query": query}
@@ -4484,7 +4492,8 @@ def _second_own(j):
     for none) and the registered reads the params give it, taken as given (`ref_reads`, `{template: registered}`, each
     null for none, null for no template's), and its own copies of the interior registration's values it fills, with
     their sources (`supplied`, `second_stage.supplied_of`), and the names of those it pinned or holds to an earlier
-    record (`fixed`), each null for none."""
+    record (`fixed`), each null for none, and the templates the auditor's params record as table reads with their
+    tables' rows (`reads`, `{template: V}`, null for none)."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
         raise D.Reject("allow is not a boolean")
@@ -4525,10 +4534,13 @@ def _second_own(j):
     fixed = j.get("fixed")
     if not (fixed is None or (isinstance(fixed, list) and all(isinstance(v, str) for v in fixed))):
         raise D.Reject("fixed is null or a list of strings")
+    reads = j.get("reads")
+    if not (reads is None or (isinstance(reads, dict) and all(map(_nat, reads.values())))):
+        raise D.Reject("reads is null or an object of naturals")
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
                  tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns, supplied,
-                 tuple(fixed or ()))
+                 tuple(fixed or ()), tuple((reads or {}).items()))
     return j["allow"], own, statements
 
 
@@ -4953,22 +4965,27 @@ def _verifier_held(c: dict, x: int) -> dict:
     return {**c, "supplied": None, "fixed": names[:1]}
 
 
-#: A read's template as round 2 knows one, by its id, and the names its links read in `_read_opening`.
+#: A read's template, which the auditor's params record as a read of `OPENING_ROWS` rows, and the names its links
+#: read in `_read_opening`.
 OPENING = "EmbeddingRead_v1{V=8,H=2}"
+OPENING_ROWS = 8
 OPENING_PORTS = ("tok", "root", "domain", "row", "salt", "path")
 
 
 #: How many cases `_read_opening` has.
-OPENINGS = 32
+OPENINGS = 36
 #: The roots and domain ids of the two tables `_read_opening` has round 1's record register.
 OPENING_TABLES = {"t": ("a1" * 64, "a2" * 64), "u": ("b1" * 64, "b2" * 64)}
 
 
 def _read_opening(c: dict, x: int) -> dict:
     """`c` with its interior registering a read's parameters, each linked at its port of the read's template
-    (`OPENING`, no part's, so `second-links` refuses the design whatever `second-inputs` says), its verifier filling
+    (`OPENING`, no part's, so `second-links` refuses the design whatever `second-inputs` says; the auditor's params
+    record it as a read of `OPENING_ROWS` rows), its verifier filling
     the read's root and domain with the root and the domain id round 1's record registers for one table
-    (`OPENING_TABLES`, two ports more of that record), their ports' rows placing each unit alike, and filling its key and the value `one` its verdict port reads in its reference statement's reads, each row the bytes
+    (`OPENING_TABLES`, two ports more of that record, each of `OPENING_ROWS` leaves), their ports' rows placing each
+    unit alike, and filling its key and the value `one` its verdict port reads in its reference statement's reads, each
+    row the bytes
     of 1: the opened row, its salt and its path are then inputs a replay block may read (`second-inputs`). By `x`, the
     read is so; its key is the prover's, a port of round 1's record, wired, pinned, or unlinked; its root is the
     prover's, filled from a root of the interior record, or unlinked; its verdict reads a value with a row that is
@@ -4978,8 +4995,9 @@ def _read_opening(c: dict, x: int) -> dict:
     or its salt at a port no link names it at; its domain's row is another table's or a root; its root is bytes
     round 1's record registers nowhere, or of another count of rows; the two ports' rows are missing, or place a unit
     differently; its root and domain are of two tables, filled alike row by row; round 1's record registers neither
-    table; its root is left as a table's name, which is none of the verifier's bytes; or round 1's record registers
-    the root under another domain."""
+    table; its root is left as a table's name, which is none of the verifier's bytes; round 1's record registers
+    the root under another domain; the params record no read, the read at another count of rows, or another template
+    alone as one; or round 1's record registers the table at another count of leaves."""
     rec, links, wires, refs, rows = (c.get(k) for k in ("interior", "links", "wires", "ref_reads", "rows"))
     b = c.get("boundary")
     if not (isinstance(rec, dict) and isinstance(links, list) and isinstance(wires, list) and isinstance(rows, list)
@@ -4991,8 +5009,10 @@ def _read_opening(c: dict, x: int) -> dict:
     placed = [{"template": OPENING, "port": p, "per": 1, "runs": [[0, 1, 0, 0]]} for p in ("root", "domain")]
     registered = [*names.values(), one]
     (t_root, t_domain), (u_root, u_domain) = OPENING_TABLES["t"], OPENING_TABLES["u"]
-    like = b["roots"][0] if b["roots"] and isinstance(b["roots"][0], dict) else {"leaves": 8}
-    tables = [{**like, "port": f"{OPENING}/table-{n}", "root": r, "domain": d} for n, (r, d) in OPENING_TABLES.items()]
+    like = b["roots"][0] if b["roots"] and isinstance(b["roots"][0], dict) else {}
+    tables = [{**like, "port": f"{OPENING}/table-{n}", "root": r, "domain": d, "leaves": OPENING_ROWS}
+              for n, (r, d) in OPENING_TABLES.items()]
+    recorded: dict | None = {OPENING: OPENING_ROWS}
     mine = {names["tok"]: [[{"bytes": "00000002"}]], names["root"]: [[{"bytes": t_root}]],
             names["domain"]: [[{"bytes": t_domain}]], one: [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
     linked = [{"template": OPENING, "port": p, "value": v} for p, v in names.items()]
@@ -5072,12 +5092,20 @@ def _read_opening(c: dict, x: int) -> dict:
         mine[names["root"]] = [[{"history": "t/root"}]]
     elif kind == 31:
         tables = [{**tables[0], "domain": u_domain}]
+    elif kind == 32:
+        recorded = None
+    elif kind == 33:
+        recorded = {OPENING: 2 * OPENING_ROWS}
+    elif kind == 34:
+        recorded = {"other": OPENING_ROWS}
+    elif kind == 35:
+        tables = [{**e, "leaves": 2 * OPENING_ROWS} for e in tables]
     supplied = c.get("supplied") if isinstance(c.get("supplied"), dict) else {}
     entries = [{**INTERIOR_VALUES[0], "value": v} for v in registered]
     return {**c, "interior": {**rec, "registered": [*held, *entries]}, "links": [*links, *linked], "wires": wired,
             "boundary": {**b, "roots": [*b["roots"], *tables]},
             "rows": [*rows, *placed], "supplied": {**supplied, **mine}, "fixed": fixed,
-            "ref_reads": {**(refs or {}), **more, at: ref}}
+            "ref_reads": {**(refs or {}), **more, at: ref}, "reads": recorded}
 
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
@@ -7427,14 +7455,16 @@ def test_round_two_takes_a_value_of_the_interior_registration_only_as_the_verifi
 
 def test_round_two_takes_the_opened_row_of_a_read_whose_table_key_and_verdict_the_verifier_holds(pieces):
     """The one input of a replay block the interior registration may give (`second-inputs`, `openedRow`), Lean's the
-    Python's whole: a read's row, its salt and its path, where the verifier fills the read's root and domain with the
-    root and the domain id round 1's record registers for one table, the read's key is a value the verifier holds or a port of round 1's record, and the
+    Python's whole: a read's row, its salt and its path, where the auditor's params record the template as a read, the
+    verifier fills the read's root and domain with the root and the domain id round 1's record registers for one
+    table of the read's rows, the read's key is a value the verifier holds or a port of round 1's record, and the
     read's verdict port reads, in its reference statement's reads, a value the verifier fills with 1 at every row
     (`_read_opening`). The row is refused by name where the key is unlinked, the root is unlinked, the verdict reads a
     value with a row that is not 1, with no row, one the verifier pinned or doesn't fill, or none, where another
     template or another port of the read reads the row too, by a link or, with none, by its reference statement's
     reads; where the root and the domain are not one table's of round 1's record row by row, or their ports' rows are
-    missing or place a unit differently; the key or the root is, where the prover registers it or the root is left
+    missing or place a unit differently; where the params record no read of the template, or one of another count of
+    rows than the table's leaves; the key or the root is, where the prover registers it or the root is left
     as a table's name; a value no link names is; and the salt is,
     where another template's reference reads it. A key the block computes, a wire, is refused with its own reason
     (`KEY_WHY`). The read's template is no part's here, so every case is refused as a design too (`second-links`)."""
