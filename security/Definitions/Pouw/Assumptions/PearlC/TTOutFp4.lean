@@ -22,7 +22,8 @@ variable {Q R S : Type}
 `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev`'s statement on `Fp4Device`'s maps. `PearlCDevice` reads E4M3 codes,
 32-MAC atoms and promotion groups, so the FP4 line has its own record. At `G = 0` rev1 is this same statement, because
 rev1's first-add term is zero with no promotion. The domain includes D-SK (`Fp4Sem.SaltKeyedB`), so at a `sem` whose
-`B̃` is not keyed by A's salt it claims nothing. At sm_120 (`tt-out/fp4-sm120`, at `Proofs.Pouw.PearlC.Records`' record `devFp4Sm120`):
+`B̃` is not keyed by A's salt it claims nothing. At sm_120 (`tt-out/fp4-sm120`, `TTOutFp4Sm120` at `devFp4Sm120`, in
+`Proofs.Pouw.PearlC.Records`):
 
 - **The cost model.** `CM` is the sm_120 accounting in FP4 units: W1 at the node-2 prices, where one unit is one dense
   NVFP4 MAC with FP32 accumulation and an instruction is priced by its whole fragment. It charges every operation a

@@ -6,7 +6,7 @@ public import Definitions.Pouw.PearlC.DeviceFp4
 # Pearl-C4's prices on sm_120 at an FP32 price and a scale path (definitions only, staged)
 
 `Fp4Prices.sm120` prices Pearl-C4's FP32 operations at the measured in-loop 8.38 FP8 units. The gap's price rule also
-computes g at the issue-bound 8.00 (`Prices.sm120`'s FADD), at `Fp4Prices.sm120Issue`'s prices; both records are
+computes g at the issue-bound 8.00 (`Prices.sm120`'s FADD), at `Fp4Prices.sm120Issue`'s prices; both are
 `Proofs.Pouw.PearlC.Records`'. Here the prices are a function of the FP32 price and the block-scale path
 (`Fp4Prices.sm120At`). The issue-bound record, in FP4 units (an FP8 unit is 2):
 * a BF16 MAC is 4;

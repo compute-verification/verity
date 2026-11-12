@@ -12,8 +12,9 @@ one's body at that cost model (same protocol, domain, `g₀ = 1/400` and `δPear
 (W1.w1Priced dv salt) …` (`Proofs.Pouw.PearlC.TTOutFp4W1`). What W1 charges, why `w1Priced`, and the honest program's
 `AdmitsRef` are `TTOutW1`'s.
 
-**The device.** At sm_120 (`Proofs.Pouw.PearlC.Records`), `devFp4Sm120` is set on `W1Device.fp4Sm120 sha fetch`: sm_120 at the loop's prices (`sm120Loop`) in FP4
-units, an FP8 unit worth 2, with `sha` and `fetch` given in FP4 units. Its table gives the record's prices:
+**The device.** At sm_120 (`TTOutFp4Sm120W1`, `Proofs.Pouw.PearlC.Records`), `devFp4Sm120` is set on
+`W1Device.fp4Sm120 sha fetch`: sm_120 at the loop's prices (`sm120Loop`) in FP4 units, an FP8 unit worth 2, with `sha`
+and `fetch` given in FP4 units. Its table gives the record's prices:
 `W1Prices.toFp4Prices` at the `lut256` scale path is `Fp4Prices.sm120` (`W1Checks.toFp4Prices_fp4Sm120`), as
 `W1Checks.toPrices_*` pairs the FP8 records. `sha` and `fetch` are unmeasured parameters, and the assumption only gets
 weaker as they grow.
