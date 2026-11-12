@@ -51,6 +51,10 @@
                                                  # `main` fast-forwarded only to one with no new failure (research/queue.py, vqueue.py)
   research goals show|set|confirm|done|remove|replace|priority|audit ...   # the Goals page, written with this agent's Cursor identity
                                                  # (research/goals.py)
+  research velocity [--since TIME] [--until TIME] [--line|--json] ...    # the velocity score, read from records: goals moved,
+                                                 # landing, agents, machines, asks; never a gate (research/velocity.py)
+  research metrics show [ID ...] [--owner HANDLE] [--json]   # the console's Metrics tab: each declared metric's latest value
+                                                 # (benchmarks/metrics.toml; research/metrics.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
@@ -2072,6 +2076,14 @@ def main(argv: list[str] | None = None) -> int:
         from .goals import main as goals_main
 
         return goals_main(rest)
+    if cmd == "velocity":
+        from .velocity import main as velocity_main
+
+        return velocity_main(rest)
+    if cmd == "metrics":
+        from .metrics import main as metrics_main
+
+        return metrics_main(rest)
     if cmd == "jobs":
         from .jobs.cli import main as jobs_main
 
