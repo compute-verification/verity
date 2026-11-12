@@ -88,8 +88,8 @@ TARGET = 1.0
 #: the keys of a checkpoint's config.json that bound its context, the smallest of which is the model's own limit
 CONTEXT_KEYS = ("max_position_embeddings", "n_positions", "max_seq_len", "seq_length", "max_sequence_length",
                 "max_seq_length", "seq_len")
-#: how the replayed window was chosen: no audit draws it yet
-WINDOW = "every request of the load's rep, a window the command names: no audit's coins drew it"
+#: how the replayed window was chosen: no audit samples it yet
+WINDOW = "every request of the load's rep, a window the command names: no audit's coins sampled it"
 #: the scheduler replay's loader, which reads a served pass's schedule as advice: a step trace's records for one
 #: pass (``span``), as a trace (``load_step_trace``), and the bits its two classes of advice cost (``draft_table``)
 ENCODINGS = ROOT / "benchmarks/network_e2e/encodings/replay.py"
@@ -680,7 +680,7 @@ def replayed_dir(dirs: list[Path], replay_dir: Path) -> Path | None:
 def seeds(w: dict, meta: dict) -> dict:
     """How a window's sampled requests were seeded, from each one's own arrival (its ``sampling``): the requests at a
     temperature above 0, those of them with no seed in their arrival, and whether the arm's record says the client
-    sent each seed (``seeded``). A sampled request with no seed there drew its own, which no record holds."""
+    sent each seed (``seeded``). What a sampled request with no seed there was sampled with is in no record."""
     sampled = [r for r in w["requests"] if r["sampling"].get("temperature")]
     return {"sampled": len(sampled), "unseeded": sum(r["sampling"].get("seed") is None for r in sampled),
             "by_client": bool(meta.get("seeded"))}
@@ -979,8 +979,8 @@ def _advice(v: dict) -> list[str]:
     if not s["sampled"]:
         seeded = "no request was sampled, so no seed is read"
     elif s["unseeded"]:
-        seeded = (f"{s['unseeded']:,} of the {s['sampled']:,} sampled requests carry NO seed in their arrival: each drew "
-                  "its own, which no record holds, so its kept count is not derived and its tokens cannot be replayed")
+        seeded = (f"{s['unseeded']:,} of the {s['sampled']:,} sampled requests carry NO seed in their arrival: what each "
+                  "was sampled with is in no record, so its kept count is not derived and its tokens cannot be replayed")
     else:
         seeded = (f"{s['sampled']:,} sampled requests, each "
                   + ("seed the client's" if s["by_client"] else "with a seed in its arrival"))

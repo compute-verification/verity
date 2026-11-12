@@ -136,7 +136,7 @@ replay that differs, the first token that does and the first step.
   of its users' own rates), in no verdict; each side's engine steps a pass and the share of its draft tokens
   accepted, which the cost is adjusted for neither of; the cost over the passes taken
   as independent, the paired ratio's median with its interval, in no verdict; and the noise floor, beside and not
-  added (each lifetime pair already holds two servers' draws): stock served a second time over stock where the job
+  added (each lifetime pair is already two servers): stock served a second time over stock where the job
   served it, else stock's own lifetimes, each second one over the one before it, a lifetime pair its unit too, with
   a line where its own interval leaves out 0: stock then differs from stock.
   On another load the figure is the one over the passes taken as independent and has no verdict. By the corpus
@@ -148,10 +148,10 @@ replay that differs, the first token that does and the first step.
   residual advice of when each request arrived, decoded back to the pass's steps; a serve under the certified tick
   sends none, and no arm here is under it) and the kept count, the drafts each row kept, at its measured entropy over
   the rows that verified drafts. Under it: the kept count's own figures as the loader gives them (`K`, the rows, the
-  rows that kept each count, the entropy and its most, the bits charged, the bits where it is derived); that the
-  kept count costs 0 where the audited block derives it, which rests on a Definition of the accept test that does
-  not exist yet; how the pass's sampled requests were seeded, from each one's own arrival (a sampled request with no
-  seed there drew its own, which no record holds: its tokens cannot be replayed); and the pass. The loader's own
+  rows that kept each count, the entropy and its most, the bits charged, the bits where it is derived); that the kept
+  count costs 0 where the audited block derives it, which rests on a Definition of the accept test that does not exist
+  yet; how the pass's sampled requests were seeded, from each one's own arrival (what a sampled request with no seed
+  there was sampled with is in no record: its tokens cannot be replayed); and the pass. The loader's own
   replay of the scheduler must reproduce every step of the pass: where it does not, or the serve has no draft, the
   line is not measured and says the loader's reason.
 

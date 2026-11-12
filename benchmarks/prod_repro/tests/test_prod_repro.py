@@ -938,8 +938,8 @@ def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays
     assert P._advice(v | {"seeds": {"sampled": 32, "unseeded": 0, "by_client": False}})[3] == \
         "  32 sampled requests, each with a seed in its arrival"
     assert P._advice(v | {"seeds": {"sampled": 32, "unseeded": 5, "by_client": True}})[3] == (
-        "  5 of the 32 sampled requests carry NO seed in their arrival: each drew its own, which no record holds, so its "
-        "kept count is not derived and its tokens cannot be replayed")
+        "  5 of the 32 sampled requests carry NO seed in their arrival: what each was sampled with is in no record, so "
+        "its kept count is not derived and its tokens cannot be replayed")
     # a serve under the certified tick sends no arrivals: the kept count alone is charged
     monkeypatch.setattr(P, "encodings", lambda: Loader(tick=True))
     assert ("advice: 295.7 bits a request charged (32 requests): the arrivals 0.0 (under the certified tick, which sends "
