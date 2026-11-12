@@ -156,7 +156,7 @@ class Binder:
         self.offsets: dict[int, dict[tuple[str, str, int], dict[str, int]]] = defaultdict(dict)
         for row in rows:
             nested = row.get("identity")                       # a row may hold its key's fields under `identity`: they read as its own
-            r = {**row, **nested} if nested else row
+            r = {**row, **nested} if nested else {**row}
             if r.get("family") == "weights" or r.get("op_path") == "weights" or not _on_rank(r, rank):
                 continue
             key = (str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0)))
@@ -183,7 +183,7 @@ class Binder:
         rows = manifest_rows(manifest)
         rebind = promoted_observation(dict(manifest))["names"] if any(r.get("promoted") for r in rows) else None
         requests = manifest.get("requests_declared")           # a global manifest's; a request manifest declares none
-        declared = {str(d["request_id"]): f"r{int(d.get('index', i))}" for i, d in enumerate(() if requests is None else requests)
+        declared = {str(d["request_id"]): f"r{int(d.get('index', i))}" for i, d in enumerate(requests if requests else ())
                     if d.get("request_id") is not None}
         return cls(rows, rank=rank, ports=ports, rebind=rebind, aliases=manifest.get("op_path_aliases"), arrivals=arrivals, declared=declared)
 
@@ -354,7 +354,7 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     no request (named)."""
     if manifest.get("complete") is False:                                        # an incomplete manifest never yields coverage
         unmodelled = manifest.get("unmodelled")
-        um = {} if unmodelled is None else unmodelled
+        um = unmodelled if unmodelled else {}
         n = len(identity_rows(manifest))
         return {"ok": False, "error": "manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted(um.items())),
                 "manifest_digest": manifest.get("manifest_digest"), "checked": n, "missing_n": n, "missing_by_family": {"(unmodelled)": n},
@@ -382,10 +382,10 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     comp: dict[int, dict[str, int]] = {}
     tokens: dict[int, int] = {}
     engine_steps = manifest.get("engine_steps")                # a global manifest's composition; a request manifest lists step numbers
-    for es in () if engine_steps is None else engine_steps:
+    for es in engine_steps if engine_steps else ():
         if isinstance(es, dict):
             listed = es.get("members")
-            comp[int(es["engine_step"])] = {str(m["request_id"]): int(m["rows"]) for m in (() if listed is None else listed)}
+            comp[int(es["engine_step"])] = {str(m["request_id"]): int(m["rows"]) for m in (listed if listed else ())}
             tokens[int(es["engine_step"])] = int(es.get("rows", sum(comp[int(es["engine_step"])].values())))
     missing: list[dict[str, Any]] = []
     by_family_missing: Counter = Counter()
@@ -437,7 +437,7 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     composition: list[dict[str, Any]] = []
     if manifest.get("global") and manifest.get("engine_steps") and request_id is None:
         reference = manifest.get("composition_reference")
-        ref = {} if reference is None else reference
+        ref = reference if reference else {}
         for es in manifest["engine_steps"]:
             e = int(es["engine_step"])
             want_rows, want_seq = int(es.get("rows", sum(int(m["rows"]) for m in es["members"]))), int(es.get("n_seq", len(es["members"])))

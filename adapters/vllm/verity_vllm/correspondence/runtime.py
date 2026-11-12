@@ -273,10 +273,10 @@ class RuntimeCorrespondence:
                 coll = CollectiveOccurrence(cj["kind"], int(cj["occurrence"]), tuple(int(x) for x in cj["operand_ranks"]),
                                             cj.get("own_operand"), cj.get("peer_operand"), cj.get("peer_input"),
                                             tuple(int(x) for x in cj.get("peer_operands") or ()), tuple(cj.get("peer_inputs") or ()))
-            lifetime = None if o is None else o.get("lifetime")
+            lifetime = o.get("lifetime") if o else None
             yield CallCorrespondence(k, (o or {}).get("module", ""), (o or {}).get("module_class"), (o or {}).get("node"), (o or {}).get("op"),
                                      (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), tuple(rets), tuple(args),
-                                     {} if lifetime is None else dict(lifetime), rank, coll)
+                                     dict(lifetime) if lifetime else {}, rank, coll)
 
     # -- lookups ----------------------------------------------------------------------------------------------------------
     def __len__(self) -> int:
@@ -324,9 +324,9 @@ class RuntimeCorrespondence:
 def occurrence_views(occurrence: Mapping[str, Any] | None, key: str) -> Sequence[Any]:
     """An occurrence's `outputs` or `inputs` (`key`), neither of which `JSON_SCHEMA` requires of it: no entries for a Call with no
     occurrence, and none where the occurrence records none (predict's naming writes `inputs` only for an op that writes an
-    argument in place)."""
-    views = None if occurrence is None else occurrence.get(key)
-    return () if views is None else views
+    argument in place).  A truth test, so every value reads as it did under `(occurrence or {}).get(key) or []`."""
+    views = occurrence.get(key) if occurrence else None
+    return views if views else []
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -515,7 +515,7 @@ def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, st
         try:
             with open(res_p) as f:
                 program = json.load(f).get("program")
-            recorded = program.get("correspondence_digest") if isinstance(program, dict) else None
+            recorded = program.get("correspondence_digest") if program else None
         except (OSError, ValueError) as e:
             return None, None, f"{res_p}: unreadable ({e})"
         if recorded is None:

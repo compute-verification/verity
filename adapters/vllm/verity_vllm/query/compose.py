@@ -82,7 +82,7 @@ def _correspondence(part: Mapping[str, Any]) -> Mapping[str, Any]:
     """A part's `correspondence` block (the reader that gave its owning modules); an empty one for a part written without it,
     which reads as the v1 annotations' and names no digest."""
     block = part.get("correspondence")
-    return {} if block is None else block
+    return block if block else {}
 
 
 def _digests(part: Mapping[str, Any]) -> list[Any]:
@@ -97,8 +97,8 @@ def _unmodelled(parts: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for p in parts:
         unmodelled = p.get("unmodelled")
-        if unmodelled is not None:
-            out.update(unmodelled)
+        for family, count in unmodelled.items() if unmodelled else ():
+            out[family] = count
     return out
 
 
@@ -132,7 +132,7 @@ def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
     aliases: dict[str, list] = {}
     for p in parts:
         part_aliases = p.get("op_path_aliases")                # a part without the field aliases nothing
-        for k, v in () if part_aliases is None else part_aliases.items():
+        for k, v in part_aliases.items() if part_aliases else ():
             want = [str(v[0]), int(v[1])]
             if aliases.setdefault(k, want) != want:
                 raise ValueError(f"merge_ranks: the parts disagree on alias {k!r} ({aliases[k]} vs {want})")

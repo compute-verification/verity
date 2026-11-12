@@ -202,7 +202,7 @@ def promoted_observation(manifest: dict[str, Any]) -> dict[str, Any]:
         op = str(r.get("op_path"))
         member = str(r.get("output_member", PROMOTED_MEMBER))
         named = r.get("consumers")
-        cons = [] if named is None else [str(c) for c in named]
+        cons = [str(c) for c in named] if named else []
         if not cons:
             problems.append(f"promoted row {op}/{member} (spec {r.get('spec')}) names no consumer: no observation point")
             continue
@@ -660,9 +660,10 @@ def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str]
 
 
 def identity_rows(manifest: Mapping[str, Any] | None) -> Sequence[Mapping[str, Any]]:
-    """The identity rows a manifest holds under `identities`; none where there is no manifest, or it has no such field."""
-    rows = None if manifest is None else manifest.get("identities")
-    return () if rows is None else rows
+    """The identity rows a manifest holds under `identities`; none where there is no manifest, or it holds none there.  A truth
+    test, so every value reads as it did under `(manifest or {}).get("identities") or []`."""
+    rows = manifest.get("identities") if manifest else None
+    return rows if rows else []
 
 
 def manifest_rows(manifest: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
@@ -671,7 +672,7 @@ def manifest_rows(manifest: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
         rows = manifest.get(key)
         if rows:
             return rows
-    return ()
+    return []
 
 
 def sweep_and_requests(workload: Mapping[str, Any] | None) -> tuple[Mapping[str, Any], Sequence[Any]]:
@@ -679,7 +680,7 @@ def sweep_and_requests(workload: Mapping[str, Any] | None) -> tuple[Mapping[str,
     holds neither."""
     sweep = workload.get("sweep") if workload else None
     requests = workload.get("requests") if workload else None
-    return ({} if sweep is None else sweep), (() if requests is None else requests)
+    return (sweep if sweep else {}), (requests if requests else [])
 
 
 def manifest_digest(identities: list[dict[str, Any]]) -> str:
