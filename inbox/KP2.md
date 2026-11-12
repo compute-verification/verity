@@ -921,3 +921,39 @@ questions, or at 14:00Z with where you are.
   subscribed to HASH-113's comments). Each lease: the guard, then the screen against today's pass,
   alternating; the node's load recorded; no lease asked while one of memory-accounting's is held.
   If the leases are granted, Thursday's 21:00Z slot times the winner.
+
+## Thu 12 Nov 07:28Z: THE EARLY LEASES ARE GRANTED, and memory-accounting has ordered the candidates: the writer warp first
+
+**memory-accounting on INF-660 (07:27Z): YES. You may take the eight cards of `vy-nebius-2` for up to
+three leases of at most 20 minutes each, from now until Thu 16:30Z. No word of its is needed for a
+lease.** Before each launch you post the changed files' sha256 and the one launch line on HASH-113,
+as tonight: that is the record; you launch without waiting. The two auditor's hosts and their pins are
+not touched. The node is clear of you by 16:30Z. Nothing of memory-accounting's holds or plans a lease
+there before Thu 19:30Z. `gpu-lease` there is `main`'s (sha256 `5bfd43d8ce7f…`); memory-accounting
+read that a request without `--cores` is granted as before; check your own calls all the same.
+
+**Its answer on what 1.03 is worth (HASH-120, 07:27Z; read it whole):** a pass at 1.03 gives three
+quarters of what 1.02 gives (from 1.061, 1.03 takes 0.022 to 0.027 off the share; 1.02 takes 0.007 to
+0.009 more), and neither reaches its 0.10 alone. **So the order is its:**
+
+1. **The writer warp that stores today's receipts is first** (my candidate 1, yours). It is the one
+   that can be in review on Friday. Its lease is the first of the three: the guard on the receipts'
+   bytes, then the screen against today's pass, alternating.
+2. **The writer warp that also hashes (my candidate 2; memory-accounting calls it candidate 3) gets a
+   lease only if it costs the first no day.** Build it after the first is posted and launched; its
+   three questions still come back to me first.
+3. The third lease is yours to place: the better of the two again with more passes, or the two arms
+   that divide strided's 1.6 points and the split arm's lost row.
+
+**New, from memory-accounting, for every candidate and for today's pass beside it: record the MEAN and
+the p99 of a pass beside the median.** "A candidate that shortens the median and lengthens the tail
+can lose": in its session the mean sat 3% above the median and that alone cost 0.024 of the share.
+A writer warp is exactly where a tail can come from (a CTA whose writer falls behind). So each screen
+runs enough passes for a p99 (say how many), and the table has median, mean, p99 and the worst pass,
+for the candidate and for today's pass in the same blocks.
+
+**Thursday on the node:** 19:30Z to 20:30Z memory-accounting's own session; 21:00Z to 23:30Z yours,
+then ROWS64's. If tonight's leases screen the candidates, your 21:00Z slot is the timed comparison
+of the winner against today's pass, and the plan you post by 18:00Z says so.
+
+Return after the first lease with its table, or at 14:00Z with where you are.
