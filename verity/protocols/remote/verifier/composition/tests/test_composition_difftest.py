@@ -743,7 +743,7 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
     def digest(r: dict) -> bytes:
         return R.policy_record(canonical(r).encode(), b"")[0]
 
-    def run(w: object, **window) -> bytes:
+    def window_bytes(w: object, **window) -> bytes:
         return canonical({"manifests": [{}], "record": "00" * 64,
                           "window": {"dropped": [], "record": w, "rounds": None, **window}}).encode()
 
@@ -752,13 +752,14 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
                                 (R.PEARL_PLUS.id, "{}", commitment, b"")])
 
     w = record(9)
-    assert R.run_window(run(w), b"") == [digest(w)] == [bytes.fromhex(R.REG.digest(w))]
+    assert R.run_window(window_bytes(w), b"") == [digest(w)] == [bytes.fromhex(R.REG.digest(w))]
     assert R.policy_previous(canonical(record(0, previous=digest(w).hex())).encode(), b"") == [digest(w)]
-    assert strays(record(0, previous=digest(w).hex()), run(w)) is None
-    assert strays(record(0, previous=digest(record(8)).hex()), run(w)) == (
+    assert strays(record(0, previous=digest(w).hex()), window_bytes(w)) is None
+    assert strays(record(0, previous=digest(record(8)).hex()), window_bytes(w)) == (
         f"window: {R.INFERENCE_ONLY.id} committed {digest(record(8)).hex()}, {R.PEARL_PLUS.id} committed {digest(w).hex()}")
-    assert strays(record(0), run(w)) == f"window: {R.INFERENCE_ONLY.id} committed , {R.PEARL_PLUS.id} committed {digest(w).hex()}"
-    for undecoded in (run([]), run(w, rounds=[-1]), run(w, rounds=[True]), run(w, dropped=None), run(w, x=1)):
+    assert strays(record(0), window_bytes(w)) == f"window: {R.INFERENCE_ONLY.id} committed , {R.PEARL_PLUS.id} committed {digest(w).hex()}"
+    for undecoded in (window_bytes([]), window_bytes(w, rounds=[-1]), window_bytes(w, rounds=[True]),
+                      window_bytes(w, dropped=None), window_bytes(w, x=1)):
         assert R.run_window(undecoded, b"") is None and strays(record(0), undecoded) is None, undecoded
 
 
