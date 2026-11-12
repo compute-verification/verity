@@ -272,6 +272,22 @@ def test_a_gate_result_read_without_evidence_or_detail_has_none(stated):
     assert read.evidence == evidence and read.evidence is not evidence and read.detail == detail and read.detail is not detail
 
 
+@pytest.mark.parametrize("entry", [None, [], 0, "", False, 0.0, "x", 1, 1.5, True, ["x"], [{"x": 1}]])
+def test_a_gates_entry_that_is_no_object_is_refused_as_the_read_of_its_id_refuses_it(entry):
+    with pytest.raises(TypeError) as subscript:
+        entry["id"]
+    with pytest.raises(TypeError) as read:
+        G.GateResult.from_json(entry)
+    assert str(read.value) == str(subscript.value)
+
+
+@pytest.mark.parametrize("entry", [{}, {"evidence": 1}, {"detail": 1}, {"status": "pass", "evidence": 1}, {"id": "G1", "evidence": 1}])
+def test_a_gates_entry_without_its_id_or_status_is_refused_by_that_key_whatever_else_it_states(entry):
+    with pytest.raises(KeyError) as read:
+        G.GateResult.from_json(entry)
+    assert read.value.args == ("status" if "id" in entry else "id",)
+
+
 @pytest.mark.parametrize("manifest", [{}, {"artifacts": None}, {"artifacts": {}}, {"artifacts": {"tokens": None}}, {"artifacts": {"tokens": ""}}])
 def test_an_artifact_the_manifest_does_not_place_is_at_its_default_path(tmp_path, manifest):
     assert G.RunArtifacts(tmp_path, manifest=manifest).path("tokens") == tmp_path / G.ARTIFACTS["tokens"]
