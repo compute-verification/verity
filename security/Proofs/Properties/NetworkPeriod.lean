@@ -793,12 +793,12 @@ theorem rowsOkHeld : RowsOkHeld := by
   exact held_members hk hheld
 
 /-- **`RowsOkHeld`'s honest lemma**: the period check accepts a period in the rows form under a schedule of two
-ticks, `pairPeriod 0` with nothing registered. A period with an execution phase needs the network certifier's LMS
+ticks, `pairParams 0` with nothing registered. A period with an execution phase needs the network certifier's LMS
 signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
 scans' registrations at the constants. -/
 theorem rowsOkHeld_honest :
-    ∃ (pub : Public) (prof : Profile), check (pairPeriod 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
-  have hb : (match check (pairPeriod 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+    ∃ (pub : Public) (prof : Profile), check (pairParams 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
+  have hb : (match check (pairParams 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
       | .accept _ _ => true
       | _ => false) = true := by
     decide +kernel
@@ -814,7 +814,7 @@ theorem rootsOf_unnamed : NetworkCheck.ScanOk.rootsOf (Lean.Json.mkObj []) = #[]
 /-- **`RowsOkHeld`'s nontrivial lemma**: a rows-form period of one execution phase under a schedule of two ticks whose
 scan's registration names no root (`unnamedCommitment`) is not held: the scan's member `first` has no `first/o0` among
 its `roots`, so its proof block's ok bit is at no constant. -/
-theorem rowsOkHeld_nontrivial : ¬ RowsOkHeldAt (pairPeriod 1) unnamedCommitment := by
+theorem rowsOkHeld_nontrivial : ¬ RowsOkHeldAt (pairParams 1) unnamedCommitment := by
   intro h
   obtain ⟨-, hm, -⟩ := h pairSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 (Lean.Json.mkObj []) rfl
   obtain ⟨e, he, -⟩ := hm ("first", "first", 1) (by simp [NetworkCheck.ScanOk.members])
@@ -823,7 +823,7 @@ theorem rowsOkHeld_nontrivial : ¬ RowsOkHeldAt (pairPeriod 1) unnamedCommitment
 
 /-- **No period check that accepts every period has `RowsOkHeld`'s property.** -/
 theorem rowsOkHeld_acceptAll : ¬ RowsOkHeldOf acceptAllRows :=
-  fun h => rowsOkHeld_nontrivial (h (pairPeriod 1) unnamedCommitment ⟨#[], #[]⟩ _ _ rfl)
+  fun h => rowsOkHeld_nontrivial (h (pairParams 1) unnamedCommitment ⟨#[], #[]⟩ _ _ rfl)
 
 end Ok
 
