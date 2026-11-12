@@ -37,17 +37,17 @@ def gemm(fn, x: np.ndarray, w: np.ndarray) -> np.ndarray:
     return np.asarray(evaluate_batch(fn, x, w, kernel="reference"), dtype=np.uint16).reshape(len(x), -1)
 
 
-def closed(circuit: I.Circuit, cap: int, records) -> tuple[I.Window, dict[str, bytes]]:
-    win = I.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, cap)
+def closed(circuit: I.Circuit, n: int, records) -> tuple[I.Window, dict[str, bytes]]:
+    win = I.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, n)
     for fn, x, w in records:
         win.record(fn, [x, w], [gemm(fn, x, w)])
     c = win.close(salt_key=bytes(32))
-    assert win.mismatches() == {} and max(m.n for m in win.window.members) == cap
+    assert win.mismatches() == {} and max(m.n for m in win.window.members) == n
     return win, {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}
 
 
-def negatives(circuit: I.Circuit, cap: int, records) -> tuple[I.Window, dict[str, dict]]:
-    win, publics = closed(circuit, cap, records)
+def negatives(circuit: I.Circuit, n: int, records) -> tuple[I.Window, dict[str, dict]]:
+    win, publics = closed(circuit, n, records)
     return win, a5.wiring_negatives(win.window.members, publics)
 
 
