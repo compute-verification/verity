@@ -123,8 +123,8 @@ def test_the_fmad_rule_compares_ptxas_two_builds_instruction_by_instruction(monk
     builds = {b"allowed": _listing("FMUL R1, R2, R3", "FADD R4, R1, R5"), b"fmad=false": _listing("FMUL R1, R2, R3", "FADD R4, R1, R5")}
     asked = []
 
-    def ptxas(ptx, cap, fmad):
-        asked.append((ptx, cap, fmad))
+    def ptxas(ptx, arch, fmad):
+        asked.append((ptx, arch, fmad))
         return b"allowed" if fmad else b"fmad=false"
 
     monkeypatch.setattr(S, "ptxas", ptxas)
