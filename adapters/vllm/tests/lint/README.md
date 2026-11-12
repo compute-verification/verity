@@ -80,7 +80,10 @@ PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `adapters/v
 rule off the merge gate (`tools/verity/check/policy.toml`'s `off_gate`): it is the check's `ratchet-gate` step, which each
 candidate's check runs as the step's base has it, judging each `Queue: #N` merge above that base against the one below. It
 fails a merge that grows a ratchet (naming the entries it added) or on whose tree the base's lints find what its lists don't
-cover (naming each violation). No check before a PR's candidate runs it, and its red never holds `main`
+cover (naming each violation). Before a PR's candidate, only the ready mark's preflight runs it, on the PR's merge within the
+preflight's budget, and prints what it fails as a warning without refusing the mark (`PREFLIGHT_RATCHET` in
+`tools/research/src/research/queue.py`): the gate tells a new violation by its text, so a moved line, or a cycle through a
+module the PR adds, can read as new. Its red never holds `main`
 (`tools/verity/check/drive.toml`'s `warn_steps`): the verified queue rings the owner of each merge it fails, who fixes it
 forward in their next PR.
 It lints the PR's own Python too: ruff, under its base's root `ruff.toml`, on each `*.py` file the PR adds or modifies

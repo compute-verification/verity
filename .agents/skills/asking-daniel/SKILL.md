@@ -41,8 +41,9 @@ a letter it hasn't seen on the page as his, and Approve is his alone to tick.
 ## Write the page
 
 Notion-flavored Markdown: inline math ``$`\gamma \le 0.01`$`` (the inner backticks are required), display math in `$$`
-blocks, tables in `<table header-row="true">`, no Slack mrkdwn. `ask-daniel --page` refuses a missing or reordered
-section and adds the reply callout if absent; a page made with the Notion MCP needs it too.
+blocks with each `$$` on its own line (Notion shows a one-line `$$ x $$` as text; `ask-daniel --page` splits one), tables
+in `<table header-row="true">`, no Slack mrkdwn. `ask-daniel --page` refuses a missing or reordered section and adds the
+reply callout if absent; a page made with the Notion MCP needs it too.
 
 ~~~markdown
 <callout icon="❓" color="gray_bg">

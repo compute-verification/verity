@@ -13,6 +13,7 @@ import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, lora, mlp
 from training_slowdown.capture import CaptureRefused, capture_step, capture_steps, products
+from training_slowdown.routes._optimizers import Muon
 
 B, S, V, H, NH, I, L, R = 2, 4, 32, 16, 2, 32, 2, 2
 T = B * S
@@ -420,6 +421,93 @@ def test_a_buffer_written_through_a_copy_of_itself_is_carried(nesterov):
     assert f["state_bits"] == f["grad_cut_bits"] == f["partial_cut_bits"] == f["u1_bits"] == 32 * weights
     assert f["delta_grad_bits"] == 2 * 32 * weights
     assert f == in_place.formalism and products.raw_on_dial(copied) == products.raw_on_dial(in_place)
+
+
+# --- a tensor an optimizer holds and the model doesn't own -------------------------------------------------------------
+
+#: where a step that reaches its latents around its arguments finds them
+BESIDE = {}
+
+
+def with_latents(where: str):
+    """One block's MLP matrices trained through latents: each latent takes its matrix's gradient under SGD, and the
+    matrix moves by the latent's sign. `where` is who holds the latents and how the step reaches them: the model owns
+    them as parameters (``owned``); or it doesn't, the optimizer holds them, and the step reads them from a plain
+    attribute of the model (``attribute``), from the optimizer's param groups (``optimizer``) or from this module's
+    global (``global``)."""
+    model = TinyLM(V, H, NH, I, 1)
+    model.requires_grad_(False)
+    for p in mlp_weights(model):
+        p.requires_grad_(True)
+    latents = [torch.zeros_like(p).requires_grad_(True) for p in mlp_weights(model)]
+    if where == "owned":
+        model.latents = torch.nn.ParameterList(torch.nn.Parameter(v) for v in latents)
+        latents = list(model.latents)
+    elif where == "attribute":
+        model.latents = latents
+    BESIDE["latents"] = latents
+
+    def step(m, batch, opts):
+        vs = opts[0].param_groups[0]["params"] if where == "optimizer" else BESIDE["latents"] if where == "global" \
+            else m.latents
+        lm_loss(m, batch).backward()
+        for v, p in zip(vs, mlp_weights(m)):
+            v.grad, p.grad = p.grad, None
+        opts[0].step()
+        opts[0].zero_grad(set_to_none=True)
+        with torch.no_grad():
+            for v, p in zip(vs, mlp_weights(m)):
+                p.add_(torch.sign(v), alpha=-0.01)
+
+    return model, torch.optim.SGD(latents, lr=0.1), latents, step
+
+
+@pytest.mark.parametrize("where", ["attribute", "optimizer"])
+def test_a_tensor_an_optimizer_holds_beside_the_model_is_traced_as_one_the_model_owns(where):
+    """A latent the optimizer steps and the model doesn't own is copied for the trace like a parameter: the step's
+    circuit and its product rows are those of the same step with the latents the model's own parameters, the
+    latents are among the parameters the step trains, by the name of their place in the optimizer, and carried from
+    step to step at their 32 bits an element, read by no token op. The run's own latents are never touched."""
+    def captured(how):
+        model, opt, latents, step = with_latents(how)
+        return capture_steps([step] * 3, model, lm_batch(), measured=1, optimizers=opt), latents
+
+    (g, latents), (owned, _) = captured(where), captured("owned")
+    assert g.formalism == owned.formalism and products.raw_on_dial(g) == products.raw_on_dial(owned)
+    assert g.formalism["state_bits"] == 32 * 2 * HI
+    trained = {p["name"] for p in g.params if p["trained"]}
+    assert trained == {"blocks.0.up.weight", "blocks.0.down.weight", "optimizers.0.params.0", "optimizers.0.params.1"}
+    assert {p["name"] for p in owned.params if p["trained"]} == trained - {"optimizers.0.params.0",
+                                                                           "optimizers.0.params.1"} | {"latents.0", "latents.1"}
+    assert all(v.grad is None and not v.any() for v in latents)
+
+
+def test_a_step_that_reads_the_runs_own_tensor_around_its_arguments_is_refused_with_the_fix():
+    """A step is traced on a copy of the model and of the optimizers it is handed. One that reaches a latent by a
+    global reads the run's own tensor, which the copy's optimizer never steps: the graph would be a step that
+    trains nothing. So does one that closes over the model. Each is refused, by the tensor's name, with the fix."""
+    model, opt, _, step = with_latents("global")
+    with pytest.raises(CaptureRefused) as e:
+        capture_steps([step] * 3, model, lm_batch(), measured=1, optimizers=opt)
+    assert e.value.reason == "trace" and "the run's own optimizers.0.params.0 and not the copy" in str(e.value)
+    assert "hold it on the model as a parameter" in str(e.value) and "param_groups" in str(e.value)
+    with pytest.raises(CaptureRefused, match="the run's own emb.weight and not the copy"):
+        capture_steps([lambda m, batch, opts: lm_loss(model, batch).backward()], model, lm_batch(), measured=0)
+
+
+def test_an_optimizer_whose_state_was_loaded_is_copied_and_its_step_traced_as_before_the_load():
+    """torch's `load_state_dict` adds a key of its own to an optimizer's `defaults` (``differentiable``), which a
+    constructor that names its keywords refuses: the copy passes the class only the defaults it takes, so the step of
+    a job continued from a kept state is traced as the unbroken job's is."""
+    model = mlp()
+    opt = Muon([p for p in model.parameters() if p.dim() == 2], lr=0.02)
+    loss, batch = (lambda m, b: F.mse_loss(m(b[0]), b[1])), (torch.empty(6, 8), torch.empty(6, 4))
+    before = capture_step(model, opt, loss, batch, token_dims=[(0,), (0,)])
+    opt.load_state_dict(opt.state_dict())
+    assert "differentiable" in opt.defaults
+    after = capture_step(model, opt, loss, batch, token_dims=[(0,), (0,)])
+    assert roles(after) == roles(before) and after.trained == before.trained
+    assert products.raw_on_dial(after) == products.raw_on_dial(before)
 
 
 # --- refusals ----------------------------------------------------------------------------------------------------------
