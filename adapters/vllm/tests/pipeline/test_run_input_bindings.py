@@ -1,4 +1,4 @@
-"""`pipeline.match.run_input_bindings`: each request's `run` Input batches of the workload root (one per field, `request[<id>].run[<k>]`,
+"""`pipeline.match_fold.run_input_bindings`: each request's `run` Input batches of the workload root (one per field, `request[<id>].run[<k>]`,
 at the gates `WorkloadProgram.address_map` gives) are bound, field by field, to the `run_values` identities the request's manifest
 requires, and a request whose rows and batches don't tile each other binds nothing and is refused by name."""
 
@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from verity.definitions.registry.dsa_topk import waksman_switches
 
-from verity_vllm.pipeline.match import run_input_bindings
+from verity_vllm.pipeline.match_fold import run_input_bindings
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.format import RUN_FAMILY, canonical_identity
 

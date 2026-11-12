@@ -207,7 +207,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "session" for anything but Flock's and the ZK server's session (ARCHITECTURE.md's Glossary, Session); code and records' `session` in those other senses (`session_id`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the ZK server's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`security/Definitions/Pouw/Assumptions/Dither.lean`), until renamed | Dither |
-| "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
+| "the accelerator model", "the machine model" for 𝓜 (`benchmarks/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
 | "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `verity/protocols/inference_only/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`), until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (honest overhead γ, and ρ as 𝓜's resource rate, stay) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
@@ -269,7 +269,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   (`security/Definitions/Core/Accel/`), their resources (tensor cores, issue slots, shared-memory and register ports,
   device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000.
 - **The card table** is one SKU's numbers at its firmware maximum: its per-resource rates ρ, stores, formats and clock
-  ceiling (`benchmarks/pouw/machine_model/`'s data).
+  ceiling (`benchmarks/machine_model/`'s data).
 - **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Op`), each priced by a card's rates.
 - **The card assumption** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within
   T at the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
@@ -410,7 +410,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     circuit-check, ratchet-gate); a candidate's check still runs it, and its red holds nothing. Under `--gate check`, a
     red the run beside its base's check doesn't share rings who acts on it.
   - **Low-risk lane**: the verified queue taking a PR on its ready mark alone, when its change touches nothing drive.toml's
-    `lowrisk_excludes` names (no Lean, lock or soundness-path change); never a layout move's PR.
+    `lowrisk_excludes` names (no Lean, lock, soundness-path or `tools/move/` change); a layout move's PR only once its move
+    is certified (**Pure move**).
   - **Records run**: a candidate's run of `lean-audit` alone before its check, when a PR of it changes Lean, a lock or the
     spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
     what is checked.
@@ -420,7 +421,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
-    lands as any PR does, on a land verdict.
+    lands on its ready mark alone once the queue's rerun of its map on its batch's tip is certified (`tools/move/README.md`).
 - **Running jobs** (`tools/research`, `infra/`):
   - **Attempt**: the evidence store's record of one run, completed or failed, with its outputs; `research run` is the
     command that makes one.

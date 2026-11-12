@@ -174,14 +174,13 @@ class Fp8Base:
 
 
 def fp8_base(cfg: dict[str, Any], recipe: F.Recipe) -> Fp8Base:
-    reads = f"{recipe.id} reads a block-FP8 base (quantization_config: quant_method fp8, e4m3, a square weight_block_size)"
-    qc = cfg.get("quantization_config")
-    if qc is None:
-        raise ValueError(f"{reads}; this one has no quantization_config")
+    held = cfg.get("quantization_config")
+    qc = held if held else {}   # a config with no block (absent, null or empty) is refused by the fields it lacks
     bs = qc.get("weight_block_size")
     if (qc.get("quant_method") != "fp8" or qc.get("fmt", "e4m3") != "e4m3" or not isinstance(bs, list) or len(bs) != 2
             or bs[0] != bs[1] or not isinstance(bs[0], int) or bs[0] <= 0):
-        raise ValueError(f"{reads}; this one has quant_method {qc.get('quant_method')!r}, fmt {qc.get('fmt')!r}, weight_block_size {bs!r}")
+        raise ValueError(f"{recipe.id} reads a block-FP8 base (quantization_config: quant_method fp8, e4m3, a square weight_block_size); "
+                         f"this one has quant_method {qc.get('quant_method')!r}, fmt {qc.get('fmt')!r}, weight_block_size {bs!r}")
     if not isinstance(cfg.get("vocab_size"), int):
         raise ValueError("config.json names no integer vocab_size")
     if cfg.get("tie_word_embeddings", True) is not False:
@@ -409,8 +408,8 @@ def report(entry: dict[str, Any], entries: list[dict[str, Any]], hf_home: str | 
 
 def recipe_of(entry: dict) -> F.Recipe:
     """The int8 recipe a pin was made by (its `recipe.id`)."""
-    r = entry.get("recipe")
-    rid = None if r is None else r.get("id")
+    held = entry.get("recipe")
+    rid = held.get("id") if held else None
     if rid not in RECIPES:
         raise C.UsageError(f"{entry.get('role')}: recipe {rid!r} is none of the int8 recipes {sorted(RECIPES)}")
     return RECIPES[rid]
