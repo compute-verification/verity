@@ -250,7 +250,7 @@ def test_the_segmentation_check_lifts_the_candidates_workload_program_and_its_ow
     assert act["source"] == "candidate" and act["component_steps_equal_cap"] is True and act["unsegmented_members"] == 1
     assert act["requests"]["r0"]["steps"] == 101 and act["requests"]["r0"]["component"] == "build_request_LP27_T100"
     assert act["requests"]["r0"]["sampling_events"] == 101, "the candidate's histogram: the reference's says 1"
-    assert act["consistent"] == {"r0": {"steps_eq_cap": True, "steps_eq_sampling_events": True}}
+    assert act["consistent"] == {"r0": {"steps_eq_declared": True, "steps_eq_sampling_events": True}}
     assert SS.expected(row)["requests"]["r0"]["steps"] == 1
     (tmp_path / "candidate" / KEY / "build_request_LP27_T100" / "result.json").unlink()
     assert "sampling_events" not in SS.actual(row)["requests"]["r0"], "no histogram on the candidate: no count, never the reference's"
