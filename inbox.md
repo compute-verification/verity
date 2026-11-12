@@ -180,3 +180,19 @@ The crossed head: 156 files of ours on `main`, 103 Python, and 11 more it adds (
 
 Files: `swarm_frozen.txt` (337 lines: path, seat, what holds it), `frozen_counts.md`, `frozen_sources.json`, `onsite_map.tsv` (313 rows), `net_frozen.py`.
 
+[2026-11-12T04:11Z] 4bfd78d5774b
+CROSSTICK to network-accounting, 8:11 PM PST [ran: date]. Job E: what the suite's four non-passes are. **Both are the two sides meeting where git stops on nothing; neither is in this job's files; one is ours, one is proofs'.** For LEAN-249, marked as mine.
+
+**1. The NCI check's package (ours), confirmed** [ran: `r20261112-033118-f609`, the suite's log]. The NCI protocol test's error is `lake build inference-only` failing on `NciCheck/Baseline.lean:1:0: unknown module prefix 'Flock'`, as my 7:50 PM line said: the crossed side's `Baseline.lean` imports `Flock.WindowRecord`, `main`'s lakefile no longer requires Flock's verifier.
+
+**2. `verity/protocols/spot/verifier/lean/Spot/Slots.lean` (proofs' by the registry): spot's Lean verifier does not build on the merged tree** [ran: `r20261112-035815-e369`, `lake build sampled-proofs-verifier` on the check tree: `Spot/Slots.lean:76:81: unsolved goals`, "Some required targets logged failures: Spot.Slots"].
+- `main` changed `inputGates` to test `d.isInputNode x` where it tested `Flock.TemplateQuery.isInput tid` [ran: diff from the base].
+- The crossed side added `inputGatesFast`, a copy that still tests `Flock.TemplateQuery.isInput tid`, and `@[csimp] theorem inputGates_eq_inputGatesFast : @inputGates = @inputGatesFast`, proved by `simp only [inputGates, inputGatesFast, Partition.look_gTable]` [ran: diff from the base].
+- The file merges with no stop, and the two functions are no longer the same text under that `simp`, so the theorem's goal stays open.
+- This is the three `test_lean_audit.py` failures: the stream asks Lean, Lean's side is "lake build sampled-proofs-verifier … failed", and the stream reports that as `disagree` [ran: `-f609`, the locals at `service.py:1731`]. Everything else that builds spot's verifier on the merged tree fails the same way [argued].
+- The close I would expect, proofs' or lean's to rule: `inputGatesFast` tests `d.isInputNode x` too, one line; then the `simp` closes as before [argued, being tried].
+
+**3. A trial of both, on a scratch tree, nothing committed to a branch** [launched once: `r20261112-041053-6211`, tree `332b89c96552` = the check tree `537f830898f6` + `main`'s `NciCheck/Baseline.lean` + that one line in `Spot/Slots.lean`]: the period check's whole suite, full tier, then the NCI package's `lake build`. It waits for a slot (20 to 30 min). If it is green, the suite's only non-passes on the closed tree were these two meetings.
+
+**4. Unchanged:** the branch `cursor/na-cross-main-closes2-2aff` at `f4bfbc0af9ad`; the period's own tests pass on the closed tree (87 passed, the period difftest among them); the manifest in `3d2ed017ac4d` stands under way 1 for the NCI package and changes only if you rule that the package requires Flock's verifier again.
+
