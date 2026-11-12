@@ -88333,3 +88333,46 @@ Not established:
 2. **#9080 breaks at one line once #9274 is on `main`** [derived; the mended line compiles on the trial branch, `r20261112-124010-f67a`]. `SpotFlock/RevealsWired.lean:620` calls `decoded_rewired … hW` and #9274's `decoded_rewired` asks one more hypothesis, the unit's decoded values' agreement. The line becomes `(fun hag => decoded_rewired h hx hP hd hin hok hu hck (List.getElem?_eq_getElem hlt) hρ hrb hW hag) val ι hv`. #9274 is marked and #9080 is not, so by your 21:39Z rule the line is #9080's to carry; FRAME should have it before its ready line.
 
 I end my turn here and wait for your word on sections 1 and 2.
+
+## FOLD, Thu 12 Nov 12:57Z: #9209 is merged with `main` at `4c8742d0d449`; the ready line lacks one run, the quick tier on the merged head (`r20261112-125155-ae58`, about 13:35Z); no lock record moves, no `verifier.allow` entry is new, `lean-agreement` 570 of 570; the head stops on no file beyond `main`'s own against the landing branch; the whole check `f29b` has not ended and will end failed on `verity-vllm`'s time limit
+
+Your 12:44Z order, steps 2 to 4 done and step 3's run out. Step 1 is my 12:48Z entry (outcome (a)). The three figures of #9209 (118.8 to 38.9 s, 20.19 to 11.84 s, 3.650 to 3.202 s) have not moved: no new run of them.
+
+**Step 2. The lock, from the ended parts of `f29b`, whose `lean-suites` part had not ended.** Files fetched from the node at 12:49Z.
+
+- [read: `lean-audit/audit.json` of `r20261112-073043-f29b`] `passed: true`, `failed: []`, `regenerated: {}`, `rekeyed: {}`. Of 35 packages none carries a failure, a review, a regeneration, a repair or a warning.
+- [read: `lean-audit.log`] "lean-audit: PASS: 2 of 35 packages reused"; 33 audited, each PASS; "audited in 11345 s (exit 0)". The Flock verifier's package: "PASS 18149 declarations in 254 modules; axioms propext, Classical.choice, Quot.sound; 11 guarantees"; its report's `failures` and `failure_codes` are empty.
+- **No record moves** [derived]: the check's Lean step regenerates where a package's only failures are record differences and names the package under `regenerated` (`tools/verity/check/check.py:830-835, 977` at `a62f144764f7`); `regenerated` is empty and every package passed against the locks as committed.
+- **No new `verifier.allow` entry: none** [derived]: the verifier rule fails on a compiled primitive outside `allow` and on an `allow` name that admits nothing on the path, and its walk follows `@[csimp]` replacements (`tools/verity/lean/check.py:1709-1736` at `a62f144764f7`, `verifier_failures`); it raised neither failure with the 176 names as committed. Not read: the walk's own list of constants, which the report does not carry, so that the walk entered `foldTFast` is from the rule's text and your 09:50Z line, not from a printout.
+- **`lean-agreement`** [read: `lean-agreement.log`, `steps.jsonl`]: 17 sets, 570 sessions, 570 agree, 0 disagree; the step passed, rc 0, in 1,033 s.
+- The sentence is in #9209's body's first paragraph with your words (edits at 12:50Z and 12:55Z).
+
+**Step 3. The merge.**
+
+- [run] `origin/main` fetched at 12:50Z: `71a2afe671aa`. Merged once into #9209's head: `4c8742d0d449fe2d933f005ec9dc3c8ab6899686` (parents `a62f144764f7` and `71a2afe671aa`), no conflict, pushed without force at 12:51Z. `git diff origin/main HEAD` is the one file, `Flock/Comp.lean`, 53 lines added.
+- [run: `git diff --name-only d6075b75d289 origin/main`] **Nothing under `verity/protocols/flock/verifier/` changed on `main` since my base** (144 first-parent commits), nothing in the three packages it requires (`verity/circuits/base`, `verity/circuits/lean`, `verity/commitments/lean`), and no `lean-toolchain`, `lake-manifest.json` or lakefile anywhere. So the merge changed no Lean input of the verifier's package, and I launched no records run.
+- [run] What `main` did change that a Lean check runs: `tools/verity/lean/check.py` (175 lines, the rules for `open` and `unwitnessed` entries; no changed line names `verifier_failures`, `implemented_by`, `extern` or `csimp`). This change adds no premise, guarantee or witness.
+- [run] The quick tier on the merged head: **`r20261112-125155-ae58`**, `uv run tools/verity/check/suites.py --changed origin/main --quick` at `4c8742d0d449`, placed by `--on auto` on `vy-nebius-cpu-6`, cpus 100-121, launched 12:51:55Z. 61 suites ("12 parallel suites one at a time on 7 processes, beside 49 others on 6"). At 12:56Z running, no suite reported yet. ETA about 13:35Z [guess: the same tier took 42 minutes on #9264's tree, `r20261112-113824-3c48`].
+
+**Step 4. Your `comm -23`.** [run at 12:53Z] `origin/cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`, head `4c8742d0d449`, `main` `71a2afe671aa`.
+
+- **The head's stops beyond `main`'s: none** (`comm -23` prints nothing; `comm -13` nothing either). Each merge-tree exits 1 and stops on the same 29 files, with the same messages (`merge.py` on `PouwCheck/Difftest.lean`, `NetworkCheck/Period.lean` and `security/Definitions/Accounting.lean`; `merge_allowlist.py` on `adapters/vllm/tests/dead_code_keep.json`). `Flock/Comp.lean` and `Flock/Statement.lean` are not among them.
+
+**Step 5. The ready line as it stands, one field open.**
+
+| what | run | commit | verdict |
+|---|---|---|---|
+| `verity lean try Flock/Comp.lean --siblings` | `r20261112-075527-b934` | `a62f144764f7` | exit 0; 16 theorems, no axiom beyond the three; no sibling clash |
+| the whole check | `r20261112-073043-f29b` | `a62f144764f7` | **not ended.** Ended, each rc 0: the preflight steps, `flock-circuit-build`, `lean-build`, `lean-unit-cut`, `flock-rust-tests`, `lean-agreement`, `lean-audit`, `pytest` (63 suites passed, none failed). Running: `lean-suites`, 25 of 29 suites passed, `verity-vllm` killed at its 14,400 s limit at 86% with no failing test. Not started: `circuit-check`, `ratchet-gate` |
+| the three statements, before and after | `r20261112-072850-28dd`, `r20261112-072824-c560`, `r20261112-074701-c19c` | `a62f144764f7` against its base | exit 0 each; same verdict bytes |
+| the quick tier | `r20261112-125155-ae58` | `4c8742d0d449` | **running** |
+
+Not run, and not established:
+
+- The whole recorded check did not end on any commit of #9209, and `f29b` will end with a failed `lean-suites`: its `verity-vllm` verdict is a time limit on 3 processes, not a failing test.
+- `circuit-check` and the ratchet gate: no run of mine has reached them.
+- The Lean check on the merged head: not run, since the merge changed no input of the package; `main`'s newer `check.py` has not judged this head.
+- The full (not quick) `verity-vllm` suite with this change: 86% of it ran with no failure, the rest did not run.
+- #9264 is untouched: unmarked, stacked, at `1997812848a4`; it takes `4c8742d0d449` after #9209 is marked. Its head row still waits on `r20261112-121258-2efb`.
+
+I end my turn here on `ae58`; resume me and the next entry is its exit code and the ready line whole.
