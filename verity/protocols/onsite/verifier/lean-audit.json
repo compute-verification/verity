@@ -1,10 +1,11 @@
 {
  "format": 1,
- "roots": ["CoreOnsite", "CoreRemoteNetwork", "CoreComposites"],
+ "roots": ["CoreOnsite", "CoreRemoteNetwork", "CoreRemoteNetworkNoPouw", "CoreComposites"],
  "exempt": {
   "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
   "ProductMain": "the product executable's entry point, one line; its command is Core.Composites.main, audited under CoreComposites",
-  "RemoteNetworkMain": "the remote-network executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "RemoteNetworkMain": "the remote-network executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "RemoteNetworkNoPouwMain": "the remote-network-no-pouw executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
  "layers": {
   "CoreOnsite": {
@@ -30,6 +31,11 @@
    "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemote", "NetworkCheck.Period"],
    "except": [],
    "why": "remote with the network certifier, development: code over remote's composite and the network certifier's period, no Mathlib and nothing of Security"
+  },
+  "CoreRemoteNetworkNoPouw": {
+   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemoteNetwork"],
+   "except": [],
+   "why": "remote with the network certifier, without PoUW, development: code over remote with the network certifier's subprotocols without PoUW's period, and its egress tie, no Mathlib and nothing of Security"
   },
   "CoreComposites": {
    "imports": ["CoreOnsite", "CoreProtocol.Cli", "CoreRemote"],
