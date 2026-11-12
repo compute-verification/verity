@@ -336,10 +336,11 @@ def test_recipe_of_names_v3_and_report_refuses_other_recipes():
         I.report({"role": "X", "recipe": {"id": I.RECIPE}}, [], None)
 
 
-def test_fp8_base_names_a_config_without_a_quantization_config():
-    """An absent block is refused as absent; an empty one, by the fields it lacks."""
-    cfg = {"vocab_size": 8, "tie_word_embeddings": False}
-    with pytest.raises(ValueError, match="reads a block-FP8 base .*; this one has no quantization_config$"):
-        I.fp8_base(cfg, I.INT8_V3)
+@pytest.mark.parametrize("block", [{}, {"quantization_config": None}, {"quantization_config": {}}, {"quantization_config": 0},
+                                   {"quantization_config": ""}, {"quantization_config": False}, {"quantization_config": []}],
+                         ids=["absent", "null", "empty", "zero", "empty text", "false", "empty list"])
+def test_fp8_base_refuses_a_config_without_a_quantization_config_by_the_fields_it_lacks(block):
+    """An absent, a null and an empty block are refused alike: as a block that names none of the three fields."""
+    cfg = {"vocab_size": 8, "tie_word_embeddings": False, **block}
     with pytest.raises(ValueError, match="reads a block-FP8 base .*; this one has quant_method None, fmt None, weight_block_size None$"):
-        I.fp8_base({**cfg, "quantization_config": {}}, I.INT8_V3)
+        I.fp8_base(cfg, I.INT8_V3)

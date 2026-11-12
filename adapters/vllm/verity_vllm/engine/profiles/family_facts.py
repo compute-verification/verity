@@ -449,10 +449,10 @@ def header_checks(cfg_family: dict[str, Any], C: dict[str, Any], header_cfg: dic
             new = f["derive"](header_cfg, C)
             if new != C.get(name):
                 out.append(f"{f['check_key']}={header_cfg[f['check_key']]!r}: {name} {new!r} != C[{name}]={C.get(name)!r}")
-    if "header_keys" in fam:
-        for hf, key in fam["header_keys"].items():
-            if hf in header_cfg and header_cfg[hf] != C.get(key):
-                out.append(f"{hf}={header_cfg[hf]!r} != C[{key}]={C.get(key)!r}")
+    held = fam.get("header_keys")
+    for hf, key in (held if held else {}).items():
+        if hf in header_cfg and header_cfg[hf] != C.get(key):
+            out.append(f"{hf}={header_cfg[hf]!r} != C[{key}]={C.get(key)!r}")
     return out
 
 
