@@ -474,8 +474,9 @@ class Registration:
         that are not the server's own carry off the node, at the rate that bounds the node's disks together). Its link
         is a boundary link that no certifier splits: it says what is so of a node none of whose ways out the
         auditor's hardware sits on, and `onsite` refuses it by `uncertified`. An interface with no rate registers no
-        link. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, then the storage
-        path's exactly where the file has a `storage` table.
+        link. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with a rate exactly
+        where its table states one, then the storage path's, with its rate, exactly where the file has a `storage`
+        table. The rates' values are the caller's, read by `ways_out`.
 
         **An entry always registers a link out.** A file that states no interface is refused: its entry would not say
         how the node reaches the outside. So is a file none of whose ways out has a rate, whose entry would hold no
@@ -497,8 +498,9 @@ class Registration:
             sku, count = node["device"]["sku"], _whole(node["device"]["count"], "a node's device.count")
             leaves = [(name, leaf["tier"], _whole(leaf["bytes"], f"a node's memory.{name}.bytes"))
                       for name, leaf in node.get("memory", {}).items()]
-            stated = [(f"{host}/{name}", True) for name in node.get("interface", {})]
-            stated += [(f"{host}/storage", False)] if "storage" in node else []
+            stated = [(f"{host}/{name}", True, "rate" in port.keys())
+                      for name, port in node.get("interface", {}).items()]
+            stated += [(f"{host}/storage", False, True)] if "storage" in node else []
         except (AttributeError, KeyError, TypeError) as e:
             raise Malformed(f"a node file's table: {e!r}; it has device.sku, device.count, for each memory.NAME a "
                             "tier and bytes, and for each interface.NAME a table") from None
@@ -507,10 +509,11 @@ class Registration:
         except TypeError:
             raise Malformed(f"`ways` is {ways!r}; give the node file's ways out, "
                             "`verity.hardware.nodes.ways_out(node, host)`") from None
-        if [(name, split) for name, _, split in out] != stated:
-            raise Malformed(f"the ways out given are {[(name, split) for name, _, split in out]}, and the node file "
-                            f"states {stated} under host {host!r} (each interface, then its storage path, with "
-                            "whether a certifier may split it); give `verity.hardware.nodes.ways_out(node, host)`")
+        given = [(name, split, bw is not None) for name, bw, split in out]
+        if given != stated:
+            raise Malformed(f"the ways out given are {given}, and the node file states {stated} under host {host!r} "
+                            "(each interface, then its storage path, with whether a certifier may split it and "
+                            "whether it has a rate); give `verity.hardware.nodes.ways_out(node, host)`")
         unread = [tier for tier in ("dram", "disk") if all(t != tier for _, t, _ in leaves)]
         if unread:
             raise Malformed(f"the node file states no {' and no '.join(unread)} leaf of its host's, so its entry would "

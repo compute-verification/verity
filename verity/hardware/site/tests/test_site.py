@@ -279,6 +279,8 @@ NODE_FILE = {"node": "sim-file-x2", "device": {"sku": "sim-file", "count": _entr
                         "vda": {"tier": "disk", "bytes": _entry(1 << 40)}}, "interface": PORTS}
 """A node file's table as `verity.hardware.nodes.load(kind)` returns it: two devices of the card file's SKU, the
 host's DRAM and one disk, and the two interfaces."""
+UNRATED = {"eth0": {"driver": "virtio_net", "source": "it reads no rate"}}
+"""A node file's `interface` tables where the one interface reads no line rate."""
 STORAGE = {"leaves": ["vda"], "source": "the disk is a network disk"}
 """A node file's `storage` table: the path the disk that is not the server's own carries bytes off the node by."""
 DISKS = 5_293_292_307_696
@@ -330,11 +332,13 @@ def test_a_nodes_entry_from_its_files() -> None:
 def test_a_nodes_interfaces_are_its_own_boundary_links() -> None:
     """Each interface that states a rate is a link from the host to the outside at its rate over a tick, rounded up,
     at latency 0: a boundary link with no certifier at an end, which remote accepts and onsite refuses by
-    `uncertified`, with a challenger reaching the host or without one. An interface with no rate registers no link."""
+    `uncertified`, with a challenger reaching the host or without one. An interface whose table states no rate
+    registers no link."""
     node, auditor = NODE_FILE, Auditor.of_files([CARD_FILE], TOLERANCE, {"chal0": ""})
     entry = Registration("remote").node_entry(node, CARD_FILE, "n0", ways=_ways())
     assert entry.links == (Link("n0/eth0", ("n0", OUTSIDE), 25, 0), Link("n0/eth1", ("n0", OUTSIDE), 2, 0))
-    unrated = Registration("remote").node_entry(node, CARD_FILE, "n0", ways=_ways(eth0=None))
+    quiet = {**node, "interface": {**PORTS, **UNRATED}}
+    unrated = Registration("remote").node_entry(quiet, CARD_FILE, "n0", ways=_ways(eth0=None))
     assert unrated.links == entry.links[1:] and unrated.locs == entry.locs
     assert Registration("remote").node_entry(node, CARD_FILE, "n0", tick=Fraction(1, 10 ** 6),
                                              ways=_ways()).links[1].beta == 1001
@@ -408,7 +412,7 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
             check_registration(onsite, e, auditor)
         assert refused.value.name == "uncertified" and bare in refused.value.detail
     assert refusal(onsite, replace(stored, links=tuple(k for k in stored.links if k != path)), auditor) is None
-    one = {**node, "interface": {"eth0": {"driver": "virtio_net", "source": "it reads no rate"}}}
+    one = {**node, "interface": UNRATED}
     alone = (("n0/eth0", None, True), ("n0/storage", DISKS, False))
     assert Registration("remote").node_entry(one, CARD_FILE, "n0", ways=alone).links == (path,)
     with pytest.raises(Malformed, match=r"no interface the node file states has a rate \(\['n0/eth0'\]\).*takes no certifier"):
@@ -420,9 +424,6 @@ def _node_entry(certifier: tuple[str, str] | None = None, ways: object = None, *
     return Registration("remote").node_entry({**NODE_FILE, **tables}, CARD_FILE, "n0", certifier=certifier,
                                              ways=_ways() if ways is None else ways)
 
-
-UNRATED = {"eth0": {"driver": "virtio_net", "source": "it reads no rate"}}
-"""A node file's `interface` tables where the one interface reads no line rate."""
 
 
 def test_the_encoding_round_trips_and_is_pinned() -> None:
@@ -488,6 +489,12 @@ def _sheet_json(**f: object) -> Sheet:
                          ways=[("n0/eth0", None, True), ("n0/storage", DISKS, False)]), "takes no certifier"),
     (lambda: _node_entry(ways=()), r"the ways out given are \[\].*give `verity.hardware.nodes.ways_out\(node, host\)`"),
     (lambda: _node_entry(ways=_ways()[:1]), "the ways out given are"),
+    (lambda: _node_entry(ways=_ways(eth0=None)),
+     r"the ways out given are \[\('n0/eth0', True, False\).*the node file states \[\('n0/eth0', True, True\)"),
+    (lambda: _node_entry(interface={**PORTS, **UNRATED}), r"states \[\('n0/eth0', True, False\), \('n0/eth1', True, True\)\]"),
+    (lambda: _node_entry(storage=STORAGE, ways=[*_ways(), ("n0/storage", None, False)]),
+     r"the ways out given are .*\('n0/storage', False, False\)\], and the node file states .*\('n0/storage', False, True\)"),
+    (lambda: _node_entry(interface={"eth0": 7}, ways=_ways()[:1]), "a node file's table"),
     (lambda: _node_entry(ways=_ways()[::-1]), "the ways out given are"),
     (lambda: _node_entry(ways=_ways(storage=DISKS)), "the ways out given are"),
     (lambda: _node_entry(storage=STORAGE), "the ways out given are"),

@@ -176,8 +176,8 @@ sheet's device memory, the host's leaves `host/NAME`, and for each way out that 
 the host to the outside. The sheet is built from the card file when the entry is, so no digest is kept in the tree.
 It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check and state a host
 with less memory than the node has. Its message gives the commands that read both on the node. The Site imports
-neither the cards nor the node files, so its caller hands it the ways out, and it holds them to the file's tables by
-name.
+neither the cards nor the node files, so its caller hands it the ways out, and it holds them to the file's tables:
+each by name and in order, with a rate exactly where the file states one. A rate's value is `ways_out`'s reading.
 
 A way out's link is a boundary link that no certifier splits, at the bits its rate moves in a tick, rounded up. That
 is what is so of a node none of whose ways out the auditor's hardware sits on, so `onsite` refuses the node by
