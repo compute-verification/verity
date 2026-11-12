@@ -84,7 +84,9 @@ def RegistersNone (rec : Json) : Prop :=
 /-- **Round 2's `second-inputs` passes with nothing the verifier holds of its own** (`inputsFailure` at `core own`:
 no value it pinned or fills, no read): round 1's record registers no value a replay block's input reads but the
 verifier's own or an opened row (`RegistersNone` gives it, `inputsNone_of_registersNone`). The model's `readsOk` reads
-this clause at `ownOf`, which holds none of them. -/
+this clause at `ownOf`, which holds none of them. So the statements that take it are of a design whose interior
+registration registers no value; at one that registers a value, such as the replay block's `logits`, it is false and
+they say nothing. -/
 def InputsNone (own : Spot.SecondStage.Own) : Prop := Spot.SecondStage.inputsFailure (core own) = none
 
 /-- **Each session statement has its template's reference statement's rounds.** No check of round 2 makes it. -/
