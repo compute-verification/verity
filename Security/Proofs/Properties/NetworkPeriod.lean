@@ -17,8 +17,8 @@ audit runs another. That the check accepts a period with a held tied audit is th
 Lean).
 `RowsStateHeld` reads the accepted public off the check: on acceptance every phase has no finding, so each is its
 scan's facts and its tied audits' charges (`rowsPhase_ok`), the scans keep the phases' indices (`filterMap_getElem?`),
-and each link-window's term is its scan's free inputs and, by its scan's draw, the scan's slot entries
-(`terms_whole`) or those charges (`tiedFree`, `terms_part`).
+and each link-window's term charges its scan's view rows and no slot entry (`terms_view`) and has as free inputs,
+by its scan's draw, its scan's alone (`terms_whole`) or its scan's and those charges (`tiedFree`, `terms_part`).
 
 On acceptance a rows-form period has no `rowsWfCheck` finding (`rowsWf_of_accept`), so its frames, the network
 certifier's of `B` bytes for its `lanes · windows · window` connections, read back (`cellRows_wf_of_rowsWf`,
@@ -50,10 +50,11 @@ theorem capsTerm_ofFn {m : ℕ} (caps : Fin m → ℕ) : capsTerm (Array.ofFn ca
   exact foldl_ofFn _
 
 theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
-    (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
-    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows charged).K =
+    (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) (viewTie : Bool) :
+    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows charged
+        viewTie).K =
       (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) +
-        ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
+        ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter viewTie).bits := by
   simp only [Public.K, rowsTerms, capsTerm_ofFn, Array.map_ofFn]
   rw [foldl_ofFn]
   rfl
@@ -83,15 +84,16 @@ theorem clockKBoundsCount : ClockKBoundsCount := by
   simp only [AuditTerms.bits, AuditTerms.of, add_zero, pow_add]
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
-/-- A scan's term's bits, by its draw: the scan's free inputs, with its slot entries where every unit is proved and
-else its tied audits' free inputs and the entry bits their wrong units can set, and the ceilings of its other
-factors. -/
-theorem terms_bits (scan : Scan) (f : Facts) (tied faulty jitter : ℕ) :
-    (scan.terms f tied faulty jitter).bits =
-      (scan.free + if f.whole then scan.entries else tied) + (if f.whole then 0 else faulty) +
+/-- A scan's term's bits, by its view tie and its draw: the scan's free inputs; with the view tie not held its view
+rows, and with it held its slot entries where every unit is proved; where it is sampled in part its tied audits' free
+inputs and the entry bits their wrong units can set; and the ceilings of its other factors. -/
+theorem terms_bits (scan : Scan) (f : Facts) (tied faulty jitter : ℕ) (viewTie : Bool) :
+    (scan.terms f tied faulty jitter viewTie).bits =
+      (scan.free + (if viewTie then (if f.whole then scan.entries else tied)
+          else scan.view + (if f.whole then 0 else tied))) + (if f.whole then 0 else faulty) +
         clog2 (atMost f.units f.wrong) + f.wrong * max scan.ingress scan.egress + clog2 (jitter ^ scan.steps) := by
   simp only [AuditTerms.bits, Scan.terms]
-  split <;> omega
+  cases viewTie <;> cases f.whole <;> simp <;> omega
 
 /-- A window's factors, its faulty sets `A` and jitter `J` each at most 2 to a ceiling, are at most 2 to the sum of
 their exponents. -/
@@ -103,7 +105,7 @@ theorem factors_le {a e s b j A J : ℕ} (hA : A ≤ 2 ^ s) (hJ : J ≤ 2 ^ j) :
     _ ≤ 2 ^ (a + e + s + b + j) := Nat.pow_le_pow_right (by decide) (by omega)
 
 theorem rowsKBoundsCount : RowsKBoundsCount := by
-  intro facts scan jitter windows m n caps w tied faulty charged
+  intro facts scan jitter windows m n caps w tied faulty charged viewTie
   rw [K_ofFn, pow_add, pow_add, mul_assoc]
   refine Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul (caps_le caps) ?_)
   rw [← Finset.prod_pow_eq_pow_sum]
@@ -111,10 +113,15 @@ theorem rowsKBoundsCount : RowsKBoundsCount := by
   simp only [terms_bits]
   exact factors_le (le_two_pow_clog2 _) (le_two_pow_clog2 _)
 
-/-- A scan's term where every unit of the scan is proved: its free inputs are the scan's and it charges the scan's
-slot entries. -/
+/-- A scan's term at the check's view tie, held for no scan (`viewTieHeld`): it charges the scan's view rows and no
+slot entry. -/
+theorem terms_view (scan : Scan) (f : Facts) (tied faulty jitter : ℕ) :
+    (scan.terms f tied faulty jitter).view = scan.view ∧ (scan.terms f tied faulty jitter).entries = 0 := by
+  simp [Scan.terms, viewTieHeld]
+
+/-- A scan's term where every unit of the scan is proved: its free inputs are the scan's. -/
 theorem terms_whole {scan : Scan} {f : Facts} (tied faulty jitter : ℕ) (h : f.whole = true) :
-    (scan.terms f tied faulty jitter).free = scan.free ∧ (scan.terms f tied faulty jitter).entries = scan.entries := by
+    (scan.terms f tied faulty jitter).free = scan.free := by
   simp [Scan.terms, h]
 
 /-- A scan's term where the scan is sampled in part: its free inputs are the scan's and its tied audits'. -/
@@ -196,9 +203,9 @@ accepts a rows-form period of one link-window with no audit, whose scan's `prog`
 theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 1⟩
   have hw : wired #[] slotSchedule #[] tiedWindow = true :=
-    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [tiedWindow_unwired] at hw
   cases hw
 
@@ -217,9 +224,10 @@ lemma at the pin): such a check accepts a rows-form period whose scan's `prog` i
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none,
-    .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    .rows slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 1⟩
   have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = true :=
-    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩ rfl 0 tiedWindow
+      rfl
   rw [renamedAudit_unwired] at hw
   cases hw
 
@@ -316,9 +324,10 @@ that audit's `SCAN_STATE`, which skips or alters a transition of the scan's. -/
 theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none,
+      .rows slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 1⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true :=
-    (h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+    (h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩ rfl 0
       stateWindow rfl).1
   rw [stateWindow_skipped] at hs
   cases hs
@@ -365,9 +374,10 @@ theorem tiedWindow_swapped : held (some "c") #[heldReg "d"] tiedWindow = false :
 `c`, where the hold is vacuous, and a phase whose tied audit is registered under `c` holds it. That the check accepts
 a period with a held tied audit is the difftest's (`rows-honest`, through Lean). -/
 theorem rowsCircuitHeld_honest :
-    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c",
+        .rows slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 0⟩
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
-      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
+      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
     held (some "c") #[heldReg "c"] tiedWindow = true :=
   ⟨by
     simp [check, auditChecks, wiredChecks, stateChecks, heldChecks, firstFinding, rowsPublic, rowsWfCheck, rowsWf]
@@ -380,11 +390,11 @@ accepts. -/
 theorem rowsCircuitHeld_nontrivial :
     ¬ RowsCircuitHeldAt
       ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c",
-        .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+        .rows slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 1⟩
       ⟨#[heldReg "d"], #[tiedWindow], .empty⟩ := by
   intro h
   have hh : held (some "c") #[heldReg "d"] tiedWindow = true :=
-    h slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+    h slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [tiedWindow_swapped] at hh
   cases hh
 
@@ -481,9 +491,10 @@ theorem rowsStateAnchored : RowsStateAnchored := by
 audit's circuit record reads row `b` of the scan's state at unit `l · 2 + b` from base 0 (`anchorAudit 0`) is
 anchored. -/
 theorem rowsStateAnchored_honest :
-    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c",
+        .rows slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 0⟩
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
-      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
+      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
     anchoredAt #[anchorAudit 0] anchorSchedule #[heldReg "c"] tiedWindow = true :=
   ⟨rowsCircuitHeld_honest.1, by decide +kernel⟩
 
@@ -493,13 +504,13 @@ row 1, past its anchor's row 0, which a check that accepts everything accepts. -
 theorem rowsStateAnchored_nontrivial :
     ¬ RowsStateAnchoredAt
       ⟨#[anchorAudit 3], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c",
-        .rows anchorSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+        .rows anchorSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 1⟩
       ⟨#[heldReg "c"], #[tiedWindow], .empty⟩ := by
   intro h
   have hj : 0 ∈ tiedAudits #[heldReg "c"] tiedWindow := by
     rw [show tiedAudits #[heldReg "c"] tiedWindow = #[0] by decide +kernel]
     exact Array.mem_singleton.mpr rfl
-  have hr := ((h anchorSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl 0 hj (anchorAudit 3)
+  have hr := ((h anchorSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl 0 hj (anchorAudit 3)
     (anchorRecord (stateReadAt 3)) rfl rfl).2 (stateReadAt 3) (List.mem_singleton.mpr rfl) rfl).2 3 1
     (by decide +kernel)
   exact absurd (hr.2.2.2 0 (by decide +kernel) 0 (by decide +kernel)).2 (by decide +kernel)
@@ -585,16 +596,18 @@ theorem rowsStateHeld : RowsStateHeld := by
           (faultyEntries p (partOf c (W.filterMap fun x => x.toOption.join)) (auditChecks p c e) scan reg)
           p.jitter) := by
       simp only [rowsPublic, rowsTerms, Array.getElem?_map, hz, Option.map_some]
-    exact ⟨_, hu, fun hw => terms_whole (scan := scan) (f := f) _ _ _ hw,
+    exact ⟨_, hu, (terms_view scan f _ _ _).1, (terms_view scan f _ _ _).2,
+      fun hw => terms_whole (scan := scan) (f := f) _ _ _ hw,
       fun hw => terms_part (scan := scan) (f := f) (tiedFree p c.audits c.windows reg) _ _ hw⟩
 
 /-- **`RowsStateHeld`'s honest lemma**: the check accepts a rows-form period of no phase, and an audit whose
 `SCAN_STATE` is its one phase's scan's state, at its root and domain (`stateReg "s"`, `stateWindow`), is held there and
 its phase charges it its `stateFree`. -/
 theorem rowsStateHeld_honest :
-    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c",
+        .rows slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 0⟩
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
-      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
+      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
     stateHeldIn #[stateReg "s"] #[stateWindow] 0 = true ∧
     tiedFree heldParams #[stateReg "s"] #[stateWindow] stateWindow = heldAudit.stateFree :=
   ⟨rowsCircuitHeld_honest.1, by decide +kernel, by decide +kernel⟩
@@ -613,7 +626,7 @@ could publish. -/
 theorem rowsStateHeld_nontrivial :
     ¬ RowsStateHeldAt heldParams ⟨#[stateReg "t"], #[stateWindow], .empty⟩ heldPublic := by
   intro h
-  obtain ⟨t, ht, -, hfree⟩ := h slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 stateWindow rfl
+  obtain ⟨t, ht, -, -, -, hfree⟩ := h slotSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩ rfl 0 stateWindow rfl
   obtain ⟨hpart, h4⟩ := heldPublic_part t ht
   have hfree := hfree hpart
   rw [h4] at hfree
