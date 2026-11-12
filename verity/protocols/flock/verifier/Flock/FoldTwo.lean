@@ -70,10 +70,10 @@ structure Cell2 where
 namespace Cell2
 
 /-- The first vector's sum. -/
-def fst (v : Cell2) : F128 := ⟨v.lo0, v.hi0⟩
+@[inline] def fst (v : Cell2) : F128 := ⟨v.lo0, v.hi0⟩
 
 /-- The second vector's sum. -/
-def snd (v : Cell2) : F128 := ⟨v.lo1, v.hi1⟩
+@[inline] def snd (v : Cell2) : F128 := ⟨v.lo1, v.hi1⟩
 
 /-- `v` with `⟨a, b⟩` added to its first sum and `⟨c, d⟩` to its second, as a call that owns `v`: compiled, the sums are
 written into `v`'s own cell when nothing else holds it, and `Array.modify` hands the call a cell it has taken out of the
@@ -127,11 +127,25 @@ theorem foldRows2_snd (m : Sparse) (e0 e1 : Array F128) (fuel i : Nat) (acc : Ar
   | zero => rfl
   | succ k ih => rw [foldRows2, ih, foldRows_step, rowAdd2_snd]
 
-/-- `(Xᵀ e₀, Xᵀ e₁)` (`foldT2_eq`): one pass over the matrix where the vectors have one length, each column's two sums in
-one cell; two walks otherwise. -/
+/-- One pass over the matrix for two coin vectors: column `c`'s cell holds `(Xᵀ e₀)[c]` (`foldC2_fst`) and, where the
+vectors have one length, `(Xᵀ e₁)[c]` (`foldC2_snd`). -/
+def foldC2 (m : Sparse) (e0 e1 : Array F128) : Array Cell2 :=
+  m.foldRows2 e0 e1 (min m.rows e0.size) 0 (Array.replicate m.width ⟨0, 0, 0, 0⟩)
+
+theorem foldC2_fst (m : Sparse) (e0 e1 : Array F128) : (m.foldC2 e0 e1).map Cell2.fst = m.foldT e0 := by
+  rw [foldC2, foldRows2_fst, Array.map_replicate, foldT]
+  rfl
+
+theorem foldC2_snd (m : Sparse) {e0 e1 : Array F128} (h : e0.size = e1.size) :
+    (m.foldC2 e0 e1).map Cell2.snd = m.foldT e1 := by
+  rw [foldC2, foldRows2_snd, Array.map_replicate, foldT, ← h]
+  rfl
+
+/-- `(Xᵀ e₀, Xᵀ e₁)` (`foldT2_eq`): one pass over the matrix where the vectors have one length (`foldC2`), its cells
+split into the two vectors' arrays; two walks otherwise. -/
 def foldT2 (m : Sparse) (e0 e1 : Array F128) : Array F128 × Array F128 :=
   if e0.size = e1.size then
-    let acc := m.foldRows2 e0 e1 (min m.rows e0.size) 0 (Array.replicate m.width ⟨0, 0, 0, 0⟩)
+    let acc := m.foldC2 e0 e1
     (acc.map Cell2.fst, acc.map Cell2.snd)
   else (m.foldT e0, m.foldT e1)
 
@@ -139,9 +153,7 @@ theorem foldT2_eq (m : Sparse) (e0 e1 : Array F128) : m.foldT2 e0 e1 = (m.foldT 
   unfold foldT2
   split
   · rename_i h
-    simp only [foldRows2_fst, foldRows2_snd, Array.map_replicate]
-    rw [foldT, foldT, ← h]
-    rfl
+    simp only [foldC2_fst, foldC2_snd m h]
   · rfl
 
 end Sparse

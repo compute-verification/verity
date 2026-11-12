@@ -34,6 +34,25 @@ theorem baseOf_eq_walks (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : O
   rw [baseOf_eq_fast]
   cases lk <;> rfl
 
+/-- `f` of a mapped array's entry, read past its end too, for an `f` that keeps the default. -/
+private theorem getElem!_map_fix {α β : Type} [Inhabited α] [Inhabited β] (f : α → β) (hf : f default = default)
+    (a : Array α) (i : Nat) : (a.map f)[i]! = f a[i]! := by
+  by_cases h : i < a.size
+  · rw [getElem!_pos (a.map f) i (by simpa using h), getElem!_pos a i h, Array.getElem_map]
+  · rw [getElem!_neg (a.map f) i (by simpa using h), getElem!_neg a i h, hf]
+
+/-- `baseOfWalks` on the walks the cells `ca` and `cb` hold under `f` (`baseOfBy_eq`), read from the cells: no array of
+either walk is made. -/
+@[inline] def baseOfBy (f : Sparse.Cell2 → F128) (alpha : F128) (ca cb : Array Sparse.Cell2) (sl : Nat) : Array F128 :=
+  if 2 ^ sl < 2048 then (Array.range (2 ^ sl)).map fun i => alpha * f ca[i]! + f cb[i]!
+  else
+    let ta := F128.mulTableL alpha
+    (Array.range (2 ^ sl)).map fun i => F128.mulBy ta (f ca[i]!) + f cb[i]!
+
+theorem baseOfBy_eq (f : Sparse.Cell2 → F128) (hf : f default = default) (alpha : F128) (ca cb : Array Sparse.Cell2)
+    (sl : Nat) : baseOfBy f alpha ca cb sl = baseOfWalks alpha (ca.map f) (cb.map f) sl := by
+  simp only [baseOfBy, baseOfWalks, getElem!_map_fix f hf]
+
 /-- Every base of `bases` is its slot type's (`slotBase`) at `(α, lw, ρ)`: what `partialRangesT` keeps of the bases it
 has folded. -/
 def BasesOk (st : Stmt) (alpha : F128) (lw rho : Array F128) (bases : Array ((Kind × Nat) × Array F128)) : Prop :=
@@ -154,27 +173,26 @@ theorem foldedPartialFrom_eq (st : Stmt) {bases : Array ((Kind × Nat) × Array 
     (st.basesOk_empty alpha lw rho)
   simp only [foldedPartialFrom, foldedPartial, key]
 
-/-- A net's two walks at one point: `fa = Aᵀe_lo` and `fb = Bᵀe_lo` (`withLookup`) for the net `net` of the circuit. -/
+/-- A net's slot type's base at one point, as a function of `α`: `baseOfWalks α` on the net's two walks there
+(`Walked.Ok`), which a pass has finished and `fold` holds. -/
 structure Walked where
   net : Nat
-  fa : Array F128
-  fb : Array F128
+  fold : F128 → Array F128
 
-/-- `w` holds the walks of the statement's net `w.net` on the local tensor of the point `(lw, ρ)`. -/
+/-- `w` folds the walks of the statement's net `w.net` on the local tensor of the point `(lw, ρ)`: `Aᵀe_lo`, and `Bᵀe_lo`
+as `baseOf` reads it (`withLookup`). -/
 def Walked.Ok (st : Stmt) (lw rho : Array F128) (w : Walked) : Prop :=
   let n := (st.c.nets.getD w.net default).2
   let eLo := tensor lw (rho.extract 0 (n.unitLog - 6))
-  w.fa = n.a.foldT eLo ∧ w.fb = withLookup n.lookup eLo (n.b.foldT eLo)
+  ∀ alpha, w.fold alpha = baseOfWalks alpha (n.a.foldT eLo) (withLookup n.lookup eLo (n.b.foldT eLo)) n.unitLog
 
 /-- The net's slot type and its base, from the walks. -/
 def Walked.base (st : Stmt) (alpha : F128) (w : Walked) : (Kind × Nat) × Array F128 :=
-  let n := (st.c.nets.getD w.net default).2
-  ((.net w.net, n.unitLog), baseOfWalks alpha w.fa w.fb n.unitLog)
+  ((.net w.net, (st.c.nets.getD w.net default).2.unitLog), w.fold alpha)
 
 theorem Walked.base_ok (st : Stmt) (alpha : F128) (lw rho : Array F128) {w : Walked} (h : w.Ok st lw rho) :
     st.slotBase alpha lw rho (w.base st alpha).1 = .ok (w.base st alpha).2 := by
-  obtain ⟨h1, h2⟩ := h
-  simp only [Walked.base, slotBase, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, baseOf_eq_walks, ← h1, ← h2]
+  simp only [Walked.base, slotBase, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, baseOf_eq_walks, h alpha]
   rfl
 
 theorem basesOk_walked (st : Stmt) (alpha : F128) (lw rho : Array F128) {ws : Array Walked}
@@ -246,18 +264,42 @@ def walkNets (st : Stmt) : Array Nat :=
     | .net i => if (st.c.nets.getD i default).2.unitLog == r.slotLog && !acc.contains i then acc.push i else acc
     | _ => acc) #[]
 
-/-- Net `i`'s walks at the points `p0` and `p1`, each matrix read in one pass for both (`Sparse.foldT2`). -/
+/-- Net `i`'s bases at the points `p0` and `p1`, each matrix read in one pass for both. Where the net has no lookup the
+bases are read from the pass's cells (`Sparse.foldC2`, `baseOfBy`); a lookup's table reads `Bᵀe_lo` as an array, so there
+the cells are split first (`Sparse.foldT2`). -/
 def walkPair (st : Stmt) (p0 p1 : Array F128 × Array F128) (i : Nat) : Walked × Walked :=
   let n := (st.c.nets.getD i default).2
   let e0 := tensor p0.1 (p0.2.extract 0 (n.unitLog - 6))
   let e1 := tensor p1.1 (p1.2.extract 0 (n.unitLog - 6))
-  let fa := n.a.foldT2 e0 e1
-  let fb := n.b.foldT2 e0 e1
-  (⟨i, fa.1, withLookup n.lookup e0 fb.1⟩, ⟨i, fa.2, withLookup n.lookup e1 fb.2⟩)
+  if e0.size = e1.size ∧ n.lookup = none then
+    let ca := n.a.foldC2 e0 e1
+    let cb := n.b.foldC2 e0 e1
+    (⟨i, fun alpha => baseOfBy Sparse.Cell2.fst alpha ca cb n.unitLog⟩,
+      ⟨i, fun alpha => baseOfBy Sparse.Cell2.snd alpha ca cb n.unitLog⟩)
+  else
+    let fa := n.a.foldT2 e0 e1
+    let fb := n.b.foldT2 e0 e1
+    let fb0 := withLookup n.lookup e0 fb.1
+    let fb1 := withLookup n.lookup e1 fb.2
+    (⟨i, fun alpha => baseOfWalks alpha fa.1 fb0 n.unitLog⟩, ⟨i, fun alpha => baseOfWalks alpha fa.2 fb1 n.unitLog⟩)
 
 theorem walkPair_ok (st : Stmt) (p0 p1 : Array F128 × Array F128) (i : Nat) :
     (st.walkPair p0 p1 i).1.Ok st p0.1 p0.2 ∧ (st.walkPair p0 p1 i).2.Ok st p1.1 p1.2 := by
-  simp only [walkPair, Walked.Ok, Sparse.foldT2_eq, and_self]
+  unfold walkPair
+  dsimp only
+  split
+  · rename_i h
+    obtain ⟨hs, hl⟩ := h
+    constructor
+    · intro alpha
+      simp only [baseOfBy_eq Sparse.Cell2.fst rfl, Sparse.foldC2_fst, hl, withLookup]
+    · intro alpha
+      simp only [baseOfBy_eq Sparse.Cell2.snd rfl, Sparse.foldC2_snd _ hs, hl, withLookup]
+  · constructor
+    · intro alpha
+      simp only [Sparse.foldT2_eq]
+    · intro alpha
+      simp only [Sparse.foldT2_eq]
 
 /-- The walks of the statement's nets (`walkNets`) at two points, one pass over each matrix. -/
 def walks2 (st : Stmt) (p0 p1 : Array F128 × Array F128) : Walks :=
