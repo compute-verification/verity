@@ -41,3 +41,25 @@ so its passing is no evidence either way.
 Scratch branch `cursor/na-probe-okbit-known-7c1e`, head `bfd80a7a7c`, pushed, no pull request. Not run: the
 per-member form, T = 32 through Flock, more than one link, the value-salt service, the scan's suite on the branch.
 
+[2026-11-12T07:12Z] f4332f0c8021
+CROSSTICK, job G part 2, status at 11:12 PM PST Wed 11 Nov. Your 10:45, 10:48 and 11:05 PM lines are applied. Nothing here needs an answer but the last point.
+
+**Pushed.** `cursor/na-span-count-e7c1` at `a18d867f3713866f20ee9bb685a78c1589d6cbff`. No pull request yet: I open it, unmarked, when the three runs below are back. [ran: git push, ls-remote]
+
+**Recut, by a merge.** LEANMERGE's tip `5dcf9585f5d3` is merged into my branch (`af41b266f2`). I did not rebase: the branch was already pushed on your order and a rebase needs a force push. The two stand-ins are deleted: the mirror writes a mark's certificate with `Certificate.encode()` and reads it with `Certificate.decode(bytes)`, and holds no serializer of its own. [ran: local tests]
+
+**Point 2, a link's name: printable ASCII was my addition and is out.** What the period check holds a name to [read]: `Period.lean`'s parameters, `link.toUTF8.size < 2 ^ 16` ("link: a name is at most 65,535 UTF-8 bytes"); its `certificateOf` takes any JSON string; the records check's byte reader takes any UTF-8 (`String.fromUTF8?`). The count now holds a name to exactly that, in the same words, on both sides. My reason for the narrower rule had been a doubt that Lean's and Python's UTF-8 readers refuse the same bytes. I compared them outside the tree on 4,487 byte strings (overlong forms, surrogates, past U+10FFFF, cut-short and stray bytes): no difference. [ran] The cases' links are now named in ASCII and outside it (two, three and four bytes a character, a control character, DEL), and a certificate's link that is not UTF-8 is a refusal in six forms.
+
+**Point 3, no number in a reason: done, both sides.** "an execution phase of the span or its tail is missing", "an execution phase is shown twice", "… is at another execution phase", and so on; the count of certificates is out too. The test asserts that no reason holds a digit outside the link's name. One consequence: the mirror gives the egress cells' head one reason where Lean gives five, because the row registration's own message names the phase. A head that names another schedule keeps its own reason on both sides.
+
+**Lean against the mirror, at `eff522909d`** (two commits below the head; they change one reason's place in the mirror and the test's seed count, no Lean): r20261112-065843-9e2e, 8 passed in 48.52 s: 600 sampled cases agree (120 accepted, 480 rejected, every change reached), each rejection's reason on both sides, and a mirror without the tail is caught. `verity lean try` on `Span.lean` with `--siblings`: r20261112-065701-05c0, lean exit 0, no theorem in it. [ran]
+`decode` and my Lean reader disagreed on no input the difftest sampled.
+
+**The merge.** `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-crossed-fc8d HEAD` at `ae73c594d338`: 54 files stop, none of them one I add or change. `origin/main` `d6075b75d289`: clean. [ran]
+
+**Your 11:05 PM item 1: yes.** `link` is a JSON string, the link's id; `key` is lower-case hex of the LMS public key, read by `Flock.unhex` as the period check's is, and upper-case hex is refused on both sides. [read; ran: the difftest's negative]. My `untraced` line is in `verity/protocols/certifier/verifier/network/pyproject.toml`, in sorted place.
+
+**Running, each launched once at the head:** r20261112-070835-2772 (the suites the change from the merge base `62bf29346f76` touches, `--quick`, without the root suite), r20261112-070911-544f (the whole root suite), r20261112-070941-f6bf (`check.py --build` of the certifier's Lean package, no `--update`).
+
+**One thing for you to rule: the ratchet gate is red on 7 sites, and I see no way to zero.** `ratchet_gate.py 5dcf9585f5d3 HEAD`: retired terms 0 → 7 in three new files, each an import of an existing module or class by its present name: `Span.lean` 3 (`NetworkCheck.Period` imported, meta-imported for the guards, and opened), `span.py` 3 and `span_case.py` 1 (the schedule's and the row registrations' modules). It was 12; I took 5 out. The files I touch gain none, and the other ratchets gain none. The gate is off the merge gate and warns, but it rings the lane. I have not edited `tests/lint/allowlists/repo_retired_terms.json`: it is not in the plan's list, and the gate refuses a grown list as well. Say if you want the entries recorded there, or the sites left for the pull request that renames those modules.
+
