@@ -711,13 +711,11 @@ structure Audited where
   cap : Json
   circuit : Json
 
-/-- `audited_session` (module docstring): the one challenger session the auditor's ledger `ledger` (its lines, `null`
-when the verifier has none) opens under v2 for `window` (`{root}`) under the window's pinned key `key`, and ends closed,
-its end naming its record's leaf, its commitment and its refused hellos and sealing `SEALED_FILES`, in a period, if any,
-that committed its cap and circuit; and the body of the window's open (`_audited`). -/
-def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Json) := do
-  unless isWindow window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
-  let (wins, periods) ← checked ledger key
+/-- `auditedOpen` on a ledger already checked: the one session among its windows `wins` that opens `window` (`{root}`)
+under v2 and ends closed, its end naming its record's leaf, its commitment and its refused hellos and sealing
+`SEALED_FILES`, in a period of `periods`, if any, that committed its cap and circuit; and the body of the window's
+open. A check of many windows of one ledger checks the ledger once (`checked`) and reads each window here. -/
+def auditedIn (wins : Array Win) (periods : Array MonitoringPeriod) (window : Json) : V (Audited × Json) := do
   let root := strOf (getD window "root")
   let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
   let o := w.opened
@@ -742,6 +740,16 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
             commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
             period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
             circuit := (p.map (·.circuit)).getD Json.null }, o.body)
+
+/-- `audited_session` (module docstring): the one challenger session the auditor's ledger `ledger` (its lines, `null`
+when the verifier has none) opens under v2 for `window` (`{root}`) under the window's pinned key `key`, and ends closed,
+its end naming its record's leaf, its commitment and its refused hellos and sealing `SEALED_FILES`, in a period, if any,
+that committed its cap and circuit; and the body of the window's open (`_audited`): the ledger checked (`checked`),
+then the window read from it (`auditedIn`). -/
+def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Json) := do
+  unless isWindow window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
+  let (wins, periods) ← checked ledger key
+  auditedIn wins periods window
 
 /-- `audited_session` (module docstring): `auditedOpen`'s session. -/
 def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited :=

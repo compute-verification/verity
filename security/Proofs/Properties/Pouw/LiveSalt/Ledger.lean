@@ -492,7 +492,7 @@ theorem auditedOpen_ok {ledger window : Json} {key : ChallengerKey} {r : Audited
       Spot.nat? (Spot.getD e.body "record_leaf") = some r.1.recordLeaf ∧
       r.1.session = win.opened.session ∧ r.1.commitment = strOf (Spot.getD e.body "commitment")) ?_ h
   clear h
-  mvcgen [auditedOpen, -Spec.throw_Except, throw_spec, checked_spec]
+  mvcgen [auditedOpen, auditedIn, -Spec.throw_Except, throw_spec, checked_spec]
   all_goals
     exact ⟨_, _, _, by assumption, by assumption, by assumption, by assumption, by assumption, by assumption, rfl, rfl⟩
 
