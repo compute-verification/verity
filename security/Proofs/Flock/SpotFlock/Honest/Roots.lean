@@ -14,15 +14,15 @@ The second half, `CheckedRun.RootsHold` at every gate an accepted run's checked 
 such gate is committed by its proof block and round 2 reads each registered value off the boundary record:
 
 * every needed gate is a source bit, an input, or a written bit at one of `R`'s ports, which a link names and the
-  wired program returns (`NeededBits`, `RefPorts.written`), so the proof block commits it and the wired program opens
-  it under the statement's roots;
+  wired program returns (`NeededBits`, `Ref.named`, `RefPorts.written`), so the proof block commits it and the wired
+  program opens it under the statement's roots (`rootsWired_held`);
 * the interior registration registers no value: round 2's `second-inputs` refuses any value that no link names as
   the opened row of a reference read, and no port of `R` is named like an opening row (`RefPorts.row`), so an accepted
-  run's interior record has no `registered` entry (`registeredEntry_none`);
-* every registered read is named like a port of the member's circuit, each of which a link names (`PortsMember`,
-  `RefPorts.all`), so round 2 reads it under the statement's roots (`readRoots`).
-
-So no registered read is ever missing at a needed gate's port, and the interior arm never applies.
+  run's interior record has no `registered` entry (`registeredEntry_none`, `reads_held`);
+* a link names the gate's row, so the session has a registered read of that name (`named_port_of_stmtOk`), and the
+  gate's port is the session's first port of that name (`PortsMember`, `bit_held`). So a registered read is always
+  named like the gate's port, it is of the gate's row (`regNamed_name`), and round 2 reads it under the statement's
+  roots (`readRoots`).
 
 That the interior registers no value is not a premise here: it follows from round 2's `second-inputs` at `R`'s
 links. So the run this is true of has the second try's shape, an interior registration with no value; the first
@@ -44,12 +44,10 @@ its template's member circuit's ports (the statement of `CheckedRun.ports_member
 def PortsMember (h : Held) : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h → ∃ m, h.ms[templateOf h.ms r.u]? = some m ∧ r.sts[0]!.c.ports = m.1.ports
 
-/-- **What the roots ask of `R`'s ports**: every written bit's row is one of them, every port of the statement's
-circuit is one of them, the circuit has a port, and none is named like an opening row. -/
+/-- **What the roots ask of `R`'s ports**: every written bit's row is one of them, and none is named like an opening
+row. -/
 structure RefPorts (R : Ref) : Prop where
   written : ∀ y ∈ writtenBits (ms2 R.x), R.ports.contains y.2.2.row = true
-  all : ∀ q (hq : q < (stmtOf R.x).ports.size), R.ports.contains ((stmtOf R.x).ports[q]).name = true
-  pos : 0 < (stmtOf R.x).ports.size
   row : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false
 
 /-! ## Round 2 refuses an interior registration's value no link opens -/
@@ -106,10 +104,6 @@ theorem registeredEntry_none {own : Spot.SecondStage.Own} (hf : own.fixed = #[])
     Array.any_empty, Bool.or_false, Bool.not_eq_true']
   rfl
 
-/-! ## The roots at the instance -/
-
-variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
-
 theorem readsOk_at {h : Held} {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {t : ℕ}
     (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : readsOk h t x m₁ xS c₀ c₁ = true := by
   unfold stmtOkAt at hok
@@ -119,6 +113,10 @@ theorem readsOk_at {h : Held} {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ 
     rw [hp] at hok
     simp only [Bool.and_eq_true] at hok
     exact hok.2
+
+/-! ## An accepted run at the instance -/
+
+variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
 
 /-- **An accepted run's checked unit is of the one template**, where its session has the member's ports. -/
 theorem templateOf_held (hM : PortsMember (held R B desc q c₀)) {r : CheckedRun (held R B desc q c₀).stage}
@@ -134,49 +132,89 @@ theorem templateOf_held (hM : PortsMember (held R B desc q c₀)) {r : CheckedRu
   rw [hm0] at hm
   rw [hp, ← Option.some.inj hm]
 
-/-- **Every registered read of an accepted run's checked unit is named like one of `R`'s ports.** -/
-theorem regName_held (hR : RefPorts R) (hM : PortsMember (held R B desc q c₀))
-    {r : CheckedRun (held R B desc q c₀).stage} (hr : r.Ok (held R B desc q c₀)) (t : ℕ) (row : String)
-    {reg : _root_.Flock.Registered.Port}
-    (hreg : regNamed r.ins r.sts (portNamed (held R B desc q c₀) t row) = some reg) :
-    R.ports.contains reg.name = true := by
+/-- **What round 2 holds of an accepted run at the instance**: its statement, round 1's record and the second
+stage's draw evaluate, the statement's roots are those it decodes to, and the interior registration registers no
+value. -/
+theorem reads_held (hR : RefPorts R) {r : CheckedRun (held R B desc q c₀).stage} (hr : r.Ok (held R B desc q c₀)) :
+    ∃ st rec draw, decode r.x = some st ∧ jsonMsg r.m₁ = some rec ∧
+      secondDraw (held R B desc q c₀) r.c₀ r.c₁ = some draw ∧ r.s.roots = st.roots ∧
+      ∀ v, Spot.SecondStage.registeredEntry (ownOf (held R B desc q c₀) st rec draw r.c₀).interior v = none := by
+  obtain ⟨Pt, d, spec, hx, -, -, -, hok, -⟩ := hr
+  obtain ⟨st, hdx, hsr⟩ := parse_roots _ hx
+  have hok0 := stmtOkAt_of _ hok (t := 0) (by decide)
+  obtain ⟨st', rec, draw, hst', hrec, hdraw, hin⟩ := inputs_of_readsOk (readsOk_at hok0)
+  rw [hdx] at hst'
+  obtain rfl := Option.some.inj hst'
+  refine ⟨st, rec, draw, hdx, hrec, hdraw, hsr, registeredEntry_none rfl rfl (fun l hl => ?_) hin⟩
+  have hl' : l ∈ R.ports.map fun p => (⟨R.name, p, p⟩ : Spot.SecondStage.Link) := hl
+  obtain ⟨p, hp, rfl⟩ := Array.mem_map.1 hl'
+  exact hR.row p hp
+
+/-- **A needed gate's row and port at the instance**: its row is one of `R`'s ports; the member's first port of that
+name is `p`, the gate's port; and the session registers a read of that name. -/
+theorem bit_held (hR : RefPorts R) (hM : PortsMember (held R B desc q c₀))
+    {r : CheckedRun (held R B desc q c₀).stage} (hr : r.Ok (held R B desc q c₀)) {k i : ℕ} {rp : Spot.Bits.RowPos}
+    (hb : BitOf (held R B desc q c₀) (templateOf (held R B desc q c₀).ms r.u) k i rp) :
+    R.ports.contains rp.row = true ∧
+      ∃ p, (List.range (stmtOf R.x).ports.size).find? (fun q => (stmtOf R.x).ports[q]!.name == rp.row) = some p ∧
+        portNamed (held R B desc q c₀) (templateOf (held R B desc q c₀).ms r.u) rp.row = p ∧
+        ∃ own reg, r.ins.registered = some own ∧ reg ∈ own ∧ reg.name = rp.row := by
+  have hrowP : R.ports.contains rp.row = true := by
+    rcases hb.2 with ⟨hs, -⟩ | ⟨-, hw, -, -⟩
+    · exact (List.all_eq_true.1 R.named) _ (List.mem_of_find?_eq_some hs)
+    · exact hR.written _ (List.mem_of_find?_eq_some hw)
+  refine ⟨hrowP, ?_⟩
+  have hrowM : rp.row ∈ R.ports := by simpa using hrowP
+  obtain ⟨ht0, hports⟩ := templateOf_held R B desc q c₀ hM hr
+  have hj : 0 < r.sts.size := CheckedRun.sts_pos hr
+  obtain ⟨Pt, d, spec, hx, -, -, -, hok, -, -, -, -, -, hset⟩ := hr
+  have hlt : templateOf (held R B desc q c₀).ms r.u < (held R B desc q c₀).ms.length := by
+    rw [ht0]; decide
+  obtain ⟨ins, spec', sts, hset', hnamed⟩ := named_port_of_stmtOk _ hok hlt
+  have he : some (ins, spec', sts) = some (r.ins, spec, r.sts) := hset'.symm.trans hset
+  obtain ⟨rfl, -, rfl⟩ : ins = r.ins ∧ spec' = spec ∧ sts = r.sts := by simpa using he
+  have hlinkM : (⟨R.name, rp.row, rp.row⟩ : Spot.SecondStage.Link) ∈ (held R B desc q c₀).links.getD #[] :=
+    show _ ∈ R.ports.map fun p => (⟨R.name, p, p⟩ : Spot.SecondStage.Link) from Array.mem_map.2 ⟨rp.row, hrowM, rfl⟩
+  obtain ⟨own, reg, hown, hregm, hrn, hsc⟩ :=
+    hnamed rp.row (Or.inr ⟨_, hlinkM, by rw [ht0]; rfl, rfl⟩)
+  obtain ⟨p, hp⟩ := hsc r.sts[0]! (by rw [getElem!_pos r.sts 0 hj]; exact Array.getElem_mem hj)
+  rw [hports] at hp
+  refine ⟨p, hp, ?_, own, reg, hown, hregm, hrn⟩
+  unfold portNamed
+  show ((List.range (stmtOf R.x).ports.size).find? fun q => (stmtOf R.x).ports[q]!.name == rp.row).getD 0 = p
+  rw [hp]
+  rfl
+
+/-- **A registered read named like the gate's port is of the gate's row.** -/
+theorem regNamed_name (hM : PortsMember (held R B desc q c₀)) {r : CheckedRun (held R B desc q c₀).stage}
+    (hr : r.Ok (held R B desc q c₀)) {p : ℕ} {row : String}
+    (hp : (List.range (stmtOf R.x).ports.size).find? (fun q => (stmtOf R.x).ports[q]!.name == row) = some p)
+    {reg : _root_.Flock.Registered.Port} (hreg : regNamed r.ins r.sts p = some reg) : reg.name = row := by
   have hports := (templateOf_held R B desc q c₀ hM hr).2
-  have hmc : memberCircuit (held R B desc q c₀) t = stmtOf R.x := rfl
-  have hqlt : portNamed (held R B desc q c₀) t row < (stmtOf R.x).ports.size := by
-    unfold portNamed
-    rw [hmc]
-    rcases hf : (List.range (stmtOf R.x).ports.size).find? (fun q => (stmtOf R.x).ports[q]!.name == row) with _ | q'
-    · exact hR.pos
-    · exact List.mem_range.1 (List.mem_of_find?_eq_some hf)
   unfold regNamed at hreg
   cases hi : r.ins.registered with
   | none => rw [hi] at hreg; cases hreg
   | some own =>
-    rw [hi, Option.bind_some] at hreg
-    have hn : reg.name = (r.sts[0]!.c.ports[portNamed (held R B desc q c₀) t row]!).name :=
-      beq_iff_eq.1 (Array.find?_some hreg)
-    rw [hn, hports, getElem!_pos (stmtOf R.x).ports _ hqlt]
-    exact hR.all _ hqlt
+    rw [hi, Option.bind_some, hports] at hreg
+    rw [beq_iff_eq.1 (Array.find?_some hreg)]
+    exact beq_iff_eq.1 (List.find?_some hp)
 
-/-- **The roots half of `OneTreeFact` at the instance**: at every gate an accepted run's checked unit needs, the roots
-the wired program opens it under are those round 2 reads its registered value under, and a registered read is named
-like its port. -/
-theorem rootsHold_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀))
-    (hM : PortsMember (held R B desc q c₀)) :
-    ∀ r : CheckedRun (held R B desc q c₀).stage, r.Ok (held R B desc q c₀) → ∀ i, r.s.prog.Needs r.b i →
-      r.RootsHold (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
-        (addressOf (held R B desc q c₀) i) (wireMap (held R B desc q c₀) i) := by
-  intro r hr i hi
-  have hr' := hr
-  rw [wireMap_held]
-  show r.RootsHold (held R B desc q c₀) id (returned (held R B desc q c₀)) (addressOf (held R B desc q c₀) i) i
-  obtain ⟨rp, hb⟩ := hN r hr i hi
+/-- **A needed gate's address at the instance** is its own position's: the member's first port of its row, and the
+place and slot of its position. -/
+theorem address_held {i t : ℕ} {rp : Spot.Bits.RowPos} (hbit : bitAtGate (held R B desc q c₀) i = some (t, rp)) :
+    addressOf (held R B desc q c₀) i =
+      ⟨fun _ => portNamed (held R B desc q c₀) t rp.row, placeAt (held R B desc q c₀) t rp,
+        slotAt (held R B desc q c₀) t rp⟩ := by
+  rw [addressOf_held, addressAt_held, hbit]
+
+/-- **The wired program opens a needed gate under the statement's roots**: the proof block commits it, an input or
+a written bit the wired program returns. -/
+theorem rootsWired_held (hR : RefPorts R) (hM : PortsMember (held R B desc q c₀))
+    {r : CheckedRun (held R B desc q c₀).stage} (hr : r.Ok (held R B desc q c₀)) {k i : ℕ} {rp : Spot.Bits.RowPos}
+    (hb : BitOf (held R B desc q c₀) (templateOf (held R B desc q c₀).ms r.u) k i rp) :
+    r.rootsWired id (returned (held R B desc q c₀)) i = r.s.roots := by
   have ht0 := (templateOf_held R B desc q c₀ hM hr).1
-  have hbit := bitAtGate_of_bitOf hb
-  have haddr : (addressOf (held R B desc q c₀) i).port r.u =
-      portNamed (held R B desc q c₀) (templateOf (held R B desc q c₀).ms r.u) rp.row := by
-    rw [addressOf_held, addressAt_held, hbit]
-  obtain ⟨Pt, d, spec, hx, -, -, -, hok, -, -, -, -, -, hset⟩ := hr
+  obtain ⟨Pt, d, spec, hx, -⟩ := hr
   have hprog : r.s.prog = bitsProgs (held R B desc q c₀).ms := parse_prog _ hx
   have hbd : (r.s.prog.wired id (returned (held R B desc q c₀))).Boundary (cutBlock id r.rb) i = true := by
     rw [hprog, wired_id_keep]
@@ -192,31 +230,37 @@ theorem rootsHold_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀)
         rw [ht0]
         exact heldLink_held R B desc q c₀ rp.row hrow
       simp [Prog.Boundary, List.mem_filter, hout, hret]
-  have hrw : r.rootsWired id (returned (held R B desc q c₀)) i = r.s.roots := by
-    unfold CheckedRun.rootsWired
-    rw [if_neg]
-    rintro ⟨-, hf⟩
-    rw [hbd] at hf
-    cases hf
+  unfold CheckedRun.rootsWired
+  rw [if_neg]
+  rintro ⟨-, hf⟩
+  rw [hbd] at hf
+  cases hf
+
+/-- **The roots half of `OneTreeFact` at the instance**: at every gate an accepted run's checked unit needs, the roots
+the wired program opens it under are those round 2 reads its registered value under, and a registered read is named
+like its port. -/
+theorem rootsHold_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀))
+    (hM : PortsMember (held R B desc q c₀)) :
+    ∀ r : CheckedRun (held R B desc q c₀).stage, r.Ok (held R B desc q c₀) → ∀ i, r.s.prog.Needs r.b i →
+      r.RootsHold (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
+        (addressOf (held R B desc q c₀) i) (wireMap (held R B desc q c₀) i) := by
+  intro r hr i hi
+  rw [wireMap_held]
+  show r.RootsHold (held R B desc q c₀) id (returned (held R B desc q c₀)) (addressOf (held R B desc q c₀) i) i
+  obtain ⟨rp, hb⟩ := hN r hr i hi
+  have ht0 := (templateOf_held R B desc q c₀ hM hr).1
+  obtain ⟨hrowP, p, hp, hpn, own, reg₀, hown, hregm, hrn⟩ := bit_held R B desc q c₀ hR hM hr hb
+  have hport : (addressOf (held R B desc q c₀) i).port r.u = p := by
+    rw [address_held R B desc q c₀ (bitAtGate_of_bitOf hb), hpn]
   refine ⟨fun reg hreg => ?_, fun hnone => ?_⟩
-  · rw [hrw]
-    rw [haddr] at hreg
-    have hname := regName_held R B desc q c₀ hR hM hr' _ _ hreg
-    obtain ⟨st, hdx, hsr⟩ := parse_roots _ hx
-    have hok0 := stmtOkAt_of _ hok (t := 0) (by decide)
-    obtain ⟨st', rec, draw, hst', hrec, hdraw, hin⟩ := inputs_of_readsOk (readsOk_at hok0)
-    rw [hdx] at hst'
-    obtain rfl := Option.some.inj hst'
-    have hnone : ∀ v, Spot.SecondStage.registeredEntry
-        (ownOf (held R B desc q c₀) st rec draw r.c₀).interior v = none :=
-      registeredEntry_none rfl rfl
-        (fun l hl => by
-          have hl' : l ∈ R.ports.map fun p => (⟨R.name, p, p⟩ : Spot.SecondStage.Link) := hl
-          obtain ⟨p, hp, rfl⟩ := Array.mem_map.1 hl'
-          exact hR.row p hp)
-        hin
+  · rw [rootsWired_held R B desc q c₀ hR hM hr hb]
+    rw [hport] at hreg
+    have hname := regNamed_name R B desc q c₀ hM hr hp hreg
+    obtain ⟨st, rec, draw, hdx, hrec, hdraw, hsr, hnone⟩ := reads_held R B desc q c₀ hR hr
     have hlink : (Spot.SecondStage.linkOf (ownOf (held R B desc q c₀) st rec draw r.c₀) R.name reg.name).isSome =
-        true := heldLink_held R B desc q c₀ reg.name hname
+        true := by
+      rw [hname]
+      exact heldLink_held R B desc q c₀ rp.row hrowP
     obtain ⟨l, hl⟩ := Option.isSome_iff_exists.1 hlink
     have hri : readsInterior (ownOf (held R B desc q c₀) st rec draw r.c₀)
         ((held R B desc q c₀).names.getD (templateOf (held R B desc q c₀).ms r.u) "") reg.name reg.value = false := by
@@ -228,34 +272,18 @@ theorem rootsHold_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀)
     unfold readRoots
     rw [hdx, hrec, hdraw, if_neg (by rw [hri]; decide), hsr]
   · exfalso
-    have hrowP : R.ports.contains rp.row = true := by
-      rcases hb.2 with ⟨hs, -⟩ | ⟨-, hw, -, -⟩
-      · exact (List.all_eq_true.1 R.named) _ (List.mem_of_find?_eq_some hs)
-      · exact hR.written _ (List.mem_of_find?_eq_some hw)
-    have hrowM : rp.row ∈ R.ports := by simpa using hrowP
-    have hports := (templateOf_held R B desc q c₀ hM hr').2
-    have hlt : templateOf (held R B desc q c₀).ms r.u < (held R B desc q c₀).ms.length := by
-      rw [ht0]; decide
-    obtain ⟨ins, spec', sts, hset', hnamed⟩ := named_port_of_stmtOk _ hok hlt
-    have he : some (ins, spec', sts) = some (r.ins, spec, r.sts) := hset'.symm.trans hset
-    obtain ⟨rfl, -, rfl⟩ : ins = r.ins ∧ spec' = spec ∧ sts = r.sts := by simpa using he
-    have hlinkM : (⟨R.name, rp.row, rp.row⟩ : Spot.SecondStage.Link) ∈ (held R B desc q c₀).links.getD #[] :=
-      show _ ∈ R.ports.map fun p => (⟨R.name, p, p⟩ : Spot.SecondStage.Link) from Array.mem_map.2 ⟨rp.row, hrowM, rfl⟩
-    obtain ⟨own, reg, hown, hregm, hrn, hsc⟩ :=
-      hnamed rp.row (Or.inr ⟨_, hlinkM, by rw [ht0]; rfl, rfl⟩)
-    have hj : 0 < r.sts.size := CheckedRun.sts_pos hr'
-    obtain ⟨p, hp⟩ := hsc r.sts[0]! (by rw [getElem!_pos r.sts 0 hj]; exact Array.getElem_mem hj)
-    rw [hports] at hp
-    have hpn : portNamed (held R B desc q c₀) (templateOf (held R B desc q c₀).ms r.u) rp.row = p := by
-      unfold portNamed
-      show ((List.range (stmtOf R.x).ports.size).find? fun q => (stmtOf R.x).ports[q]!.name == rp.row).getD 0 = p
-      rw [hp]
-      rfl
-    rw [haddr, hpn] at hnone
+    rw [hport] at hnone
     unfold regNamed at hnone
-    rw [hown, Option.bind_some, hports] at hnone
-    apply Array.find?_eq_none.1 hnone reg hregm
+    rw [hown, Option.bind_some, (templateOf_held R B desc q c₀ hM hr).2] at hnone
+    apply Array.find?_eq_none.1 hnone reg₀ hregm
     rw [hrn]
     exact beq_iff_eq.2 (beq_iff_eq.1 (List.find?_some hp)).symm
+
+/-- **`OneTreeFact` at the instance**: the wiring map moves nothing, and the roots hold (`rootsHold_held`). -/
+theorem oneTreeFact_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀))
+    (hM : PortsMember (held R B desc q c₀)) :
+    OneTreeFact (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
+      (addressOf (held R B desc q c₀)) :=
+  ⟨fun i => by rw [wireMap_held]; exact ⟨rfl, rfl⟩, rootsHold_held R B desc q c₀ hR hN hM⟩
 
 end SpotFlock.Honest
