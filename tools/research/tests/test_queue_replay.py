@@ -132,6 +132,25 @@ def test_a_change_with_a_lean_input_waits_for_the_records_run_under_the_rule_tha
     assert built_beside(rule("2.")) and not built_beside(rule("2d."))
 
 
+def test_a_lean_batch_checked_from_its_build_is_checked_again_on_its_records(tr):
+    def least(r: qr.Rule) -> float:
+        """Over the Lean batches as they are built: how much longer than its records run and the check after it the check
+        of one stands, at the least."""
+        got, seen = [], 0
+        for run in walk(tr, r):
+            for c in run.built[seen:]:
+                files = frozenset().union(*(ch.files for ch in c.changes if ch.lean))
+                if files and c.built == run.t:
+                    again = tr.suites.wall(tr.suites.whole if r.locks_whole else tr.suites.touched(files))
+                    got.append(c.pass_at - c.start - min(tr.records) - again)
+            seen = len(run.built)
+        assert got
+        return min(got)
+
+    assert least(rule("6f.")) > -1.0 and least(rule("6j.")) > -1.0   # in seconds: sums of floats
+    assert tr.suites.wall(tr.suites.whole) < tr.suites.wall(frozenset(tr.suites.by_path))
+
+
 def test_side_by_side_a_failed_batch_drops_no_other(tr):
     run = qr.Replay(tr, rule("3.")).run()
     assert "dropped base" not in run.lost and run.counts["unions"] > 0
