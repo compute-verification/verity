@@ -161,10 +161,8 @@ A spec-level reference for network accounting's timing channel:
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
 - the lengths row's proof block (`verity.protocols.certifier.prover.lengths_row`, `LengthsRow`), in no Spec: one a link,
-  execution phase and slot stride, which computes the lengths row from the compute side's committed request row and
-  the network certifier's fails row (`connection_rows`) with no witness, as a registered read of the signed row;
-- the response tie's two proof blocks (`response_tie`, beside it) and the content rows' formats (`content_rows`),
-  in no Spec;
+  execution phase and slot stride (`PROTOCOL.md`, "The lengths row's proof block");
+- the response tie's two proof blocks (`response_tie`, beside it), in no Spec;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -281,8 +279,8 @@ A spec-level reference for network accounting's timing channel:
   bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in bucket
   s + D + ⌊i/r⌋ from its admission s. In the id egress form, its default, it releases a server's cell only if
   `io_tie.parse_cell` reads it ("The egress record"), and fails the connection (`format`) at any other, never
-  rewriting it. A miss fails the connection closed with a `FAIL` cell that carries no reason. It records and
-  certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
+  rewriting it. It records and certifies exactly the cells it sends, and each failure's reason in a third record,
+  `fails`.
   `PROTOCOL.md`'s "The active network certifier" has its leak bound, and `benchmarks/network_traces/warden_serve.py`
   runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
@@ -297,15 +295,15 @@ A spec-level reference for network accounting's timing channel:
 - the network certifier's cells as rows (`warden_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
   row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network certifier signs with the
   certifier's signer, beside a salted digest of the window's wiring. The registration is what a proof block's
-  `--registered` port reads, so the sender's proof block opens a cell's row as its output and the receiver's as its
-  input, and the verifier places each read, the (connection, cell) the Program's proof blocks' wiring pins (`Units`,
-  whose digest the port's value names), with the network certifier's wiring (`PROTOCOL.md`, "The network certifier's
-  cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+  `--registered` port reads, and the verifier places each read, the (connection, cell) the Program's proof blocks'
+  wiring pins (`Units`, whose digest the port's value names), with the network certifier's wiring (`PROTOCOL.md`,
+  "The network certifier's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the network certifier's connection rows (`connection_rows`), in a schedule with lengths rows
   (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
-  committed as the cells' rows are and listed under one head the network certifier signs once; the registration the
-  verifier reads (`check_registration`) and its `--registered` port of the proof blocks that read a table, one a row
-  (`port`);
+  and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
+  (`content_rows`: its request, response and end rows), all committed as the cells' rows are and listed under one
+  head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
+  `--registered` port of the proof blocks that read a table, one a row (`port`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
