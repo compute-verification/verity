@@ -22,8 +22,8 @@
    "declarations": 4
   },
   "Proofs/NetworkCertifier": {
-   "modules": 2,
-   "declarations": 6
+   "modules": 4,
+   "declarations": 34
   },
   "Proofs/Pous": {
    "modules": 1,
