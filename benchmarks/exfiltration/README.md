@@ -91,6 +91,15 @@ The record is one JSON object (`served_share` in `exfiltration.py`):
 job serves. So the window's serving and, where the same job served `compiled` on the same plan and rate, stock's are
 read from that record, and no stock serve of this command's own is needed.
 
+The reader is `python -m verity_bench.served_record --second DIR [--serving META] [--stock META]`
+(`benchmarks/harness/verity_bench/served_record.py`). It prints that object from the second stage's `summary.json`
+and the two loads' `meta.json`, with `None` for each field those files lack, and names each one with the file it read
+and what that file holds instead. A second stage's summary holds each session's seconds (`audit.timing`: `session_s`,
+the wall clock from the session's launch to its return, by default; `--seconds prove_total_s` reads the prover's own
+timer over the session's tables instead) and not the GPUs a session held. It holds no time for the staging, the
+replay or the interior commitment, so the reader names `prove.gpus`, `staging`, `replay` and `interior`, and the
+command claims no share from such a record.
+
 ## The errors
 
 Every figure carries the error summed over everything it covers. A figure whose error is 1 or more is printed as
