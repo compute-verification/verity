@@ -23,6 +23,28 @@ COVERAGE_DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
 #: writes
 CALL_BOUNDARIES_GATE_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
 
+# --- the Commit (`verity_vllm.commit`)
+#: a dumped store's `store.json` (`commit.store_dump.SCHEMA`), which `dump_files` writes and `load` refuses any other
+#: than
+COMMITTED_STORE_SCHEMA = "verity-vllm/committed-store/v1"
+#: a window's `index.json` (`commit.index.INDEX_SCHEMA`), which `index_doc` writes
+SERVING_ROWS_INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
+#: the reconciliation of what a Commit did not execute, which `commit.executed_prefix.reconcile_not_executed` writes
+NOT_EXECUTED_RECONCILIATION_SCHEMA = "verity-sweep/not-executed-reconciliation/v3"
+
+# --- the Commit's driver (`verity_vllm.pipeline`)
+#: the Commit plan's document (`pipeline.commit_plan.SCHEMA`), which `derive` writes and `use` refuses any other than
+COMMIT_PLAN_SCHEMA = "verity-vllm/commit-plan/v1"
+#: a slim keep's `slim.json` (`pipeline.cpu_replay.SLIM_SCHEMA`), which `keep` writes and `open_keep` refuses any other
+#: than
+REPLAY_SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
+#: a replay bundle's `context.json` and its manifest (`pipeline.replay_bundle.SCHEMA`), which `seal` writes;
+#: `open_bundle` refuses a manifest with any other
+REPLAY_BUNDLE_SCHEMA = "verity-vllm/replay-bundle/v1"
+#: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.m1_capture`'s `main`
+#: writes
+SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
+
 # --- the Match (`verity_vllm.check.match`)
 #: the global workload Program's interface as the Match reads it (`check.match.declaration.GP_SCHEMA`)
 GLOBAL_PROGRAM_SCHEMA = "cb-a/global-program/v1"
