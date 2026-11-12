@@ -502,10 +502,12 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     commits (`Input`), each with that port as the serve opens it. The interior registers no value for one: the port
     that reads it is committed under the serve's salts at the rows its units read (`Input.rows`), read at round 1's
     root as a return is, and a replayed unit that takes there another row than round 1's at its place is refused the
-    same way."""
+    same way. A sampled span of no units (a request served nothing, whose rows of round 1's ports are zero) is refused by
+    slot: it has no last unit to pad its block with."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
+    _served_some(per, sample)
     if len({s.program for p in per for s in p}) != 1:
         raise ValueError(f"the spans were replayed from Programs {sorted({s.program[:16] for p in per for s in p})}, not one: "
                          "a size class's spans share its replay Definition")
@@ -579,13 +581,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         for m, d in zip(window.members, data, strict=True):  # after the reads: a read's key may be a wired row
             for p, _o, _ws in m.wired:
                 d["rows"][p] = CS.WIRED
-        for x, v, k, at in took_in:
-            off = np.flatnonzero((np.asarray(data[k]["rows"][x.port], dtype=np.uint16) != v.rows_at(at)).any(axis=1))
-            if off.size:
-                u = int(off[0])
-                raise ValueError(f"{x.template}: unit {u} (sampled span {u // cells[k]}) takes at its {x.port!r} a row that "
-                                 f"is not row {at[u]} of {x.value}, the port round 1 committed: the replay didn't "
-                                 "reproduce what was served")
+        _as_served(data, cells, took_in, "rows")
         took = [np.asarray(data[k]["rows"][x.port], dtype=np.uint16) for x, k, _at in placed]
         for name, x in IL.values(links).items():
             if isinstance(x, Operand):
@@ -603,13 +599,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                                      else "the value the verifier supplies it"))
             data[k]["rows"][x.port] = CS.ValueRows(v, at)
         linked = {window.members[k].port(x.port) for x, k, _at in placed}
-        for x, v, k, at in back:
-            off = np.flatnonzero((np.asarray(data[k]["outs"][x.port], dtype=np.uint16) != v.rows_at(at)).any(axis=1))
-            if off.size:
-                u = int(off[0])
-                raise ValueError(f"{x.template}: unit {u} (sampled span {u // cells[k]}) returns at its {x.port!r} a row that "
-                                 f"is not row {at[u]} of {x.value}, the return round 1 committed: the replay didn't "
-                                 "reproduce what was served")
+        _as_served(data, cells, back, "outs")
         fresh = {} if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()
                                                  if p not in linked}
         fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in (*back, *took_in)}
@@ -620,6 +610,28 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                           entries=[given[v].entry() for v in IL.values(links)])
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
     return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tcs, tuple(returns), tuple(inputs))
+
+
+def _served_some(per: Sequence[Sequence[Span]], sample: Sequence[int]) -> None:
+    """Refuse, by slot, a sampled span of no units: a request served nothing has no last unit to pad its block with."""
+    for i, p in enumerate(per):
+        if any(s.n < 1 for s in p):
+            raise ValueError(f"sampled span {i} (slot {int(sample[i])}, request {p[0].rid}) holds no unit of its replay "
+                             "block: a span served nothing has no proof block to commit, whatever round 1 holds at its rows")
+
+
+def _as_served(data: Sequence[Mapping[str, Any]], cells: Sequence[int], held: Sequence[tuple[Any, LK.Port, int, list[int]]],
+               kind: str) -> None:
+    """Refuse, by unit, sampled span and row, a replayed row that is not round 1's at its place: ``held`` as `_taken`
+    gives the parameters round 1 commits (``kind`` "rows") or `_returned` the returns ("outs")."""
+    does, what = ("takes", "the port") if kind == "rows" else ("returns", "the return")
+    for x, v, k, at in held:
+        off = np.flatnonzero((np.asarray(data[k][kind][x.port], dtype=np.uint16) != v.rows_at(at)).any(axis=1))
+        if off.size:
+            u = int(off[0])
+            raise ValueError(f"{x.template}: unit {u} (sampled span {u // cells[k]}) {does} at its {x.port!r} a row that "
+                             f"is not row {at[u]} of {x.value}, {what} round 1 committed: the replay didn't reproduce "
+                             "what was served")
 
 
 def _returned(ms: Sequence[CS.Member], cells: Sequence[int], sample: Sequence[int],
