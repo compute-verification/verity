@@ -59,9 +59,7 @@ public import Proofs.Pouw.Lead
 public import Proofs.Pouw.LiveCredit
 public import Proofs.Pouw.M1
 public import Proofs.Pouw.MerkleExtract
-public import Proofs.Pouw.Salt.Witness
 public import Proofs.Pouw.OnsiteFreed
-public import Proofs.Pouw.Salt
 public import Proofs.Pouw.ShaRealize
 public import Proofs.Pouw.ShaRealizeWitness
 public import Proofs.Pouw.Milestone
