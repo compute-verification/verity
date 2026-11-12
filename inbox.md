@@ -20,3 +20,54 @@ Probe (should 6), the plan:
 
 Runs: `r20261112-192536-b84b` (suites at the old head) took check slot r2 at 20:27Z and is running: verity-vllm passed (14,314 passed, 400 skipped), no failure in its log so far (RAN: fetched `out/suites.txt`). `r20261112-194241-5573` (every word at the old head) took slot r0 at 21:05Z and is running, 16 processes, ETA about 22:00Z. I let both finish: the every-word run still checks the head's wiring (Row, Key, the loop), though it counts for nothing at the fixed head.
 
+[2026-11-12T21:23Z] ba3e9177ff6c
+THREADS, Thu 12 Nov, 1:23 PM PST.
+
+**PLAN's three lines hold, and the third is worse than PLAN read: a stop during the state's fetch can fail the job outright, not only send it back to θ. My bound counts kept states, not steps. Item 5 is about eight lines in the same place, so I build it. A keep between checkpoints touches four ties in `run.py`, and the trace can already run in a lease of its own.** About my context: my part of this conversation is near half. I take this job and keep the reads short; if I run short, I send you the hand-off instead. Branch: `cursor/training-stop-before-up-45e7`, cut from `main` at `5f0c008aa0`.
+
+PLAN's three lines (READ: `benchmarks/training_slowdown/run.py`; `training_slowdown/run.py` `outside`):
+
+1. Confirmed. In `store_state`, a run is done when it has rc 0 and a record. Otherwise it is stopped only when `told(said)`, where `said` is the record's `out/run.json`. Every other run is failed.
+2. Confirmed. The only writer of the stop record is `outside`'s `stop` handler, installed by `signal.signal(SIGTERM, stop)` once `run.main` has imported torch and parsed its arguments. `ENV`'s `trap : TERM` writes nothing. A stop during `uv sync`, during the fetch or during Python's start therefore leaves no `run.json`.
+3. Confirmed (`run = runs[-1]`, then `store.keeps(record)` of that run alone). One correction:
+   - The fetch writes straight into `$OUT/state`. A run stopped partway leaves a partial `out/state` in its record.
+   - If its `state.json` arrived before the tensors, `keeps` lists that file's sha256, and the next run fetches the partial state under `--continues`. `Kept.load` then refuses it ("its tensors ... are missing" or "don't load"). That is a `SystemExit` with no stop record, so the job fails for good. (INFERRED: I haven't checked the order in which `research data fetch` writes files.)
+   - If `state.json` did not arrive, the job starts from θ, as PLAN read.
+
+The bound I chose:
+
+- A label is failed when its last three runs (`STALLS = 3`) were each stopped and none of them kept a state newer than the one before it. "Newer" means the sha256 of the `state.json` in its record is present and differs from the latest state an earlier run kept.
+- I can't observe "no step" from the store without fetching every run's `state.json`. The kept state is the observable that matters: steps after the last kept state are lost anyway, so such a run advanced nothing for the label.
+- Against your wording, this also fails a job whose runs keep being stopped before their next checkpoint (a lease shorter than a checkpoint interval, or three evictions in a row inside one interval), rather than letting it loop.
+- The message names the three runs and says why.
+- If you want stops before the job is up counted apart from stops after it, the shell's stop record would need a mark of its own, which makes two kinds of stop record. I'd rather not.
+
+Item 5, about eight lines, so I build it:
+
+- `Store.says` takes a path.
+- For the run whose state is continued, `store_state` reads that run's `out/state/state.json` and takes `record.threads`.
+- `research_argv` adds `--threads N` when the record states one.
+- Cost: one more fetch per stopped job each time the command runs. `state.json` holds the record so far, so it can be several MB.
+
+Sizing a keep between checkpoints (READ: `run.py`; nothing built):
+
+- What is tied to a checkpoint today:
+  - `Kept.write` names the tensors by the last checkpoint's step, `tensors-{checkpoints[-1].step}`.
+  - `Kept.load` refuses a model that doesn't hash to the record's last checkpoint (`trained_sha256` or `output_sha256`).
+  - `Harness._after_step` calls `keep` only at a checkpoint step that isn't the last.
+  - `joined` and `assert_continues` assume the stopped segment's last kept step is a checkpoint. They count a route `output` computed at that checkpoint into `setup`, and the next segment's first step is short of it.
+- What a keep between checkpoints needs:
+  - A trigger in `_after_step` every few minutes, read from the harness's injected clock.
+  - Tensors named by step.
+  - The model check moved from "hashes to the last checkpoint" to the segment's own SHA-512 of the model part, which `kept` already states.
+  - A `joined` and `assert_continues` that expect no short step when the stop was between checkpoints.
+  - The keep's own time paused out of `elapsed()`. It currently runs in `uncounted()` with the clock going, so frequent keeps eat `budget.minutes`.
+- What already works between checkpoints: the scores are only the checkpoints' (`with_scores` on the record so far), and the clock is `te.elapsed()`. The record, the stream's position, the generators and the fresh-windows record are all whole at any step boundary.
+- Resume tests to add:
+  - A stop at a non-checkpoint step whose joined record equals the unbroken job's, through the quick harness and through the slow two-process test.
+  - A kept state whose model differs from its own `kept` digest, refused.
+  - A keep whose time the budget doesn't count, through the injected clock.
+- The trace in its own lease: possible with what exists. `--retrace RUN_JSON` takes a record's trace again from the record's config text, on a freshly built route (`route.build`). It needs no trained weights, because the capture reads shapes. A job could write its record with `trace.failed`, and a separate queued `--retrace` run would write the traced record. The command would need a second label or a step to queue it. That is not built.
+
+Next: build items 1 to 5 with a test for each that fails without its change, then run the suite on a node, slow tests included.
+
