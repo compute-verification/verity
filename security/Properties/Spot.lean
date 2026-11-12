@@ -398,10 +398,10 @@ def drawnNats (draw : Json) : Array Nat :=
   | .arr us => us.filterMap nat?
   | _ => #[]
 
-/-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
+/-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: whether every
+verdict ran (`Record.allRan`, which `VerdictsAccept` asks only of the verdicts of record), the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
-for a Bernoulli sample), for a stratified or work sampling design each template's own (`Bound.stratumBound`), and
-whether every verdict ran (`Record.allRan`), which `VerdictsAccept` asks only of the verdicts of record. -/
+for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
