@@ -29,10 +29,12 @@ conditions that evaluation decides and the verifier does not run, one a fact not
 
 * `SpotFlock.BuiltWired`: the registration's frame is SPOT's own at the connected program. Every held code whose frame
   is set to it has it (`SpotFlock.builtWired_spot`).
-* `SpotFlock.AddressesConnected`: each gate's value has one address at the connected program, which holds at every
-  checked unit that needs it; it is asked only of a held code with `SpotFlock.SourcesNamed`. Nothing proves it at a
-  registration. It would follow from a fact about what `SpotFlock.V` accepts: that each needed gate's read is held
-  to one entry, a linked gate's to the boundary record.
+* `SpotFlock.AddressesConnected`: each gate's value has one address at the connected program, fixed before the run,
+  which holds at every accepted run's checked unit whose proof block needs the gate; it is asked only of a held code
+  with `SpotFlock.SourcesNamed`. Nothing proves it at a registration: not that the checked unit's instance is one of
+  its session's (`SpotFlock.CheckedRun.Counted`), not that the address's place reads the row its session holds the
+  gate in (`SpotFlock.CheckedRun.RowAt`), and not that `SpotFlock.V` holds each needed gate's read to one entry, a
+  linked gate's to the boundary record.
 * `SpotFlock.SourcesNamed`: every source bit is at a port a link or a wire names. Nothing the verifier runs decides
   it, so the guarantee says nothing of an input the developer supplies or a row round 2 opens off the interior record.
 * `SpotFlock.WiresFirst`: each wire's writer's part is before its reader's, so each wire's writer names a template.
@@ -44,11 +46,14 @@ conditions that evaluation decides and the verifier does not run, one a fact not
 At a held code that fails one of them the guarantee says nothing, though `SpotFlock.V` still accepts its runs. The
 guarantee speaks of what a replay block returns: its served outputs are the written bits at an output port a link
 names, so at a design with no link it says nothing. What it covers rests on the links the held code holds: an output
-that leaves and that no held link names is outside it, and `SpotFlock.V` does not run the design's check of the links
-(`SecondStage.linksOk`). Over the members' programs side by side every written bit is returned, whatever the links;
-the connected program of a design with no wire still returns only the linked ones. So at every design, with a wire or
-without, the guarantee speaks only of the linked outputs, where the side-by-side statement speaks of every written
-bit. Its honest instance needs a registration that meets the five premises, which nothing proves yet.
+that leaves and that no held link names is outside it. The held links are the auditor's copy, which nothing in the
+statement holds to the replay block program's own links (`SecondStage.replayLinks`), and `SpotFlock.V` does not run
+the design's check of them (`SecondStage.linksOk`). That check asks that each link is for a template one of the parts
+is of, whose units its rows place, and not that an output that leaves has a link. Over the members' programs side by
+side every written bit is returned, whatever the links; the connected program of a design with no wire still returns
+only the linked ones. So at every design, with a wire or without, the guarantee speaks only of the linked outputs,
+where the side-by-side statement speaks of every written bit. Its honest instance needs a registration that meets the
+five premises, which nothing proves yet.
 
 Over the members' programs side by side, `SpotFlock.ksTwo_spot` gives the same knowledge soundness at `SpotFlock.code`
 from `SpotFlock.Built` and `SpotFlock.Addresses` (`SpotFlock.frameIs_built`, `SpotFlock.sessionOpensTwo_of_frameIs`).
