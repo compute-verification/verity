@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import types
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -34,11 +35,14 @@ from verity_vllm.query.compose import compose_global
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import definition_ports, spec_statics
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.sources import call_boundary_plan as CP  # noqa: E402
-from verity_vllm.acquire.sources import call_boundary_source as CB  # noqa: E402
-from verity_vllm.acquire.sources import taps  # noqa: E402
+from verity_vllm.acquire.sources import call_boundary_plan as CP
+from verity_vllm.acquire.sources import call_boundary_source as CB
+from verity_vllm.acquire.sources import taps
 
 #: bf16 embedding rows the prompt selects: NaN payloads (quiet, negative, signalling), +-inf, +-0, subnormals, the largest finite, mixed
 EDGE = [[0x7FC0, 0xFFC1, 0x7F81, 0x3F80, 0xBF80, 0x4000, 0x3F00, 0x0000],
@@ -54,9 +58,9 @@ TORCH_OF = {"bf16": torch.bfloat16, "f32": torch.float32, "w8": torch.uint8}
 
 class Recorder:
     def __init__(self, model=None) -> None:
-        self._cur = None
+        self._cur: types.SimpleNamespace | None = None
         self.errors: list[str] = []
-        self.acquired: list[tuple[int, str, object]] = []
+        self.acquired: list[tuple[int, str, torch.Tensor]] = []
         self.sources: list = []
         self.name = "rec"
         self.model = model
@@ -539,7 +543,12 @@ def test_the_warm_up_commits_zero_words_of_the_records_layout_and_evaluates_noth
     _drive_pair(pair, com, src, ["r1", "r0"])
     ref = [(s, n, tuple(t.shape), t.dtype, CB.words(torch, t).tobytes()) for s, n, t in com.acquired]
     calls, real = [], CP.evaluate_template
-    monkeypatch.setattr(CP, "evaluate_template", lambda *a, **k: calls.append(a[2]) or real(*a, **k))
+
+    def counted(*a, **k):
+        calls.append(a[2])
+        return real(*a, **k)
+
+    monkeypatch.setattr(CP, "evaluate_template", counted)
     warm, wsrc = _dense_source(pair, pair.man, pair.root)
     taps.warmup(warm, True)
     _drive_pair(pair, warm, wsrc, ["r1", "r0"], lambda e, rows: [(f"warmup-{rid[3]}", lo, hi) for rid, lo, hi in rows])

@@ -190,12 +190,13 @@ class SparseDecode:
         if isinstance(wslots := _entry_slots(node, ctx, f"{sl.layer}.swa_cache", req, range(s0, p + 1), kv.shape[1] if kv.rank > 1 else 0),
                       Unsupported):
             return wslots
-        xslots = _entry_slots(node, ctx, sl.layer, req, range(nc), xkv.shape[1] if xkv.rank > 1 else 0, ratio=sl.R) if nc else ()
+        xslots = _entry_slots(node, ctx, sl.layer, req, range(nc), xkv.shape[1] if xkv.rank > 1 else 0, ratio=sl.R) \
+            if nc and isinstance(xkv, ViewDesc) else ()
         if isinstance(xslots, Unsupported):
             return xslots
         try:
             win = fp8_rows(block_bytes(kv), wslots, kv.shape[1], DN, sl.DR, sl.QT)
-            comp = fp8_rows(block_bytes(xkv), xslots, xkv.shape[1], DN, sl.DR, sl.QT) if nc else []
+            comp = fp8_rows(block_bytes(xkv), xslots, xkv.shape[1], DN, sl.DR, sl.QT) if nc and isinstance(xkv, ViewDesc) else []
         except GeometryError as e:
             return unsupported(node, str(e))
         if isinstance(made := mla_compress(node, ctx, sl) if sl.R > 1 else [], Unsupported):
@@ -250,10 +251,11 @@ class SparsePrefill:
                                kv=repr(wsv), chunk_N=N, gather_len=gather, q=repr(q))
         caches = [(ctx.buffers.get(f"kv_cache[{sl.layer}.swa_cache_layer]"), f"{sl.layer}.swa_cache", range(seq - gather, seq), 1)] \
             + ([(ctx.buffers.get(f"kv_cache[{sl.layer}]"), sl.layer, range(N), sl.R)] if N else [])
-        if not all(isinstance(c, ViewDesc) and c.rank > 1 for c, *_ in caches):
+        named = [(c, group, entries, ratio) for c, group, entries, ratio in caches if isinstance(c, ViewDesc) and c.rank > 1]
+        if len(named) != len(caches):
             return unsupported(node, "the capture's external buffers name no window or compressed cache for the layer", layer=sl.layer)
         src = []
-        for cache, group, entries, ratio in caches:
+        for cache, group, entries, ratio in named:
             if isinstance(slots := _entry_slots(node, ctx, group, req, entries, cache.shape[1], ratio=ratio), Unsupported):
                 return slots
             try:

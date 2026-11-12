@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from verity_vllm.program import compact as C
 from verity_vllm.query import module_body as mb
 from verity_vllm.query import program_view as pv
 from verity_vllm.query.module_body import (
@@ -259,7 +260,6 @@ def test_a_wide_record_resolves_by_bisection_to_the_linear_scans_ports():
 def test_stored_progressions_resolve_to_the_columns_of_their_runs():
     """v2 rows (node and parameter progressions, `compact.file_items_from_runs`) build the same columns as their per-leaf v1 runs:
     every Value in the same order, for strided weight reads of a wide record, gathers over producer Calls and overlapping runs."""
-    from verity_vllm.program import compact as C
     rng = random.Random(9)
     edges = sorted(rng.sample(range(1, 40_000), 199))
     wide = tuple(pv.Port(f"f{k}", lo, hi, hi - lo, 16) for k, (lo, hi) in enumerate(zip([0] + edges, edges + [40_000])))
@@ -297,7 +297,6 @@ def test_weight_read_progressions_resolve_to_the_columns_and_reads_of_their_runs
     builds the columns its per-leaf runs build and the reads the reader this replaced gives them, beside progressions that cross
     fields, sit in a gap between fields, are empty, have one run or none, step backwards or over parameters, on a single-port and
     an overlapping table."""
-    from verity_vllm.program import compact as C
     rng = random.Random(11)
     edges = sorted(rng.sample(range(1, 30_000), 149))
     gapped = []
@@ -374,7 +373,6 @@ def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_
     """The memo of a document's parameter operands builds the columns the Builder without it builds and the reads the reader this
     replaced gives, for operands that are one list again, a copy of it, equal runs that are other objects, more operands sharing a
     first run than the memo keeps, parameter runs then a Call's, and a Call reading a weight port before the repeat; under any cap."""
-    from verity_vllm.program import compact as C
     monkeypatch.setattr(pv, "RESOLVE_MEMO_RUNS", cap)
     monkeypatch.setattr(pv, "RESOLVE_MEMO_MIN", least)
     rng = random.Random(13)
@@ -422,3 +420,11 @@ def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_
         want: list[ValueRef] = []
         _resolve_reads_ref([C.runs_from_file_items(o) for o in ops], port_of, ins, ["call"] * len(rows), want)
         assert tuple(P.call(i).reads) == tuple(want), i
+
+
+def test_a_spec_the_registry_does_not_hold_has_no_ports_and_says_so():
+    with pytest.raises(KeyError, match="NoSuch_v1 is not a registered Definition"):
+        pv.definition_ports("NoSuch_v1{N=1}")
+    assert "NoSuch_v1{N=1}" not in pv._PORTS_CACHE
+    with pytest.raises(TypeError, match=r"Gemm_v1: statics \['N'\] are not in the spec"):
+        pv.definition_ports("Gemm_v1{K=4}")
