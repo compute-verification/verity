@@ -1392,6 +1392,7 @@ def two_stage_strata(cells: Iterable[Cell], merged: int | None) -> list[Cell]:
 
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
                      widths: bool = False,
+                     margin: float = 0.0,
                      boundary: float = 0.0, h: float = 0.0, stratify: bool = True, served: float | None = None,
                      union: bool = False, registration: float = 0.0, fanout: int = 1) -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
@@ -1410,14 +1411,20 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     interior's `commit_bytes` at `h` a byte, and
     `two_stage_price`'s proving.  A statement holds one sampled replay block's proof blocks of one Definition, or with
     `registration` (the replay blocks one interior registration spans) the registration's, padded to its public cap
-    where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  Its row:
-    `merged` (the widest size class in stratum 0, None where each width is a stratum), `kappa`, `k`, `q`,
+    where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  With
+    `margin` m > 0 the family also holds, at each threshold and κ, the design that samples (1 + m) k_t, at most n_t, of
+    every stratum but the one whose statements cost the most proving at those k: where one stratum is most of the
+    proving a margin on the rest costs little, and the design is again never worse.  Its row:
+    `merged` (the widest size class in stratum 0, None where each width is a stratum), `kappa`, `margin` (m where its
+    k carry it, else 0), `k`, `q`,
     `registration`, `registration_sample` (Q, the
     replay blocks a registration samples), `registration_cap` (K0), `shared` and `padding` (their shares of proving),
     `bound` (bits) and the Rankin `theta` it takes, `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
     `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the boundary
     alone is over the budget."""
     cells = list(cells)
+    if not margin >= 0:
+        raise ValueError(f"a margin is at least 0, not {margin}")
     if not cells or not budget >= boundary:
         return None
     classes = {_size_class(c.bits) for c in cells}
@@ -1429,7 +1436,7 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
         charge = two_stage_exfil(cells, {c.stratum: 1 for c in cells}, 1, 0.0, 0.5, served, union, fanout=fanout)
     interior = fsum(c.n * c.commit_bytes for c in cells) * h
     rows, seen = [], set()
-    for merged in thresholds:
+    for merged, m in [(t, x) for t in thresholds for x in ((0.0, margin) if margin > 0 else (0.0,))]:
         split = two_stage_strata(cells, merged)
         strata: dict[int, float] = {}
         widest: dict[int, float] = {}
@@ -1439,6 +1446,12 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
         for kappa in KAPPAS:
             k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / charge)))
                  if charge > 0 else 1 for t, n in strata.items()}
+            if m:
+                cost: dict[int, float] = {}
+                for c, r in zip(split, two_stage_statements(split, k)):
+                    cost[c.stratum] = cost.get(c.stratum, 0.0) + r["prove"]
+                most = max(cost, key=cost.__getitem__)
+                k = {t: v if t == most else min(ceil(strata[t]), ceil((1 + m) * v)) for t, v in k.items()}
             if (key := (merged, *sorted(k.items()))) in seen:
                 continue
             seen.add(key)
@@ -1451,7 +1464,7 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
             blocks, marginal, prove = (fsum(r[x] for r in st) for x in ("taken", "marginal", "prove"))
             per = replay + interior + prove
             sampled = q * replay_blocks
-            rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa,
+            rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa, "margin": m,
                          "k": k, "q": q, "registration": registration, "registration_sample": q * registration,
                          "registration_cap": registration_cap(q * registration, registration),
                          "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,

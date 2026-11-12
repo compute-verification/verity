@@ -820,6 +820,41 @@ def test_a_stratum_a_width_samples_a_narrower_block_at_its_own_rate():
         apart, replay_blocks, delta, **kw)
 
 
+def test_a_margin_samples_the_strata_that_cost_little_above_their_rule():
+    """One stratum is most of the proving and the rest cost little.  With `margin` the family also holds each κ's
+    design with every stratum but the costliest sampled the margin above its rule: the costliest keeps its k, the
+    rest take theirs times 1 + m, rounded up and at most their blocks, and the bound falls for little proving.  The
+    family only grows, so a margin is never worse; none is the planner as it was, and a uniform design has no other
+    stratum to raise."""
+    delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
+    cells = [Cell(1000, 16.0, prove=1e-5, commit_bytes=2.0), Cell(2000, 2100.0, prove=1e-2, commit_bytes=300.0),
+             Cell(40, 512.0, prove=1e-4, commit_bytes=64.0), Cell(40, 1024.0, prove=1e-4, commit_bytes=128.0),
+             Cell(40, 1536.0, prove=1e-4, commit_bytes=128.0), Cell(4, 4096.0, prove=1e-3, commit_bytes=512.0)]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served, "union": True, "widths": True}
+    rule = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert rule["margin"] == 0.0 and two_stage_design(cells, replay_blocks, delta, margin=0.0, **kw) == rule
+    row = two_stage_design(cells, replay_blocks, delta, margin=0.125, **kw)
+    assert row["margin"] == 0.125 and (row["merged"], row["kappa"]) == (rule["merged"], rule["kappa"]) == (None, 0.5)
+    strata = two_stage_strata(cells, None)
+    costly, = (c.stratum for c in strata if c.bits == 2100.0)
+    blocks = {c.stratum: c.n for c in strata}
+    assert row["k"] == {t: k if t == costly else min(blocks[t], ceil(1.125 * k)) for t, k in rule["k"].items()}
+    assert any(row["k"][t] > rule["k"][t] for t in blocks) and row["k"][costly] == rule["k"][costly]
+    assert row["bound"] == two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta, served, True)
+    assert row["total"] <= budget * (1 + 1e-12) and row["q"] < rule["q"]
+    assert row["prove"] / row["replay_sample"] < 1.001 * rule["prove"] / rule["replay_sample"]
+    assert row["bound"] < 0.9 * rule["bound"]
+    one = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(2000, 2100.0, prove=1e-2, commit_bytes=300.0),
+           Cell(4, 4096.0, prove=1e-3, commit_bytes=512.0)]
+    assert two_stage_design(one, replay_blocks, delta, margin=0.125, **kw) == two_stage_design(
+        one, replay_blocks, delta, **kw)
+    uniform = {**kw, "stratify": False}
+    assert two_stage_design(cells, replay_blocks, delta, margin=0.125, **uniform) == two_stage_design(
+        cells, replay_blocks, delta, **uniform)
+    with pytest.raises(ValueError, match="margin"):
+        two_stage_design(cells, replay_blocks, delta, margin=-0.125, **kw)
+
+
 def test_a_capped_design_charges_what_a_request_serves():
     """Capped at S served bits a request, a design charges a stratum's width at most S and a request its capped count,
     every T counted (at most N + S bits in the sets' form): its bound is the capped `two_stage_exfil` at its rates, at
