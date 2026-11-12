@@ -134,6 +134,28 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
     assert prof.checkpoint_for("ROLE_X", m) == made
 
 
+def test_a_role_two_pins_carry_is_refused_with_both_revisions(tmp_path) -> None:
+    """A role names one checkpoint.  Two pins under one role are refused, each named by its revision's first twelve characters,
+    where the first pin's snapshot would have been served; under a role of its own each resolves to its own snapshot."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+
+    for name in ("first", "second"):
+        (tmp_path / name).mkdir()
+    first = {"repo": "org/model", "role": "ROLE_X", "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "first")}
+    second = dict(first, revision="4e20de362430" + "1" * 28, local_path=str(tmp_path / "second"))
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [first, second]}))
+    with pytest.raises(SystemExit) as refused:
+        prof.checkpoint_for("ROLE_X", m)
+    assert str(refused.value) == ("case 'ROLE_X': 2 pins carry role 'ROLE_X' (9535bd9b1d1d, 4e20de362430); a role names one "
+                                  "checkpoint, so another revision of a model is pinned under a role of its own")
+    m.write_text(json.dumps({"checkpoints": [first, dict(second, role="ROLE_Y")]}))
+    assert prof.checkpoint_for("ROLE_X", m) == first
+    assert prof.checkpoint_for("ROLE_Y", m) == dict(second, role="ROLE_Y")
+
+
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
     """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
     is not the execution order the fold takes it to be."""
