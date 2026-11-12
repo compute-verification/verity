@@ -351,15 +351,19 @@ def test_a_prover_state_or_weights_key_other_than_the_served_ones_is_refused(ser
 
 
 @pytest.mark.slow
-def test_a_lanes_form_ks_drawn_units_are_staged_as_their_lanes_and_combine_and_credit_accepts_them(lanes_served,
-                                                                                                   monkeypatch, capsys):
+@pytest.mark.skipif(not os.environ.get("VERITY_VLLM_H1_LANES_E2E"),
+                    reason="VERITY_VLLM_H1_LANES_E2E=1: 7 to 10 minutes on a CPU, declaring the window Program over v1's "
+                           "real tile unit at K 384 and running the lanes' word references in Python")
+def test_a_lanes_form_ks_sampled_proof_blocks_are_staged_as_their_lanes_and_combine_and_credit_accepts_them(
+        lanes_served, monkeypatch, capsys):
     """Each sampled proof block at a lanes-form K is staged as `leaf_lanes.statements` on the committed lane and combine files,
     its partials one produced record under the window's sample, its registered files credit's own; credit's lanes form
     accepts the statements and refuses a leaf without its combine, and a session that reports another opening of a
     partials row (P-shared). A window that registers no receipts is refused before anything is staged. Slow (the window
     Program over v1's real tile unit at K 384 takes about a minute to declare, and the lanes' word references run in
     Python): it is the one test that takes a served window through the lanes form's staging and credit's verification of
-    it."""
+    it. It runs only where ``VERITY_VLLM_H1_LANES_E2E=1`` asks, as the nightly's cold check does by name: no cheaper test
+    of ours holds what staging writes for a lanes-form K's sampled proof blocks to what credit's lanes form accepts."""
     DR, d, tmp = lanes_served
     win = DR.window_of(d, 0)
     drawn = sorted(u for us in DR.drawn_calls(win, _PeriodAuditor.K).values() for u in us)
