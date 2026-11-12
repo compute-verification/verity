@@ -471,7 +471,7 @@ def test_an_encoded_store_is_held_to_the_generators_manifest(tmp_path: Path, mon
     and with none. Refused: another seed's manifest, the generator's manifest with no seed (it names nothing) and a
     `setup.json` with no `program`. The name under `program` in a manifest with no `model`, the pinned manifest's form,
     is held the same way: the store's own opens, another's is refused."""
-    from p2_v1 import store as ST
+    from p2_store import store as ST
 
     monkeypatch.syspath_prepend(str(ROOT))
     gen = importlib.import_module(ST.GENERATOR)
