@@ -598,8 +598,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     connection rows kept as the publisher process keeps them when the schedule has lengths rows (its key then a
     height taller, for their heads), `deployment.json`, and `client.json` with every cell's arrival 1 ms into the
     bucket it was sent in, each response read id-form at P = `id_payload` when given; `servers` gets the server's side
-    of each connection, in connect order. Request j connects before the run's first tick, or just before tick
-    `arrive[j]` (later requests no earlier), and tick t runs `late[t]` seconds late. Returns the network certifier."""
+    of each connection, in connect order. Returns the network certifier."""
     tau = params.bucket_ms / 1000
     height = 5 if load_heads or params.lengths else 4
     if process:
@@ -637,6 +636,8 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         clients, tasks = [], []
 
         async def connect_due(t: int) -> None:
+            # request j connects before the run's first tick, or just before tick `arrive[j]`: a later request no
+            # earlier, so that the clients are in the requests' order
             for j, request in enumerate(requests):
                 if (arrive or {}).get(j, 0) == t:
                     reader = asyncio.StreamReader()
@@ -653,6 +654,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
                 if t:
                     await connect_due(t)
                 await warden.until(settled)
+                # tick t runs `late[t]` seconds past its time
                 clock.advance(t * tau + (late or {}).get(t, 0))
                 await warden.until(lambda w, t=t: w.ticks > t)
             await running

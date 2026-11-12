@@ -566,7 +566,7 @@ class Warden:
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
                  watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None,
-                 lengths: Callable[[int, tuple[tuple[Released, ...], ...] | None], None] | None = None) -> None:
+                 lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None) -> None:
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
                              f"time hands it before its time, not {paced!r} s after its boundary")
@@ -597,7 +597,9 @@ class Warden:
         self.withhold = withhold or (lambda record, grid: self.withheld.append(record))
         self.release = release
         self.lengths: list[tuple[int, tuple[tuple[Released, ...], ...] | None]] = []
-        self.hand_lengths = lengths or (lambda window, strides: self.lengths.append((window, strides)))
+        # `lengths` as it is called: under form 2 also with no strides, for a window that is not handed
+        self.hand_lengths: Callable[[int, tuple[tuple[Released, ...], ...] | None], None] = (
+            lengths or (lambda window, strides: self.lengths.append((window, strides))))
         self._released: dict[int, list[list[_Connection]]] = {}  # each open window's releases, by slot stride
         self._whole: dict[int, bool] = {}  # whether a closed window's three records were published complete
         self._ended = 0  # under form 2, the windows whose lengths rows are ended: 0 … _ended − 1
