@@ -177,8 +177,12 @@ def test_a_setting_the_serve_did_not_turn_on_is_off(tmp_path: Path):
     assert "  speculative decoding: off (no --speculative-config in the launch line); compiled: off (" in txt
     assert "  context limit: 4,096 tokens, BELOW the model's own 131,072 (config.json max_position_embeddings)\n" in txt
     assert "  circuit compiled ahead of serving: no: nothing in this job compiles the settings' circuit" in txt
-    assert "  NOT at the same settings: record and compiled differ in prefix caching, torch.compile and CUDA graphs" in txt
+    # a cost between arms at different settings is printed, and no verdict is given on it
+    assert "; under 1%: not said, the arms are not at the same settings\n" in txt
+    assert ("  NOT at the same settings: record and compiled differ in prefix caching, torch.compile and CUDA graphs, so "
+            "the figure is not our changes' cost\n") in txt
     assert r["cost"]["settings_differ"] == ["prefix caching", "torch.compile and CUDA graphs"]
+    assert r["cost"]["verdict"] == P.UNLIKE
 
 
 def test_speculative_decoding_and_the_models_own_limit_are_read_from_the_launch_line(tmp_path: Path):

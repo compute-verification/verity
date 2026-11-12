@@ -40,7 +40,7 @@ differing position.
   configuration in the step trace's header, the engine's counters): prefix caching, speculative decoding, the context
   limit beside the model's own (the checkpoint's `config.json`), the KV cache's type, compiled or eager, and whether
   the settings' circuit was compiled ahead of serving. A setting the serve did not turn on is `off`; `DIFFERS` marks
-  one that stock and ours do not share.
+  one that stock and ours do not share, and the cost line then gives its figure without a verdict.
 - **tokens**: the requests of the replayed window, their served tokens, the tokens the replay kept for them and how
   many differ; the engine steps and how many have other rows than the served schedule; how many of the window's
   requests began from a prefix-cache hit and the longest hit; the mode served and replayed; and how the window was

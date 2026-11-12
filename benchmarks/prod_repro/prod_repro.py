@@ -58,6 +58,8 @@ NO_ADVICE = ("nothing in this job computes it: the advice code (verity_vllm.pipe
              "bits by class")
 NO_CIRCUIT = "no: nothing in this job compiles the settings' circuit"
 ON, OFF, UNCONFIRMED = "on", "off", "not confirmed"
+#: the cost's verdict where stock and ours did not serve at the same settings: the figure is then not our changes' cost
+UNLIKE = "the arms are not at the same settings"
 
 
 def default_arms() -> tuple[str, str, str]:
@@ -265,6 +267,8 @@ def report(out: Path, stock: str, ours: str, again: str | None, load: str, rep: 
     line = cost(out, by, stock, ours, again, load, target)
     if len(sets) == 2 and (differ := settings_differ(sets[stock], sets[ours])):
         line["settings_differ"] = differ
+        if line["measured"]:
+            line["verdict"] = UNLIKE
     return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
             "run": meta.get("run_id"), "commit": meta.get("commit"),
             "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by)},
@@ -361,13 +365,14 @@ def text(r: dict) -> str:
         reps = f"{how['reps']} paired reps" if bench else f"{how['reps'][0]} and {how['reps'][1]} reps"
         lines += [
             f"cost: {ours} over {stock} {_pct(c['value'])} of stock's serving time{_interval(c)}; under "
-            f"{c['target']:g}%: " + {"meets": "yes", "misses": "no"}.get(c["verdict"], "cannot tell"),
+            f"{c['target']:g}%: " + {"meets": "yes", "misses": "no", UNLIKE: f"not said, {UNLIKE}"}.get(c["verdict"], "cannot tell"),
             f"  95% interval over {reps}, {at}: {how['by']}",
             "  noise floor: " + (f"{a['again']} over {stock} {_pct(noise['value'])}{_interval(noise)}"
                                  if noise and noise["value"] is not None else
                                  "not measured (stock was not served a second time)")]
     if c.get("settings_differ"):
-        lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}")
+        lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}, so the "
+                     "figure is not our changes' cost")
     lines.append(f"advice: not measured: {r['advice']['why']}")
     done = sum(bool(r[k]["measured"]) for k in ("tokens", "cost", "advice"))
     lines.append(f"prod_repro: {done} of 3 lines measured" + ("; FAILED: the replay differs from what was served" if failed(r) else ""))
