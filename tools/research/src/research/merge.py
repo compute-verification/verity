@@ -1722,7 +1722,9 @@ def _own_tree(repo: Path, commit: str) -> Path | None:
     volume, where each worktree add and remove takes minutes.  None when ``repo`` can't make one."""
     import shutil
 
-    if root := os.environ.get("TRAIN_TREES") or None:
+    from .settings import train_trees
+
+    if root := train_trees():
         os.makedirs(root, exist_ok=True)
     tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
     if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
