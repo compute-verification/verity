@@ -632,8 +632,8 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     """The verdict of the check that gates (``rec``) while a shard of it runs: pending until one of its runs says it failed
     (one running names its failures so far, `landing.failing`; one ended exited 1), then fail with each step it is judged on
     (`_gate`) that such a run failed, not by a signal, or a suite of which it failed a named test, uncovered by an allowance
-    at its base, read as once every shard ended (`failing`), from their dirs fetched afresh (`landing.evidence`: the Landing's
-    own cache holds what the end's reading reads).  A suite failed beyond its tests alone, as a stop marks each suite it
+    at its base, read as once every shard ended (`failing`), from their dirs as this tick read them (`Landing.evidence`,
+    `landing.Reads`: the Landing's own cache holds what the end's reading reads).  A suite failed beyond its tests alone, as a stop marks each suite it
     cuts short, waits for the end.  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is
     inherited as pending until the check ends.  ``rec`` holds it (``early``: its failures as `_keep` keeps a verdict's, with
     ``at``, when the first was written: a failed step's end, a failed suite's log's last write), which the check above reads
@@ -682,7 +682,8 @@ def _passed_early(driver: Landing, rec: dict, states: dict) -> Verdict:
     (`shard_steps`, `shard_passed`: a failure an allowance at its base covers counting as passed), whatever a step off the
     gate (policy.toml's `off_gate`, drive.toml's `warn_steps`) still does there; pending while a shard's plan isn't known, a
     shard's records can't be fetched, or one of those steps hasn't ended in a shard that holds it.  The records are each
-    shard's dirs fetched afresh (`landing.evidence`), never the Landing's cache, which the end's reading and `failures` read.
+    shard's dirs as this tick read them (`Landing.evidence`, `landing.Reads`), never the Landing's cache, which the end's
+    reading and `failures` read.
     ``rec`` says its runs still run (``still_running``) until a later `judge` finds each ended (`_settle`): `failures`
     reads nothing of them until then."""
     groups = rec.get("groups") or [rec["ids"]]

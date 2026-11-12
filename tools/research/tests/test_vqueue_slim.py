@@ -1055,6 +1055,51 @@ def test_a_step_the_check_judges_failed_while_a_shard_runs_circuit_check_fails_i
         assert "verdict" not in rec and "still_running" not in rec and rec["early"]["state"] == FAIL
 
 
+@pytest.mark.parametrize("case", ["pending", "early pass", "early fail", "pass", "fail"])
+def test_the_check_that_gates_is_judged_the_same_on_a_ticks_reads_as_on_reads_afresh(world, monkeypatch, tmp_path, case):
+    """Judged on a tick's reads (`Landing.reading`: each run read once, at once, every later state and evidence answered from
+    that read), the check that gates reads as it does with each state and evidence read afresh: the same verdict and the
+    same record, pending, passed or failed early while a shard runs, passed or failed once each ended; and each run's
+    `EVIDENCE` read once."""
+    import copy
+
+    from research import landing
+    from research.landing import EVIDENCE
+
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    running = {"pending": ((1, "lean-audit"), (3, "circuit-check")), "pass": (), "fail": ()}.get(case, ((3, "circuit-check"),))
+    _shards_now(h, tmp_path, running=running, failed=((2, "pytest"),) if "fail" in case else ())
+    if "fail" in case:
+        (h.evidence[1] / "suites.json").write_text(json.dumps([PKG]))
+    dirs = {d.name: d for d in h.evidence}
+
+    def row(rid: str) -> dict:
+        st = h.run_state[rid]
+        return {"state": st[0], "rc": st[1], "ended_utc": st[2], "dir": str(dirs[rid]), "remote": {"machine": "m1"}}
+
+    def afresh_states(repo, ids):
+        return {r: (row(r)["state"], row(r)["rc"], None, landing.failing(dirs[r]) if row(r)["state"] in ACTIVE else None, "m1")
+                for r in ids}
+
+    def judged(driver) -> tuple[Verdict, dict]:
+        got = copy.deepcopy(rec)
+        driver._ev = {}
+        return judge(driver, got), got
+
+    h.d.states, h.d.evidence = afresh_states, lambda repo, ids: [dirs[r] for r in ids if r in dirs]
+    afresh = judged(h.d)
+    asked = []
+    h.d.reads = landing.Reads(read=lambda rid, names: asked.append((rid, names)) or (dirs[rid], row(rid)), node=lambda r: "m1")
+    h.d.states, h.d.evidence = h.d.reads.states, h.d.reads.evidence
+    with h.d.reading(rec["ids"]):
+        ticked = judged(h.d)
+    assert ticked == afresh
+    assert {"pending": PENDING, "early pass": PASS, "early fail": FAIL, "pass": PASS, "fail": FAIL}[case] == afresh[0].state
+    assert sorted(r for r, names in asked if names == EVIDENCE) == sorted(rec["ids"])
+    assert len(asked) == len(set(asked)), "no run read twice for the same files"
+
+
 @pytest.mark.parametrize("third", ["running", "ended"])
 def test_a_shard_refused_at_its_prebuild_never_planned_its_steps_and_holds_no_pass(world, monkeypatch, tmp_path, third):
     """Shard 2 passed its preflights, then its C++ prebuild failed: check.py records a `prebuild` step and stops before it

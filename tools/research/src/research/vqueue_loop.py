@@ -2425,35 +2425,37 @@ class Loop:
             return 1 + height(bases[sha], (*seen, sha)) if bases.get(sha) in bases and sha not in seen else 0
 
         steps.lap("ready")
-        below = self._below(past, whole, n, main, origin, wrote)
-        steps.lap("below")
-        lent = _lent(judged, below[0], main)
-        w._theirs, w._listed, self.stale = {}, {}, set()
-        try:
-            for sha in sorted(mine, key=lambda s: (height(s), s)):      # each after its base, whose record it reads as judged now
-                p, b = whole if sha in older else past, builds[sha]
-                base, prs, heads = b.get("base") or "", tuple(b.get("members") or ()), tuple(b.get("heads") or ())
-                waits = self.records is not None and bool(b.get("records_first")) and not p.tries(sha)
-                if waits:
-                    j = Judged(Verdict(PENDING), note="its check waits for its records run", listed=False)
-                else:
-                    j, kept = self._read(p, sha, base)
-                    # where the check gates, a candidate on `main` is read by its check too: graph2's verdict decides nothing
-                    if self.slim is not None and (self.gate == CHECK_GATE or not w._ancestor(sha, main)):
-                        again = None if kept is None or kept.get("check_ended") else partial(self._read, p, sha, base,
-                                                                                              fresh=True, ended=True)
-                        j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
-                                         below if base == main else ((judged[base].record if base in judged else None)
-                                                                     or p.slim(base)[1], p.slim_started(base)[1]), lent,
-                                         on_main=below[0], again=again)
-                judged[sha] = j
-                cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
-                                       enqueued=p.enqueued(sha),
-                                       records=self._records_run(p, n, main, origin, sha, b, wrote, regen),
-                                       repairs=b.get("repairs") if isinstance(b.get("repairs"), str) else None,
-                                       waits=waits, held=p.held(sha) if waits else None))
-        finally:
-            w._theirs = w._listed = None
+        with self._reading(past, whole, main, mine, older):
+            steps.lap("reads")
+            below = self._below(past, whole, n, main, origin, wrote)
+            steps.lap("below")
+            lent = _lent(judged, below[0], main)
+            w._theirs, w._listed, self.stale = {}, {}, set()
+            try:
+                for sha in sorted(mine, key=lambda s: (height(s), s)):  # each after its base, whose record it reads as judged now
+                    p, b = whole if sha in older else past, builds[sha]
+                    base, prs, heads = b.get("base") or "", tuple(b.get("members") or ()), tuple(b.get("heads") or ())
+                    waits = self.records is not None and bool(b.get("records_first")) and not p.tries(sha)
+                    if waits:
+                        j = Judged(Verdict(PENDING), note="its check waits for its records run", listed=False)
+                    else:
+                        j, kept = self._read(p, sha, base)
+                        # where the check gates, a candidate on `main` is read by its check too: graph2's verdict decides nothing
+                        if self.slim is not None and (self.gate == CHECK_GATE or not w._ancestor(sha, main)):
+                            again = None if kept is None or kept.get("check_ended") else partial(self._read, p, sha, base,
+                                                                                                  fresh=True, ended=True)
+                            j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
+                                             below if base == main else ((judged[base].record if base in judged else None)
+                                                                         or p.slim(base)[1], p.slim_started(base)[1]), lent,
+                                             on_main=below[0], again=again)
+                    judged[sha] = j
+                    cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
+                                           enqueued=p.enqueued(sha),
+                                           records=self._records_run(p, n, main, origin, sha, b, wrote, regen),
+                                           repairs=b.get("repairs") if isinstance(b.get("repairs"), str) else None,
+                                           waits=waits, held=p.held(sha) if waits else None))
+            finally:
+                w._theirs = w._listed = None
         steps.lap("judge")
         chain = [c.sha for c in cands if chained(c.sha)]
         members = {m for c in cands if c.sha in chain for m in c.members}
@@ -2476,6 +2478,26 @@ class Loop:
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
                     riding=riding)
+
+    def _reading(self, past: Past, whole: Past, main: str, mine: set[str], older: set[str]):
+        """The tick's reads of the runs its judging reads (`Landing.reading`): every run of a record not yet decided (or a
+        pass kept while its runs still run) of the run beside ``main``'s check, a candidate's or its records run's, read at
+        once before the first is judged.  Nothing with --dry-run, which judges none."""
+        if self.dry_run or (self.slim is None and self.records is None):
+            return contextlib.nullcontext()
+        recs = [past.slim(main)[1], whole.slim(main)[1]] if self.slim is not None else []
+        for sha in mine:
+            p = whole if sha in older else past
+            recs += [*([p.slim(sha)[1]] if self.slim is not None else ()),
+                     *([p.regenerated(sha)[1]] if self.records is not None else ())]
+        ids = [i for r in recs if isinstance(r, dict) and ("verdict" not in r or r.get("still_running"))
+               for i in r.get("ids") or () if isinstance(i, str)]
+        try:
+            reading = getattr(self.world.slim_driver(), "reading", None) if ids else None
+        except QueueError as e:                             # the judging that needs the driver raises it
+            self.world.log(f"research queue vqueue: the tick's runs aren't read at once, each judge reads its own: {e}")
+            reading = None
+        return reading(ids) if callable(reading) else contextlib.nullcontext()
 
     def _read(self, p: Past, sha: str, base: str, fresh: bool = False, ended: bool | None = None
               ) -> tuple[Judged, dict | None]:
