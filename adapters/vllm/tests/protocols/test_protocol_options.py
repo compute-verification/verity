@@ -10,6 +10,8 @@ import json
 import subprocess
 import sys
 import types
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
@@ -91,8 +93,17 @@ class Model:
         return iter(self.layers)
 
 
+class FakeAdapter(types.ModuleType):
+    """A stand-in adapter module, with what `verity_vllm.protocols` reads from every adapter."""
+
+    NAME: str
+    schemes: Callable[[], tuple[str, ...]]
+    refusals: Callable[[str, Any], tuple[str, ...]]
+    install: Callable[[str, Any], Any]
+
+
 def _fake_adapter(monkeypatch, name, install, *, refuse=(), schemes=("s1",)):
-    mod = types.ModuleType(f"verity_vllm.protocols.fake_{name.replace('-', '_')}")
+    mod = FakeAdapter(f"verity_vllm.protocols.fake_{name.replace('-', '_')}")
     mod.NAME = name
     mod.schemes = lambda: schemes
     mod.refusals = lambda scheme, ctx: tuple(refuse)
@@ -269,7 +280,8 @@ def test_the_commit_guard_exits_3_naming_every_reason(monkeypatch, capsys, kw, m
 def test_a_commit_with_pous_records_its_options_and_its_verdict_stands(monkeypatch, tmp_path):
     log: list[str] = []
     _fake_adapter(monkeypatch, "pous", _pous(log), schemes=("band-chain/d12/v1",))
-    p, model, versions = TargetProfile(protocols=ALL[1:]), Model(), {}
+    p, model = TargetProfile(protocols=ALL[1:]), Model()
+    versions: dict[str, Any] = {}
     assert PO.commit_guard(p) is p
     comp = PO.at_commit(p, model, versions)
     assert versions["protocols"]["entries"] == list(ALL[1:]) and "apply" in vars(model.layers[0].quant_method)
@@ -423,13 +435,14 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
     assert "REFUSE (fail-closed)" in capsys.readouterr().out
     _fake_adapter(monkeypatch, "pous", _pous([]))
     assert ROW.run_row(SimpleNamespace(**{**vars(o), "protocols": "pous:s1,sampled-proofs:rows-sha512"}), "build") == 0
-    assert seen["protocols"] == ("pous:s1", "sampled-proofs:rows-sha512")
+    enabled = ("pous:s1", "sampled-proofs:rows-sha512")
+    assert seen["protocols"] == enabled
     tp = SimpleNamespace(**{**vars(o), "row": row.replace("__tp1__", "__tp2__"), "protocols": "pous:s1,sampled-proofs:rows-sha512"})
     assert ROW.run_row(tp, "build") == 3
     wl = tmp_path / "wl.json"
     wl.write_text(json.dumps({"engine": {"target": {"flash_attn_version": 2}}}))
     assert R.declared_target(str(wl)) == '{"flash_attn_version": 2}'
-    assert json.loads(R.declared_target(str(wl), seen["protocols"])) == {"flash_attn_version": 2, "protocols": list(seen["protocols"])}
+    assert json.loads(R.declared_target(str(wl), enabled)) == {"flash_attn_version": 2, "protocols": list(enabled)}
 
 
 def test_every_protocol_has_an_adapter_module_name():
@@ -519,8 +532,12 @@ def test_every_option_commits_to_the_weights_before_any_installs(monkeypatch):
         def install(scheme, target):
             log.append(f"install {name} seeing {sorted(target.weight_commitments)}")
             return PO.Option(name=f"{name}:{scheme}", hooks=target.hooks(f"{name}:{scheme}"))
-        mod = _fake_adapter(monkeypatch, name, install)
-        mod.commit_weights = lambda scheme, target: log.append(f"commit {name}") or {"root": f"{name}-w"}
+
+        def commit_weights(scheme, target):
+            log.append(f"commit {name}")
+            return {"root": f"{name}-w"}
+
+        _fake_adapter(monkeypatch, name, install).commit_weights = commit_weights
 
     adapter("pouw")
     adapter("pous")
