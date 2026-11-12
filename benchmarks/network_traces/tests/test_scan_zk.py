@@ -402,6 +402,70 @@ def test_the_registration_lists_each_link_windows_certified_rows_as_a_registered
     assert sz.certified_rows([{"warden": {}}]) == {} and sz.registered_of({}) == []
 
 
+def _reported(files: dict[str, dict]) -> dict[str, dict]:
+    """The verdicts of record Lean gives on members it holds, each reporting its registered reads under the value and
+    root its ``--registered`` file names (``{port: {"value", "root"}}``)."""
+    return {f"lean-verify/{name}": {"of_record": True, "accepted": True, "registered": {
+        p: {"value": e["value"], "root": e["root"]} for p, e in f["ports"].items()}} for name, f in files.items()}
+
+
+def test_a_registered_file_naming_another_root_than_the_records_is_refused_by_the_record_check(tmp_path):
+    """The record check on a scan's registration (`audit.audit_record`'s ``registered``, on the reads the verdicts
+    report for the registration's values, `audit.session_registered`). Lean opens a member's registered reads against
+    the root its ``--registered`` file names (`registered_file`) and reports each under the file's value and root; the
+    registration lists each certified row registration under that value at the root the verifier read under the
+    deployment's key (`certified_rows`). On the honest round's files the reported reads are the registration's, each
+    value at its root, and the check finds nothing. A file naming another root for a member's network certifier port
+    (a statement committing other rows, which a session holds against that root) is refused naming the value: the
+    egress member's ``o1``, and one ingress member's ``row`` while the others read the registration's, the value then
+    reported under two roots. A registration listing no certified rows holds none of it: the check has nothing to
+    compare such a read with."""
+    run = published(tmp_path / "run", sz.TEST, windows=1)
+    h = sz.host(tmp_path / "host", run, setup=sz.TEST)
+    honest = h.rounds["honest"]
+    certified = sz.certified_rows([{"warden": m.warden} for m in honest])
+    (ingress, egress) = (next(d["value"] for m in honest for d in m.warden.values() if d["direction"] == x)
+                         for x in ("ingress", "egress"))
+    assert sorted(certified) == sorted((ingress, egress))
+    program = sz.PA.mixed_population_program([(FIRST, 4)])
+    query = sz.PA.template_instances_query([FIRST])
+    law = sz.DR.parse_design("stratified:4")
+
+    def record(registered: list[dict]) -> dict:
+        return R.record(program, query, law, sz.S.SCHEME, [], {"kind": "stand-in"}, leaf_layer="ee" * 64,
+                        registered=registered)
+
+    def check(files: dict[str, dict], rec: dict) -> dict | None:
+        verdicts = _reported(files)
+        draw = {**sz.DR.derive(program, query, law), "population": 4, "units": [0, 1, 2, 3]}
+        got = sz.AU.audit_record(rec, R.receipt(rec, "a test"), draw, rec["law"], [0, 1, 2, 3], 4, {}, verdicts,
+                                 2.0 ** -20, session_registered=sz.AU.session_registered(verdicts, rec))
+        assert not got["accepted"] or "registered" not in got["checks"]
+        return got["checks"].get("registered")
+
+    rec = record(sz.registered_of(certified))
+    files = {m.name: sz.registered_file(m) for m in honest}
+    assert sz.AU.session_registered(_reported(files), rec) == {v: e["root"] for v, e in certified.items()}
+    assert check(files, rec) is None
+
+    def tampered(member, port: str) -> dict[str, dict]:
+        f = files[member.name]
+        assert f["ports"][port]["value"] in certified
+        return {**files, member.name: {**f, "ports": {**f["ports"], port: {**f["ports"][port], "root": "dd" * 64}}}}
+
+    def refusal(value: str) -> dict:
+        return {"ok": False, "codes": ["registered"],
+                "detail": {"registered": sorted(certified), "opened": sorted(certified), "wrong": [value]}}
+
+    eg = next(m for m in honest if m.template == "egress")
+    assert check(tampered(eg, "o1"), rec) == refusal(egress)
+    ing = [m for m in honest if m.template != "egress"]
+    assert len(ing) > 1 and check(tampered(ing[0], "row"), rec) == refusal(ingress)
+    assert sz.AU.session_registered(_reported(tampered(ing[0], "row")), rec)[ingress] is None
+    bare = record([])
+    assert bare["format"] == R.FORMAT and all(check(f, bare) is None for f in (files, tampered(eg, "o1")))
+
+
 def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
     passes it, and a Lean verdict's ``registered`` reports its roots) holds each network certifier port at the root and

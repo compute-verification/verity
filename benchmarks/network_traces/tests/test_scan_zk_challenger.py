@@ -44,7 +44,11 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     registration is a v2 record listing the link-window's two certified row registrations as registered values
     (`scan_zk.certified_rows`), which the stream is handed as its certified entries, so both verifiers' R7 holds the
     record's entries to them, and each member's registered read of the network certifier's rows is the record's entry
-    of its value. The round names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each
+    of its value. On those files' reads, reported as Lean reports a held member's, both verifiers' record check
+    (`verifier.audit_record`) accepts the round's sample; with the egress member's file naming another root for the
+    network certifier's rows, both refuse it at ``registered``, naming the value. The evidence for another window,
+    replayed on a stream handed the same certified entries, is refused at its select's coins, not at its
+    registration. The round names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each
     read, tied, so R8 lets them through and both verifiers' registration verdict publishes them
     (``rests_on_period_check``): this round's acceptance rests on a period check (`NetworkCheck.Period`'s `wired`),
     which refuses its stand-in block (`period_case.UNWIRED`).
@@ -126,3 +130,27 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
         for p, doc in m["warden"].items():
             assert {x: ports[p][x] for x in ("root", "leaves", "words", "domain")} == certified[doc["value"]]
             assert ports[p]["value"] == doc["value"]
+
+    files = {m["name"]: json.loads(m["registered_file"].read_text()) for m in members}
+    lean_draw = json.loads((out / "draw.json").read_text())
+    proved = sz.DR.proved(lean_draw)
+
+    def record(files: dict[str, dict]) -> dict:
+        verdicts = {f"lean-verify/{name}": {"of_record": True, "accepted": True, "registered": {
+            p: {"value": e["value"], "root": e["root"]} for p, e in f["ports"].items()}} for name, f in files.items()}
+        got = M.V.audit_record(rec, receipt, lean_draw, rec["law"], proved, len(proved), {}, verdicts, av.delta)
+        assert got["verifiers"]["agree"], got["checks"].get("verifiers")
+        return got
+
+    held = record(files)
+    assert held["accepted"] and held["verifiers"]["lean"] == {"accepted": True, "failed": []}, held["checks"]
+    eg = next(m for m in members if "o1" in m["warden"])
+    mine = files[eg["name"]]
+    refused = record({**files, eg["name"]: {**mine, "ports": {**mine["ports"],
+                                                               "o1": {**mine["ports"]["o1"], "root": "dd" * 64}}}})
+    assert not refused["accepted"]
+    assert refused["verifiers"]["lean"] == refused["verifiers"]["python"] == {"accepted": False,
+                                                                              "failed": ["registered"]}
+    assert refused["checks"]["registered"]["detail"] == {
+        "registered": sorted(certified), "opened": sorted(certified), "wrong": [eg["warden"]["o1"]["value"]]}
+    assert res["coin_negatives"] == {"coins-for-another-window": True}, json.loads((out / "coins.json").read_text())
