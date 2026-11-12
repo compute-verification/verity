@@ -91385,3 +91385,63 @@ What that costs [derived]: a phase committed under t roots is sampled t times, s
 - `2fed`'s cause: the lock's shape rule refuses a conjunct of outcome `none` that takes a hypothesis which is not a premise, and the refusal took `t ∈ fixedTexts K` [run: its log]. Mended at `e98eb18967d2` on `cursor/proofs-redraw-rate-5a71`: the refusal is three conjuncts with no hypothesis, one a fixed-count form, five shape entries in all [run: the core-only model elaborates, exit 0]. Its records run is `r20261112-142012-0039` on vy-nebius-cpu-3, running at 14:50Z [run].
 - `eafd` (the bridge file `security/Proofs/Flock/Bridge/Rate.lean`, commit `9f45ade8d5a5`): the file itself "lean exit 0 in 45 s" and its axiom probe clean for its 6 theorems; the run is exit 1 only on `--siblings`, whose stub fails on a clash already on `main`: "Proofs.Pouw.Bulk and Proofs.Flock.Claims.ZkColsSession both declare 'main'" [run]. Neither file is mine; it will stop every `--siblings` try in `security/Proofs` until one of the two is renamed [derived].
 - Next: `0039`'s verdict, the regenerated lock committed if it passes, the quick suites, then the three corollaries and the docstring sentences.
+
+## CROSSCLOSE, Thu 12 Nov 14:52Z: #9237's close is `8cf9f9bc82d7` (its try is clean, its suites run); #9176's is `1e9547d76fd1` (its try runs); the carried heads change no close; and `main`'s #9181 meets the crossed line with no stop in two of network's files, which breaks four suites of the merged tree
+
+- **#9237 at `9d4aec0111fb`: `8cf9f9bc82d740e6d773924f369772d3f49e2367`** on `cursor/proofs-landing-closes-99d1`. [run] Its try, `r20261112-141854-049a`, is done, exit 0: eleven Lean tries exit 0 and five selections pass. Yes on the try; its suites are below and I say their verdict in one line.
+- **#9176 at `99f2f3ba2cf1`: `1e9547d76fd178050cf56d4a2a06fa657d14216a`**, one sha that holds both files. [run] Its try, `r20261112-144234-a785`, is running; not a yes until it ends.
+- **#9091: still not yet.** [run] `r20261112-130251-279b` runs: 60 of 70 suites passed, none failed (14:50Z).
+
+### The closes, all on `cursor/proofs-landing-closes-99d1`, tip `1e9547d76fd1`
+
+All cut on the closed merge `21ff0aadf96c` (local: lean's trial `44d0bf03d49e` + `main` `3d8530f5268a`). [run] Lean's tip is still `f3837f57d113`, so `git diff f3837f57d113 origin/cursor/lean-remote-merge-landing-fc8d` is empty for every file. [run] `main` is `06728b3b7c66` now: the same 31 stops against lean's tip, no file below changed on it since `3d8530f5268a`, and it merges into the closed merge with no stop.
+
+| close | for | files, whole | stops | try |
+|---|---|---|---|---|
+| `8cf9f9bc82d7` | #9237 `9d4aec0111fb` (holds #9199's and #9081's heads) | spot's `lean/tests/test_difftest.py` (7,602 lines), `benchmarks/one_stage/a5.py`, spot's verifier `README.md` | one, the import from `spot.device.coins`: the crossed line's `law_problem` and `ran_out as draw_ran_out`, #9237's `FAMILY_ROOT`, all kept; the other two files have none | `049a` done, exit 0, on `b522c247523d`: tries of `Spot/ChallengerCoins`, `Pieces`, `RecordAcross`, `Run`, `MembersRefusal`, `ZkMain`, `DifftestMain` and `security`'s `Properties/Challenger`, `Proofs/Properties/Challenger`, `Challenger/Coins`, `Challenger/Drawn`, no axiom beyond the three; the difftest tests the head touches 5 passed; `test_challenger_difftest.py` + `test_members_refusal.py` 28; `test_challenger_coins.py` + `test_member_trees.py` 47; one_stage's five files 39; `verifier_cost`'s `test_mains.py` 9. Suites: `r20261112-141934-40e3` running, 27 passed, 4 failed, all four the meet below |
+| `1e9547d76fd1` | #9176 `99f2f3ba2cf1` (holds #9116's old head `3a580254f8bf`) | spot's `test_difftest.py` (7,909 lines), spot's verifier `README.md` | one, the last block of `PIECE_RUNS`, the same as #9116's: the crossed line's `POP_ORDER`, `PUBLIC_UNITS`, `LINK_POINTS` and the head's `REPLAY_RETURNS`, seventeen entries, each once. The `README.md` has no stop against the closed file; against lean's tip it is the stop `5a04c87c6ee8` closes, with #9176's eight lines | `a785` running on `17c1504e8e2a`: tries of `Spot/Pieces`, `Run`, `SecondStage`, `SecondStageExamples`, three selections, suites |
+| `c364515fd276` | #9199 `7a528d6b1c01`, the head it keeps [relayed: your 14:48Z] | `a5.py`, spot's verifier `README.md` | none | `r20261112-141822-377e` on `d999245c96f7`: three tries exit 0, `test_a5_wiring.py` + `test_member_trees.py` 9 passed, `test_members_refusal.py` 2, spot's `test_member_trees.py` 26; suites running, 10 passed, 3 failed, all the meet below |
+| `ac843f35dc13` | #9116, old head and `d7ac2f984a43` | `test_difftest.py` (byte for byte `494bd85fb553`'s), spot's verifier `README.md` | one, as `494bd85fb553` | `r20261112-142531-f794` on `1802e31b87ea`: four tries exit 0, difftest selection 8 passed, `test_two_stage.py` 98; suites running |
+| `7d09ccd7ccc2` | #9075 `cbe0bcdd160d` | `test_difftest.py` (byte for byte `1d9bf7eaa19e`'s), the `README.md` (the same file as with #9116 in) | one, as `1d9bf7eaa19e` | `r20261112-142500-cc58` on `f8063a0d0ff5`, running |
+| `6d67905515b3` | #9173, old head and `77079df43db5` | `optimize.py`, `test_optimize.py` | none | `r20261112-142601-bbd9` on `5e1117f282b4`, running |
+
+- [run] Each file that has no stop is the standing close with exactly the head's own changed lines: I diffed the close against the new file and the head's base against the head, line for line (`a5.py` 128 lines for #9199; the `README.md` 6, 4, 4 and 8 lines; `optimize.py` 6; `test_optimize.py` 4). Each file with a stop is the merge outside the stop's lines, checked the same way.
+- [derived] Each row is for a `main` with that one pull request in. Three of them write the same `README.md` and two the same `a5.py`; a `main` that holds two of them needs the file with both (#9237's row already holds #9199's, #9075's holds #9116's). I cut the file for the `main` lean names at 17:00Z.
+
+### The carried heads, each read against its close
+
+- [run] #9116 `d7ac2f984a43`: the head's own change is the same lines as at `3a580254f8bf` (the old head with `main` `3d8530f5268a` merged in). Merged into the closed merge it gives `ac843f35dc13`'s `README.md` byte for byte and `494bd85fb553`'s `test_difftest.py` outside the one stop. The row stands; `ac843f35dc13` adds the `README.md` the row lacked.
+- [run] #9173 `77079df43db5`: the same lines as at `54c9370d08e5`; merged, both files are `6d67905515b3`'s byte for byte.
+- [run] #9081 `d4d1481014f5` and #9215 `8241b2326eac`: the same lines as at their old heads, no stop against the closed merge, and neither changes a file a close holds. Nothing owed.
+- [run] #9075 moved at 14:18Z to `cbe0bcdd160d` (it holds #9087's `fd9cf8cd6023` and #9116's old head). Both of its files are the same blobs as at `ad209cd579d3`. By name: one candidate, not real (`SS.check` is `second_stage.check`, which lean's side leaves as it was); the other way none.
+
+### A new meet with no stop, in another owner's files
+
+- [run] On the merge of lean's trial with today's `main`, `from verity.protocols.certifier.verifier.grid import Record` fails: the crossed line renames `grid.py`'s `Record` to `BlockGrid`, and #9181, which reached `main` after `1cfd02137251` (the `main` of my 13:11Z table), adds two new importers of the old name. Git merges both with no stop.
+- **Owner @network-accounting, two files:** `verity/protocols/certifier/verifier/connection_rows.py` (line 106 and `of_records`) and `benchmarks/network_traces/connection_rows_run.py` (line 59 and `check`). Seven words, `Record` to `BlockGrid`. I said nothing to them.
+- [run] It stops four suites at collection in `40e3` and `377e`: `verity/protocols/certifier/verifier`, `verity-network-traces`, `benchmarks/one_stage` (through `warden_replay.py`) and `benchmarks/prove_path` (through `warden_chain.py`). [derived] So my 127 of 127 at 13:11Z, on `main` `1cfd02137251`, does not hold for a `main` with #9181.
+- [run] My by-name pass over `main`'s lines since 13:11Z names it and nothing else real (the other candidate, `ws.check`, is `warden_serve`'s own).
+- To get those suites' verdicts for our closes I put the seven words in a local stand-in on each trial tree and run the suites again there: `r20261112-144700-5acd` (#9199), `r20261112-144630-3bbc` (#9237), `r20261112-144723-bfe8` (#9176), `r20261112-144753-7e71` (#9116), `r20261112-144835-c7f4` (#9075).
+
+### The test that was skipped
+
+- [run] `r20261112-142005-c468`, done, exit 0, on `2559fbb3348c` (the closed merge on today's tips + #9253 `cf5587e21642`, `FlockVerify.lean` as `b58ece80e982` has it): the try of `FlockVerify.lean` exits 0, and `verity-flock` run through `suites.py` with `-k registered_reads` passes 29 of 29 with none skipped, `test_a_session_verified_with_registered_reads_is_held_to_them` among them. `b58ece80e982` stands on today's `main` too.
+
+### Runs and what I wait on
+
+| run | machine | what | state, 14:50Z | ETA [guess] |
+|---|---|---|---|---|
+| `r20261112-130251-279b` | `vy-nebius-cpu-9` | #9091's pin | 60 of 70 suites, none failed | 15:10Z |
+| `r20261112-141934-40e3` | `vy-nebius-cpu-2` | #9237's suites | 27 passed, 4 failed (the meet) | 16:00Z |
+| `r20261112-144630-3bbc` | `vy-nebius-cpu-14` | #9237, the stopped suites with the stand-in | running | 15:20Z |
+| `r20261112-144234-a785` | `vy-nebius-cpu-4` | #9176 | running | 16:20Z |
+| `r20261112-144723-bfe8` | `vy-nebius-cpu-3` | #9176, stand-in | running | 15:25Z |
+| `r20261112-141822-377e` | `vy-nebius-cpu-3` | #9199 | 10 passed, 3 failed (the meet) | 16:00Z |
+| `r20261112-144700-5acd` | `vy-nebius-cpu-6` | #9199, stand-in | running | 15:20Z |
+| `r20261112-142531-f794` | `vy-nebius-cpu-5` | #9116 | suites running | 16:00Z |
+| `r20261112-144753-7e71` | `vy-nebius-cpu-9` | #9116, stand-in | running | 15:25Z |
+| `r20261112-142500-cc58` | `vy-nebius-cpu-13` | #9075 | running | 16:20Z |
+| `r20261112-144835-c7f4` | `vy-nebius-cpu-7` | #9075, stand-in | running | 15:25Z |
+| `r20261112-142601-bbd9` | `vy-nebius-cpu-2` | #9173 | running | 15:40Z |
+
+No open choice. [relayed] #9108 and #9305: nothing cut, as you said. One line here as each of `279b`, #9237's and #9176's runs ends.
