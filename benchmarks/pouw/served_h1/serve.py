@@ -727,21 +727,21 @@ def run(a: argparse.Namespace) -> dict:
         roots = [bytes.fromhex(r["root"]) for r in round_log]
         openings = [Ch.LiveOpening.from_json(r["opening"]) for r in round_log]
         commitment = Ch.LiveCommitment.from_json(cs.commitment.to_json())
-        draw_after = receipts_root(window, calls)
-        draw = cs.draw(draw_after)
+        sample_after = receipts_root(window, calls)
+        sample = cs.draw(sample_after)
         cs.close()
-        rng = gate_rng(commitment, draw.coin, draw_after)
+        rng = gate_rng(commitment, sample.coin, sample_after)
         gate_picks = {"from": f"the draw coin ({cs.label}), opened after the receipts root", "domain": GATE_DRAW_DOMAIN,
-                      "after": draw_after.hex(), "what": "the harness's self-check of the receipts, not the window's draw"}
+                      "after": sample_after.hex(), "what": "the harness's self-check of the receipts, not the window's draw"}
         recomputed = [steps[r["round"]]["root"] == root and r["a_step"] == steps[r["round"]]["a_step"].hex()
                       and {c["salt"] for c in by_step[r["round"]]}
                       == {Wd.round_key(commitment, o.coin, r["round"], root).stream(0, 64).hex()}
                       for r, root, o in zip(round_log, roots, openings)]
         coins.update(scheme=Wd.LIVE_SCHEME, commitment=cs.commitment.to_json(), salt_coin=live_salt.to_json(),
-                     draw_coin=draw.to_json(), draw_after=draw_after.hex(),
+                     draw_coin=sample.to_json(), draw_after=sample_after.hex(),
                      draw_session=cs.draw_session and cs.draw_session.id, draw_commitment=cs.draw_commitment.to_json(),
                      draw_reason=Wd.draw_epoch_reason(cs.draw_commitment)
-                     or Ch.live_reason(cs.draw_commitment, draw, Wd.DRAW, 0, draw_after),
+                     or Ch.live_reason(cs.draw_commitment, sample, Wd.DRAW, 0, sample_after),
                      rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
                      roots_and_keys_recomputed=all(recomputed), coin_bytes=len(openings[0].coin) if openings else None,

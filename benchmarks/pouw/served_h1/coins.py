@@ -636,11 +636,11 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
         mine = Ch.LiveCommitment.from_json(coins.get("commitment"))
         salt = _openings([coins["salt_coin"]])
         openings = _openings([r["opening"] for r in coins.get("rounds", [])])
-        draw = _openings([coins["draw_coin"]]) if coins.get("draw_coin") else []
+        sample = _openings([coins["draw_coin"]]) if coins.get("draw_coin") else []
     except (KeyError, TypeError, Ch.CoinError) as e:
         return {**out, "reason": f"{type(e).__name__}: {e}"}
     got = roots[Wd.ROUND]
-    drawn = draw_reason(draw_out, heads, draw_after, draw, key, pins, main)
+    sample_reason = draw_reason(draw_out, heads, draw_after, sample, key, pins, main)
     bad_salts = sorted(r for r, s in (salts or {}).items()
                        if not (0 <= r < min(len(got), len(openings)))
                        or HT.live_salt(commitment, openings[r].coin, r, got[r]).hex() != s)
@@ -654,9 +654,9 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
                    f"the challenger received {len(got)} round roots, not the window's {len(rounds)} committed ones")
         or Wd.rounds_reason(commitment, got, openings),
         "salts": None if not bad_salts else f"rounds {bad_salts[:8]}'s unit salts are not their opened coins' live_salt",
-        "draw": drawn,
+        "draw": sample_reason,
     }
-    out.update(reasons=reasons, ledger=ledger_info(audited, entries), root=root.hex(), rounds=len(got), draws=len(draw),
+    out.update(reasons=reasons, ledger=ledger_info(audited, entries), root=root.hex(), rounds=len(got), draws=len(sample),
                commitment=commitment.root.hex())
     out["ok"] = all(v is None for v in reasons.values())
     out["coins"] = (f"off-node {host} (checked{'; ' + ', '.join(loose) + ' unanchored' if loose else ''})"
