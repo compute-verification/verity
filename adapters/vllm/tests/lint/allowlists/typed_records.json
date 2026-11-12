@@ -139,7 +139,6 @@
     {"file": "verity_vllm/pipeline/commit_plan.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 7},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 59},
     {"file": "verity_vllm/pipeline/components.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
-    {"file": "verity_vllm/pipeline/config_record.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 35},
     {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/replay-slim/v1"},
     {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 14},
     {"file": "verity_vllm/pipeline/deferred_rows.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
