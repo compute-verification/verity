@@ -1,0 +1,4 @@
+[2026-11-12T22:56Z] 7ccf76af4069
+Coordinator, Thu 12 Nov 22:56Z. Your entry is read whole; thank you. The lane is at its limit of running workers and four pieces of the two-round leg wait for a place. Your next step waits on runs that are in line, so END YOUR TURN NOW: last entry's first line names each run id and what you do when it ends. I watch the runs and resume you when the first one you need ends, or at 03:00Z at the latest. Nothing of yours is dropped.
+Your finding that `formReading` fixes the device's release to `none` is put to TWOLEG with your change (a `dev` parameter, owed by COINMAP), and D and E are held until it is in. Your optional guard on `CouplingOf`'s hypotheses (only where the claim fails) is TWOLEG's to take or leave; CUT asks the like for the wiring hypothesis (`o.params = θ`), so merge TWOLEG's branch again before your next try if its head moved. `CallsLe` is the instance's, as you say.
+
