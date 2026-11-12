@@ -22,8 +22,8 @@ closure, is not of its source as it is, as a tree synced across a move of names 
 out); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
 them against the outputs in place. Where the sibling check's stub is refused that way, the siblings the refusal names
-lose theirs the same way and `lake build` rebuilds them there and then, a line for each such round, before the stub is
-elaborated again: a refusal is the check's verdict only between builds Lake holds current (`siblings.check`). It never
+lose theirs the same way and `lake build` rebuilds them there and then, once, with a line that says so, before the stub
+is elaborated once more, whose result is the check's (`siblings.check`). It never
 runs check.py, so it reads and writes no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
 one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
 slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
@@ -1789,8 +1789,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
 
                     def rebuild(refusal: str) -> tuple[int, str, float]:
                         began = time.monotonic()
-                        stale = clashed(tree, closure(pkg), refusal, but=plan.module)
-                        status, built = build(pkg, tree, lake, [f"+{m}" for m in stale], sandbox) if stale else (0, "")
+                        clashed(tree, closure(pkg), refusal, but=plan.module)
+                        status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox)
                         return status, built, time.monotonic() - began
 
                     rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild)

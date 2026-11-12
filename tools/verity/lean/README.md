@@ -283,9 +283,9 @@ Lean's job in `check` and the tools around the audit:
 - `siblings.py`, `axiom_probe.py`: what `verity lean try` runs beside lean: the sibling check and the axiom probe.
   The sibling check leaves out, and counts as unchecked, a module whose build, or an import's, is not of its source
   as it is (by the hash Lake's trace states). A sibling is checked as it is built. One built against an older build of
-  an import is rebuilt when a refusal names it, a line for each such round, and not otherwise: a refusal is the verdict
-  only between builds Lake holds current. That is the step's limit, and the full check, which builds every module, has
-  none.
+  an import is rebuilt when a refusal names it, and not otherwise: the stub's first refusal has Lake rebuild the
+  siblings it names, once, with a line that says so, and what the stub says once more is the verdict. That is the
+  step's limit, and the full check, which builds every module, has none.
 - `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
   landing gate on its seeds (drive.toml's `landing_gates`).
 - `trusted_size.py`: the size of a package's spec, per area.

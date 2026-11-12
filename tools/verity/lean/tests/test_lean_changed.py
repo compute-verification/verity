@@ -1398,13 +1398,14 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
         LC.main(["--records", "Sec", "--siblings"])
 
 
-def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_then_elaborates_the_stub_again(
+def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_and_elaborates_the_stub_once_more(
         trying, tmp_path, monkeypatch):
     """`Proofs.Y`, left built against an older build of an import, holds a theorem Lean made with another type than
     `Proofs.Z`'s, and the stub is refused on a name no source declares. The refusal goes through `clashed`, as an import
-    clash in FILE's own elaboration does, and Lake then builds the two it forgot: one line for the round, and the stub
-    again, which passes. A refusal of FILE's own build forgets and rebuilds the sibling alone, and leaves the product the
-    tree holds of FILE; the same refusal after it is the verdict. A rebuild that fails is the verdict too."""
+    clash in FILE's own elaboration does, and Lake then builds the two it names: the rebuild's line, and the stub once
+    more, which passes. A refusal of FILE's own build forgets and rebuilds the sibling alone, and leaves the product the
+    tree holds of FILE; the same refusal after it is the verdict, with no second rebuild. A rebuild that fails is the
+    verdict too."""
     tree, calls = trying
     proofs = tree / "Sec" / "Proofs"
     (proofs / "Flock").mkdir(parents=True)
@@ -1422,10 +1423,11 @@ def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_then_el
     monkeypatch.setattr(LC.SIBLINGS, "run", lambda argv, cwd: (1 if stubs[0] else 0, stubs.pop(0), 2.0, 700))
 
     def tried() -> tuple[int, list[str], list[list[str]]]:
+        """A try: (its status, the check's lines, the targets of each `lake build` it ran)."""
         said, before = [], len(calls["build"])
         rc = LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True)
         assert not stubs, "each stub's answer was read"
-        return rc, [s for s in said if "siblings:" in s], [c[2] for c in calls["build"][before:] if c[2] and c[4] is None]
+        return rc, [s for s in said if "siblings:" in s], [c[2] for c in calls["build"][before:] if c[4] is None]
 
     x, y, z = products()
     stubs[:] = [refusal, ""]
@@ -1436,8 +1438,9 @@ def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_then_el
     assert not list(y.parent.glob("Y.*.hash")) and not list(z.parent.glob("Z.*.hash"))
     assert len(lines) == 2 and lines[0].startswith(
         "lean-try: Sec/Proofs/Flock/X.lean: siblings: Proofs.Z and Proofs.Y both declare 'Defs.step.eq_1' as they are built "
-        "here: Lake rebuilt Proofs.Y in "), lines
-    assert lines[1].startswith("lean-try: Sec/Proofs/Flock/X.lean: siblings: no built module of its package"), lines
+        "here: Lake rebuilt Proofs.Y in ") and lines[0].endswith(" s, and the stub is elaborated once more"), lines
+    assert lines[1] == ("lean-try: Sec/Proofs/Flock/X.lean: siblings: no built module of its package that doesn't import "
+                        "Proofs.Flock.X declares a name it does (2 imported in 2 s, peak 700 MB)")
 
     x, y, z = products()
     stubs[:] = [own, own]
@@ -1445,8 +1448,9 @@ def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_then_el
     assert rc == 1 and built == [["+Proofs.Flock.X:deps"], ["+Proofs.Y"]], (lines, built)
     assert x.exists() and not y.exists() and z.exists(), "FILE's own product in the tree is not the build that clashed"
     assert len(lines) == 2 and "Proofs.Flock.X and Proofs.Y both declare 'f' as they are built here: Lake rebuilt Proofs.Y" in lines[0]
-    assert "Proofs.Flock.X and Proofs.Y both declare 'f', which Lean refuses when it imports both" in lines[1], lines
-    assert "rename one (" in lines[1], "nothing else is left for it to be"
+    assert lines[1].endswith(
+        "siblings: Proofs.Flock.X and Proofs.Y both declare 'f', which Lean refuses when it imports both, as the package's "
+        "root does: rename one, and Lake holds Proofs.Y current, which this try had it build (2 imported in 2 s, peak 700 MB)")
 
     x, y, z = products()
     stubs[:] = [refusal]
