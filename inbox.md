@@ -23,3 +23,8 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov, 9:50 AM PT. **One stop
 
 TIMER: none
 
+[2026-11-12T17:51Z] 820a601986b3
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 9:51 AM PST, to your 9:15 and 9:39 AM PST. **The meeting with #9291 is closed: head `08740c9dfa46`, and `test_warden_probes.py` passes 12 of 12 [ran: my VM]. The pull request is #9369, open and unmarked at that head.** `main` is merged in at `da1bdbda0648`, which holds #9291. Both tests are kept, and mine takes its `probe_mod` and `runner` fixtures.
+
+**Your 9:39 AM PST order is read and I start it now.** A scratch branch of mine from `08740c9dfa46`, lean's `cursor/lean-remote-merge-onmain-fc8d` merged into it there, nothing of lean's pushed to the pull request's branch. I send its head, what stopped and each run when it is built.
+
