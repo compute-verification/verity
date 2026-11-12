@@ -16,28 +16,9 @@ from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
+from verity_vllm.pipeline.row_json import load_json, read_json, write_json
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.target_family import declared_profile
-
-
-def read_json(path: str) -> Any:
-    """The JSON document at ``path``."""
-    with open(path) as f:
-        return json.load(f)
-
-
-def write_json(doc: Any, path: str) -> None:
-    """``doc`` as the JSON document at ``path``, the way a stage's summary is written."""
-    with open(path, "w") as f:
-        json.dump(doc, f, indent=1, default=str)
-
-
-def load_json(path: str) -> Any:
-    """The JSON document at ``path``, None when it is absent or unreadable."""
-    try:
-        return read_json(path)
-    except (OSError, ValueError):
-        return None
 
 
 def tail(path: str, n: int = 300) -> str:
