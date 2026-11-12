@@ -8,10 +8,16 @@ import hashlib
 import json
 
 import pytest
-
 from test_appends import N, Run, salts, store
+
 from verity.protocols.poub.verifier import audit, codec, memory_map
-from verity.protocols.poub.verifier.memory_map import Header, MemoryMapError, Replay, Step, Written
+from verity.protocols.poub.verifier.memory_map import (
+    Header,
+    MemoryMapError,
+    Replay,
+    Step,
+    Written,
+)
 
 
 def page(slot: int, step: int) -> bytes:

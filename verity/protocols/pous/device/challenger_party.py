@@ -95,12 +95,12 @@ class Refusal(RuntimeError):
     """A request the challenger's side refuses; the message is why."""
 
 
-def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], draw: Callable[[int], bytes] = os.urandom) -> bytes:
-    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source sampled from `draw` after the
+def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], entropy: Callable[[int], bytes] = os.urandom) -> bytes:
+    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source sampled from `entropy` after the
     commitment, its salt (`setup.draw_salt`) logged under the audit in `salts` before the source is returned. Refused
     (`Refusal`) when the audit has a salt already."""
     audit, commitment = bytes.fromhex(request["audit"]), bytes.fromhex(request["commitment"])
-    source = draw(SOURCE_BYTES)
+    source = entropy(SOURCE_BYTES)
     try:
         salts.record(audit, commitment, pous_setup.draw_salt(source, commitment))
     except (mc.SessionLogError, ValueError) as e:
@@ -240,17 +240,17 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger, PROVER: Prover})
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
           domain: str, salts: mc.SaltLog | None = None, clock: Callable[[], int] = time.perf_counter_ns,
-          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.ChallengePhaseRecord]:
+          warmups: int = WARMUPS, entropy: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.ChallengePhaseRecord]:
     """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
     audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
-    and salts from `draw`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
+    and salts from `entropy`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
     (`memory_challenger.collector_paused`); its id and record. `Refusal` when the party refuses the session."""
     party, given = Challenger(domain, warmups, mc.resolution_of(clock)), [coins]
     with mc.collector_paused():
         done, _ = stream.run(party, request,
                              Identity(CHALLENGER, capabilities={"signer": signer, "log": log, "salts": salts}), f,
                              Frames(request["block_bytes"]), peer=PROVER, clock=clock,
-                             coins=lambda n: given.pop() if given else draw(n))
+                             coins=lambda n: given.pop() if given else entropy(n))
     if done.refused is not None:
         raise Refusal(done.refused)
     return party.sid, party.session
