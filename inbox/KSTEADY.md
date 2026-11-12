@@ -1824,3 +1824,9 @@ asked which Definition each row timed.
 6. **Your VM's out-of-memory kill:** noted; the rule above is the fix.
 
 Return when item 3's table has rows 7 and 6 and item 4 is dry-run, or at 13:00Z with where you are.
+- **Added 07:20Z: benchmarks' rule (HASH-98, 07:19Z): time the form a served statement proves; which form
+  that is, proofs and circuits say.** At its ask the two cards (5 and 7, Thu 17:30Z to 21:00Z) stay
+  booked until one of them answers; I release them only on a "the census's form" or at 19:30Z with no
+  word. So have item 4's job able to start late and take what fits whole. **#9152:** benchmarks is
+  reading it now; its verdict or its fixes come on HASH-115 by Thu 15:00Z. Its two open points
+  (exit 4 until the node's `nvcc` is read; no rerun of a passed point) are fine with it.
