@@ -11,6 +11,8 @@
 # the member's verify call (verify.argv), members.json and each process's output and stage lines (flock_members.py's
 # docstring). A spec whose session the verifier refuses is not timed, and the job exits 1.
 # env: FM_MEM_GB (the job's --mem-gb)  FM_SPECS  FM_MEMBERS=3  FM_ROUNDS=2  FM_CACHE  FM_PORT=7611  FM_CORE
+#      MIMALLOC_PURGE_DELAY (the allocator setting flock_members.py's processes run under; unset: the verifier's own,
+#      proofs.py's VERIFIER_ENV)
 set -uo pipefail
 SPECS=$(cat <<'EOF'
 expert-gemm-small	MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=384}"},K=768,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}

@@ -181,10 +181,12 @@ members in turn (`verify-members`, which reads the run's program once) against a
 member in `FM_MEMBERS` times each way, pinned to one core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers
 are a member's `before_check_ms` (the verifier's own `inputs:` and `setup:` stage lines) alone, as the kept process's
 first member, which pays the one read, and as a later member, with the memory the kept process holds between members
-(`rss_kb`: its resident memory at each `MEMBER` line). Its guard: each kept member's `VERDICT` lines are byte for
-byte `verify`'s alone, every member is accepted and the kept process exits 0; a run that fails it exits nonzero and
-none of its figures counts. The target is a later member's wait with nothing of the program's in it: what is left reads
-the member's own circuit and public file.
+(`rss_kb`: its resident memory at each `MEMBER` line). Every process runs under the verifier's allocator setting, as its
+Python callers start it (`proofs.verifier_env`), unless the job's environment sets a value of its own, and
+`members.json` records the value (`env`). Its guard: each kept member's `VERDICT` lines are byte for byte `verify`'s
+alone, every member is accepted and the kept process exits 0; a run that fails it exits nonzero and none of its figures
+counts. The target is a later member's wait with nothing of the program's in it: what is left reads the member's own
+circuit and public file.
 
 ~~~sh
 research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \
