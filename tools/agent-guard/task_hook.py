@@ -9,8 +9,8 @@ of the Slack registry, `.agents/skills/using-slack/registry.json`) it refuses a 
 one of the short read-only lookups in `LOOKUPS`. Cloud and background calls pass, and so does every other agent's. Reads
 Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes, and so does another
 step's event, unlogged. Each verdict is appended to
-$AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type and background flag,
-never its prompt.
+$AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type, background flag,
+model and whether it resumes an agent, never its prompt.
 
 It also refuses a cloud agent's (a `bc-` conversation's) write through Linear's MCP connector, which acts as the workspace
 owner, so the write would show as theirs: every Linear tool but the reads in `LINEAR_READS`, called through `CallDynamicTool`
@@ -121,7 +121,8 @@ def main() -> int:
         with open(LOG, "a") as f:
             f.write(json.dumps({"conversation_id": event.get("conversation_id"), "tool_name": event.get("tool_name"),
                                 "deny": bool(why), "input_keys": sorted(args),
-                                **{k: args.get(k) for k in ("environment", "subagent_type", "run_in_background")}}) + "\n")
+                                **{k: args.get(k) for k in ("environment", "subagent_type", "run_in_background", "model")},
+                                "resume": bool(args.get("resume"))}) + "\n")
     except OSError:
         pass
     print(json.dumps({"permission": "deny", "agent_message": why, "user_message": why} if why else {"permission": "allow"}))
