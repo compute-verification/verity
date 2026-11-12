@@ -109,7 +109,7 @@ class Plan:
             # exceed max(max_tokens)), else max(max_tokens); a listed step that never happens costs nothing
             n = a.max_tokens if a.max_tokens is not None else _workload_expected_steps(a.workload)
             if not n:
-                print("[plan] --snapshot-steps all: workload max_tokens unknown, falling back to 0,1,2,3", file=sys.stderr)
+                logger.warning("[plan] --snapshot-steps all: workload max_tokens unknown, falling back to 0,1,2,3")
                 n = 4
             self.steps = list(range(int(n)))
         else:
@@ -420,11 +420,12 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
             spec["reconstructed_after_execution"] = True
             spec["digest"] = EXP._digest_doc({k: v for k, v in spec.items() if k != "digest"})
         note = EXP.write_spec(plan.run, spec)
-        print(f"[spec] {'written' if note.get('written') else 'kept'} digest={(note.get('digest') or note.get('existing_digest') or '')[:12]}"
-              f"{'' if note.get('same', True) else '  (this phase would have produced a DIFFERENT spec; not rewritten)'}", file=sys.stderr)
+        logger.info("[spec] %s digest=%s%s", "written" if note.get("written") else "kept",
+                    (note.get("digest") or note.get("existing_digest") or "")[:12],
+                    "" if note.get("same", True) else "  (this phase would have produced a DIFFERENT spec; not rewritten)")
         return note
     except Exception as e:  # noqa: BLE001 - informational
-        print(f"[spec] not written: {type(e).__name__}: {e}", file=sys.stderr)
+        logger.warning("[spec] not written: %s: %s", type(e).__name__, e)
         return {"written": False, "error": f"{type(e).__name__}: {e}"}
 
 
@@ -499,8 +500,8 @@ def load_stages(run: Path) -> list[dict]:
         # over the preserved capture: set the unreadable record aside under a stamped name and start the stage list empty.
         aside = p.with_name(p.name + f".unreadable-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}")
         p.replace(aside)
-        print(f"[stages] {p.name} unreadable ({e.__class__.__name__}: {e}; {len(text)} bytes) -> set aside as {aside.name}; resuming with no stage records",
-              file=sys.stderr)
+        logger.warning("[stages] %s unreadable (%s: %s; %d bytes) -> set aside as %s; resuming with no stage records",
+                       p.name, e.__class__.__name__, e, len(text), aside.name)
         return []
     return list(d.get("stages", d) if isinstance(d, dict) else d)
 
@@ -604,8 +605,8 @@ def main(a: Options) -> int:
         cap, why = snapshot_cap_bytes(_workload_doc(a.workload), _hf_config_of(a, C0), _engine_arg_dict(a.engine_arg))
         a.snapshot_max_bytes, a.snapshot_cap_derivation = cap, why
         if why["raised"]:
-            print(f"[plan] --snapshot-max-bytes derived: {cap} B ({why['rows']} rows [{why['rows_source']}] x {why['row_bytes']} B "
-                  f"[{why['row_bytes_source']}]; the 32 MiB cap of record skips the prefill MLP rows of 1024-class workloads)", file=sys.stderr)
+            logger.info("[plan] --snapshot-max-bytes derived: %s B (%s rows [%s] x %s B [%s]; the 32 MiB cap of record skips the prefill MLP "
+                        "rows of 1024-class workloads)", cap, why["rows"], why["rows_source"], why["row_bytes"], why["row_bytes_source"])
 
     plan = Plan(a)
     stages = plan.stage_list(a.phase)
@@ -641,7 +642,7 @@ def main(a: Options) -> int:
         try:
             write_realized(plan)             # an existing capture's realized shape is in run.json before the gates / card read it
         except Exception as e:  # noqa: BLE001
-            print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
+            logger.warning("[realized] not written: %s: %s", type(e).__name__, e)
     for st in stages:
         if plan.skipped(st):
             recs.append({"stage": st, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"})
@@ -651,7 +652,7 @@ def main(a: Options) -> int:
             try:
                 write_realized(plan)         # realized shape into run.json before the card is built
             except Exception as e:  # noqa: BLE001
-                print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
+                logger.warning("[realized] not written: %s: %s", type(e).__name__, e)
             try:
                 recs.append(gates_stage(plan, a))
             except Exception as e:  # noqa: BLE001 - the driver reports, never crashes on the last stage
@@ -662,9 +663,9 @@ def main(a: Options) -> int:
         cmd = plan.cmd(st)
         if cmd is None:
             continue
-        print(f"[{st}] {shlex.join(cmd)}", file=sys.stderr)
+        logger.info("[%s] %s", st, shlex.join(cmd))
         rec = run_stage(st, cmd, logs / f"{st}.log", max_rss_gb=max_rss, timeout_s=timeout)
-        print(f"[{st}] {rec['status']} in {rec['seconds']} s", file=sys.stderr)
+        logger.info("[%s] %s in %s s", st, rec["status"], rec["seconds"])
         recs.append(rec)
         save_stages(plan.run, recs)
     if a.phase in ("gpu", "all"):
@@ -674,14 +675,14 @@ def main(a: Options) -> int:
     try:
         real = write_realized(plan)          # realized lengths / steps into run.json (also on a --phase cpu re-run over an old capture)
         if real:
-            print(f"[realized] prompt_lens={real['prompt_lens']} n_generated={real['n_generated']} steps capture/control="
-                  f"{real['engine_steps_capture']}/{real['engine_steps_control']} max_concurrent={real['max_concurrent_requests']}", file=sys.stderr)
+            logger.info("[realized] prompt_lens=%s n_generated=%s steps capture/control=%s/%s max_concurrent=%s", real["prompt_lens"],
+                        real["n_generated"], real["engine_steps_capture"], real["engine_steps_control"], real["max_concurrent_requests"])
     except Exception as e:  # noqa: BLE001 - informational
-        print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
+        logger.warning("[realized] not written: %s: %s", type(e).__name__, e)
     try:
         EXP.write_experiment(plan.run, repo=Path(a.tree), spec_note=spec_note)   # the Experiment index over the run directory
     except Exception as e:  # noqa: BLE001 - informational
-        print(f"[experiment] not written: {type(e).__name__}: {e}", file=sys.stderr)
+        logger.warning("[experiment] not written: %s: %s", type(e).__name__, e)
     bad = [r for r in recs if r["stage"] in stages and r["status"] not in ("ok", "skipped")]
     return 1 if bad else 0
 
@@ -1082,9 +1083,9 @@ def fold_worker(a: Options) -> int:
         doc["persisted"] = persist_program(result, Path(a.persist_dir), profile_name=profile, log_path=log,
                                            journal_level=1 if a.match_pipeline == "shared" else 9)
     out.write_text(json.dumps(_jsonable(doc), indent=1) + "\n")
-    print(f"{out}  digest={doc['digest'][:16]}  instances={doc['n_instances']}  steps={doc['n_steps']}  unresolved={doc['unresolved']}  "
-          f"unknown_roots={len(doc['unknown_roots'])}  rss={doc['max_rss_gb']} GB"
-          + (f"  persisted={sorted(doc['persisted'])}" if doc.get("persisted") else ""), file=sys.stderr)
+    logger.info("%s  digest=%s  instances=%s  steps=%s  unresolved=%s  unknown_roots=%d  rss=%s GB%s", out, doc["digest"][:16],
+                doc["n_instances"], doc["n_steps"], doc["unresolved"], len(doc["unknown_roots"]), doc["max_rss_gb"],
+                f"  persisted={sorted(doc['persisted'])}" if doc.get("persisted") else "")
     return 0
 
 
