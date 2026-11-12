@@ -60,14 +60,14 @@ class StateFits:
 
 @cache
 def phis() -> tuple[float, ...]:
-    """`verity/protocols/inference_only/nci/slowdown.py`'s grid of slices."""
+    """`verity/protocols/inference_only/nci/bracket.py`'s grid of slices."""
     return (*(10 ** (-12 + 12 * i / 2400) for i in range(2400)), 1.0)
 
 
 @lru_cache(maxsize=1 << 16)
 def search(state: float, splits: bool, flops: float, cut: float, data: float, decode: float, k: float, compute: float,
            shared: float = math.inf) -> float:
-    """The most reference work one block does by `verity/protocols/inference_only/nci/slowdown.py`'s `search`: it covers a slice, a fraction
+    """The most reference work one block does by `verity/protocols/inference_only/nci/bracket.py`'s `search`: it covers a slice, a fraction
     `φ` of every token's computation, for `T` tokens, reading the slice's state (`φ U`, or all of `U` when it doesn't
     split), the `cut` bits per token crossing into it (none at `φ = 1`) and `data` novel bits per token, and decoding
     its slice (`φ decode`). Only slices within the largest contiguous run every token shares (`φ U ≤ shared`) are taken,
