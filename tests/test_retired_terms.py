@@ -98,7 +98,7 @@ DOC_TERMS = {
         "the developer's node, machine, host or site, a machine the developer doesn't control, nothing the developer runs "
         "or hosts, developer-controlled, the developer's hardware (\"prover\" stays for the proving side of a proof: "
         "Flock's prover, a proof's messages, a cheating prover)",
-    "onsite deployment, remote deployment": "composite protocol (onsite or remote, the Lean's `Composite`)",
+    "onsite deployment, remote deployment, composite protocol": "configuration (onsite or remote, the Lean's `Composite`)",
     "named premise, the card premise": "assumption, or a proposed assumption until a lock lists it; the card assumption (a "
                                        "theorem's hypothesis stays a premise)",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
@@ -173,7 +173,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
-                       rf"|registered{_SPACE}work|(?:named|card){_SPACE}premises?|(?:onsite|remote){_SPACE}deployments?"
+                       rf"|registered{_SPACE}work|(?:named|card){_SPACE}premises?|(?:onsite|remote){_SPACE}deployments?|composite{_SPACE}protocols?"
                        rf"|prover{_SPACE}systems?|prover-controlled|prover{_SPACE}runs{_SPACE}or{_SPACE}hosts"
                        rf"|prover's{_SPACE}(?:own{_SPACE})?(?:nodes?|machines?|hosts?|sites?|datacenters?|servers?|GPUs?|hardware)"
                        rf"|prover{_SPACE}(?:doesn't|does{_SPACE}not){_SPACE}control|(?:hosts?|machines?){_SPACE}the{_SPACE}prover{_SPACE}controls"
@@ -233,6 +233,8 @@ ALLOWED: dict[str, str] = {
     "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
+    "Verity's two composite protocols": "`verity/protocols/remote/verifier/composition/README.md`, in a Lake package's "
+                                        "directory, which the protocols' word move rewrites; renamed with it",
 }
 
 PENDING: dict[str, str] = {
@@ -594,18 +596,20 @@ def test_the_doc_scan_reads_each_form():
 
 
 def test_the_doc_scan_reads_the_party_terms():
-    """The developer, the composite protocols, the registered circuit and assumptions, on toy files: the proving side's
+    """The developer, the configurations, the registered circuit and assumptions, on toy files: the proving side's
     prover, a theorem's premise, a deployment record, `verity.configuration.deploy` and a registered workload stay."""
     docs = {
         "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
                 "prover-controlled host and the prover system. The remote deployment's registered work, under a named\n"
-                "premise and the card premise. Flock's prover, a cheating prover, a theorem's premise, a deployment record,"
-                " `verity.configuration.deploy` and a registered workload stay.\n",
+                "premise and the card premise, in a composite protocol. Flock's prover, a cheating prover, a theorem's "
+                "premise, a deployment record, `verity.configuration.deploy`, the Lean's `Composite` and a registered "
+                "workload stay.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "prover runs or hosts"), ("a.md", 1, "prover doesn't control"), ("a.md", 2, "prover's node"),
         ("a.md", 2, "prover-controlled"), ("a.md", 2, "prover system"), ("a.md", 2, "remote deployment"),
-        ("a.md", 2, "registered work"), ("a.md", 2, "named premise"), ("a.md", 3, "card premise")]
+        ("a.md", 2, "registered work"), ("a.md", 2, "named premise"), ("a.md", 3, "card premise"),
+        ("a.md", 3, "composite protocol")]
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
