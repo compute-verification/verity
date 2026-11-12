@@ -336,7 +336,7 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_events(tmp_path, caps
     assert (f"(`advice_code/lengths.py:{n['rule']['line']}`). The load's `max_tokens` runs from {n['max_tokens']['min']} to "
             f"{n['max_tokens']['max']}, mean {n['max_tokens']['mean']:.1f}; the widths from") in text
     assert f"{N} terms are {lengths:,} bits, {lengths / N:.3f} a request." in text
-    assert (f"Scaled, not measured: at this serve's own rate, its {lengths:,} bits over the {span:,.1f} s from its first "
+    assert (f"Scaled, not measured: at this serve's own rate on its 1 card, its {lengths:,} bits over the {span:,.1f} s from its first "
             f"release to its last, the charge is {t['scaled']['week']:,} bits a week, {t['scaled']['month']:,} a month of "
             f"30 days and {t['scaled']['year']:,} a year.") in text
     _, rec, _, reg = tick_case(False)
@@ -386,15 +386,18 @@ def test_a_trace_with_an_abort_is_its_refusal_and_its_aborts(tmp_path, capsys):
     assert "so they are not counted by window. The record is refused whole" in BYC._unshown(BYC.aborts(d, 10), 10)
 
 
-def _name(d: Path, model: str, cards: int, where: str) -> None:
+def _name(d: Path, model: str, cards: int, where: str, engine: bool = True) -> None:
     """Give a trace-corpus directory a serve's own facts: its model's name, its cards, where its network certifier ran
-    and the version its server's log prints."""
+    and the version its server's log prints: another program's version and the banner's, which are not read, then
+    with `engine` the engine's own line, which is."""
     meta = json.loads((d / "meta.json").read_text())
     meta["server_argv"] += ["--served-model-name", model, "--tensor-parallel-size", str(cards)]
     meta["tick"]["where"] = where
     (d / "meta.json").write_text(json.dumps(meta))
     with (d / "server.log").open("a") as log:
-        log.write("INFO vLLM API server version 0.9.1rc2.dev3+gabc123\n")
+        log.write("INFO CUDA version 12.4\nINFO vLLM API server version 0.9.1rc2.dev3+gabc123\n")
+        if engine:
+            log.write("INFO [core.py:123] Initializing a V1 LLM engine (v0.9.1rc2.dev3+gabc123) with config: model='m'\n")
 
 
 def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path, capsys):
@@ -410,8 +413,8 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     there = write_corpus(tmp_path / "there", small, ios, times, serve(small, ios, times, seed=1), tick=True)
     gone = write_corpus(tmp_path / "gone", small, ios, times, serve(small, ios, times, seed=1), tick=True)
     _name(here, "big", 8, "on the auditor's host")
-    for d in (there, gone):
-        _name(d, "little", 1, "beside the server")
+    _name(there, "little", 1, "beside the server")
+    _name(gone, "little", 1, "beside the server", engine=False)
     reqs = [json.loads(line) for line in (gone / "requests.jsonl").read_text().splitlines()]
     reqs[5]["finish_reason"] = "abort"
     (gone / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in reqs))
@@ -435,24 +438,27 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     assert a["not_exercised"]["resumes and lag"] == {"resumptions": theirs["resumptions"], "lagged": 0}
     assert b["not_exercised"]["resumes and lag"] == {"resumptions": None, "lagged": None}
     assert b["not_exercised"]["segment end"] == {"segments": None} and a["not_exercised"]["segment end"] == {"segments": 0}
+    assert refused["serve"]["vllm"] is None and other["serve"]["vllm"] == row["serve"]["vllm"]
+    assert b["differs"]["vLLM"] == ["0.9.1rc2.dev3+gabc123", "not in the server's log"]
     assert a["differs"] == {"model": ["big", "little"], "cards": ["8", "1"],
-                            "the network certifier": ["on the auditor's host", "beside the server"],
+                            "where the network certifier ran": ["on the auditor's host", "beside the server"],
                             "the pool": ["4,096 blocks of 16 tokens", "8 blocks of 16 tokens"]}
     assert set(a["same"]) == {"vLLM", "the draft", "requests a step", "tokens a step", "admission", "the prefix cache",
                               "the registered codebook", "ℓ", "T"}
     assert a["same"]["admission"] == "under the certified tick (τ_b = 100,000, τ_sat = 30,000, τ_free = 40,000 µs)"
-    assert set(b["differs"]) == {"model", "cards", "the network certifier"} and set(b["same"]) == {"vLLM", "the draft"}
+    assert set(b["differs"]) == {"model", "cards", "vLLM", "where the network certifier ran"} and set(b["same"]) == {"the draft"}
     assert text.count("| all |") == 1 and "**there**" not in text and "**gone**" not in text
     assert "Beside `there`:\n\n- aborts: not exercised here; not exercised in `there` either.\n" in text
     assert f"- resumes and lag: not exercised here; in `there`: resumptions {theirs['resumptions']}.\n" in text
     assert (f"- in the classes exercised here, none here and some in `there`: admissions an eviction cut "
             f"{theirs['admissions_cut']}, preemptions {theirs['preemptions']}.\n") in text
     assert "none here and some in `gone`" not in text
-    assert ("- the same in both serves: vLLM 0.9.1rc2.dev3+gabc123; the draft off; requests a step at most 4; tokens a step "
-            "at most 64; admission under the certified tick") in text
-    assert ("- differing: model: big here, little in `there`; cards: 8 here, 1 in `there`; the network certifier: on the "
-            "auditor's host here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 blocks of 16 "
-            "tokens in `there`.\n") in text
+    assert ("- the same in both serves: vLLM: 0.9.1rc2.dev3+gabc123; the draft: off; requests a step: at most 4; tokens a "
+            "step: at most 64; admission: under the certified tick") in text
+    assert ("- differing: model: big here, little in `there`; cards: 8 here, 1 in `there`; where the network certifier "
+            "ran: on the auditor's host here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 "
+            "blocks of 16 tokens in `there`.\n") in text
+    assert "Scaled, not measured: at this serve's own rate on its 8 cards, its " in text
     assert ("Beside `gone`, which is refused, so that only its aborts and its directory's facts are read:\n\n"
             "- aborts: not exercised here; in `gone`: aborted requests 1.\n") in text
     assert "- segment end: not exercised here; `gone` has no table to say.\n" in text

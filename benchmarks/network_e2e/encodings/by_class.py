@@ -197,8 +197,9 @@ def aborts(d: Path, T: int = 600) -> dict[str, Any]:
 def serve_of(d: Path) -> dict[str, Any]:
     """What a trace's directory says of its serve, read without the reader: the served model's name, the cards (the
     tensor-parallel size, 1 where the server names none), whether the server had a draft (an argument that begins
-    ``--speculative``), the vLLM version its log prints, and where the network certifier ran (the note meta.json's
-    tick has of it); None for what the directory doesn't say."""
+    ``--speculative``), the vLLM version its log's engine line prints (no other line's: a log names other programs'
+    versions too), and where the network certifier ran (the note meta.json's tick has of it); None for what the
+    directory doesn't say."""
     d = Path(d)
     meta = json.loads((d / "meta.json").read_text())
     argv = [str(a) for a in meta["server_argv"]]
@@ -206,8 +207,8 @@ def serve_of(d: Path) -> dict[str, Any]:
     def opt(name: str) -> str | None:
         return argv[argv.index(name) + 1] if name in argv[:-1] else None
 
-    log = d / "server.log"
-    version = re.search(r"\bversion (\d+\.\d+[\w.+-]*)", log.read_text(errors="replace")) if log.exists() else None
+    log = (d / "server.log").read_text(errors="replace") if (d / "server.log").exists() else ""
+    version = re.search(r"LLM engine \(v([^)\s]+)\)", log)
     return {"model": opt("--served-model-name"), "cards": int(opt("--tensor-parallel-size") or 1),
             "draft": any(a.startswith("--speculative") for a in argv), "vllm": version.group(1) if version else None,
             "certifier": (meta.get("tick") or {}).get("where")}
@@ -401,7 +402,7 @@ def _facts(row: dict[str, Any]) -> dict[str, str]:
     (`serve_of`) and, for a trace with a table, the registration's."""
     s = row["serve"]
     out = {"model": s["model"] or "not named", "cards": str(s["cards"]), "vLLM": s["vllm"] or "not in the server's log",
-           "the draft": "on" if s["draft"] else "off", "the network certifier": s["certifier"] or "not said"}
+           "the draft": "on" if s["draft"] else "off", "where the network certifier ran": s["certifier"] or "not said"}
     if "error" not in row:
         g, t = row["engine"], row["tick"]
         tick = "on arrival" if t is None else (f"under the certified tick (τ_b = {t['bucket_us']:,}, τ_sat = {t['sat_us']:,}, "
@@ -452,7 +453,7 @@ def _beside(b: dict[str, Any]) -> list[str]:
         out.append(f"- in the classes exercised here, none here and some in {label}: "
                    + ", ".join(f"{HEADS[e]} {n:,}" for e, n in b["events"].items()) + ".")
     if b["same"]:
-        out.append("- the same in both serves: " + "; ".join(f"{k} {v}" for k, v in b["same"].items()) + ".")
+        out.append("- the same in both serves: " + "; ".join(f"{k}: {v}" for k, v in b["same"].items()) + ".")
     if b["differs"]:
         out.append("- differing: " + "; ".join(f"{k}: {x} here, {y} in {label}" for k, (x, y) in b["differs"].items()) + ".")
     return out
@@ -500,7 +501,9 @@ def render(row: dict[str, Any], standing: bool = True) -> str:
     else:
         out.append("The lengths: the registration sends none.")
     k = row["scaled"]
-    out.append(f"Scaled, not measured: at this serve's own rate, its {row['bits']:,} bits over the "
+    cards = row["serve"]["cards"]
+    out.append(f"Scaled, not measured: at this serve's own rate on its {cards} card{'s' if cards != 1 else ''}, its "
+               f"{row['bits']:,} bits over the "
                f"{n['release_span_s']:,.1f} s from its first release to its last, the charge is {k['week']:,} bits a week, "
                f"{k['month']:,} a month of 30 days and {k['year']:,} a year.")
     out.append(f"The admission is {f['decisions']:,} bits of decisions and {f['order']:,} of order entries.")
