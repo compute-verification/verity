@@ -10,13 +10,37 @@ from dataclasses import dataclass
 from verity.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, rows_operand
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_slot_rows,
+    rows_operand,
+)
 from verity_vllm.observe.fold.patterns.kv_cache import _kv_moves, kv_layer_of, kv_slots
-from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name, op_parts
-from verity_vllm.observe.fold.patterns.resolutions import _group_compute, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.ops import (
+    as_float,
+    bound_args,
+    first,
+    op_name,
+    op_parts,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _group_compute,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
-from verity_vllm.observe.fold.patterns.transparent import find_descendants, scope_transparents
-from verity_vllm.observe.fold.resolver import Compute, GatherMany, Resolution, StepContext, Supplied, Unsupported
+from verity_vllm.observe.fold.patterns.transparent import (
+    find_descendants,
+    scope_transparents,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    GatherMany,
+    Resolution,
+    StepContext,
+    Supplied,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 FA2_OP_NAMES = frozenset({"varlen_fwd", "flash_attn_varlen_func", "fwd"})
@@ -99,7 +123,7 @@ class AttentionScope:
                 return moves
             before.extend(moves)
         q, k, v, out = a.get("q"), a.get("k"), a.get("v"), a.get("out")
-        if not all(isinstance(x, ViewDesc) for x in (q, k, v, out)):
+        if not (isinstance(q, ViewDesc) and isinstance(k, ViewDesc) and isinstance(v, ViewDesc) and isinstance(out, ViewDesc)):
             return unsupported(node, "FA2 op arguments q/k/v/out not bound by name (schema unrecognised)",
                                schema=fa.enter.schema, names=list(a)[:24], views=[repr(x) for x in fa.input_views()][:8])
         causal = first(a.get("is_causal"), a.get("causal"))
@@ -145,7 +169,7 @@ class AttentionScope:
             return unsupported(node, "KV cache geometry does not match q", q=repr(q), k_cache=repr(kcs), v_cache=repr(vcs))
         if q.strides[1:] != (D, 1) or out.shape != (M, NH, D) or out.strides[1:] != (D, 1):
             return unsupported(node, "q/out rows are not [NH][D] row-major", q=repr(q), out=repr(out))
-        if M != len(ctx.start.rows):
+        if len(ctx.start.rows) != M:
             return unsupported(node, "FA2 query rows differ from the step's token rows", M=M, rows=len(ctx.start.rows))
         if fa_v == 2 and self.bn != b1.fa2_kblock_n(D):
             return unsupported(node, "pinned kBlockN is not the FA2 head-dim dispatch rule's", bn=self.bn, rule=b1.fa2_kblock_n(D), D=D)
@@ -167,7 +191,7 @@ class AttentionScope:
         for i, (req, position) in enumerate(ctx.start.rows):
             T = int(position) + 1
             seq = ctx.start.seq_lens.get(req)
-            if seq is not None and T > seq:
+            if seq is not None and seq < T:
                 return unsupported(node, "row position exceeds the request's KV length", row=i, request=req, T=T, seq_len=seq)
             groups.setdefault((T, int(position) - first_pos[req] if check_inf or check_inf2 else None, own[req] if check_inf2 else None),
                               []).append(i)
@@ -187,9 +211,9 @@ class AttentionScope:
                                                  scale_input=registered)
             except _targets().UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered attention binding: {e}")
-            scale = (Supplied("registration", f"scale_log2_d{D}", 32, b1.scale_log2_bits(D)),) if registered else ()
+            scale_op = (Supplied("registration", f"scale_log2_d{D}", 32, b1.scale_log2_bits(D)),) if registered else ()
             computes.append(Compute(spec, len(rows),
-                                    (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)) + scale,
+                                    (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)) + scale_op,
                                     (rows_operand(out, rows),), (), hint=hint_of(node, str(layer) if isinstance(layer, str) else "attn"),
                                     kernels=(kernel_name,), attribution=tuple(ctx.start.rows[i] for i in rows),
                                     pattern=pattern_name))

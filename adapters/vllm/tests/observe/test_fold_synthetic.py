@@ -11,19 +11,40 @@ import itertools
 from dataclasses import dataclass
 
 import pytest
-
-from verity_vllm.observe.fold import fold as fold_mod
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
-                                   StorageAlloc, TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.fold import FoldError, fold, instance_nodes
-from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
-from verity_vllm.observe.fold.patterns.norms import eps_input
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Supplied, Transparent
 from verity.circuits.defs import bind
 from verity.circuits.refs import Affine, Explicit, concat
+from verity.circuits.types import Array, RecordType, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry import value_inputs as VI
-from verity.circuits.types import Array, RecordType, Value
+
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold import fold as fold_mod
+from verity_vllm.observe.fold.fold import FoldError, fold
+from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
+from verity_vllm.observe.fold.patterns.norms import eps_input
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Group,
+    PerRow,
+    Profile,
+    Shared,
+    Supplied,
+    Transparent,
+)
 
 # ---------------------------------------------------------------------------------------------------------
 # toy configuration
@@ -119,7 +140,6 @@ def step_events(step: int, positions: list[int], ids: Ids, base_alloc: int, samp
     R = 1
     p0 = positions[0]
     a = itertools.count(base_alloc)
-    ids_view = V(A_IDS, (4,), dtype=ids_dtype)
     pos_view = V(A_POS, (4,), dtype=I64D)
     hidden, normed, qkv, attn, o, gu, act, down, gathered, logits, sampled_v = (V(next(a), s, dtype=d) for s, d in (
         ((M, 16), BF), ((M, 16), BF), ((M, 32), BF), ((M, 2, 8), BF), ((M, 16), BF), ((M, 32), BF), ((M, 16), BF), ((M, 16), BF),
@@ -199,6 +219,12 @@ def toy_log(ids_dtype: str = I32D, extra_unknown_op: bool = False, skip_norm0: b
     return evs
 
 
+def instance_nodes(result, *, spec_prefix: str | None = None, step: int | None = None) -> list[dict]:
+    """The fold result's instance records whose spec id starts with `spec_prefix` and whose step is `step`."""
+    return [m for m in result.instances
+            if (spec_prefix is None or m["spec"].startswith(spec_prefix)) and (step is None or m["step"] == step)]
+
+
 # ---------------------------------------------------------------------------------------------------------
 # toy patterns (the fold only sees resolutions; these are minimal stand-ins for a real profile)
 # ---------------------------------------------------------------------------------------------------------
@@ -232,6 +258,7 @@ def p_rms_triton(node, ctx):
     if not node.is_triton or not node.op.endswith("_rms_norm_kernel"):
         return None
     a = node.enter.args
+    operands: tuple
     spec, operands = bind(b1.RMSNormTriton, N=C["H"], EPS=C["EPS"]), (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]))
     if ctx.profile.registered_values:
         spec, operands = bind(VI.RMSNormTritonV3, N=C["H"]), operands + (eps_input(C["EPS"]),)
@@ -282,6 +309,7 @@ def p_attention(node, ctx):
     ch = node.children[0]
     q3, kc, vc, out = ch.args[:4]
     parts = []
+    operands: tuple
     for i, (req, p) in enumerate(ctx.start.rows):
         T = p + 1
         slots = tuple(_slot(ctx, req, j) for j in range(T))
@@ -298,6 +326,7 @@ def p_fused_norm(node, ctx):
     if node.op != "_C.fused_add_rms_norm.default":
         return None
     x, res, w, eps = node.args
+    operands: tuple
     spec, operands = bind(b1.RMSNormFusedCuda, N=C["H"], EPS=eps), (PerRow(x), PerRow(res), Shared(w))
     if ctx.profile.registered_values:
         spec, operands = bind(VI.RMSNormFusedCudaV4, N=C["H"]), operands + (eps_input(eps),)
@@ -360,7 +389,7 @@ def _elements(v: ViewDesc):
 
 
 def _compact(refs):
-    parts = []
+    parts: list[Affine] = []
     for r in refs:
         if parts and parts[-1].space == r[0] and parts[-1].idx == r[1] and parts[-1].base + parts[-1].count == r[2]:
             parts[-1] = Affine(r[0], r[1], parts[-1].base, parts[-1].count + 1)
@@ -463,7 +492,7 @@ def test_fold_builds_program_and_is_deterministic(memory):
     assert r1.sampled == {REQ: [(0, 9), (1, 3)]}
     # per-specialization instance counts: prefill 2 rows + decode 1 row = 3 positions
     by = r1.report.by_spec
-    assert by[f"Embedding_v1{{V=16,H=16}}"] == 3
+    assert by["Embedding_v1{V=16,H=16}"] == 3
     assert by["RMSNormTriton_v1{N=16,EPS=1e-05}"] == 3
     assert by["Gemm_v1{K=16,N=32}"] == 6          # qkv + gate_up per position
     assert by["Gemm_v1{K=16,N=16}"] == 8          # o + down per position, lm_head per step
@@ -477,12 +506,53 @@ def test_fold_builds_program_and_is_deterministic(memory):
     assert r1.program.gates > 0 and r1.timings["program_s"] >= 0
 
 
+def test_the_header_supplies_the_configuration_a_profile_does_not_state(memory):
+    """`_Fold._header`: a profile with no configuration of its own folds under the run header's (`model.config`)."""
+    import dataclasses
+
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+    config: dict | None
+    for config in (None, {}):
+        r = fold(toy_log(), dataclasses.replace(toy_profile(), config=config), strict=True, with_program=False)
+        assert r.weights_type == own.weights_type == b1.weights_type(C) and r.report.by_spec == own.report.by_spec
+
+
+@pytest.mark.parametrize("workload", [None, {}, {"requests": None}, {"requests": []}])
+def test_a_header_without_requests_is_refused(memory, workload):
+    import dataclasses
+
+    evs = toy_log()
+    evs[0] = dataclasses.replace(evs[0], workload=workload)
+    with pytest.raises(FoldError, match="RunHeader.workload has no requests"):
+        fold(evs, toy_profile(), strict=True, with_program=False)
+
+
+def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_note(memory):
+    """A workload's `children` and `sampling` and the notes' `tp2` are optional: missing, null and empty each read as none."""
+    import dataclasses
+
+    hdr = toy_log()[0]
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+    more: dict
+    notes: dict | None
+    for more in ({}, {"children": None, "sampling": None}, {"children": [], "sampling": {}}):
+        for notes in (None, {}, {"tp2": None}, {"tp2": {}}, {"tp2": {"world_size": 1}}):
+            evs = toy_log()
+            evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
+            r = fold(evs, toy_profile(), strict=True, with_program=False)
+            assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, (more, notes)
+
+
 def test_registered_values_are_inputs_of_the_program(memory):
     """Under `registered_values` the norms' eps and the attention scale are fields of the registered `values` parameter, read by the
     Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""
     import numpy as np
-
-    from verity.definitions.circuits.constants import REGISTRATION, RUN, inputs, program_data
+    from verity.definitions.circuits.constants import (
+        REGISTRATION,
+        RUN,
+        inputs,
+        program_data,
+    )
     from verity.definitions.registry import prims as P
 
     r = fold(toy_log(), toy_profile(registered_values=True), strict=True)

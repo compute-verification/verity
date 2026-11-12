@@ -23,15 +23,39 @@ import time
 from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.observe.events import Event, Note, Root, RunHeader, StepLink, StorageAlloc, ViewDesc
-from verity_vllm.observe.log import read_log, split_steps
-from verity_vllm.observe.fold.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, label, members
-from verity_vllm.observe.fold.resolver import (Compute, Group, Profile, Resolution, ResolutionError, ResolutionReport, StepContext, Transparent,
-                                               external_buffers, spec_module, Unsupported, resolve_step)
+from verity_vllm.observe.events import (
+    Event,
+    Note,
+    Root,
+    RunHeader,
+    StorageAlloc,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.patterns import (
+    GEMM_TARGET_SCRATCH_KEY,
+    X01_SCRATCH_KEY,
+    members,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Group,
+    Profile,
+    Resolution,
+    ResolutionError,
+    ResolutionReport,
+    StepContext,
+    Transparent,
+    Unsupported,
+    external_buffers,
+    resolve_step,
+    spec_module,
+)
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
+from verity_vllm.observe.log import read_log, split_steps
+
 
 def load_profile(name: str) -> tuple[Profile, Any]:
     mod_name = name if "." in name else f"verity_vllm.observe.fold.profiles.{name}"

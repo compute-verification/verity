@@ -15,9 +15,22 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity_vllm.observe.events import ViewDesc
+from verity.definitions.registry import dsa
+from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.definitions.registry.dsa_norm import DsaRMSNorm
+from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity.definitions.registry.sparse_mla_split import (
+    SparseMlaSplit,
+    launch_num_splits,
+)
+
+from verity_vllm.observe.events import TritonLaunch, ViewDesc
+from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
+from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
+from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_major
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
+from verity_vllm.observe.fold.patterns.norms import CudaFusedAddRmsNorm, CudaRmsNorm
 from verity_vllm.observe.fold.patterns.ops import bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.patterns.rotary import step_positions
@@ -36,11 +49,6 @@ from verity_vllm.observe.fold.resolver import (
     Unsupported,
 )
 from verity_vllm.observe.fold.tree import TreeNode
-from verity.definitions.registry import dsa
-from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.definitions.registry.dsa_norm import DsaRMSNorm
-from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity.definitions.registry.sparse_mla_split import SparseMlaSplit, launch_num_splits
 
 NORM_KERNEL = "_fused_norm_rope_kernel"
 Q_KERNEL = "_fused_q_kernel"
@@ -197,7 +205,7 @@ class DsaNormRope:
     name = "dsa.fused_norm_rope"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        if not node.is_triton or triton_name(node) != NORM_KERNEL:
+        if not isinstance(node.enter, TritonLaunch) or triton_name(node) != NORM_KERNEL:
             return None
         a, c = bound_args(node), node.enter.constexprs
         if node.enter.src_sha != NORM_SRC_SHA or node.enter.num_warps != 4 or node.enter.num_stages != 3:
@@ -216,13 +224,13 @@ class DsaNormRope:
         kv, kvw = a.get("kv_ptr"), a.get("kv_rms_norm_w_ptr")
         kpe, cs = a.get("kpe_ptr"), a.get("kpe_rope_cos_sin_cache_ptr")
         latent = a.get("mla_cache_ptr")
-        if not all(isinstance(v, ViewDesc) for v in (q, qo, qw, kv, kvw, kpe, cs, latent)):
+        if not (isinstance(q, ViewDesc) and isinstance(qo, ViewDesc) and isinstance(qw, ViewDesc) and isinstance(kv, ViewDesc) and isinstance(kvw, ViewDesc) and isinstance(kpe, ViewDesc) and isinstance(cs, ViewDesc) and isinstance(latent, ViewDesc)):
             return unsupported(node, "fused norm/RoPE pointer arguments are not bound", args={k: repr(v) for k, v in a.items() if k.endswith("_ptr")})
         M = q.shape[0]
         pos = step_positions(node, ctx, a.get("pos_ptr"), M)
         if isinstance(pos, Unsupported):
             return pos
-        if M != len(ctx.start.rows) or q.shape != (M, 2048) or qo.shape != (M, 2048) or kv.shape != (M, 512) or kpe.shape != (M, 64):
+        if len(ctx.start.rows) != M or q.shape != (M, 2048) or qo.shape != (M, 2048) or kv.shape != (M, 512) or kpe.shape != (M, 64):
             return unsupported(node, "fused norm/RoPE rows or GLM-5.3 dimensions differ", q=repr(q), q_out=repr(qo), kv=repr(kv), kpe=repr(kpe),
                                step_rows=len(ctx.start.rows))
         if not (q.dtype == qo.dtype == qw.dtype == kv.dtype == kvw.dtype == kpe.dtype == cs.dtype == latent.dtype == "bfloat16"):
@@ -260,7 +268,7 @@ class DsaNormRope:
             ik, iw, ib, ics = (a.get(k) for k in ("index_k_ptr", "index_k_layer_norm_w_ptr", "index_k_layer_norm_bias_ptr",
                                                    "index_k_rope_cos_sin_cache_ptr"))
             ikc, isc = a.get("indexer_cache_ptr"), a.get("indexer_cache_scale_ptr")
-            if not all(isinstance(v, ViewDesc) for v in (ik, iw, ib, ics, ikc, isc)):
+            if not (isinstance(ik, ViewDesc) and isinstance(iw, ViewDesc) and isinstance(ib, ViewDesc) and isinstance(ics, ViewDesc) and isinstance(ikc, ViewDesc) and isinstance(isc, ViewDesc)):
                 return unsupported(node, "indexer-layer norm/RoPE pointers are not bound")
             if c.get("INDEX_K_DIM") != 128 or c.get("INDEX_K_BLOCK_SIZE") != 128 or c.get("INDEX_K_HALF_ROT_DIM") != 32:
                 return unsupported(node, "index-K dimensions differ from the recorded GLM-5.3 pin")
@@ -296,7 +304,7 @@ class DsaQ:
     name = "dsa.fused_q"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        if not node.is_triton or triton_name(node) != Q_KERNEL:
+        if not isinstance(node.enter, TritonLaunch) or triton_name(node) != Q_KERNEL:
             return None
         a, c = bound_args(node), node.enter.constexprs
         if node.enter.src_sha != Q_SRC_SHA or node.enter.num_warps != 1 or node.enter.num_stages != 3:
@@ -456,7 +464,7 @@ class DsaTopK:
         rows = _topk_rows(node, ctx, out)
         if isinstance(rows, Unsupported):
             return rows
-        parts = []
+        parts: list[Compute] = []
         kernel = "topKPerRowPrefill" if op_name(node.op) == TOPK_PREFILL else "cooperative_topk"
         for i, (req, position) in enumerate(ctx.start.rows[rows]):
             n = int(position) + 1
@@ -481,7 +489,7 @@ class DsaIndexShare:
     name = "dsa.index_share_copy"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        if not node.is_triton or node.enter.fn != INDEX_SHARE_KERNEL:
+        if not isinstance(node.enter, TritonLaunch) or node.enter.fn != INDEX_SHARE_KERNEL:
             return None
         a, c = bound_args(node), node.enter.constexprs
         pins = {
@@ -586,11 +594,6 @@ class DsaSparseMla:
 def dsa_patterns() -> list:
     """Patterns in dependency order, before generic transparent handlers; with them vLLM's default Hopper block-FP8 linear op
     (`fp8.DynamicDeepGemmFp8Linear`), which GLM-5.3's attention and dense projections run."""
-    from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
-    from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
-    from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
-    from verity_vllm.observe.fold.patterns.norms import CudaFusedAddRmsNorm, CudaRmsNorm
-
     return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaIndexShare(), DsaSparseMla(), DynamicDeepGemmFp8Linear(),
             TpFusedAllReduceRmsNorm(world=8), CudaRmsNorm(), CudaFusedAddRmsNorm(), CublasLinear(), MlaAbsorbBmm()]
 

@@ -5,15 +5,27 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from verity_vllm.program.frontend.rules.vocab import vocabulary_for
+from verity.definitions.registry.dsv4_moe import limit_bits
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name
-from verity_vllm.observe.fold.patterns.resolutions import _fmt, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _fmt,
+    attribution_for,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import target_of
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    StepContext,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 
 
 @dataclass
@@ -45,10 +57,10 @@ class SiluAndMul:
         statics = self.statics(node, a)
         if isinstance(statics, Unsupported):
             return statics
-        M, I = out.shape
+        M, INTER = out.shape
         numerics = target_of(ctx)[0].numerics_profile
         try:
-            spec = vocabulary_for("profile", numerics).kind(self.kind, I=I, **statics)
+            spec = vocabulary_for("profile", numerics).kind(self.kind, I=INTER, **statics)
         except ValueError as e:
             return unsupported(node, f"the record target's numerics profile has no vocabulary: {e}", numerics_profile=numerics)
         if spec is None:
@@ -68,7 +80,6 @@ class SiluAndMulWithClamp(SiluAndMul):
     kind: ClassVar[str] = "silu_mul_clamp"
 
     def statics(self, node: TreeNode, a: dict) -> dict | Unsupported:
-        from verity.definitions.registry.dsv4_moe import limit_bits  # the DeepSeek-V4 registry on use
         limit, alpha, beta = as_float(a.get("limit")), as_float(a.get("alpha", 1.0)), as_float(a.get("beta", 0.0))
         if (alpha, beta) != (1.0, 0.0):
             return unsupported(node, "silu_and_mul_with_clamp's alpha and beta are not 1 and 0 (SiluMulClamp_v1 is the clamp alone)",

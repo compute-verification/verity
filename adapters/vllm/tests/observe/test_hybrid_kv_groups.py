@@ -7,10 +7,18 @@ import dataclasses
 
 import pytest
 
+from tests.observe.test_patterns_synthetic import BS, by_spec, context, decode_step
 from verity_vllm.observe.events import Note, StepStart, ViewDesc, from_json, to_json
 from verity_vllm.observe.fold.patterns import GeometryError, kv_group_of, kv_slots
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Transparent, Unsupported, external_buffers, resolve_step
-from tests.observe.test_patterns_synthetic import BS, by_spec, context, decode_step
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Transparent,
+    Unsupported,
+    external_buffers,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import step_events
 
 LAYER = "model.layers.0.self_attn.attn"
@@ -102,7 +110,9 @@ def test_layer_in_group_1_reads_and_writes_group_1_cells():
         assert isinstance(a.dst, Gather) and isinstance(b.dst, Gather) and b.dst.view == a.dst.view
         assert b.dst.indices == tuple(s + 8 * BS for s in a.dst.indices)
     # everything else in the step is the same
-    others = lambda d: sorted(s for s in d if not s.startswith("Attention_v3"))
+    def others(d):
+        return sorted(s for s in d if not s.startswith("Attention_v3"))
+
     assert others(by_spec(res)) == others(by_spec(base))
 
 
@@ -159,6 +169,22 @@ def test_bare_reshape_and_cache_flash_uses_the_module_hint_for_its_group():
     none = dataclasses.replace(rc, enter=dataclasses.replace(rc.enter, module=None, parent=None), children=[])
     res = KVCacheUpdate().match(none, ctx)
     assert isinstance(res, Unsupported) and "unknown" in res.reason
+
+
+def test_a_group_without_a_slot_mapping_covers_no_row():
+    """A KV-cache group whose slot mapping is missing, null or empty maps no row: the move is unsupported, having 0 slots."""
+    from verity_vllm.observe.fold.patterns import KVCacheUpdate
+    events, start = decode_step()
+    se = step_events(events)
+    rc = next(n for n in se.roots for n in n.walk() if n.op.startswith("_C_cache_ops.reshape_and_cache_flash"))
+    bare = dataclasses.replace(rc, enter=dataclasses.replace(rc.enter, module=LAYER, parent=None), children=[])
+    absent: dict
+    for absent in ({}, {"slot_mapping": None}, {"slot_mapping": []}):
+        g0, g1 = _groups(start, this_layer_group=1)
+        g1 = {**{k: v for k, v in g1.items() if k != "slot_mapping"}, **absent}
+        res = KVCacheUpdate().match(bare, context(dataclasses.replace(start, kv_groups=[g0, g1]), se.sample))
+        assert isinstance(res, Unsupported) and res.reason == "StepStart.slot_mapping shorter than the rows", absent
+        assert res.detail["have"] == 0 and res.detail["layer"] == LAYER
 
 
 def test_step_start_kv_groups_round_trip_and_old_logs_default_to_none():

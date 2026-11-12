@@ -19,7 +19,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.resolver import Compute, Group, Resolution, StepContext, Transparent, Unsupported, parts_of
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Resolution,
+    StepContext,
+    Transparent,
+    Unsupported,
+    parts_of,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 

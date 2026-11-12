@@ -21,10 +21,20 @@ resolution's `consumed` set (no silent, unaccounted children) and that no id is 
 
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-from verity_vllm.observe.events import Note, Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
+from verity_vllm.observe.events import (
+    Note,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepLink,
+    StepStart,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode
 from verity_vllm.observe.fold.views import row_view, rows_view
 
@@ -182,6 +192,13 @@ def operand_rows(op: Operand) -> int | None:
     return None
 
 
+def whole_view(op: Operand) -> ViewDesc:
+    """The device view an operand names whole (`Shared`, `PerRow`, `Gather`, `GatherMany`); no other operand has one."""
+    if not isinstance(op, (Shared, PerRow, Gather, GatherMany)):
+        raise TypeError(f"a {type(op).__name__} operand names no one view")
+    return op.view
+
+
 def operand_view(op: Operand, i: int) -> ViewDesc | None:
     """Row i's device view of an operand; None for a Program constant, a declared parameter or several pieces."""
     if isinstance(op, (Const, Param, Supplied, Pieces, WeightField, WitnessParam)):
@@ -319,8 +336,11 @@ class StepContext:
 def external_buffers(note: Note, device: Callable[[int], str]) -> dict[str, ViewDesc]:
     """The views the capture's external-buffers Note (`observe.capture`) records with an offset and strides, the KV caches as
     `kv_cache[<module>]`, on the device of their allocation."""
+    buffers = (note.data or {}).get("buffers")
+    if not buffers:
+        return {}
     return {name: ViewDesc(int(b["alloc"]), int(b["offset"]), tuple(b["shape"]), tuple(b["strides"]), b["dtype"], device(int(b["alloc"])))
-            for name, b in ((note.data or {}).get("buffers") or {}).items() if "offset" in b and "strides" in b}
+            for name, b in buffers.items() if "offset" in b and "strides" in b}
 
 
 @runtime_checkable
@@ -368,8 +388,7 @@ def resolve_node(node: TreeNode, ctx: StepContext) -> Resolution:
     return Unsupported(node.id, node.op, "no pattern", {"phase": node.phase, "children": [c.op for c in node.children]})
 
 
-def _with_pattern(r: Resolution, name: str) -> Resolution:
-    import dataclasses
+def _with_pattern(r: Compute | Transparent | Group, name: str) -> Resolution:
     return dataclasses.replace(r, pattern=name)
 
 
