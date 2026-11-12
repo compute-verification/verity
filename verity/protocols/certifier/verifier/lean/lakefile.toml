@@ -52,3 +52,8 @@ root = "NetworkCheck.RecordsMain"
 [[lean_exe]]
 name = "network-period"
 root = "NetworkCheck.PeriodMain"
+
+# a probe, not for landing: NetworkCheck.ProbeOkBit's rule on a registration, timed
+[[lean_exe]]
+name = "network-okbit-probe"
+root = "NetworkCheck.ProbeOkBitMain"
