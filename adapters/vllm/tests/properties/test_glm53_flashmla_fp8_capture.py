@@ -12,7 +12,7 @@ import pytest
 
 from tests.properties import glm53_flashmla_fp8_capture_gpu as X
 from verity.definitions.numerics import flashmla_twin as T
-from verity.definitions.numerics import flashmla_v32_twin as V
+from verity.definitions.numerics import flashmla_dsv32_twin as V
 from verity_vllm.properties.record import digest_of
 
 #: a row width the twin runs in a fraction of a second: two blocks a token
@@ -204,7 +204,7 @@ def test_the_comparison_takes_the_kernel_words(made) -> None:
 
 
 def test_the_tokens_held_to_the_definition_are_spread_over_a_case() -> None:
-    from verity.definitions.registry import flashmla_v32 as R
+    from verity.definitions.registry import flashmla_dsv32 as R
 
     S = R.FLASHMLA_GLM53
     assert (S["NH"], S["DN"], S["DR"], S["QT"], S["BN"], S["SCALE"]) == (X.NH, X.DN, X.DR, X.QT, X.BN, X.SCALE)

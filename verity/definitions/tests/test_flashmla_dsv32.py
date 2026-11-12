@@ -1,4 +1,4 @@
-"""FlashMLA's sparse FP8 decode at its V32 instance (`registry.flashmla_v32`, `numerics.flashmla_v32_twin`).
+"""FlashMLA's sparse FP8 decode at its V32 instance (`registry.flashmla_dsv32`, `numerics.flashmla_dsv32_twin`).
 
 * the row on vectors worked by hand: an f32 scale is rounded to bf16 (ties to even) before it multiplies, so the row is not
   the E4M3 value times the f32 scale; an invalid row is the zero row;
@@ -21,9 +21,9 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, self_check
 from verity.definitions.numerics import flashmla_twin as T
-from verity.definitions.numerics import flashmla_v32_twin as TV
+from verity.definitions.numerics import flashmla_dsv32_twin as TV
 from verity.definitions.registry import flashmla as F
-from verity.definitions.registry import flashmla_v32 as V
+from verity.definitions.registry import flashmla_dsv32 as V
 
 U8, U16, U32 = np.uint8, np.uint16, np.uint32
 DEFS = {d.id: d for d in V.FLASHMLA_V32_COMPOSITES}

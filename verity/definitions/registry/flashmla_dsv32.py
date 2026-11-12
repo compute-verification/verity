@@ -33,7 +33,7 @@ What this instance does that `flashmla`'s (MODEL1) does not:
    `FlashMlaV32SplitEnd_v1` does on a constant; the combine skips its own (combine.cu:101-112), and so does
    `FlashMlaV32CombineWeights_v1`.
 5. The schedule.  The call is one request of s_q = T query rows, so num_sm_parts = max(132 / T, 1) and every token of the
-   step has the same SPLITS over its 32 blocks, a function of T alone (`flashmla_v32_twin.step_splits`): 32 splits of one
+   step has the same SPLITS over its 32 blocks, a function of T alone (`flashmla_dsv32_twin.step_splits`): 32 splits of one
    block at T <= 3 down to one split, written by the decode kernel with no combine, from T = 67.
 
 Registered functions (all `Name_v1`):
@@ -63,7 +63,7 @@ from types import SimpleNamespace
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.numerics import flashmla_v32_twin
+from verity.definitions.numerics import flashmla_dsv32_twin
 from verity.definitions.ops.gemm import DotBf16 as DotBf16V2
 from verity.definitions.ops.prims import HopperBF16WgmmaDot16
 from verity.definitions.registry import flashmla as F
@@ -291,4 +291,4 @@ CUTS = {"FlashMlaV32DecodeHead_v1": head_cut, "FlashMlaV32Decode_v1": decode_cut
 FLASHMLA_V32_COMPOSITES = [FlashMlaV32KvRow, FlashMlaV32Block, FlashMlaV32SplitEnd, FlashMlaV32CombineWeights,
                            FlashMlaV32CombineValues, FlashMlaV32DecodeHead, FlashMlaV32Decode]
 
-flashmla_v32_twin.register_twin({d.id: d for d in FLASHMLA_V32_COMPOSITES})
+flashmla_dsv32_twin.register_twin({d.id: d for d in FLASHMLA_V32_COMPOSITES})

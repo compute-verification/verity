@@ -8,7 +8,7 @@ and the value its first 512 words; there is no sink (the decode kernel runs its 
 and no second cache.  `kv_rows` is the staged row, `decode` a token's heads at its SPLITS, `step_splits` the SPLITS a step's
 token count gives.
 
-`registry.flashmla_v32` registers it (`register_twin`) as kernel ``flashmla-twin`` of `FlashMlaV32KvRow_v1`,
+`registry.flashmla_dsv32` registers it (`register_twin`) as kernel ``flashmla-twin`` of `FlashMlaV32KvRow_v1`,
 `FlashMlaV32Block_v1`, `FlashMlaV32SplitEnd_v1`, `FlashMlaV32CombineWeights_v1`, `FlashMlaV32CombineValues_v1`,
 `FlashMlaV32DecodeHead_v1` and `FlashMlaV32Decode_v1` (``DOT`` the Hopper wgmma k16 step).
 """
@@ -233,7 +233,7 @@ KERNELS = {"FlashMlaV32KvRow_v1": (_row_fn, _sample_row), "FlashMlaV32Block_v1":
 
 
 def register_twin(defs: dict) -> None:
-    """Register the twin of each family in `KERNELS`; ``defs`` is `registry.flashmla_v32`'s composites by id, which binds the
+    """Register the twin of each family in `KERNELS`; ``defs`` is `registry.flashmla_dsv32`'s composites by id, which binds the
     self-check's specialisations (the registry calls this, so neither module imports the other both ways)."""
     for family, (fn, sample) in KERNELS.items():
         register(family, T._instance(fn), kernel=T.KERNEL, domain=T.DOMAIN, sample=sample,

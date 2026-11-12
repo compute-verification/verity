@@ -24,7 +24,7 @@ saved words without one:
            Everything the kernel read and wrote is saved under `<out>/capture/`: the cache, and per case the queries, the
            indices before and after vLLM's conversion, all 64 heads' output words, the lse and the planner's metadata.
   compare  no GPU.  The planner's metadata against `flashmla_twin.sched_meta` at num_sm_parts = max(132 // T, 1); every output
-           word of every token against `flashmla_v32_twin.decode` at the step's SPLITS: the 8 real heads and one pad head
+           word of every token against `flashmla_dsv32_twin.decode` at the step's SPLITS: the 8 real heads and one pad head
            against the twin, the other 55 pad heads against that pad head's words; the probes; and, for ``--definition N``
            tokens a case (every token of `edge`), the 8 real heads against `FlashMlaV32Decode_v1` itself, bound at GLM-5.3's
            statics and the step's SPLITS and run through the reference evaluator (about two minutes a token on one core).
@@ -77,7 +77,7 @@ from tests.properties import fa_tap_exactness_gpu as G
 from verity.definitions.kernels import tc as CK
 from verity.definitions.numerics import derived_rows as DRW
 from verity.definitions.numerics import flashmla_twin as T
-from verity.definitions.numerics import flashmla_v32_twin as V
+from verity.definitions.numerics import flashmla_dsv32_twin as V
 from verity_vllm.properties.record import digest_of
 
 SCHEMA = "verity-vllm/glm53-flashmla-fp8-capture/v1"
@@ -716,7 +716,7 @@ def definition_token(job: dict[str, Any]) -> dict[str, Any]:
     try:
         from verity.circuits.defs import bind
         from verity.circuits.evaluation import evaluate
-        from verity.definitions.registry import flashmla_v32 as R
+        from verity.definitions.registry import flashmla_dsv32 as R
 
         outdir, t = Path(job["dir"]), job["token"]
         a, cache = _case(outdir, job["case"]), np.load(outdir / "cache.npy", mmap_mode="r")
