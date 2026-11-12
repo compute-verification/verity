@@ -314,11 +314,21 @@ def _iso(t: float) -> str:
     return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%MZ")
 
 
-def _end(start: str, minutes: int) -> str | None:
+def _end(start: str, minutes: int) -> str:
     try:
         return f"{datetime.fromisoformat(start.replace('Z', '+00:00')) + timedelta(minutes=minutes):%Y-%m-%dT%H:%MZ}"
     except ValueError:
-        return None
+        return f"? (its start {start!r} is no ISO time)"
+
+
+def _refusal(pd: dict, ask: float) -> Exception | None:
+    """Why `auto._pool` refuses pool document ``pd`` a job of one CPU and ``ask`` GB (`auto.Stalled` among the reasons), or
+    None when it would take it."""
+    try:
+        auto._pool(pd, 1, ask)
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        return e
+    return None
 
 
 def _job(machine: str, pool: str, w: dict) -> tuple[str, str]:
@@ -370,18 +380,14 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
                     j["runs"].append(w["run"])
                 j["lines"].append({"machine": m, "since": w.get("since"), "minutes": w.get("minutes") or 0})
             head = max((w.get("minutes") or 0 for w in pd.get("waiters") or []), default=0)
-            if p != CHECK and (m, p) not in shut and head >= auto.STALL_MIN:
-                try:
-                    auto._pool(pd, 1, auto.BACKFILL_MAX_GB + 1)
-                except auto.Stalled:
-                    free = pd.get("free_gb")
-                    avail = d.get("available_gb")
-                    out["stalled"].append({"machine": m, "pool": p, "in_line": len(pd.get("waiters") or []), "head_minutes": head,
-                                           "available_gb": avail, "free_gb": free,
-                                           "unreached_gb": round(avail - free, 1) if isinstance(avail, (int, float)) and
-                                           isinstance(free, (int, float)) else None})
-                except (ValueError, KeyError, TypeError, AttributeError):
-                    pass
+            if p != CHECK and (m, p) not in shut and head >= auto.STALL_MIN and isinstance(
+                    _refusal(pd, auto.BACKFILL_MAX_GB + 1), auto.Stalled):
+                free = pd.get("free_gb")
+                avail = d.get("available_gb")
+                out["stalled"].append({"machine": m, "pool": p, "in_line": len(pd.get("waiters") or []), "head_minutes": head,
+                                       "available_gb": avail, "free_gb": free,
+                                       "unreached_gb": round(avail - free, 1) if isinstance(avail, (int, float)) and
+                                       isinstance(free, (int, float)) else None})
         lean = d.get("lean")
         for p, lp in sorted(((lean or {}).get("pools") or {}).items()) if isinstance(lean, dict) and "error" not in lean else ():
             out["lean_waits"] += [{"machine": m, "pool": p, "job": w.get("run") or f"pid {w.get('pid')}",

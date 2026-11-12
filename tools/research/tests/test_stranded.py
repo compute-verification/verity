@@ -207,6 +207,7 @@ def test_a_window_is_printed_with_its_end_and_note_and_is_no_place():
     assert doc["windows"] == [{"machine": B, "pool": "research", "slot": "r0", "start": "2026-11-12T19:00Z",
                                "end": "2026-11-12T20:00Z", "note": "lean bench"}]
     assert f"{B}: 2026-11-12T19:00Z to 2026-11-12T20:00Z: lean bench; closes research r0" in stranded.text(doc)
+    assert stranded._end("soon", 60) == "? (its start 'soon' is no ISO time)", "an end it can't work out says why"
 
 
 def test_an_unread_machine_and_a_pool_that_answered_late_are_listed_and_the_rest_is_read():
