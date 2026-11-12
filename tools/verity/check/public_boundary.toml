@@ -381,7 +381,7 @@ paths = [
     "adapters/vllm",
     "benchmarks/one_stage",
 ]
-until = "PRF-285: the v3 ledger names a period's prover `prover`"
+until = "the v3 ledger names a period's prover `prover`"
 
 [[residue]]
 what = "a Lean lock's reason names PoUW's clear audit by its directory, which the export leaves out"
