@@ -4,8 +4,11 @@ Programs with 64-bit gates."""
 from __future__ import annotations
 
 import pytest
+import verity.circuits.partition as pm
 from verity.circuits import partition
+from verity.circuits.defs import bind
 from verity.circuits.partition import (
+    CheckedTiling,
     ReadinessReport,
     WidthVerdict,
     gate_width_readiness,
@@ -14,6 +17,7 @@ from verity.circuits.partition import (
     validate_width,
 )
 from verity.circuits.parts import Limits, Part
+from verity.circuits.program import Program
 
 from tests.query.test_partition_stubs import (
     OracleBoundary,
@@ -180,7 +184,6 @@ def test_shared_callee_from_two_parents_two_plans():
     assert fast.detail["sets"] == 2 + 2 * 32 * (3 + 1) == sweep.detail["sets"] and fast.detail["bodies"] == 5
     # width: the tiling path must count 64 coordinate activations (2 parents x 32 members) and 64 dot activations
     B = OracleBoundary(P_)
-    import verity.circuits.partition as pm
     saved = pm._BOUNDARY
     pm._BOUNDARY = B
     try:
@@ -208,7 +211,6 @@ def test_scopes_of_enumerates_every_activation():
     coord_t = whole_body(coord, key="coord")
     g = whole_body(gemm_spec, {0: ("descend", coord_t)}, key="gemm")
     t = tiling(whole_body(P_.root, {2: ("descend", g), 3: ("descend", g)}))
-    from verity.circuits.partition import CheckedTiling
     T = CheckedTiling(P_, t)
     assert T.instances == {(t.root,): 1, ("gemm",): 2, ("coord",): 64}
     scopes = list(T.scopes_of(("coord",)))
@@ -425,8 +427,6 @@ def test_readiness_lists_64bit_input_and_primitive():
 
 def test_readiness_gumbel_const64():
     G = pytest.importorskip("verity.definitions.registry.sampling")
-    from verity.circuits.defs import bind
-    from verity.circuits.program import Program
     P_ = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
     r = readiness_32bit(P_)
     assert not r.ok

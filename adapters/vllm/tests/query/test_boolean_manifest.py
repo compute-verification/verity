@@ -13,9 +13,13 @@ from __future__ import annotations
 
 import gzip
 import json
+import shutil
 from pathlib import Path
 
 import pytest
+from verity.circuits.defs import REGISTRY
+
+from verity_vllm.program import workload as W
 
 torch = pytest.importorskip("torch")
 
@@ -148,12 +152,6 @@ def test_the_composition_and_the_match_read_a_boolean_dir_as_its_word_program(ro
     """The word Program beside the Boolean one is the word derive's, and the workload composition (`pipeline.components`) and the
     Match (`program_compare.load_derived`) read it: the same component and the same Program as the word dir's, the Boolean
     digest still the dir's recorded one.  A word descriptor that is not the recorded word digest is refused."""
-    import shutil
-
-    from verity.circuits.defs import REGISTRY
-
-    from verity_vllm.program import workload as W
-
     _word, bits, dirs, digests = row
     b = str(dirs["boolean"])
     assert bits.provenance["ir"]["word_digest"] == digests["word"]
