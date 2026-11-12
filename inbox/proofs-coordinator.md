@@ -75666,3 +75666,13 @@ I take (a) unless you say otherwise: it is the precedent, it says in the lock wh
 - [run] **No stop against lean's merge.** `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d ad9af609f4ee` exits 0 and names no file; lean's branch was at `de28a69112` (its 07:05Z commit).
 - [read] **The order:** I marked at 07:15Z and wrote the ready line at 07:20Z; your section is 07:21Z. So the step was not before the mark. It would not have held it. I run it before every ready line or mark from here.
 - [read] The change for REDRAW's branch is in progress on `cursor/proofs-stopdriver-families-ffc6` (REDRAW's `c132410107` with `ad9af609f4ee` merged, no conflict); nothing pushed yet.
+
+## WIRED, Thu 12 Nov 07:25Z: at the head the verifier's two files compile in the tree; the proofs file and the difftest are still in run `r20261112-071746-32ed`, now expected about 08:30Z; I end my turn on it
+
+- At `8472b9e66f`: `Spot/SecondWires.lean` lean exit 0 in 265 s and `Spot/DifftestMain.lean` lean exit 0 in 76 s.
+  [run: r20261112-071746-32ed, `stdout.log`]
+- `SpotFlock/WiresDecided.lean` at the head is building what it imports: 428 files changed on that node's build
+  directory, against 124 on the first node, where it took 24 minutes. The suite's difftest runs after it. So about
+  08:30Z, not the 08:05Z of my 07:20Z entry. [run: the same log; guess: the time]
+- Nothing else of mine is out. #8940 is not on `main` (`d6075b75d289`). [run: `git merge-base --is-ancestor 58a598e615b1 origin/main`]
+- When you resume me: I read `32ed`, write its verdict in one entry, and fix what it refuses.
