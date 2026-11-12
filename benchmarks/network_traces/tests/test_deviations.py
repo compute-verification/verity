@@ -77,6 +77,12 @@ class _Side:
         return 0
 
 
+def _watermark_log(relay) -> dict:
+    """What `serve` keeps of a relay's watermark in its log: the last line, the lost releases and its error."""
+    return {"watermark": {"last": relay.watermarked and list(relay.watermarked), "lost": relay.watermark_lost,
+                          "error": relay.watermark_error}}
+
+
 def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[bytes],
                served: Sequence[tuple[bytes, bool]], watermark: bool = False, refuse: Sequence[int] = ()) -> list[dict]:
     """`requests` through the relay for one window on a `VirtualClock`, the k-th server to be connected sending
@@ -153,9 +159,8 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0,
                                      params.payload if request.startswith(active.ID_REQUEST_HEAD) else None))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    marks = {"watermark": {"last": warden.watermarked and list(warden.watermarked), "lost": warden.watermark_lost,
-                           "error": warden.watermark_error}} if watermark else {}
-    (out / "warden.json").write_text(json.dumps({"connections": warden.log} | marks))
+    marks = _watermark_log(warden) if watermark else {}
+    (out / dv.RELAY_LOG).write_text(json.dumps({"connections": warden.log} | marks))
     if watermark:
         (out / "watermark.bin").write_bytes(b"".join(data for side in streams for _, data in side.writes))
     return warden.log
@@ -484,7 +489,7 @@ def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_
                        "(2), a line a server that reads `t n` alone stops ordering at")
     run = args.scratch / "tokens"
     assert dv.lost_releases(run) == [2] and dv.lost_releases(args.scratch / "honest") == []
-    log = json.loads((run / "warden.json").read_text())["connections"]
+    log = json.loads((run / dv.RELAY_LOG).read_text())["connections"]
     lost = next(c for c in log if c["release"] == 2)
     assert lost["upstream"].startswith("ConnectionRefusedError") and lost["failed"] == "upstream"
     t = lost["ingress_end"]
@@ -541,8 +546,8 @@ def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_st
 
     tried, stopped, ran = tries("no-log", "no log", *WATERMARK)
     assert (tried, ran) == (["honest"], ["honest", "tokens"])
-    assert stopped == ("tokens: STOPPED: its network certifier ran with the watermark and wrote no log (warden.json), "
-                       "so whether a line named a lost release isn't known")
+    assert stopped == (f"tokens: STOPPED: its network certifier ran with the watermark and wrote no log "
+                       f"({dv.RELAY_LOG}), so whether a line named a lost release isn't known")
 
     # the network certifier never ran: nothing was sent, and the classes after it are tried, as without the watermark
     assert tries("never-ran", "never ran", *WATERMARK) == (["honest", "fail"], None, ["honest", "tokens", "fail"])

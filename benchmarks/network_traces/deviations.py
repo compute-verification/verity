@@ -56,12 +56,12 @@ from these files alone. The run directory itself (the relay's records and their 
 its own in a directory it removes.
 
 **A lost release stops the tries** (`lost_stop`). Under ``--watermark`` (a flag of the rehearsal's, after ``--``)
-the network certifier names on its watermark each release that its server connection lost (`release.watermark_chunk`),
-and its own log of the run keeps them (`warden.json`'s `watermark`). A server whose gate reads a watermark line as
-``t n`` alone stops ordering at such a line, for every run after it too, so no try after it would be served in the
-release order. After each try the log is read, whether or not the try wrote a check: when it names a lost release, or
-when the network certifier ran with the watermark and wrote no log, no later class is tried, the command says which
-try it stopped at and exits `LOST_EXIT`.
+the network certifier names on its watermark each release that its server connection lost
+(`release.watermark_chunk`), and its own log of the run keeps them (the log's `watermark`, `lost_releases`). A server
+whose gate reads a watermark line as ``t n`` alone stops ordering at such a line, for every run after it too, so no
+try after it would be served in the release order. After each try the log is read, whether or not the try wrote a
+check: when it names a lost release, or when the network certifier ran with the watermark and wrote no log, no later
+class is tried, the command says which try it stopped at and exits `LOST_EXIT`.
 
     python deviations.py try (--stand-in | --front-env NAME) --out DIR [--class all|CLASS] [--ids FILE] [--seed S]
         [--tag T] [--requests 8] [--bucket-requests 64] [--rate 2] [--max-tokens 16] [--tail 8] [--hold-ms 500]
@@ -163,6 +163,8 @@ NOT_RUN = "not-run"
 #: why the tries stop at a refused control, and the exit of a command whose tries stopped at a lost release
 HONEST_STOP = "the honest control was refused or had no check: no deviation was tried"
 LOST_EXIT = 5
+#: the relay's own log of a run, in its run directory
+RELAY_LOG = "warden.json"
 ADDRESS = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b(?::\d+)?")
 
 
@@ -357,7 +359,7 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
     B, blank = params.cell_bytes, IT.pad_cell(params.cell_bytes)
     check = json.loads((run / "check.json").read_text())
     traffic = json.loads((run / "traffic.json").read_text())
-    log = {c["ordinal"]: c for c in json.loads((run / "warden.json").read_text())["connections"]}
+    log = {c["ordinal"]: c for c in json.loads((run / RELAY_LOG).read_text())["connections"]}
     lines = [json.loads(x) for x in (run / PLANTED).read_text().splitlines()] if (run / PLANTED).exists() else []
     bits = {d["release"]: d["planted"] for d in lines if d.get("release") is not None}
     whole = {d["release"]: bool(d.get("whole")) for d in lines if d.get("release") is not None}
@@ -403,9 +405,9 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
 
 def lost_releases(run: Path) -> list[int] | None:
     """The releases a try's network certifier named lost on its watermark, by its own log in the run directory `run`
-    (`warden.json`'s `watermark`, which `warden_serve.serve` writes at the run's end): none where the run sent no
+    (the `watermark` of `RELAY_LOG`, which the relay's `serve` writes at the run's end): none where the run sent no
     watermark, and None where it wrote no log."""
-    path = run / "warden.json"
+    path = run / RELAY_LOG
     if not path.exists():
         return None
     return [int(n) for n in (json.loads(path.read_text()).get("watermark") or {}).get("lost") or []]
@@ -427,7 +429,7 @@ def lost_stop(cls: str, run: Path, watermark: bool) -> str | None:
     if lost:
         return lost_words(cls, lost)
     if lost is None and watermark and (run / "deployment.json").exists():
-        return (f"{cls}: STOPPED: its network certifier ran with the watermark and wrote no log (warden.json), so "
+        return (f"{cls}: STOPPED: its network certifier ran with the watermark and wrote no log ({RELAY_LOG}), so "
                 "whether a line named a lost release isn't known")
     return None
 
