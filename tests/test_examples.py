@@ -53,7 +53,7 @@ def test_a_document_fault_is_named():
 
 
 def test_a_file_with_the_retired_level_reads_as_its_two_axes(tmp_path):
-    d = tmp_path / "examples" / "toy"
+    d = tmp_path / "demos" / "toy"
     d.mkdir(parents=True)
     (d / "demo.toml").write_text('protocol = "pous"\nworkload = "none"\nlevel = 1\n')
     (ex,) = E.demos(tmp_path)

@@ -44,7 +44,7 @@ OTHER_FAMILIES = {
 }
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.circuits"
+CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.definitions.ops", "verity.definitions.silicon")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 
@@ -64,7 +64,7 @@ def _core(name: str) -> bool:
 
 def _verity(name: str) -> bool:
     """`name` is a module a Definition module may import from `verity`: core's, the catalog's, or the evidence."""
-    return _core(name) or name in (CATALOG, EVIDENCE) or name.startswith(CATALOG + ".")
+    return _core(name) or name in (*CATALOG, EVIDENCE) or name.startswith(tuple(c + "." for c in CATALOG))
 
 
 def _top_level(mod: str) -> set[str]:
