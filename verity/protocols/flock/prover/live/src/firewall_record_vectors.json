@@ -320,17 +320,6 @@
       "L1",
       "alg"
      ],
-     2,
-     null
-    ],
-    [
-     "open",
-     "s",
-     [
-      "L0",
-      "L1",
-      "alg"
-     ],
      3,
      null
     ],
@@ -342,7 +331,29 @@
       "L1",
       "alg"
      ],
-     2,
+     4,
+     null
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     0,
+     null
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
      null
     ],
     [
@@ -376,8 +387,17 @@
       "L1",
       "alg"
      ],
-     2,
+     3,
      null
+    ],
+    [
+     "admit",
+     "r0002",
+     "L0"
+    ],
+    [
+     "failures",
+     "s"
     ],
     [
      "admit",
@@ -405,7 +425,7 @@
       "L1",
       "alg"
      ],
-     2,
+     3,
      null
     ],
     [
@@ -432,7 +452,10 @@
    "results": [
     "r0000",
     {
-     "error": "stream s's budget is 2, not 3"
+     "error": "stream s's budget is 3, not 4"
+    },
+    {
+     "error": "a failure budget is an integer of at least 1, not 0"
     },
     "r0001",
     null,
@@ -448,11 +471,15 @@
     },
     2,
     {
-     "refused": "stream s stopped at its failure budget (2 of 2)"
+     "refused": "recursive session r0002: its inner session has not finished"
     },
-    2,
+    3,
     {
-     "refused": "stream s stopped at its failure budget (2 of 2)"
+     "refused": "stream s stopped at its failure budget (3 of 3)"
+    },
+    3,
+    {
+     "refused": "stream s stopped at its failure budget (3 of 3)"
     },
     "r0003",
     null,
@@ -460,7 +487,530 @@
      "release_ms": null
     }
    ],
-   "record": "{\"budget\": 2, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"budget\": 2, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 1, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 2, \"session\": \"r0000\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 3, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 4, \"session\": \"r0000\", \"why\": \"cut\"}\n{\"budget\": 2, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 5, \"session\": \"r0002\", \"stream\": \"s\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0002\"}\n{\"event\": \"refused\", \"part\": \"L1\", \"seq\": 7, \"session\": \"r0001\"}\n{\"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 8, \"session\": \"r0003\", \"stream\": \"t\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 9, \"session\": \"r0003\"}\n"
+   "record": "{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 1, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 2, \"session\": \"r0000\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 3, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 4, \"session\": \"r0000\", \"why\": \"cut\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 5, \"session\": \"r0002\", \"stream\": \"s\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0002\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 7, \"session\": \"r0002\"}\n{\"event\": \"refused\", \"part\": \"L1\", \"seq\": 8, \"session\": \"r0001\"}\n{\"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 9, \"session\": \"r0003\", \"stream\": \"t\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 10, \"session\": \"r0003\"}\n"
+  },
+  {
+   "name": "unended",
+   "ops": [
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "open",
+     "v",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L0"
+    ],
+    [
+     "release",
+     "r0000",
+     "L0"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L1"
+    ],
+    [
+     "release",
+     "r0000",
+     "L1"
+    ],
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "admit",
+     "r0000",
+     "alg"
+    ],
+    [
+     "release",
+     "r0000",
+     "alg"
+    ],
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "stop",
+     "r0001",
+     "L0",
+     "cut"
+    ],
+    [
+     "failures",
+     "u"
+    ],
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "finish",
+     "r0002"
+    ],
+    [
+     "admit",
+     "r0002",
+     "L1"
+    ],
+    [
+     "failures",
+     "u"
+    ],
+    [
+     "open",
+     "u",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ]
+   ],
+   "results": [
+    "r0000",
+    "r0001",
+    "r0002",
+    {
+     "refused": "stream u's unended recursive sessions and failures reach its failure budget (3 and 0 of 3)"
+    },
+    "r0003",
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "refused": "stream u's unended recursive sessions and failures reach its failure budget (3 and 0 of 3)"
+    },
+    {
+     "release_ms": null
+    },
+    null,
+    "r0004",
+    {
+     "refused": "stream u's unended recursive sessions and failures reach its failure budget (3 and 0 of 3)"
+    },
+    true,
+    1,
+    {
+     "refused": "stream u's unended recursive sessions and failures reach its failure budget (2 and 1 of 3)"
+    },
+    null,
+    {
+     "refused": "recursive session r0002 stopped at L0: L1 is not its next statement"
+    },
+    2,
+    {
+     "refused": "stream u's unended recursive sessions and failures reach its failure budget (1 and 2 of 3)"
+    }
+   ],
+   "record": "{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"u\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 1, \"session\": \"r0001\", \"stream\": \"u\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 2, \"session\": \"r0002\", \"stream\": \"u\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 3, \"session\": \"r0003\", \"stream\": \"v\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 4, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 5, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L1\", \"seq\": 6, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"alg\", \"seq\": 7, \"session\": \"r0000\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 8, \"session\": \"r0004\", \"stream\": \"u\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 9, \"session\": \"r0001\", \"why\": \"cut\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 10, \"session\": \"r0002\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 11, \"session\": \"r0002\", \"why\": \"never opened: L1 was asked in its place\"}\n{\"event\": \"refused\", \"part\": \"L1\", \"seq\": 12, \"session\": \"r0002\"}\n"
+  },
+  {
+   "name": "honest",
+   "ops": [
+    [
+     "open",
+     "h",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "open",
+     "h",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "finish",
+     "r0001"
+    ],
+    [
+     "open",
+     "h",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "finish",
+     "r0002"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L0"
+    ],
+    [
+     "release",
+     "r0000",
+     "L0"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L1"
+    ],
+    [
+     "release",
+     "r0000",
+     "L1"
+    ],
+    [
+     "admit",
+     "r0000",
+     "alg"
+    ],
+    [
+     "release",
+     "r0000",
+     "alg"
+    ],
+    [
+     "open",
+     "h",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "finish",
+     "r0003"
+    ],
+    [
+     "admit",
+     "r0001",
+     "L0"
+    ],
+    [
+     "release",
+     "r0001",
+     "L0"
+    ],
+    [
+     "admit",
+     "r0001",
+     "L1"
+    ],
+    [
+     "release",
+     "r0001",
+     "L1"
+    ],
+    [
+     "admit",
+     "r0001",
+     "alg"
+    ],
+    [
+     "release",
+     "r0001",
+     "alg"
+    ],
+    [
+     "open",
+     "h",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "finish",
+     "r0004"
+    ],
+    [
+     "admit",
+     "r0002",
+     "L0"
+    ],
+    [
+     "release",
+     "r0002",
+     "L0"
+    ],
+    [
+     "admit",
+     "r0002",
+     "L1"
+    ],
+    [
+     "release",
+     "r0002",
+     "L1"
+    ],
+    [
+     "admit",
+     "r0002",
+     "alg"
+    ],
+    [
+     "release",
+     "r0002",
+     "alg"
+    ],
+    [
+     "admit",
+     "r0003",
+     "L0"
+    ],
+    [
+     "release",
+     "r0003",
+     "L0"
+    ],
+    [
+     "admit",
+     "r0003",
+     "L1"
+    ],
+    [
+     "release",
+     "r0003",
+     "L1"
+    ],
+    [
+     "admit",
+     "r0003",
+     "alg"
+    ],
+    [
+     "release",
+     "r0003",
+     "alg"
+    ],
+    [
+     "admit",
+     "r0004",
+     "L0"
+    ],
+    [
+     "release",
+     "r0004",
+     "L0"
+    ],
+    [
+     "admit",
+     "r0004",
+     "L1"
+    ],
+    [
+     "release",
+     "r0004",
+     "L1"
+    ],
+    [
+     "admit",
+     "r0004",
+     "alg"
+    ],
+    [
+     "release",
+     "r0004",
+     "alg"
+    ],
+    [
+     "failures",
+     "h"
+    ]
+   ],
+   "results": [
+    "r0000",
+    null,
+    "r0001",
+    null,
+    "r0002",
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    "r0003",
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    "r0004",
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    0
+   ],
+   "record": "{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"h\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 1, \"session\": \"r0000\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 2, \"session\": \"r0001\", \"stream\": \"h\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 3, \"session\": \"r0001\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 4, \"session\": \"r0002\", \"stream\": \"h\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 5, \"session\": \"r0002\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L1\", \"seq\": 7, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"alg\", \"seq\": 8, \"session\": \"r0000\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 9, \"session\": \"r0003\", \"stream\": \"h\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 10, \"session\": \"r0003\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 11, \"session\": \"r0001\"}\n{\"event\": \"release\", \"part\": \"L1\", \"seq\": 12, \"session\": \"r0001\"}\n{\"event\": \"release\", \"part\": \"alg\", \"seq\": 13, \"session\": \"r0001\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 14, \"session\": \"r0004\", \"stream\": \"h\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 15, \"session\": \"r0004\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 16, \"session\": \"r0002\"}\n{\"event\": \"release\", \"part\": \"L1\", \"seq\": 17, \"session\": \"r0002\"}\n{\"event\": \"release\", \"part\": \"alg\", \"seq\": 18, \"session\": \"r0002\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 19, \"session\": \"r0003\"}\n{\"event\": \"release\", \"part\": \"L1\", \"seq\": 20, \"session\": \"r0003\"}\n{\"event\": \"release\", \"part\": \"alg\", \"seq\": 21, \"session\": \"r0003\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 22, \"session\": \"r0004\"}\n{\"event\": \"release\", \"part\": \"L1\", \"seq\": 23, \"session\": \"r0004\"}\n{\"event\": \"release\", \"part\": \"alg\", \"seq\": 24, \"session\": \"r0004\"}\n"
   },
   {
    "name": "schedule",
@@ -921,6 +1471,549 @@
     }
    ],
    "record": "{\"budget\": 2, \"event\": \"open\", \"parts\": [\"L0\", \"L1\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 1, \"session\": \"r0000\"}\n{\"event\": \"register\", \"n\": 0, \"record\": \"0000000000000000aa\", \"seq\": 2}\n{\"event\": \"register\", \"n\": 1, \"record\": \"0000000000000001bb\", \"seq\": 3}\n{\"event\": \"register\", \"n\": 2, \"record\": \"0000000000000002cc\", \"seq\": 4}\n{\"event\": \"register\", \"n\": 3, \"record\": \"0000000000000003dd\", \"seq\": 5}\n{\"event\": \"admit\", \"n\": 0, \"part\": \"L0\", \"seq\": 6, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 7, \"session\": \"r0000\"}\n{\"event\": \"skip\", \"n\": 1, \"part\": \"L1\", \"seq\": 8, \"session\": \"r0000\"}\n{\"event\": \"admit\", \"n\": 2, \"part\": \"L1\", \"seq\": 9, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L1\", \"seq\": 10, \"session\": \"r0000\"}\n{\"budget\": 2, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 11, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 12, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 13, \"session\": \"r0001\", \"why\": \"registration 1 was skipped: one passed over is never admitted\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 14, \"session\": \"r0001\"}\n{\"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 15, \"session\": \"r0002\", \"stream\": \"t\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 16, \"session\": \"r0002\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 17, \"session\": \"r0002\", \"why\": \"registration 7 is not on the ZK server's record\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 18, \"session\": \"r0002\"}\n{\"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 19, \"session\": \"r0003\", \"stream\": \"t\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 20, \"session\": \"r0003\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 21, \"session\": \"r0003\", \"why\": \"row x: its root is no value commitment of the ZK server's (no registration on its record holds a table of its domain, leaf count, schema and root)\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 22, \"session\": \"r0003\"}\n{\"event\": \"open\", \"parts\": [\"L0\", \"L1\"], \"seq\": 23, \"session\": \"r0004\", \"stream\": \"t\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 24, \"session\": \"r0004\"}\n{\"event\": \"admit\", \"n\": 3, \"part\": \"L0\", \"seq\": 25, \"session\": \"r0004\"}\n{\"budget\": 1, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 26, \"session\": \"r0005\", \"stream\": \"u\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 27, \"session\": \"r0005\"}\n{\"event\": \"register\", \"n\": 4, \"record\": \"0000000000000004ee\", \"seq\": 28}\n{\"event\": \"register\", \"n\": 5, \"record\": \"0000000000000005\", \"seq\": 29}\n{\"event\": \"skip\", \"n\": 4, \"part\": \"L0\", \"seq\": 30, \"session\": \"r0005\"}\n{\"event\": \"admit\", \"n\": 5, \"part\": \"L0\", \"seq\": 31, \"session\": \"r0005\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 32, \"session\": \"r0005\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 33, \"session\": \"r0005\"}\n"
+  },
+  {
+   "name": "prestop",
+   "ops": [
+    [
+     "open",
+     "s",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "stop",
+     "r0001",
+     "L0",
+     "cut"
+    ],
+    [
+     "slot",
+     "r0001",
+     "L0"
+    ],
+    [
+     "slot",
+     "r9999",
+     "L0"
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "slot",
+     "r0001",
+     "L0"
+    ],
+    [
+     "slot",
+     "r0000",
+     "L0"
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "stop",
+     "r0001",
+     "L0",
+     "again"
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0",
+      "L1",
+      "alg"
+     ],
+     3,
+     null
+    ],
+    [
+     "stop",
+     "r0002",
+     "inner",
+     "rec proxy: the session ended without Finish"
+    ],
+    [
+     "failures",
+     "s"
+    ]
+   ],
+   "results": [
+    "r0000",
+    false,
+    null,
+    null,
+    "r0001",
+    0,
+    null,
+    null,
+    1,
+    false,
+    "r0002",
+    {
+     "refused": "stream s's unended recursive sessions and failures reach its failure budget (2 and 1 of 3)"
+    },
+    true,
+    2
+   ],
+   "record": "{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 1, \"session\": \"r0001\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 2, \"session\": \"r9999\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 3, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 4, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 5, \"session\": \"r0001\", \"why\": \"the slot's holder ended before its outcome (slot 4)\"}\n{\"event\": \"slot\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0000\"}\n{\"budget\": 3, \"event\": \"open\", \"parts\": [\"L0\", \"L1\", \"alg\"], \"seq\": 7, \"session\": \"r0002\", \"stream\": \"s\"}\n{\"event\": \"stop\", \"part\": \"inner\", \"seq\": 8, \"session\": \"r0002\", \"why\": \"rec proxy: the session ended without Finish\"}\n"
+  },
+  {
+   "name": "prestop-registrations",
+   "ops": [
+    [
+     "register",
+     "aa"
+    ],
+    [
+     "registrations",
+     "r0000",
+     "L0",
+     [
+      3
+     ]
+    ],
+    [
+     "registrations",
+     "r0000",
+     "L0",
+     "row x: its root is no value commitment of the ZK server's"
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0"
+     ],
+     1,
+     null
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L0"
+    ],
+    [
+     "registrations",
+     "r0000",
+     "L0",
+     [
+      0
+     ]
+    ],
+    [
+     "release",
+     "r0000",
+     "L0"
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0"
+     ],
+     1,
+     null
+    ],
+    [
+     "finish",
+     "r0001"
+    ],
+    [
+     "admit",
+     "r0001",
+     "L0"
+    ],
+    [
+     "registrations",
+     "r0001",
+     "L0",
+     [
+      3
+     ]
+    ],
+    [
+     "failures",
+     "s"
+    ],
+    [
+     "open",
+     "s",
+     [
+      "L0"
+     ],
+     1,
+     null
+    ]
+   ],
+   "results": [
+    0,
+    {
+     "refused": "recursive session r0000 stopped at L0: registration 3 is not on the ZK server's record"
+    },
+    {
+     "refused": "recursive session r0000 stopped at L0: row x: its root is no value commitment of the ZK server's"
+    },
+    "r0000",
+    0,
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    null,
+    "r0001",
+    null,
+    {
+     "release_ms": null
+    },
+    {
+     "refused": "recursive session r0001 stopped at L0: registration 3 is not on the ZK server's record"
+    },
+    1,
+    {
+     "refused": "stream s stopped at its failure budget (1 of 1)"
+    }
+   ],
+   "record": "{\"event\": \"register\", \"n\": 0, \"record\": \"0000000000000000aa\", \"seq\": 0}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 1, \"session\": \"r0000\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 2, \"session\": \"r0000\"}\n{\"budget\": 1, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 3, \"session\": \"r0000\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 4, \"session\": \"r0000\"}\n{\"event\": \"admit\", \"n\": 0, \"part\": \"L0\", \"seq\": 5, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0000\"}\n{\"budget\": 1, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 7, \"session\": \"r0001\", \"stream\": \"s\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 8, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 9, \"session\": \"r0001\", \"why\": \"registration 3 is not on the ZK server's record\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 10, \"session\": \"r0001\"}\n"
+  },
+  {
+   "name": "budget-1",
+   "ops": [
+    [
+     "open",
+     "a",
+     [
+      "L0",
+      "alg"
+     ],
+     1,
+     null
+    ],
+    [
+     "open",
+     "a",
+     [
+      "L0",
+      "alg"
+     ],
+     1,
+     null
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L0"
+    ],
+    [
+     "release",
+     "r0000",
+     "L0"
+    ],
+    [
+     "open",
+     "a",
+     [
+      "L0",
+      "alg"
+     ],
+     1,
+     null
+    ],
+    [
+     "admit",
+     "r0000",
+     "alg"
+    ],
+    [
+     "release",
+     "r0000",
+     "alg"
+    ],
+    [
+     "open",
+     "a",
+     [
+      "L0",
+      "alg"
+     ],
+     1,
+     null
+    ],
+    [
+     "failures",
+     "a"
+    ],
+    [
+     "stop",
+     "r0001",
+     "inner",
+     "rec proxy: the session ended without Finish"
+    ],
+    [
+     "failures",
+     "a"
+    ],
+    [
+     "open",
+     "a",
+     [
+      "L0",
+      "alg"
+     ],
+     1,
+     null
+    ],
+    [
+     "open",
+     "a",
+     [
+      "L0",
+      "alg"
+     ],
+     2,
+     null
+    ],
+    [
+     "admit",
+     "r0000",
+     "L0"
+    ],
+    [
+     "failures",
+     "a"
+    ]
+   ],
+   "results": [
+    "r0000",
+    {
+     "refused": "stream a's unended recursive sessions and failures reach its failure budget (1 and 0 of 1)"
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    {
+     "refused": "stream a's unended recursive sessions and failures reach its failure budget (1 and 0 of 1)"
+    },
+    {
+     "release_ms": null
+    },
+    null,
+    "r0001",
+    0,
+    true,
+    1,
+    {
+     "refused": "stream a stopped at its failure budget (1 of 1)"
+    },
+    {
+     "error": "stream a's budget is 1, not 2"
+    },
+    {
+     "refused": "recursive session r0000 released all its statements: the firewall serves nothing more of it"
+    },
+    1
+   ],
+   "record": "{\"budget\": 1, \"event\": \"open\", \"parts\": [\"L0\", \"alg\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"a\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 1, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 2, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"alg\", \"seq\": 3, \"session\": \"r0000\"}\n{\"budget\": 1, \"event\": \"open\", \"parts\": [\"L0\", \"alg\"], \"seq\": 4, \"session\": \"r0001\", \"stream\": \"a\"}\n{\"event\": \"stop\", \"part\": \"inner\", \"seq\": 5, \"session\": \"r0001\", \"why\": \"rec proxy: the session ended without Finish\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 6, \"session\": \"r0000\"}\n"
+  },
+  {
+   "name": "budget-2",
+   "ops": [
+    [
+     "open",
+     "b",
+     [
+      "L0"
+     ],
+     2,
+     null
+    ],
+    [
+     "open",
+     "b",
+     [
+      "L0"
+     ],
+     2,
+     null
+    ],
+    [
+     "open",
+     "b",
+     [
+      "L0"
+     ],
+     2,
+     null
+    ],
+    [
+     "finish",
+     "r0000"
+    ],
+    [
+     "admit",
+     "r0000",
+     "L0"
+    ],
+    [
+     "release",
+     "r0000",
+     "L0"
+    ],
+    [
+     "open",
+     "b",
+     [
+      "L0"
+     ],
+     2,
+     null
+    ],
+    [
+     "open",
+     "b",
+     [
+      "L0"
+     ],
+     2,
+     null
+    ],
+    [
+     "admit",
+     "r0002",
+     "L0"
+    ],
+    [
+     "failures",
+     "b"
+    ],
+    [
+     "open",
+     "b",
+     [
+      "L0"
+     ],
+     2,
+     null
+    ],
+    [
+     "finish",
+     "r0001"
+    ],
+    [
+     "stop",
+     "r0001",
+     "L0",
+     "cut"
+    ],
+    [
+     "failures",
+     "b"
+    ],
+    [
+     "open",
+     "b",
+     [
+      "L0"
+     ],
+     2,
+     null
+    ],
+    [
+     "finish",
+     "r0002"
+    ],
+    [
+     "admit",
+     "r0002",
+     "L0"
+    ],
+    [
+     "failures",
+     "b"
+    ]
+   ],
+   "results": [
+    "r0000",
+    "r0001",
+    {
+     "refused": "stream b's unended recursive sessions and failures reach its failure budget (2 and 0 of 2)"
+    },
+    null,
+    {
+     "release_ms": null
+    },
+    null,
+    "r0002",
+    {
+     "refused": "stream b's unended recursive sessions and failures reach its failure budget (2 and 0 of 2)"
+    },
+    {
+     "refused": "recursive session r0002: its inner session has not finished"
+    },
+    1,
+    {
+     "refused": "stream b's unended recursive sessions and failures reach its failure budget (2 and 1 of 2)"
+    },
+    null,
+    true,
+    2,
+    {
+     "refused": "stream b stopped at its failure budget (2 of 2)"
+    },
+    null,
+    {
+     "refused": "stream b stopped at its failure budget (2 of 2)"
+    },
+    2
+   ],
+   "record": "{\"budget\": 2, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 0, \"session\": \"r0000\", \"stream\": \"b\"}\n{\"budget\": 2, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 1, \"session\": \"r0001\", \"stream\": \"b\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 2, \"session\": \"r0000\"}\n{\"event\": \"release\", \"part\": \"L0\", \"seq\": 3, \"session\": \"r0000\"}\n{\"budget\": 2, \"event\": \"open\", \"parts\": [\"L0\"], \"seq\": 4, \"session\": \"r0002\", \"stream\": \"b\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 5, \"session\": \"r0002\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 6, \"session\": \"r0001\"}\n{\"event\": \"stop\", \"part\": \"L0\", \"seq\": 7, \"session\": \"r0001\", \"why\": \"cut\"}\n{\"event\": \"finish\", \"part\": \"inner\", \"seq\": 8, \"session\": \"r0002\"}\n{\"event\": \"refused\", \"part\": \"L0\", \"seq\": 9, \"session\": \"r0002\"}\n"
   }
  ]
 }
