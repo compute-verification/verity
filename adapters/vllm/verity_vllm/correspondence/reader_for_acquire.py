@@ -33,7 +33,6 @@ from verity_vllm.query.manifest.format import collector_path, split_name
 from verity_vllm.observe.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, RuntimeCorrespondence, read_program_dir
 
-SOURCES = ("correspondence", "v1_annotations")
 FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
 
 
@@ -214,5 +213,5 @@ class AcquireCorrespondence:
 
 AnnotationCorrespondence = AcquireCorrespondence      # the adapter's former name (callers written against it keep working)
 
-__all__ = ["SOURCES", "FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence", "AnnotationCorrespondence", "read_program_correspondence",
+__all__ = ["FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence", "AnnotationCorrespondence", "read_program_correspondence",
            "RuntimeTree", "RUNTIME_TREE_SCHEMA", "RUNNER_PATH", "mro_names", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.definitions.registry import b1
 
 from verity_vllm.check.fold_compare import DEFAULT_COS_SIN as B0_FIXTURE
 from verity_vllm.program import model as analytic
-from verity.definitions.registry import b1
 
 # the relevant keys of the checkpoints' config.json (HF hub, the pinned revisions)
 SMOLLM2_135M = {"model_type": "llama", "hidden_size": 576, "num_hidden_layers": 30, "num_attention_heads": 9, "num_key_value_heads": 3,

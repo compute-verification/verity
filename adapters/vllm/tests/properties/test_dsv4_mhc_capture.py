@@ -11,6 +11,7 @@ import hashlib
 import json
 import types
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -23,7 +24,7 @@ from verity.definitions.numerics import mhc_twin as W
 from verity.definitions.registry import mhc as R
 from verity_vllm.properties.record import REGISTRY, digest_of
 
-SMALL = {"HC": 2, "H": 64, "TH": 2, "TH_HEAD": 2, "TN": 2, "REPEAT": 2, "EPS": 1e-6, "HC_EPS": 1e-6}
+SMALL: dict[str, Any] = {"HC": 2, "H": 64, "TH": 2, "TH_HEAD": 2, "TN": 2, "REPEAT": 2, "EPS": 1e-6, "HC_EPS": 1e-6}
 SMALL_NS = {"fused": 2, "tf32": 2, "broadcast": 1, "head": None}
 OTHER_STEP = "g4+4_w25_f139"
 
@@ -53,7 +54,7 @@ def test_the_probe_launches_are_deepgemms_shapes(launches) -> None:
     assert [L["family"] for L in launches] == list(X.PROBE_FAMILIES)
     for L in launches:
         (M, K), (N, Kb) = L["a"].shape, L["b"].shape
-        assert (M, N, K) == (X.PROBE_M, X.PROBE_N, Kb) and N <= 32 and N % 8 == 0 and K % 64 == 0 and 1 <= L["NS"] <= K // 64
+        assert (X.PROBE_M, X.PROBE_N, Kb) == (M, N, K) and N <= 32 and N % 8 == 0 and K % 64 == 0 and 1 <= L["NS"] <= K // 64
         assert L["a"].dtype == np.uint16 and L["b"].dtype == np.uint32
 
 
@@ -377,8 +378,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     import sys
 
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     for k in ("VLLM_USE_DEEP_GEMM", "VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR", "TILELANG_CACHE_DIR"):

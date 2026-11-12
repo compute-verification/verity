@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
 from verity_vllm.acquire.committer_api import StepCommitment
-from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline.tp import warmup as WU
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 
 
 class _Placeholder:
@@ -24,7 +25,8 @@ class _Com:
     """A committer that learns a plan over budget at step 0 when learn-only, raises there otherwise; `seen` = (call, learn_only)."""
 
     def __init__(self, bounded: bool = True) -> None:
-        self.bounded, self.learn_only, self.sources, self.seen = bounded, False, [_Placeholder()], []
+        self.bounded, self.learn_only, self.sources = bounded, False, [_Placeholder()]
+        self.seen: list[tuple[str, bool]] = []
 
     def reset(self) -> None:
         self.seen.append(("reset", self.learn_only))
@@ -54,7 +56,7 @@ class _Rank:
     tp2_commit_reset = _cls.tp2_commit_reset
 
     def __init__(self, rank: int, com: _Com) -> None:
-        self._tp2_commit = {"com": com, "rank": rank, "eng": None, "base": None, "replay": {"programs": {}}, "match_capture_dir": "/match"}
+        self._tp2_commit: dict[str, Any] = {"com": com, "rank": rank, "eng": None, "base": None, "replay": {"programs": {}}, "match_capture_dir": "/match"}
         self.calls: list[str] = []
 
     def _tp2_binding(self, rc):
@@ -73,7 +75,8 @@ class _LLM:
     """`LLM.collective_rpc` over the ranks: a callable runs as `fn(worker, *args)` on each, a name as the worker's method."""
 
     def __init__(self, ranks: list[_Rank]) -> None:
-        self.ranks, self.rpcs = ranks, []
+        self.ranks = ranks
+        self.rpcs: list[tuple[Any, tuple]] = []
 
     def collective_rpc(self, method, timeout=None, args=(), kwargs=None):
         self.rpcs.append((getattr(method, "__name__", method), args))
@@ -86,9 +89,13 @@ def _pristine(monkeypatch):
 
 
 def _run(llm: _LLM, tmp_path):
-    states = []
-    r = WU.run(llm, lambda: states.append([(k.learn_only, k.sources[0].placeholder) for k in (x._tp2_commit["com"] for x in llm.ranks)]) or {"wall_s": 1.0},
-               tmp_path, "native_collect_v2b", 60.0)
+    states: list[list[tuple[bool, bool]]] = []
+
+    def run_once() -> dict[str, Any]:
+        states.append([(k.learn_only, k.sources[0].placeholder) for k in (x._tp2_commit["com"] for x in llm.ranks)])
+        return {"wall_s": 1.0}
+
+    r = WU.run(llm, run_once, tmp_path, "native_collect_v2b", 60.0)
     return r, states
 
 

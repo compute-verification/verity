@@ -11,6 +11,7 @@ import sys
 
 import pytest
 
+from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay.fork import die_with_parent, fork_pool
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="PR_SET_PDEATHSIG is Linux-only")
@@ -134,3 +135,18 @@ def test_a_replacement_worker_sets_no_signal_and_the_pool_terminates():
         pool.apply_async(_die)
         second, sig = pool.apply(_pdeathsig)
         assert second != first and sig == 0
+
+
+def test_oom_kills_is_the_cgroups_count_and_none_only_where_no_cgroup_counts(tmp_path, monkeypatch):
+    """None says no cgroup counts OOM kills here, so a dead worker is named without the OOM half; a count that is there and
+    cannot be read is never taken for that."""
+    events = tmp_path / "memory.events"
+    monkeypatch.setattr(FK, "CGROUP_MEMORY_EVENTS", str(events))
+    assert FK.oom_kills() is None                                               # no cgroup v2 memory controller
+    events.write_text("low 0\nhigh 0\nmax 12\noom 3\noom_kill 2\noom_group_kill 0\n")
+    assert FK.oom_kills() == 2
+    events.write_text("low 0\nhigh 0\n")
+    assert FK.oom_kills() is None                                               # a controller that writes no such line
+    events.write_text("oom_kill many\n")
+    with pytest.raises(ValueError):
+        FK.oom_kills()

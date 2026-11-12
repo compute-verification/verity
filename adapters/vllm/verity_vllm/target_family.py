@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
@@ -181,8 +182,8 @@ def check(row_id: str, workload: dict | None, stages: list[str], *, want_device:
 
 def summary_line(rec: dict) -> str:
     fam = fmt(tuple(rec["row_family"]) if rec["row_family"] else None)
-    facts = f"row={rec['device_token']}({fam}) declared={fmt(tuple(rec['declared']) if rec['declared'] else None)} " \
-            f"device={fmt(tuple(rec['device']) if rec['device'] else None)} built={fmt(tuple(rec['built']) if rec['built'] else None)}"
+    facts = (f"row={rec['device_token']}({fam}) declared={fmt(tuple(rec['declared']) if rec['declared'] else None)} "
+             f"device={fmt(tuple(rec['device']) if rec['device'] else None)} built={fmt(tuple(rec['built']) if rec['built'] else None)}")
     if rec["verdict"] == "PASS":
         return f"TARGET-FAMILY-OK {facts}"
     why = "; ".join(m["why"] for m in rec["mismatches"])
@@ -210,8 +211,8 @@ class Options:
 
 
 def main(a: Options) -> int:
-    wl = json.load(open(a.workload)) if a.workload and os.path.exists(a.workload) else None
-    bs = json.load(open(a.build_summary)) if a.build_summary and os.path.exists(a.build_summary) else None
+    wl = json.loads(Path(a.workload).read_text()) if a.workload and os.path.exists(a.workload) else None
+    bs = json.loads(Path(a.build_summary).read_text()) if a.build_summary and os.path.exists(a.build_summary) else None
     stages = [s for s in a.stages.replace(" ", "").split(",") if s]
     rec = check(a.row, wl, stages, want_device=not a.no_device, build_summary=bs, waiver=a.waiver, devices=a.devices,
                 match_phase=a.match_phase)
