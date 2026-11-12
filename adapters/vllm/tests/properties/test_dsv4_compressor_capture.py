@@ -15,12 +15,12 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.definitions.numerics import dsv4_compressor_twin as T
+from verity.definitions.numerics import flashmla_twin as FT
 
 from tests.properties import dsv4_compressor_capture_gpu as X
 from tests.properties import dsv4_flashmla_capture_gpu as FX
-from verity.definitions.numerics import dsv4_compressor_twin as T
-from verity.definitions.numerics import flashmla_twin as FT
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 LAYERS = list(X.LAYERS)
 
@@ -533,7 +533,5 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_compressor_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

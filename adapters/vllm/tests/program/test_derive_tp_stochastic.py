@@ -13,8 +13,9 @@ from __future__ import annotations
 import pytest
 import torch
 from torch import nn
-
 from verity.circuits.codec import encode_program, program_digest
+from verity.definitions.registry import b1
+
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import seed_rule as SEED
 from verity_vllm.program.frontend import vllm_meta as vm
@@ -24,7 +25,6 @@ from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_bindings.collectives import AllReduce2Rule
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-from verity.definitions.registry import b1
 
 PROF = {"mode": "profile", "profile": "b1-eager-v3"}
 LP, T = 3, 2
@@ -61,7 +61,7 @@ class _ToyRankLM(nn.Module):
         return self.lm.lm_head(hidden)
 
 
-def _wrapper(kind: str, sampling: dict, bus: CollectiveBus | None):
+def _wrapper(kind: str, sampling: dict | None, bus: CollectiveBus | None):
     with torch.device("meta"):
         return vm.make_wrapper(kind, _ToyRankLM(_config(), bus), pos0=LP, M=1, LP=LP, T=T, sampling=sampling)
 

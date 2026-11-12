@@ -102,6 +102,7 @@ def _worker(cfg, bmap, rc=None, model=None):
     from verity_vllm.pipeline.tp import rank_worker as W
 
     class Stub:
+        _tp2_commit: dict
         _tp2_sampled_replay = W.TP2CaptureWorkerExtension._tp2_sampled_replay
 
     s = Stub()

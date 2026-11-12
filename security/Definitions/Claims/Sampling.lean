@@ -520,8 +520,8 @@ sampled verifier at this deployment (`SamplingGeneric.ofDeploy`). A union over t
 `2^{2^{−j}}`, while `k` enters the extractor's cost, and so the hash side of `Bits`, only through `log₂ k`. -/
 def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ slackExp * (2 * nPU D x + 1)
 
-/-- The waits give up after `K = 2^128·k` reruns. -/
-def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 128 * D.k x
+/-- The waits give up after `K = 2^192·k` reruns, so that `2k/K = 2^{−191}` is below `e^{−k/8}` at `k = 2^j`. -/
+def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 192 * D.k x
 
 /-- What passes its opening check among `rs`, each checked by the commitment under its roots, its `H` calls the
 extractor's own. -/

@@ -32,9 +32,9 @@ MXFP4_BLOCK = 32
 def shapes(layer: Any) -> dict[str, list[int]]:
     """Each field's shape as `Mxfp4MoEMethod.create_weights` makes it."""
     qm = layer.quant_method
-    E, I, H, S = int(qm.num_experts), int(qm.intermediate_size), int(qm.hidden_size), int(qm.moe.w13_num_shards)
-    return {"w13_weight": [E, S * I, H // 2], "w2_weight": [E, H, I // 2],
-            "w13_weight_scale": [E, S * I, H // MXFP4_BLOCK], "w2_weight_scale": [E, H, I // MXFP4_BLOCK]}
+    E, inter, H, S = int(qm.num_experts), int(qm.intermediate_size), int(qm.hidden_size), int(qm.moe.w13_num_shards)
+    return {"w13_weight": [E, S * inter, H // 2], "w2_weight": [E, H, inter // 2],
+            "w13_weight_scale": [E, S * inter, H // MXFP4_BLOCK], "w2_weight_scale": [E, H, inter // MXFP4_BLOCK]}
 
 
 def marlin_repack(layer: Any, *loaded: torch.Tensor) -> tuple[torch.Tensor, ...]:

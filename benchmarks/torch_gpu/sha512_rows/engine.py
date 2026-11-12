@@ -52,7 +52,8 @@ __all__ = ["DEFAULT_VARIANT", "Engine", "LeafTable", "RowTable", "SaltKey", "dev
 HERE = Path(__file__).resolve().parent
 DEVICE_SOURCES = (SHA512, ROW_COMMIT, HERE / "rows.cuh", HERE / "rows.cu")
 HOST_SOURCES = (SHA512, ROW_COMMIT, HERE / "rows.cuh", HERE / "rows_host.cpp")
-NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", "-lineinfo", "-Xptxas", "-v")
+#: no -lineinfo: nothing reads a line table, and with one the cubin holds the source's path
+NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", "-Xptxas", "-v")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
 settings = of(__file__)
 BUILD_DIR = Path(settings.SHA512_ROWS_BUILD or Path.home() / ".cache" / "verity" / "sha512_rows")

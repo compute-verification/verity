@@ -8,8 +8,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+
 from verity_vllm.errors import Refused
-from verity_vllm.protocols.linear.api import Arm, Control, Forward, LinearSite, PassSpec, Stack
+from verity_vllm.protocols.linear.api import (
+    Arm,
+    Control,
+    Forward,
+    LinearSite,
+    PassSpec,
+    Stack,
+)
 
 SITES = (LinearSite(0, 0, "model.layers.0.self_attn.qkv_proj", 6144, 4096, "bf16"),
          LinearSite(1, 1, "model.layers.0.mlp.down_proj", 4096, 14336, "bf16", has_bias=True))
@@ -132,20 +140,28 @@ def test_a_forward_that_raises_still_ends_at_the_source_and_its_pass_is_ended_un
     stack.activate(PEARLC)
     with pytest.raises(ZeroDivisionError), stack.pass_() as p, stack.forward():
         stack.apply(SITES[0], Layer(), "x", None, original)
-        1 / 0
+        raise ZeroDivisionError("the forward raises")
     assert src.ended == [0] and p.ended == 1 and stack.passes == []
 
 
 def test_arms_switch_only_between_passes_and_name_the_stacks_executor():
     stack = Stack(SITES, Executor())
     stack.activate(PEARLC)
-    with stack.pass_():
-        with pytest.raises(RuntimeError, match="arms switch between passes"):
-            stack.activate(None)
+    with stack.pass_(), pytest.raises(RuntimeError, match="arms switch between passes"):
+        stack.activate(None)
     stack.activate(Arm("bf16", "bf16"))
     assert stack.apply(SITES[0], Layer(), "x", None, original)[0] == "stock"
     with pytest.raises(ValueError, match="this stack's executor is pouw:pearl-c-sm120-v1-h3"):
         stack.activate(Arm("ncp", "bf16", "pouw:ncp-v2"))
+
+
+def test_an_arm_that_executes_on_a_stack_with_no_executor_is_refused():
+    stack = Stack(SITES)
+    with pytest.raises(ValueError, match="this stack's executor is none"):
+        stack.activate(PEARLC)
+    stack.active = PEARLC                 # past `activate`: the pass refuses it too
+    with pytest.raises(RuntimeError, match="this stack has no executor"), stack.pass_():
+        pass
 
 
 def test_the_interface_imports_neither_vllm_nor_torch():

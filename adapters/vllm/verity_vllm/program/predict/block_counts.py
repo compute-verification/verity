@@ -50,13 +50,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.circuits import codec, partition_v2 as PV2
+from verity.circuits import codec
+from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.parts import n_members
 from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
-from verity.definitions.boolean import gate_table
 from verity.commitments.windows import interface as IF
+from verity.definitions.boolean import gate_table
+
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.weights_registration import WeightsRegistration
@@ -69,6 +71,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
     blocks, _ = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    per: Counter[str]
     m, per = blocks.slots, Counter()
     for e in blocks.inference:
         per[e.template] += e.units // m
@@ -99,6 +102,7 @@ def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Cou
         key = codec.descriptor_id(fn)
         got = (0, Counter()) if is_input(fn) else (table[key], Counter()) if key in table else (0, Counter({key: 1}))
     else:
+        miss: Counter[str]
         g, miss = 0, Counter()
         for nd in fn.body.nodes:
             cg, cm = gates(nd.fn, table, memo)
@@ -125,13 +129,14 @@ def declaration(doc: Any) -> tuple[str, int, int, int]:
     (ValueError) where it isn't a JSON object holding them."""
     if not isinstance(doc, Mapping):
         raise ValueError(f"the declaration is a {type(doc).__name__}, not a JSON object")
-    got = [doc.get(f) for f in ("c", "k", "n")]
+    got: list[Any] = [doc.get(f) for f in ("c", "k", "n")]
     if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in got):
         raise ValueError(f"the declaration's c, k and n are {got}, not natural numbers")
-    return (hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), *got)
+    c, k, n = got
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), c, k, n
 
 
-def judge(classes: Sequence[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
+def judge(classes: tuple[RBC.BlockClass, ...] | list[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
     """`NciCheck.Count`'s rules on ``classes`` (each with a block) and the day's exact ``total``: each rule's outcome, and
     the first that doesn't accept as a sentence naming c, k or n, never a count (None when every rule accepts)."""
     checks = {**RBC.shape_checks(classes, c, k), "count": "accept" if total <= n else "refuse"}

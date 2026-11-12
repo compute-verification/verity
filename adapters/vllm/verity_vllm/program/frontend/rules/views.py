@@ -6,17 +6,24 @@ derived view is the very same affine/strided descriptor an authored program woul
 
 from __future__ import annotations
 
-import operator
-
 import torch
-
 from verity.circuits.refs import Coll, array_of, concat
-from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.errors import FrontendError
-from verity_vllm.program.frontend.strided_views import _dim_len, _expand, _norm_dim, _permute, _select, _slice, _stack, _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of, type_of_tensor, width_of
+from verity.circuits.types import Array
+
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
+from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
+from verity_vllm.program.frontend.strided_views import (
+    _dim_len,
+    _expand,
+    _norm_dim,
+    _permute,
+    _select,
+    _slice,
+    _stack,
+    _tensor_type,
+)
+from verity_vllm.program.frontend.value_types import shape_of, type_of_tensor, width_of
 
 aten = torch.ops.aten
 

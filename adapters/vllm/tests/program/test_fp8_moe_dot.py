@@ -18,26 +18,34 @@ import dataclasses
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.circuits import boolean as BL
-from verity.circuits.defs import bind
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import fp8_moe_rows as MR
 from verity.definitions.ops.boolean import gemm as BG
-from verity.circuits.boolean import trace as TR
 from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32 as BW
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
-from verity.definitions import boolean as SW
-from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics import fp8_moe_rows as MR
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import fp8_moe as M
 from verity.definitions.registry import fp8_moe_experts as X
+
+from tests.program.test_boolean_fp8 import _flat, _inputs
+from tests.program.test_fp8_moe import (
+    ONE,
+    _bf16,
+    _ffma,
+    _fmul,
+    _operands,
+    _twin_agrees,
+    _wide,
+)
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as T
-from tests.program.test_boolean_fp8 import _flat, _inputs
-from tests.program.test_fp8_moe import ONE, _bf16, _ffma, _fmul, _operands, _twin_agrees, _wide
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 PAIRS = [(M.MoeExpertFp8BlockCoordinate, M.MoeExpertFp8BlockCoordinateV3), (M.MoeExpertFp8BlockCoordinateW, M.MoeExpertFp8BlockCoordinateWV3),
          (M.MoeExpertFp8BlockGemm, M.MoeExpertFp8BlockGemmV3), (M.MoeExpertFp8BlockGemmW, M.MoeExpertFp8BlockGemmWV3)]
@@ -129,7 +137,8 @@ def test_the_pair_forms_gather_the_routed_experts_rows(W: bool) -> None:
     rng = np.random.default_rng(17 + W)
     x, sx, _, _ = _operands(rng, K, G)
     stack = [_operands(rng, K, G, N)[2:] for _ in range(E)]
-    w, ws = sum((s[0] for s in stack), []), sum((s[1] for s in stack), [])
+    w: list[int] = sum((s[0] for s in stack), [])
+    ws: list[int] = sum((s[1] for s in stack), [])
     g = int(np.float32(0.6875).view(np.uint32))
     pair = bind(X.MoeExpertFp8GemmW if W else X.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=32, SWAP=False, DOT=BW)
     block = bind(M.MoeExpertFp8BlockGemmWV3 if W else M.MoeExpertFp8BlockGemmV3, K=K, N=N, G=G, KB=32, SWAP=False, DOT=BW)
