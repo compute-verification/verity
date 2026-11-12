@@ -587,8 +587,9 @@ private def passed : Answer :=
     { protocol := Core.Example.protocol.id, verdict := .reject, reason := none, digest := none, published := none,
       profile := none }
 
-private def accept (protocol : String) (published profile : List (String × Json)) : Answer :=
-  { protocol, verdict := .accept, reason := none, digest := none, published := some (Json.mkObj published),
+private def accept (protocol : String) (published profile : List (String × Json)) (head : String := "h") : Answer :=
+  { protocol, verdict := .accept, reason := none, digest := none,
+    published := some (Json.mkObj (("registration_head", .str head) :: published)),
     profile := some (Json.mkObj profile) }
 
 /-- Toy accounts in the shapes a row takes: memory held, at a moment, from below; memory after a wipe, at a moment,
@@ -596,77 +597,74 @@ from above, with its own capacity and a flag; a link's bits, over a span named b
 above, summed; work, over a span that is only counted, from below, with a share, pooled once; and work over a span
 named by its first and last steps, from below. -/
 private def held : Account :=
-  { protocol := "toy/held", head := some (.profile "registration")
+  { protocol := "toy/held", head := some (.published "registration_head")
     amounts := [{ metric := "held", part := .memory [.hbm], place := some (.profile "device"),
                   key := .published "s_bits", unit := bits, side := .verified, time := .moment,
                   error := .published "eps", uncertified := .flagged (.published "certified") }] }
 
 private def wiped : Account :=
-  { protocol := "toy/wiped", head := some (.profile "registration")
-    amounts := [{ metric := "after a wipe", part := .memory [.hbm], key := .published "foreign_bits", unit := bits,
-                  side := .free, time := .moment, error := .published "eps",
+  { protocol := "toy/wiped", head := some (.published "registration_head")
+    amounts := [{ metric := "after a wipe", part := .memory [.hbm, .dram, .disk], key := .published "foreign_bits",
+                  unit := bits, side := .free, time := .moment, error := .published "eps",
                   capacity := some (.published "memory_bits"), uncertified := .flagged (.published "certified"),
                   unpriced := ["the keyed stream's PRF advantage"] }] }
 
 private def sent : Account :=
-  { protocol := "toy/sent", head := some (.profile "registration")
+  { protocol := "toy/sent", head := some (.published "registration_head")
     amounts := [{ metric := "sent", part := .link, place := some (.profile "link"), key := .published "K",
                   unit := bits, side := .free,
                   time := .steps (.run (.published "start_ns") (.published "span_ns")) ⟨1, 1000000000⟩,
                   error := .published "eps", uncertified := .refused }] }
 
 private def worked : Account :=
-  { protocol := "toy/worked", head := some (.profile "registration")
+  { protocol := "toy/worked", head := some (.published "registration_head")
     amounts := [{ metric := "work", part := .compute, key := .published "work", unit := macs, side := .verified,
                   time := .span (.published "windows") ⟨1, 1000000⟩, share := some (.published "eps"),
                   error := .published "delta", pool := .once, uncertified := .safe }] }
 
 private def ranged : Account :=
-  { protocol := "toy/ranged", head := some (.profile "registration")
+  { protocol := "toy/ranged", head := some (.published "registration_head")
     amounts := [{ metric := "audited", part := .compute, key := .published "work", unit := macs, side := .verified,
                   time := .steps (.range (.published "first") (.published "last")) ⟨1, 1000000⟩,
                   series := some (.profile "session"), error := .published "delta", uncertified := .safe }] }
 
 /-- A read rate bounded from above over two tiers, one of them a host's, whose rate no sheet states. -/
 private def spare : Account :=
-  { protocol := "toy/spare", head := some (.profile "registration")
+  { protocol := "toy/spare", head := some (.published "registration_head")
     amounts := [{ metric := "unread", part := .read [.hbm, .dram], key := .published "K", unit := bits, side := .free,
                   time := .span (.published "span_ns") ⟨1, 1000000000⟩, error := .published "eps",
                   uncertified := .refused }] }
 
-private def at_ (head : String) (more : List (String × Json) := []) : List (String × Json) :=
-  ("registration", .str head) :: more
-
 private def session (n : Nat) (eps : String) (certified : Bool := true) : Answer :=
   accept "toy/held" [("certified", .bool certified), ("eps", .str eps), ("s_bits", Lean.toJson n)]
-    (at_ "h" [("device", .str "gpu0")])
+    [("device", .str "gpu0")]
 
 private def wipe (foreign memory : Nat) (certified : Bool := true) : Answer :=
   accept "toy/wiped" [("certified", .bool certified), ("eps", .str "1/1000"), ("foreign_bits", Lean.toJson foreign),
-    ("memory_bits", Lean.toJson memory)] (at_ "h")
+    ("memory_bits", Lean.toJson memory)] []
 
 private def check (k ns : Nat) (eps : String) (head : String := "h") (start : Option Nat := some 0) : Answer :=
   accept "toy/sent" ([("K", Lean.toJson k), ("eps", .str eps), ("span_ns", Lean.toJson ns)] ++
-    (start.map fun s => ("start_ns", Lean.toJson s)).toList) (at_ head [("link", .str "up0")])
+    (start.map fun s => ("start_ns", Lean.toJson s)).toList) [("link", .str "up0")] head
 
 /-- An audit of `work` MACs over the steps `span` names, first and last, numbered in `session`; over no named span
 where it is none. -/
 private def audit (work : Nat) (span : Option (Nat × Nat)) (session : String := "s0") : Answer :=
   accept "toy/ranged" ([("delta", .str "1/1000"), ("work", Lean.toJson work)] ++
     (span.map fun s => [("first", Lean.toJson s.1), ("last", Lean.toJson s.2)]).getD [])
-    (at_ "h" [("session", .str session)])
+    [("session", .str session)]
 
 private def firstVerified (rs : List Row) : List (Option Nat × String) :=
   (rs.take 1).map fun r => (r.verified, r.error.toString)
 
 private def unread (k ns : Nat) : Answer :=
-  accept "toy/spare" [("K", Lean.toJson k), ("eps", .str "1/1000"), ("span_ns", Lean.toJson ns)] (at_ "h")
+  accept "toy/spare" [("K", Lean.toJson k), ("eps", .str "1/1000"), ("span_ns", Lean.toJson ns)] []
 
 private def credit : Answer :=
   accept "toy/worked" [("delta", .str "1/100"), ("eps", Json.arr #[.str "1/4", .null]),
     ("windows", Json.arr #[Json.arr #[], Json.arr #[]]),
     ("work", Json.arr #[Lean.toJson (1000 : Nat), Lean.toJson (500 : Nat)])]
-    (at_ "h")
+    []
 
 private def table (accounts : List Account) (answers : List Answer) (A : Site.Registration.Auditor := auditor)
     (ticks : Nat := 1000) : List Row :=
@@ -790,6 +788,21 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
   ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"link\"," ++
    "\"place\":\"up0\",\"reading\":\"registered\",\"session\":null,\"sessions\":1,\"status\":\"certified\"," ++
    "\"unit\":\"bits\",\"unpriced\":[],\"verified\":37000}"]
+
+/-- A read rate verified from below, in bytes, by an answer that names no span. -/
+private def reads : Account :=
+  { protocol := "toy/reads", head := some (.published "registration_head")
+    amounts := [{ metric := "reads", part := .read [.hbm], key := .published "q_bytes", unit := bytes,
+                  side := .verified, time := .unstated, error := .published "eps", uncertified := .safe }] }
+
+private def read (q : Nat) : Answer := accept "toy/reads" [("eps", .str "1/1000"), ("q_bytes", Lean.toJson q)] []
+
+-- reads verified from below: the bytes in bits, and the rest of the registered rate over the period is free; of two
+-- answers that name no span the larger counts once
+#guard reads.Formed
+#guard cells ((table [reads] [read 1000]).take 1) ==
+  [("reads", "", "registered", some 3200000, some 8000, some 3192000, "1/1000")]
+#guard firstVerified (table [reads] [read 1000, read 700]) == [(some 8000, "1/500")]
 
 end Example
 
