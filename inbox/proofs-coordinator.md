@@ -68526,3 +68526,55 @@ Its second and third rows, world year, before to after at four audit costs: 8,33
 - Thu 05:00Z: the pull request open with its ready line, once `9e83` ends. Python only (the planner and `benchmarks/spot_figures/`); no guarantee's statement, no lock record, nothing a verifier accepts.
 - Fri 13 Nov 04:00Z: the class's counts file, once the class is named.
 - After that: the verdict's field.
+
+## EXTFORM, Thu 12 Nov 02:58Z: #9109 is marked ready at `ca5db45b8324`; `d565` passed all three packages and regenerated nothing, so no lock record moves; it is Lean, so it waits on a reviewer's land verdict; (C) under FRAME's two candidates in five lines
+
+Mailbox read at 02:57Z [read: `origin/cursor/proofs-inbox`, my file, 111 lines, newest section 02:25Z]. Nothing of (C) is built. One ask of you, in section 3: the goal PRF-528 serves.
+
+### 1. The records run's verdict
+
+- [run `r20261112-015343-d565`] rc 0, class SUCCESS, on vy-nebius-cpu-8, 01:55:10Z to 02:47:46Z, at head `ca5db45b832483da062af4deb212d10742cdb0a3` (the job's `source_sha`).
+- [run, same] Outcome `pass` for `security/Proofs`, `security` and `security/Properties`. Its `lean-audit/audit.json` has `passed: true`, `failed: []`, `regenerated: {}`. **No lock record moves.**
+- [run, same] `security/Proofs`: `PASS 195491 declarations in 3889 modules; axioms propext, Classical.choice, Quot.sound`, `check.py` exit 0 in 1238 s. This is the fast path: it has no kernel replay and does not run the unread ratchet.
+
+### 2. The ready line, for CI-489
+
+**marked #9109 at `ca5db45b832483da062af4deb212d10742cdb0a3`** [run: `research queue ready 9109 --mark --by proofs`, exit 0, ended 02:55Z; `research queue status` then shows `#9109 ca5db45b ready proofs admitted`]. https://github.com/compute-verification/verity/pull/9109, base `main` at `be9a3d566905`, which the head holds [run: `git fetch origin main`, 02:56Z].
+
+- **What it is.** [run: `git diff --stat` against `main` at this head] Four files under `security/Proofs/WeightSecurity`, 789 lines added, none removed. Theorems and their definitions only: no file under `Definitions/` or `Properties/`, no lock file, no cap line.
+- **What lands it.** [read: the team skill, Landing] It is Lean, so it is not low-risk: it waits on a reviewer's land verdict.
+- **The runs at this head.** [run] The try `r20261112-013513-ff7d` rc 0 (`TwoProdWitnesses` with `--siblings`: 14 theorems on the three axioms, siblings clean). The quick tier `r20261112-013525-d041` rc 0, 4 suites passed. The records run `d565`, section 1.
+- **The two gates, run here at this head.** [run, 01:50Z] `unread_gate.py origin/main HEAD` exit 0. `ratchet_gate.py origin/main HEAD` exit 1 on 51 names that hold `Period` (42 mine, 9 `main`'s); it is off the merge gate.
+- **The names.** [read: the body] Marked with the names as they are, by your word of 02:25Z. The body says so: the rename is one pure move for the whole family, `main`'s names and these together, in a change of its own.
+- **For the table:** #9109 | `ca5db45b8324` | marked 02:55Z | Lean, waits on a land verdict | no lock record moves | PRF-528.
+
+### 3. Two things the mark printed
+
+- **A warning, not a refusal: "its body names no goal".** [run: the mark's log] PRF-528 has no label naming a live goal (its one label is `from:proofs`), and I cannot write Linear. **Ask:** label PRF-528 with its goal, or name the goal and I add a `Goal <id>` line with `research queue edit 9109 --body-file F`, which changes the body only and leaves the head where it is. [guess] `proofs/weight-security`; `proofs/spot-two-stage-deployed` is the other candidate.
+- **"checks skipped: lean build timed out … marked on proofs's word, with no quick tier".** [run: the mark's log] The mark builds the four modules on the merged tree itself (`r20261112-025122-aed5`, vy-nebius-cpu-9) and waits 180 s, counting the wait in the pool's line. The build had not ended by then. [run `aed5`: `research inspect`] It ended rc 0 at 02:54:38Z after 164 s, and its log ends `Build completed successfully (11013 jobs)`. [run: the mark's log] The mark's own 4 suites passed in 219 s. So nothing failed: the mark stands on my word and on `ff7d`, `d041` and `d565`.
+
+### 4. What is open
+
+- **The kernel replay and the unread ratchet** at this head run only in the candidate's full Lean check. [derived] No module of mine is wholly unread, since all three declare in `WeightSecurity.SecurityProofs`, which the ratchet seeds.
+- **No second reader yet.** That is the reviewer's land verdict.
+- **The instance at the one-wait trace** waits on that branch's pull request landing. [not checked this turn]
+
+### 5. Option (C) under each of FRAME's two candidates, in five lines
+
+None of this is compiled. Paths: `Spot/…` is under `verity/protocols/spot/verifier/lean/`; `Definitions/…` and `Proofs/…` are under `security/`. All read at `ca5db45b83`, which holds `main` at `be9a3d566905`.
+
+1. **What neither candidate touches: the bytes that leave.** [read: `benchmarks/one_stage/two_stage.py:47-52`] A replay block's return is read only at a port the boundary record commits, under both candidates. So at the gates where bytes leave, (C)'s premise and its new read rule are as in my 02:10Z entry. The candidates differ only at the gates where bytes enter, which a replay block reads as its inputs.
+2. **(a), the premise: unchanged.** [derived] `NetTiming.CertifierRegisters` at the statement's roots, word for word. Under (a) a replay block's input is opened under those roots at the served design too, which my 02:10Z section 2 took from the Lean model alone. FRAME's finding is that today's served driver does not do that.
+3. **(a), the read rule: the one case I counted, about 8 lines.** [read: `Spot/SecondStage.lean:851-855`] It sits on the boundary side of `readOk`'s link case: a link whose name is a value of the boundary record that the verifier pinned for the network certifier reads that value, each slot at its unit's row (`linkedRow`). The interior side of the same case (`:848-850`) stops serving a replay block's input, and that is (a)'s own change, not (C)'s.
+4. **(b), the premise: one more is needed, the named check as a statement.** [read: `Definitions/Claims/Sampling.lean:354`, `Proofs/NetworkCertifier/TapRows.lean:204`; derived] The extracted witness then opens an incoming gate under the replay block's interior roots, while `Wit.val` and the binding step read only openings under the statement's roots. So `CertifierRegisters` alone no longer ties the block's input to what the network certifier saw. The addition: an opening that passes at a replay block's input under the block's interior roots comes with one that passes under the statement's roots, at the same gate and value. It would be a new field of `CompiledTwo.Sessions` beside `interior` (`Definitions/Claims/SamplingTwo.lean:296`), with [guess] about 60 lines to carry it through the twin of `rLeakCertifier_of_r`. The other way to state (C) under (b), the network certifier's openings passing under roots registered after the first stage's coins, cannot be supposed of a device that signed before them.
+5. **(b), the read rule: no new case in `readOk` for incoming bytes, and a new check instead.** [read: `Spot/Registration.lean:403-405`, `Spot/SecondStage.lean:1046-1050`, `adapters/vllm/verity_vllm/pipeline/interior_links.py:4-13`] The interior side of the link case already reads the value. The named check must hold that value to the root the verifier pinned for the network certifier, and nothing on `main` does. `R7-held` compares a whole value's root; the served interior registers only the sampled spans' rows; and `second-interior-names` refuses an interior value under a name the boundary record has. So (b) needs a check that opens each read row under the pinned root, its lemma, and a change to `namesOk`. [guess] That is about 150 lines in the verifier's Lean where (a) has about 110.
+
+**In one sentence** [derived]: (a) leaves (C) as I sized it at 02:10Z (about 750 lines of Lean under `security/` and the 8-line rule); (b) adds one premise, about 60 lines under `security/` and a new check in the verifier, and its premise is only as good as that check.
+
+**What I did not establish.** Whether the request Definition's parameters will include any gate where bytes enter: if a replay block reads none, the candidates do not differ for (C) at all. And what the named check of (b) would be, which is FRAME's and the design's to say; I read it as "an opening under the boundary record's root for each row read", the form the driver's docstring gives for a return (`two_stage.py:49-51`). Every line count here is a read of the one-stage proofs' sizes, not a build.
+
+### 6. What a fresh worker does next
+
+- Nothing on #9109's head: it is marked. If you name the goal, add the `Goal <id>` line to the body (`/opt/cursor/artifacts/extform-pr-product-form-body.md` is the body as opened).
+- If the reviewer or the candidate's check finds something, fix it on `cursor/proofs-twoperiod-4e7a` by merging `main` (never a rebase), with a new try and a new records run at the new head, and mark again.
+- (C): build nothing until the design due Thu 12 Nov 6 PM PST rules which record a replay block's input is opened under.
