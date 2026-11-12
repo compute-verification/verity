@@ -56,6 +56,8 @@ from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline import store_data as SD
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 
+__all__ = ["TpRow"]
+
 TP_UTIL = "0.6"
 
 

@@ -57,6 +57,8 @@ from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_sha
 from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
 from verity_vllm.records.schema_ids import LATE_READ_CHECK_SCHEMA
 
+__all__ = ["Options", "main"]
+
 logger = init_logger(__name__)
 
 
