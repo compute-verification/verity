@@ -273,7 +273,8 @@ number or load `prefix` has not run writes no entry under the metric's id. `gpus
 ## Running it
 
 On a node with the pinned vLLM venv, under `research run`, the C4 shard `benchmarks/ppl/datasets.json` pins sent with
-`--send` (`research data fetch` it first):
+`--send` (`research data fetch` it first). `SERVE_VLLM=52aeb5806` serves on vLLM v0.34.0rc1 instead, in the environment
+`adapters/vllm/verity_vllm/ops/vllm_env.sh` installs beside the pin's the first time:
 
 ~~~text
 # stock compiled's capacity under one burst, from which the loads are set

@@ -101,10 +101,10 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
                 # only the PARAMETER-space runs ("p": prompt / weights reads -- O(instances)) of each
                 # operand are kept from `operand_refs`; the node-space runs ("n": the attention K/V reads, O(LP^2) over a long prefill) are
                 # the same references `RootView.inst[*].args` holds and are never read from the rows.  Operand arity is preserved (one list per
-                # operand, possibly empty) so `operand_roots[k]` still names operand k below.
-                refs = o.get("operand_refs")   # a row without its operands' references retains none
+                # operand, possibly empty) so `operand_roots[k]` still names operand k below.  The row's `node` is read first: a line
+                # that is not an object is refused there, before any field it may leave out is looked for.
                 rows.append({"node": o["node"], "step": o.get("step"), "row": o.get("row"), "rows": o.get("rows"), "hint": o.get("hint"),
-                             "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in refs] if refs else [],
+                             "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in _operand_refs(o)],
                              "pattern": o.get("pattern"),
                              "request": o.get("request"),  # the fold's own attribution when recorded
                              "position": o.get("position"),  # prefix_reads links a cached row to its producer by position (and layer: hint)
@@ -119,7 +119,8 @@ LOAD_NOTES: dict[str, dict] = {}   # fold dir -> {"source": "record files", "ins
 
 
 def _operand_refs(row: dict) -> list:
-    """A retained row's weight references, one list per operand; none on a row that carries no list."""
+    """An instance row's operand references, one list per operand (a line of `instances.jsonl`, or the row retained from it); none
+    on a row that carries no list."""
     refs = row.get("operand_refs")
     return refs if refs else []
 

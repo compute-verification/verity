@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import math
 import os
 import shlex
 import subprocess
 import sys
+import tarfile
 import tomllib
 from pathlib import Path
 
@@ -60,7 +62,20 @@ def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(do
     for t in _suites(doc):
         assert t["inputs"] == files, f"{t['id']}: check's lean-suites, keyed by the whole tree"
         assert t["reads"] == [{"task": BUILD, "output": o["name"]} for o in by[BUILD]["outputs"]] and not t["key"]
-        assert {t["vars"]["bin"] + "/" + r["output"] for r in t["reads"]} == {o["path"] for o in by[BUILD]["outputs"]}
+        assert {t["vars"]["bin"] + "/" + r["output"] if r["output"] != lean_build.TREE else t["vars"]["tree"]
+                for r in t["reads"]} == {o["path"] for o in by[BUILD]["outputs"]}
+
+
+def test_lean_suites_read_the_whole_build_the_flock_suite_s_tests_build_on(doc):
+    """check's lean-suites step runs on the tree its lean-build step built, every module of the verifier and of the packages it
+    requires built, so a test's `lake build` of an executable links what is there.  A lean-suites task reads that whole build
+    (lean-build's `TREE`, every one of those packages), not the executables alone: on a tree holding only those, each test
+    process built the verifier at once in one `.lake`, and the links failed on objects missing their symbols."""
+    lb = next(t for t in doc["tasks"] if t["id"] == BUILD)
+    assert lb["vars"]["builds"].split() == [build.LEAN, *(d.rstrip("/") for d in CHECK.required_in_tree(build.LEAN + "/"))]
+    assert {"name": lean_build.TREE, "path": build.TREE_PATH} in lb["outputs"]
+    assert all({"task": BUILD, "output": lean_build.TREE} in t["reads"] and t["vars"]["tree"] == build.TREE_PATH
+               for t in _suites(doc))
 
 
 def test_lean_suites_is_check_s_lean_suites_step_a_suite_or_a_part_a_task(doc):
@@ -209,8 +224,8 @@ def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path, monk
     parts, by_id = ["lean-suites:a:1/2", "lean-suites:a:2/2"], [f"lean-suites:d:{k}/3" for k in (1, 2, 3)]
     assert list(got) == [BUILD, UNIT, *parts, "lean-suites:b/c", *by_id, "lean-suites:gone"]
     assert got[UNIT]["inputs"] == [build.UNIT_CUT]
-    assert [got[p]["vars"] for p in parts] == [{"suites": "a", "files": f"{k}/2", "bin": f"{build.LEAN}/.lake/build/bin"}
-                                               for k in (1, 2)]
+    assert [got[p]["vars"] for p in parts] == [{"suites": "a", "files": f"{k}/2", "bin": f"{build.LEAN}/.lake/build/bin",
+                                                "tree": build.TREE_PATH} for k in (1, 2)]
     assert [got[p]["vars"]["files"] for p in by_id] == ["1/3", "2/3", "3/3"] and all("by id" in got[p]["about"] for p in by_id), \
         "a suite that declares parts is in those parts by test id, as check runs it, whatever PARTS says"
     assert all(got[p]["resources"] == {"cores": 1, "mem_gb": 3, "disk_gb": 60} and "timeout_s" not in got[p] for p in parts), \
@@ -254,7 +269,7 @@ def _tree(tmp_path: Path, monkeypatch, files: dict[str, str]) -> Path:
 LAKE = """#!/bin/sh
 case "$1" in
   --version) {version} ;;
-  build) mkdir -p .lake/build/bin && printf 'fv' > .lake/build/bin/flock-verify && {build} ;;
+  build) mkdir -p .lake/build/bin && printf 'fv' > .lake/build/bin/exe && {build} ;;
 esac
 """
 
@@ -265,10 +280,38 @@ esac
 def test_lean_build(tmp_path, monkeypatch, version, build_, status):
     _tree(tmp_path, monkeypatch, {"bin/lake": LAKE.format(version=version, build=build_), "pkg/lean-toolchain": "v4\n"})
     doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
-                  "outputs": [{"name": "flock-verify", "path": "pkg/.lake/build/bin/flock-verify"}]})
+                  "outputs": [{"name": "exe", "path": "pkg/.lake/build/bin/exe"}]})
     res = _execute(doc, tmp_path / "work", lean_build.run)
     assert res["status"] == status, res
-    assert (res["outputs"] == {"flock-verify": contract.digest(b"fv")}) == (status == "pass")
+    assert (res["outputs"] == {"exe": contract.digest(b"fv")}) == (status == "pass")
+
+
+#: a build of `pkg` and of `dep`, which it requires by path: each `.lake/build` with a module's olean, trace and object, and pkg's
+#: executable with its trace
+BUILT = {f"{p}/.lake/build/{f}": f"{p} {f}" for p in ("pkg", "dep") for f in ("lib/lean/M.olean", "lib/lean/M.trace",
+                                                                              "ir/M.c.o.export")}
+BUILT["pkg/.lake/build/bin/exe.trace"] = "trace"
+
+
+def _built(root: Path) -> dict[str, str]:
+    return {f.relative_to(root).as_posix(): f.read_text() for f in sorted(root.rglob("*")) if f.is_file()
+            and "/.lake/build/" in f"/{f.relative_to(root).as_posix()}"}
+
+
+def test_lean_build_packs_its_whole_build_but_the_executables(tmp_path, monkeypatch):
+    """Its archive holds every file of each named package's `.lake/build`, the executables it outputs apart, and the package's
+    stamp names it, so a reader in this tree, which holds the build, doesn't unpack it again."""
+    make = "; ".join(f"mkdir -p {Path('..') / Path(p).parent} && printf '{t}' > {Path('..') / p}" for p, t in BUILT.items())
+    root = _tree(tmp_path, monkeypatch, {"bin/lake": LAKE.format(version="exit 0", build=make), "pkg/lean-toolchain": "v4\n"})
+    doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean", "vars": {"builds": "pkg dep"},
+                  "outputs": [{"name": "exe", "path": "pkg/.lake/build/bin/exe"},
+                              {"name": lean_build.TREE, "path": build.TREE_PATH}]})
+    res = _execute(doc, tmp_path / "work", lean_build.run)
+    assert res["status"] == "pass" and set(res["outputs"]) == {"exe", lean_build.TREE}, res
+    with tarfile.open(tmp_path / "work" / build.TREE_PATH) as tf:
+        packed = {m.name: tf.extractfile(m).read().decode() for m in tf}
+    assert packed == BUILT and _built(root) == {**BUILT, "pkg/.lake/build/bin/exe": "fv"}
+    assert (root / "pkg" / ".lake" / lean_build.STAMP).read_text() == res["outputs"][lean_build.TREE]
 
 
 @pytest.mark.parametrize(("script", "status"), [
@@ -461,3 +504,67 @@ def test_lean_suites(tmp_path, monkeypatch, how, status):
         assert res["detail"]["suites"] == {"a": "passed", "b/c": "failed"}
     if how == "missing":
         assert res["detail"]["error"] == "not run: b/c", res
+
+
+STAGED_STANDIN = """import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+root = Path(__file__).resolve().parents[3]
+built = {p: (root / p).read_text() for p in json.loads(os.environ["BUILT"]) if (root / p).is_file()}
+assert built == json.loads(os.environ["BUILT"]), ("the tests' lake builds find the whole build in the tree", built)
+assert os.access(root / "pkg/.lake/build/bin/exe", os.X_OK)
+Path(a[a.index("--json") + 1]).write_text(json.dumps([{"suite": "lean/a", "name": "a", "status": "passed", "failed_tests": []}]))
+"""
+
+
+@pytest.mark.parametrize("lake", ["ok", "fails"])
+def test_lean_suites_stages_lean_builds_whole_build_in_a_tree_without_it(tmp_path, monkeypatch, lake):
+    """On a tree that holds none of lean-build's build (a fresh checkout, as an executor's run gets, lean-build having run in
+    another), the task unpacks the build it reads into the tree and runs check's `lake build` there before the suites, once a
+    tree: a second task finds the stamp and stages nothing.  A build that doesn't build here, though lean-build passed it, is
+    an error."""
+    calls = tmp_path / "lake-calls"
+    root = _tree(tmp_path, monkeypatch, {lean_suites.SUITES: STAGED_STANDIN,
+                                         "bin/lake": f"#!/bin/sh\necho \"$PWD $*\" >> {calls}\n{'exit 3' * (lake == 'fails')}\n"})
+    monkeypatch.setenv("BUILT", json.dumps(BUILT))
+    made = tmp_path / "made"
+    for p, text in BUILT.items():
+        (made / p).parent.mkdir(parents=True, exist_ok=True)
+        (made / p).write_text(text)
+    monkeypatch.setattr(lean_build, "ROOT", made)
+    bin_ = "pkg/.lake/build/bin"
+    doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
+                  "outputs": [{"name": "exe", "path": f"{bin_}/exe"},
+                              {"name": lean_build.TREE, "path": build.TREE_PATH}]},
+                 {"id": SUITES, "kind": "lean-suites", "env": "py", "vars": {"suites": "a", "bin": bin_, "tree": build.TREE_PATH},
+                  "reads": [{"task": "lean-build:pkg", "output": "exe"}, {"task": "lean-build:pkg", "output": lean_build.TREE}],
+                  "outputs": [{"name": "report", "path": lean_suites.REPORT}], "resources": {"cores": 3, "mem_gb": 5, "disk_gb": 1}})
+    archive = tmp_path / "archive"
+    lean_build.pack(["pkg", "dep"], set(), archive)
+    for n in (1, 2):
+        work = tmp_path / f"work{n}"
+        (work / bin_).mkdir(parents=True)
+        (work / bin_ / "exe").write_text("fv")
+        (work / build.TREE_PATH).parent.mkdir(parents=True)
+        (work / build.TREE_PATH).write_bytes(archive.read_bytes())
+        res = _execute(doc, work, lean_suites.run)
+        if lake == "fails":
+            assert res["status"] == "error" and "on the build lean-build passed, unpacked here, exited 3" in res["detail"]["error"]
+            assert not (root / "pkg" / ".lake" / lean_build.STAMP).exists()
+            continue
+        assert res["status"] == "pass", res
+        assert _built(root) == {**BUILT, f"{bin_}/exe": "fv"}
+        assert calls.read_text().splitlines() == [f"{root / 'pkg'} build"], "check's lake build, once a tree"
+        assert (root / "pkg" / ".lake" / lean_build.STAMP).read_text() == contract.file_digest(archive)
+
+
+def test_lean_suites_refuses_an_archive_member_outside_a_build(tmp_path):
+    """The archive writes only under a package's `.lake/build`: a member elsewhere is refused, and not written."""
+    archive = tmp_path / "a.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        for name in ("pkg/.lake/build/lib/M.olean", "pkg/lakefile.toml"):
+            info = tarfile.TarInfo(name)
+            tf.addfile(info, io.BytesIO(b""))
+    with pytest.raises(ValueError, match="pkg/lakefile.toml is no file under a package's .lake/build"):
+        lean_suites.unpack(archive, tmp_path / "root")
+    assert not (tmp_path / "root" / "pkg" / "lakefile.toml").exists()

@@ -1,5 +1,5 @@
-"""`engine.stock`: an in-process engine built from ``EngineArgs``, vLLM's ``SamplingParams`` and its version, over stand-ins
-of vLLM's modules; and importing the module imports no vLLM."""
+"""`engine.stock`: an in-process engine built from ``EngineArgs``, vLLM's ``SamplingParams``, its version and its build,
+over stand-ins of vLLM's modules; and importing the module imports no vLLM."""
 from __future__ import annotations
 
 import importlib
@@ -25,11 +25,14 @@ def fake_vllm(monkeypatch):
             return SimpleNamespace(args=args)
 
     root = types.ModuleType("vllm")
-    root.__dict__.update(EngineArgs=lambda **kw: SimpleNamespace(**kw), SamplingParams=lambda **kw: SimpleNamespace(**kw),
-                         __version__=VERSION)
+    root.EngineArgs = lambda **kw: SimpleNamespace(**kw)
+    root.SamplingParams = lambda **kw: SimpleNamespace(**kw)
+    root.__version__ = VERSION
+    scm = types.ModuleType("vllm._version")
+    scm.__commit_id__ = "gd9105ea80"
     core = types.ModuleType("vllm.v1.engine.llm_engine")
-    core.__dict__.update(LLMEngine=LLMEngine)
-    for name, mod in {"vllm": root, "vllm.v1": types.ModuleType("vllm.v1"),
+    core.LLMEngine = LLMEngine
+    for name, mod in {"vllm": root, "vllm._version": scm, "vllm.v1": types.ModuleType("vllm.v1"),
                       "vllm.v1.engine": types.ModuleType("vllm.v1.engine"), "vllm.v1.engine.llm_engine": core}.items():
         monkeypatch.setitem(sys.modules, name, mod)
     return built
@@ -41,6 +44,13 @@ def test_the_engine_is_built_from_its_engine_args_and_the_rest_passes_through(fa
     assert vars(eng.args) == {"model": "/models/m", "dtype": "bfloat16", "enforce_eager": True}
     assert vars(stock.sampling(temperature=0.8, seed=7)) == {"temperature": 0.8, "seed": 7}
     assert stock.version() == VERSION
+
+
+def test_a_build_is_named_by_its_commit_whatever_its_version_says(fake_vllm, monkeypatch):
+    assert stock.build() == stock.BUILDS[0] == "d9105ea80"
+    monkeypatch.setattr(sys.modules["vllm"], "__version__", "0.34.0rc1")       # a tagged build: no commit in its version
+    monkeypatch.setattr(sys.modules["vllm._version"], "__commit_id__", "g52aeb5806")
+    assert stock.build() in stock.BUILDS[1:] and stock.build() not in stock.version()
 
 
 def test_importing_it_imports_no_vllm(monkeypatch):

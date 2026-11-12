@@ -692,7 +692,7 @@ class H1Run:
         (`request_gaps`), whose coins aren't the challenger's (`IN_PROCESS`) or, with the Commit, whose A tables or input
         ids aren't the Commit's (`pouw_h1_commit.UNTIED`, ``details.roots1``)."""
         out = {c.index: self.verdict(c) for c in self.calls if c.m}
-        untied = (tie := self.details.get("roots1")) is not None and bool(tie["reason"])
+        untied = bool(tie.get("reason")) if (tie := self.details.get("roots1")) else False
         for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER),
                         (CT.UNTIED, untied)):
             out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
@@ -702,8 +702,8 @@ class H1Run:
         """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before `draw_root`): its
         `gated` verdict, true only for a served call with a z table."""
         gated, tables = self.gated(), self.tables
-        return {c.index: c.index in gated and gated[c.index]["credit"] and c.index in tables and tables[c.index]["z"] is not None
-                for c in self.calls}
+        return {c.index: c.index in gated and gated[c.index]["credit"]
+                and (t.get("z") if (t := tables.get(c.index)) else None) is not None for c in self.calls}
 
     def credit(self) -> dict[str, Any]:
         """Gate-passed: the served rows' MACs of the calls the serving process's own credit gate passes (`gated`), only. No

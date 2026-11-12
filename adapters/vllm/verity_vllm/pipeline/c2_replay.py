@@ -35,7 +35,6 @@ from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import commit_plan as CP
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.pipeline import vu_store as VUX
 from verity_vllm.query.manifest import format as MF
 
 logger = init_logger(__name__)
@@ -109,6 +108,11 @@ def live_weights(model: Any, prefix: str) -> Callable:
 
 def vu_export(args: Any, pair: int, rc: Any, manifest: Any, versions: dict[str, Any], eng: Any) -> Callable:
     """The in-process replay's VU export hook (`pipeline.vu_store.after_replay`)."""
+    # Importing `vu_store` turns the driver's `keep_population` on, and only this hook's `after_replay` takes what a replay then
+    # keeps.  So it is imported here, where the Commit makes the hook: a process whose replay has no hook (the CPU replay of a
+    # bundle, a rank's) loads this module, never loads `vu_store`, and keeps no population after its replay.
+    from verity_vllm.pipeline import vu_store as VUX
+
     return lambda sr, progs, bm, rd, wp, arr, sr_kw, loaded, digs: VUX.after_replay(
         args.vu_export_dir, sr, pair, rc.run_root, progs, bm, rd, wp, arr, manifest, sr_kw, loaded, digs, versions, eng)
 

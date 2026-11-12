@@ -23,7 +23,9 @@ form under a hiding commitment to the case's digest (one ``hm96-sha512/row/v2`` 
 
 **The session's length** is the request's: ``windows`` of ``window_s`` each (`WINDOWS`, `WINDOW_S`: two minutes), each of
 ``passes`` passes (`PASSES`) and ``samples`` openings (`SAMPLES`), by default the auditor's (`p2_party.SESSION`, which
-its party holds every request to). At δ = 2^-40 an accepted session's ε is δ + Σ draws/2^64, and the pooled bound leaves at most 0.45% of its receipts wrong at those defaults over a store of 2^17
+its party holds every request to). At δ = 2^-40 an accepted session's ε is δ + Σ samples/2^64, which leaves out
+Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed; `p2_party.EPS_TERMS`), and the pooled bound leaves at most
+0.45% of its receipts wrong at those defaults over a store of 2^17
 units (6 windows of 4 passes, 1,024 draws each; `pooled.bound`), so q_bytes is at least 99.5% of the reads.
 """
 from __future__ import annotations

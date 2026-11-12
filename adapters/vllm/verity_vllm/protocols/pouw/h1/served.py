@@ -343,7 +343,7 @@ class Served:
             return self.window
         session = commits.get("session")
         weights, requests = commits.get("weights_root"), commits.get("requests_root")
-        opened = None if session is None else session.get("session")
+        opened = session.get("session") if session else None
         if weights is None or requests is None or opened is None:
             raise ValueError("the window has no key: neither one given nor a window-open root (its weights' root, round 0's "
                              "request table and the session)")

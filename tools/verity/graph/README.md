@@ -184,7 +184,7 @@ runs them, one task a step:
 
 | task | env | runs | inputs | outputs |
 | --- | --- | --- | --- | --- |
-| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the files of the package and of the packages of the tree it requires by path, but each one's `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
+| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the files of the package and of the packages of the tree it requires by path, but each one's `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>`; `lake-build`, each of those packages' `.lake/build` but the executables, in one archive |
 | `lean-unit-cut:verity/protocols/flock/agreement/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/protocols/flock/agreement` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
 | `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits by test file, or of one that declares `parts`, by test id; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
@@ -193,7 +193,11 @@ runs them, one task a step:
 
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
 `artifacts`); `lean-unit-cut` and `lean-agreement` read `flock-verify` and get its path as their var `verify`, and
-`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
+`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`), and unpacks
+`lake-build` into the tree and runs `lake build` there under check's lock (its var `tree`), once a tree (the stamp
+`.lake/graph-build.sha512`, which lean-build writes in its own), so the tree is as check's lean-build step leaves it: the
+suites' own `lake build`s of the verifier, at once in every test process, find every module built, where on the executables
+alone each built the whole verifier in one `.lake` and the links broke. A part's task
 (its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
 file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
 failed suite with its failed tests (`detail.failed`), which the verified queue names, allows and blames as that suite's red. A

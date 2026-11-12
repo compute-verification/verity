@@ -273,7 +273,7 @@ class Population:
                  query: str = QUERY_OF_RECORD) -> None:
         if query not in QUERIES:
             raise ValueError(f"unknown query {query!r}: one of {QUERIES}")
-        self.P, self.corr, self.return_slots, self.query = P, corr, return_slots, query
+        self.P, self.corr, self.query = P, corr, query
         self.events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
         if not self.events:
             raise ValueError("Program has no sampling event: no step boundary")
@@ -316,7 +316,7 @@ class Population:
         self.literals = literals = literal_calls(P)
         # a check is an output, not a required Value: nothing commits it, and the replay evaluates it from the Values that are required
         returned = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks))) if P.checks else P
-        self.B_module = B_module = boundary_without_literals(returned, module_body_partition(P, corr), literals)
+        B_module = boundary_without_literals(returned, module_body_partition(P, corr), literals)
         if query == Q_WORD_ID:
             self.Q = partition_by(lambda c: c.id)
             self.B = B = boundary_without_literals(returned, self.Q, literals)
@@ -548,14 +548,14 @@ def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = Tru
 def _declared_target(res: Mapping[str, Any]) -> Mapping[str, Any]:
     """The target a Build's `result.json` declares (`target.declared`); an empty one where the Build declared none."""
     target = res.get("target")
-    declared = None if target is None else target.get("declared")
-    return {} if declared is None else declared
+    declared = target.get("declared") if target else None
+    return declared if declared else {}
 
 
 def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | None]:
     fa = None
     observed = res.get("attention_impls_observed")             # a trace's; predict's Build records none under this name
-    for v in () if observed is None else observed.values():
+    for v in observed.values() if observed else ():
         fa = v.get("vllm_flash_attn_version")
         break
     if profile is None:
@@ -660,8 +660,9 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     k_req = int(numbered.group(1))
     if wr and k_req < len(wr) and isinstance(wr[k_req], dict) and str(wr[k_req].get("request_id")) != str(workload_request_id):
         workload_request_id = wr[k_req].get("request_id")
-    arr = sweep.get("arrive_steps")                        # this request's, the first where the sweep lists fewer, step 0 where it lists none
-    arrive = int(arr[k_req] if k_req < len(arr) else arr[0]) if arr else 0
+    steps = sweep.get("arrive_steps")                      # this request's, the first where the sweep lists fewer, step 0 where it lists none
+    arr = steps if steps else []
+    arrive = int(arr[k_req] if k_req < len(arr) else (arr[0] if arr else 0)) if sweep else 0
     n_seq = 1
     # --- the query and the policy ---------------------------------------------------------------------------------------------------
     pop = (norm_scales.population if norm_scales else population)(P, corr, return_slots=return_slots, tp=({"world": prog_world, "rank": prog_rank} if prog_world > 1 else None), query=query)

@@ -97,13 +97,33 @@ def test_derived_gpu_numbers(sku: str) -> None:
     assert 0 < value(card, "memory.read") <= value(card, "memory.bandwidth")
 
 
+#: The uniform registers a warp that each card's `store.reg_extra` counts: the 80 a run found hold values on the RTX PRO
+#: 6000, and 63 on the cards whose uniform registers no run has swept.
+UNIFORM_REGISTERS = {"b200-sxm-180gb": 63, "h200-sxm-141gb": 63, "rtx-pro-6000-server": 80}
+
+
 @pytest.mark.parametrize("sku", skus("gpu"))
 def test_the_extra_registers_cover_the_resident_warps(sku: str) -> None:
-    """`sm.warps` is the most warps resident on an SM, and `store.reg_extra` holds at least their uniform registers (63
-    a warp) and their predicates (7 bits a thread at 32 threads a warp, and 7 bits a warp), in 32-bit words."""
+    """`sm.warps` is the most warps resident on an SM, and `store.reg_extra` holds at least their uniform registers
+    (`UNIFORM_REGISTERS` a warp) and their predicates (7 bits a thread at 32 threads a warp, and 7 bits a warp), in
+    32-bit words. Its source states the count, and a count that is a run's cites the run's record."""
     card = load(sku)
-    warps = value(card, "sm.warps")
-    assert value(card, "store.reg_extra") >= 63 * warps + 7 * warps + math.ceil(7 * warps / 32)
+    warps, uniform = value(card, "sm.warps"), UNIFORM_REGISTERS[sku]
+    assert value(card, "store.reg_extra") >= uniform * warps + 7 * warps + math.ceil(7 * warps / 32)
+    source = card["store"]["reg_extra"]["source"]
+    assert f"({uniform} a warp at {warps} warps" in source
+    assert (re.search(r"\bart:[0-9a-f]{12}\b", source) is not None) == (uniform != 63)
+
+
+def test_the_registers_a_run_found_on_the_rtx_pro_6000() -> None:
+    """The RTX PRO 6000's `store.reg_extra` is its 80 uniform registers a warp, its predicates and its uniform
+    predicates and nothing more, pinned with the on-chip bytes its stores then give a sheet (the registers, shared
+    memory and L2) so that a change to either is deliberate: a Lean table and every sheet of the card move with it."""
+    card = load("rtx-pro-6000-server")
+    assert value(card, "store.reg_extra") == 80 * 48 + 336 + 11 == 4187
+    sms = value(card, "sm.count")
+    words = value(card, "store.reg") + value(card, "store.reg_extra")
+    assert 4 * sms * words + sms * value(card, "store.smem") + value(card, "store.l2") == 211_290_960
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
@@ -147,7 +167,9 @@ def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
 def test_derived_host_numbers(sku: str) -> None:
     """A host's ops are its cores' AMX MACs at their clocks, two ops a MAC; its DRAM's bandwidth is its channels'
     transfers, which bound its reads and are its write ceiling; the second reading of the three, at the fastest memory
-    the processor takes, is a ceiling at or above the first; and its on-chip bytes are its caches and allowances."""
+    the processor takes, is a ceiling at or above the first; its lanes' bandwidth is every lane into its sockets, and
+    what a socket takes apart from them, at their rates less the coding, in whole bytes, which is its disks' read at
+    most; and its on-chip bytes are its caches and allowances."""
     card = load(sku)
     sockets, cores, priority = (value(card, f"cpu.{k}") for k in ("sockets", "cores", "priority_cores"))
     hz = priority * value(card, "clock.priority_turbo") + (cores - priority) * value(card, "clock.turbo")
@@ -160,6 +182,11 @@ def test_derived_host_numbers(sku: str) -> None:
     assert most == channels * value(card, "memory.speed_max") == value(card, "memory.write_max")
     assert value(card, "memory.speed") <= value(card, "memory.speed_max") and bandwidth <= most
     assert {card["memory"][k]["mark"] for k in ("speed_max", "bandwidth_max", "write_max")} == {"ceiling"}
+    transfers = sockets * (value(card, "pcie.lanes") * value(card, "pcie.speed") + value(card, "pcie.other")) * 10 ** 9
+    assert value(card, "pcie.bandwidth") == math.ceil(transfers * Fraction(128, 130) / 8)
+    assert value(card, "disk.read_max") == value(card, "pcie.bandwidth")
+    assert {e["mark"] for e in card["pcie"].values()} | {card["disk"]["read_max"]["mark"]} == {"ceiling"}
+    assert [e["unit"] for e in (card["pcie"]["bandwidth"], card["disk"]["read_max"])] == ["B/s", "B/s"]
     per_socket = value(card, "store.l3") + value(card, "store.uncore")
     per_core = sum(value(card, f"store.{k}") for k in ("l2", "l1d", "l1i", "core"))
     assert value(card, "store.chip") == sockets * per_socket + sockets * cores * per_core
@@ -172,6 +199,21 @@ def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
     card = load(sku)
     assert card["cpu"]["vm_cores"]["mark"] == "measurement"
     assert 0 < value(card, "cpu.vm_cores") <= value(card, "cpu.sockets") * value(card, "cpu.cores")
+
+
+def test_a_ceiling_is_no_less_than_the_measurement_beside_it() -> None:
+    """Where a host card states a rate a run measured beside its ceiling, the ceiling is at or above it: its DRAM's
+    read under its channels' at the fastest memory the processor takes, and its disks' read under its lanes'."""
+    pairs = {"memory.read": "memory.bandwidth_max", "disk.read": "disk.read_max"}
+    seen = []
+    for sku in skus("host"):
+        card, numbers = load(sku), entries(load(sku))
+        for measured, ceiling in pairs.items():
+            if measured in numbers and numbers[measured]["mark"] == "measurement":
+                assert numbers[ceiling]["mark"] == "ceiling", (sku, ceiling)
+                assert 0 < value(card, measured) <= value(card, ceiling), (sku, measured, ceiling)
+                seen.append((sku, measured))
+    assert ("xeon-6776p-2s", "memory.read") in seen and ("xeon-6776p-2s", "disk.read") in seen
 
 
 @pytest.mark.parametrize("sku", skus("server"))
@@ -218,6 +260,15 @@ def test_the_second_readings() -> None:
     assert [float(value(load("xeon-platinum-8468-2s"), k)) for k in second] == [4800, 6.144e11, 6.144e11]
     caches = ("store.l15", "store.l1i", "store.l0i", "store.const_l0")
     assert [value(load("rtx-pro-6000-server"), k) for k in caches] == [147_456, 65_536, 24_576, 12_288]
+
+
+def test_the_lanes_into_the_sockets() -> None:
+    """Each host's PCI Express lanes, their rate, what a socket takes apart from them (four USB ports of its own at
+    most on the one with no chipset, the chipset link on the other) and the bytes a second they carry together, which
+    is the most its disks are read back at, pinned so that a change to one is deliberate."""
+    lanes = ("pcie.lanes", "pcie.speed", "pcie.other", "pcie.bandwidth", "disk.read_max")
+    assert [value(load("xeon-6776p-2s"), k) for k in lanes] == [88, 32, 20, 698_092_307_693, 698_092_307_693]
+    assert [value(load("xeon-platinum-8468-2s"), k) for k in lanes] == [80, 32, 128, 661_661_538_462, 661_661_538_462]
 
 
 def test_the_rates_readers_quote() -> None:
