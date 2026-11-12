@@ -73,7 +73,8 @@ run takes no kept build, no artifact bundle and no artifact cache, and keeps not
 The audit's `dependencies` check still compares their `.olean` files with the package's record, and the kernel replay
 still covers the package's own modules and their whole import
 closure, the toolchain's, Mathlib's and ArkLib's modules included (`check.py --closure`): each module whose `.olean` files, and
-those of every module it imports, transitively, passed an earlier replay here or in a recorded check whose verdict pack this
+those of every module it imports, transitively, as their bytes or, where a message keeps the source's path, as their object
+graph without it (`check.replay_digest`, so a build at another path counts as the same), passed an earlier replay here or in a recorded check whose verdict pack this
 one imported (`check.verdicts_fetched`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
 `REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
 modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is

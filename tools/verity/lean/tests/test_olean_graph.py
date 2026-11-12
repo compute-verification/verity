@@ -4,6 +4,7 @@ compactor lays them out, and with a toolchain, on a module built at two paths, w
 message differs, and with one declaration or attribute changed, which each tells apart."""
 from __future__ import annotations
 
+import functools
 import importlib.util
 import os
 import shutil
@@ -17,6 +18,16 @@ HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("lean_olean_graph", HERE.parent / "olean_graph.py")
 G = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(G)
+
+
+@functools.cache
+def check():
+    """`check.py`, whose `replay_keys` reads `canonical`."""
+    spec = importlib.util.spec_from_file_location("lean_check", HERE.parent / "check.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 HEADER = b"olean\x02\x01" + b"4.34.0".ljust(33, b"\0") + b"0" * 40
 SOURCE = "P/M.lean"
@@ -157,15 +168,11 @@ def test_a_module_built_at_another_path_has_one_canonical_digest_and_nothing_els
 def test_a_module_s_replay_key_is_the_same_at_another_path_and_moves_with_its_declarations(tmp_path):
     """`check.replay_keys` keys a module whose server part holds its source's path by `canonical`, so the module and every
     module importing it keep their keys when the package is built elsewhere, and a changed declaration moves both."""
-    spec = importlib.util.spec_from_file_location("lean_check", HERE.parent / "check.py")
-    check = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(check)
-
     def keys(m: dict[str, Path], name: str) -> dict[str, str]:
         top = tmp_path / name / "Top.olean"
         top.write_text("Top")
         graph = {"P.M": {"olean": str(m["olean"]), "imports": []}, "Top": {"olean": str(top), "imports": ["P.M"]}}
-        return check.replay_keys({"graph": graph, "modules": ["Top"]}, "t")
+        return check().replay_keys({"graph": graph, "modules": ["Top"]}, "t")
 
     here = keys(module_data(tmp_path / "x"), "x")
     assert keys(module_data(tmp_path / "y", path="/a/much/longer/checkout/elsewhere/P/M.lean"), "y") == here
@@ -247,6 +254,9 @@ def test_lean_s_output_at_two_paths_differs_only_in_the_path_and_a_changed_decla
     assert G.canonical(parts(a, "Lab"), "Lab.lean") is not None
     assert G.canonical(parts(a, "Lab"), "Lab.lean") == G.canonical(parts(b, "Lab"), "Lab.lean")
     assert G.canonical(parts(a, "Lab/Basic"), "Lab/Basic.lean") == G.canonical(parts(b, "Lab/Basic"), "Lab/Basic.lean")
+    graph = {"Lab.Basic": ("Lab/Basic.olean", []), "Lab": ("Lab.olean", ["Lab.Basic"])}
+    assert len({tuple(check().replay_keys({"graph": {m: {"olean": str(lib / o), "imports": i} for m, (o, i) in graph.items()}},
+                                          "t").items()) for lib in (a, b)}) == 1
     proof = built(tmp_path / "c" / "pkg", lab=LAB.replace("1 + 1 = 2", "2 + 0 = 2"))
     assert G.differs(parts(a, "Lab"), parts(proof, "Lab"), "Lab.lean") is not None
     assert G.canonical(parts(a, "Lab"), "Lab.lean") != G.canonical(parts(proof, "Lab"), "Lab.lean")

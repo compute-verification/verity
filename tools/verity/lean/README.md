@@ -90,8 +90,9 @@ of `check.py` unless it says otherwise, or the lock's section below.
 - **The kernel accepts every declaration again** (`replay_step`, `Replay.lean`), and the axioms the replay finds are
   the ones the `.olean` files recorded; a replay killed by a signal is a kill, not a verdict (`killed`). `--closure`
   checks the whole import closure the same way, reusing each module that passed under its key, whichever package
-  checked it (`closure_plan`, `replay_keys`, `build_roots_over`); the audit prints `closure: N modules checked, M
-  reused` under each package's line.
+  checked it, wherever it was compiled: a key reads a module's `.olean` files without the source's path a message keeps
+  (`closure_plan`, `replay_keys`, `replay_digest`, `olean_graph.canonical`, `build_roots_over`); the audit prints
+  `closure: N modules checked, M reused` under each package's line.
 - **`--build` recompiles a sample** of the modules the build didn't compile and compares the outputs
   (`sampled_recompile`, `olean_graph.py`).
 - **Each test under `runs` passes** on the data whose SHA-256 the record holds (`tests`, `run_paths`).
