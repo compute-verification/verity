@@ -85,11 +85,12 @@ research run --on NODE --project verity --source . --cwd clone --pool network --
   --timeout 10800 -- bash benchmarks/scan_cost/run.sh
 ~~~
 
-It pins the job, runs `scan_zk.sh` with every setting that changes what is proved unset, then `result.py write`, which
-leaves `out/scan_cost.json` (the document: identity, group, guard, each session with its stages, the round's sums and
-the numbers) and the run's `result.json` (the two metrics of `benchmarks/metrics.toml` under their ids, and their
-inputs, through the harness kit's writer). The scan's own files stay under `out/` as it keeps them: `sczk/summary.json`,
-`sczk/answers.json`, each session's logs, `lean.jsonl`, `rss.jsonl`, `host.txt`.
+It pins the job, clears every `SC_` setting but those below and `SC_MEM_GB`, `SC_CACHE` and `SC_PORT` (so none of
+the scan's settings that change what is proved reaches it), runs `scan_zk.sh`, then `result.py write`, which
+leaves `out/scan_cost.json` (the document: identity, group, guard, each session with its stages, the round's sums
+and the numbers) and the run's `result.json` (the two metrics of `benchmarks/metrics.toml` under their ids, and
+their inputs, through the harness kit's writer). The scan's own files stay under `out/` as it keeps them:
+`sczk/summary.json`, `sczk/answers.json`, each session's logs, `lean.jsonl`, `rss.jsonl`, `host.txt`.
 
 | Setting | What it changes |
 | --- | --- |
