@@ -45,15 +45,14 @@ from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pearlc_census as K
 import run_result
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 #: what the tests read
 __all__ = ["K", "cell"]

@@ -61,7 +61,6 @@ from pathlib import Path
 
 from verity.protocols.pouw.verifier.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
 
-sys.path.insert(0, str(Path(__file__).parent))
 import budget as BU
 import eps_budget as EB
 
