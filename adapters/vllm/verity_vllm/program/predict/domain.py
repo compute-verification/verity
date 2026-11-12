@@ -23,7 +23,7 @@ def check_splits(sampling: dict, num_sms: int | None) -> int:
         raise UnregisteredSplits(f"top-p on a target that declares no num_sms: the registered split count registered_splits(num_SMs) "
                                  f"has no num_SMs (splits {S!r})")
     want = registered_splits(int(num_sms))
-    if type(S) is not int or S != want:
+    if type(S) is not int or want != S:
         raise UnregisteredSplits(f"top-p split count {S!r} is not the registered one, registered_splits({int(num_sms)}) = {want}: "
                                  f"serving runs every launch at it, and the Program carries it as Const32[{want}]")
     return S

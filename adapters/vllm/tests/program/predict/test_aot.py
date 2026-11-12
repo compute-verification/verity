@@ -10,15 +10,15 @@ import json
 from pathlib import Path
 
 import pytest
-
 from verity.circuits.types import RecordType
+
+from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.config import UsageError
-from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE, correspondence_digest
+from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE
+from verity_vllm.correspondence.runtime import correspondence_digest
 from verity_vllm.program.predict import aot as A
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import build_program
-
-from tests.program.predict.test_predict import TINY, _phi
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
@@ -94,8 +94,8 @@ def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path
     (d / "build_summary.json").write_text(json.dumps({"tp": {"world": 2}, "ranks": {
         f"rank{r}": {"build_step": {"program_digest": f"s{r}"}, "build_request_LP9_T2": {"program_digest": f"q{r}"},
                      "workload": {"workload_digest": f"w{r}"}} for r in range(2)}}))
-    got = {0: {"step": "s0", "requests": {"build_request_LP9_T2": "q0"}, "workload": "w0", "errors": {}, "secs": {"step": 1.0}},
-           1: {"step": "s1", "requests": {}, "workload": None, "errors": {"build_request_LP9_T2": "Unexpressible: x"}, "secs": {}}}
+    got: dict[int, dict] = {0: {"step": "s0", "requests": {"build_request_LP9_T2": "q0"}, "workload": "w0", "errors": {}, "secs": {"step": 1.0}},
+                            1: {"step": "s1", "requests": {}, "workload": None, "errors": {"build_request_LP9_T2": "Unexpressible: x"}, "secs": {}}}
     monkeypatch.setattr(A, "ProcessPoolExecutor", lambda max_workers, **_: concurrent.futures.ThreadPoolExecutor(max_workers))
     monkeypatch.setattr(A, "_predict_rank", lambda task: got[task[1]])
     doc = A.compare(str(d), "row", "config.json")

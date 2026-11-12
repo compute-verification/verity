@@ -27,7 +27,6 @@
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "admission-bound"},
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "commit-arb"},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "coverage-workloads"},
-    {"file": "verity_vllm/pipeline/pouw_serve.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "pouw-serve"},
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "program-graph"},
     {"file": "verity_vllm/pipeline/research_outputs.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "research-outputs"},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "topp-split-probe"},

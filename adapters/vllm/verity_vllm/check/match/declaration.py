@@ -11,10 +11,10 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from verity_vllm.config import workload_file
-from verity_vllm.observe import capture_log as CL
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
+from verity_vllm.config import workload_file
+from verity_vllm.observe import capture_log as CL
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload
@@ -55,7 +55,7 @@ def manifest_sampling(wl: Workload | Mapping[str, Any], variant: str | None = No
     w = Workload.of(wl, "workload")
     sweep = w.sweep or {}
     v = variant or w.sampling_variant or sweep.get("sampling")
-    per_key: dict[str, dict[str, object]] = {}   # key -> {source: value}
+    per_key: dict[str, dict[str, float]] = {}   # key -> {source: value}
     def put(src: str, k: str, val) -> None:
         if val is not None:
             per_key.setdefault(k, {})[src] = val
@@ -65,9 +65,10 @@ def manifest_sampling(wl: Workload | Mapping[str, Any], variant: str | None = No
             put("variants_table", k, table.get(k))
     if v == "greedy":
         put("label", "temperature", 0.0)
-    elif isinstance(v, str) and _VARIANT_RE.match(v):
-        m = _VARIANT_RE.match(v)
-        put("label", "temperature", float(m["t"])); put("label", "top_p", float(m["p"])); put("label", "top_k", int(m["k"] or 0))
+    elif isinstance(v, str) and (m := _VARIANT_RE.match(v)) is not None:
+        put("label", "temperature", float(m["t"]))
+        put("label", "top_p", float(m["p"]))
+        put("label", "top_k", int(m["k"] or 0))
     if variant is None:
         s = w.sampling
         explicit = {} if s is None else {"temperature": s.temperature, "top_p": s.top_p, "top_k": s.top_k}
@@ -100,7 +101,7 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
     `lag` = the declared scheduler's post-EOS rows (0/1) the mock Program is specialized for; None = an older Program that
     declares no lag (G6 then fails by name on any EOS stop)."""
     wl = Workload.load(workload_file(workload_path))
-    comps = {}
+    comps: dict[tuple[int, ...], str] = {}
     for d in component_dirs:
         sh = component_shape(d)
         if sh is not None:
@@ -206,7 +207,8 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     cross-checked (component digests, per-request instance counts, programmed steps).  The manifest it was built from
     (`workload_path`, else `inputs.manifest`) is read through the workload record, and one that declares no prompt for a request (a
     lengths-only plan) is refused by name."""
-    art = json.load(open(artifact_path))
+    with open(artifact_path) as f:
+        art = json.load(f)
     if not art.get("ok", True):
         raise ValueError(f"{artifact_path}: builder result not ok ({art.get('reason')}: {art.get('missing_derived')})")
     # the artifact's `workload_digest` field is a CLAIM: recompute it from the descriptor GP-01 wrote beside the
@@ -231,7 +233,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
         # the artifact's `lag` block is a CLAIM beside the Program: the Program's own `lag` static (inside the digest just verified)
         # must carry the same value -- an edited block cannot make G6 consume another lag than the Program's
         static_lag = workload_lag_static(desc)
-        claimed = (art.get("lag") or {}).get("value") if isinstance(art.get("lag"), dict) else None
+        claimed = art["lag"].get("value") if isinstance(art.get("lag"), dict) else None
         if static_lag is not None or claimed is not None:
             if static_lag is None or claimed is None or int(static_lag) != int(claimed):
                 raise ValueError(f"{artifact_path}: lag.value {claimed!r} != the Program's Workload_v1 `lag` static {static_lag!r} (descriptor "
@@ -245,10 +247,10 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     wl = Workload.load(wl_path) if wl_path and workload_file(wl_path).is_file() else None
     declared = () if wl is None else wl.requests
     for i, q in enumerate(declared):
-        if q.prompt_token_ids is None:
+        if wl is not None and q.prompt_token_ids is None:
             raise RecordError(wl.where, f"requests[{i}].prompt_token_ids", "is absent (a lengths-only plan): the Program declares each prompt")
     # prompts by manifest POSITION (the Program's r<k>); the manifest's own request_id is the workload (UUID) id
-    prompts = {request_id_of(i): list(q.prompt_token_ids) for i, q in enumerate(declared)}
+    prompts = {request_id_of(i): list(q.prompt_token_ids) for i, q in enumerate(declared) if q.prompt_token_ids is not None}
     wl_uuids = {request_id_of(i): q.request_id for i, q in enumerate(declared)}
     amap = {r["request_id"]: r for r in (art.get("address_map") or {}).get("requests", [])}
     chron = {r["request_id"]: r for r in (art.get("chronology") or {}).get("requests", [])}
@@ -276,7 +278,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
                      "component": {"dir": d, "LP": lp, "T": cap - 1, **({"C": C} if C else {}), "program_digest": (r.get("component") or {}).get("program_digest"),
                                    "specialization": (r.get("component") or {}).get("specialization")},
                      "global_address": {k: amap[rid].get(k) for k in ("root_node", "gates", "n_instances", "rule")} if rid in amap else None,
-                     "programmed_steps": (chron.get(rid) or {}).get("programmed_steps"),
+                     "programmed_steps": chron[rid].get("programmed_steps") if rid in chron else None,
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
     return {"schema": GP_SCHEMA, "builder": f"gprog GP-01 {art.get('schema')} workload_fn={art.get('workload_fn')}", "workload_digest": art.get("workload_digest"),
             "workload": {"path": wl_path, "sha256": art.get("manifest_digest"), "n_requests": len(reqs)},
@@ -308,14 +310,14 @@ def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
     OWN attestation (RunHeader.profile.engine_kwargs / RunHeader.engine_kwargs / capture/versions.json, all locations agreeing)
     -- never guessed: a lag-0 record must carry the flag too, else it is indistinguishable from a lag-1 record with a deleted
     step. Returns (rows, source) with rows None when the record does not attest the flag (GM-01 refuses by name)."""
-    vals = (facts.get("values") or {}).get("async_scheduling")
+    vals = facts["values"].get("async_scheduling")
     if not vals:
         return None, "not attested"
     v = vals[0]
     if isinstance(v, bool):
-        return (1 if v else 0), f"async_scheduling={v!r} ({', '.join((facts.get('sources') or {}).get('async_scheduling', []))})"
+        return (1 if v else 0), f"async_scheduling={v!r} ({', '.join(facts['sources']['async_scheduling'])})"
     if isinstance(v, str) and v.strip().lower() in ("true", "false"):
-        return (1 if v.strip().lower() == "true" else 0), f"async_scheduling={v!r} ({', '.join((facts.get('sources') or {}).get('async_scheduling', []))})"
+        return (1 if v.strip().lower() == "true" else 0), f"async_scheduling={v!r} ({', '.join(facts['sources']['async_scheduling'])})"
     return None, f"async_scheduling={v!r} is not a boolean"
 
 
@@ -328,16 +330,20 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
     but unreadable} -- the caller FAILS on any disagreement, on an unreadable location and when nothing is attested."""
     from verity_vllm.pipeline.global_program import compilation_facts
     header = header if isinstance(header, dict) else {}
-    prof = header.get("profile") if isinstance(header.get("profile"), dict) else {}
-    ek_top = header.get("engine_kwargs") if isinstance(header.get("engine_kwargs"), dict) else {}
-    ek_prof = prof.get("engine_kwargs") if isinstance(prof.get("engine_kwargs"), dict) else {}
+    prof = header.get("profile")
+    prof = prof if isinstance(prof, dict) else {}
+    ek_top = header.get("engine_kwargs")
+    ek_top = ek_top if isinstance(ek_top, dict) else {}
+    ek_prof = prof.get("engine_kwargs")
+    ek_prof = ek_prof if isinstance(ek_prof, dict) else {}
     ek_ver: dict = {}
     unreadable: dict[str, str] = {}
     if oracle_dir:
         vp = os.path.join(oracle_dir, "capture", "versions.json")
         if os.path.exists(vp):
             try:
-                v = json.load(open(vp))
+                with open(vp) as f:
+                    v = json.load(f)
                 ek_ver = v.get("engine_kwargs") if isinstance(v.get("engine_kwargs"), dict) else {}
             except Exception as e:  # noqa: BLE001 -- an unreadable versions.json is not an attestation
                 unreadable["capture/versions.json"] = repr(e)[:200]
@@ -347,7 +353,7 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
                     "RunHeader.engine_kwargs.compilation_config": ek_top.get("compilation_config"),
                     "RunHeader.engine_kwargs.compilation": ek_top.get("compilation"),
                     "capture/versions.json engine_kwargs.compilation_config": ek_ver.get("compilation_config")}
-    out = {"engine": {}, "compilation": {}, "values": {}, "sources": {}, "disagreements": {}}
+    out: dict[str, dict] = {"engine": {}, "compilation": {}, "values": {}, "sources": {}, "disagreements": {}}
 
     def _j(v):
         return json.dumps(v, sort_keys=True, default=str)
@@ -384,7 +390,7 @@ def requests_declared(run: MatchRun) -> tuple[dict, list[dict], dict, list[str]]
     the Program's declared applicability.  Returns (the record's engine facts, the header's requests, request -> its prompt parameter,
     the Program's request ids)."""
     res, gp, header, G = run.res, run.gp, run.header, run.declared
-    c = NamedCheck(res, "G1", "requests_declared: manifest == global Program == record header; none omitted/duplicated; prompts as declared; "
+    c = NamedCheck(res, "requests_declared", "manifest == global Program == record header; none omitted/duplicated; prompts as declared; "
                              "record engine conditions inside the Program's declared applicability")
     facts = _execution_conditions(c, res, gp, header, run.oracle_dir)
     g_ids = [r["request_id"] for r in gp["requests"]]
@@ -455,7 +461,7 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
                                                                      "decide (MOE-01 ids = indexed-read); nothing declared, nothing assumed"})
     for k, (a, b, sa, sb) in facts["disagreements"].items():
         c.fail(f"the record's own sources disagree on {k}: {a!r} ({sa}) vs {b!r} ({sb}) -- the record does not attest one execution")
-    for src, err in (facts.get("unreadable") or {}).items():
+    for src, err in facts.get("unreadable", {}).items():   # stated only when a location is there and cannot be read
         c.fail(f"the record's {src} is present but unreadable ({err}): its engine conditions cannot be read, fail closed")
     if not app.get("engine"):
         c.fail("the workload Program declares no applicability.engine (an older artifact): the record's engine conditions cannot be "
@@ -478,7 +484,7 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     # (RunHeader.profile.compilation / .compilation / engine_kwargs.compilation_config); a compiled Program against a header without them
     # FAILS (fail closed).  An EAGER Program against a record whose compilation facts attest cudagraphs / torch.compile FAILS too.
     from verity_vllm.pipeline.global_program import compilation_facts
-    decl_comp = (app.get("engine") or {}).get("compilation") if app.get("engine") else None
+    decl_comp = app["engine"].get("compilation") if app.get("engine") else None
     if decl_comp is not None:
         decl = compilation_facts(decl_comp)
         res["execution"]["declared_compilation"] = decl
@@ -558,12 +564,12 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 c.fail(f"no declared seed for {request_id_of(i)} but the run header records seed={hs}")
             elif ws is not None and hs is None:
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records no seed")
-            elif ws is not None and int(ws) != int(hs):
+            elif ws is not None and hs is not None and int(ws) != int(hs):
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records seed={hs}")
         m_s, h_s = manifest_sampling(wl), dict((header.get("workload") or {}).get("sampling") or {})
         c.info["sampling"] = {"manifest": m_s, "header": {k: h_s.get(k) for k in ("variant", "temperature", "top_p", "top_k") if k in h_s}}
         # the manifest's own sources (variants table = the driver's, label, explicit fields) must agree: fail closed
-        for conf in m_s.get("conflict") or []:
+        for conf in m_s.get("conflict", []):   # stated only when the manifest's sources disagree
             c.fail(f"manifest of record is not one sampling declaration -- {conf}")
         for k in ("variant", "temperature", "top_p", "top_k"):
             mv, hv = m_s.get(k), h_s.get(k)
@@ -579,7 +585,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
             if h is None or (rv is None and h.get("variant") is None):
                 continue
             r_s = manifest_sampling(wl, variant=rv) if rv is not None else m_s
-            for conf in (r_s.get("conflict") or []) if rv is not None else []:
+            for conf in r_s.get("conflict", []) if rv is not None else []:
                 c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf}")
             # a manifest that pins a per-request variant against a header WITHOUT a per-request sampling
             # record is not agreement: the run was not pinned (mirror of the seed rule above) -- a pin added after the run fails closed

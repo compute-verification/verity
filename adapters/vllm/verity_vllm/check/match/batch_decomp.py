@@ -46,31 +46,48 @@ PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched
 from __future__ import annotations
 
 import collections
+import functools
 import json
 import os
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.observe.capture_log import read_steps, request_params
-from verity_vllm.check.match.dag_form import dag_hashes, live_cone
-from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _memo_stats, _install_profile_counters, _n_runs_of, _NoPhase,
-                                                    _Phase, _profile_on)
+
+# Imported from here by a test an open PR edits (tests/pipeline/test_global_program_regress.py); it moves to dag_form after that lands.
+from verity_vllm.check.match.dag_form import (
+    dag_hashes,
+    dag_multiset,  # noqa: F401
+    live_cone,
+)
+from verity_vllm.check.match.decomp_profile import (
+    FORCE_DAG_ENV,
+    PROFILE_ENV,
+    _install_profile_counters,
+    _memo_stats,
+    _n_runs_of,
+    _NoPhase,
+    _Phase,
+    _profile_on,
+)
 from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.check.match.input_layout import request_inputs, weights_input_nodes  # noqa: F401  (weights_input_nodes re-exported: tests)
 from verity_vllm.check.match.occurrence import SHARED, attribute, shared_legs
 from verity_vllm.check.match.projection import Projection, engine_steps_of
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
+from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  #
-# Imported from here by a test an open PR edits (tests/pipeline/test_global_program_regress.py); it moves to dag_form after that lands.
-from verity_vllm.check.match.dag_form import dag_multiset  # noqa: F401
+from verity_vllm.program.compact import idx_values as _idx_values
+from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
 
+logger = init_logger(__name__)
 
 # the within-step criterion of record: `dag` accepts a request whose projection
 # is the same live-cone DAG multiset as its Program although the fold's emission SEQUENCE differs (a co-scheduled prefill displaced
@@ -84,8 +101,51 @@ def record_ops() -> Ops:   # the checker of record's operations: X-09's default,
     return Ops("record", C.load_oracle, C.load_derived, Projection, C.compare_steps, dag_hashes, live_cone)
 
 
+@dataclass(frozen=True)
+class _Fold:
+    """The fold as X-09 reads it: its view, its capture log's header and engine steps, and the header's requests with each one's
+    prompt parameter and parent."""
+    view: C.RootView
+    header: dict
+    steps: dict[int, dict]
+    reqs: list[dict]
+    param_of: dict[str, int]
+    parent_of: dict[str, str]
+
+
+@dataclass(frozen=True)
+class _Owners:
+    """X-09's attribution of the fold's instances: each request's own, the weight-only ones no request owns, the ones no channel
+    placed, and what the document states of how; with the request-owned and the weights input nodes it read them from."""
+    n_in: int
+    seed_node_of: dict[str, int]
+    peer_node_of: dict[str, int]
+    weights_nodes: set[int]
+    meta_of: dict[int, dict]
+    per_req: dict[str, list[int]]
+    shared_idx: list[tuple[int, int]]
+    unattributed: list[dict]
+    how: collections.Counter[str]
+    disagree: int
+
+
+@dataclass(frozen=True)
+class _RequestReads:
+    """What one request's comparison reads: the fold and its attribution, the derived dirs by shape, the components decoded so far (by shape
+    in this run, by dir with the caller), the operations and the within-step criterion."""
+    fold: _Fold
+    own: _Owners
+    derived: dict[tuple[int, ...], str]
+    by_shape: dict[tuple[int, ...], C.RootView]
+    components: dict[str, C.RootView]
+    ops: Ops
+    within_step: str
+    profiling: bool
+    force_dag: bool
+
+
 def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = None, within_step: str = DEFAULT_WITHIN_STEP,
-              oracle: "C.RootView | None" = None, components: "dict[str, C.RootView] | None" = None, ops: Ops | None = None) -> dict:
+              oracle: C.RootView | None = None, components: dict[str, C.RootView] | None = None, ops: Ops | None = None) -> dict:
     if within_step not in WITHIN_STEP_CRITERIA:
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
     ops = ops or record_ops()
@@ -110,14 +170,83 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         run_prof["fold_preloaded"] = oracle is not None
         run_prof["fold_instances"] = len(B.inst)
         run_prof["fold_compact"] = bool(getattr(B, "compact", False))
+    fold = _Fold(B, header, steps, reqs, param_of, parent_of)
+    with _Phase(run_prof, "attribution") if profiling else _NoPhase():
+        own = _instance_owners(fold, oracle_dir)
+    n_in, seed_node_of, weights_nodes = own.n_in, own.seed_node_of, own.weights_nodes
+    per_req, shared_idx, unattributed, how, disagree = own.per_req, own.shared_idx, own.unattributed, own.how, own.disagree
+
+    # derived index by (LP, T[, C])
+    derived: dict[tuple[int, ...], str] = {}
+    bad_derived = []
+    for d in derived_dirs:
+        sh = derived_shape(d)
+        if sh is None:
+            bad_derived.append(d)
+        else:
+            derived.setdefault(sh, d)
+    A_cache: dict[tuple[int, ...], C.RootView] = {}
+    components = components if components is not None else {}  # decoded component Progs keyed by dir, shared with the caller
+
+    res: dict[str, Any] = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
+                           "log": log_path, "n_requests_header": len(reqs), "n_output_sequences": len(per_req), "engine_steps": len(steps),
+                           "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in, "fold_form": getattr(B, "fold_form", None),
+                                      # the shared weights as a node RANGE (contiguous after the request-owned parameters)
+                                      "weights_input_nodes": {"n": len(weights_nodes), "first": min(weights_nodes), "last": max(weights_nodes),
+                                                              "request_owned_inputs": len(reqs) + len(seed_node_of)},
+                                      "weight_map": {"n_ranges": len(B.oracle_wmap), "n_overlaps": len(B.oracle_wmap_overlaps)}},
+                           "attribution": {"how": dict(how), "unattributed": len(unattributed), "unattributed_examples": unattributed[:12],
+                                           "attributed": sum(len(v) for v in per_req.values()), "row_rule_disagreements": disagree,
+                                           # weight-only instances: owned by no request, projected into every participating leg
+                                           "weight_only_shared": len(shared_idx),
+                                           "weight_only_specs": dict(collections.Counter(B.inst[i]["spec"].split("{")[0] for i, _ in shared_idx).most_common(6))},
+                           "derived_available": {PP.shape_name(s): d for s, d in sorted(derived.items())}, "derived_unreadable": bad_derived,
+                           "requests": [], "missing_derived": []}
+    missing: set[tuple[int, ...]] = set()
+    all_equal = True
+    outs = _compare_requests(_RequestReads(fold, own, derived, A_cache, components, ops, within_step, profiling, force_dag), run_prof)
+    for ent, miss in outs:
+        if profiling:
+            p = ent.pop("_profile", None)   # the sidecar's, never the document's
+            if p is not None:
+                run_prof["requests"].append(p)
+        else:
+            ent.pop("_profile", None)
+        if miss is not None:
+            missing.add(miss)
+        elif ent.get("error"):
+            all_equal = False
+        elif ent.get("derived") is not None:
+            all_equal = all_equal and ent["canonical_equal"]
+        res["requests"].append(ent)
+    res["within_step_criterion"] = within_step
+    res["missing_derived"] = [list(s) for s in sorted(missing)]
+    res["xreq_total"] = sum(sum(e.get("xreq", {}).get("counts", {}).values()) for e in res["requests"])
+    complete = not unattributed and not missing and not bad_derived
+    res["verdict"] = "PASS" if (complete and all_equal and per_req) else ("MISSING_DERIVED" if missing and not unattributed else "FAIL")
+    res["reasons"] = ([f"{len(unattributed)} unattributed instances"] if unattributed else []) + \
+                     ([f"missing derived Programs for {res['missing_derived']}"] if missing else []) + \
+                     ([f"{len(bad_derived)} derived dir(s) unreadable: {[os.path.basename(x) for x in bad_derived[:3]]}"] if bad_derived else []) + \
+                     ([f"{res['xreq_total']} cross-request operand reads"] if res["xreq_total"] else []) + \
+                     [f"{e['request_id']}: not canonical-equal" for e in res["requests"] if e.get("canonical_equal") is False and not e.get("xreq", {}).get("counts")] + \
+                     [f"{e['request_id']}: {e['error']}" for e in res["requests"] if e.get("error")]
+    res["seconds"] = round(time.time() - t0, 1)
+    if profiling:
+        _write_profile(run_prof, res, ops)
+    return res
+
+
+def _instance_owners(fold: _Fold, oracle_dir: str) -> _Owners:
+    """Attribute every instance of the fold to its request, to no request (weight-only) or to nothing, by name."""
+    B, steps, reqs, param_of = fold.view, fold.steps, fold.reqs, fold.param_of
     n_in = B.n_input_nodes
-    _attr_phase = _Phase(run_prof, "attribution") if profiling else _NoPhase()
-    _attr_phase.__enter__()
     # the request-owned parameters after the prompts: a stochastic fold's `seed_<i>` per seeded request (every request of a stochastic
     # row is seeded, derive_step.sampler_geometry refuses otherwise), a TP rank fold's `peers_<i>` per request and a profile's witness
     # parameters; the shared weights are the Input nodes no request owns -- ONE node for a homogeneous bf16 Record, one per leaf field
     # for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when the layout does not hold
     seed_node_of, peer_node_of, witness_owners, weights_nodes = request_inputs(B, reqs)
+    if B.oracle_rows is None:
+        raise ValueError(f"{oracle_dir}: the view passed as the fold has no instances.jsonl rows")
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
 
     # attribution of every instance, in node order (producers precede consumers). Channels, in order:
@@ -136,17 +265,15 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     owners_of_param: dict[int, set[str]] = collections.defaultdict(set)
     # request-owned inputs: its prompt, seed, peers (a collective instance reading request r's peers node is r's), witnesses
     # and run values
-    for rid, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *witness_owners, *SI.run_owners(B, reqs)]:
-        owners_of_param[k].add(rid)
+    for owner, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *witness_owners, *SI.run_owners(B, reqs)]:
+        owners_of_param[k].add(owner)
     shared_inputs = weights_nodes | SI.values_nodes(B)
     owner_of_node: dict[int, str] = {}
     per_req: dict[str, list[int]] = collections.OrderedDict()
     unattributed: list[dict] = []
-    how = collections.Counter()
+    how: collections.Counter[str] = collections.Counter()
     disagree = 0
     compact = getattr(B, "compact", False)
-    if compact:
-        from verity_vllm.program.compact import idx_values as _idx_values
     for i, r in enumerate(B.inst):
         o = meta_of.get(r["k"])
         if o is None:
@@ -205,153 +332,139 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                 disagree += 1
         owner_of_node[r["k"]] = rid
         per_req.setdefault(rid, []).append(i)
-    _attr_phase.__exit__(None, None, None)
+    return _Owners(n_in, seed_node_of, peer_node_of, weights_nodes, meta_of, per_req, shared_idx, unattributed, how, disagree)
 
-    # derived index by (LP, T[, C])
-    derived: dict[tuple[int, ...], str] = {}
-    bad_derived = []
-    for d in derived_dirs:
-        sh = derived_shape(d)
-        if sh is None:
-            bad_derived.append(d)
-        else:
-            derived.setdefault(sh, d)
-    A_cache: dict[tuple[int, ...], C.RootView] = {}
-    components = components if components is not None else {}  # decoded component Progs keyed by dir, shared with the caller
 
-    res = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
-           "log": log_path, "n_requests_header": len(reqs), "n_output_sequences": len(per_req), "engine_steps": len(steps),
-           "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in, "fold_form": getattr(B, "fold_form", None),
-                      # the shared weights as a node RANGE (contiguous after the request-owned parameters)
-                      "weights_input_nodes": {"n": len(weights_nodes), "first": min(weights_nodes), "last": max(weights_nodes),
-                                              "request_owned_inputs": len(reqs) + len(seed_node_of)},
-                      "weight_map": {"n_ranges": len(B.oracle_wmap), "n_overlaps": len(B.oracle_wmap_overlaps)}},
-           "attribution": {"how": dict(how), "unattributed": len(unattributed), "unattributed_examples": unattributed[:12],
-                           "attributed": sum(len(v) for v in per_req.values()), "row_rule_disagreements": disagree,
-                           # weight-only instances: owned by no request, projected into every participating leg
-                           "weight_only_shared": len(shared_idx),
-                           "weight_only_specs": dict(collections.Counter(B.inst[i]["spec"].split("{")[0] for i, _ in shared_idx).most_common(6))},
-           "derived_available": {PP.shape_name(s): d for s, d in sorted(derived.items())}, "derived_unreadable": bad_derived,
-           "requests": [], "missing_derived": []}
-    missing: set[tuple[int, ...]] = set()
-    all_equal = True
+def _shape_of(fold: _Fold, rid: str, idxs: list[int]):
+    """(LP, T[, C]) of a request from the fold alone (the leg recomputes the same; here to preload its component before the legs fork)."""
+    B, header, steps, reqs, param_of = fold.view, fold.header, fold.steps, fold.reqs, fold.param_of
+    pidx = param_of.get(rid)
+    if pidx is None:
+        return None
+    LP = len(reqs[pidx]["prompt_token_ids"])
+    n_ts = sum(1 for i in idxs if _is_sampling_event(B.inst[i]["spec"]))
+    chunks = max(1, sum(1 for s, st in steps.items() if any(r == rid and pos < LP for r, pos in st.get("rows", []))))
+    return PP.shape(LP, n_ts - chunks, PX.cached_rows(header, steps, rid))
 
-    def shape_of(rid: str, idxs: list[int]):
-        """(LP, T[, C]) of a request from the fold alone (the leg recomputes the same; here to preload its component before the legs fork)."""
-        pidx = param_of.get(rid)
-        if pidx is None:
-            return None
-        LP = len(reqs[pidx]["prompt_token_ids"])
-        n_ts = sum(1 for i in idxs if _is_sampling_event(B.inst[i]["spec"]))
-        chunks = max(1, sum(1 for s, st in steps.items() if any(r == rid and pos < LP for r, pos in st.get("rows", []))))
-        return PP.shape(LP, n_ts - chunks, PX.cached_rows(header, steps, rid))
 
-    def leg(item) -> tuple:
-        """X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
-        its cross-request reads.  Reads the shared fold / components / attribution, writes nothing shared: the record's loop body,
-        returning (entry, missing shape | None) instead of appending.  Runs in this process, or on a forked worker (fast path)."""
-        rid, idxs = item
-        pidx = param_of.get(rid)
-        ent = {"request_id": rid, "parent": parent_of.get(rid), "prompt_param": pidx, "n_instances": len(idxs)}
-        prof: dict = {"request_id": rid, "n_instances": len(idxs), "pid": os.getpid(), "t_start": time.time()} if profiling else None
-        if prof is not None:
-            ent["_profile"] = prof
-        if pidx is None:
-            ent["error"] = "request not in RunHeader.workload (no prompt parameter)"
-            return ent, None
-        LP = len(reqs[pidx]["prompt_token_ids"])
-        with _Phase(prof, "projection_build") if prof is not None else _NoPhase():
-            P = ops.projection(B, f"oracle[{rid}]", idxs, tok_node=pidx, weights_node=weights_nodes, seed_node=seed_node_of.get(parent_of.get(rid, rid)),
-                               peer_node=peer_node_of.get(parent_of.get(rid, rid)))
-            P._all_seed_nodes = set(seed_node_of.values())
-            P.cached_rows = PX.cached_rows(header, steps, rid)
-        with _Phase(prof, "shape") if prof is not None else _NoPhase():
-            n_ts = sum(1 for r in P.inst if _is_sampling_event(r["spec"]))
-            # prefill chunks: engine steps in which the request had PROMPT rows (position < LP). vLLM v1 samples (and discards) a token
-            # after every partial chunk, so the fold holds one TokenSelect per chunk + one per served decode step: T = n_ts - chunks.
-            prefill_steps = sorted(s for s, st in steps.items() if any(r == rid and pos < LP for r, pos in st.get("rows", [])))
-            chunks = max(1, len(prefill_steps))
-            T = n_ts - chunks
-            es = engine_steps_of(P, meta_of)
-            sh = PP.shape(LP, T, P.cached_rows)
-        ent.update({"LP": LP, "T": T, **({"C": P.cached_rows} if P.cached_rows else {}), "token_selects": n_ts, "steps": len(P.steps), "engine_steps_per_step": es[:4] + (["..."] if len(es) > 4 else []),
-                    "prefill_chunks": chunks, "prefill_engine_steps": prefill_steps[:8],
-                    "chunked_steps": sum(1 for e in es if len(e) != 1), "engine_step_range": [min(min(e) for e in es if e), max(max(e) for e in es if e)] if es else None})
-        if prof is not None:
-            prof.update({"LP": LP, "T": T, "steps": len(P.steps), "prefill_chunks": chunks,
-                         "p_runs_total": sum(_n_runs_of(a) for r in P.inst for a in r["args"]) if len(P.inst) <= 2_000_000 else None})
-        if n_ts == 0:
-            ent["error"] = "no TokenSelect attributed to the request"
-            return ent, None
-        d = derived.get(sh)
-        if d is None:
-            ent["derived"] = None
-            return ent, sh
-        with _Phase(prof, "component_load") if prof is not None else _NoPhase():
-            A = A_cache.get(sh)
-            if A is None:
-                A = components.get(d)
-                if A is None:
-                    A = components[d] = ops.load_derived(d, f"derived[{PP.shape_name(sh)}]")
-                A_cache[sh] = A
-        if prof is not None:
-            prof.update({"a_instances": len(A.inst), "a_steps": len(A.steps),
-                         "a_runs_total": sum(_n_runs_of(a) for r in A.inst for a in r["args"]) if len(A.inst) <= 2_000_000 else None})
-        with _Phase(prof, "compare_steps") if prof is not None else _NoPhase():
-            cmp = ops.compare_steps(A, P, unfold_a=False)
-        ent["derived"] = d
-        ent["derived_digest"] = A.digest
-        ent["xreq"] = {"counts": dict(P.xreq), "examples": P.xreq_examples}
-        seq_equal = bool(cmp["canonical_sha256"]["equal"]) and not P.xreq
-        ent["sequence_equal"] = seq_equal
-        ent["canonical_sha256"] = cmp["canonical_sha256"]
-        ent["criterion"] = "sequence"
-        chunked = chunks > 1
-        if prof is not None:
-            prof.update({"sequence_equal": seq_equal, "xreq_total": sum(P.xreq.values()),
-                         "steps_spec_equal": cmp["totals"].get("steps_spec_equal", 0), "cmp_steps": len(cmp["steps"])})
-        if (not seq_equal and not P.xreq) or (force_dag and not P.xreq):
-            # Order-insensitive DAG form over the LIVE cone (see dag_multiset / live_cone). It is the ACCEPTED criterion only for a
-            # request whose prefill the engine chunked: the fold is then chunk-major and carries one discarded sample per partial
-            # chunk, so the sequence criterion cannot hold by construction. Otherwise it is reported as a diagnostic only.
-            with _Phase(prof, "live_cone_A") if prof is not None else _NoPhase():
-                la = ops.live_cone(A)
-            with _Phase(prof, "live_cone_P") if prof is not None else _NoPhase():
-                lb = ops.live_cone(P)
-            with _Phase(prof, "dag_hashes_A") if prof is not None else _NoPhase():
-                ha = ops.dag_hashes(A, la)
-            with _Phase(prof, "dag_hashes_P") if prof is not None else _NoPhase():
-                hb = ops.dag_hashes(P, lb)
-            with _Phase(prof, "multiset_diff") if prof is not None else _NoPhase():
-                ma, mb = collections.Counter(ha.values()), collections.Counter(hb.values())
-                only_a, only_b = ma - mb, mb - ma
-                diff = only_a + only_b
-                spec = lambda Q, i: Q.inst[i]["spec"].split("{")[0]  # noqa: E731
-                ent["dag_multiset_equal"] = not diff
-                ent["dag_multiset"] = {
-                    "a_live": len(la), "a_dead": len(A.inst) - len(la), "b_live": len(lb), "b_dead": len(P.inst) - len(lb),
-                    "a_dead_specs": dict(collections.Counter(spec(A, i) for i in range(len(A.inst)) if i not in la)),
-                    "b_dead_specs": dict(collections.Counter(spec(P, i) for i in range(len(P.inst)) if i not in lb)),
-                    "only_a": sum(only_a.values()), "only_b": sum(only_b.values()),
-                    "only_a_specs": dict(collections.Counter(spec(A, i) for i, h in ha.items() if h in only_a).most_common(6)),
-                    "only_b_specs": dict(collections.Counter(spec(P, i) for i, h in hb.items() if h in only_b).most_common(6))}
-            if prof is not None:
-                prof.update({"a_live": len(la), "b_live": len(lb), "dag_only_a": sum(only_a.values()), "dag_only_b": sum(only_b.values())})
-            if not seq_equal and not diff and chunked:
-                ent["criterion"] = "dag-multiset over the live cone (chunked prefill)"
-            elif not seq_equal and not diff and within_step == "dag":
-                ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record; sequence differs)"
-        ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (cmp.get("splits_values") or {}).get("equal", True)
-        ent["totals"] = cmp["totals"]
-        ent["a_steps"], ent["b_steps"] = cmp["a"]["steps"], cmp["b"]["steps"]
-        bad = [s for s in cmp["steps"] if not s["spec_seq_equal"] or (s.get("wiring") or {}).get("operands_different")]
-        ent["first_divergences"] = [{"step": s["step"], "n_a": s["n_a"], "n_b": s["n_b"], "div": s.get("first_divergences_T_normalised", [])[:2],
-                                     "wiring_examples": (s.get("wiring") or {}).get("examples", [])[:3]} for s in bad[:3]]
-        ent["n_divergent_steps"] = len(bad)
-        if prof is not None:
-            prof["seconds"] = round(time.time() - prof["t_start"], 3)
+def _compare_request(reads: _RequestReads, item) -> tuple:
+    """X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
+    its cross-request reads.  Reads the shared fold / components / attribution, writes nothing shared: the record's loop body,
+    returning (entry, missing shape | None) instead of appending.  Runs in this process, or on a forked worker (fast path)."""
+    fold, own, ops, derived, A_cache, components = reads.fold, reads.own, reads.ops, reads.derived, reads.by_shape, reads.components
+    B, header, steps, reqs, param_of, parent_of = fold.view, fold.header, fold.steps, fold.reqs, fold.param_of, fold.parent_of
+    meta_of, seed_node_of, peer_node_of, weights_nodes = own.meta_of, own.seed_node_of, own.peer_node_of, own.weights_nodes
+    within_step, profiling, force_dag = reads.within_step, reads.profiling, reads.force_dag
+    rid, idxs = item
+    pidx = param_of.get(rid)
+    ent = {"request_id": rid, "parent": parent_of.get(rid), "prompt_param": pidx, "n_instances": len(idxs)}
+    prof: dict | None = {"request_id": rid, "n_instances": len(idxs), "pid": os.getpid(), "t_start": time.time()} if profiling else None
+    if prof is not None:
+        ent["_profile"] = prof
+    if pidx is None:
+        ent["error"] = "request not in RunHeader.workload (no prompt parameter)"
         return ent, None
+    LP = len(reqs[pidx]["prompt_token_ids"])
+    with _Phase(prof, "projection_build") if prof is not None else _NoPhase():
+        P = ops.projection(B, f"oracle[{rid}]", idxs, tok_node=pidx, weights_node=weights_nodes, seed_node=seed_node_of.get(parent_of.get(rid, rid)),
+                           peer_node=peer_node_of.get(parent_of.get(rid, rid)))
+        P._all_seed_nodes = set(seed_node_of.values())
+        P.cached_rows = PX.cached_rows(header, steps, rid)
+    with _Phase(prof, "shape") if prof is not None else _NoPhase():
+        n_ts = sum(1 for r in P.inst if _is_sampling_event(r["spec"]))
+        # prefill chunks: engine steps in which the request had PROMPT rows (position < LP). vLLM v1 samples (and discards) a token
+        # after every partial chunk, so the fold holds one TokenSelect per chunk + one per served decode step: T = n_ts - chunks.
+        prefill_steps = sorted(s for s, st in steps.items() if any(r == rid and pos < LP for r, pos in st.get("rows", [])))
+        chunks = max(1, len(prefill_steps))
+        T = n_ts - chunks
+        es = engine_steps_of(P, meta_of)
+        sh = PP.shape(LP, T, P.cached_rows)
+    ent.update({"LP": LP, "T": T, **({"C": P.cached_rows} if P.cached_rows else {}), "token_selects": n_ts, "steps": len(P.steps), "engine_steps_per_step": es[:4] + (["..."] if len(es) > 4 else []),
+                "prefill_chunks": chunks, "prefill_engine_steps": prefill_steps[:8],
+                "chunked_steps": sum(1 for e in es if len(e) != 1), "engine_step_range": [min(min(e) for e in es if e), max(max(e) for e in es if e)] if es else None})
+    if prof is not None:
+        prof.update({"LP": LP, "T": T, "steps": len(P.steps), "prefill_chunks": chunks,
+                     "p_runs_total": sum(_n_runs_of(a) for r in P.inst for a in r["args"]) if len(P.inst) <= 2_000_000 else None})
+    if n_ts == 0:
+        ent["error"] = "no TokenSelect attributed to the request"
+        return ent, None
+    d = derived.get(sh)
+    if d is None:
+        ent["derived"] = None
+        return ent, sh
+    with _Phase(prof, "component_load") if prof is not None else _NoPhase():
+        A = A_cache.get(sh)
+        if A is None:
+            A = components.get(d)
+            if A is None:
+                A = components[d] = ops.load_derived(d, f"derived[{PP.shape_name(sh)}]")
+            A_cache[sh] = A
+    if prof is not None:
+        prof.update({"a_instances": len(A.inst), "a_steps": len(A.steps),
+                     "a_runs_total": sum(_n_runs_of(a) for r in A.inst for a in r["args"]) if len(A.inst) <= 2_000_000 else None})
+    with _Phase(prof, "compare_steps") if prof is not None else _NoPhase():
+        cmp = ops.compare_steps(A, P, unfold_a=False)
+    ent["derived"] = d
+    ent["derived_digest"] = A.digest
+    ent["xreq"] = {"counts": dict(P.xreq), "examples": P.xreq_examples}
+    seq_equal = bool(cmp["canonical_sha256"]["equal"]) and not P.xreq
+    ent["sequence_equal"] = seq_equal
+    ent["canonical_sha256"] = cmp["canonical_sha256"]
+    ent["criterion"] = "sequence"
+    chunked = chunks > 1
+    if prof is not None:
+        prof.update({"sequence_equal": seq_equal, "xreq_total": sum(P.xreq.values()),
+                     "steps_spec_equal": cmp["totals"].get("steps_spec_equal", 0), "cmp_steps": len(cmp["steps"])})
+    if (not seq_equal and not P.xreq) or (force_dag and not P.xreq):
+        # Order-insensitive DAG form over the LIVE cone (see dag_multiset / live_cone). It is the ACCEPTED criterion only for a
+        # request whose prefill the engine chunked: the fold is then chunk-major and carries one discarded sample per partial
+        # chunk, so the sequence criterion cannot hold by construction. Otherwise it is reported as a diagnostic only.
+        with _Phase(prof, "live_cone_A") if prof is not None else _NoPhase():
+            la = ops.live_cone(A)
+        with _Phase(prof, "live_cone_P") if prof is not None else _NoPhase():
+            lb = ops.live_cone(P)
+        with _Phase(prof, "dag_hashes_A") if prof is not None else _NoPhase():
+            ha = ops.dag_hashes(A, la)
+        with _Phase(prof, "dag_hashes_P") if prof is not None else _NoPhase():
+            hb = ops.dag_hashes(P, lb)
+        with _Phase(prof, "multiset_diff") if prof is not None else _NoPhase():
+            ma, mb = collections.Counter(ha.values()), collections.Counter(hb.values())
+            only_a, only_b = ma - mb, mb - ma
+            diff = only_a + only_b
+            spec = lambda Q, i: Q.inst[i]["spec"].split("{")[0]  # noqa: E731
+            ent["dag_multiset_equal"] = not diff
+            ent["dag_multiset"] = {
+                "a_live": len(la), "a_dead": len(A.inst) - len(la), "b_live": len(lb), "b_dead": len(P.inst) - len(lb),
+                "a_dead_specs": dict(collections.Counter(spec(A, i) for i in range(len(A.inst)) if i not in la)),
+                "b_dead_specs": dict(collections.Counter(spec(P, i) for i in range(len(P.inst)) if i not in lb)),
+                "only_a": sum(only_a.values()), "only_b": sum(only_b.values()),
+                "only_a_specs": dict(collections.Counter(spec(A, i) for i, h in ha.items() if h in only_a).most_common(6)),
+                "only_b_specs": dict(collections.Counter(spec(P, i) for i, h in hb.items() if h in only_b).most_common(6))}
+        if prof is not None:
+            prof.update({"a_live": len(la), "b_live": len(lb), "dag_only_a": sum(only_a.values()), "dag_only_b": sum(only_b.values())})
+        if not seq_equal and not diff and chunked:
+            ent["criterion"] = "dag-multiset over the live cone (chunked prefill)"
+        elif not seq_equal and not diff and within_step == "dag":
+            ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record; sequence differs)"
+    splits = cmp.get("splits_values")   # the two sides' own split counts held against each other; absent when either side binds none
+    ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (splits is None or splits["equal"])
+    ent["totals"] = cmp["totals"]
+    ent["a_steps"], ent["b_steps"] = cmp["a"]["steps"], cmp["b"]["steps"]
+    # a step whose spec sequences are equal is wired (`compare_steps`); one whose sequences do not align is compared no further
+    bad = [s for s in cmp["steps"] if not s["spec_seq_equal"] or s["wiring"]["operands_different"]]
+    ent["first_divergences"] = [{"step": s["step"], "n_a": s["n_a"], "n_b": s["n_b"], "div": s.get("first_divergences_T_normalised", [])[:2],
+                                 "wiring_examples": s["wiring"]["examples"][:3] if "wiring" in s else []} for s in bad[:3]]
+    ent["n_divergent_steps"] = len(bad)
+    if prof is not None:
+        prof["seconds"] = round(time.time() - prof["t_start"], 3)
+    return ent, None
 
+
+def _compare_requests(reads: _RequestReads, run_prof: dict) -> list[tuple]:
+    """Every request's comparison, in request order: in this process, or through the operations' hook after its components are loaded."""
+    steps, per_req, shared_idx = reads.fold.steps, reads.own.per_req, reads.own.shared_idx
+    ops, derived, components, profiling = reads.ops, reads.derived, reads.components, reads.profiling
+    shape_of, leg = functools.partial(_shape_of, reads.fold), functools.partial(_compare_request, reads)
     if shared_idx:
         # a weight-only instance of engine step s belongs to the projection of every request with rows in s (the
         # request's own derive computes that node inside its forward at that step); a request with no rows in s does not see it.
@@ -366,9 +479,9 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         to_load: list[tuple[str, str]] = []
         for rid, idxs in items:
             sh = shape_of(rid, idxs)
-            d = derived.get(sh) if sh is not None else None
-            if d is not None and d not in components and all(d != x[0] for x in to_load):
-                to_load.append((d, f"derived[{PP.shape_name(sh)}]"))
+            comp = derived.get(sh) if sh is not None else None
+            if comp is not None and comp not in components and all(comp != x[0] for x in to_load):
+                to_load.append((comp, f"derived[{PP.shape_name(sh)}]"))
         if to_load:
             # the components are built on the workers too, one per leg (2 s to build vs 0.1 s to pickle a component back: the build is
             # the descriptor walk), then held by the parent so the legs below share them copy-on-write; a build failure raises, as the
@@ -379,49 +492,27 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     else:
         with _Phase(run_prof, "legs") if profiling else _NoPhase():
             outs = [leg(it) for it in items]
-    for ent, miss in outs:
-        if profiling:
-            p = ent.pop("_profile", None)   # the sidecar's, never the document's
-            if p is not None:
-                run_prof["requests"].append(p)
-        else:
-            ent.pop("_profile", None)
-        if miss is not None:
-            missing.add(miss)
-        elif ent.get("error"):
-            all_equal = False
-        elif ent.get("derived") is not None:
-            all_equal = all_equal and ent["canonical_equal"]
-        res["requests"].append(ent)
-    res["within_step_criterion"] = within_step
-    res["missing_derived"] = [list(s) for s in sorted(missing)]
-    res["xreq_total"] = sum(sum(e.get("xreq", {}).get("counts", {}).values()) for e in res["requests"])
-    complete = not unattributed and not missing and not bad_derived
-    res["verdict"] = "PASS" if (complete and all_equal and per_req) else ("MISSING_DERIVED" if missing and not unattributed else "FAIL")
-    res["reasons"] = ([f"{len(unattributed)} unattributed instances"] if unattributed else []) + \
-                     ([f"missing derived Programs for {res['missing_derived']}"] if missing else []) + \
-                     ([f"{len(bad_derived)} derived dir(s) unreadable: {[os.path.basename(x) for x in bad_derived[:3]]}"] if bad_derived else []) + \
-                     ([f"{res['xreq_total']} cross-request operand reads"] if res["xreq_total"] else []) + \
-                     [f"{e['request_id']}: not canonical-equal" for e in res["requests"] if e.get("canonical_equal") is False and not e.get("xreq", {}).get("counts")] + \
-                     [f"{e['request_id']}: {e['error']}" for e in res["requests"] if e.get("error")]
-    res["seconds"] = round(time.time() - t0, 1)
-    if profiling:
-        run_prof["seconds"] = res["seconds"]
-        run_prof["verdict"] = res["verdict"]
-        run_prof["x09_legs"] = "forked" if ops.legs is not None else "inline"
-        st = _memo_stats()
-        if st is not None:
-            run_prof["fast_stats_final"] = {k: int(v) for k, v in sorted(st.items())}
-        try:
-            import resource
-            run_prof["max_rss_mib_parent"] = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024)
-            run_prof["max_rss_mib_children"] = int(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
-        except Exception as e:   # noqa: BLE001 - telemetry only
-            run_prof["max_rss_error"] = repr(e)[:200]
-        out = os.environ[PROFILE_ENV]
-        os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-        json.dump(run_prof, open(out, "w"), indent=1, default=str)
-    return res
+    return outs
+
+
+def _write_profile(run_prof: dict, res: dict, ops: Ops) -> None:
+    """Close the profile with the run's verdict, seconds and peak memory and write it to the file `X09_PROFILE_OUT` names."""
+    run_prof["seconds"] = res["seconds"]
+    run_prof["verdict"] = res["verdict"]
+    run_prof["x09_legs"] = "forked" if ops.legs is not None else "inline"
+    st = _memo_stats()
+    if st is not None:
+        run_prof["fast_stats_final"] = {k: int(v) for k, v in sorted(st.items())}
+    try:
+        import resource
+        run_prof["max_rss_mib_parent"] = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024)
+        run_prof["max_rss_mib_children"] = int(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
+    except Exception as e:   # noqa: BLE001 - telemetry only
+        run_prof["max_rss_error"] = repr(e)[:200]
+    out = settings.get(PROFILE_ENV)
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    with open(out, "w") as f:
+        json.dump(run_prof, f, indent=1, default=str)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -435,14 +526,16 @@ class Options:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
     res = decompose(a.oracle, a.derived, within_step=a.within_step)
-    json.dump(res, open(a.out, "w"), indent=1, default=str)
+    with open(a.out, "w") as f:
+        json.dump(res, f, indent=1, default=str)
     brief = {"verdict": res["verdict"], "within_step": res["within_step_criterion"], "reasons": res["reasons"],
              "requests": [{k: e.get(k) for k in ("request_id", "LP", "T", "n_instances", "steps", "canonical_equal", "sequence_equal", "dag_multiset_equal", "criterion", "chunked_steps")}
                                                                                  for e in res["requests"]],
              "attribution": {k: v for k, v in res["attribution"].items() if k != "unattributed_examples"}, "missing_derived": res["missing_derived"],
              "xreq_total": res["xreq_total"], "seconds": res["seconds"]}
-    print(json.dumps(brief, indent=1, default=str))
+    logger.info("%s", json.dumps(brief, indent=1, default=str))
     return 0 if res["verdict"] == "PASS" else (4 if res["verdict"] == "MISSING_DERIVED" else 3)

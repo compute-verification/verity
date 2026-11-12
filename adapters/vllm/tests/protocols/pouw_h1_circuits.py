@@ -43,12 +43,18 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
+
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import descriptor_id
+from verity.protocols.spot.verifier.one_stage import partition as P
 
 HERE = Path(__file__).resolve().parent
 H1_PROVE = HERE.parents[3] / "benchmarks" / "pouw" / "h1_prove"
@@ -78,11 +84,9 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     (`h1window.tile_unit`) or J10-R's (`h1tile.PouwH1Tile5`, serve-openai's pouw setting ``unit`` j10r). ValueError when
     neither is one of the descriptor's definitions, or (with core's credit) the partition is not the one core's credit
     verifies statements under."""
-    from verity.protocols.pouw.verifier import credit as CR
     from verity.protocols.pouw.prover.circuit import h1tile as HT
     from verity.protocols.pouw.prover.circuit import h1window as HW
-    from verity.circuits import partition_object as PO
-    from verity.circuits.codec import descriptor_id
+    from verity.protocols.pouw.verifier import credit as CR
     program, desc = hashlib.sha512(descriptor).hexdigest(), json.loads(descriptor)
     tile = tuple(layout["tile"])
 
@@ -97,7 +101,8 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     if missing:
         raise ValueError(f"K = {missing}'s template (h1window.template over v1's or J10-R's tile_unit at {list(tile)}) "
                          "is not one of the declared Program's definitions, so no circuit file of it is the Program's")
-    ids, j10r = {k: g[0] for k, g in got.items()}, {k for k, g in got.items() if g[1]}
+    found = {k: g for k, g in got.items() if g is not None}
+    ids, j10r = {k: g[0] for k, g in found.items()}, {k for k, g in found.items() if g[1]}
     part = PO.build(desc, PO.template_instances_query([ids[k] for k in sorted(ids)]))
     if part["program"] != program:
         raise ValueError(f"the descriptor's program_digest {part['program'][:16]}... is not its SHA-512 {program[:16]}...")
@@ -131,8 +136,8 @@ def _lower(k: int, r: int, c: int, bind: dict, path: Path, j10r: bool = False) -
 
 
 def _h1_live():
-    import importlib.util
     spec = importlib.util.spec_from_file_location("h1_prove_live", H1_PROVE / "live.py")
+    assert spec is not None and spec.loader is not None, f"{H1_PROVE / 'live.py'} is no module"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -141,7 +146,6 @@ def _h1_live():
 def live_part(T: int, S: int, prefix: str) -> dict:
     """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on: v2's, or past
     `live.PIECE_ROWS` rows the pieced one (``h1_prove/live.py``'s `program_of`)."""
-    from verity.protocols.spot.verifier.one_stage import partition as P
     return P.partition(*_h1_live().program_of({"T": T, "S": S, "prefix": prefix}))
 
 
@@ -156,9 +160,8 @@ def lower_live(T: int, part: dict, path: Path) -> None:
 def rebuilt(descriptor: bytes) -> Any:
     """The declared window Program rebuilt from its descriptor's layout (`credit.layout_of`, its prefix `credit.shape_of`'s),
     each K's template held to the descriptor's by its descriptor id, which names every binding. ValueError otherwise."""
-    from verity.protocols.pouw.verifier import credit as CR
     from verity.protocols.pouw.prover.circuit import h1window as HW
-    from verity.circuits.codec import descriptor_id
+    from verity.protocols.pouw.verifier import credit as CR
     layout, why = CR.layout_of(descriptor)
     if why is not None:
         raise ValueError(f"the declared Program's layout: {why[1]}")
@@ -179,7 +182,7 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     descriptor (`served.descriptor`), its partition object and what its file is bound to, ``{"partition",
     "program"}``."""
     from verity.protocols.pouw.prover.circuit import h1window as HW
-    from verity.protocols.spot.verifier.one_stage import partition as P
+
     from verity_vllm.protocols.pouw.h1 import served as SV
     program, query = HW.leaf_program(win, k, kind)
     part = P.partition(program, query)
@@ -222,13 +225,16 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
     descriptor written beside it (`drawn_rows.LEAF_PROGRAM`): ``files`` (each file's SHA-512 and ``leaf_programs``), each
     statement's bind (``leaf_binds``) and Definition id (``templates``). ValueError when credit derives another leaf
     Program or partition at K, or refuses the K (`credit.lanes_shape`)."""
-    from tests.protocols.pouw_h1_rehearsal import PROGRAM
     from verity.protocols.pouw.verifier import credit as CR
     from verity.protocols.pouw.verifier import leaf_lanes as LL
+
+    from tests.protocols.pouw_h1_rehearsal import PROGRAM
     from verity_vllm.protocols.pouw.h1 import drawn_rows as D
     layout, _why = CR.layout_of(descriptor)
     shape, win = CR.shape_of(descriptor), rebuilt(descriptor)
-    files, binds, templates = {CR.LEAF_PROGRAMS: {}}, {}, {}
+    files: dict[str, Any] = {CR.LEAF_PROGRAMS: {}}
+    binds: dict[str, dict] = {}
+    templates: dict[str, str] = {}
     for k in ks:
         if why := CR.lanes_shape(layout, shape, k):
             raise ValueError(f"K = {k}: {why}")

@@ -42,7 +42,8 @@ def _program(fields=(), reads=None, checked=False) -> ProgramView:
         lo += n
     if fields:
         params.append(InputView(-3, fmt.RUN_PARAM, "{...}", tuple(ports)))
-    calls, tok, checks = [], R(-2, "out"), []
+    calls: list[CallView] = []
+    tok, checks = R(-2, "out"), []
     for step in (0, 1):
         k0 = len(calls)
         calls += [_call(k0, "Embedding_v1{V=8,H=4}", f"{W}.embed/embedding[0]", [tok, R(-1, EMBED_W)]),
@@ -130,7 +131,10 @@ def test_a_run_field_no_step_or_two_steps_read_is_unmodelled_by_name():
 
 def test_the_plan_anchors_one_value_class_per_layer_on_its_readers_module():
     from verity_vllm.acquire import plan as PL
-    from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_from_paths
+    from verity_vllm.correspondence.reader_for_acquire import (
+        AnnotationCorrespondence,
+        runtime_tree_from_paths,
+    )
 
     m = _served()
     assert PL.ROUTE_OF_FAMILY[fmt.RUN_FAMILY] == "run_tap"

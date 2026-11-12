@@ -21,8 +21,8 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
             return int(v)
         # an unbound instance sequence (a RootView-shaped reader without compare's binding): the 6th operand must be ONE run
         # ("n", k, 0, 1) onto a `Const32[0x<S>]_v1` instance emitted for the select (fold._const, patterns._stage3 Const(32, S, "splits"))
-        args = inst.get("args") or []
-        if len(args) > _SPLITS_OPERAND and len(args[_SPLITS_OPERAND]) == 1:
+        args = inst.get("args")   # None for a reader's row that carries no operands
+        if args is not None and len(args) > _SPLITS_OPERAND and len(args[_SPLITS_OPERAND]) == 1:
             run = args[_SPLITS_OPERAND][0]
             if len(run) == 4 and run[0] == "n" and (run[2], run[3]) == (0, 1):
                 j = (getattr(B, "k2i", None) or {}).get(run[1])
@@ -81,7 +81,7 @@ def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -
     per_req: dict[str, dict] = {}
     for e in requests:
         rid = e["request_id"]
-        ps = present.get(rid) or []
+        ps = present.get(rid)   # the steps with its rows; a request never scheduled has no entry
         if not ps:
             continue
         first = int(e.get("first_step", ps[0]))
@@ -92,7 +92,7 @@ def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -
         ok = (a_r is not None and finish in ("length", "eos")
               and (finish != "eos" or e.get("eos_verified") is True)
               and not e.get("g6_problems"))
-        if not ok:
+        if not ok or a_r is None:
             for s in ps:
                 unest[s].append(rid)
             per_req[rid] = {"established": False, "observed_steps": [ps[0], ps[-1]]}
@@ -141,6 +141,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     fails closed.  Without `scheduled` the SampleEnd batch is held to the observed logits rows."""
     from verity.definitions.registry.sampling_vocab import SHARED_GREEDY
     from verity.definitions.registry.topp_geometry import registered_splits
+
     from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)
@@ -163,7 +164,8 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     if n_topp == 0:
         info["note"] = "no top-p TokenSelect in the fold: nothing to check"
         return {"info": info, "problems": problems}
-    sg = gp.get("sampler_geometry") if isinstance(gp.get("sampler_geometry"), dict) else {}
+    sg = gp.get("sampler_geometry")
+    sg = sg if isinstance(sg, dict) else {}
     nsm = sg.get("num_sms")
     if nsm is None:
         nsm = ((gp.get("applicability") or {}).get("components") or {}).get("num_sms")
@@ -185,7 +187,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     sched_dis: list[dict] = []
     unest_steps: list[dict] = []
     unscheduled: list[dict] = []
-    sched_unest = (scheduled or {}).get("unestablished") or {} if sched_live is not None else {}
+    sched_unest = scheduled["unestablished"] if scheduled is not None and sched_live is not None else {}
     for s in sorted(per_step, key=lambda x: (x is None, x if x is not None else -1)):
         Ss = per_step[s]
         if s is None or s not in steps:

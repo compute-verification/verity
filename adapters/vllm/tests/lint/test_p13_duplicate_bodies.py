@@ -33,6 +33,7 @@ KIND = "duplicate-body"
 MIN_LINES = 9
 ML = R.CORE_PKG / "ml"
 _DEFS = (ast.FunctionDef, ast.AsyncFunctionDef)
+_Def = ast.FunctionDef | ast.AsyncFunctionDef
 _SKIP_FIELDS = frozenset({"ctx", "annotation", "returns", "type_comment", "type_params"})
 
 
@@ -42,14 +43,14 @@ class Body:
     symbol: str
     line: int
     digest: str
-    node: ast.AST
+    node: _Def
 
 
 def _is_doc(stmt: ast.AST) -> bool:
     return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)
 
 
-def _bound(fn: ast.AST) -> frozenset[str]:
+def _bound(fn: _Def) -> frozenset[str]:
     """The names ``fn`` binds: parameters, targets, nested defs and classes, except, import and match-capture names."""
     a = fn.args
     out = {x.arg for x in (*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg) if x is not None}
@@ -88,7 +89,7 @@ def _statements(body: list[ast.stmt]) -> list[ast.stmt]:
     return [s for s in body if not _is_doc(s)]
 
 
-def digest(fn: ast.AST) -> str:
+def digest(fn: _Def) -> str:
     """The normalized body's digest: equal exactly when the bodies are copies (module docstring)."""
     names = _bound(fn)
     renamed: dict[str, int] = {}
@@ -122,7 +123,8 @@ def digest(fn: ast.AST) -> str:
 
 class _Normalize(ast.NodeTransformer):
     def __init__(self, names: frozenset[str]) -> None:
-        self.names, self.renamed = names, {}
+        self.names = names
+        self.renamed: dict[str, int] = {}
 
     def _r(self, x: str) -> str:
         return f"_{self.renamed.setdefault(x, len(self.renamed))}" if x in self.names else x
@@ -139,7 +141,7 @@ class _Normalize(ast.NodeTransformer):
         return None if _is_doc(n) else self.generic_visit(n)
 
 
-def lines(fn: ast.AST) -> int:
+def lines(fn: _Def) -> int:
     """The normalized body's length: the lines ``ast.unparse`` gives it, equal for every copy."""
     fn = copy.deepcopy(fn)
     norm = _Normalize(_bound(fn))
@@ -186,7 +188,8 @@ def scan() -> tuple[tuple[R.Violation, ...], dict[tuple[str, str, str, str], lis
     pkg = [b for p in R.library_files() for b in bodies(R.parse(p), R.rel(p))]
     ml = [b for p in R.library_files(".py", ML) if _is_module(p, ML)
           for b in bodies(R.parse(p), p.relative_to(R.CORE_PKG.parent).as_posix())]
-    found, others = [], {}
+    found: list[R.Violation] = []
+    others: dict[tuple[str, str, str, str], list[str]] = {}
     for b, where, rest in duplicates(pkg, ml):
         v = R.Violation(b.file, KIND, b.symbol, where, b.line)
         found.append(v)
@@ -232,11 +235,13 @@ def test_detectors_on_examples() -> None:
                    ("verity_vllm/b.py", "g", "verity_vllm", ["f", "C.f"]),
                    ("verity_vllm/c.py", "C.f", "verity_vllm", ["f", "g"])], got
     ml = _defs("def kept(x):\n" + steps.format(v="x") + "    return len(x)\n", "verity/ml/x.py")
-    got = [(b.file, where, [o.file for o in rest]) for b, where, rest in duplicates(pkg, ml)]
-    assert ("verity_vllm/m.py", "verity.ml", ["verity/ml/x.py"]) in got, got
+    with_ml = [(b.file, where, [o.file for o in rest]) for b, where, rest in duplicates(pkg, ml)]
+    assert ("verity_vllm/m.py", "verity.ml", ["verity/ml/x.py"]) in with_ml, with_ml
 
     def same(a: str, b: str) -> bool:
-        return digest(ast.parse(a).body[0]) == digest(ast.parse(b).body[0])
+        fa, fb = ast.parse(a).body[0], ast.parse(b).body[0]
+        assert isinstance(fa, _DEFS) and isinstance(fb, _DEFS)
+        return digest(fa) == digest(fb)
 
     assert same("def f(a):\n    b = a\n    return b\n", "def f(x):\n    y = x\n    return y\n")
     assert not same("def f(a):\n    return g(k=a)\n", "def f(a):\n    return g(j=a)\n")     # keyword names are kept

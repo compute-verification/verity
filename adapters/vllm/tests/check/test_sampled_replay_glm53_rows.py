@@ -9,16 +9,27 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.batch import type_dtype, type_shape
 from verity.circuits.evaluation.reference import signature_of
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.definitions.numerics import rows
 from verity.definitions.numerics.kernel_registry import Declined
-from verity.definitions.registry import b1, boolean_rope, cublas_bf16, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
-from verity.definitions.registry import ll_bf16, moe, sparse_mla_split
+from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.definitions.registry import (
+    b1,
+    boolean_rope,
+    cublas_bf16,
+    cuda_rmsnorm,
+    deepgemm,
+    dsa,
+    fp8_moe_experts,
+    hopper,
+    ll_bf16,
+    moe,
+    sparse_mla_split,
+)
+
 from verity_vllm.query.manifest import format as RM
 
 #: the families FIXWIT's per-rank rule failed GLM-5.3 TP8 B1's Commit on: four plane-fed MoE producers and eleven with no evaluator
@@ -113,10 +124,11 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
     """The replay record's `evaluator_provenance` for LlBf16SplitKGemm_v1 is the capture that held cuteDSL's split-K launches to
     `splitk_rows`: at both gates, every M the capture runs that the dispatch table sends to the split-K kernel, at the table's
     SPLIT_K, TILE_K and WARPS, N words a token row; and the Definition's conformance cites the same record."""
-    from tests.properties import glm53_bf16_gemm_capture_gpu as X
     from verity.circuits.defs import conformance_label
     from verity.definitions.numerics import batched_gemm_rows, glm53_rows
     from verity.definitions.registry import bf16_gemm_check as BC
+
+    from tests.properties import glm53_bf16_gemm_capture_gpu as X
 
     p = rows.EVALUATOR_PROVENANCE["LlBf16SplitKGemm_v1"]
     assert p is glm53_rows.PROVENANCE["LlBf16SplitKGemm_v1"]

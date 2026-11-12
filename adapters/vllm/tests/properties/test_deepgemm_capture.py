@@ -4,7 +4,9 @@ tensors, the JIT scan on DeepGEMM's generated sources, the bindings, and the ver
 `tests/properties/deepgemm_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
+import contextlib
 import copy
+import json
 import sys
 import types
 from collections.abc import Mapping
@@ -13,14 +15,14 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import deepgemm_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import deepgemm_twins as T
 from verity.definitions.numerics import derived_rows as R
 from verity.definitions.registry import fp8 as F
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests.properties import deepgemm_capture_gpu as X
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 K, N, GQ = 256, 200, X.GROUP
 NW = 300                                                                    # 3 x 2 weight blocks, the last one partial
@@ -461,7 +463,8 @@ def _doc(batch_invariant: bool = False) -> dict:
     def weights(case):
         return {"phase": "weights", "model": "dsv4", "case": case, "deterministic": True, "operands_ok": True}
 
-    doc: dict[str, Any] = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
+    doc: dict[str, Any]
+    doc = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
            "mufu": {"rcp_ok": True}, "schedule": {"ok": True},
            "jit": {"ok": True, "gemm_types": ["GemmType::Batched", "GemmType::Normal"]}, "bind": {"ok": True},
            "launches": [weights("wq_b"), {**lin, "M": 1, "branch": branches[0]}, {**lin, "M": 32, "branch": branches[1]}, weights("wo_a"),
@@ -532,8 +535,6 @@ ENV = ("VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0", "VLLM_BLOCKSCALE_FP8_GEM
 def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False) -> dict:
     """vLLM's config module and every GPU piece stood in for: the launches are the jobs above, the JIT scan and MUFU probe
     canned; returns what the stubs saw."""
-    import contextlib
-
     vc = types.ModuleType("vllm.config")
     vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
                     set_current_vllm_config=lambda cfg: contextlib.nullcontext())
@@ -578,8 +579,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     """`main` with the GPU's pieces stood in for and vLLM's config module stubbed: the comparison jobs through the spawned worker
     pool, the per-case verdicts, the sealed record, the printed line and the exit status, so a slip in the orchestration shows here
     and not in the H200's first hour."""
-    import json
-
     seen = _stub_gpu(tmp_path, monkeypatch)
     out = tmp_path / "out"
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--quick"]) == 0
@@ -599,8 +598,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 
 
 def test_main_names_the_case_a_flipped_word_fails(tmp_path, monkeypatch, capsys) -> None:
-    import json
-
     _stub_gpu(tmp_path, monkeypatch, flip=True)
     out = tmp_path / "out"
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--quick", "--only", "linear,einsum"]) == 1
@@ -611,8 +608,6 @@ def test_main_names_the_case_a_flipped_word_fails(tmp_path, monkeypatch, capsys)
 
 
 def test_main_stops_at_a_failed_gate(tmp_path, monkeypatch, capsys) -> None:
-    import json
-
     _stub_gpu(tmp_path, monkeypatch, gate_ok=False)
     with pytest.raises(SystemExit) as e:
         X.main(["--out", str(tmp_path / "out"), "--scratch", str(tmp_path), "--workers", "1"])
@@ -622,7 +617,5 @@ def test_main_stops_at_a_failed_gate(tmp_path, monkeypatch, capsys) -> None:
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["deepgemm_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

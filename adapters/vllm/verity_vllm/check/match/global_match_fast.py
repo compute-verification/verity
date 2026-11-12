@@ -28,8 +28,16 @@ from __future__ import annotations
 
 import collections
 import functools
+import gc
 import os
+import pickle
+import tempfile
+import traceback
 from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+from verity.circuits import codec
+from verity.circuits import refs as circuit_refs
 
 from verity_vllm import settings
 from verity_vllm.check.match import dag_form as DAG
@@ -39,6 +47,9 @@ from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.check.match import projection as PJ
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.check.replay.fork import die_with_parent
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 FLAG = "MATCH_IMPL"
 
@@ -107,11 +118,20 @@ def leave() -> None:
 
 # ------------------------------------------------------------------------------------------------ canon (per RootView, per instance)
 
-class _CanonMemo:
+if TYPE_CHECKING:
+    _View = SEQ.RootView   # what `_CanonMemo` is mixed in ahead of, so the type checker reads its `super().canon` as the view's
+else:
+    _View = object
+
+
+class _CanonMemo(_View):
     """Mixin over compare.RootView (`MemoProg`) and projection.Projection (`_MemoProjection`): `canon` computed once per (instance,
     unfold) and returned as the SAME list object thereafter (no caller mutates it: compare._canon_step_relative, dag_form.dag_hashes
     / live_cone and global_match iterate only).  A Projection's `_xreq` calls made during the first computation are recorded and
     replayed on every hit, so cross-request read counts are unchanged."""
+
+    _fast_canon: dict[tuple[int, bool], tuple[list[list[tuple]], tuple]]   # (instance, unfold) -> (canon, the `_xreq` calls it made)
+    _xreq: Callable[..., None]   # a Projection's (`Projection._xreq`), declared and nothing more: a plain view has none, and `canon` asks
 
     def canon(self, i: int, unfold: bool = False):
         cache = self.__dict__.get("_fast_canon")
@@ -269,7 +289,7 @@ def _dag_hashes_intern(P: SEQ.RootView, only: set[int] | None = None) -> dict[in
                                 h = hashes.get(ii)
                                 if h is None:
                                     memo = False
-                                    item = ("N", f"forward-ref-or-dead:{ii}", lo0 + k * dlo, hi0 + k * dhi)
+                                    item: tuple = ("N", f"forward-ref-or-dead:{ii}", lo0 + k * dlo, hi0 + k * dhi)
                                 else:
                                     item = ("N", h, lo0 + k * dlo, hi0 + k * dhi)
                                 nk = trie.get((node, item))
@@ -329,7 +349,7 @@ def _canon_step_relative_identity(P: SEQ.RootView, i: int, seqs: list[list[int]]
         return C._canon_step_relative(P, i, seqs, unfold)
     ident = P.__dict__.get("_fast_seqs_ident")
     if ident is None or ident[0] is not seqs:
-        P._fast_seqs_ident = ident = (seqs, seqs == P.steps)
+        P.__dict__["_fast_seqs_ident"] = ident = (seqs, seqs == P.steps)
         stats["seqs_identity_checks"] += 1
     if not ident[1]:
         return C._canon_step_relative(P, i, seqs, unfold)
@@ -391,7 +411,7 @@ def _runs_fast(refs):
     """verity.circuits.refs.runs for an Affine or a Concat of Affines (every operand of a fold descriptor: 1.40 M affine + 137 k concat, and
     the alias chains codec._decode_refs splices flat are Concats of Affines) -- one loop, no recursion, no closures; the merge rule is
     the record's `push` (adjacent runs of the same (space, idx) with hi == next lo fuse).  Anything else goes to the original."""
-    from verity.circuits.refs import Affine, Concat
+    Affine, Concat = circuit_refs.Affine, circuit_refs.Concat
     if type(refs) is Affine:
         return [(refs.space, refs.idx, refs.base, refs.base + refs.count)] if refs.count else []
     if type(refs) is Concat:
@@ -405,15 +425,14 @@ def _runs_fast(refs):
                 continue
             s, i, b = p.space, p.idx, p.base
             if out:
-                l = out[-1]
-                if l[0] == s and l[1] == i and l[3] == b:
-                    out[-1] = (s, i, l[2], b + c)
+                last = out[-1]
+                if last[0] == s and last[1] == i and last[3] == b:
+                    out[-1] = (s, i, last[2], b + c)
                     continue
             out.append((s, i, b, b + c))
         else:
             return out
-    from verity.circuits.refs import runs
-    return runs(refs)
+    return circuit_refs.runs(refs)
 
 
 _chron_memo: dict[int, tuple] = {}   # id(engine_step_of) -> (engine_step_of, B, step_of_k)
@@ -484,16 +503,12 @@ def _spec_id_memo(fn):
     component's load on the real record.  The id is a pure function of the (immutable after construction) definition + bindings: it
     is kept ON the definition object (no memo table pins the decoded IR, which RootView.__init__ drops for memory), and only after a
     successful computation -- `descriptor_id` reads every static's binding, so a partially bound specialization raises instead of caching."""
-    try:
-        return fn.__dict__["_gmf_spec_id"]
-    except (AttributeError, KeyError):
-        pass
-    from verity.circuits.codec import descriptor_id
-    sid = descriptor_id(fn)
-    try:
-        fn.__dict__["_gmf_spec_id"] = sid
-    except AttributeError:   # a __slots__ definition class: nothing to keep it on; recompute as the checker of record does
-        pass
+    kept = getattr(fn, "__dict__", None)   # None for a __slots__ definition class: nothing to keep it on; recompute as the checker of record does
+    sid = kept.get("_gmf_spec_id") if kept is not None else None
+    if sid is None:
+        sid = codec.descriptor_id(fn)
+        if kept is not None:
+            kept["_gmf_spec_id"] = sid
     return sid
 
 
@@ -618,10 +633,6 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
     same."""
     if n_workers <= 1 or len(items) <= 1 or not hasattr(os, "fork"):
         return [fn(x) for x in items]
-    import gc
-    import pickle
-    import tempfile
-    import traceback
     order = sorted(range(len(items)), key=lambda j: -(weight(items[j]) if weight else 0))
     parts: list[list[int]] = [[] for _ in range(min(n_workers, len(items)))]
     for rank, j in enumerate(order):
@@ -669,14 +680,14 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
         finally:
             try:
                 os.unlink(path)
-            except OSError:
-                pass
+            except OSError as left:
+                logger.warning("worker %d's result file %s is left behind: %r", pid, path, left)
         if not payload.get("ok"):
             errors.append(payload)
             continue
         for j, r in payload["results"].items():
             results[j] = r
-        for k, v in (payload.get("stats") or {}).items():
+        for k, v in payload["stats"].items():
             if not k.startswith("worker."):   # the child's own counters only (it inherited the parent's, including earlier workers')
                 stats[f"worker.{k}"] += v
         stats["legs_on_workers"] += len(payload["results"])
@@ -699,7 +710,8 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
     `tokens_optional` (CLI --tokens-optional) forwarded unchanged so the CLI's `mod.check(...)` call has one
     signature for both implementations."""
     global _force
-    from verity_vllm.check.match import global_match as _record  # deferred: global_match imports this module at load
+    # deferred: global_match imports this module at load
+    from verity_vllm.check.match import global_match as _record
     prev = _force
     _force = True
     try:

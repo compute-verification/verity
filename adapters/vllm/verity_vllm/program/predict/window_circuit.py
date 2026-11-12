@@ -138,18 +138,32 @@ from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
 from verity.commitments.gates import embedding as E
-from verity.definitions.registry import rmsnorm_fused_split as NS
+from verity.commitments.windows import interface as IF
 from verity.definitions.registry import int8_exact as IX
 from verity.definitions.registry import io_shell as IO
-from verity.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
+from verity.definitions.registry import rmsnorm_fused_split as NS
+from verity.definitions.registry.dead_free import (
+    AttentionV19,
+    AttnBlockFirstV2,
+    TokenSelectGroupsV1,
+)
 from verity.definitions.registry.fa3_check_inf import AttentionV20
-from verity.commitments.windows import interface as IF
+
 from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
 from .build import Unexpressible
 from .steps import RequestUnit, request_program
-from .window_builder import WEIGHTS, Grain, Row, _Builder, _spans, _step, _word, inference
+from .window_builder import (
+    WEIGHTS,
+    Grain,
+    Row,
+    _Builder,
+    _spans,
+    _step,
+    _word,
+    inference,
+)
 from .window_class import CLASS_OF_RECORD, GREEDY, Tables, WindowClass, takes
 
 NAME = "verity-vllm/window"
@@ -341,6 +355,7 @@ class _Program:
             rows = self.rows(tok.refs)
         else:
             tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=False))
+            assert self.slot is not None, f"{self.name}: position {p}'s token before position 0's, which carries its slot"
             self.b.feed(tid, "slot", u, 1, (self.slot,))
             self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
             self.tokens.append((tid, u))
@@ -408,7 +423,7 @@ class _Program:
         if K % R:
             raise Unexpressible(f"{node.fn.id}: its x is {R} writer rows, which don't divide its {K} values")
         t = self.tables
-        if t is None or K != t.k:
+        if t is None or t.k != K:
             self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
             return
         s, i = t.at(self.cls, self.slot_index, self.position - 1)
@@ -421,11 +436,11 @@ class _Program:
     def _SiluMul(self, j: int, node: Any) -> None:
         """`SiluMul_v2{I}` as P units `SiluMul_v2{I / P}`, unit k reading gate and up elements [k·I/P, (k+1)·I/P) as the
         gate-up GEMM's rows that hold them, P the fewest that leaves a unit within ``grain.rows`` rows."""
-        I, (gu,) = node.fn.bindings["I"], node.args
-        for P in (p for p in range(1, I + 1) if I % p == 0):
-            w = I // P
+        n, (gu,) = node.fn.bindings["I"], node.args
+        for P in (p for p in range(1, n + 1) if n % p == 0):
+            w = n // P
             try:
-                pieces = [self.rows(gu.refs.slice(k * w, (k + 1) * w)) + self.rows(gu.refs.slice(I + k * w, I + (k + 1) * w))
+                pieces = [self.rows(gu.refs.slice(k * w, (k + 1) * w)) + self.rows(gu.refs.slice(n + k * w, n + (k + 1) * w))
                           for k in range(P)]
             except Unexpressible:
                 continue
@@ -435,7 +450,7 @@ class _Program:
             raise Unexpressible(f"{node.fn.id}: no cut of its gate and up rows holds a unit within {self.b.grain.rows} rows")
         tid, u = self.b.unit(bind(node.fn.defn, I=w), P)
         self._each(tid, "gu", u, pieces)
-        self.outs[j] = [(0, I, Row(tid, u, "o0", w))]
+        self.outs[j] = [(0, n, Row(tid, u, "o0", w))]
 
     def _Gemm(self, j: int, node: Any) -> None:
         b = node.fn.bindings
@@ -524,6 +539,7 @@ class _Program:
             for (port, _), a in zip(IF.layout(n.fn).rows, n.args):
                 (space, idx, lo, hi), *more = runs(a.refs)
                 name = params[idx] if space == "p" else None
+                src: tuple[str, tuple] | None
                 if more or n.form != "call":
                     src = None
                 elif name == "q" and (lo, hi) == (0, D):
@@ -629,7 +645,7 @@ class _Program:
             tid, u = self.b.unit(bind(TokenSelectGroupsV1, C=C, G=GROUP))
             self.b.feed(tid, "x", u, 1, self.rows(logits.refs.slice(lo, lo + C)))
             parts.append((tid, u))
-        ctid, cu = self._collect(V)
+        ctid, cu = self._collect(V, self.head, self.occ)
         self.b.feed(ctid, "best", cu, 1, [Row(t, u, "o0", n) for t, u in parts])
         self.b.feed(ctid, "idx", cu, 1, [Row(t, u, "o1", 2 * n) for t, u in parts])
         (_, lm, lo, _), = self.segments(logits.refs.slice(0, 1))
@@ -644,7 +660,7 @@ class _Program:
             self.outs[j] = [(0, 2, Row(ctid, cu, "o0", 2))]
         self.selects[j] = (tuple(parts), (xtid, xu))
 
-    def _collect(self, V: int) -> tuple[str, int]:
+    def _collect(self, V: int, head: Row, occ: Row) -> tuple[str, int]:
         """The position's combine unit, the slot's outputs collected on with its select (`io_shell.SelectCollect_v1`, its
         state the next position's ``state``: the first's reads its lane's head), and at the last position the slot's entry
         too (`io_shell.SelectEntry_v1`, reading its occupancy word), whose select is no row: its one output is the entry. With
@@ -660,9 +676,11 @@ class _Program:
         else:
             fn = bind(IO.SelectCollect, **at)
         ctid, cu = self.b.unit(fn)
-        self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (self.head if p == 0 else self.collect,))
+        state = head if p == 0 else self.collect
+        assert state is not None, f"{self.name}: position {p}'s select before position {p - 1}'s, which collects on to it"
+        self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (state,))
         if last:
-            self.b.feed(ctid, "occ", cu, 1, (self.occ,))
+            self.b.feed(ctid, "occ", cu, 1, (occ,))
             self.entry_unit = (ctid, cu)
         else:
             self.collect = Row(ctid, cu, "o1", 2 * (KO + 2))
@@ -698,7 +716,7 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  name: str = NAME, provable: bool = True, tables: Tables | None = None) -> IF.Circuit:
+                  provable: bool = True, tables: Tables | None = None) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
@@ -706,10 +724,10 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     tables (`Tables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
     (`class_size`). Each unit is a proof block Flock's composer proves (`_Builder.settle`) unless not ``provable`` (a probe's,
     or a test's of too small a class)."""
-    return lower(registered, cls, programs, grain, name, provable=provable, tables=tables).circuit
+    return lower(registered, cls, programs, grain, provable=provable, tables=tables).circuit
 
 
-def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME,
+def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
           wired: bool = True, provable: bool = True, tables: Tables | None = None) -> Lowered:
     """`class_circuit`'s circuit with its lowering (`Lowered`); unless ``wired``, its units and registered reads alone, no
     wire or cut, whatever `settle` would refuse (the weights a registration commits, `window_weights`). With ``tables``,
@@ -745,15 +763,17 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                         tuple(openings), values=held)
     wires = tuple(IF.coalesce(b.wires))
     starts = {tid: [at - slot * n for at, n, slot, _step in runs] for tid, runs in b.spans.items()}
-    circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                         external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
+    entry_unit = progs[0].entry_unit
+    assert entry_unit is not None, f"{progs[0].name}: no select at its last position, whose unit makes the slot's entry"
+    circuit = IF.Circuit(NAME, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
+                         external=(f"{descriptor_id(scan)}/state", f"{entry_unit[0]}/o0"),
                          wires=wires, cuts=b.cuts, registered=reg,
                          blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))),
                          order=IF.ordered(b.units, wires, starts) if wires else None)
     return Lowered(circuit, fn, tuple(progs), b.spans)
 
 
-def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME,
+def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True,
                    tables: Tables | None = None) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
@@ -763,7 +783,7 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     end unchecked. A last output past the window's end is the scan's to carry (module docstring). With ``tables``, H1's
     tables read (`Tables`), refused unless the window is the fixed load."""
     takes(compiled, cls, placed, tables)
-    return class_circuit(registered, cls, None, grain, name, provable, tables)
+    return class_circuit(registered, cls, None, grain, provable, tables)
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "Row", "Tables", "WindowClass",
