@@ -8,7 +8,8 @@ files as they are and writes the case, ``NAME.case.json`` (a line of the record 
 ``{"check", "count"}``, `nci_record_reference.check_detail` and `count`, what `inference-only-record-check` prints.
 
     python served_record_case.py --program P --record C --log FIRST ... RUN --limits L --out DIR --name NAME
-        [--count B] [--unregister smallest|largest|PARAMETER] [--drop registered.KEY] [--no-pins] [--case-only]
+        [--count B] [--unregister smallest|largest|PARAMETER] [--drop registered.KEY] [--format P=JSON|P=-]
+        [--no-pins] [--case-only]
 
 - ``--program``: the Program's v1 descriptor. ``--record``: the circuit record, the bytes the run's record commits.
 - ``--log``: the registration log's records, the first first and the run's own last.
@@ -18,13 +19,15 @@ files as they are and writes the case, ``NAME.case.json`` (a line of the record 
   gives none.
 - ``--case-only``: the case alone, not the reference's verdicts.
 
-Two options make a case the run did not write, and the case's name should say so:
+Three options make a case the run did not write, and the case's name should say so:
 
 - ``--unregister``: the log's first record without one parameter's entry and each later record's ``previous``
   made again, so the deployment never registered it. ``smallest`` and ``largest`` choose by words among the
   parameters the record reads that the first record registers.
 - ``--drop registered.KEY``: the record without that key of its ``registered``, and the run's own record pointed
   at the new text. The run committed no such text: a stand-in, to read what the form says past that key.
+- ``--format P=JSON``: the record with parameter P's row format (``registered.formats``) that JSON object, or with
+  none where it is ``-``, and the run's own record pointed at the new text, as ``--drop`` does.
 
 The reference runs form-only (`check_detail`'s ``form_only``): its leaf-by-leaf expansions of `own-rows` and
 `leaf-widths` visit every leaf of every row of every unit, more than a served class's circuit lets it walk, so on
@@ -65,21 +68,41 @@ def rechained(log: list[dict]) -> list[dict]:
 
 
 def served_case(program: str, record: str, log: list[dict], limits: dict, count: dict | None = None, *,
-                unregister: str | None = None, drop: tuple[str, ...] = (), pins: bool = True) -> tuple[dict, list[str]]:
+                unregister: str | None = None, drop: tuple[str, ...] = (), formats: tuple[str, ...] = (),
+                pins: bool = True) -> tuple[dict, list[str]]:
     """The case the files make, and what of it the run did not write (empty for the run's own). `program` and
     `record` are the files' text, `log` their records in order, the run's own last."""
     doc, log = json.loads(record), list(log)
     changed = []
+
+    def restated(what: str) -> None:
+        nonlocal record
+        record = circuit_bytes(doc).decode()
+        log[-1] = {**log[-1], "window": {**log[-1]["window"], "circuit": hashlib.sha512(record.encode()).hexdigest()}}
+        changed.append(f"the record {what}, the run's record pointed at it (a stand-in)")
+
+    def as_served(option: str) -> None:
+        if circuit_bytes(doc).decode() != record:
+            raise ValueError(f"{option}: the record is not in the form a serve writes, so its text can't be made again")
+
     for key in drop:
         head, _, k = key.partition(".")
         if head != "registered" or k not in doc.get("registered", {}):
             raise ValueError(f"--drop {key}: the record's registered has no such key")
-        if circuit_bytes(doc).decode() != record:
-            raise ValueError("--drop: the record is not in the form a serve writes, so its text can't be made again")
+        as_served("--drop")
         del doc["registered"][k]
-        record = circuit_bytes(doc).decode()
-        log[-1] = {**log[-1], "window": {**log[-1]["window"], "circuit": hashlib.sha512(record.encode()).hexdigest()}}
-        changed.append(f"the record without registered.{k}, the run's record pointed at it (a stand-in)")
+        restated(f"without registered.{k}")
+    for spec in formats:
+        p, _, f = spec.partition("=")
+        as_served("--format")
+        stated = doc["registered"].setdefault("formats", {})
+        if f == "-":
+            if p not in stated:
+                raise ValueError(f"--format {p}=-: the record has no format for {p}")
+            del stated[p]
+        else:
+            stated[p] = json.loads(f)
+        restated(f"with {p}'s format {f}")
     if unregister:
         first = {e.get("value") for e in log[0]["registered"]}
         read = sorted((n, p) for p, n in doc["registered"]["params"].items() if p in first)
@@ -122,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--count", type=Path)
     ap.add_argument("--unregister")
     ap.add_argument("--drop", action="append", default=[])
+    ap.add_argument("--format", action="append", default=[])
     ap.add_argument("--no-pins", action="store_true")
     ap.add_argument("--case-only", action="store_true", help="write the case and not the reference's verdicts")
     ap.add_argument("--out", type=Path, required=True)
@@ -133,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
         case, changed = served_case(
             a.program.read_text(), record, [json.loads(p.read_text()) for p in a.log], json.loads(a.limits.read_text()),
             json.loads(a.count.read_text()) if a.count else None,
-            unregister=a.unregister, drop=tuple(a.drop), pins=not a.no_pins)
+            unregister=a.unregister, drop=tuple(a.drop), formats=tuple(a.format), pins=not a.no_pins)
     except ValueError as e:
         print(e, file=sys.stderr)
         return 2
