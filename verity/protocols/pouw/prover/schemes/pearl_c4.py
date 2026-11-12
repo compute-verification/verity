@@ -121,10 +121,10 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.errors import InvalidArtifact
 from verity.commitments import domains
 from verity.definitions.silicon import fp32
 from verity.definitions.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
+from verity.errors import InvalidArtifact
 
 from verity.protocols.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from verity.protocols.pouw.verifier.registration import (  # noqa: F401 - re-exported
@@ -136,6 +136,7 @@ from verity.protocols.pouw.verifier.registration import (  # noqa: F401 - re-exp
     VO_ROTATION,
     check_registration,
 )
+
 from . import pearl_c as C
 from . import pearl_c4_c_L as CL
 from . import pearl_kw as P

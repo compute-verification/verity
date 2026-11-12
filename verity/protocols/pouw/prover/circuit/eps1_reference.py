@@ -68,6 +68,7 @@ from verity.circuits.program import Program
 from verity.commitments import domains
 from verity.definitions.ops import prims as P
 from verity.definitions.ops import s8 as OS8
+
 from verity.protocols.pouw.verifier.protocol import DomainError
 
 from . import segment as SG
