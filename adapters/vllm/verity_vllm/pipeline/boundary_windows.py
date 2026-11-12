@@ -22,6 +22,7 @@ from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.pipeline.boundary_rows import (
     FINISH,
     FORMAT,
+    ONE_RETURN,
     TABLES_UNDER_A_RULE,
     Layout,
     Span,
@@ -102,6 +103,8 @@ class BoundaryWindows:
             raise ValueError("history tables need both rank 0's channel and their layers")
         if stop is not None and layers:
             raise ValueError(TABLES_UNDER_A_RULE)
+        if verdicts and ids:
+            raise ValueError(ONE_RETURN)
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
         self.window_s, self.drained, self.inline, self.stop_rule = float(window_s), drained, inline, stop
         self.verdicts, self.ids = verdicts, ids
@@ -123,10 +126,12 @@ class BoundaryWindows:
         history tables (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and
         ``stop`` (`Stop.of`: the registered model's stop ids and length and T, the most ids a response has). A stop rule
         the serve can't register (a T the word can't hold, or one beside history tables) is refused here, as the serve
-        starts."""
+        starts, and so is a configuration that says both ``verdicts`` and ``ids``."""
         t, tc, stop = str(cfg["check"]), cfg.get("tables"), Stop.of(cfg.get("stop"))
         if stop is not None and tc:
             raise ValueError(TABLES_UNDER_A_RULE)
+        if cfg.get("verdicts") and cfg.get("ids"):
+            raise ValueError(ONE_RETURN)
         ch = BT.Channel.of(tc, out, *public) if tc else None
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
