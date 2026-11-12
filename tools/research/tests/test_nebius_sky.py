@@ -1250,7 +1250,10 @@ def test_every_cpu_node_the_retention_collector_runs_on_gets_researchs_store_evi
 
     from research import auto
     files = tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"]
-    on = lambda path: {n for f in files if f["path"] == path for n in f["nodes"]}
+
+    def on(path):
+        return {n for f in files if f["path"] == path for n in f["nodes"]}
+
     unit = "/etc/systemd/system/vy-store-evict-research"
     service, script = on(f"{unit}.service"), on("/usr/local/bin/vy-store-evict")
     holds_runs = {n for n in on("/etc/systemd/system/vy-retention-gc.timer") if auto.CPU_NODE.fullmatch(n)}

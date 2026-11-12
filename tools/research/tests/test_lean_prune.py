@@ -43,7 +43,10 @@ def test_every_cpu_node_gets_the_hourly_lean_prune_with_its_timer():
     """A check slot's or a research pool's run builds Lean as research on every CPU node, and nothing else prunes the cache
     those builds leave under its home: a node the prune misses keeps every records tree its runs make."""
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
-    on = lambda path: {n for e in manifest["file"] if e["path"] == path for n in e["nodes"]}
+
+    def on(path):
+        return {n for e in manifest["file"] if e["path"] == path for n in e["nodes"]}
+
     service, timer = on("/etc/systemd/system/vy-lean-prune.service"), on("/etc/systemd/system/vy-lean-prune.timer")
     cpu = {n for n in manifest["nodes"] if re.fullmatch(r"vy-nebius-cpu-\d+", n)}
     assert len(cpu) > 2, "the manifest's CPU nodes"
