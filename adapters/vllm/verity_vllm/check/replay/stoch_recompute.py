@@ -50,6 +50,7 @@ from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewD
 from verity_vllm.observe.log import header_of, read_log
 from verity_vllm.program import sampling_rng
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.schema_ids import STOCH_RECOMPUTE_SCHEMA
 from verity_vllm.records.workload import Workload
 
 __all__ = ["Options", "main", "recompute_run"]
@@ -727,7 +728,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
                       f"(device-tied) at {n_dev} of {checked} checked rows via the kernel-consumed seeds_ptr/pos_ptr/temp_ptr/P snapshots"
                       + (f"; S: kernel constexpr == Program TopPMask S at {s_checked} of {checked} rows" if program_S else
                          "; S: kernel constexpr only (no --build given: the Program's S is checked by cb_a.compare spec equality, not here)"))
-    return {"schema": "verity-r15/stoch-recompute/v2", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
+    return {"schema": STOCH_RECOMPUTE_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
             "workload": None if workload is None else str(workload), "build": None if build_dir is None else str(build_dir),
             "declared_facts": facts, "run_header_facts": run_facts, "program_splits": program_S,
             "header_vs_manifest": header_vs_manifest, "structure_note": structure_note,
