@@ -23,12 +23,18 @@ commit: `--run "$RESEARCH_RUN_ID" --commit "$RESEARCH_SOURCE_SHA"`. Without `--c
 
 The document's `value` is the term of record: the scan's term over the world's year, charged at two release
 schedules (D_j = 2), in GB. The term at D_j = 1 is what a network certifier with a set-time card, a network card
-that releases at a set time, would be charged. No timing test has shown one, so a figure at D_j = 1 is never the
-term of record and is printed only under the label "with a set-time card (not yet tested)": the document's
-`with_set_time_card` holds the scan's term over the world's year at D_j = 1, its unit and that label. A row whose
-release times are taken once (`timing`, `all three`) has a jitter of 0 at either D_j, which rests on the same card,
-so every figure of it is under the label: the row's own `with_set_time_card` is the label, where every other row's
-is null, and the tables print the row's name with the label.
+that releases at a set time, would be charged. That card is simulated: none is deployed, and the network
+certifier's software pacer stands in for it. So a figure at D_j = 1 is never the term of record and is printed only
+under the label "with a simulated set-time card": the document's `with_set_time_card` holds the scan's term over
+the world's year at D_j = 1, its unit, that label and its mark, `simulated`. A row whose release times are taken
+once (`timing`, `all three`) has a jitter of 0 at either D_j, which rests on the same card, so every figure of it is
+under the label: the row's own `with_set_time_card` is the label, where every other row's is null, and the tables
+print the row's name with the label.
+
+The card is an input of the document, `set_time_card`, the one input marked `simulated`. Its source is what a
+figure under the label rests on, a clause of `trusted-host`: the network certifier's card releases each bucket at
+the tick its record names, whatever the host and the server send it. The clause holds only of a calibrated hardware
+card; no such card is deployed, and the software pacer that stands in for it does not meet it.
 
 ## The result
 
@@ -41,6 +47,10 @@ it prints doesn't change. Every measurement is the model's and its name says so;
 - `certifier_term/modeled/metric`: the term of record, the document's `value`, in GB, against the document's target.
   Its verdict, `within target` or `over target`, is the document's multiple of the target in words. Its row is the
   scan's over the world's year, whichever rows the command prints.
+- `certifier_term/modeled/simulated/metric`: the card's figure, the same row's term at D_j = 1, which the document
+  gives as `with_set_time_card`, in GB, against the same target. It is no term of record. Its name says `simulated`,
+  the card's mark, and its `inputs` open with the row it is of and the card as the document states it, whose source
+  is the clause the figure rests on.
 - `certifier_term/modeled/<scope>/<period>/free`: the term K, in bits. The check bounds the free amount from above,
   so this is the network's amount of record. It stands against the same target, in bits.
 - `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
@@ -58,8 +68,8 @@ it prints doesn't change. Every measurement is the model's and its name says so;
   as `eps`. It is a union bound over the period's execution phases, their number × the scan's δ (`--scan-delta`).
 
 A row whose error is 1 or more has no bound at its period, since a union bound of 1 bounds nothing. Its `free` and
-`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so is `metric`
-where the row is the term of record's. Its `error` is written with its value, and its `capacity`, which no error
+`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so are `metric`
+and the card's figure where the row is the term of record's. Its `error` is written with its value, and its `capacity`, which no error
 enters. What the command prints is the calculator's still, those rows' terms among it.
 
 A measurement's `inputs` name what it was computed from: its row, the document's inputs with their values, marks and
@@ -104,8 +114,8 @@ and each row says where it stands:
   length held to its Program's output count, with the release times taken once by the compute side's tick, and with
   the entries charged through the compute audit. The schedules' 0 under `lengths` and `all three` rests on a stop
   block, a proof block that checks where a response's ids stop, sampled on a served audit: it holds that output count
-  to the response's ids. The jitter's 0 under `timing` and `all three` rests on the set-time card, which no timing
-  test has shown.
+  to the response's ids. The jitter's 0 under `timing` and `all three` rests on the set-time card, which is
+  simulated.
 - `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
   audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
@@ -129,11 +139,11 @@ cells, and nothing else.
   0 with none (`--failure-rate`, the share that fail, which no run has measured).
 - **jitter**: ⌈log2 D_j^T⌉ bits for each execution phase of T buckets on each link. At D_j = 2, two release
   schedules, it is a bit a bucket, and that is the jitter of record. At D_j = 1 it is 0, which is what a network
-  certifier with a set-time card would be charged: it is printed as "with a set-time card (not yet tested)". Where
+  certifier with a set-time card would be charged: it is printed as "with a simulated set-time card". Where
   the timing is taken once it is 0 at either D_j, and that 0 rests on the same card, so those rows carry the label
   in their name.
 - **term**: the three summed, the network certifier's own term, at each D_j. The term of record is the one at
-  D_j = 2. The one at D_j = 1 is printed beside it only as "with a set-time card (not yet tested)", never as the
+  D_j = 2. The one at D_j = 1 is printed beside it only as "with a simulated set-time card", never as the
   term.
 - **entries**: the slot entries, which are the compute side's and not part of the term. The scan's check charges
   every slot's entry at its whole width, a count by capacity: with `--lanes N`, the connections a link holds at once,
@@ -143,8 +153,10 @@ cells, and nothing else.
 ## The tables
 
 - **Inputs**: each input's value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
-  (derived from other figures) or `assumed`; the source is the file and key it is read from, or the parameter that
-  gave it. No run has certified a class for GLM-5.3, so the class is assumed: the most ids a response holds
+  (derived from other figures), `assumed` or `simulated` (a stand-in runs in place of a device that is not deployed,
+  and the figure is what that device would be charged: the set-time card, `set_time_card`, alone); the source is the
+  file and key it is read from, the parameter that gave it, or for the card the clause its figures rest on. No run
+  has certified a class for GLM-5.3, so the class is assumed: the most ids a response holds
   (`--response-ids`), an id's bits (`--id-bits`), and an execution phase's buckets and their seconds
   (`--phase-buckets`, `--bucket-s`).
 - **The scopes**: the compute each row covers, which is all its scope serves: machines, GPU-seconds, requests and
@@ -156,18 +168,18 @@ cells, and nothing else.
 - **The terms in GB**: schedules, cells, the jitter at each D_j, and the term at each D_j with its multiple of the
   target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the entries. The
   columns at D_j = 2, the term of record, come before those at D_j = 1. Every column at D_j = 1, the multiples too,
-  has the label in its header, as `set-time card (not yet tested)`, and so has the name of a row whose release times
-  are taken once, in the `row` column: `timing, set-time card (not yet tested)`.
+  has the label in its header, as `simulated set-time card`, and so has the name of a row whose release times
+  are taken once, in the `row` column: `timing, simulated set-time card`.
 - **The terms in bits**: the same pooled totals in bits, beside the term for one execution phase of one link
   (`a link's phase`) and for one request (`a request`), the term as a share of the compute it covers.
 
-The lines above the tables give the rule for the term of record and for the rows that carry the label, each row's
-rule, one link's execution phase (its requests, a connection's bits, N2's schedules, the jitter at each D_j, a slot
-entry's bits), the target as bits a link's execution phase and a request over the world's year, and the largest
-failure rate at which, with the lengths held by a stop block and the release times taken once by a network
-certifier whose network card releases at a set time (not yet tested), the world's year meets the target. Then they
-give what the jitter alone is without that card, at D_j = 2 over the world's year, in GB and as a multiple of the
-target.
+The lines above the tables give the rule for the term of record, that the card is simulated, and the rule for the
+rows that carry the label, each row's rule, one link's execution phase (its requests, a connection's bits, N2's
+schedules, the jitter at each D_j, a slot entry's bits), the target as bits a link's execution phase and a request
+over the world's year, and the largest failure rate at which, with the lengths held by a stop block and the release
+times taken once by a network certifier whose network card releases at a set time (simulated), the world's year
+meets the target. Then they give what the jitter alone is without that card, at D_j = 2 over the world's year, in GB
+and as a multiple of the target.
 
 ## Where the scale comes from
 
