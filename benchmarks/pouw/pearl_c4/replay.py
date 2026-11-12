@@ -1,5 +1,5 @@
 """Pearl-C4's reference replay of a device run's own transcript under the work sampling design (`clear_work.audit`), with
-Pearl-C4's domain and debit (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
+Pearl-C4's domain and inert work (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
 ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck), never the protocol's
 verdict.
 
@@ -23,11 +23,11 @@ many fall outside D-SB's byte range (`device_scales`).
 **`verify`** recomputes everything from the transcript and the scheme: the salt, the records against the workload, the
 samples, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
 against the commitment, the tile's C̃ and U through the scalar reference to the device's leaf, zero filler rows, credited
-rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed debit
-(`pearl_c4.tile_debit`: F1′'s base split under the exact noise distribution given the sampled E lines and the realised scale bytes,
-F2's int8 route on flat scales, identity atoms, dead × dead pairs, salt-dead or unneeded A forming, sub-grid blocks, D-24's
-pair-sparse row windows) under the cap, ρ = 1/400 of the credited cells' creditOf.  Its report carries every tile's debit and the
-accept line (`accept_line`).
+rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed inert work
+(`pearl_c4.tile_debit`: F1′'s base split under the exact noise distribution given the sampled E lines and the realised
+scale bytes, F2's int8 route on flat scales, identity atoms, dead × dead pairs, salt-dead or inert A forming, sub-grid
+blocks, D-24's pair-sparse row windows) under the inert-work bound, ρ = 1/400 of the credited cells' creditOf.  Its report
+carries every tile's inert work and the accept line (`accept_line`).
 
   python -m benchmarks.pouw.pearl_c4.replay prove DUMP --run RUN --out transcript.json [--t 8] [--workers N]
   python -m benchmarks.pouw.pearl_c4.replay verify transcript.json --out verify.json [--path P] [--commit SHA]
@@ -240,7 +240,7 @@ class _Openings:
                               _opening(o["leaf"]))
 
 
-def _check_with_debit(f: Callable, pick) -> tuple[CA.Verdict, dict | None]:
+def _check_with_inert_work(f: Callable, pick) -> tuple[CA.Verdict, dict | None]:
     scheme = f.args[0]
     scheme.last_debit = None
     v = f(pick)
@@ -248,7 +248,7 @@ def _check_with_debit(f: Callable, pick) -> tuple[CA.Verdict, dict | None]:
 
 
 def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
-    """The report on transcript v0 `t`: ``accepted``, the reason when it is not, every opened tile's verdict and debit."""
+    """The report on transcript v0 `t`: ``accepted``, the reason when it is not, every opened tile's verdict and inert work."""
     s = _scheme(t, scheme)
     unit = _unit(t)
     workload = au.Workload((unit,))
@@ -266,12 +266,12 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
     fs = draw_beacon(commitment.root, W.records_root(epoch.salt, epoch.weights_root, splits, records))
     if beacon != fs:
         return report | {"accepted": False, "reason": "the draws' beacon is not the Fiat-Shamir of the commitment"}
-    debits: list = []
+    inert: list = []
     fmap, done = _pool(workers)
 
     def tile_map(f, picks):
-        out = list(fmap(partial(_check_with_debit, f), picks))
-        debits.extend(d for _, d in out)
+        out = list(fmap(partial(_check_with_inert_work, f), picks))
+        inert.extend(d for _, d in out)
         return [v for v, _ in out]
 
     try:
@@ -284,16 +284,16 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
     refs = au.tile_refs(s, workload)
     cell = CW.cell_credit(s, records[0])
     tiles = []
-    for v, d in zip(out.audit.verdicts, debits or [None] * len(out.audit.verdicts)):
+    for v, d in zip(out.audit.verdicts, inert or [None] * len(out.audit.verdicts)):
         row = {"tile": v.tile, "ok": v.ok, "reason": v.reason}
         if v.tile >= 0:
             ref = refs[v.tile]
             rows, cols = records[0].credited(ref.tile)
-            cap = F.CAP * cell * len(rows) * len(cols)
+            bound = F.CAP * cell * len(rows) * len(cols)
             row |= {"rows": [ref.tile.rows[0], ref.tile.rows[-1]], "cols": [ref.tile.cols[0], ref.tile.cols[-1]],
-                    "credited": [len(rows), len(cols)], "cap": str(cap)}
+                    "credited": [len(rows), len(cols)], "cap": str(bound)}
             if d is not None:
-                row |= {"debit": d, "debit_over_cap": float(Fraction(d["total"]) / cap) if cap else None}
+                row |= {"debit": d, "debit_over_cap": float(Fraction(d["total"]) / bound) if bound else None}
         tiles.append(row)
     bad = next((v.reason for v in out.audit.verdicts if not v.ok), "")
     ratios = [x["debit_over_cap"] for x in tiles if x.get("debit_over_cap") is not None]
@@ -306,7 +306,7 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
 
 def accept_line(report: dict, transcript: str, sha: str, commit: str) -> str:
     """One line: ACCEPT (replay-verified) or REJECT, the scheme, the transcript checked, what was opened, the largest
-    debit/cap, and the replay's commit."""
+    inert work over its bound, and the replay's commit."""
     m, k, n = report["shape"]
     verdict = "ACCEPT" if report["accepted"] else "REJECT"
     tail = (f"opened={report.get('opened', 0)} t={report['t']} max_debit_over_cap={report.get('max_debit_over_cap')}"

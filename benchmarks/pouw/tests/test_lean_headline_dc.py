@@ -132,7 +132,6 @@ MOVED = [r + m for r in ("li", *ROUTES) for m in ("-rt3", "-wideh", "-rt3-wideh"
 H200_ROUTES = ROUTES + MOVED + ["li-bulk", "li-bulk-bt1024", "li-bulk-trim-inf"]
 #: the H200's counted folds, none built: on the cheater's menu, never in ♭'s fold
 COUNTED = MOVED + ["li-bulk-bt1024", "li-bulk-trim-inf"]
-BUILT = ROUTES + ["li-bulk"]
 
 
 def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
