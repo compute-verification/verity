@@ -109730,3 +109730,31 @@ Mailbox read to "Coordinator, Thu 12 Nov 23:43Z: End your turn if you only wait 
 
 **Work that needs no run's answer:** the second build's first entry (the read across a tie's streams, due Fri 22:00Z, not on Friday's path). I stop rather than go on with it, so the place goes to a piece of the two-round proof; a word in my mailbox and I take it up at once (derived).
 
+
+## ACCEPTS, Thu 23:51Z: `ReadsOnly` and `CoinsCover` are now proofs too, so `acceptsRun` rests on four premises owned elsewhere; nothing has compiled yet
+
+LEAN SLOT WAIT OVER TEN MINUTES: my try `r20261112-233803-98af` has waited on vy-nebius-2 since 23:38Z, "25 check(s) ahead in line" at 23:50Z, down one in twelve minutes [run]. Since my last entry I proved two more of `acceptsRun`'s premises in Lean. Neither proof has compiled yet [read]. `CoinsCover` (every byte string of a coin's width is some coin's bytes) is proved from `SpotFlock.coinEquiv` and `stageEquiv` (`Cover.lean`). `ReadsOnly` is in `ReadsOnly.lean`: two runs of `SpotFlock.V` with one prover, on coins equal at the rounds `readsAt` names, are one run. Its step lemma `next_congr` checks each kind of round: the pre-rounds read their own coin, the statements' round reads round 0's and the second stage's, a session reads only its own rounds so far, and `decidedAt` reads at most `k₀ t` rounds of each session [derived]. `acceptsRun_of'` is `acceptsRun` with both discharged. I merged the base at `9af21118fe`; its new `sourceRead` conjunct in `accepted_steps` changes none of my proofs [read].
+
+Branch `cursor/proofs-accepts-7d08` at `3d9ac14792`, pushed.
+
+**Size.** Four files, 919 lines:
+
+- `Accepts.lean`, 266 lines: statements and `stmtAt`.
+- `AcceptsProof.lean`, 462 lines: `acceptsRun`.
+- `Cover.lean`, 65 lines.
+- `ReadsOnly.lean`, 126 lines.
+
+None of my own statements is left unproved. What remains is compiling, and the premises below, which belong to others. The try in line covers `Accepts` and `AcceptsProof` at `e00f3a3ea5`. The next try, of `ReadsOnly.lean`, builds all four, since each file imports the one before. Expected compile hour: I can't give one until the line moves. At the current rate, past 01:00Z [guess].
+
+**STOP RULE.** Nothing: no lock, no listed guarantee, nothing wired into `Sampled.lean`, and nothing turns the accept on. Nothing I wrote rests on the switch being off.
+
+**NEEDS.** The premises `acceptsRun_of'` still takes, each a named `Prop`:
+
+- `PlayAccepts`, from RUNCOINS's `SpotRunAcceptsPlay` with RUNSAS's `roundTwo_of_check`. I derive it once our bases meet. Two points are unchanged from my last entry: `AcceptedTwo` reads `Spot.Run.run i` where the check calls `run i true`, and the bridge needs `jsonMsg (recordMsg j) = j`.
+- `SessionMsgs`, from E and F.
+- `SourcesFit` (`i.source.size ≤ L` and `it.source.size ≤ stage * L`), from TWOLEG. The base's new `sourceRead_le` gives `ξ.size ≤ read`. It would close this premise if `read ≤ L` (and the second stage's `≤ stage * L`) followed from the run's own report.
+- `CaseCommits`, for the instance.
+
+**To post.** Nothing.
+
+**Not established.** Nothing compiles yet. An earlier period's genuine challenger signature still makes the error ⊤, as the docstring says. The files ready for soundness's reading once compiled: `Accepts.lean` (statements, `stmtAt`) and `ReadsOnly.lean` (`acceptsRun_of'`).
