@@ -27,11 +27,14 @@ untraced = [
     "tests/test_guard.py",
     "tests/test_lean_audit.py",
     "tests/test_lean_changed.py",
+    "tests/test_lean_prebuild.py",
     "tests/test_lean_records.py",
     "tests/test_markdown_caps_gate.py",
     "tests/test_merge_map.py",
+    "tests/test_merge_rows.py",
     "tests/test_move_check.py",
     "tests/test_mutants.py",
+    "tests/test_node_keys.py",
     "tests/test_pins.py",
     "tests/test_placement.py",
     "tests/test_plan.py",
@@ -47,12 +50,13 @@ untraced = [
     "tests/test_suite_parts.py",
     "tests/test_suites.py",
     "tests/test_tasks.py",
+    "tests/test_verdicts.py",
 ]
 # The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs), check.py's
 # shipped-tree commit record, the flock-circuit build step's script and the patches its Rust tests cover, the repository
 # lints the preflight names (and the direct environment read's detector, by which test_settings counts the reads left
-# outside settings.py), and the Lean audit's tool directory: Lean's jobs (`lean_audit.py`, `lean_changed.py`, the pin
-# `lean-deps.json`), the sandbox lean_changed builds in, and the audit whose judgment of the guarantees it runs (a
+# outside settings.py), and the Lean audit's tool directory: the audit's job and the fast path (`lean_audit.py`,
+# `lean_changed.py`, the pin `lean-deps.json`), the sandbox lean_changed builds in, and the audit tool both load (a
 # directory, since loading `check.py` reads and writes its `__pycache__`) with the task graph's contract its module keys
 # load, the security proofs' manifest and record (a
 # shard's package), the Slack registry, whose handles are the owners `ci.toml` may name, and what of research the fixture
@@ -76,7 +80,8 @@ inputs = [".agents/skills/using-slack/registry.json", "READY.json", "tools/move/
           "tools/research/src/research/telemetry/scope.py", "tools/research/src/research/auto.py",
           "tools/research/src/research/pods/nebius/slot_only.py", "adapters/vllm/tools/ratchet_gate.py",
           "tests/lint/test_repo_env_reads.py",
-          "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py", "tools/research/src/research/telemetry/__init__.py"]
+          "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py", "tools/research/src/research/telemetry/__init__.py",
+          "tools/verity/circuit_check/src/circuit_check/cli.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -88,3 +93,10 @@ paths = ["tools/verity/check"]
 [[tool.verity.tests.reads]]
 tests = ["tests/test_shard_plan.py"]
 paths = ["fixtures/artifacts.json"]
+
+# `check.cc_manifests`, which every step list and check run reads: whether this tree's circuit-check lists its records
+[[tool.verity.tests.reads]]
+tests = ["tests/test_check.py", "tests/test_declaration.py", "tests/test_deferred_run.py", "tests/test_lean_slot.py", "tests/test_live.py",
+         "tests/test_record_pool.py", "tests/test_records.py", "tests/test_settings.py", "tests/test_shard_plan.py", "tests/test_shards.py",
+         "tests/test_verdicts.py"]
+paths = ["tools/verity/circuit_check/src/circuit_check/cli.py"]

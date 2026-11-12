@@ -20,8 +20,8 @@
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
-* ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, and the
-  audit takes that cache;
+* ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, a table
+  read's by the verifier's executable too, and the audit takes that cache;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
   compile and charges the length the registration does;
 * that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
@@ -969,7 +969,8 @@ def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(w
 
 def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
     """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
-    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger."""
+    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
+    ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     import a5_coins as AC
 
     args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
@@ -993,11 +994,19 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
         raise Opened
 
     monkeypatch.setattr(AC, "start", start)
+    gate = ["--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json", "--gate-key", "gate.key"]
     with pytest.raises(Opened):
-        RA.main([*args, "--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json",
-                 "--gate-key", "gate.key"])
+        RA.main([*args, *gate])
     assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
-                    "peer": "vy-nebius-1", "key_record": "key.json"}
+                    "peer": "vy-nebius-1", "key_record": "key.json", "deployed": False}
+    seen.clear()
+    with pytest.raises(SystemExit, match="2"):
+        RA.main([*args, *gate, "--deployed-key"])
+    assert seen == {}
+    with pytest.raises(Opened):
+        RA.main([*args, "--challenger", "local", "--deployed-key"])
+    assert seen == {"challenger": "local", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": None, "peer": None,
+                    "key_record": None, "deployed": True}
 
 
 def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
@@ -1123,6 +1132,39 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen["audit"] == want
+
+
+def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_other_composer_is(tmp_path, monkeypatch):
+    """A table read's unit is the template the verifier's executable prints (`read_tmpl`), and that executable is no file of
+    the tree: its composer's ``inputs`` hold the executable's digest, by `compose_circuit.template_inputs`'s rule
+    (`read_tmpl.is_read`, `read_tmpl.digest`), so a5's key for it (`a5.compose_key`) moves with the executable and comes back
+    with it, and a compose cache kept under another build is not taken. Every other template's composer never asks for the
+    executable, and its inputs and its key are the statement's alone; the Definition decides, not the statement's form. The
+    read here is the toy template under the read's name (`read_tmpl.READ`), which is all `is_read` asks of a Definition."""
+    import a5 as A5
+    import compose_circuit as CM
+    from verity_flock import read_tmpl as RT
+
+    st, flat = {"layout": "iv/hybrid/4", "structural": True}, {"reads": "inline"}
+    with monkeypatch.context() as m:
+        m.setattr(RT, "READ", COORD.base_id)
+        assert RT.is_read(COORD)
+        builds, keys = [tmp_path / "flock-read-tmpl-1", tmp_path / "flock-read-tmpl-2"], []
+        for exe, text in zip((*builds, builds[0]), (b"one build", b"another build", b"one build")):
+            exe.write_bytes(text)
+            m.setattr(RT, "EXE", str(exe))
+            compose = RA.composer(COORD, st)
+            assert compose.inputs == ["unit/window", st, hashlib.sha512(text).hexdigest()]
+            keys.append(A5.compose_key(compose, COORD, TID))
+        assert keys[0] == keys[2] != keys[1]
+        assert RA.composer(COORD, flat).inputs == ["unit/window", flat, hashlib.sha512(b"one build").hexdigest()]
+    assert not RT.is_read(COORD)
+    monkeypatch.setattr(RT, "digest", lambda: pytest.fail("a template that reads no table asked for the verifier's executable"))
+    compose = RA.composer(COORD, flat)
+    assert compose.inputs == ["unit/window", flat] and RA.composer(COORD, st).inputs == ["unit/window", st]
+    assert A5.compose_key(compose, COORD, TID) == CM.cache_key(
+        ["a5/own", TID, program_digest(A5.Program(COORD)), ["unit/window", flat]], files=(Path(CM.__file__), Path(RA.__file__)))
+    assert A5.compose_key(compose, COORD, TID) not in keys
 
 
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):

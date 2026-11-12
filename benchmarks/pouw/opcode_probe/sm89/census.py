@@ -1,4 +1,4 @@
-"""The machine model's sm_89 census (`benchmarks/pouw/machine_model/data/devices/sm_89/`) from a run of `run.sh`
+"""The machine model's sm_89 census (`benchmarks/machine_model/data/devices/sm_89/`) from a run of `run.sh`
 (scalar.cu), a run of tensor_kinds with TK_ARCH=89, a run of `SRC=uniform run.sh` (uniform.cu) and runs of `SRC=ji32
 run.sh` (ji.py's grid), in the machine model's schema with one epoch (no `since` or `until`).
 
@@ -141,9 +141,10 @@ def build(scalar: Path, tk: Path, ji: list[Path] = ()) -> tuple[list[list[str]],
     scalar_kinds = list(PIPES)
 
     lanes = summary["lane_op_alone"]
-    rws.append(["issue", "measured", t_run, "1 warp instruction a SMSP-cycle, every kind: FFMA alone "
-                f"{lanes['ffma']['issue_per_smsp_cycle']:.3f}, IADD3 and FFMA alternating "
-                f"{lanes['iadd3_ffma']['issue_per_smsp_cycle']:.3f} a SMSP-cycle (tensor_kinds' lane ops)"])
+    rws.append(["issue", "measured", t_run,
+                ("1 warp instruction a SMSP-cycle, every kind: FFMA alone "
+                 f"{lanes['ffma']['issue_per_smsp_cycle']:.3f}, IADD3 and FFMA alternating "
+                 f"{lanes['iadd3_ffma']['issue_per_smsp_cycle']:.3f} a SMSP-cycle (tensor_kinds' lane ops)")])
     cen += [[k, "issue", "", "", "1", "", "", "", t_run] for k in [*kinds, *scalar_kinds]]
 
     rws.append(["M", "measured", t_run, "tensor pipe: each MMA kind at its fastest form's alone rate + 2%; "
@@ -184,8 +185,9 @@ def build(scalar: Path, tk: Path, ji: list[Path] = ()) -> tuple[list[list[str]],
             ji_runs = sorted({t.split("@")[1] for t in f["tight"] if t.startswith("j32_")})
             run = " ".join([s_run, *ji_runs])
             src = f"sm89/scalar.cu's {x} frontier" + (" and ji.py's IMMA.16832 programs" if ji_runs else "")
-            rws.append([f"{new}{i}", "joint", run, f"IMMA16832 {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles ({src}, "
-                        f"every non-MMA instruction of the loops counted as {kind}, 2% noise margin; tight at {tight})"])
+            rws.append([f"{new}{i}", "joint", run,
+                        (f"IMMA16832 {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles ({src}, every non-MMA instruction of "
+                         f"the loops counted as {kind}, 2% noise margin; tight at {tight})")])
             for k, c in (("IMMA16832", f["MMA"]), (kind, f["X"])):
                 if c > 0:
                     cen.append([k, f"{new}{i}", "", "", f"{c:.9g}", "", "", "", run])

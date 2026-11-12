@@ -177,11 +177,9 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None, wai
     """Take the leased Commit's GPUs now (``VERITY_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
     lease and for any other process to leave its GPUs (`_foreign`), then see only its devices. Nothing before this call may initialise
     CUDA (the process sees no device until it returns). The lease's locks are this process's from here to its ``release`` or its exit;
-    the holder ending first (the lease tool's --max-min) kills this process. A process that holds its lease already keeps it."""
+    the holder ending first (the lease tool's --max-min) kills this process."""
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
     if environ is None or not environ.get(STARTED) or not leased(environ):
-        return
-    if _HELD:
         return
     if cuda_initialised():
         raise SystemExit("GPU lease: CUDA was initialised before the lease (with no device visible); nothing may touch CUDA before "

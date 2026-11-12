@@ -481,6 +481,33 @@ def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_cou
     assert IF.input_count(doc, resolve, pins=None, roots=pins)["registered"] == 0
 
 
+def test_two_fused_templates_reading_one_table_declare_and_commit_it_once(monkeypatch):
+    """A served window holds one projection's fused blocks on two kernels (here w2's QGMMA block and its MMA v2 twin, each one
+    token's pairs), both reading the same tables: each table is declared and committed once, each template's reads and
+    openings of it its own, and the record's check (`interface.listed_reads`) and the verifier's count accept it."""
+    pr, ns = PROJ["w2"], build(monkeypatch, "w2")
+    twin = descriptor_id(bind(BM.MoeExpertFp8ReadGemmWV1, READ=EMB.read(E, NR * K // 2), K=K, N=NR, G=G, KB=KB, SWAP=False,
+                              DOT=BG.HopperE4m3MmaV2Dot32))
+    tmpls, most = [SLOTS, READ_WS, pr.fused, twin], {SLOTS: 4, READ_WS: 4, pr.fused: 4, twin: 4}
+    rows = [ns.routers, ns.pairs, ns.pairs[:TOPK], ns.pairs[TOPK:]]
+    plan, ms = cut(rows, tmpls, most)
+    w = [EX.table_param(pr.w, NR * K // 2, b) for b in range(B)]
+    want = sorted([*w, EX.table_param(pr.ws, 2 * K // G, 0)])
+    for t in (pr.fused, twin):
+        assert [p for _a, _n, _b, p, _l in plan.tables(t)] == w
+    reg = EX.declarations(plan)
+    assert sorted(t.name for t in reg.tables) == sorted(reg.params) == want
+    assert {(o.reader, o.at, o.units) for o in reg.openings} == {
+        (t, at, n) for t in (READ_WS, pr.fused, twin) for at, n, _b, _param, _l in plan.tables(t)}
+    tables = EX.commit_tables(plan, ns.store, None, None, SRW._slices, committer(plan))
+    assert sorted(tables) == want
+    templates = [[t, sum(m.n for m in ms if m.template == t)] for t in tmpls]
+    assert set(IF.listed_reads(ms, templates, reg).values()) == set(want)
+    pins = {p: v.root.hex() for p, v in tables.items()}
+    doc = {"templates": templates, "members": [IF._member_doc(m) for m in ms], "registered": reg.doc()}
+    assert IF.input_count(doc, {t: SRW.template(t).fn for t in tmpls}.__getitem__, pins=pins, roots=pins)["registered"] > 0
+
+
 def test_a_pair_row_cut_both_fused_and_apart_is_refused(layer):
     for extra in ([PROJ["w13"].fused], [READ_W, PROJ["w13"].fused]):
         tmpls = [SLOTS, READ_WS, BLOCK, *extra] if len(extra) == 1 else [SLOTS, READ_WS, *extra]
