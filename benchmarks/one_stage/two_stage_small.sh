@@ -17,6 +17,7 @@
 #   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
 #   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances;
 #   adding --stop serves it under a stop rule, a stop class, which `first` and `second` take as --stop
+#   adding --tables commits each request's history table beside it instead, as a serve with no stop rule does
 #   SMALL_GPU=1 builds flock-circuit with its device prover (on CUDA 13.3's toolkit: CUDA_TK, the node's own, or the one
 #   verity/protocols/flock/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
 #   --devices, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as

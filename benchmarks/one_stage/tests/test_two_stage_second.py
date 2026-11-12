@@ -285,7 +285,8 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
 
 
 @pytest.mark.slow
-def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_takes_its_hand_over(tmp_path):
+@pytest.mark.parametrize("tables", [False, True], ids=["alone", "beside-tables"])
+def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_takes_its_hand_over(tmp_path, tables):
     """A class as a served vocabulary's is with the greedy select in units, its replay block
     `GreedySelect_v1{V, N=V / K}`'s body inlined: one unit of each of its K templates a token, the combine's every
     wired row one chunk's output row (K = 4 here; a served row's is 20). Round 2 derives its wires, a link from each
@@ -293,11 +294,19 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     the ids as its return's port, `replayed` commits it linked (`interior_rows.pieces`), and round 2 takes the
     hand-over with no code, the combine's ``o0`` read at round 1's rows. With the return read at the interior's own
     port, as a record without the port leaves it, round 2 refuses that read at the combine's statement
-    (``second-read``). Slow (about 16 s): it lowers the K templates for the references and the sessions' files."""
+    (``second-read``). The same holds with each span's history table committed beside the class, as a serve with no
+    stop rule commits them (``two_stage_small --tables``): the record lists the tables' roots after the return, which
+    a record of tables names ``<block>/o0`` (`boundary_rows.return_port`), as round 2 names the link from each unit's
+    ``logits`` ``<block>/logits``, and no unit reads a table. Slow (about 16 s
+    a case): it lowers the K templates for the references and the sessions' files."""
     v, k = 256, 4
-    got, check = SM.serve(tmp_path, v, O, N, inline=True, units=k), BR.check_template(SM.template(v, k))
+    got, check = SM.serve(tmp_path, v, O, N, inline=True, units=k, tables=tables), BR.check_template(SM.template(v, k))
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
-    assert c.layout.inline and len(c.layout.templates) == k and c.layout.returned == "o0"
+    ret, names = c.layout.returned, list(c.layout.tables)
+    block = f"{BR.descriptor_id(c.layout.replay)}/" if tables else ""
+    assert c.layout.inline and len(c.layout.templates) == k and len(names) == (N if tables else 0) and pub["ids"]
+    assert ret == f"{block}o0"
+    assert list(pub["values"]) == [*BR.PORTS, ret, *names]
     first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior")
@@ -306,18 +315,20 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert d.cells == (O,) * k and [m.template for m in d.members][-1] == combine
     assert [(w.template, w.port, w.wport) for w in d.wires] == [(combine, f"r{j}", "o0") for j in range(k - 1)]
     assert [w.writer for w in d.wires] == [m.template for m in d.members[:-1]]
-    assert [(x.template, x.port, x.value) for x in d.links] == [(m.template, "logits", "logits") for m in d.members]
-    assert d.returns == (IR.Return(combine, "o0", "o0", O, tuple(range(O)), True),)
-    assert [e["value"] for e in r.record["registered"]] == ["logits"] and [x.value for x, _v in r.interior.returns] == ["o0"]
+    assert [(x.template, x.port, x.value) for x in d.links] == [(m.template, "logits", f"{block}logits") for m in d.members]
+    assert d.returns == (IR.Return(combine, "o0", ret, O, tuple(range(O)), True),)
+    assert [e["value"] for e in r.record["registered"]] == [f"{block}logits"]
+    assert [x.value for x, _v in r.interior.returns] == [ret]
     assert sorted(u // O for u in drawn) == sorted(t * Q + s for t in range(k) for s in range(Q))
 
     mine = d.window(again.registration.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, brec, sample)
-    served, = (x for x in brec["roots"] if x["port"] == "o0")
+    assert [x["port"] for x in brec["roots"]] == [*BR.PORTS, ret, *names]
+    served, = (x for x in brec["roots"] if x["port"] == ret)
     last = mine.members[-1]
     assert reads[last.key]["ports"]["o0"] == {
-        "value": "o0", "root": served["root"], "leaves": N * O, "words": 2, "word_bits": 16, "domain": served["domain"],
+        "value": ret, "root": served["root"], "leaves": N * O, "words": 2, "word_bits": 16, "domain": served["domain"],
         "row_schema": last.schema("o0"), "reads": [s * O + j for s in sample for j in range(O)], "reads_from": last.base}
     proofs = TS.references(d, Q, tmp_path / "references")
     S.template_circuits(proofs, again.stream.spec.check.query)
