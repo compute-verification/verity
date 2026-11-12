@@ -27,7 +27,8 @@ WORKLOADS = ["workload_b0_sampling_temp07", "workload_b0_sampling_topk50_topp09"
     ((0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344), (0xa4093822, 0x299f31d0), "d16cfe09 94fdcceb 5001e420 24126ea1"),
 ])
 def test_philox_known_answers(ctr, key, expect):
-    out = R.philox4x32_10(*[np.array([c], dtype=np.uint32) for c in ctr], key[0], key[1])
+    c0, c1, c2, c3 = (np.array([c], dtype=np.uint32) for c in ctr)
+    out = R.philox4x32_10(c0, c1, c2, c3, key[0], key[1])
     assert " ".join(f"{int(x[0]):08x}" for x in out) == expect
 
 
