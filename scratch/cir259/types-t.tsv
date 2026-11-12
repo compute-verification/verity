@@ -1,0 +1,3 @@
+greedychunk	census:GreedyChunk_v1{N=16384,FIRST=false}	1	session
+greedycombine	census:GreedyCombine_v1{V=154880,N=16384}	1	session
+tokensel	census:TokenSelect_v1{V=154880}	1	session
