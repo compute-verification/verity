@@ -104150,3 +104150,51 @@ Cancelled by me since 21:07Z, none of which had a slot: `964a` (21:17Z, relaunch
 - [derived] The toy (`benchmarks/two_stage/audit.sh`) has not run since its check changed: `9e10` is waiting.
 - [run: `7ad8`] Lean's verdict on a one-stage audit's record taken with own reads is seen in one run, at V = 2,560; not yet at the served vocabulary (`b876`).
 - [relayed: your 20:50Z] vllm's `select20` dry line on VLLM-412 is due 23:30Z and its small serve's result on VLLM-300 at 01:00Z; I read both then and enter them.
+
+## RUNSAS, Thu 21:56Z: the table is done: every model clause round 2 checks follows from its passing check, five clauses of `stmtOk` come from nowhere in round 2; the statements and all twenty proofs are written over the moved base, waiting for a Lean slot, nothing compiled
+
+**In plain words.** I have written down, in Lean, exactly what a passing round 2 gives the proved verifier's statement check, one statement per clause, and a proof of each. None of it has been through Lean yet: every proofs slot on the three CPU nodes is taken, and my run is in the line on vy-nebius-cpu-8. The answer the table gives: the parts of the model's check that read round 2's own code (the interior record's order and names, and the per-statement codes) follow from a passing round 2, with three small facts about how round 2 picks a statement's part. The rest of the model's statement check is not something round 2 sees: the session statement's own bytes (its circuit, tables, flags, rounds), the design's evaluation, and the records' names, which `Run.run`'s registration step checks. Those are named premises in my statement, each saying who can discharge it. One is a GAP for the run as it stands (below).
+
+Agent `bc-6b562a40-d85b-538d-9805-f87f05365e9b`; branch `cursor/proofs-runsas-7e3a` at **`9eb4d65525`**, pushed, the base `056097eb27` merged in (not rebased).
+
+**Size.** [run: git] Two new files: `security/Proofs/Flock/SpotFlock/RunsAs/Statements.lean` (144 lines: the premises as named `Prop`s and the nine statements as `Prop` definitions) and `RunsAs/Round2.lean` (269 lines, 20 theorems, each statement proved). Theorems left to write: none for the two-round form as the base states it, unless the compile finds a tactic that fails. Expected compiled [guess]: within an hour of the run getting a slot; a failing tactic costs one more slot each.
+
+**Runs.**
+- [run] `r20261112-215359-0940` on vy-nebius-cpu-8: `verity lean try security/Proofs/Flock/SpotFlock/RunsAs/Round2.lean` at `9eb4d65525` (it builds `Statements.lean` as its import). Waiting in the proofs line since 21:54Z, not started.
+- [run] I cancelled my two earlier tries (`r20261112-213814-2dfb` on cpu-12, `r20261112-215119-239c` on cpu-10): both were at a head older than the base's move, and neither had started. cpu-12 had 1 to 2 GB free per slot with 480 GB reserved by runs ahead; cpu-10 had none free.
+
+**The table: each code of `SecondStage.failures` (and `check`), against the model clause it gives.** [read `Spot/SecondStage.lean`, by name; `SpotFlock/Code.lean` `readsOk`, `stmtOk`, `stmtOkAt`, `codesOk`]
+- `second-interior-order` gives `interiorOrderOk`: **follows** (`check_ok`), `interiorOrder_of_check`.
+- `second-interior-names` gives `namesOk`, the base's new clause of `readsOk`: **follows** (`interiorFailures_names`), `namesOk_of_check`.
+- `second-verified`, `second-tables`: give `codesOk`'s versions, where the model's verdict is the statement's own (`Stmt.checked`): **follow with a lemma**. A verdict of record that passes them has a canonical header, registered reads and draw, so the statement's own passes too (`jeq` is reflexive on what it accepted once, `jeq_self_of`; `checked_tables`).
+- `second-header`, `second-population`, `second-roots`, `second-sample`, `second-read`, `second-refs`, `second-values`: give the rest of `codesOk` **by agreement**: the model runs the same `stmtCodes`. It needs the part round 2 picks (`ps.find?` by template name) to be the model's `partAt h q t`: true by `second-template` (no earlier statement of the same template) and `second-order` (the `t`-th part is of the `t`-th statement's template), `find?_first`, `codesOk_of_check`. And `stmtCodes` reads none of the `Own` fields the model leaves at their defaults (`reported`, `returns`, `supplied`, `fixed`, `reads`): checked by `rfl` (`stmtCodes_core`).
+- `second-statement`, `second-template`, `second-order`, `second-cover`: give the count clause `xs.length == h.ms.length` **with a lemma and a premise**: `count_of_check` needs the templates' names distinct (`NamesDistinct`). With two parts of one name round 2 passes a run with fewer statements than parts. [read] Nothing I have found proves the names distinct.
+- `second-cells`: gives that the parts exist; with `OwnAgrees` they are `partsAt`.
+- `second-return`, `second-schedule`, `second-inputs`, `second-links`, `second-wires`, `second-reported`: **no clause of the model's `stmtOk` on the base**. Round 2 is stricter here; nothing to prove. When L1 adds clauses for any of them I add one lemma each.
+- `two-stage-form`: none; RUNCOINS's lemma turns `check FORM` into `check true`.
+- **Not from round 2 at all** (each a premise of my statement): `two` (`TwoHolds`; reads only the auditor's copies), `recordsOk` (`RecordsHeld`; `Run.run`'s registration step, RUNCOINS's), the rounds `k₀ t` (`RoundsHeld`), `sessionOk` (`ScopeHeld`), `pinOk` (`PinHeld`).
+
+**GAP.** [read `Spot/Run.lean` where it builds `Own` and calls `SecondStage.check`; `SecondStage.stmtCodes`] Nothing in round 2 holds a session statement's circuit, tables, `zk`, `count`, partition, program, closure, public inputs or rounds to its template's reference statement (`pinOk`, `sessionOk`, `k₀ t`). Round 2 reads only the JSON `Stmt` (template, header, sample, registered reads) and what verdicts of record name of it. [read] The run reads the params' circuit digest per template and drops it (`refs := it.circuits.map fun (t, _, h, _) => (t, h)`). So these three premises can come only from how the verdicts of record were made (RUNCOINS's `VerdictsAreFlocks`, if it says the verdict is Flock's verifier at the template's reference statement), or from a change that makes the run check them. [guess] `second-header` holds `circuit_sha512` to the reference header's, which would bind the circuit up to a SHA-512 collision if Flock's verifier holds the header's digest to the circuit bytes; I have not read that, so I do not count it.
+
+**Proposed statement for RUNCOINS** (my text, in `RunsAs/Statements.lean` at `9eb4d65525`; it elaborates when the run does). [derived] It answers your question: the `own` is the run's own (`Run.lean`'s), not `ownOf`'s; `OwnAgrees` says they agree except on six fields: `verified`, which my proof handles, and five that round 2's per-statement checks don't read.
+```
+def StmtOkOfCheck : Prop :=
+  ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
+    (st : Roots) (rec draw : Json),
+    decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw →
+      OwnAgrees h own st rec draw c₀ →      -- core own = ownOf h st rec draw c₀
+      StmtsAre h m₂ ss →                    -- m₂'s t-th session statement reads as ss's t-th Stmt
+      TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ → RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ →
+      (Spot.SecondStage.check true own (some ss)).codes = #[] →
+        stmtOk h x m₁ m₂ c₀ c₁ = true
+theorem stmtOk_of_check : StmtOkOfCheck
+```
+`core own` sets `reported := none`, `verified`, `returns`, `supplied`, `fixed`, `reads` to the defaults `ownOf` leaves. The per-template form is `StmtOkAtOfCheck` (`∀ t < ss.size, stmtOkAt h x m₁ (stmtAt h m₂ t) c₀ c₁ t = true`, without `NamesDistinct` and `RecordsHeld`). If you would rather take a hypothesis of the form in your 21:33Z entry (`RoundTwoGives`), say so and I add it as a corollary.
+
+**NEEDS.**
+- Owner FRAME (or whoever owns `security/Proofs/Flock.lean`): one line, `public import Proofs.Flock.SpotFlock.RunsAs.Round2`, so the package build compiles my files. Until then only `verity lean try` builds them. I take it as given and edit nothing.
+- Whoever owns the template names (`Held.names`): a proof that they are distinct, or I keep `NamesDistinct` as a premise.
+
+**To post.** Nothing.
+
+**Not established.** That either file elaborates: no run has compiled them. That `NamesDistinct`, `PinHeld`, `ScopeHeld` or `RoundsHeld` hold of any served run. Whether Flock's verifier binds the header's `circuit_sha512` to the circuit bytes. My mailbox does not exist yet (read 21:50Z).
