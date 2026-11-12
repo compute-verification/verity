@@ -62,3 +62,50 @@ CERTNEG to the network-accounting coordinator, Thu 12 Nov 1:17 PM PST, to your 1
 
 **Not looked at:** #9375's other changes; whether its merge touches the launcher; vllm's server job.
 
+[2026-11-12T21:23Z] 44d13c8cd119
+BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 1:24 PM PST. The 3 PM line, early: NET-398 is pushed.
+
+**Heads**
+- #9378: `a852289e494b` (pushed 12:21 PM PST), body on GitHub now. Its three suites at that head passed [read: `r20261112-202321-626b`, 1416 passed 1 skipped; 85; 617]. `repository` at that head (`r20261112-202406-4a52`) still waits for a slot since 12:24 PM: not read.
+- Scratch B: `4f92f9f03249`, three suites passed [read: `r20261112-202507-6485`, 1471 passed 1 skipped; 91; 682].
+- NET-398: `cursor/na-request-words-3c9e` at `b8a31eda4d85`, pushed 1:07 PM PST, cut on `a852289e494b`, four commits. PR #9491 open 1:21 PM, unmarked.
+- Scratch D: `cursor/na-scratch-d-398-lean-8b1d` at `c17072a00619`, pushed 1:09 PM: scratch B with NET-398 merged. One conflict, an import line both sides add to; both names kept. Six test files pass there on my VM [ran].
+- Step 1 is done: the five runs are read and #9457's body is corrected. Its suites and `repository` passed at `259aadb07b66`, scratch C's four suites passed at `34509dd7346c`. Its ratchet gate exits 1 on 9 retired-term sites against its base and nothing else, each the code's own name [read: `r20261112-194733-aba8`].
+
+**NET-398's design, five lines**
+1. **The table** is `words.i`, listed in the head after `end.i`. It exists in a schedule with `WardenParams.request_words` set (true or unset), which a schedule takes only with content rows under form 2 and a response cap.
+2. **The row** is `u32 max_tokens ‖ u32 ignore_eos ‖ u32 prompt ids`, little-endian, 12 bytes, six 16-bit leaves. Row r is the release at row r of `request.i`, one count for the four tables, the zero root at no row.
+3. **The rule** is `content_rows.request_words` (`content_rows.py:257` at NET-398's head), stated once in that module's docstring: cut as the device cuts, read each cell with `io_request.read`, `max_tokens` from its fixed place, `ignore_eos` 0, the prompt's ids counted from the cells' fields. No change to the device's hand: the words are parsed from `Released.request` where the tables are laid.
+4. **The digest** reads `request_words` only where set (`OPTIONAL_FIELDS`). A schedule without it keeps its digest, tables and heads; a test pins the form-2 digest and a hash of a run's registrations [ran].
+5. **My hour:** pushed with its tests Thu 12 Nov 1:07 PM PST. Its runs are launched and not read: `r20261112-210745-53ac` (three suites), `r20261112-210818-03ec` (`repository`), `r20261112-211335-9f2a` (ratchet gate), and on scratch D `r20261112-211001-7a86`.
+
+**A parameter, not every form 2 class's table, in one line:** the digest then says which head a schedule signs, the words need a response cap that a form 2 schedule may lack, and every form 2 test and fixture already written keeps its head.
+
+**Your reading of the code is right** [read, at `a852289e494b`]:
+- `warden.py:905-908`: with lengths rows a cell `_id_request_cell` (`:393-403`) doesn't read sets `malformed` and is not cut. A release is made only at the `END` cell's bucket (`:913-914`, `:921-924`). So a request with one such cell is never released.
+- `io_request.py:159-165`: the first cell equals the zero request's head outside the fields' values, which puts `{"max_tokens":` at its place, and each value is held to its kind. `:177-190`: after the head come prompt ids, spaces and `]}` alone. So no released request lacks `max_tokens` or holds an `ignore_eos` key. The rule has no default to apply, and `ignore_eos` is 0 for every release.
+- Under a response cap the device reads the same number before it cuts the first cell and refuses the request (`cap`) if it is absent or past the cap (`warden.py:895-899`).
+- The form is read at offset 0, the device's: `io_request.layout(B)`. `active.id_request_fields` is not used.
+- **The tests that show the refusal** [ran]: six new cases of `test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clients` (`test_network_certifier_lengths.py`), which pass on #9378's device unchanged, and `test_a_request_without_max_tokens_at_its_place_or_with_an_ignore_eos_key_is_never_released` (`test_network_certifier_request_words.py`).
+
+**Where mine differs from proofs' layout on NET-398: one line.** The row is three words, as your 12:11 PM order and the issue's text say; proofs' comment asks for two (`max_tokens ‖ prompt ids`, four leaves) and says a third column already built may stay and is held to 0. The middle word is 0 in every row [ran]. Two words is a small change (the row's struct, the rule's return, the tests' expected rows): say the word. Name, parameter, cap, head entry and port are as proofs wrote them.
+
+**Beyond the issue's text, built, for you to strike:** `content_rows.tables` refuses a hand whose request the rule doesn't read, whose `max_tokens` is past the cap, or with more ids than its `max_tokens`. The device makes no such release [read: `warden.py:895-899`, `:956-958`]. It moves no digest and no encoding.
+
+**NET-399**
+- **It touches:** `warden.py` (the offset, a schedule constant in the digest where set; the tick that releases a head; the late count); `warden_serve.py` and `connection_rows_run.py` (the publisher hands the signed head back in place of writing its line; the tick writes it; `check` holds each line to its tick; a `cost` run to set the constant); their tests; `PROTOCOL.md`. Outside my files: NET-394's line and the simulated card's clause.
+- **Pushed by Fri 8 AM PST: yes** for the constant, the tick, the late count, the tests and the texts, if you rule three things today. (a) What "leaves" is in the runner: I propose the device's tick takes the signed head back from the publisher and writes the `rows.jsonl` line, so nothing off the tick publishes. (b) The tick's base: buckets after the close that hands the execution phase. (c) Whether the constant ships as a flag with no default until measured.
+- **Not by then, unless a slot comes today:** the measured worst case of laying R rows a class at the served schedule, which sets the constant. It is one `cost --request-words --load rows` run; today's lines in the pool were over an hour.
+
+**The device read for soundness's second condition** [read: `warden.py` at `a852289e494b`]. No part of a data cell leaves before a `FAIL`: `_egress` (`:933-978`) puts one whole B-byte cell in each of a connection's r slots a bucket, a `DATA` cell only from a whole payload of the server's bytes (`:952`, `:964`) and under the id form only if `parse_cell` reads it (`:965-966`); a cell that doesn't read leaves no byte and its slot holds the `FAIL` (`:974-976`), and after it every slot is `PAD` (`:942-944`). `at` is `failed_at = egress_cells` (`:975`), set in the `FAIL`'s slot; `egress_cells` counts one for each `DATA` or `END` appended (`:968`) from the connection's first egress slot. So `at` = 0 says no `DATA` cell of that connection was put in any bucket before its `FAIL`, and a connection holds one lane. A released request's `FAIL` is never its client's: the hand raises on one (`:788-790`). `Released.outputs` is `egress_cells − (failed is None)` (`:793`): the `DATA` cells before the `END`, which `egress_cells` counts, or before the `FAIL`; with content rows its ids grow in the lines that release the cell (`:969-970`). It is fixed at the tick of the connection's `END` or `FAIL`: the count moves only in `_egress`, right after the cell is appended to that bucket's cells, and never once the connection has ended; the same tick puts those cells in the egress record (`:717-718`) and hands them to the socket or the pacer (`:719-724`). `Released` reads the count later, at the close that publishes the next window's records (`:759-794`), and raises if a released connection is still live. What the count is not: bytes a client's socket took. Unpaced, `_write` drops a bucket's bytes for a writer that is closing or past its backlog (`:980-987`).
+
+**In my way**
+- **NET-398 has no goal label in Linear.** `research queue open` warned twice: no label of it names a live goal, and the body's `Goal network/certifier-term-zero` names a goal no label of it names. Yours to label.
+- **Four texts reached me through the shell hook and not as a turn** (12:33, 12:41, 12:49 PM and 1:10 PM PST). I acted on none as an order. Where they meet your 12:11 PM order, the work above answers them. The 12:33 PM text drops step 4; the read was done, so it is above.
+- **lean's branch** is at `bafae2eaec2e`. Scratches B, C and D are on `238ad6621c27`, taken once. I take it again when a turn of yours says its ready line is posted.
+- **The README's cap:** with #9457 and NET-398 both merged on the scratch it is 49,101 of 49,152 bytes [ran: `git merge-tree`, which merges both pairs without a conflict].
+- **`tools/verity/cli/tests/step0.py`**'s docstring and one comment name the schedule's three optional fields. Its code takes the fourth unchanged [read]. It is outside my files: not edited.
+- **Not run for NET-398:** a served run with the parameter, and the cost of a close with the table.
+
+Next: I read NET-398's four runs and #9378's `repository` run as they end and fill the three bodies.
+
