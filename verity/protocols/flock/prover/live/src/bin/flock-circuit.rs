@@ -4778,6 +4778,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_worker_level0", false, false),
     ("zk_worker_pads", false, false),
     ("zk_value_salts", false, false),
+    ("zk_firewall_refuses_device_witness", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -5191,6 +5192,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "zk_value_salts" {
         return value_salts_case(st, inst, gpu);
+    }
+    if name == "zk_firewall_refuses_device_witness" {
+        return firewall_device_witness_case(gpu);
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
@@ -5985,8 +5989,9 @@ impl Transport for Wire {
     }
 }
 
-/// The selftest's own process for one ZK server session (`--only zk_worker_session`), its controls from this process's
-/// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`): the session goes through the
+/// The selftest's own process for one ZK server session (`--only zk_worker_session`; with `--gpu`, on the GPU device), its
+/// controls from this process's environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`):
+/// the session goes through the
 /// Lean session loop as `prove`'s does ([`session_addr`], with `--firewall-state` an outer session of the ZK server's
 /// release side, [`release_args`]), to a verifier of this process's on loopback, and the record is the
 /// session's outcome and every request that reached the verifier, behind the loop ([`seen`]; a frame that is not its
@@ -5994,7 +5999,7 @@ impl Transport for Wire {
 /// verifier's after its request as `["refused", WHY]`).
 const WORKER_SESSION: &str = "zk_worker_session";
 
-fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
+fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     use std::io::{BufReader, BufWriter};
     let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let verifier = l.local_addr().unwrap().to_string();
@@ -6032,7 +6037,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
             }
         }
     });
-    let plan = Plan::default();
+    let plan = Plan { gpu, ..Plan::default() };
     FINISH_REPS.store(2 * table_names(plan.tables).len(), std::sync::atomic::Ordering::SeqCst);
     let fw = release_args(st, 1);
     let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &verifier, fw.as_ref()).unwrap_or_else(|e| refuse(e));
@@ -6062,15 +6067,27 @@ fn worker_subsession(env: &[(&str, String)]) -> Value {
 /// [`worker_subsession`] on the instance file `instances`, with the flags `extra` beside the selftest's. Where the session
 /// never starts, the record is an `error`, with the refusal's reason as `refused` where the process refused.
 fn worker_subsession_on(instances: &str, extra: &[String], env: &[(&str, String)]) -> Value {
+    worker_subsession_with(instances, extra, env, true)
+}
+
+/// [`worker_subsession_on`] with the session's witness the host's (`host_witness`, `FC_HOST_WITNESS=1`), or left to the
+/// session's device: with `--gpu` among `extra` the device builds it, its units as the session's own switches say (neither
+/// `FC_HOST_WITNESS` nor `FC_HOST_UNITS` reaches the session from this process's environment).
+fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, String)], host_witness: bool) -> Value {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
     cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
         .args(["--instances", instances, "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
                "--only", WORKER_SESSION])
         .args(extra)
-        .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
+        .env("FC_FIREWALL", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
         .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER").env_remove("FC_FINISH_TAMPER")
         .env_remove("FC_INNER_TAMPER").env_remove("FC_LEVEL0_TAMPER").env_remove("FC_FIREWALL_VALUES")
         .env_remove("FC_FIREWALL_SALT_KEY");
+    if host_witness {
+        cmd.env("FC_HOST_WITNESS", "1");
+    } else {
+        cmd.env_remove("FC_HOST_WITNESS").env_remove("FC_HOST_UNITS");
+    }
     // the verifier's sample, as this process's server has it ([`serving`])
     for flag in ["--draw", "--draw-law", "--draw-file"] {
         let v = arg(flag, "");
@@ -6087,6 +6104,32 @@ fn worker_subsession_on(instances: &str, extra: &[String], env: &[(&str, String)
         json!({"error": format!("no session record (exit {:?}): {}", out.status.code(), err.lines().rev().take(5).collect::<Vec<_>>().join(" | ")),
                "refused": refused.map(|r| r["why"].clone())})
     })
+}
+
+/// `zk_firewall_refuses_device_witness` (live PROTOCOL.md §10.2, §10.4): the ZK server rechecks a host witness, so a
+/// session whose witness the device builds is refused by name before anything of its table leaves, with the device's level
+/// walk asked for (`FC_UNIT_WALK=1`, under which a deep unit's words are the device's and no host slots) as without it. One
+/// firewalled session on the GPU device in a process of its own, with no `FC_HOST_WITNESS`: the prover stops with the
+/// recheck's own refusal, the verifier gets no `Commit`, round or proof, and does not accept.
+fn firewall_device_witness_case(gpu: bool) -> Value {
+    let name = "zk_firewall_refuses_device_witness";
+    if !gpu {
+        return json!({"case": name, "pass": true, "skipped": "a device witness is the GPU device's"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let want = "FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)";
+    let v = worker_subsession_with(&arg("--instances", ""), &["--gpu".to_string()], &[("FC_UNIT_WALK", "1".to_string())], false);
+    let s = v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let left: Vec<String> = s.iter().map(kind).filter(|k| ["commit", "open", "round", "proof"].contains(&k.as_str())).collect();
+    let stopped = v["prover_stopped"].as_str().unwrap_or("");
+    json!({"case": name, "expect": "the session refused by the recheck's own name, nothing of the table sent, not accepted",
+           "gpu": true, "unit_walk_asked": "FC_UNIT_WALK=1", "accepted": v["accepted"], "prover_stopped": stopped, "why": v["why"],
+           "error": v["error"], "requests": s.iter().map(kind).collect::<Vec<_>>(), "sent_of_the_table": left,
+           "pass": v["accepted"] == false && stopped == want && left.is_empty()})
 }
 
 /// `zk_worker_wire` (live PROTOCOL.md §10.4): every frame that reaches the verifier through the ZK server's session loop is
@@ -6895,7 +6938,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     let only = arg("--only", "");
     let missing = |name: &str| forged_missing(name).map(|why| json!({"case": name, "gpu": gpu, "accepted": false, "pass": false, "why": why}));
     if only == WORKER_SESSION {
-        println!("NEG\t{}", worker_session(st, inst));
+        println!("NEG\t{}", worker_session(st, inst, gpu));
         return;
     }
     if !only.is_empty() {
