@@ -56,8 +56,8 @@ monitoring period and where it says no advice is priced.
 
 Both parts count the same requests: the sampling plan's, which the network certifier's calculator counts by default
 and reads from the planner in the tree. The command holds no count of its own, so its inputs list that calculator's
-request count and what its request is, as the calculator marks them. The requests a row of record is priced over
-are its `replay_sample / q`, the sampled replays over the probability a request is sampled; the row's `requests`
+request count and what its request is, as the calculator marks them. The requests one of the planner's rows is
+priced over are its `replay_sample / q`, the sampled replays over the probability a request is sampled; the row's `requests`
 field is the planner's default scope's count, another request's, and is not read. The command refuses if the two
 parts don't cover the same GPU-seconds, if the rows of record are priced over other requests than the network
 certifier's part counts, or if the two aren't shares of the same weights.
