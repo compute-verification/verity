@@ -26,8 +26,8 @@ verifier, the sessions, their rounds, the samples and the frame are `code h`'s.
 * `rewires_of_two`: where the design evaluates and each wire's writer's part is before its reader's, the code's
   wiring map rewires the members' programs (`Prog.Rewires`).
 * `named_port_of_stmtOk`: in an accepted run, each port a wire or a link names for a template is a port of that
-  template's session circuit, by that name. A run at a member whose circuit has that port's rows under other names is
-  refused.
+  template's session circuit, by that name. A run whose session statement's circuit has that port's rows under other
+  names is refused; the lemma's docstring says what ties that circuit's ports to the member's.
 
 The verifier is `V h` itself. Its check of the session statements (`stmtOk`) holds each session's reads to the
 links and wires the verifier holds (`readsOk`), and does not run round 2's check of the design itself
@@ -173,10 +173,10 @@ name of one of the session's registered reads and of a port of each of its state
 statement's circuit has no port of that name is refused: its session's registered reads either leave the port out,
 which round 2's statement check refuses (`SecondStage.wiredRead`, `linkedRead`, the code `second-read`), or name a
 port the circuit doesn't have, which the session's verifier refuses (`Flock.Registered.checkPort`). The circuits here
-are the session statement's, not the member's, and this lemma does not state the step between them. The member's
-circuit has that circuit's ports: a table's circuit unrolls, ports and all (`FlockSoundness.unrolled_ports`), to its
-template's reference statement's statement circuit (`pin_of_stmtOkAt`, `stmt_of_pin`), which is the member's
-(`templateOk_facts`); `CheckedRun.v2Row_port` chains the three for a checked unit's first table. The refusal is the
+are the session statement's, not the member's, and no lemma states that the member's circuit has their ports. The step
+is made inside the proof of `CheckedRun.v2Row_port`, for the first table of an accepted run's checked unit's session:
+the table's circuit unrolls, ports and all (`FlockSoundness.unrolled_ports`), to its template's reference statement's
+statement circuit (`pin_of_stmtOkAt`, `stmt_of_pin`), which is the member's (`templateOk_facts`). The refusal is the
 run's and not the registration's: the design still evaluates. -/
 theorem named_port_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
