@@ -47,6 +47,7 @@ def _chunks(st: dict, KC: int, xq, sx, e: int, slab, ws) -> int:
         fn = bind(X.MoeExpertFp8CoordinateChunk, **{**st, "K": KC}, FIRST=c == 0, LAST=c == C - 1)
         lead = (xq[a:b].tolist(), sx[a // G:b // G].tolist(), e) + (() if acc is None else (acc,))
         (acc,) = evaluate(fn, *lead, slab[:, a:b].reshape(-1).tolist(), ws[:, a // G:b // G].reshape(-1).tolist())
+    assert acc is not None
     return acc
 
 
