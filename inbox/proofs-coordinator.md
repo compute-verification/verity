@@ -109478,3 +109478,39 @@ NEEDS
 - FRAME, as in the 23:02Z entry: discharge `MembersRowed h` from `templateOk` (the scopeOkH conjunct) or confirm it stays a named hypothesis with FRAME as owner.
 
 Not established: that the file elaborates; that `MembersRowed` is all `NeededBits` needs beyond what the file proves (the try decides it); whether `.pad` and `.lit` sources are already refused upstream of `Held`.
+
+## CUT, Thu 12 Nov 23:43Z: A LEAN SLOT ON vy-nebius-2 HAS KEPT MY TRY WAITING 19 MINUTES (17 checks ahead at 23:24Z); the cut is written in full on the merged base, nothing of it has compiled yet
+
+Coordinator's ask in your 23:07Z message: try 4 (`r20261112-232428-20b2`, launched 23:24Z at `6d551cb5a4`, 12 GB) was still waiting at 23:41Z with "17 check(s) ahead in line" [run]. At four slots and about 18 minutes a try (try 3 took 18 minutes [run]), it should start around 00:30Z and finish around 00:50Z [derived]. So the signatures will be elaborated around 00:50Z, not by 00:30Z as owed [derived]. More trees on the node would bring that forward.
+
+What happened since 22:50Z:
+- I merged TWOLEG's base (`b04e0a9fd9`) into my branch and restated `Accepts` as the form's check with its switch on, `checkBlobsAtWith true`, at the case `caseOf` decodes. This is how `Reading.AcceptsOn` reads a case [read]. The interior-held proof now reads the interior's per-member run from an accepted check through TWOLEG's `accepted_steps` and `inputAt_ok`, rather than unfolding `prepare` [read].
+- Try 3 (`r20261112-230912-ed74`, at the pre-merge `3dc3e5e5ea`) failed after 18 minutes [run]. It never reached my files: it stopped at a parse error in `SampledTwo/Projection.lean` lines 196 and 212 at the old base (`X` is a token in that file's scope) [run]. TWOLEG's `506b009d58` fixed this, and my merge includes it [read].
+- Agreement with RUNCOINS [read]. RUNCOINS states facts at one run's level (`FromDevice`, `runCoinsFromDevice` in `SpotFlock/RunsAs/Coins.lean`). Mine are at the play's log (`LogIsDevice`), and nothing in either restates the other. Both count a forgery or collision through the one finder, `Properties.Challenger.findBreak`. My forger and read finder are built on `findBreak` (`Cut.lean`, `readFinder`, `forger`), so each break is counted once. That is the proposal you took at 22:51Z [read].
+
+The three files, on `cursor/proofs-cut-9323` at `6d551cb5a4`, all under `security/Proofs/Properties/Verity/SampledTwo/`, each a root on its own line [read]:
+- `Cut.lean` (447 lines) states `LogIsDevice`, the two finders, the premises (`Wired`, `SignsPlay`, `Binds`, `PrintsOn`, `PrintsTwo`, `BindsOfPrints`) and `cutBound`: \(\Pr[\text{verdict} \wedge \neg\,\texttt{LogIsDevice}] \le \text{read finder's term} + \text{forger's term}\), from `Wired`, `SignsPlay` and `Binds`.
+- `CutPrints.lean` (459 lines) proves `binds_of_prints`: `Binds` follows from `PrintsTwo` at each play's history and the interior's records being held at its trees.
+  - The first session goes through `Drawn.drawn_log`.
+  - The interior's records are held at their trees less the closing round (`tree_lines_unclosed`).
+  - The one-window case reads one session for the whole log.
+- `CutHeld.lean` (236 lines) proves `binds_of_accepts : BindsOfPrints dev θ`, with the interior held proved from the form's acceptance.
+
+None has `sorry`. Theorems left: none beyond what is written; what remains is getting the written proofs to elaborate. Expected hour for "done": the first verdict around 00:50Z, then a fix round; I give the hour of done in the next entry, once I have seen the errors [guess].
+
+Where the bound is forced to a one-play history [read]: only `SignsPlay`, the step where a signature in the evidence that the history didn't sign counts as the forger's. `drawn_log`, `read_on`, `binds_of_prints` and `binds_of_accepts` hold at any history. `PrintsTwo` is stated at any history too; COINMAP's warning holds: at a history with no runs on a window, `PrintsOn` is vacuous, so the bound stays true but says little there, because the forger's term is then large [derived].
+
+STOP RULE
+- Nothing. No listed guarantee, named assumption or form the verifier accepts changes [read].
+
+NEEDS
+- Infra (through you): more Lean trees on vy-nebius-2, or my try 4 moved up the line; the 17 ahead of it decide whether I meet 03:00Z [derived].
+- TWOLEG, for the assembly: `ProjectionOf`'s `Acc` should be my `Accepts`, or a lemma from `FormAccepts C o` to `Accepts o.sent` where `C` decodes as `caseOf` does. Nothing is needed from me for that [read].
+
+To post
+- Nothing.
+
+Not established
+- That any of the three files elaborates; nothing of mine has been compiled [run].
+- The earlier-signature hole: an earlier period's genuine signature in the evidence makes the error ⊤ at a one-play history. The docstring says so; soundness's change of Tue 17 Nov closes it.
+- `SignsPlay` and `PrintsTwo` at a history holding both sessions' runs (and earlier ones): nobody owns proving that the device's history satisfies them. COINMAP asked for a new worker for it, and I agree.
