@@ -12,12 +12,17 @@
 #   `SLOWDOWN`, `SLOWDOWN_HARDWARE` and `SLOWDOWN_MODEL`; `rho_models`, `rho_shapes` and `rho_periods` are
 #   `slowdown_models`, `slowdown_shapes` and `slowdown_periods`; a local that held its directory, its registry or its
 #   shapes is named for what it holds.
+# - In the training harness (`benchmarks/training_slowdown/`), which has two numbers: S, a config's slowdown, keeps
+#   its names, and the other, what the calculator gives at a job's record, is the record's slowdown. A local `rho` is
+#   `slowdown`, `rho_of` is `slowdown_of`, Fit's `rho_fit` is `slowdown_fit`, `BOUND_IS_RHO` is `BOUND_IS_SLOWDOWN`,
+#   and where the grade prints the word it prints "the record's slowdown". Its prose, which says ρ, is
+#   `slowdown_harness_map.toml`'s, whose header says which of the harness's keys are stored.
 # Each row is under a [[words_in]] that names its files: `rho` is another quantity's name in most of the tree.
 # What stays: "overhead" where it is prose or another quantity (a family's κ overhead, a regime's proving overhead, a
 # figure's per-block `overhead`, the `overheads` figure); `multiple` and `multiple_bound`; the stored keys (the
-# board's `"rho"`, the circuit properties' `out["rho"]`: [keep]); SPOT's risk `level.rho(1)`, which the calculator's
-# `tests/test_held_to_core.py` holds to core ([keep_in]); the symbol ρ; and the harness under
-# `benchmarks/training_slowdown/`, whose two quantities get a map of their own.
+# board's `"rho"` and the circuit properties' `out["rho"]`: [keep]; every `"rho"` and `"rho_fit"` of the harness,
+# quoted or in backticks: [keep_in]); SPOT's risk `level.rho(1)`, which the calculator's `tests/test_held_to_core.py`
+# holds to core ([keep_in]); and the symbol ρ.
 
 [words]
 
@@ -101,6 +106,73 @@ words = { "test_every_shape_is_rhos" = "test_every_shape_is_the_slowdown_calcula
 files = ["tests/test_retired_terms.py"]
 words = { "test_the_scan_reads_rho_terms" = "test_the_scan_reads_the_slowdown_calculators_terms", "faulty outputs outside rho" = "faulty outputs outside the calculator" }
 
+# --- the training harness: the record's slowdown. A key stays (`slowdown_harness_map.toml`'s header says which are
+# stored). A row cannot keep a word and [keep]'s patterns hold in every file of the map, so where a block has the bare
+# word, the key in its quotes or backticks has a row of its own, standing before the bare word, and [keep_in] holds that
+# row's word in the harness's files: the row is never written there. Its name is the one the calculator's own key has
+# (`slowdown_calculator_names_map.toml`), so the word has one name in both maps; what a harness key is called when its
+# schema changes is that change's to say. The printed phrases stand before the bare word too.
+
+# the grade and its block: the row heads are `S = p x slowdown` and `record's slowdown`
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/grade.py",
+         "benchmarks/training_slowdown/tests/test_grade.py"]
+[words_in.words]
+"\"rho\"" = "\"slowdown\""
+"'rho'" = "'slowdown'"
+"`rho`" = "`slowdown`"
+"BOUND_IS_RHO" = "BOUND_IS_SLOWDOWN"
+"rho's products term is this bound" = "the products term of the record's slowdown is this bound"
+"rho is it" = "the record's slowdown is it"
+"beside rho and never in it" = "beside the record's slowdown and never in it"
+"rho is unmeasured" = "the record's slowdown is unmeasured"
+"add(\"rho\"," = "add(\"record's slowdown\","
+"rho: {" = "the record's slowdown: {"
+"S = p x rho" = "S = p x slowdown"
+"x rho {" = "x the record's slowdown {"
+"(|C| x rho)" = "(|C| x the record's slowdown)"
+"rho" = "slowdown"
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/grade.py",
+         "benchmarks/training_slowdown/tests/test_grade.py",
+         "benchmarks/training_slowdown/tests/test_one_calculator.py",
+         "benchmarks/training_slowdown/training_slowdown/calculator.py"]
+[words_in.words]
+"rho_of" = "slowdown_of"
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/tests/test_grade.py"]
+[words_in.words]
+"test_rho_reads_the_first_planned_search_seed" = "test_the_records_slowdown_reads_the_first_planned_search_seed"
+"test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it" = "test_the_records_slowdown_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it"
+"test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again" = "test_no_slowdown_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again"
+"test_no_rho_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes" = "test_no_slowdown_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes"
+"test_rho_is_the_bound_of_record_where_products_bind" = "test_the_records_slowdown_is_the_bound_of_record_where_products_bind"
+"test_the_bound_of_record_is_the_calculators_and_rho_follows_it" = "test_the_bound_of_record_is_the_calculators_and_the_records_slowdown_follows_it"
+
+# Fit and the record's slowdown: `at`'s keys `"rho"` and `"rho_fit"` are what `published` reads
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/formalism.py",
+         "benchmarks/training_slowdown/tests/test_formalism.py"]
+[words_in.words]
+"\"rho\"" = "\"slowdown\""
+"'rho'" = "'slowdown'"
+"`rho`" = "`slowdown`"
+"\"rho_fit\"" = "\"slowdown_fit\""
+"`rho_fit`" = "`slowdown_fit`"
+"rho_fit" = "slowdown_fit"
+"rho is unmeasured" = "the record's slowdown is unmeasured"
+"rho" = "slowdown"
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/tests/test_one_calculator.py"]
+[words_in.words]
+"\"rho\"" = "\"slowdown\""
+"'rho'" = "'slowdown'"
+"`rho`" = "`slowdown`"
+"rho" = "slowdown"
+
 [rewrite]
 # Never rewritten: the earlier moves and their maps, the archive, lock files, and the cards a digest names.
 exclude = ["tools/move/**", "archive/**", "uv.lock", "**/*.lock", "benchmarks/spot_figures/cards/**"]
@@ -114,3 +186,5 @@ strings = ["the board's `\"rho\"`"]
 [keep_in]
 # SPOT's risk ρ(m), the integrity profile's
 "verity/protocols/inference_only/slowdown/tests/test_held_to_core.py" = ["rho"]
+# the harness's keys, each a row of its block
+"benchmarks/training_slowdown/**" = ["\"rho\"", "'rho'", "`rho`", "\"rho_fit\"", "`rho_fit`"]
