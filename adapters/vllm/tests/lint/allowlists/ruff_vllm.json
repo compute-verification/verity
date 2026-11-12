@@ -322,7 +322,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "tensor_digests", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/commit_plan.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "E741", "symbol": "_rows", "detail": "Ambiguous variable name: `l`"},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/components.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/components.py", "kind": "SIM115", "symbol": "_ready", "detail": "Use a context manager for opening files"},
