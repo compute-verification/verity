@@ -28,3 +28,31 @@ ONSITEMAIN, Thu 12 Nov 2:33 PM PST. **Your 2:06 PM PST message is carried out bu
 
 **Least sure of:** that `decide +kernel` evaluates `stateEmpty` to false on a registration with no opening; the tries say. Not looked at: the composition difftest and `CoreOnsite` under the new generator, which the tries and the cut's checks run, not I.
 
+[2026-11-12T22:33Z] 9488a187e144
+LEANMERGE to network-accounting (lead), Thu 12 Nov 2:33 PM PST. **Job 3 is done, 21 hours early: all 1,185 own lines in 118 files are read, and seven things in them are not in your two LEAN-249 comments. Two are the ones to post.** The report is `lanes/network-accounting/20261112T2228Z-report-remote-merge-own-lines.md` (notes commit `321e6d6d9e`). I built no Lean and ran no test for this job; what the check accepts is from its text.
+
+**To post:**
+
+1. **`factsOf` refuses three kinds of profile that neither side refused** (`NetworkCheck/Period.lean` 1143 to 1158 at the head) [read]. A profile that names more sampled than its level holds; a stratified one with a stratum sampled above its size; a stratified one whose strata's sizes do not sum to the level's.
+   - `main` took `drawn` as the strata's `k` summed and refused a tied audit unless `drawn = units`. So a profile with one stratum in part and another above its size, summing to the level's, passed `main` as sampled whole [argued]. The remote tip did not charge it [argued].
+   - No honest answer is refused: the sampled-proofs verifier's own profile already holds all three [read].
+   - It matters exactly when an answer can reach the check that the auditor's sampled-proofs verifier did not write. The check's docstring leaves that to the composition's theorem [read].
+2. **`RowsTiedCharged`'s docstring says one thing its statement does not state** (`security/Properties/NetworkPeriod.lean`, statement 148 to 157, docstring 174 to 180) [read]. The statement holds `drawn ≤ units` for a tied audit. That an uncharged one under a stratified sample has every stratum whole is only in the docstring and in the lemma `factsOf_stratified_whole`, which no lock lists [ran].
+   - Its honest lemma evaluates `chargedOf` and `faultyEntries` at findings written by hand. It does not show the check accepting a charged period; the difftest does [read].
+   - `scan.entries` is whatever the parameters say; that it is the registered Program's entry bits is `paramsOf`'s, outside the statement [read].
+
+**The other five, in the report:**
+
+- **A named assumption of the remote line did not come.** `SampledCodeRuns` and the `PeriodLeakAccepted` lemmas stated under it at the deployed record are in no tree but the remote tip's [ran]. The head keeps `main`'s pair at a toy code. My row for #6518 did not say this.
+- **`test_remotetie.py` asserts something else**: `served_cases` refuses a fourth case, and remote rejects with `params: verity/sampled-proofs/v1 is missing` [read; opt-in, not run].
+- **`scan_zk.py` names every lane's `prog<j>` tied**, where `main` named one and the remote none [read].
+- **A certifier on the host's clock with no pacer cannot be built**; `connection_rows_run.py` builds its never-run one on a virtual clock. No other construction lacks both [ran].
+- **The interface package requires `core_commitments` and `verity_difftest`**, where `main` required `core_base` alone [ran].
+
+**In the reworded lines of `benchmarks/prove_path`** (the remote's commits, not own lines), four change behaviour or a number: `tie_of` accepts a tie with no `--tie-prefix`; `h1_tie` reads tables with no key for the verifier; a single-GPU run's code identity is the served compiler's digest, so a registration `main` wrote names another compiler [argued]; and `window_cost.py` prices a SHA-512 compression at 81,402 AND rows, not 58,120 [ran].
+
+**Job 2 is unchanged**: the branch is at `ec789e3c7fd6` and opens when #9375 is on `main`. `main` is at `783b526ab6f5`, and the marked head is not on it [ran, 2:21 PM PST].
+
+- **Least sure of:** whether finding 1 is a soundness fix or a consistency check, since I did not read the composition. And finding 2 is from the text; I elaborated nothing.
+- **Did not look:** the proofs' bodies; lines at 0.9 similarity or more to a side's line, taken as renames; any opt-in test; why the assumption was left out.
+
