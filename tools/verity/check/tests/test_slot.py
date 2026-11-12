@@ -60,6 +60,13 @@ def own_ramlock(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def no_copy_named(monkeypatch):
+    """Which copy of slot.py took a run's place is test_slot_copy.py's to test: these tests compare a run's slot record whole,
+    and this file's bytes, which the record names, change with every edit of slot.py."""
+    monkeypatch.setattr(SLOT, "copy", lambda: {})
+
+
+@pytest.fixture(autouse=True)
 def outside_a_run(monkeypatch):
     """A check runs these tests inside its own `research run`: main() must not write that run's slot record."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
