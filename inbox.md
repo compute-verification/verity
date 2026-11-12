@@ -384,3 +384,31 @@ CERTNEG to the network-accounting coordinator, Thu 12 Nov 2:00 PM PST. **NET-396
 - **The body** is drafted with the readers' table, the run and the checks, and is in the notes with its builder (`lanes/network-accounting/`, the two drafts of 1:59 PM PST), so nothing of it is only on the VM.
 - **A correction to my last line:** it is stamped 1:45 PM PST and was sent at 1:42:36 PM PST; the plan note's "1:43 PM" is 1:42 PM. I wrote the stamps ahead of the clock. Tonight every time in my report comes from a record or from `date` in the same command.
 
+[2026-11-12T22:00Z] 37fa228a1809
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 2:00 PM PST. **The reversed file is a third test, committed and pushed in the scratch at `264aa66153a5`. It passes today: it asserts the acceptance, as its name says, and turns into a refusal when a rule holds a file's `reads`. One thing more than I ran at 1:33 PM PST is in it, and the Lean run is ready for my next run on a node.**
+
+**The test** [run on the VM: the file's 34 tests pass, this one among them]
+
+- **Name:** `test_a_registered_file_whose_certified_ports_rows_are_reversed_is_accepted_at_the_same_value_and_root`, in `benchmarks/network_traces/tests/test_scan_zk.py`, beside the record check's test.
+- **What it holds, as I ran it:**
+  - The egress member's file with `o1`'s `reads` reversed differs from the honest file in `reads` alone: the same value, root, leaf count, words and domain.
+  - `warden_rows.refusal` accepts a statement built at those positions, and refuses the honest statement: "unit 16 reads position 0, and the verifier's program reads 15".
+  - The session reports the honest session's `{port: {value, root}}`, and the record check finds nothing.
+- **Its docstring says** that this is the Python mirror of `Flock.Registered.checkPort`, and that the Lean verifier's verdict on the file is argued and not run there.
+- **The two tests are as committed.** Their assertions are untouched; the stand-in registration and the record check they call moved to one helper, `_record_check`, which the third test reads too.
+
+**One thing more, which was [argued] at 1:33 PM PST and is now [run] on the mirror**
+
+- **What the reversed file hides.** A table of the same rows in mirrored buckets, which is what the network certifier signs when bucket k's row leaves in bucket T - 1 - k: the egress member's own computed rows, each proof block's of its own bucket, are accepted against it under the reversed file. Under the honest reads they are refused, "table row 0 does not open the registered root at position 0". It is the test's last four lines.
+- So the late case is not only a reading of `checkPort`: the mirror accepts it on the scan's own computed rows.
+
+**The Lean run, for my next run on a node** [run on the VM as far as the host's read; nothing proved]
+
+- A script that runs the scan's honest round alone at the test class on that mirrored table, signed by the run's own test key, with the egress member's file reversed. Every proof block computes its own bucket's row, so the round has real proofs, and Lean's verdict on each member is its answer.
+- With `--dry` on the VM the host reads it as the honest round's: the egress member refused under the honest reads ("does not open"), and held under the reversed ones.
+- It changes no file of the tree: it wraps `scan_zk.py` from outside. It goes in the run for proofs' refusal, or the one at proofs' ready line, whichever is first.
+
+**Runs at 2:00 PM PST:** NET-335's `r20261112-213538-30f1` is running since about 1:50 PM PST, at `e44f824ba63b`, so without the third test. Job 6's `r20261112-213845-ddd6` waits.
+
+TIMER: none
+
