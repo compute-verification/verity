@@ -372,7 +372,9 @@ class Trace:
     records: list[float]                 # each real records run that passed, in seconds
     records_from: float | None           # when the loop first ran a Lean batch's records before its check
     blame_from: float | None             # when the loop first ejected one member for a failure
-    mixed_until: float                   # the loop's last batch that mixed Lean changes with others under a `--lean` cap
+    mixed_until: float                   # the loop's last batch that mixed Lean changes with others
+    capped: float                        # when its flags first took no Lean change into a batch (`--lean 0`): from then
+                                         # until `mixed_until`, the ones it mixed in were those pinned
     flakes: list[float]                  # each real check that failed with no change at fault: when it was built
     wide: frozenset[int]
     suites: dict
@@ -645,7 +647,7 @@ def trace(doc: dict) -> Trace:
     first_records = [qt.ts(r["at"]) for r in lines if r.get("records_first")]
     stamped = [(at, _flags(text)) for at, text in sorted(rep.get("flags") or [], key=lambda x: x[0])]
     capped = min((at for at, f in stamped if f.get("lean") == 0 and at >= start), default=end)
-    mixes = [qt.ts(r["at"]) for r in decisions if r["action"] == "build" and start <= qt.ts(r["at"]) < capped
+    mixes = [qt.ts(r["at"]) for r in decisions if r["action"] == "build" and start <= qt.ts(r["at"])
              and 0 < sum(changes[k].lean for k in members_of[(r.get("sha") or "")[:12]] if k in changes) < len(r.get("members") or [])]
     launch = qt.pct([max(s["took"] for s in c["shards"]) - c["build"] for c in cands
                      if c["shards"] and all(s.get("took") for s in c["shards"]) and c["build"] >= start], .5) or 540.0
@@ -661,7 +663,7 @@ def trace(doc: dict) -> Trace:
     return Trace(start, end, [t for t in map(qt.ts, doc["control"].get("ticks") or []) if start <= t <= end], changes, faults,
                  stamped, [(c["dropped"], frozenset(c["members"])) for c in cands if c.get("cause") == "by hand" and c["dropped"] >= start],
                  passes, fails, records, min(first_records, default=None), min((when for when, _ in ejects), default=None),
-                 max(mixes, default=start), sorted(clean), frozenset(rep.get("wide") or ()), Suites(rep, launch, plain), measured)
+                 max(mixes, default=start), capped, sorted(clean), frozenset(rep.get("wide") or ()), Suites(rep, launch, plain), measured)
 
 
 def gated(tr: Trace, f: Fault) -> bool:
@@ -839,8 +841,10 @@ class Replay:
         order = sorted((ch for ch in ready.values() if ch.pr not in busy), key=lambda ch: (ch.rank, ch.pr))
         mixed = self.rule.recorded and self.t <= self.tr.mixed_until
         if mixed:
-            # the loop then took Lean changes into any batch, up to its cap: the first so many in order, as changes with none
-            over = [ch for ch in order if ch.lean and ch.key not in held][f["lean"]:]
+            # the loop then took Lean changes into any batch, as changes with none: up to its cap, the first so many in
+            # order; once the cap was none, those pinned then
+            over = [ch for ch in order if ch.lean and ch.key not in held]
+            over = over[f["lean"]:] if self.t < self.tr.capped else [ch for ch in over if not any(a <= self.t < b for a, b in ch.pins)]
             order, pins = [ch for ch in order if ch not in over], False
         rd = tuple(vq.Ready(ch.pr, ch.head, self._files(ch), ch.lean and not mixed, i,
                             ch.key not in held and any(a <= self.t < b for a, b in ch.conflicts)) for i, ch in enumerate(order))
