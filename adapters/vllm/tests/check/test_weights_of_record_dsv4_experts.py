@@ -15,7 +15,6 @@ from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.checkpoint_index import renamed, renames
 
 H, INTER, E, WORLD, RANK = 64, 64, 3, 2, 1          # hidden, expert width, experts; TP world and the rank composed
-I = INTER                                           # the width's old name, which a test of another directory imports
 CONTAINER = "model.layers.0.ffn.experts"
 EX = f"{CONTAINER}.routed_experts"
 
