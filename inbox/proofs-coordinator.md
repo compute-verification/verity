@@ -91280,3 +91280,45 @@ Each log's first line is `HEAD_AT a2f8506cf865...`. The whole quick tier was not
 - Nothing marked, nothing posted, nothing pushed but this entry; the body is as sent at 13:50Z [run: compared].
   Checkpoint 16 is in the notes (`1dfab71f42`). When you resume me: the run read whole, its verdict here and in the
   body's Lean item.
+
+## WIDELEAF, Thu 12 Nov 14:38Z: the four reads for Daniel's message: the condition is the reference deployment's "only exit", stated in the README and ARCHITECTURE.md and in no Lean; the stand-in needs a way out past the release side; one sentence of my page was wrong; one refusal more than the page's four
+
+**Answer.** [derived] The condition is not new as an element of the deployment and is new as something the value salts' rule reads. The attack needs a way out that does not pass a release side run with the key, which the README's "only exit" and PROTOCOL.md's limit on `--salt-key` already exclude; with those two, who names the loop's `--verifier` no longer matters. No Lean and no named assumption states the only exit. Read at `main` `1d71606cc12d`, fetched 14:21Z [run]; nothing built.
+
+**(a) Where the rule already rests on it** [read, each]
+- The key and who runs the loop, nothing of its flags or its address:
+  - `security/Definitions/Core/Assumptions/ZkServer.lean:17-22`: the docstring says the value service and the session loop run under the ZK server's own OS user and the key file is that user's alone; the Prop is `∀ k k', st k = st k'`. Its uses take it as that and no more (`Definitions/Core/Guarantees/ValueSalts.lean:48`, `:64`).
+  - `Flock/Firewall/Salts.lean:54-57` and PROTOCOL.md `:758-761`: the same words; "the selftest runs them all under one".
+  - `Flock/Firewall/Values.lean:35`: "Only the ZK server, under its own OS user, starts the service". I found no like sentence of the loop.
+- A flag of the loop's the rule rests on today: PROTOCOL.md `:752-753`, "Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing yet requires the key of a deployment's loop."
+- The stack reaches the auditor only through the ZK server:
+  - ARCHITECTURE.md `:97` ("the only exit to the auditor"), `:144` (workers "reach the auditor only through the ZK server"), `:145`.
+  - `verity/protocols/recursion/verifier/firewall/README.md:3-4`, and `:58-60`: "**The ZK server is the only exit.** Nothing of the workers' reaches the verifier except in the ZK server's release", realizing the auditor's view in `Flock.Guarantees.RecursiveZK` and `Flock.zk_server_blind`; "None yet physically".
+  - The same README `:50-51` and `:61-66`: CPU servers of its own that run only the compiled Lean; "Today Rust and Python run beside it: `flock-circuit`'s host side". `:118-123`: none of it is in place, and the premises "rest on the ZK server's code and the operating system's process isolation".
+  - PROTOCOL.md `:517-521`: the ZK server stands "between its workers, which nobody trusts, and the auditor".
+- Under `security/`: the only named assumptions on the ZK server's deployment are `zk-server-own-user` and `flock-firewall-os-src` (`verity/claims/__init__.py:550-557`; `Loop.Src`, `Proofs/Flock/SessionLoop/Statement.lean:345`), which lists the loop's inputs from its host (level 0, the rep samples) and no flag or address. The only exit is the model's shape (the auditor's view is the release: `OuterViewZK`, `Proofs/Flock/Recursive/Statements.lean:224-229`), not a Prop.
+- [derived] So Daniel can be told: the deployment element exists and is cited; the salts' rule would be the first text to read it for its own claim, and no Lean changes.
+
+**(b) The stand-in's path** [derived, from the lines named]
+- It is a process at the address the loop is given. It gets the real draw by sending `REGISTER` to the true auditor on a connection of its own, and hands the rest by copying each frame of the loop's onto that connection and each answer back. Every byte on it is one the release side computed, but the connection is not a release side's: a way out that does not pass one.
+- Through a second loop instead, the stand-in as its prover: with the key it fails twice. That loop sends frames it computes from its own statement and witness, never its prover's bytes (PROTOCOL.md `:877-878`), and compares its statement's trees with the true auditor's list. And the first loop checks each coin's opening against the root in `Hello`'s answer, which the second never hands its prover (`:890-894`). Without the key it passes, as any statement does today (`:752-753`).
+- **So: only by a way out that does not pass a release side run with the key.** The condition is the firewall's own (README `:58`) with the limit at `:752`. With both, a stack that named `--verifier` itself gains nothing: its stand-in receives the release and can send it nowhere. "Where the loop connects is its own user's choice" need not be a condition of its own.
+- **WRONG, mine** (13:58Z page, item 4): "the stack's prover starts the loop". [read] PROTOCOL.md `:527-529` counts `flock-circuit`'s host side, which starts the loop (`flock-circuit.rs:1618-1634`), as the ZK server in the outer phase, and the README `:65-66` says it runs beside the compiled Lean today. By §10's boundary the process that names `--verifier` is the ZK server's, not the stack's.
+
+**(c) The signed list, five lines**
+1. Key: [read] the release side holds no key of the auditor's and checks no signature; neither `verity/protocols/recursion/verifier/firewall/` nor `Flock/Firewall/` names LMS, and neither lakefile requires `verity/commitments/lms/lean`. [derived] The loop would take the auditor's LMS public key by a flag, so the condition moves from an address to a key file, both the loop's own.
+2. State: [read] one message a leaf; which leaf is the signer's state, kept by its host (`Lms/Sign.lean:11-13`); `deployed` is (N, W, H) = (64, 1, 20) (`Lms/Verify.lean:10`), 2^20 signatures a key. The auditor's gate already signs under a leaf state and `sign.lock` (`live_challenger/auditor.py:275-286`). [derived] One leaf a session, reserved before `REGISTER` is answered.
+3. Signed: a tag ‖ the draw's text ‖ the list. [derived] A replayed signature passes only trees the auditor once computed.
+4. Verified: [derived] in the hold's hook before `admitReads` (`Lms.verify`); the firewall package gains a `path` require of the LMS package, in a commit of its own.
+5. Size: [derived] the signature is 4 + 64 + 522·64 + 20·64 = 34,756 bytes at (64, 1, 20), on every session's answer. [guess] 150 to 250 lines with tests. [derived] It buys nothing against a stand-in with no way out (b); it holds only where the only exit fails and the key file does not.
+
+**(d)** [derived] The same condition, no more: from a stand-in, positions choose which rows of the server's tables a statement shows, a choice as large as the number of position lists; from the auditor, even one that departs from the protocol, they name rows whose `b ‖ c` are under the server's salts.
+
+**Changed since the page, before network is told**
+- **A fifth refusal, (e): an entry that equals no tree of the statement is refused**, where the page ignored it. [derived] A verifier that sent K entries at K domains would leave the stack the choice of which to hold, log₂ K bits a session, with K as large as the sender likes. With (b), (c) and (e) a session that passes holds exactly the listed trees.
+- [derived] So a session's list is its own statement's known trees and no other. Network's is the one constant of the member whose statement it is, not `consts T` whole [read: `ScanOk.lean`'s header only, at `ac8cd26077b2`].
+- The published domain, seen in passing: [read] the release side takes each port's domain from the public file's header (`Salts.treesOf`), and no Lean at `main` names the binding's tag. [derived] Which port carries which of a session's listed trees is therefore the header's, as it is for a registration's tables today; it belongs to the issue you file.
+
+**Dates** [guess, both]: A opens Thu 12 Nov, unmarked, if the try passes; B opens Fri 13 Nov, after A's ready line.
+
+**The try**: `r20261112-142856-b24f` (`security/Proofs/Flock/Recursive/StopCountBudget.lean` on `6e0b0e21d4`, the event alone) was launched 14:28Z and had not ended at 14:38Z [run]. Its line follows when it ends.
