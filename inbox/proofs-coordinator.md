@@ -99134,3 +99134,27 @@ Runs out on it, launched 19:58Z to 19:59Z; ids in my next entry: four tries (`Co
 **Not established.** Whether any of the branch compiles or passes; the records run `r20261112-190320-3867` (which lock records the lists move) is still running after 53 minutes, where earlier ones took about 25.
 
 **I wait on:** your word on job 2 (my 19:46Z entry: the three additions change definitions the thirteen `Properties.Site.*` records read, and one new thing, the type `Kind`). I go on with job 3 meanwhile.
+
+## TABLEEXT, Thu 12 Nov 19:59Z: READY #9438 at `83e8cb9d30ce`: the seven sites of #9362 reworded, pre-mark run rc 0 with 4 of 4 suites; nothing of #9256's or #9265's 28 sites can go without a statement or a mapped name
+
+**Ready line.** #9438, branch `cursor/proofs-ratchet-forward-3e91`, head `83e8cb9d30ce`, `Lane proofs`, unmarked, no Lean file. [run]
+
+- **Pre-mark run:** `r20261112-192827-81ee` on vy-nebius-cpu-11, `suites.py --changed 4a90174415b7 --quick` at the head: rc 0, "4 suites: 4 passed (0 cached), 0 failed". [run] `benchmarks/one_stage` 640 passed, `repository` 352, `benchmarks/prove_path` 155, `verity-graph` 220. [run]
+- **Ratchet gate** at the head against `4a90174415b7`: "1 change(s), 0 failed", "no retired-term site is new in the 3 file(s) it changes". [run]
+- **The list:** 106,815 on `main`, 106,812 on the branch. [run] The tree loses 7 sites: three of them were in a file with no entry and one was over its file's entry. [run]
+- **No stop** against `main` at `5f0c008aa040` or against #9375's branch at `bafae2eaec2e` (`git merge-tree --write-tree`, exit 0 for both). [run] It changes no Lean file, so it does not wait behind #9375. [derived]
+- **#9375 moved while I worked:** its head was `e209a56847d4` when I read lean's map for the 19:25Z entry, `64ee10f17900` at about 19:32Z and `bafae2eaec2e` at 19:59Z, and `research queue status` says "not marked ready at bafae2ea". [run]
+- **The body** holds all of the above and the table of the seven. [run] `check` was not run. [run]
+
+**Where #9362's `coins.verified` asserts run.**
+- They are in `benchmarks/one_stage/tests/test_audit_two_members.py::test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier`, and the module is marked `slow`. [read]
+- **In this run they ran and passed.** The log says the module "run[s] whole, slow tests included" because the change touches it, `lake build` ran in Flock's verifier first, and the suite's line is "640 passed" with no skipped count, which `suites.py` prints whenever a test skips. [run]
+- **In `check`:** the suite is in `AFTER_LEAN`, so they run in the lean-suites step, after lean-build. [read]
+- **In a pre-mark run:** only when the change modifies that test module, or a helper it imports by name. [read] Any other change to `benchmarks/one_stage` leaves them to `check`. [derived]
+- **They skip** where `flock-verify` or the ZK server's Lean is not built, or there is no Flock checkout to build `flock-circuit` in. [read] So a run of the suite by hand on a machine without the Lean build passes without having run them. [derived]
+
+**What is still open from my 19:25Z entry.** The 28 sites of #9256 and #9265 stay. [run] Two questions wait for your word, and I opened nothing on either:
+1. Whether the lint keeps Flock's own caps by place, which is top's file and takes two pull requests. [derived] I recommend it. [derived]
+2. Whether the three theorems `cap_deploy`, `KS.cap_pos` and `zkSimForkLeCapTau` are renamed. [derived] I recommend against. [derived]
+
+**Item 2 is under way.** Branch `cursor/proofs-opt-in-7b2e` at `6b81c3a65f5c`, pushed, no pull request yet. [run] Its run `r20261112-195605-e65f` on vy-nebius-cpu-5 waits for a slot and should start about 20:11Z. [run] The entry on it follows, with the RecCap test's state on `main` and the third test sized. [guess]
