@@ -24254,7 +24254,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "0a4c41f051a0e8ae550d5a9be958cfded7387e94215c585865c405a86ddd9248",
+   "digest": "9c43d3aabf41badb8e69d899e9defe4cc24063314ade149e7afcea550681e6f3",
    "definitions": {
     "Spot.OneStage.Commitment": "a73c4a90f1c2b83c2840decc48593e672266092719b09da7b4c08282e3862285",
     "Spot.OneStage.Commitment.digest": "5ad7187d0b69df894ed454b1cef1a4593b7e2e8dd1d831e2b80ef6726c4b6e46",
@@ -24271,7 +24271,7 @@
     "Spot.OneStage.Evidence.statement": "74b356c3f76171f9868dfa576a844a538f3f08c4410ac30345904616d6f97698",
     "Spot.OneStage.Evidence.verdicts": "81db97c8dd0262866fef18d1ee034915508f7e88883ed12ac90f627fc981eb32",
     "Spot.OneStage.PARAM_KEYS": "67fa7abb3b14fe0b31c7e59f31acd29a0329e4469f074e74c76ae7e8529b0793",
-    "Spot.OneStage.Params": "c7e59a1216107d2421365fa4fae992643407964b83359a62a6311a4d48b14313",
+    "Spot.OneStage.Params": "b95560f804862565274a5b4ae974e9642b0d4c4d478f030a2d66559149cd7ec8",
     "Spot.OneStage.Params.challenger": "598ee235786a0a3a9fa87465206478af0fe014791b74ae86ab3dd2f899a7095c",
     "Spot.OneStage.Params.delta": "d550f45ad0ba012c2bc8c7a0467b8c402089f9c49e78b913427cf382710b2de8",
     "Spot.OneStage.Params.verifier": "680df793464a25574c508c8be9441d42dc65883c3c4b93ed60db17fac4535c69",
@@ -24293,7 +24293,7 @@
     "Spot.OneStage.evidenceOf": "0f542f2c31def5b78e5ee6d5ab4840e0562b7f0d1cbc768a31246226c9202e77",
     "Spot.OneStage.evidenceParsed": "b41893c95a243f5b9929c68df678f3483f8fa40523b96850745107b669388aad",
     "Spot.OneStage.paramsOfJson": "999d78a093de5052bca080e42c16b5b7b6ed73744fd42218f09e6f3f34202362",
-    "Spot.OneStage.paramsParsed": "998cfd2d39be4719f0fb83bab18d836f607b6b179bd309533a1d8d0ecd7c200a",
+    "Spot.OneStage.paramsParsed": "8fba3a6f89afe8b7f3a2b8c3d65a25c434916d43e851ca671db7a279aca030d1",
     "Spot.OneStage.protocol": "300822c245ce4c2b120c8026a5774b09392918617a1c5177056ed32ca41f4705",
     "Spot.OneStage.publicJson": "1eecfca42c0f31de9d361496f31e2620a0c17671e0b9ff47d59552ef11d92e14",
     "Spot.OneStage.recordChecks": "c8f06b53e4b19f87065742547208d843a2f54ebaa146f2581da7b9fceca4eb39",

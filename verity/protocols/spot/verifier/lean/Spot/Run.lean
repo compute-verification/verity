@@ -28,7 +28,9 @@ check the stream ran on it, in the stream's order.
   public-items rule on the interior values, the population (else `interior-population`), its window (else
   `interior-window`: the boundary registration's, or the one the verifier computes from the boundary registration's
   digest and the sample, `interiorWindowOk`), R1–R8 against its copies under `subset:Q·n` (all of them committed),
-  `population-order`, and its receipt; and `second`: the second stage on its own
+  `population-order`, each history table its copies name being a port of the boundary registration's record at the
+  root and domain they computed for it (`tablesServed`: `interior-table`), and its receipt; and `second`: the second
+  stage on its own
   coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
   registration's digest and carrying their evidence as the first stage's do (`coins`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
@@ -184,6 +186,17 @@ private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
   | .twoStage grain _ _ => jeq query grain
   | _ => true
 
+/-- **Each history table the interior reads is one the boundary registration served** (`interior-table`): every table
+`tables` names, at the root and domain id `HistoryTable.rootsOf` computed for it, is a port of the boundary
+registration's record `record` of that name with that root and domain, at the port's last root (`Record.byPort`, the one
+round 1's checks hold). The interior's copies name the tables round 2 recomputes from the writers it opens; this holds
+each one to the table round 1 registered under its name, so no table only the interior's copies name is read. -/
+def tablesServed (record : Json) (tables : Array (String × ByteArray × ByteArray)) : Bool :=
+  let ports := Record.byPort record
+  tables.all fun (name, root, domain) => match ports.find? (·.1 == name) with
+    | some (_, r) => jsonStrIs (getD r "root") (Flock.hexOf root) && jsonStrIs (getD r "domain") (Flock.hexOf domain)
+    | none => false
+
 /-- **The interior registration's window** is the boundary registration's, or the one the verifier computes from the
 boundary registration's digest `digest` (lowercase hex) and the replay sample (`SecondStage.interiorRoot`); `boundary`
 and `interior` are the two registrations' window roots as the verifier holds them. So one session samples both stages,
@@ -211,6 +224,7 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
   let codes := Registration.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
+  if !tablesServed i.record it.params.tables then return .error ("interiors", #["interior-table"])
   let receipt ← receipt it.record i.challenger it.received
   let (draw, read) ← Select.selectSecond sample ns ks it.source
   if !coinsHold it.coins it.record v.windowRoot (it.source.extract 0 read) then return .error ("second", #["coins"])

@@ -97,6 +97,10 @@ structure Params where
   delta : Core.Ratio
   /-- the auditor's challenger the sample's coins come from, and their family; none when the verifier samples from its own -/
   challenger : Option (Challenger.ChallengerKey × String) := none
+  /-- the history tables its `history` names, each `(name, root, domain)`: the root `HistoryTable.rootsOf` computed from
+  the writers' public bodies the leaf layer binds and held to the one the window registers, and the domain id its reads
+  open under; none when it names none -/
+  tables : Array (String × ByteArray × ByteArray) := #[]
 
 structure Commitment where
   record : Json
@@ -289,14 +293,14 @@ def paramsParsed (j : Json) : V Params := do
     | pj => some <$> poolOf pj registered given (field? j "row_schemas")
   let (suppliedJ, outputsJ, schemasJ) := poolValues pool (Flock.hexOf program.sha512) log (field? j "supplied")
     (field? j "outputs") (field? j "row_schemas")
-  let suppliedJ ← match field? j "history" with
-    | none => pure suppliedJ
+  let (suppliedJ, tables) ← match field? j "history" with
+    | none => pure (suppliedJ, (#[] : Array (String × ByteArray × ByteArray)))
     | some h => do
       exactly h #["digests", "held", "registered", "tables"] "the history tables"
       let some leaf := leafLayer
         | throw "history tables are read from members' public bodies the leaf layer binds: the verifier names no leaf_layer"
       let roots ← HistoryTable.rootsOf leaf h
-      suppliedJ.mapM (HistoryTable.resolve roots)
+      pure (← suppliedJ.mapM (HistoryTable.resolve roots), roots)
   let supplied ← match suppliedJ with
     | none => pure #[]
     | some s => do
@@ -387,7 +391,7 @@ def paramsParsed (j : Json) : V Params := do
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
                                     declared, seedSalt, pool, tied },
-                      delta, challenger }
+                      delta, challenger, tables }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
     throw (s!"registered values {again.toList} were registered by an earlier record of the log under the domains they " ++
