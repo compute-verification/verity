@@ -535,7 +535,8 @@ def compare_tokens(result: FoldResult, tokens_json: Path | None = None, record: 
     # the accepted tokens the capture wrote next to its own (tokens.json `accepted_record_token_ids`, from the workload file)
     if tokens_json is not None and Path(tokens_json).exists():
         d = _load_json(Path(tokens_json))
-        acc = {r["request_id"]: [int(t) for t in r["accepted_record_token_ids"]] for r in (d.get("requests") or [])
+        requests = d.get("requests")  # a tokens file that names no request records no accepted tokens
+        acc = {r["request_id"]: [int(t) for t in r["accepted_record_token_ids"]] for r in (requests if requests else [])
                if isinstance(r, dict) and r.get("accepted_record_token_ids")}
         out["accepted"] = acc or None
         for req, toks in per_req.items():
@@ -805,7 +806,9 @@ def compare_structure(result: FoldResult, *, C=b1.B0_CONFIG, LP: int = 32, STEPS
     out: dict[str, Any] = {"status": "pass" if rep.get("matched") or rep.get("superset") else "fail",
                            "family": fam.id, "matched": bool(rep.get("matched")), "superset": bool(rep.get("superset")),
                            "reason": rep.get("reason"), "seconds": round(time.time() - t0, 3)}
-    extra = rep.get("extra_nodes") or []
+    extra = rep.get("extra_nodes")  # listed only for a superset: a match, a mismatch and a matcher that raised list none
+    if not extra:
+        extra = []
     out["n_extra"] = len(extra)
     out["extra_by_spec"] = dict(Counter(e["id"] for e in extra))
     out["classes"] = {k: {"count": v["count"], "specs": dict(v["specs"]), "steps": dict(v["steps"]), "examples": v["nodes"]}

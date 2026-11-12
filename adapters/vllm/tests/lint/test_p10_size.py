@@ -14,7 +14,7 @@ decorators excluded), methods and nested functions each counted on their own.  T
 from __future__ import annotations
 
 import ast
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -45,7 +45,7 @@ def file_sizes(src: str, rel: str) -> list[R.Violation]:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():

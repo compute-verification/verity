@@ -96,7 +96,9 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     """The names no digest covers, as the trace gave them: each Call's naming hint (the descriptor's `node_hints`: the Calls are the
     trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
     in field order), refused where the fields differ in number or size."""
-    hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
+    annotations = desc.get("annotations")   # a descriptor without annotations, or without their `node_hints`, hints no Call
+    node_hints = annotations.get("node_hints") if annotations else None
+    hints = {int(k): v for k, v in node_hints.items()} if node_hints else {}
     params = []
     for n, t in program.fn.body.params:
         if n == WEIGHTS and isinstance(t, RecordType):
@@ -114,13 +116,15 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     same rank and shape) holds about it.  Returns the `aot` block it records."""
     from verity_vllm.pipeline.build import write_instances
     res = json.loads(Path(trace, "result.json").read_text())
-    traced = res.get("program") or {}
+    recorded = res.get("program")   # the trace's record of its Program; a result without it names no digest, and is refused below
+    traced = recorded if recorded else {}
     r = predict(phi, wrapper, M=M, pos0=pos0, LP=LP, T=T)
     if r.digest != traced.get("digest"):
         raise UsageError(f"{trace}: the trace's Program {str(traced.get('digest'))[:16]}… is not the predicted {r.digest[:16]}…: what it "
                          f"holds is about another Program (the row's comparison no longer holds: `verity-vllm predict compare` on a "
                          f"fresh trace, `verity-vllm neutrality --tier heavy`)")
-    desc = {**r.desc, "annotations": S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations") or {}}
+    annotations = S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations")
+    desc = {**r.desc, "annotations": annotations if annotations else {}}   # a trace without annotations: predicted under empty ones
     raw = json.dumps(desc, sort_keys=True).encode()
     if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):
         raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {str(got[1])[:16]}…), "

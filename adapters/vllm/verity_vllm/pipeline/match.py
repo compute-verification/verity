@@ -44,31 +44,48 @@ import hashlib
 import importlib
 import json
 import shlex
-import subprocess
 import sys
 import time
-from collections import Counter, defaultdict
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.check import gates as G
-from verity_vllm.config import (
-    RowEngine,
-    UsageError,
-    option,
-    row_execution,
-    workload_arg,
+from verity_vllm.config import RowEngine, UsageError, option, workload_arg
+from verity_vllm.engine.served import (
+    ENFORCE_EAGER as ENFORCE_EAGER,  # read through this module
 )
-from verity_vllm.engine.served import ENFORCE_EAGER
 from verity_vllm.log import init_logger
-from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline.timeline import Timeline
-from verity_vllm.program.sampling_event import program_sampler_construction
-from verity_vllm.query.manifest.format import RUN_FAMILY, RUN_PARAM, canonical_identity
+from verity_vllm.pipeline.match_fold import (
+    INSTANCES_FORM_ENV as INSTANCES_FORM_ENV,  # read through this module
+)
+from verity_vllm.pipeline.match_fold import (
+    INSTANCES_SCHEMA as INSTANCES_SCHEMA,  # read through this module
+)
+from verity_vllm.pipeline.match_fold import (
+    INSTANCES_SCHEMA_V2 as INSTANCES_SCHEMA_V2,  # read through this module
+)
+from verity_vllm.pipeline.match_fold import (
+    _jsonable,
+    fold_summary_result,
+    persist_program,
+)
+from verity_vllm.pipeline.match_stage import run_stage
+from verity_vllm.pipeline.match_workload import (
+    _workload_doc,
+    _workload_enforce_eager,
+    _workload_engine_args,
+    _workload_execution,
+    _workload_expected_steps,
+    fold_construction_args,
+)
+from verity_vllm.pipeline.match_workload import (
+    _workload_moe_construction as _workload_moe_construction,  # read through this module
+)
+from verity_vllm.records.schema_ids import MATCH_RUN_SCHEMA, MATCH_STAGES_SCHEMA
 
 logger = init_logger(__name__)
 
@@ -259,64 +276,6 @@ def profile_config(name: str) -> dict | None:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _rss_gb(pid: int) -> float | None:
-    try:
-        out = subprocess.run(["ps", "-o", "rss=", "-p", str(pid)], capture_output=True, text=True, timeout=5).stdout.strip()
-        return int(out) / (1024 ** 2) if out else None
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        return None
-
-
-def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float | None, timeout_s: float | None, cwd: Path | None = None) -> dict:
-    """Run one command, teeing stdout+stderr to `log_path`; watch RSS / wall when limits are given."""
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    t0 = time.time()
-    rec: dict[str, Any] = {"stage": stage, "cmd": shlex.join(cmd), "log": str(log_path), "status": "ok", "returncode": None, "reason": None}
-    peak = 0.0
-    # the Match phase's sub-steps on the row timeline (VERITY_TIMELINE, else no-op): capture / control = one engine
-    # process each (`work.*`), the CPU phases (fold, resolve, ...) are validation
-    try:
-        _tl = Timeline.from_env("run_config", hot=False)
-    except OSError:   # the telemetry file's directory can't be made: the stage runs without it
-        _tl = None
-    _tl_stage = f"match.{stage}" if stage not in ("capture", "control") else f"work.match_{stage}"
-    if _tl is not None:
-        _tl.start(_tl_stage)
-    with open(log_path, "w") as lf:
-        lf.write(f"$ {shlex.join(cmd)}\n")
-        lf.flush()
-        proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None, env=dict(settings.environ(), PYTHONUNBUFFERED="1"))
-        while True:
-            rc = proc.poll()
-            if rc is not None:
-                break
-            if max_rss_gb is not None:
-                rss = _rss_gb(proc.pid)
-                if rss is not None:
-                    peak = max(peak, rss)
-                    if rss > max_rss_gb:
-                        proc.kill()
-                        rec.update(status="killed_memory", reason=f"RSS {rss:.2f} GB > {max_rss_gb} GB")
-                        proc.wait()
-                        break
-            if timeout_s is not None and time.time() - t0 > timeout_s:
-                proc.kill()
-                rec.update(status="timeout", reason=f"wall > {timeout_s:.0f} s")
-                proc.wait()
-                break
-            time.sleep(0.25)
-        rc = proc.returncode
-    rec["returncode"] = rc
-    rec["seconds"] = round(time.time() - t0, 3)
-    if max_rss_gb is not None:
-        rec["peak_rss_gb"] = round(peak, 3)
-    if rec["status"] == "ok" and rc != 0:
-        rec.update(status="failed", reason=f"exit {rc}; see {log_path}")
-    if _tl is not None:
-        _tl.end(_tl_stage, rc=rc, status=rec["status"])
-    return rec
-
-
 def _sha256_file(p: Path) -> str | None:
     try:
         return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -365,7 +324,7 @@ def write_manifest(plan: Plan, a: Options) -> dict:
     from verity_vllm.pipeline.report import workload_summary
     C = profile_config(required(a, "profile"))
     man = {
-        "schema": "verity-gen/run/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": a.config_id,
+        "schema": MATCH_RUN_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": a.config_id,
         "profile": a.profile, "case": a.case, "workload_path": a.workload, "workload": workload_summary(a.workload),
         "C": C, "hf_config": _hf_config_of(a, C), "laptop": plan.laptop, "snapshot_steps": plan.steps, "tier_b_steps": plan.tier_b_steps,
         "verify_weights": True, "parallel_replay": plan.parallel, "phase": a.phase,
@@ -418,7 +377,7 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
                                        "family": getattr(a, "family", None)})
         if a.phase == "cpu" and not (plan.run / "spec.json").exists():
             spec["reconstructed_after_execution"] = True
-            spec["digest"] = EXP._digest_doc({k: v for k, v in spec.items() if k != "digest"})
+            spec["digest"] = EXP.digest_doc({k: v for k, v in spec.items() if k != "digest"})
         note = EXP.write_spec(plan.run, spec)
         logger.info("[spec] %s digest=%s%s", "written" if note.get("written") else "kept",
                     (note.get("digest") or note.get("existing_digest") or "")[:12],
@@ -517,7 +476,7 @@ def save_stages(run: Path, recs: list[dict]) -> None:
     byname: dict[str, dict] = {}
     for r in recs:
         byname[r["stage"]] = r
-    (run / G.ARTIFACTS["stages"]).write_text(json.dumps({"schema": "verity-gen/stages/v1", "stages": list(byname.values())}, indent=1) + "\n")
+    (run / G.ARTIFACTS["stages"]).write_text(json.dumps({"schema": MATCH_STAGES_SCHEMA, "stages": list(byname.values())}, indent=1) + "\n")
 
 
 def gates_stage(plan: Plan, a: Options) -> dict:
@@ -727,36 +686,6 @@ def _defaults_from_run_dir(a: Options) -> None:
             raise UsageError(f"workload {a.workload} not found in this checkout")
 
 
-def _workload_doc(path: str | None) -> dict | None:
-    if not path or not Path(path).exists():
-        return None
-    try:
-        return json.loads(Path(path).read_text())
-    except (OSError, ValueError):
-        return None
-
-
-def _workload_max_tokens(path: str | None) -> int | None:
-    doc = _workload_doc(path)
-    if not doc:
-        return None
-    mt = [int(r["max_tokens"]) for r in doc.get("requests", []) if r.get("max_tokens") is not None]
-    return max(mt) if mt else None
-
-
-def _workload_expected_steps(path: str | None) -> int | None:
-    """The workload's declared `expected_engine_steps` (an upper bound: every request runs to max_tokens under the declared
-    arrivals), else max(max_tokens)."""
-    doc = _workload_doc(path)
-    if doc and doc.get("expected_engine_steps"):
-        return int(doc["expected_engine_steps"])
-    return _workload_max_tokens(path)
-
-
-def _workload_engine_args(path: str | None) -> dict:
-    return dict(RowEngine.of(_workload_doc(path) or {}).args)
-
-
 def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | None = None) -> tuple[int, dict]:
     """The per-tensor snapshot cap a Match capture needs so that EVERY per-token
     activation of the largest forward the workload can schedule has snapshot evidence: rows x widest row x 2 bytes, never below the
@@ -801,284 +730,9 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
                  "floor_bytes": SNAPSHOT_CAP_FLOOR, "cap_bytes": cap, "raised": cap > SNAPSHOT_CAP_FLOOR}
 
 
-# torch-free mirror of vllm_adapter.execution_of_workload (this driver runs on the laptop): the workload's
-# declared execution label (explicit `execution` / `sweep.execution`, else the row-id suffix) and the enforce_eager it implies
-# (`engine.served.ENFORCE_EAGER`).  The GPU phases derive the same from the workload themselves and refuse a contradicting engine arg
-# (build_engine).
-
-
-def _workload_moe_construction(path: str | None) -> str | None:
-    """The workload's DECLARED MoE construction (`engine.target.moe_construction`; None = undeclared = the default),
-    validated by the frontend's own table so a misspelling fails here by name and is never folded as MOE-01 silently."""
-    mc = (RowEngine.of(_workload_doc(path) or {}).target or {}).get("moe_construction")
-    if mc is None:
-        return None
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-    if mc not in TargetProfile.MOE_CONSTRUCTIONS:
-        raise SystemExit(f"workload engine.target.moe_construction {mc!r} is not one of {sorted(TargetProfile.MOE_CONSTRUCTIONS)}")
-    return str(mc)
-
-
-def fold_construction_args(workload: str | None, program_dirs) -> list[str]:
-    """The fold worker's construction flags: the MoE scope under the workload's DECLARED construction (manifest
-    target.moe_construction), the top-p select under the one the Build's Programs declare (a single-request select has no shared-greedy
-    form) and the values they register; never off the trace.  The single-rank driver passes them from --program-dir, the TP fold Match
-    (`tp.fold_match`) from each rank's Build dirs; a fold without them binds the profile's default select."""
-    mc, sc, rv = _workload_moe_construction(workload), program_sampler_construction(program_dirs), program_registered_values(program_dirs)
-    return (["--moe-construction", mc] if mc else []) + (["--sampler-construction", sc] if sc else []) + (["--registered-values"] if rv else [])
-
-
-def _workload_execution(path: str | None) -> str | None:
-    doc = _workload_doc(path) or {}
-    sw = doc.get("sweep")
-    if not isinstance(sw, dict):
-        sw = {}
-    for v in (doc.get("execution"), sw.get("execution")):
-        if isinstance(v, str) and v:
-            return v
-    rid = sw.get("row_id") or doc.get("row_id")
-    return row_execution(rid) if isinstance(rid, str) else None
-
-
-def _workload_enforce_eager(path: str | None) -> bool:
-    ex = _workload_execution(path)
-    if ex is None:
-        return True                                   # undeclared execution: the historical eager default (recorded as declared null)
-    if ex not in ENFORCE_EAGER:
-        raise SystemExit(f"workload {path}: execution label {ex!r} is not modelled by the harness (known: {sorted(ENFORCE_EAGER)})")
-    return ENFORCE_EAGER[ex]
-
-
 # ---------------------------------------------------------------------------------------------------------
 # the fold worker (one process = one fold; the driver runs it twice for G6)
 # ---------------------------------------------------------------------------------------------------------
-
-
-def _max_rss_gb() -> float:
-    import resource
-    ru = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return ru / (1024 ** 3) if sys.platform == "darwin" else ru / (1024 ** 2)
-
-
-def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None, sampler_construction: str | None = None, registered_values: bool = False) -> tuple[dict, Any]:
-    """Fold one log: the `gates.FOLD_SUMMARY_SCHEMA` document and the live `FoldResult` (for `persist_program`).  `moe_construction`: the workload's
-    DECLARED construction, which a profile without a `with_moe_construction` hook cannot fold (FAILS by name); `sampler_construction` and `registered_values`: the Programs' (`--program-dir`)."""
-    from verity_vllm.check.fold_compare import load_profile
-    from verity_vllm.observe.events import Root, RunHeader
-    from verity_vllm.observe.fold.fold import fold, summarize
-    from verity_vllm.observe.fold.patterns.pouw import with_protocols
-    from verity_vllm.observe.fold.patterns.sampling import with_sampler_construction
-    from verity_vllm.observe.log import read_log
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-
-    t0 = time.time()
-    profile = load_profile(profile_name)
-    prof_mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.{profile_name}")
-    if moe_construction not in (None, TargetProfile.DEFAULT_MOE_CONSTRUCTION):
-        hook = getattr(prof_mod, "with_moe_construction", None)
-        if hook is None:
-            raise SystemExit(f"workload declares moe_construction={moe_construction!r} but profile {profile_name} has no with_moe_construction hook: it cannot fold that construction (refused by name; the MOE-01 fold is NOT a substitute)")
-        profile = hook(profile, moe_construction)
-    profile = replace(with_sampler_construction(profile, sampler_construction), registered_values=registered_values)
-    events = list(read_log(log_path))
-    header = next((e for e in events if isinstance(e, RunHeader)), None)
-    result = fold(events, with_protocols(profile, header), strict=None, with_program=with_program)   # PoUW's calls: `patterns.pouw`
-    summ = summarize(result)
-    scope_pattern = next((type(pt).__name__ for pt in profile.patterns if type(pt).__name__.startswith("MoEFusedExperts")), None)
-    # roots, classified as resolve_log does (the profile's `root_class`, else `weight_field`)
-    classify = getattr(prof_mod, "root_class", None)
-    classes: Counter = Counter()
-    unknown: list[str] = []
-    seen: set[str] = set()
-    for ev in events:
-        if isinstance(ev, Root) and ev.name not in seen:
-            seen.add(ev.name)
-            if ev.role in ("weight", "buffer"):
-                cls = classify(ev.name) if classify else ("weight" if profile.weight_field(ev.name) else "unknown")
-                classes[cls] += 1
-                if cls == "unknown":
-                    unknown.append(ev.name)
-            else:
-                classes[ev.role] += 1
-    unbound = sorted({n.split("Root ")[1].split(" (")[0].strip("'") for n in result.notes if n.startswith("unbound root:")})
-    # per step
-    by_step: dict[int, Counter] = {}
-    for inst in result.instances:
-        by_step.setdefault(int(inst["step"]), Counter())[inst["spec"]] += 1
-    step_meta = {int(s["step"]): s for s in result.steps}
-    steps_sorted = sorted(set(by_step) | set(step_meta))
-    first = steps_sorted[0] if steps_sorted else 0
-    per_step = []
-    for s in steps_sorted:
-        m = step_meta.get(s, {})
-        per_step.append({"step": s, "phase": "prefill" if s == first else "decode", "rows": m.get("rows"),
-                         "n_instances": sum(by_step.get(s, Counter()).values()), "computes": m.get("computes"),
-                         "spec_histogram": dict(sorted(by_step.get(s, Counter()).items())), "unsupported": m.get("unsupported"),
-                         "errors": m.get("errors"), "seconds": m.get("seconds")})
-    tokens = {str(r): [int(t) for _, t in v] for r, v in result.sampled.items()}
-    sampled_steps = {str(r): [int(s) for s, _ in v] for r, v in result.sampled.items()}
-    requests = []
-    hdr_reqs = list(getattr(result, "requests", None) or ((header.workload or {}).get("requests") if header else None) or [])
-    for r in hdr_reqs:
-        rid = getattr(r, "request_id", None) if not isinstance(r, dict) else r.get("request_id")
-        ptl = getattr(r, "prompt_token_ids", None) if not isinstance(r, dict) else r.get("prompt_token_ids")
-        mt = getattr(r, "max_tokens", None) if not isinstance(r, dict) else r.get("max_tokens")
-        requests.append({"request_id": rid, "prompt_len": len(ptl or []), "max_tokens": mt, "n_tokens": len(tokens.get(str(rid), []))})
-    opaque = sum(1 for e in result.errors if str(e.get("class", "")).lower() in ("opaque", "prescribed"))
-    return {
-        "schema": G.FOLD_SUMMARY_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
-        "profile": profile_name, "profile_id": profile.id, "with_program": with_program, "digest": result.digest, "spec": summ.get("spec"),
-        # the DECLARED construction the scope folded under (None = undeclared = indexed-read) and the pattern that did
-        "moe_construction": moe_construction, "moe_scope_pattern": scope_pattern, "sampler_construction": sampler_construction, "registered_values": registered_values,
-        "n_instances": len(result.instances), "n_steps": len(per_step), "unsupported": result.report.unsupported,
-        "unresolved": result.unresolved, "opaque_fallbacks": opaque, "errors": len(result.errors), "error_classes": summ.get("error_classes"),
-        "error_examples": summ.get("error_examples"), "unknown_roots": unknown, "root_classes": dict(classes), "unbound_roots": unbound,
-        "per_step": per_step, "tokens": tokens, "sampled_steps": sampled_steps, "requests": requests, "params": summ.get("params"),
-        "ret_type": summ.get("ret_type"), "memory": result.memory, "timings": result.timings, "seconds": round(time.time() - t0, 3),
-        "max_rss_gb": round(_max_rss_gb(), 3), "fold": summ,
-    }, result
-
-
-PROGRAM_SCHEMA = "verity-gen/program/v1"
-INSTANCES_SCHEMA = "verity-gen/instances/v1"
-INSTANCES_SCHEMA_V2 = "verity-gen/instances/v2"   # operand_refs: "p" runs + node-space PROGRESSIONS ["N", idx, lo, hi, dI, dL, dH, count]
-INSTANCES_FORM_ENV = "VERITY_INSTANCES_FORM"      # runs (default, v1) | progressions (v2); every reader accepts both (cb_a.compact.runs_from_file_items)
-
-
-def instances_form() -> str:
-    """The STORED form of `instances.jsonl` operand references.  `runs` = the record form
-    (every maximal run one item, the node-space K/V gathers listed run by run: 54 M items / 1.63 GB on a B8 1024/128 row); `progressions`
-    = the same references with the node space as compact progressions built from the fold's own Refs objects in O(1) per part (no
-    `runs()` expansion at write; ~3 % of the text), parameter-space runs unchanged.  Lossless either way.  The LIBRARY default stays `runs`
-    (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match phase ("compact
-    refs stay compact end to end": readers accept both forms)."""
-    v = settings.get(INSTANCES_FORM_ENV)
-    v = "runs" if v is None else v
-    if v not in ("runs", "progressions"):
-        raise SystemExit(f"{INSTANCES_FORM_ENV}={v!r}: expected runs | progressions")
-    return v
-
-
-def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path, journal_level: int = 9) -> dict:
-    """Freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.circuits.codec`,
-    digest == `fold_summary.digest`); `instances.jsonl` is the runtime-correspondence record the fold already holds in
-    memory -- one line per Compute instance (step, root event id, pattern, spec id, rows, operand/output `ViewDesc`s, and
-    the operand `Refs` as runs) -- and `accesses.jsonl.gz` the full memory-access journal (alloc / root / read / write /
-    move / token with event ids).  With these three files a checker can locate every
-    operand and result of every instance in the trusted record without importing the profile's patterns."""
-    import dataclasses
-    import gzip
-
-    from verity.circuits import codec
-    from verity.circuits.refs import runs
-
-    from verity_vllm.observe.events import ViewDesc
-
-    # the writer converts by SHAPE, not by a generic walk: a ViewDesc is six known fields (the
-    # same dict, in field order, that dataclasses.asdict + _jsonable produced), an operand_refs item is a list of a str and ints already
-    # (runs() / cb_a.compact.file_items_from_refs_json), so neither goes through _jsonable's per-element recursion (6.5 M calls on a 32k-instance
-    # fold, ~40 % of the writer; at B8 1024/128 the refs alone were 54 M runs x 4 elements).  Output bytes are unchanged (test_compact:
-    # test_persist_program_writer_is_byte_identical...); only the meta fields, which may carry non-JSON values, keep the generic conversion.
-    def view(v):
-        if type(v) is ViewDesc:
-            return {"alloc": int(v.alloc), "offset": int(v.offset), "shape": [int(s) for s in v.shape], "strides": [int(s) for s in v.strides],
-                    "dtype": v.dtype, "device": v.device}
-        return _jsonable(dataclasses.asdict(v)) if dataclasses.is_dataclass(v) and not isinstance(v, type) else _jsonable(v)
-
-    def run_items(rs):      # runs(): [(space, idx, lo, hi), ...] -> the stored lists, ints coerced exactly as _jsonable's tolist() did
-        return [[r[0], int(r[1]), int(r[2]), int(r[3])] for r in rs]
-
-    written: dict[str, Any] = {}
-    if result.program is not None:
-        desc = getattr(result, "descriptor", None)
-        if desc is None:      # a result without the fold's own encoding (older producer): encode here, and the digest must agree
-            desc = codec.encode_program(result.program)
-            digest = codec.program_digest(desc)
-            if result.digest and digest != result.digest:
-                raise SystemExit(f"program.json digest {digest[:16]} != fold digest {result.digest[:16]}")
-        else:                 # the descriptor `_finish` digested: one encoding, program.json's digest is the fold's by construction
-            digest = result.digest or codec.program_digest(desc)
-        n_root_nodes = len(result.program.root.body.nodes)
-        n_input_nodes = n_root_nodes - len(result.body.nodes)
-        doc = {"schema": PROGRAM_SCHEMA, "profile": profile_name, "log": str(log_path), "digest": digest,
-               "n_input_nodes": n_input_nodes, "n_instances": len(result.body.nodes), "program": desc,
-               # the fold's root-parameter layout by NAME (prompt_<i> / seed_<i> / peers_<i> / weights, in parameter order = Input
-               # node order for homogeneous parameters) and, on a tensor-parallel rank fold, rank/world + the `peers_<i>` field tables
-               # (step, k, kind, site, rows, N, leaf offset) -- cb_a.compare locates every peer leaf range from these, never by guessing
-               "params": [[n, repr(t)] for n, t in (getattr(result, "params", None) or ())],
-               "tp": getattr(result, "tp", None), "peers_layout": _jsonable(getattr(result, "peers_layout", None) or []),
-               "witness_layout": _jsonable(getattr(result, "witness_layout", None) or []),   # the witness parameters by name
-               "supplied": _jsonable(getattr(result, "supplied", None) or {})}   # a `registered_values` fold's, with `input_nodes`
-        p = run_dir / "program.json"
-        _ptext = json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n"
-        p.write_text(_ptext)
-        written["program"] = {"path": str(p), "bytes": p.stat().st_size, "digest": digest, "n_input_nodes": n_input_nodes}
-        del _ptext
-    p = run_dir / "instances.jsonl"
-    # the header carries the request table (fold order = prompt parameter order `prompt_<i>` of program.json) with each
-    # request's prompt length and number of SERVED samples, and every instance line its `request`/`position` attribution
-    # (`fold._attribution`; X-09's `meta` channel reads exactly these keys -- without them here the record never carried them and the
-    # decomposition always fell through to the data-flow / row-count channels).
-    reqs_tab = []
-    sampled = getattr(result, "sampled", None)   # request id -> its served samples; a fold of no sampler has none
-    for i, r in enumerate(getattr(result, "requests", None) or []):
-        rid = r.get("request_id")
-        prompt, served = r.get("prompt_token_ids"), sampled.get(rid) if sampled else None
-        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": len(prompt) if prompt else 0,
-                         "served_samples": len(served) if served else 0, "max_tokens": r.get("max_tokens")})
-    _form = instances_form()
-    if _form == "progressions":
-        from verity_vllm.program.compact import file_items_from_refs as _file_items
-    with p.open("w") as f:
-        line = json.dumps({"schema": INSTANCES_SCHEMA_V2 if _form == "progressions" else INSTANCES_SCHEMA, "profile": profile_name,
-                           "digest": result.digest, "n_instances": len(result.instances),
-                           "note": "root-circuit node of instance k = n_input_nodes + k (program.json)", "requests": reqs_tab,
-                           # how operand_refs items are stored: "runs" = every maximal run ["space", idx, lo, hi]; "progressions" =
-                           # node- and parameter-space progressions ["N"|"P", idx, lo, hi, dI, dL, dH, count] (cb_a.compact.runs_from_file_items)
-                           "operand_refs_form": _form}) + "\n"
-        f.write(line)
-        _dumps = json.dumps
-        for m in result.instances:
-            node = result.body.nodes[m["node"]] if result.body is not None and m.get("node") is not None else None
-            rec = {k: m.get(k) for k in ("node", "step", "event", "resolution", "pattern", "spec", "row", "rows", "name", "hint", "request", "position")}
-            if m.get("operand_roots"):
-                rec["operand_roots"] = m["operand_roots"]     # per-operand weight names (multi-weight Computes)
-            if m.get("collective"):
-                rec["collective"] = m["collective"]           # kind/step/k/site/rank/world + the peers field the row reads
-            rec = _jsonable(rec)                              # the meta fields only (small; may carry tuples / numpy scalars / objects)
-            operand_views, output_views = m.get("operand_views"), m.get("output_views")   # an instance may list no view of a side
-            rec["operand_views"] = [view(v) for v in operand_views] if operand_views else []
-            rec["output_views"] = [view(v) for v in output_views] if output_views else []
-            if node is not None:
-                if _form == "progressions":   # from the fold's own Refs objects: no runs() expansion, no to_json() tree
-                    rec["operand_refs"] = [_file_items(arg.refs) for arg in node.args]   # (== file_items_from_refs_json(refs.to_json()))
-                else:
-                    rec["operand_refs"] = [run_items(runs(arg.refs)) for arg in node.args]
-            f.write(_dumps(rec, separators=(",", ":")) + "\n")
-    # no compact sidecar is written beside the files of record: a producer-written copy in the record's own directory is prover input
-    # the checker cannot authenticate; the compact STORED form above is the file of record itself.
-    written["instances"] = {"path": str(p), "bytes": p.stat().st_size, "n": len(result.instances), "operand_refs_form": _form}
-    acc = getattr(result, "accesses", None) or []
-    if acc:
-        p = run_dir / "accesses.jsonl.gz"
-        # the journal is 22 % of the fold phase at B8 1024/128 (161 s: jsonable + dumps + gzip; 237 MB) and no
-        # Match-pipeline stage reads it (the regression fixtures pin it).  The fold worker under row_pod's
-        # MATCH_PIPELINE=shared compresses it at `journal_level` 1 (same lines, ~4x less compressor time, a larger file).
-        with gzip.open(p, "wt", compresslevel=journal_level) as f:
-            for r in acc:
-                # the journal entry (fold._journal): view -> the six fields, refs -> its runs() lists, everything else by the generic conversion;
-                # key order is the entry's own (unchanged bytes)
-                r2 = {}
-                for k, v in r.items():
-                    if k == "view":
-                        r2[k] = view(v) if v is not None else None
-                    elif k == "refs":     # under `progressions` a Refs is stored compact too (a transposed weight read: ~1e6 runs)
-                        r2[k] = None if v is None else _file_items(v) if _form == "progressions" and not isinstance(v, list) else run_items(v if isinstance(v, list) else runs(v))
-                    else:
-                        r2[str(k)] = _jsonable(v)
-                f.write(_dumps(r2, separators=(",", ":")) + "\n")
-        written["accesses"] = {"path": str(p), "bytes": p.stat().st_size, "n": len(acc)}
-    return written
 
 
 def fold_worker(a: Options) -> int:
@@ -1086,7 +740,7 @@ def fold_worker(a: Options) -> int:
     if log is None or profile is None or summary is None:
         raise SystemExit(f"--worker fold needs --{next(req for req in ('log', 'profile', 'out') if getattr(a, req) is None)}")
     # process-level; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     doc, result = fold_summary_result(log, profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None), registered_values=bool(getattr(a, "registered_values", False)))
     out = Path(summary)
@@ -1099,67 +753,3 @@ def fold_worker(a: Options) -> int:
                 doc["n_instances"], doc["n_steps"], doc["unresolved"], len(doc["unknown_roots"]), doc["max_rss_gb"],
                 f"  persisted={sorted(doc['persisted'])}" if doc.get("persisted") else "")
     return 0
-
-
-# ---------------------------------------------------------------------------------------------------------
-# the root's `run` Inputs
-# ---------------------------------------------------------------------------------------------------------
-
-def run_input_bindings(address_map: dict, identities: list[dict], *, rank: int = 0) -> dict:
-    """Each request's `run` Input batches of the workload root, bound to the committed `run_values` identities of the required
-    manifest (`identities`, `RUN_FAMILY`, rank `rank`).  `run` (`RUN_PARAM`) is a Record of one `Array<leaves, Value<1>>` per field, so
-    the root holds it as one Input batch per field in field order (`workload.request_component`), `request[<id>].run[<k>]` (`run`
-    alone for one field), whose gates `WorkloadProgram.address_map` gives; field k is the request's row whose `leaves` are the k-th
-    of its `run`, and its batch has one gate a leaf.  A request whose rows don't tile its `run` batch by batch, or whose rows the map
-    has no `run` for, is refused by name and binds nothing.
-    -> {"bindings": [{request_id, input, field, gates, identity, engine_step}], "refused": [str]}"""
-    batches: dict[str, list[tuple[int, str, int, int]]] = defaultdict(list)
-    for r in address_map["requests"]:
-        for i in r["inputs"]:
-            name = str(i["name"])
-            if name == RUN_PARAM or (name.startswith(RUN_PARAM + "[") and name.endswith("]") and name[len(RUN_PARAM) + 1:-1].isdigit()):
-                k = int(name[len(RUN_PARAM) + 1:-1]) if name != RUN_PARAM else 0
-                batches[f"r{int(r['index'])}"].append((k, str(i["global"]), int(i["gates"][0]), int(i["gates"][1])))
-    fields: dict[str, list[dict]] = defaultdict(list)
-    for row in identities:
-        if row.get("family") == RUN_FAMILY and int(row.get("rank", 0)) == rank:
-            fields[str(row["request_id"])].append(row)
-    bindings: list[dict] = []
-    refused: list[str] = []
-    for rid in sorted(set(batches) | set(fields), key=lambda q: (len(q), q)):
-        rows = sorted(fields.get(rid, ()), key=lambda x: int(x["leaves"][0]))
-        held = sorted(batches.get(rid, ()))
-        if not held:
-            refused.append(f"{rid}: {len(rows)} run values and no `{RUN_PARAM}` Input in the address map")
-            continue
-        spans = [(int(x["leaves"][0]), int(x["leaves"][1])) for x in rows]
-        sizes = [(k, b - a) for k, _p, a, b in held]
-        tiled = len(spans) == len(held) and [k for k, _ in sizes] == list(range(len(held)))
-        lo = 0
-        for (a, b), (_k, n) in zip(spans, sizes):
-            tiled = tiled and a == lo and b - a == n
-            lo = b
-        if not tiled:
-            refused.append(f"{rid}: its run values' leaves {spans} don't tile its `{RUN_PARAM}` Input batches {sizes} (field k, one gate a leaf)")
-            continue
-        for row, (k, param, a, b) in zip(rows, held):
-            bindings.append({"request_id": rid, "input": param, "field": f"{row['op_path']}/{row['output_member']}", "gates": [a, b],
-                             "identity": canonical_identity(row), "engine_step": row.get("engine_step")})
-    return {"bindings": bindings, "refused": refused}
-
-
-_JSON_PRIMS = frozenset((str, int, float, bool, type(None)))
-
-
-def _jsonable(x: Any) -> Any:
-    if type(x) in _JSON_PRIMS:      # the common leaf, one set lookup (subclasses -- IntEnum, numpy scalars -- take the general path below)
-        return x
-    if isinstance(x, dict):
-        return {str(k): _jsonable(v) for k, v in x.items()}
-    if isinstance(x, (list, tuple)):
-        return [_jsonable(v) for v in x]
-    if isinstance(x, (str, int, float, bool)) or x is None:
-        return x
-    if hasattr(x, "tolist"):
-        return x.tolist()
-    return repr(x)

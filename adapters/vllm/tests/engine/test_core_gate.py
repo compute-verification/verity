@@ -7,13 +7,13 @@ import importlib.abc
 import queue
 import sys
 import threading
-import types
 from collections import deque
 from collections.abc import Sequence
 from typing import Any
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.engine import core_gate as cg
 from verity_vllm.pipeline import tick_plugin as tp
 
@@ -294,11 +294,10 @@ def test_a_gate_or_edge_is_refused_without_its_place_twice_or_after_a_core_made_
 
 
 def test_it_wraps_vllms_engine_core_classes_when_given_none(monkeypatch):
-    mod = types.ModuleType("vllm.v1.engine.core")
-    mod.__dict__.update(EngineCoreProc=type("EngineCoreProc", (Proc,), {}), EngineCore=type("EngineCore", (Proc,), {}))
-    for name in ("vllm", "vllm.v1", "vllm.v1.engine"):
-        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
-    monkeypatch.setitem(sys.modules, mod.__name__, mod)
+    fake = fake_vllm.install(monkeypatch)
+    mod = fake["vllm.v1.engine.core"]
+    fake.set("vllm.v1.engine.core:EngineCoreProc", type("EngineCoreProc", (Proc,), {}))
+    fake.set("vllm.v1.engine.core:EngineCore", type("EngineCore", (Proc,), {}))
     s = cg.EngineCoreGate()
     s.edge("cut", lambda core: None)
     try:

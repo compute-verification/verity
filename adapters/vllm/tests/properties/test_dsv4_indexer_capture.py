@@ -12,8 +12,6 @@ import contextlib
 import copy
 import hashlib
 import json
-import sys
-import types
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +22,7 @@ from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_indexer_twin as T
 from verity.definitions.registry import dsa
 
+from tests import fake_vllm
 from tests.properties import dsv4_indexer_capture_gpu as D4
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
@@ -542,11 +541,10 @@ def test_each_case_has_its_own_verdict() -> None:
 
 def _stub_vllm(monkeypatch, gate: dict) -> None:
     """vLLM's config module, the device gate and the environment stood in for; the env `run` sets restored after the test."""
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):
         monkeypatch.setenv(k, "")
     monkeypatch.setattr(D4.C, "gate", lambda *a: gate)

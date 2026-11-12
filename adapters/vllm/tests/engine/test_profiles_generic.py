@@ -328,3 +328,9 @@ def test_header_checks_hold_a_family_s_header_keys_and_only_where_it_declares_th
     assert FF.header_checks(neox, C, {"layer_norm_eps": 1e-5}) == []
     assert FF.header_checks(neox, C, {"layer_norm_eps": 1e-6}) == ["layer_norm_eps=1e-06 != C[EPS]=1e-05"]
     assert FF.header_checks({"model_type": "llama"}, C, {"layer_norm_eps": 1e-6}) == []
+
+
+@pytest.mark.parametrize("held", [None, {}, 0, "", False, []], ids=["null", "empty", "zero", "empty text", "false", "empty list"])
+def test_a_family_whose_header_keys_are_null_or_empty_checks_none(monkeypatch, held):
+    monkeypatch.setitem(FF.FAMILY_FACTS["gpt_neox"], "header_keys", held)
+    assert FF.header_checks({"model_type": "gpt_neox"}, {"EPS": 1e-5}, {"layer_norm_eps": 1e-6}) == []

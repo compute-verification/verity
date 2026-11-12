@@ -135,6 +135,24 @@ def test_a_slim_keep_is_held_to_its_sample_and_written_no_second_time(tmp_path: 
     assert site is r.seen["run"][0][0] and keep == {"picks": []}
 
 
+@pytest.mark.parametrize("commit", [{}, {"weight_registration": None}, {"weight_registration": {}}, {"weight_registration": {"root": None}}])
+def test_a_run_that_registered_no_weights_opens_its_tensors_against_no_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                            commit: dict[str, Any]) -> None:
+    r = Replay(tmp_path, monkeypatch)
+    r.row["commit"] = {"value_correspondence": {}} | commit
+    assert CPU.replay(OPTIONS) is True
+    assert r.seen["open_weights"] == ((r.bdir, {"names": [], "extra": {"model.rope": 0}}, None, "ck"), {"threads": 3})
+
+
+@pytest.mark.parametrize("tree", [{"names": []}, {"names": [], "extra": None}, {"names": [], "extra": {}}])
+def test_a_tree_that_lists_no_tensor_as_the_bundle_s_decides_the_run_with_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                               tree: dict[str, Any]) -> None:
+    r = Replay(tmp_path, monkeypatch)
+    (r.bdir / "weights" / "tree.json").write_text(json.dumps(tree))
+    assert CPU.replay(OPTIONS) is True
+    assert r.seen["open_weights"][0][1] == tree and r.seen["decide"][0][-1] == {}
+
+
 @pytest.mark.parametrize(("verdict", "code"), [(True, 0), (False, 3), (None, 3)])
 def test_the_command_exits_by_the_verdict(monkeypatch: pytest.MonkeyPatch, verdict: bool | None, code: int) -> None:
     warmed = []

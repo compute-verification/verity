@@ -32,6 +32,7 @@ from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.program.frontend.seed_rule import rid_entry
 from verity_vllm.program.prune import BATCHED, registered_form
+from verity_vllm.records import schema_ids as SID
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -104,7 +105,7 @@ def construction_version(rules, root: str | None = None) -> dict:
             b = f.read()
         files.append({"file": rel, "sha256": hashlib.sha256(b).hexdigest()})
         h.update(rel.encode() + b"\0" + b + b"\0")
-    return {"schema": "cb-a/aot-artifact/v1", "mechanism": "torch.export(strict=False) on meta + verity_vllm.program.frontend.derive (profile mode)",
+    return {"schema": SID.CONSTRUCTION_VERSION_SCHEMA, "mechanism": "torch.export(strict=False) on meta + verity_vllm.program.frontend.derive (profile mode)",
             "rules": [{"id": r.rule_id, "version": r.info.version} for r in rules], "sources_sha256": h.hexdigest(), "files": files}
 
 
@@ -342,7 +343,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         res_target_source = "declared"
     if target.numerics_profile != profile:
         target = target.with_overrides(numerics_profile=profile)  # `--profile` IS the vocabulary field of the target profile (one source)
-    res: dict = {"schema": "cb-a/derive_step/v3", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "wrapper": wrapper, "M": M, "pos0": pos0,
+    res: dict = {"schema": SID.DERIVE_STEP_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "wrapper": wrapper, "M": M, "pos0": pos0,
                  "LP": LP, "T": T, "C": cached, "eos": eos, "sampling": sampling, "profile": profile, "target": {"declared": target.to_json(), "declared_source": res_target_source},
                  # the tensor-parallel structural inputs: world size and WHICH rank this Program describes (rank-local computation,
                  # this rank's weight shards as its committed weight inputs, the other rank's collective partials as peer inputs)
@@ -663,7 +664,7 @@ def _write_manifest(out: str, res: dict) -> None:
         tr = json.load(f)
     tp, declared = res.get("tp"), res.get("declared_derived")   # None: a single-GPU Build, and one refused before it declared
     world, rank = (tp.get("world", 1), tp.get("rank", 0)) if tp else (1, 0)
-    m = {"schema": "cb-a/construction_manifest/v3", "utc": res.get("utc"), "wrapper": res.get("wrapper"),
+    m = {"schema": SID.CONSTRUCTION_MANIFEST_SCHEMA, "utc": res.get("utc"), "wrapper": res.get("wrapper"),
          # `sampling` is the row's declared policy (manifest / --sampling / default-by-omission), never a literal
          "structural_inputs": {"LP": res.get("LP"), "T": res.get("T"), "M": res.get("M"), "pos0": res.get("pos0"), "eos": res.get("eos"),
                                "sampling": res.get("sampling"), "tp": world, "rank": rank,
@@ -765,7 +766,7 @@ def _stop_arg(text: str | None) -> dict | None:
 
 def main(a: Options) -> int:
     # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     try:
         from verity_vllm.engine.profiles.devices import device_name
