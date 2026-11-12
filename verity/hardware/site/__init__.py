@@ -4,17 +4,19 @@ links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check a
 
 The Site is a tree of locations, each with its owner: the site at the root, its hosts, a host's devices, memory leaves
 by tier and bytes under a device or a host, and at the site the auditor's devices, its network certifiers and memory
-challengers (`PARENTS`). Links join two ends, each a location or `OUTSIDE`, with a capacity `beta` in bits a tick each
-way and a latency in ticks (`LINKS`). A network certifier is the leaf that splits an uplink: one link from a host to it,
-one from it to the outside. Hosts carry no compute: a device names its sheet by digest. A sheet (`Sheet`), a card, is
+challengers (`PARENTS`). Links join two ends, each a location or `OUTSIDE`, with a capacity `beta` in bits a second
+each way and a latency in the site's units of time (`LINKS`). A boundary link no certifier splits may say why none does
+(`unmediated`), and a link states no capacity only where it does; a site is mediated when no link says so
+(`Site.mediated`). A network certifier is the leaf that splits an uplink: one link from a host to it, one from it to the
+outside. Hosts carry no compute: a device names its sheet by digest. A sheet (`Sheet`), a card, is
 the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the SKU, the tensor clock and the peak
 rate of each operand class) and its memory figures (bits from device memory to the chip a tick, bits of on-chip state and
 bytes of device memory). The auditor's data sheets, public and looked up by SKU, are sheets too, whose figures are its
 estimate of the SKU's (`Auditor.estimate`); they come from the card files (`verity/hardware/cards/<sku>.toml`):
 `Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. A node's entry comes from its files too:
 `Registration.node_entry` reads a node file's table (`verity.hardware.nodes.load(kind)`), its GPU card's and the
-file's ways out (`verity.hardware.nodes.ways_out`), and registers each way out that has a rate, an interface or the
-storage path, as a boundary link that no certifier splits.
+file's ways out (`verity.hardware.nodes.ways_out`), and registers each way out, an interface or the storage path, as
+a boundary link that no certifier splits.
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -26,12 +28,12 @@ it fails (`REFUSALS`, the spec's `Registration.Refusal` in kebab case):
 | `previous` | the entry follows the log's head |
 | `duplicate-id` | no id is registered twice, `outside`'s included, and no sheet twice |
 | `unknown-ref` | each new location's parent and each new link's ends are registered |
-| `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity; each certifier splits exactly one uplink |
+| `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity or, where it says why no certifier splits it, at none; each certifier splits exactly one uplink |
 | `sheet-digest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
 | `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
-| `uncertified` | onsite: every boundary link is certified |
+| `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
 | `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
 
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `boundary`, `units`, `registered`) are functions of
@@ -77,6 +79,10 @@ REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "
 """The checks `check_registration` makes, in the order it makes them."""
 TICK = Fraction(1, 10 ** 9)
 """A tick, in seconds: a nanosecond."""
+NO_LINE_RATE = "no line rate stated"
+"""Why no certifier splits a node's interface that reads no line rate: `Registration.node_entry`'s `unmediated`."""
+STORAGE_PATH = "storage path"
+"""Why no certifier splits a node's storage path: `Registration.node_entry`'s `unmediated`."""
 
 
 class Malformed(ValueError):
@@ -368,12 +374,16 @@ class Loc:
 
 @dataclass(frozen=True)
 class Link:
-    """A link between two ends, with its capacity `beta` in bits a tick each way and its latency in ticks."""
+    """A link between two ends, with its capacity `beta` in bits a second each way and its latency in the site's units
+    of time. `unmediated` is, on a boundary link no certifier splits, the reason none does; None on every other link. A
+    link states no capacity (`beta` None) only where it carries `unmediated`: an interface that reads no line rate has
+    none, and no amount is read from it."""
 
     id: str
     ends: tuple[str, str]
-    beta: int
+    beta: int | None
     latency: int
+    unmediated: str | None = None
 
     def __post_init__(self) -> None:
         _str(self.id, "a link's id")
@@ -381,19 +391,23 @@ class Link:
             raise Malformed(f"link {self.id}: its ends are a pair")
         for e in self.ends:
             _str(e, f"link {self.id}'s end")
-        _nat(self.beta, f"link {self.id}'s beta")
+        if self.beta is not None:
+            _nat(self.beta, f"link {self.id}'s beta")
         _nat(self.latency, f"link {self.id}'s latency")
+        if self.unmediated is not None:
+            _str(self.unmediated, f"link {self.id}'s unmediated")
 
     def to_json(self) -> dict[str, Any]:
-        return {"beta": self.beta, "ends": list(self.ends), "id": self.id, "latency": self.latency}
+        return {"beta": self.beta, "ends": list(self.ends), "id": self.id, "latency": self.latency,
+                "unmediated": self.unmediated}
 
     @classmethod
     def of_json(cls, j: Any) -> Link:
-        j = _exactly(j, ("beta", "ends", "id", "latency"), "a link")
+        j = _exactly(j, ("beta", "ends", "id", "latency", "unmediated"), "a link")
         ends = _list(j["ends"], "a link's ends")
         if len(ends) != 2:
             raise Malformed("a link's ends: not two ends")
-        return cls(j["id"], (ends[0], ends[1]), j["beta"], j["latency"])
+        return cls(j["id"], (ends[0], ends[1]), j["beta"], j["latency"], j["unmediated"])
 
 
 @dataclass(frozen=True)
@@ -457,7 +471,7 @@ class Registration:
         return Entry(self.head, tuple(sheets), tuple(locs), tuple(links))
 
     def node_entry(self, node: Mapping[str, Any], card: Mapping[str, Any], host: str, site: str = "site",
-                   tick: Fraction = TICK, certifier: tuple[str, str] | None = None, *,
+                   certifier: tuple[str, str] | None = None, *,
                    ways: Iterable[tuple[str, int | None, bool]]) -> Entry:
         """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`),
         the table of the GPU card it names (`verity.hardware.cards.load(sku)`) and the file's ways out
@@ -465,22 +479,23 @@ class Registration:
         at site `site`. It adds the sheet `Sheet.of_file` gives the card and the site's location, each only where the
         log has none; the host; the node's `device.count` devices `host/gpuI`, each naming the sheet, with one `hbm`
         leaf `host/gpuI/hbm` holding the sheet's device memory, whole; for each `memory.NAME` of the file a leaf
-        `host/NAME` under the host, at the tier and bytes it states, in the file's order; and for each way out that
-        has a rate a link under the way's id from the host to the outside, at the bits that rate moves in a tick of
-        `tick` seconds, rounded up, and latency 0. The file names no host, so the caller gives its id, and every id
-        under it starts with that.
+        `host/NAME` under the host, at the tier and bytes it states, in the file's order; and for each way out a link
+        under the way's id from the host to the outside, at the way's bits a second, and latency 0. The file names no
+        host, so the caller gives its id, and every id under it starts with that.
 
         A way out is an interface of the file's (`host/NAME`) or its storage path (`host/storage`: what the disks
         that are not the server's own carry off the node, at the rate that bounds the node's disks together). Its link
-        is a boundary link that no certifier splits: it says what is so of a node none of whose ways out the
-        auditor's hardware sits on, and `onsite` refuses it by `uncertified`. An interface with no rate registers no
-        link. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with a rate exactly
+        is a boundary link that no certifier splits, and it says what is so of a node none of whose ways out the
+        auditor's hardware sits on. Two kinds say why no certifier splits them (`Link.unmediated`, its text from the
+        way's kind): an interface that reads no line rate, whose link states no capacity (`NO_LINE_RATE`), and the
+        storage path, which no certifier can sit on (`STORAGE_PATH`). A site with either is not mediated, and `onsite`
+        takes their reasons. An interface with a rate says none, so `onsite` refuses it by `uncertified` until a
+        certifier splits it. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with a rate exactly
         where its table states one, then the storage path's, with its rate, exactly where the file has a `storage`
         table. The rates' values are the caller's, read by `ways_out`.
 
         **An entry always registers a link out.** A file that states no interface is refused: its entry would not say
-        how the node reaches the outside. So is a file none of whose ways out has a rate, whose entry would hold no
-        link out.
+        how the node reaches the outside.
 
         `certifier` is the id and the key of a network certifier of the auditor's that stands in front of the node
         without splitting its interface (a process on another machine, say). It adds the certifier under the site and
@@ -525,16 +540,12 @@ class Registration:
                             "outside; read the node's interfaces on a node of its kind (`ip route; ip -6 route; "
                             "ethtool IF` under `research run --on NODE`) and state each one the routes name as an "
                             "interface.NAME table: its rate, or where it reads none its driver and what was read")
-        if all(bw is None for _, bw, _ in out):
-            raise Malformed(f"no way out the node file states has a rate ({[name for name, _, _ in out]}), so its "
-                            "entry would hold no link out and nothing would bound what leaves the node; state the "
-                            "line rate of an interface that reads one, or the storage path its disks ride")
         rates = [bw for _, bw, split in out if split and bw is not None]
         if certifier is not None and not rates:
             raise Malformed(f"no interface the node file states has a rate ({[name for name, _, split in out if split]})"
                             ", so a network certifier's links would have none: an interface that reads no line rate "
-                            "registers no link and takes no certifier. Register the node without one")
-        sheet = Sheet.of_file(card, tick)
+                            "takes no certifier. Register the node without one")
+        sheet = Sheet.of_file(card)
         if sheet.sku != sku:
             raise Malformed(f"the node's devices are {sku!r}, and the card given is {sheet.sku!r}'s")
         before, digest = Site.of_log(self), sheet.digest()
@@ -544,13 +555,14 @@ class Registration:
             locs += [Loc(gpu, "device", host, sheet=digest),
                      Loc(f"{gpu}/hbm", "memory", gpu, tier="hbm", bytes=sheet.mem)]
         locs += [Loc(f"{host}/{name}", "memory", host, tier=tier, bytes=n) for name, tier, n in leaves]
-        links = [Link(name, (host, OUTSIDE), math.ceil(bw * tick), 0) for name, bw, _ in out if bw is not None]
+        links = [Link(name, (host, OUTSIDE), bw, 0, STORAGE_PATH if not split else None if bw else NO_LINE_RATE)
+                 for name, bw, split in out]
         if certifier is not None:
             try:
                 device, key = certifier
             except (TypeError, ValueError):
                 raise Malformed(f"`certifier` is a network certifier's id and its key, not {certifier!r}") from None
-            beta = math.ceil(sum(rates) * tick)
+            beta = sum(rates)
             locs.append(Loc(device, "certifier", site, "auditor", key=key))
             links += [Link(f"{host}/{device}", (host, device), beta, 0),
                       Link(f"{device}/{OUTSIDE}", (device, OUTSIDE), beta, 0)]
@@ -656,6 +668,11 @@ class Site:
     def sheet_of(self, x: Loc) -> Sheet | None:
         """A device's sheet: the first registered sheet under the digest it names."""
         return next((k for k in self.sheets if k.digest() == x.sheet), None)
+
+    @property
+    def mediated(self) -> bool:
+        """No link of the site says that no certifier splits it."""
+        return all(k.unmediated is None for k in self.links)
 
     def held(self, i: str) -> int:
         """The bytes of the memory leaves directly under `i`."""
@@ -795,8 +812,10 @@ def _first(composite: str, s: Site, head: str, e: Entry, auditor: Auditor) -> tu
                 or (x.kind == "memory") != (x.tier is not None)):
             return "kind", f"{x.kind} {x.id} can't sit under {x.parent!r}, or has a tier exactly when it isn't memory"
     for k in e.links:
-        if k.ends[0] == k.ends[1] or not any(t.joins(k, a, b) for a, b in LINKS) or k.beta == 0:
-            return "kind", f"link {k.id} can't join {list(k.ends)} at capacity {k.beta}"
+        if (k.ends[0] == k.ends[1] or not any(t.joins(k, a, b) for a, b in LINKS) or k.beta == 0
+                or (k.beta is None and k.unmediated is None)):
+            return "kind", (f"link {k.id} can't join {list(k.ends)} at capacity {k.beta}: a link states no capacity "
+                            "only where it says why no certifier splits it (unmediated)")
     for x in t.locs:
         if x.kind == "certifier" and (far := [t.kind(n) for n in t.far(x.id)]) not in (["host", "outside"],
                                                                                        ["outside", "host"]):
@@ -823,8 +842,9 @@ def _first(composite: str, s: Site, head: str, e: Entry, auditor: Auditor) -> tu
             return "owner", f"{x.kind} {x.id} isn't one of the auditor's own devices"
         if x.kind not in AUDITOR_KINDS and x.owner != "prover":
             return "owner", f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s"
-    if composite == "onsite" and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)]):
-        return "uncertified", f"boundary links {bare} have no certifier splitting them"
+    if composite == "onsite" and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)
+                                           and k.unmediated is None]):
+        return "uncertified", f"boundary links {bare} have no certifier splitting them and say no reason none does"
     if composite == "onsite":
         reached = t.reached()
         if far := sorted({h for x in t.locs if x.kind == "memory" and (h := t.host_of(x)) is not None} - set(reached)):

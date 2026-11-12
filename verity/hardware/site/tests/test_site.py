@@ -11,8 +11,9 @@ from fractions import Fraction
 
 import pytest
 
-from verity.hardware.site import (OPERAND_CLASSES, OUTSIDE, REFUSALS, Auditor, DeviceFigures, Entry, Link, Loc, Malformed,
-                              Refused, Registration, Sheet, Site, check, check_registration, genesis, refusal)
+from verity.hardware.site import (NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, REFUSALS, STORAGE_PATH, Auditor, DeviceFigures,
+                                  Entry, Link, Loc, Malformed, Refused, Registration, Sheet, Site, check,
+                                  check_registration, genesis, refusal)
 from verity.configuration.wire import canonical
 
 GHZ = 10 ** 9
@@ -61,6 +62,7 @@ ENTRIES = {
     "no-parent": ("unknown-ref", Entry("", locs=(Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=1),))),
     "device-at-site": ("kind", Entry("", locs=(Loc("gpu9", "device", "site0", sheet=A),))),
     "loop-link": ("kind", Entry("", links=(Link("l9", ("node0", "node0"), 1, 1),))),
+    "unrated-link": ("kind", Entry("", links=(Link("u9", ("node0", OUTSIDE), None, 1),))),
     "unknown-sku": ("sheet-digest", Entry("", sheets=(replace(SHEET_A, figures=replace(SHEET_A.figures,
                                                                                        sku="sim-int8-z")),))),
     "unregistered-sheet": ("sheet-digest", Entry("", locs=(Loc("gpu9", "device", "node0", sheet="00"),))),
@@ -77,8 +79,8 @@ ENTRIES = {
                                                  links=(Link("n01", ("node0", "node1"), 1, 1),))),
 }
 """A later entry for each check `check_registration` makes, with the refusal it draws, and one it accepts: the lifecycle
-example's 14, its `not-the-sheet` now a sheet of an SKU the auditor has no data sheet for, and `doubled-clock`, the
-figures check the example doesn't make yet."""
+example's 14, its `not-the-sheet` now a sheet of an SKU the auditor has no data sheet for, `doubled-clock`, the
+figures check the example doesn't make yet, and `unrated-link`, a link that states no capacity and no reason."""
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
 """The entries a remote site accepts: it has no certifier and no memory challenger to hold its links to."""
 
@@ -94,7 +96,7 @@ def grown(composite: str = "onsite") -> Registration:
 
 
 def test_every_check_has_a_case() -> None:
-    assert len(ENTRIES) == 15 and {name for name, _ in ENTRIES.values()} - {None} == set(REFUSALS)
+    assert len(ENTRIES) == 16 and {name for name, _ in ENTRIES.values()} - {None} == set(REFUSALS)
 
 
 @pytest.mark.parametrize("composite", ["onsite", "remote"])
@@ -272,8 +274,8 @@ def _rate(v: object) -> dict[str, object]:
 
 
 PORTS = {"eth0": _rate(25 * 10 ** 9), "eth1": _rate("1000000000.5")}
-"""A node file's `interface` tables: two interfaces that leave the node, at 25 bits a tick and at a rate that is not
-a whole number of bits a tick."""
+"""A node file's `interface` tables: two interfaces that leave the node, at 25 Gbit/s and at a rate that is not a whole
+number of bits a second."""
 NODE_FILE = {"node": "sim-file-x2", "device": {"sku": "sim-file", "count": _entry(2)}, "host": {"sku": "sim-host"},
              "memory": {"dram": {"tier": "dram", "bytes": _entry(1 << 39)},
                         "vda": {"tier": "disk", "bytes": _entry(1 << 40)}}, "interface": PORTS}
@@ -284,7 +286,13 @@ UNRATED = {"eth0": {"driver": "virtio_net", "source": "it reads no rate"}}
 STORAGE = {"leaves": ["vda"], "source": "the disk is a network disk"}
 """A node file's `storage` table: the path the disk that is not the server's own carries bytes off the node by."""
 DISKS = 5_293_292_307_696
-"""A rate that bounds a host's disks together, in bits a second: 5293.29... bits a tick."""
+"""A rate that bounds a host's disks together, in bits a second."""
+ETH0, ETH1 = (Link("n0/eth0", ("n0", OUTSIDE), 25 * 10 ** 9, 0), Link("n0/eth1", ("n0", OUTSIDE), 1_000_000_001, 0))
+"""`NODE_FILE`'s interfaces as links: each at its rate in whole bits a second, rounded up, saying no reason."""
+PATH = Link("n0/storage", ("n0", OUTSIDE), DISKS, 0, STORAGE_PATH)
+"""The storage path's link: at the rate that bounds the disks together, saying why no certifier splits it."""
+QUIET = Link("n0/eth0", ("n0", OUTSIDE), None, 0, NO_LINE_RATE)
+"""An interface that reads no line rate as a link: no capacity, and why no certifier splits it."""
 
 
 def _ways(host: str = "n0", storage: int | None = None, eth0: int | None = 25 * 10 ** 9) -> tuple[tuple, ...]:
@@ -293,6 +301,12 @@ def _ways(host: str = "n0", storage: int | None = None, eth0: int | None = 25 * 
     none may, where the file states one."""
     ports = ((f"{host}/eth0", eth0, True), (f"{host}/eth1", 1_000_000_001, True))
     return ports if storage is None else (*ports, (f"{host}/storage", storage, False))
+
+
+def _reached(entry: Entry, site: str = "site") -> Entry:
+    """`entry` with a memory challenger under `site` linked to host `n0`."""
+    return replace(entry, locs=(*entry.locs, Loc("chal0", "challenger", site, "auditor")),
+                   links=(*entry.links, Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000)))
 
 
 def test_a_nodes_entry_from_its_files() -> None:
@@ -311,7 +325,7 @@ def test_a_nodes_entry_from_its_files() -> None:
         Loc("n0/gpu1", "device", "n0", sheet=sheet.digest()), Loc("n0/gpu1/hbm", "memory", "n0/gpu1", **hbm),
         Loc("n0/dram", "memory", "n0", tier="dram", bytes=1 << 39),
         Loc("n0/vda", "memory", "n0", tier="disk", bytes=1 << 40)],
-        [Link("n0/eth0", ("n0", OUTSIDE), 25, 0), Link("n0/eth1", ("n0", OUTSIDE), 2, 0)])
+        [ETH0, ETH1])
     log = check_registration(log, first, auditor)
     second = log.node_entry(NODE_FILE, CARD_FILE, "n1", "site0", ways=_ways("n1"))
     assert second.sheets == () and [x.id for x in second.locs[:2]] == ["n1", "n1/gpu0"]
@@ -324,55 +338,52 @@ def test_a_nodes_entry_from_its_files() -> None:
     bare = onsite.node_entry(NODE_FILE, CARD_FILE, "n0", ways=_ways())
     assert bare.locs[0] == Loc("site", "site") and refusal(onsite, bare, auditor) == "uncertified"
     assert refusal(onsite, replace(bare, links=()), auditor) == "challenger-reach"
-    reached = replace(bare, locs=(*bare.locs, Loc("chal0", "challenger", "site", "auditor")),
-                      links=(Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000),))
-    assert refusal(onsite, reached, auditor) is None
+    assert refusal(onsite, _reached(replace(bare, links=())), auditor) is None
 
 
 def test_a_nodes_interfaces_are_its_own_boundary_links() -> None:
-    """Each interface that states a rate is a link from the host to the outside at its rate over a tick, rounded up,
-    at latency 0: a boundary link with no certifier at an end, which remote accepts and onsite refuses by
-    `uncertified`, with a challenger reaching the host or without one. An interface whose table states no rate
-    registers no link."""
+    """Each interface that states a rate is a link from the host to the outside at its rate, at latency 0, saying no
+    reason: a boundary link with no certifier at an end, which remote accepts and onsite refuses by `uncertified`,
+    with a challenger reaching the host or without one. An interface whose table states no rate is a link that states
+    no capacity and says why no certifier splits it, which onsite takes: it names only the rated interface. A site
+    with that link is not mediated."""
     node, auditor = NODE_FILE, Auditor.of_files([CARD_FILE], TOLERANCE, {"chal0": ""})
     entry = Registration("remote").node_entry(node, CARD_FILE, "n0", ways=_ways())
-    assert entry.links == (Link("n0/eth0", ("n0", OUTSIDE), 25, 0), Link("n0/eth1", ("n0", OUTSIDE), 2, 0))
-    quiet = {**node, "interface": {**PORTS, **UNRATED}}
+    assert entry.links == (ETH0, ETH1) and (entry.links[0].unmediated, entry.links[1].unmediated) == (None, None)
+    quiet = {**node, "interface": {**UNRATED, "eth1": PORTS["eth1"]}}
     unrated = Registration("remote").node_entry(quiet, CARD_FILE, "n0", ways=_ways(eth0=None))
-    assert unrated.links == entry.links[1:] and unrated.locs == entry.locs
-    assert Registration("remote").node_entry(node, CARD_FILE, "n0", tick=Fraction(1, 10 ** 6),
-                                             ways=_ways()).links[1].beta == 1001
+    assert unrated.links == (QUIET, ETH1) and unrated.locs == entry.locs
     site = check(Registration("remote").append(entry), auditor)
     assert site.boundary("n0") == list(entry.links) and not any(site.certified(k) for k in site.links)
+    assert site.mediated and not check(Registration("remote").append(unrated), auditor).mediated
     onsite = Registration("onsite")
-    bare = onsite.node_entry(node, CARD_FILE, "n0", ways=_ways())
-    reached = replace(bare, locs=(*bare.locs, Loc("chal0", "challenger", "site", "auditor")),
-                      links=(*bare.links, Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000)))
-    for e in (bare, reached):
-        with pytest.raises(Refused, match="n0/eth0.*n0/eth1") as refused:
-            check_registration(onsite, e, auditor)
-        assert refused.value.name == "uncertified"
+    for file, ways, bare in ((node, _ways(), "['n0/eth0', 'n0/eth1']"), (quiet, _ways(eth0=None), "['n0/eth1']")):
+        e = onsite.node_entry(file, CARD_FILE, "n0", ways=ways)
+        for at in (e, _reached(e)):
+            with pytest.raises(Refused) as refused:
+                check_registration(onsite, at, auditor)
+            assert refused.value.name == "uncertified" and bare in refused.value.detail, refused.value
 
 
 def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None:
     """With a certifier's id and key the entry also holds the certifier under the site and a certified way out, host
-    to certifier and certifier to outside, each at the interfaces' rates summed and rounded up once. The interfaces'
-    own links stay, so onsite still refuses the entry by `uncertified`, naming them and not the certified link."""
+    to certifier and certifier to outside, each at the interfaces' rates summed. The interfaces' own links stay, so
+    onsite still refuses the entry by `uncertified`, naming them and not the certified link."""
     node = NODE_FILE
     auditor = Auditor.of_files([CARD_FILE], TOLERANCE, {"cert0": "dummy-cert0-key", "chal0": ""})
     plain = Registration("remote").node_entry(node, CARD_FILE, "n0", "site0", ways=_ways())
     entry = Registration("remote").node_entry(node, CARD_FILE, "n0", "site0", certifier=("cert0", "dummy-cert0-key"),
                                               ways=_ways())
     assert entry.locs == (*plain.locs, Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key"))
-    assert entry.links == (*plain.links, Link("n0/cert0", ("n0", "cert0"), 27, 0),
-                           Link("cert0/outside", ("cert0", OUTSIDE), 27, 0))
+    assert entry.links == (*plain.links, Link("n0/cert0", ("n0", "cert0"), 26_000_000_001, 0),
+                           Link("cert0/outside", ("cert0", OUTSIDE), 26_000_000_001, 0))
     site = check(Registration("remote").append(entry), auditor)
     assert [(k.id, site.certified(k)) for k in site.boundary("n0")] == [
         ("n0/eth0", False), ("n0/eth1", False), ("n0/cert0", True)]
+    assert site.mediated
     onsite = Registration("onsite")
     stood = onsite.node_entry(node, CARD_FILE, "n0", "site0", certifier=("cert0", "dummy-cert0-key"), ways=_ways())
-    reached = replace(stood, locs=(*stood.locs, Loc("chal0", "challenger", "site0", "auditor")),
-                      links=(*stood.links, Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000)))
+    reached = _reached(stood, "site0")
     with pytest.raises(Refused) as refused:
         check_registration(onsite, reached, auditor)
     assert refused.value.name == "uncertified" and "n0/eth1" in refused.value.detail
@@ -383,40 +394,81 @@ def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None
 
 def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> None:
     """A file that states a storage path registers it as a link from the host to the outside, after the interfaces',
-    at the path's rate over a tick, rounded up. A certifier's two links stay at the interfaces' rates summed: the
-    path's rate is not in the sum, and no certifier is at an end of its link. So onsite refuses the entry by
-    `uncertified` with the interfaces' bare links or without them, naming the path's, and accepts it only without
-    that link too. Where the file's one interface has no rate, the path's link is the entry's only one, and a
-    certifier named on the node is refused."""
+    at the path's rate, saying why no certifier splits it. A certifier's two links stay at the interfaces' rates
+    summed: the path's rate is not in the sum, and no certifier is at an end of its link. So onsite refuses the entry
+    by `uncertified` with the interfaces' bare links, naming them and not the path's, and accepts it without them,
+    the path's link and all; the site is then not mediated. Where the file's one interface has no rate, the entry's
+    links are that interface's, with no capacity, and the path's, and a certifier named on the node is refused."""
     node = {**NODE_FILE, "storage": STORAGE}
     auditor = Auditor.of_files([CARD_FILE], TOLERANCE, {"cert0": "dummy-cert0-key", "chal0": ""})
-    path = Link("n0/storage", ("n0", OUTSIDE), 5294, 0)
     plain = Registration("remote").node_entry(node, CARD_FILE, "n0", ways=_ways(storage=DISKS))
-    assert plain.links == (Link("n0/eth0", ("n0", OUTSIDE), 25, 0), Link("n0/eth1", ("n0", OUTSIDE), 2, 0), path)
+    assert plain.links == (ETH0, ETH1, PATH)
     assert plain.locs == Registration("remote").node_entry(NODE_FILE, CARD_FILE, "n0", ways=_ways()).locs
     entry = Registration("remote").node_entry(node, CARD_FILE, "n0", certifier=("cert0", "dummy-cert0-key"),
                                               ways=_ways(storage=DISKS))
-    assert entry.links == (*plain.links, Link("n0/cert0", ("n0", "cert0"), 27, 0),
-                           Link("cert0/outside", ("cert0", OUTSIDE), 27, 0))
+    assert entry.links == (*plain.links, Link("n0/cert0", ("n0", "cert0"), 26_000_000_001, 0),
+                           Link("cert0/outside", ("cert0", OUTSIDE), 26_000_000_001, 0))
     site = check(Registration("remote").append(entry), auditor)
     assert [(k.id, site.certified(k)) for k in site.boundary("n0")] == [
         ("n0/eth0", False), ("n0/eth1", False), ("n0/storage", False), ("n0/cert0", True)]
-    assert site.far("cert0") == ["n0", OUTSIDE]
+    assert site.far("cert0") == ["n0", OUTSIDE] and not site.mediated
     onsite = Registration("onsite")
-    stood = onsite.node_entry(node, CARD_FILE, "n0", certifier=("cert0", "dummy-cert0-key"), ways=_ways(storage=DISKS))
-    reached = replace(stood, locs=(*stood.locs, Loc("chal0", "challenger", "site", "auditor")),
-                      links=(*stood.links, Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000)))
+    reached = _reached(onsite.node_entry(node, CARD_FILE, "n0", certifier=("cert0", "dummy-cert0-key"),
+                                         ways=_ways(storage=DISKS)))
+    with pytest.raises(Refused) as refused:
+        check_registration(onsite, reached, auditor)
+    assert refused.value.name == "uncertified" and "['n0/eth0', 'n0/eth1']" in refused.value.detail
     stored = replace(reached, links=tuple(k for k in reached.links if k not in plain.links[:2]))
-    for e, bare in ((reached, "['n0/eth0', 'n0/eth1', 'n0/storage']"), (stored, "['n0/storage']")):
-        with pytest.raises(Refused) as refused:
-            check_registration(onsite, e, auditor)
-        assert refused.value.name == "uncertified" and bare in refused.value.detail
-    assert refusal(onsite, replace(stored, links=tuple(k for k in stored.links if k != path)), auditor) is None
+    assert refusal(onsite, stored, auditor) is None
+    assert not check(onsite.append(stored), auditor).mediated
     one = {**node, "interface": UNRATED}
     alone = (("n0/eth0", None, True), ("n0/storage", DISKS, False))
-    assert Registration("remote").node_entry(one, CARD_FILE, "n0", ways=alone).links == (path,)
+    lone = Registration("remote").node_entry(one, CARD_FILE, "n0", ways=alone)
+    assert lone.links == (QUIET, PATH)
+    assert refusal(onsite, _reached(onsite.node_entry(one, CARD_FILE, "n0", ways=alone)), auditor) is None
     with pytest.raises(Malformed, match=r"no interface the node file states has a rate \(\['n0/eth0'\]\).*takes no certifier"):
         Registration("remote").node_entry(one, CARD_FILE, "n0", certifier=("cert0", "dummy-cert0-key"), ways=alone)
+
+
+def test_an_interface_that_reads_no_rate_is_registered_without_a_capacity() -> None:
+    """A node whose one way out is an interface that reads no line rate registers that link alone: it states no
+    capacity and says why no certifier splits it, so remote and onsite (with a challenger) accept it and the site is
+    not mediated."""
+    one = {**NODE_FILE, "interface": UNRATED}
+    auditor = Auditor.of_files([CARD_FILE], TOLERANCE, {"chal0": ""})
+    entry = Registration("remote").node_entry(one, CARD_FILE, "n0", ways=[("n0/eth0", None, True)])
+    assert entry.links == (QUIET,) and not check(Registration("remote").append(entry), auditor).mediated
+    onsite = Registration("onsite")
+    assert refusal(onsite, _reached(onsite.node_entry(one, CARD_FILE, "n0", ways=[("n0/eth0", None, True)])),
+                   auditor) is None
+
+
+@pytest.mark.parametrize("composite", ["onsite", "remote"])
+def test_a_link_states_no_capacity_only_with_its_reason(composite: str) -> None:
+    """`kind` refuses a link that states no capacity and says no reason, and a link at a capacity of 0 whatever it
+    says, and takes a link with no capacity that says why no certifier splits it. Onsite, `uncertified` refuses a bare
+    boundary link that says no reason and takes it with one; remote takes both. A site with a link that says a reason
+    is not mediated."""
+    log, auditor = first(composite), AUDITOR[composite]
+    unrated, bare = Link("u9", ("node0", OUTSIDE), None, 1), Link("u9", ("node0", OUTSIDE), 1, 1)
+    assert refusal(log, log.entry(links=[unrated]), auditor) == "kind"
+    assert refusal(log, log.entry(links=[replace(bare, beta=0, unmediated="a stand-in")]), auditor) == "kind"
+    assert refusal(log, log.entry(links=[bare]), auditor) == ("uncertified" if composite == "onsite" else None)
+    for k in (replace(unrated, unmediated="a stand-in"), replace(bare, unmediated="a stand-in")):
+        assert refusal(log, entry := log.entry(links=[k]), auditor) is None
+        assert Site.of_log(log).mediated and not check(log.append(entry), auditor).mediated
+
+
+def test_a_links_encoding_is_pinned() -> None:
+    """A link's JSON writes `beta` and `unmediated` as null where it has none, as the Lean's `Link.toJson` does."""
+    unrated = Link("eth0", ("node0", OUTSIDE), None, 0, "a stand-in")
+    bare = Link("eth0", ("node0", OUTSIDE), 1_000_000_000, 0, "a stand-in")
+    assert canonical(unrated.to_json()) == (
+        b'{"beta":null,"ends":["node0","outside"],"id":"eth0","latency":0,"unmediated":"a stand-in"}')
+    assert canonical(bare.to_json()) == (
+        b'{"beta":1000000000,"ends":["node0","outside"],"id":"eth0","latency":0,"unmediated":"a stand-in"}')
+    for k in (unrated, bare, replace(bare, unmediated=None)):
+        assert Link.of_json(k.to_json()) == k
 
 
 def _node_entry(certifier: tuple[str, str] | None = None, ways: object = None, **tables: object) -> Entry:
@@ -458,6 +510,9 @@ def _sheet_json(**f: object) -> Sheet:
     (lambda: Loc("x", "memory", "node0", tier="dram", bytes=-1), "bytes"),
     (lambda: Link("l", ("a", "b", "c"), 1, 1), "pair"),
     (lambda: Link("l", ("a", "b"), 1, -1), "latency"),
+    (lambda: Link("l", ("a", "b"), -1, 1), "beta"),
+    (lambda: Link("l", ("a", "b"), 1, 1, 7), "unmediated"),
+    (lambda: Link.of_json({"beta": 1, "ends": ["a", "b"], "id": "l", "latency": 0}), "keys"),
     (lambda: Registration("hybrid"), "composite"),
     (lambda: Entry.of_json({**LATER.to_json(), "format": "verity/registration/information/v1"}), "format"),
     (lambda: Registration.of_json({"composite": "onsite", "entries": [], "extra": 1}), "keys"),
@@ -485,8 +540,6 @@ def _sheet_json(**f: object) -> Sheet:
     (lambda: _node_entry(memory={}), "no dram and no disk leaf.*lsmem -b --summary=only; lsblk -b -d"),
     (lambda: _node_entry(interface={}, ways=()), "states no interface, so its entry would not say how.*ip route"),
     (lambda: _node_entry(interface={}, storage=STORAGE, ways=[("n0/storage", DISKS, False)]), "states no interface"),
-    (lambda: _node_entry(interface=UNRATED, ways=[("n0/eth0", None, True)]),
-     r"no way out the node file states has a rate \(\['n0/eth0'\]\).*would hold no link out"),
     (lambda: _node_entry(("cert0", "k"), interface=UNRATED, storage=STORAGE,
                          ways=[("n0/eth0", None, True), ("n0/storage", DISKS, False)]), "takes no certifier"),
     (lambda: _node_entry(ways=()), r"the ways out given are \[\].*give `verity.hardware.nodes.ways_out\(node, host\)`"),

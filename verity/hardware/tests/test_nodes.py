@@ -2,11 +2,12 @@
 machine, address or provider. Every memory leaf states the most its bytes are read back at, a ceiling, which
 `nodes.leaves` gives in whole bits a second beside the rate that bounds a tier's leaves together. `nodes.ways_out`
 gives a node's ways out: its interfaces, each with its line rate or with none where it reads none, and its storage
-path, at the rate that bounds its disks together. A node whose file states its host's DRAM and disks, an interface
-and a way out with a rate gives a log accepted for `remote` against the auditor the card files give; a file without
-them gives no entry. Every entry holds a link out, and `onsite` refuses each node by `uncertified`: an interface's
-link and the storage path's are the node's own ways out, which no certifier splits, with a network certifier standing
-in front of the node or without one."""
+path, at the rate that bounds its disks together. A node whose file states its host's DRAM and disks and an interface
+gives a log accepted for `remote` against the auditor the card files give; a file without them gives no entry. Every
+entry holds a link for each way out, none of which a certifier splits. The storage path's link and that of an interface
+that reads no line rate say why (`Link.unmediated`), so neither node's site is mediated; an interface with a rate says
+nothing, so `onsite` refuses the eight-card node by `uncertified`, with a network certifier standing in front of the
+node or without one, and takes the H200 node once a challenger reaches its host."""
 
 from __future__ import annotations
 
@@ -19,8 +20,8 @@ import pytest
 from verity.errors import InvalidArtifact
 from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
-from verity.hardware.site import (OUTSIDE, TICK, TIERS, Auditor, Entry, Link, Loc, Malformed, Refused, Registration,
-                                  Sheet, check, refusal)
+from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, STORAGE_PATH, TIERS, Auditor, Entry, Link, Loc, Malformed,
+                                  Refused, Registration, Sheet, check, refusal)
 
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
@@ -143,10 +144,10 @@ def test_what_a_node_file_never_holds_is_matched(text: str) -> None:
 @pytest.mark.parametrize("kind", READ)
 def test_remote_accepts_a_nodes_log(kind: str) -> None:
     """The site holds the node's count of devices, each naming the sheet its card file gives and holding that sheet's
-    device memory, whole, and the host's leaves at the file's bytes, by tier. Its links are the file's ways out that
-    have a rate, each from the host to the outside at its rate over a tick, rounded up: an interface at the line rate
-    its table states, then the storage path at the rate that bounds the node's disks together. They are boundary
-    links, none of them certified, and every node has one."""
+    device memory, whole, and the host's leaves at the file's bytes, by tier. Its links are the file's ways out, each
+    from the host to the outside at its rate in bits a second: an interface at the line rate its table states, or at
+    none, saying so, where it reads none, then the storage path at the rate that bounds the node's disks together,
+    saying it is the storage path. They are boundary links, none of them certified, and neither site is mediated."""
     node = nodes.load(kind)
     sheet = Sheet.of_file(cards.load(node["device"]["sku"]))
     count, leaves = int(cards.number(node["device"]["count"])), node.get("memory", {}).values()
@@ -155,45 +156,45 @@ def test_remote_accepts_a_nodes_log(kind: str) -> None:
     assert all(site.sheet(d) == sheet and site.held(d) == sheet.mem for d in site.units)
     assert site.tiers(HOST) == {"hbm": count * sheet.mem} | {
         tier: sum(int(cards.number(leaf["bytes"])) for leaf in leaves if leaf["tier"] == tier) for tier in ("dram", "disk")}
-    ports = [Link(f"{HOST}/{name}", (HOST, OUTSIDE), math.ceil(cards.number(port["rate"]) * TICK), 0)
-             for name, port in node["interface"].items() if "rate" in port]
-    path = Link(f"{HOST}/storage", (HOST, OUTSIDE), math.ceil(nodes.leaves(node, HOST)[1]["disk"] * TICK), 0)
-    assert site.links == (*ports, path) and len(ports) == (kind in WIRED)
+    ports = [Link(f"{HOST}/{name}", (HOST, OUTSIDE), math.ceil(cards.number(port["rate"])), 0) if "rate" in port
+             else Link(f"{HOST}/{name}", (HOST, OUTSIDE), None, 0, NO_LINE_RATE)
+             for name, port in node["interface"].items()]
+    path = Link(f"{HOST}/storage", (HOST, OUTSIDE), nodes.leaves(node, HOST)[1]["disk"], 0, STORAGE_PATH)
+    assert site.links == (*ports, path) and len(ports) == 1
     assert site.boundary(HOST) == list(site.links) and not any(site.certified(k) for k in site.links)
+    assert not site.mediated
 
 
 @pytest.mark.parametrize("kind", sorted(set(READ) - set(WIRED)))
-def test_a_node_whose_interface_reads_no_rate_registers_its_storage_path_alone(kind: str) -> None:
-    """The H200 node's one interface reads no line rate, so it registers no link, and the entry's one link out is the
-    storage path's. `onsite` refuses the node by `uncertified`, naming that link, before and once a challenger
-    reaches the host, and accepts the same entry without it, so the path's link is all it refuses. A network
-    certifier named on the node is refused under either composite: its links would have no rate."""
+def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(kind: str) -> None:
+    """The H200 node's one interface reads no line rate, so its link states no capacity and says so, and the storage
+    path's link says it is the storage path. Each says why no certifier splits it, so `onsite` refuses neither: it
+    refuses the node by `challenger-reach` alone, and accepts it once a challenger reaches the host, with a site that
+    is not mediated. A network certifier named on the node is refused under either composite: its links would have
+    no rate."""
     assert [way.bw for way in nodes.ways_out(nodes.load(kind), HOST) if way.split] == [None]
     entry = log_of(kind, "onsite").entries[0]
-    assert [(k.id, k.ends) for k in entry.links] == [(f"{HOST}/storage", (HOST, OUTSIDE))]
-    for e in (entry, reached(entry)):
-        with pytest.raises(Refused) as refused:
-            check(Registration("onsite", (e,)), auditor(**{CHALLENGER: "dummy-key"}))
-        assert refused.value.name == "uncertified"
-        assert re.findall(rf"{HOST}/\w+", refused.value.detail) == [f"{HOST}/storage"]
-    inside = replace(reached(entry), links=reached(entry).links[1:])
-    assert refusal(Registration("onsite"), inside, auditor(**{CHALLENGER: "dummy-key"})) is None
+    assert [(k.id, k.beta, k.unmediated) for k in entry.links] == [
+        (f"{HOST}/eth0", None, NO_LINE_RATE), (f"{HOST}/storage", 5_293_292_307_696, STORAGE_PATH)]
+    keys = auditor(**{CHALLENGER: "dummy-key"})
+    assert refusal(Registration("onsite"), entry, keys) == "challenger-reach"
+    assert not check(Registration("onsite", (reached(entry),)), keys).mediated
     for composite in ("remote", "onsite"):
         with pytest.raises(Malformed, match=rf"no interface the node file states has a rate \(\['{HOST}/eth0'\]\).*"
-                                            "registers no link and takes no certifier"):
+                                            "takes no certifier"):
             log_of(kind, composite, CERTIFIER)
 
 
 @pytest.mark.parametrize("certifier", [None, CERTIFIER])
 @pytest.mark.parametrize("kind", WIRED)
 def test_onsite_refuses_a_nodes_own_ways_out(kind: str, certifier: tuple[str, str] | None) -> None:
-    """The node's interface and its storage path are boundary links that no certifier splits, so `onsite` refuses the
-    node by `uncertified`, naming both, before and once a challenger reaches the host, and with a network certifier
-    standing in front of the node as without one: the certifier's links are registered beside the node's own, which
-    stay."""
+    """The node's interface is a boundary link that no certifier splits and that says no reason, so `onsite` refuses
+    the node by `uncertified`, naming it and not the storage path, which says why, before and once a challenger
+    reaches the host, and with a network certifier standing in front of the node as without one: the certifier's
+    links are registered beside the node's own, which stay."""
     keys = {CHALLENGER: "dummy-key", **({} if certifier is None else {certifier[0]: certifier[1]})}
     entry = log_of(kind, "onsite", certifier).entries[0]
-    bare = sorted([*(f"{HOST}/{name}" for name in nodes.load(kind)["interface"]), f"{HOST}/storage"])
+    bare = [f"{HOST}/{name}" for name in nodes.load(kind)["interface"]]
     for e in (entry, reached(entry)):
         with pytest.raises(Refused) as refused:
             check(Registration("onsite", (e,)), auditor(**keys))
@@ -208,7 +209,7 @@ def test_a_certifier_links_to_one_host_and_the_outside(kind: str) -> None:
     the outside missing, or linked to a second host, is refused by `kind`."""
     log = log_of(kind, "remote", CERTIFIER)
     cert, entry = CERTIFIER[0], log.entries[0]
-    beta = math.ceil(sum(cards.number(port["rate"]) for port in nodes.load(kind)["interface"].values()) * TICK)
+    beta = sum(way.bw for way in nodes.ways_out(nodes.load(kind), HOST) if way.split)
     assert entry.links[-2:] == (Link(f"{HOST}/{cert}", (HOST, cert), beta, 0),
                                 Link(f"{cert}/{OUTSIDE}", (cert, OUTSIDE), beta, 0))
     assert check(log, auditor(**dict([CERTIFIER]))).far(cert) == [HOST, OUTSIDE]
@@ -224,8 +225,9 @@ def test_a_certifier_links_to_one_host_and_the_outside(kind: str) -> None:
 def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_certifier(kind: str) -> None:
     """No rule of the Site refuses a host that has a bare link out beside a certified one: `remote` accepts the entry
     with both. `onsite` refuses it by `uncertified`. With a certifier named and the interface's bare link taken out,
-    it still refuses the eight-card node, by the storage path's link alone: a certifier on the interface does not
-    mediate the disks. It accepts the same entry without any bare link, so the bare links are all it refuses."""
+    it accepts the eight-card node, storage path and all, since that link says why no certifier splits it: a
+    certifier on the interface does not mediate the disks, so the site is not mediated. Without the path's link too,
+    it is."""
     keys = {CHALLENGER: "dummy-key", **dict([CERTIFIER])}
     ports = [f"{HOST}/{name}" for name in nodes.load(kind)["interface"]]
     site = check(log_of(kind, "remote", CERTIFIER), auditor(**keys))
@@ -234,12 +236,9 @@ def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_cer
     entry = reached(log_of(kind, "onsite", CERTIFIER).entries[0])
     assert refusal(Registration("onsite"), entry, auditor(**keys)) == "uncertified"
     stored = replace(entry, links=tuple(k for k in entry.links if k.id not in ports))
-    with pytest.raises(Refused) as refused:
-        check(Registration("onsite", (stored,)), auditor(**keys))
-    assert refused.value.name == "uncertified"
-    assert re.findall(rf"{HOST}/\w+", refused.value.detail) == [f"{HOST}/storage"]
+    assert not check(Registration("onsite", (stored,)), auditor(**keys)).mediated
     certified = replace(entry, links=tuple(k for k in entry.links if OUTSIDE not in k.ends or CERTIFIER[0] in k.ends))
-    assert refusal(Registration("onsite"), certified, auditor(**keys)) is None
+    assert check(Registration("onsite", (certified,)), auditor(**keys)).mediated
 
 
 @pytest.mark.parametrize("kind", WIRED)
@@ -263,14 +262,16 @@ def test_the_quoted_bytes() -> None:
 
 
 def test_the_quoted_rates() -> None:
-    """Each node's links out, in bits a tick of a nanosecond: the eight-card node's one interface at 400 Gbit/s and
-    its storage path at the 5,584,738,461,544 bit/s that bound its disks together, and the H200 node's storage path
-    alone, at 5,293,292,307,696 bit/s, since its interface reads no rate. Each is rounded up to a whole bit a tick."""
+    """Each node's links out, in bits a second: the eight-card node's one interface at 400 Gbit/s and its storage path
+    at the 5,584,738,461,544 bit/s that bound its disks together, and the H200 node's interface at none, since it
+    reads no rate, and its storage path at 5,293,292,307,696 bit/s. The storage paths and the interface that reads no
+    rate say why no certifier splits them."""
     assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor()).links == (
-        Link(f"{HOST}/eth0", (HOST, OUTSIDE), 400, 0), Link(f"{HOST}/storage", (HOST, OUTSIDE), 5585, 0))
+        Link(f"{HOST}/eth0", (HOST, OUTSIDE), 400_000_000_000, 0),
+        Link(f"{HOST}/storage", (HOST, OUTSIDE), 5_584_738_461_544, 0, "storage path"))
     assert check(log_of("h200-sxm-141gb-x1", "remote"), auditor()).links == (
-        Link(f"{HOST}/storage", (HOST, OUTSIDE), 5294, 0),)
-    assert (5585, 5294) == (math.ceil(5_584_738_461_544 / 10 ** 9), math.ceil(5_293_292_307_696 / 10 ** 9))
+        Link(f"{HOST}/eth0", (HOST, OUTSIDE), None, 0, "no line rate stated"),
+        Link(f"{HOST}/storage", (HOST, OUTSIDE), 5_293_292_307_696, 0, "storage path"))
 
 
 def test_the_quoted_ways_out() -> None:
@@ -514,12 +515,12 @@ def test_a_server_whose_disks_are_its_own_has_no_storage_link(tmp_path, monkeypa
     (tmp_path / "x.toml").write_text(body(PORT, disk="nvme0n1"), encoding="utf-8")
     monkeypatch.setattr(nodes, "NODES", tmp_path)
     assert nodes.ways_out(nodes.load("x"), HOST) == (nodes.Way(f"{HOST}/eth0", 25 * 10 ** 9, True),)
-    assert log_of("x", "remote").entries[0].links == (Link(f"{HOST}/eth0", (HOST, OUTSIDE), 25, 0),)
+    assert log_of("x", "remote").entries[0].links == (Link(f"{HOST}/eth0", (HOST, OUTSIDE), 25 * 10 ** 9, 0),)
     (tmp_path / "x.toml").write_text(body(PORT, PATH), encoding="utf-8")
     assert nodes.ways_out(nodes.load("x"), HOST) == (nodes.Way(f"{HOST}/eth0", 25 * 10 ** 9, True),
                                                      nodes.Way(f"{HOST}/storage", DISKS, False))
-    assert log_of("x", "remote").entries[0].links == (Link(f"{HOST}/eth0", (HOST, OUTSIDE), 25, 0),
-                                                      Link(f"{HOST}/storage", (HOST, OUTSIDE), 5294, 0))
+    assert log_of("x", "remote").entries[0].links == (Link(f"{HOST}/eth0", (HOST, OUTSIDE), 25 * 10 ** 9, 0),
+                                                      Link(f"{HOST}/storage", (HOST, OUTSIDE), DISKS, 0, STORAGE_PATH))
 
 
 def test_the_storage_paths_rate_is_the_host_card_givens(tmp_path, monkeypatch) -> None:
@@ -536,22 +537,20 @@ def test_the_storage_paths_rate_is_the_host_card_givens(tmp_path, monkeypatch) -
 @pytest.mark.parametrize(("tables", "refusal"), [
     ((), "states no interface, so its entry would not say how the node reaches the outside.*ip route"),
     ((PATH,), "states no interface, so its entry would not say how the node reaches the outside"),
-    ((UNRATED,), rf"no way out the node file states has a rate \(\['{HOST}/eth0'\]\).*would hold no link out.*"
-                 "state the line rate of an interface that reads one, or the storage path"),
 ])
 @pytest.mark.parametrize("composite", ["remote", "onsite"])
 def test_a_node_file_with_no_link_out_gives_no_entry(tmp_path, monkeypatch, composite: str, tables: tuple[str, ...],
                                                      refusal: str) -> None:
     """An entry always registers a link out. A file that states no interface gives none, with a storage path or
-    without one: its entry would not say how the node reaches the outside. A file whose only way out has no rate
-    gives none either: its entry would hold no link. Each loads, and the builder refuses it and says what to state.
-    The same file with a way out that has a rate gives an entry."""
+    without one: its entry would not say how the node reaches the outside. Each loads, and the builder refuses it and
+    says what to state. The same file with an interface gives an entry, one whose only way out has no rate too: its
+    link states no capacity and says why no certifier splits it."""
     (tmp_path / "x.toml").write_text(body(*tables), encoding="utf-8")
     monkeypatch.setattr(nodes, "NODES", tmp_path)
     with pytest.raises(Malformed, match=refusal):
         log_of("x", composite)
-    (tmp_path / "x.toml").write_text(body(UNRATED, PATH), encoding="utf-8")
-    assert [k.id for k in log_of("x", composite).entries[0].links] == [f"{HOST}/storage"]
+    (tmp_path / "x.toml").write_text(body(UNRATED), encoding="utf-8")
+    assert log_of("x", composite).entries[0].links == (Link(f"{HOST}/eth0", (HOST, OUTSIDE), None, 0, NO_LINE_RATE),)
 
 
 RATE = {"value": 25 * 10 ** 9, "unit": "bit/s", "mark": "measurement", "source": SOURCE}
