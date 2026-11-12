@@ -44,6 +44,6 @@ def run(args) -> int:
             lf = RT.least_filler(name, args.data, mix=mix, m=args.m, q=args.q, operands=args.operands,
                                  credit=args.credit, vector=args.vector or "")
             how = (f"{lf.per_word:g} a word (worst {pct(lf.core)}, γ {lf.gamma:.3f})" if lf.per_word is not None
-                   else f"none ≤ cap holds it (worst {pct(lf.core)})")
+                   else f"none in the sweep holds it (worst {pct(lf.core)})")
             print(f"    least {'+'.join(lf.mix)} filler that holds {mg.m*100:g}%: {how}")
     return 0
