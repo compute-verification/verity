@@ -2161,10 +2161,10 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     the ejected PR."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     q = world.queue()
-    q.eject(1, "held for Daniel's decision 10", "memory-accounting")
+    q.eject(1, "held for a decision", "memory-accounting")
     head = next(p.head for p in world.gh.open_prs() if p.number == 1)
     (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
-    assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
+    assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for a decision")
 
 
 def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):

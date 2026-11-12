@@ -4455,7 +4455,7 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert witness_codes(*witnessed(honest={"body": wbody("P.Other")}, unwitnessed={"P.sound": h})) == \
         ["witnesses.honest-uncovered"]
     assert A.unwitnessed_kept({**pol, "unwitnessed": {"P.sound": h}}, f, {}) == {}
-    half = {"type_hash": h, "missing": "nontrivial", "why": "PRF-212 / #4867: not yet closed"}
+    half = {"type_hash": h, "missing": "nontrivial", "why": "the nontrivial witness is not yet proved"}
     honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
     assert witness_codes(honest_only, f) == []
     assert A.unwitnessed_kept(honest_only, f, {}) == {"P.sound": half}
@@ -4630,7 +4630,7 @@ def test_an_unwitnessed_entry_of_a_restated_definition_fails():
     before = {**bare, "unwitnessed": {"P.sound": u}}
     assert witness_codes(before, f) == [] and A.unwitnessed_kept(before, f, {}) == keyed["unwitnessed"]
     assert witness_codes(before, g) == ["witnesses.unwitnessed-changed"] and A.unwitnessed_kept(before, g, {}) == {}
-    half = {"type_hash": h, "missing": "nontrivial", "why": "PRF-212: not yet closed"}
+    half = {"type_hash": h, "missing": "nontrivial", "why": "the nontrivial witness is not yet proved"}
     honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
     assert witness_codes(honest_only, f) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(honest_only, f, {}) == {}
