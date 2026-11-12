@@ -58,6 +58,7 @@ public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbersTables
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitNumbers
 public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitKS
+public import Proofs.Flock.SamplingGeneric.TwoOneWaitAvg
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.Refused
