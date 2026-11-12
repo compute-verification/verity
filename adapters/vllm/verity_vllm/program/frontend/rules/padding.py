@@ -394,6 +394,8 @@ class CacheRowWriteRule(StateRule):
                    emitted="(state) history row rebound; no gates")
 
 
-PADDING_RULES = [ConstScalarRule(), EqScalarRule(), BitNotRule(), BitAndRule(), SelectRule(), CacheRowWriteRule()]
+PADDING_TORCH_RULES = [ConstScalarRule(), EqScalarRule(), BitNotRule(), BitAndRule(), SelectRule()]
+PADDING_VLLM_RULES = [CacheRowWriteRule()]
+PADDING_RULES = PADDING_TORCH_RULES + PADDING_VLLM_RULES
 
-__all__ = ["PADDING_RULES"]
+__all__ = ["PADDING_RULES", "PADDING_TORCH_RULES", "PADDING_VLLM_RULES"]
