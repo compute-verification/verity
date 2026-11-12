@@ -54,7 +54,13 @@ counts every reservation whole.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
 live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
-lock is not in the line: it takes that slot whenever it frees.
+lock is not in the line: it takes that slot whenever it frees. A lane waiter whose ask (RUN_MEM_ENV) is over the memory free
+holds no one behind it: only memory keeps it from starting, so the waiters behind it go on, whatever they ask, and each
+starts once its own ask is free (`ahead`). It holds its place again once its ask fits in what is free and what the runs that
+came after it reserve (`passed_gb`): it would start if they ended, so nothing more passes it, and it waits only for runs
+that already hold a slot, however many that fit join behind it. A waiter with no ask keeps its place throughout: it
+reserves a slot's own mem= and nothing where there is none, never more than a run behind it would there, so no run fits
+where it doesn't.
 
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
@@ -90,7 +96,8 @@ that blocks it, if any, then a line for each of its windows open now or starting
 its comment's first words); then one line per live waiter, a priority one marked so. --json prints the same as one JSON
 object (`status_doc`), which `check.py --slots` reads from every machine. A check that came through here also names its run
 (RESEARCH_RUN_ID), the tree it checks (its working directory, which `research run` names by commit) and who asked (`--by
-NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in `check-NAME.who` beside the lock, with when it joined
+NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in `check-NAME.who` beside the lock, with its ticket's
+name and the GiB it reserves (which `passed_gb` reads), when it joined
 the line and when it took the slot, shown only while its pid holds the lock, so a hand-run `flock` is never shown as the
 check that came before it. A holder with no record of the slot's taking (that `flock`, a check an older slot.py started) is
 listed with when its process started, as that, and no time held: a check is one process from joining the line on, so its
@@ -138,10 +145,6 @@ SCOPE_ENV = "CHECK_SCOPE_UNIT"
 #: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`): a slot whose mem= is smaller waits for and reserves
 #: this instead (reserving only the slot's mem= would under-report the run in the ledger)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
-#: a lane waiter that asks at most this many GB (RUN_MEM_ENV) passes the lane waiters ahead of it that only memory keeps from
-#: starting: a 448 GB run at the head held 7 idle slots and every small check behind it. Small runs end and free
-#: their memory soon, so passing the head costs it little
-BACKFILL_MAX_GB = 32
 #: on a slot with peaks=N, the share `reserved_gb` counts of each unreached lane reservation past the N largest: about what a
 #: lane run holds of its reservation, averaged over the time it holds its slot. To measure it again, over a day of pool runs:
 #: the GiB-hours the runs held (each run's cgroup memory less its page cache, sampled in its resources.jsonl) over the
@@ -211,8 +214,8 @@ def _peaks(name: str, opts: dict[str, str]) -> dict:
 
 def lane_peaks(slots: list[dict]) -> dict:
     """`reserved_gb`'s peaks= for a pool as a whole, as keyword arguments: the largest peaks= of the slots a lane run may take
-    there, and none (every reservation whole) when one of them has no peaks=. A lane waiter's backfill and a placement's
-    count of the pool's free memory read it, so neither finds more free than any slot of the pool would."""
+    there, and none (every reservation whole) when one of them has no peaks=. A waiter's count of the line ahead (`ahead`) and
+    a placement's count of the pool's free memory read it, so neither finds more free than any slot of the pool would."""
     lane = [s.get("peaks") for s in slots if not s.get("trains")]
     return {"peaks": max(lane)} if lane and all(lane) else {}
 
@@ -782,7 +785,7 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
                    + (f"  peaks {s['peaks']}" if s.get("peaks") else "")
                    + f"  {held_text(s['holder'])}" + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
         out += [f"{s['name']}  {window_text(w)}" for w in s["upcoming"]]
-    return out + waiters(lock_dir / LINE, now, before)
+    return out + waiters(lock_dir / LINE, now, before, lambda name: passed_gb(name, lock_dir, proc))
 
 
 def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
@@ -790,7 +793,7 @@ def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
     if not SLOTS.exists():
         return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}", "slots": None, "waiters": []}
     return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}", "slots": slot_docs(parse(SLOTS.read_text()), SLOTS.parent, now, proc),
-            "waiters": waiting(SLOTS.parent / LINE, now)}
+            "waiters": waiting(SLOTS.parent / LINE, now, passed=lambda name: passed_gb(name, SLOTS.parent, proc))}
 
 
 def _when(who: dict, key: str, who_file: Path) -> datetime | None:
@@ -852,20 +855,24 @@ def held_text(h: dict | None) -> str:
     return f"held by pid {h['pid']}" + (f" {times}" if times else "") + (f" ({who})" if who else "") + f": {h['cmd']}"
 
 
-def waiters(line: Path, now: datetime, before: str | None = None) -> list[str]:
+def waiters(line: Path, now: datetime, before: str | None = None, passed: Callable[[str], float] | None = None) -> list[str]:
     """One line per live waiter in ``line`` (`waiting`)."""
-    return [waiter_text(w) for w in waiting(line, now, before)]
+    return [waiter_text(w) for w in waiting(line, now, before, passed)]
 
 
 def waiter_text(w: dict) -> str:
     return (f"waiting since {w['since']} ({w['minutes']} min)" + (" with priority" if w["priority"] else "") + f": pid {w['pid']}"
-            + (f" ({describe(w)})" if describe(w) else ""))
+            + (f" ({describe(w)})" if describe(w) else "")
+            + (f"; runs that came after it reserve {w['passed_gib']:g} GB of the {gib(w['mem_gb'])} GB it waits for"
+               if w.get("passed_gib") else ""))
 
 
-def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
+def waiting(line: Path, now: datetime, before: str | None = None, passed: Callable[[str], float] | None = None) -> list[dict]:
     """Each live waiter in ``line``, oldest first (priority ones first, as they take slots): since when and for how many
     minutes, whether with priority, and the pid, run, tree, asker and ask (`mem_gb`, the GB its run asks of its slot) its
-    ticket names; with `before` (a ticket's name), only those that came before it."""
+    ticket names; with `before` (a ticket's name), only those that came before it. With `passed` (`passed_gb`, by a ticket's
+    name), a lane waiter with an ask also names the GiB the runs that passed it reserve (`passed_gib`), where they reserve
+    any: `ahead` counts it again once its ask fits in that and what is free."""
     out = []
     for p in sorted(line.iterdir()) if line.is_dir() else []:
         if before is not None and p.name >= before:
@@ -885,9 +892,12 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
             os.close(fd)
         t = datetime.fromtimestamp(int(p.name.lstrip(PRIORITY).split("-")[0].split(RANKED)[-1]) / 1e9, timezone.utc)
         who = _read(p)
+        asks = isinstance(who.get("mem_gb"), (int, float)) and who["mem_gb"] > 0 and not p.name.startswith(PRIORITY)
+        gone = passed(p.name) if passed and asks else 0
         out.append({"since": f"{t:%Y-%m-%dT%H:%MZ}", "minutes": round((now - t).total_seconds() / 60),
                     "priority": p.name.startswith(PRIORITY), "pid": who.get("pid", int(p.name.split("-")[-1])),
-                    **{k: who[k] for k in ("run", "tree", "commit", "by", "twin", "mem_gb") if who.get(k)}})
+                    **{k: who[k] for k in ("run", "tree", "commit", "by", "twin", "mem_gb") if who.get(k)},
+                    **({"passed_gib": gone} if gone else {})})
     return out
 
 
@@ -913,11 +923,16 @@ def join(lock_dir: Path, priority: bool = False, who: dict | None = None, line: 
     return d / name, fd
 
 
-def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None) -> int:
+def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None,
+          passed: Callable[[str], float] | None = None) -> int:
     """How many live waiters came before `ticket`'s; a dead waiter's ticket is removed. With `free_gb` (the GiB free now, or a
     function read once, the first time a ticket ahead names an ask), a lane waiter whose ticket asks more than that is not
-    counted: only memory keeps it from starting, so it holds no one behind it (BACKFILL_MAX_GB). A priority waiter, or a ticket
-    that names no ask, always counts."""
+    counted: only memory keeps it from starting, so it holds no one behind it, whatever they ask (a run whose 72 GB were
+    free stood behind a head asking more than was free, and ten smaller runs behind it, beside 11 idle slots). With `passed`
+    (`passed_gb`, by a ticket's name) it counts again once its ask fits in what is free and what the runs that passed it
+    reserve: it would start if they ended, so nothing more passes it and it waits only for them, and a stream of runs that
+    fit can't keep it out. A priority waiter always counts, and so does a ticket that names no ask: that waiter reserves a
+    slot's own mem=, never more than a run behind it would there, so none fits where it doesn't."""
     n, free = 0, None
     for p in sorted(ticket.parent.iterdir()):
         if p.name >= ticket.name:
@@ -935,10 +950,27 @@ def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None) -> i
             asks = _asks(fd) if free_gb is not None and not p.name.startswith(PRIORITY) else 0.0
             if asks and free is None:
                 free = free_gb() if callable(free_gb) else free_gb
-            n += 0 if asks and asks > free else 1
+            n += 0 if asks and asks > free + (passed(p.name) if passed and asks > free else 0) else 1
         finally:
             os.close(fd)
     return n
+
+
+def passed_gb(ticket: str, lock_dir: Path, proc: Path = Path("/proc")) -> float:
+    """The GiB reserved by the lane runs that hold a slot of ``lock_dir`` and joined its line after the waiter whose ticket is
+    named ``ticket``: what the runs that passed it give back as they end. A holder's record (`check-NAME.who`) names its own
+    ticket and the GiB it reserved (`booked`), and counts only while its pid holds the slot's lock. Each counts whole, as a
+    run may reach what it reserved, also in a pool whose slots count the unreached part of it at a share (peaks=). Not
+    counted: what a run holds past or without a reservation, a priority check (its ticket sorts before every lane
+    waiter's), and a holder whose record names no ticket (an older slot.py's). Against those a waiter is passed for as
+    long as memory keeps it."""
+    gb = 0.0
+    for who_file in sorted(lock_dir.glob("check-*.who")):
+        who = _read(who_file)
+        if (isinstance(who.get("ticket"), str) and who["ticket"] > ticket and isinstance(who.get("reserves_gib"), (int, float))
+                and who.get("pid") == holder(who_file.with_suffix(".lock"), proc)):
+            gb += who["reserves_gib"]
+    return gb
 
 
 def _asks(fd: int) -> float:
@@ -1129,9 +1161,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             peeked = now()
             if state == "taken":
                 return gone(f"its twin took a slot first ({describe(info) or 'claimed'})")
-        n = ahead(ticket)
-        if n and not priority and asked_gb() <= BACKFILL_MAX_GB:
-            n = ahead(ticket, free_gb=lambda: memory_gb() - reserved_gb(**lane_peaks(slots)))
+        n = ahead(ticket, free_gb=lambda: memory_gb() - reserved_gb(**lane_peaks(slots)),
+                  passed=lambda name: passed_gb(name, SLOTS.parent))
         got = None if n else take([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem)], SLOTS.parent, now(),
                                   priority)
         if got and pair:
@@ -1162,7 +1193,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     took = f"{now():%Y-%m-%dT%H:%M:%SZ}"
     who = SLOTS.parent / f"check-{slot['name']}.who"
     tmp = who.with_name(f".{who.name}.{os.getpid()}")
-    tmp.write_text(json.dumps({**me, "joined": f"{joined:%Y-%m-%dT%H:%M:%SZ}", "took": took}) + "\n")
+    tmp.write_text(json.dumps({**me, "ticket": ticket.name, "reserves_gib": booked(slot) or 0,
+                               "joined": f"{joined:%Y-%m-%dT%H:%M:%SZ}", "took": took}) + "\n")
     tmp.chmod(0o664)
     os.replace(tmp, who)
     os.set_inheritable(fd, True)

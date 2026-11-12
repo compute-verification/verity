@@ -11,7 +11,9 @@
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
                                                  # on whole cores of its own, waiting on the node while none are free; or, when it starts
                                                  # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node);
-                                                 # a machine that can start no run is passed over, and the launch says which and why
+                                                 # a machine that can start no run is passed over, and the launch says which and why;
+                                                 # where it went and why is kept with the run: `inspect` prints it on the VM that launched
+                                                 # it, and the machine's request.json holds it (`auto`)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -1222,9 +1224,12 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
     kind's time as its --timeout. It then says when the run should start (`auto.expect`): a late one is warned in one line,
-    or under `auto.REFUSE` refused unless --accept-wait. The harness options it runs with, or None when it is refused (a late
-    run, `auto.Unplaceable`, or a GPU or quiet job while AUTO_NODE is down, held or starts no run, `auto.closed`). ``docs``
-    keeps what it read of the machines (`auto.read`): given them again, it places the job from them and asks no machine."""
+    or under `auto.REFUSE` refused unless --accept-wait. What it says of a job it places, where it sent it and why (what
+    AUTO_NODE and each pool answered, and whether the pool was the last resort) and when it should start, it keeps as
+    `ns.placed`, which the launch records (remote.launch's `auto`). The harness options it runs with, or None when it is
+    refused (a late run, `auto.Unplaceable`, or a GPU or quiet job while AUTO_NODE is down, held or starts no run,
+    `auto.closed`). ``docs`` keeps what it read of the machines (`auto.read`): given them again, it places the job from
+    them and asks no machine."""
     from . import auto
 
     docs = {} if docs is None else docs
@@ -1260,9 +1265,10 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
                 return None
             told = f"warning: {told}" + (f". {cut}" if cut else "")
     if target is None:
-        print(f"research run --on auto: queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", file=sys.stderr)
-        if told:
-            print(f"research run --on auto: {told}", file=sys.stderr)
+        ns.placed = {"machine": auto.AUTO_NODE, "pool": None,
+                     "said": [f"queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", *([told] if told else [])]}
+        for line in ns.placed["said"]:
+            print(f"research run --on auto: {line}", file=sys.stderr)
         return harness_opts
     machine, pool = target
     if remote.flag_value(harness_opts, "--timeout") is None:
@@ -1272,8 +1278,9 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
     ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
-    print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
-    print(f"research run --on auto: {told}", file=sys.stderr)
+    ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told]}
+    for line in ns.placed["said"]:
+        print(f"research run --on auto: {line}", file=sys.stderr)
     return harness_opts
 
 
@@ -1437,7 +1444,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
                             job_user=ns.job_user, job_namespaces=ns.job_namespaces, gpus=None if queue else ns.gpus,
-                            store_read=ns.store_read)
+                            store_read=ns.store_read, auto=getattr(ns, "placed", None))
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         ns.cannot_start = str(e) if isinstance(e, remote.CannotStart) else None
@@ -1972,6 +1979,8 @@ def cmd_inspect(argv: list[str]) -> int:
               + ("  (records shown are a cached copy; `research fetch` refreshes)" if rr.get("observed_utc") else "  (nothing fetched yet)"))
         if q := rr.get("queue"):
             print(f"queue     placed on {q.get('machine')} ({q.get('why')}); {q.get('phase')} phase")
+        for line in (rr.get("auto") or {}).get("said") or ():
+            print(f"auto      {line}")
     if sl := s.get("slot"):
         print(f"slot      {_slot_text(sl)}")
     if s["state"] in R.ACTIVE and (not s.get("remote_rec") or s["remote_rec"].get("remote_run_dir")):

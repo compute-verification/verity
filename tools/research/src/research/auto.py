@@ -98,11 +98,10 @@ NULL_DEVICE, GIT = "/dev/null", "git"
 NO_START = "no run starts there"
 #: the machines that may refuse one `--on auto` launch as machines that can start no run before the launch gives up
 TRIES = 3
-#: a pool whose line has waited this long beside a free slot is stalled on memory and takes no job (`_pool`), nor does one whose
-#: every fitting slot is idle and blocked with slot.py's memory reason, which contains MEMORY_BLOCK
+#: a pool where a waiter the job would stand behind (`_behind`) has waited this long beside a free slot is stalled on memory and
+#: takes no job (`_pool`), nor does one whose every fitting slot is idle and blocked with slot.py's memory reason, which contains
+#: MEMORY_BLOCK
 STALL_MIN, MEMORY_BLOCK = 5, " GB of memory free"
-#: slot.py's BACKFILL_MAX_GB: a run asking at most this many GB passes the lane waiters ahead that only memory keeps from starting
-BACKFILL_MAX_GB = 32
 #: a launch is on time when its run starts within this many minutes; one `expect` finds late is told so, or refused (REFUSE)
 START_WITHIN_MIN = 10
 #: how long a pool run holds its slot, in minutes, as `expect` takes it: the mean over the pools' runs, since a line of n runs
@@ -447,13 +446,14 @@ def _blocked(slot: dict, free_gb: Any, mem_gb: float) -> str | None:
     return None
 
 
-def _behind(ahead: list[dict], mem_gb: float, free_gb: float) -> list[dict]:
-    """The waiters of ``ahead`` a run asking ``mem_gb`` GB waits behind with ``free_gb`` GiB free, as slot.py counts them (its
-    `ahead`): all of them, but that a run asking at most BACKFILL_MAX_GB passes a lane waiter whose own ask is over what is
-    free. A priority waiter, or one whose ticket names no ask, is never passed."""
-    if mem_gb > BACKFILL_MAX_GB:
-        return ahead
-    return [w for w in ahead if w.get("priority") or not w.get("mem_gb") or w["mem_gb"] * 1e9 / 2 ** 30 <= free_gb]
+def _behind(ahead: list[dict], free_gb: float) -> list[dict]:
+    """The waiters of ``ahead`` a run that joins after them waits behind with ``free_gb`` GiB free, as slot.py counts them (its
+    `ahead`), whatever the run asks: all but a lane waiter whose own ask is over what is free, which only memory keeps from
+    starting. That one holds its place again once its ask fits in what is free and what the runs that passed it reserve
+    (its `passed_gib`, slot.py's `passed_gb` for the runs that hold slots; a run `_pool` starts behind it takes from what is
+    free what it adds to that, so it changes nothing). A priority waiter, or one whose ticket names no ask, is never passed."""
+    return [w for w in ahead if w.get("priority") or not w.get("mem_gb")
+            or w["mem_gb"] * 1e9 / 2 ** 30 <= free_gb + (w.get("passed_gib") or 0)]
 
 
 def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
@@ -501,13 +501,13 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
 
     stay, started = [], 0
     for w in waiters:
-        if _behind(stay, ask := w.get("mem_gb") or 0, left) or not take(ask):
+        if _behind(stay, left) or not take(w.get("mem_gb") or 0):
             stay.append(w)
         else:
             started += 1
-    ahead = _behind(stay, mem_gb, left)
-    # a waiter retries every 20 s (slot.py's POLL_S), so one that stays this long beside an idle slot waits on memory, and so
-    # would this job behind it (cpu-3's head asked 256 GB for hours while its other slots sat free)
+    ahead = _behind(stay, left)
+    # a waiter retries every 20 s (slot.py's POLL_S), so one that stays this long beside an idle slot waits on memory. One this
+    # job can't pass waits for what the runs that passed it hold, or for a slot's own mem=, and the job would wait behind it
     if idle and ahead and (head := max(w.get("minutes") or 0 for w in ahead)) >= STALL_MIN:
         raise Stalled(f"its line is stalled: a run has waited {head} min while slot {idle[0]['name']} is free, for more "
                       f"memory than the {left:g} GB free there", len(waiters))
