@@ -218,7 +218,10 @@ An auditor's host has no node file: `clock_drift(host, cards.load(sku))`, beside
 time base its device's clock reads (`kind = "timebase"`) and gives, by `drift.max`'s mark, the host's premise
 (`ClockPremise`: `ClockRateWithin(<host>, <drift.max>)`, the number, its mark and its source) or, for a `ceiling`, the
 figure `Auditor.drift` takes. A number marked `premise` never becomes that figure, so a row that reads a drift the
-auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is refused.
+auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is refused. A certifier
+`node_entry` adds states the drift of its host's clock (`clock=`, through `device_drift`: the figure, or none for a
+premise), `Auditor.of_files(..., clocks={device: clock})` holds the same, and `ClockPremise.premised(device)` is the
+device's `Account.Premised` (device, drift, premise).
 
 ~~~python
 from verity.hardware import cards, nodes
