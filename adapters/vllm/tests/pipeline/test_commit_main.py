@@ -34,6 +34,7 @@ pytest.importorskip("torch")
 import torch
 
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
+from verity_vllm.commit.step_rows import program_field
 from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline import cli, commit, source_identity
@@ -42,7 +43,8 @@ from verity_vllm.pipeline import commit_coins as CC
 Record = dict[str, Any]
 
 VOCAB = 16
-PROGRAM = hashlib.sha256(b"the stand-in engine's Program").digest()
+#: The stand-in engine's Program digest as the roots bind it; `commit` reads a served Build's through the same function.
+PROGRAM = program_field(hashlib.sha512(b"the stand-in engine's Program").hexdigest())
 PLUGIN = f"plugin:{__name__}:committer"
 PLUGIN_2 = f"plugin:{__name__}:committer_2"
 #: Two requests of unequal `max_tokens`: three engine steps a run, the last with one request.
