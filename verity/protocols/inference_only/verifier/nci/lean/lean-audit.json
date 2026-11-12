@@ -108,6 +108,11 @@
    "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
    "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
+  },
+  "NciCheck.DefinitionDigest": {
+   "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],
+   "except": [],
+   "why": "a Definition's digests are code: Lean core, the base package's bytes, canonical JSON and SHA-512 and the circuit format's step bound, nothing of the policy's check, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

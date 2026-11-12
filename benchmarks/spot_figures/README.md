@@ -128,6 +128,13 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     only where they cost less than its own (`optimize.two_stage_statements`). (A) and (A′) are plotted at each of the
     three, dark to light, and (B) at one machine's; each series gives Q, K0 and the shares of its proving in the
     registration's statements and on padding.
+  - A two-stage point's bound is for a deployment whose second stage has the coins its cells read first: on fewer it
+    refuses every honest run. Each two-stage exfiltration series carries them at every β (`second_stage.at_design`):
+    a sampled replay block's cells, the proof blocks sampled of them and the bytes they read first; the rounds of
+    2^20 bytes and the challenger's 64-byte coins that hold the first reads of K0 replay blocks, and the replay blocks
+    whose first reads one commitment of the challenger's holds (`challenger.MAX_COINS` coins); Lean's bound on the
+    chance the second stage then refuses an honest run at a first-stage coin the first stage accepts, K0·Σ_t k_t·2^−64
+    (`SpotFlock.secondDraw_refused_le_first`); and that bound added up over the replay blocks the scope samples.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's registration beside each, thin and dashed; (B) in
@@ -270,8 +277,8 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     prints beside them the gates as a count of the sample gives them: the blocks it checks (`--checked`, the
     sessions unless stated) times that. `--largest-classes` does the same by classes.
   - It prints the sums per sampled replay block, per run and over each monitoring period, marks each above 2^-100
-    (`--target`), gives the most gates that keep the collision term there, and beside them the term of the cap on
-    the extractor's waits at each cap, per run (`--waits-k`).
+    (`--target`), gives the most gates that keep the collision term there, and beside them the term of the limit on
+    the extractor's waits at each limit, per run (`--waits-k`).
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build

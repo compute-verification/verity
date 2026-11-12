@@ -159,6 +159,8 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     commit_scheme, rows = step_rows.NAME, True
     ends_source_steps = True
+    #: set by the first sampling step that binds a seed (`install`'s `sample`)
+    seed_bound_steps: int
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,

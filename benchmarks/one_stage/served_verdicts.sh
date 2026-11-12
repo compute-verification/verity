@@ -346,6 +346,11 @@
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node, under KEEP_CMD where it is set (run as
 # `bash -c KEEP_CMD _ ROOT` in TREE, before anything is built: the node's retention of ROOT, SERVE_ROOT's default
 # /workspace/research/vllm-served-verdicts); $OUT keeps the public records and every log, each in its public form.
+# V3C_COMPOSE_CACHE=DIR, with V3C_WARM_JOBS, keeps step 6's composed circuits in DIR in place of the window's own
+# directory: a kept compose cache, which outlives the window and its serve dir, so that a later window's warm and audit,
+# under the same tree and FLOCK_* environment, take each circuit they would compose the same and compose only the rest
+# (at `v3c_audit`). It holds every such template's circuit, one of which can be past 100 GB, for as long as it is kept:
+# no step here removes it or checks its room, and the run that names it finds the disk for it.
 set -uo pipefail
 if [ -n "${SETTINGS:-}" ]; then
   [ -f "$SETTINGS" ] && [ -r "$SETTINGS" ] || { echo "PREFLIGHT: SETTINGS=$SETTINGS is not a readable file" >&2; exit 3; }
@@ -684,10 +689,21 @@ EOF
 # none, its limit then its sessions'. A compose holds up to what the audit needs (V3C_AUDIT_MEM_GB, a 4,32,4 window's
 # Int8RowQuant at K 8,192), so N is what the run's memory takes. A warm that fails says so, and the audit composes what it
 # didn't keep.
+# V3C_COMPOSE_CACHE=DIR names that cache instead of $VW/compose-cache: a directory outside the window's, absolute or
+# refused (the warm and the audit run in TREE), which no step here removes. An entry is one template's circuit under
+# one key (`a5.compose_key`): the template, its Definition's program, its statement in the circuit record, the composing code
+# (compose_circuit.py, records_audit.py, the packages `compose_circuit.COMPOSERS`), the FLOCK_* lowering flags and
+# Python's and NumPy's versions, and not the window, whose partition and program are two values of the circuit's
+# META. So another window's warm and audit take the entries of the templates they share with the windows
+# composed into DIR before, at this tree and environment, and compose and keep the rest: the audit gets each circuit as
+# a link where its partition and program are the entry's (a copy on another file system than DIR's), else as a copy
+# bound to its own, the entry held to its pin as it is copied (`compose_circuit.cached`). A kept entry is trusted as the
+# tree is: staging takes a circuit's META, pin and class off the line its compose kept beside it, a drawn member's
+# circuit is held to that line before its prover reads it (`a5.held`), and nothing else says what a template's circuit is.
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
-    --compose-cache "$VW/compose-cache" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
+    --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
   local rc=$? why
   if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)
   else
@@ -720,7 +736,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/flock/prover/python:$TREE/adapters/vllm
   if [ -n "${V3C_WARM_JOBS:-}" ]; then
     v3c_warm
-    cache=(--compose-cache "$VW/compose-cache")
+    cache=(--compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}")
   fi
   if v3c_live; then  # the gate opens the run root once, ever, and a reserve joins the lane's open period: neither, first
     gl=$("$PY" "$SV" gate --gate "$(v3c_gate)" --lane "${H1_LANE:-vllm}" --main "$main" --root "$run" 2>&1); rc=$?
@@ -1476,6 +1492,10 @@ if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split
   [ -n "$V3C" ] || { say "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
   SPLIT=1
 fi
+case ${V3C_COMPOSE_CACHE:-/} in  # a kept compose cache: outside TREE, where the warm and the audit would put a relative path
+  /*) ;;
+  *) say "PREFLIGHT: V3C_COMPOSE_CACHE is the kept compose cache's directory, an absolute path (the warm and the audit run in the tree, where a relative one would put it), not $V3C_COMPOSE_CACHE: name it from /"; exit 3 ;;
+esac
 if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   [[ $V3C_WARM_JOBS =~ ^[1-9][0-9]*$ ]] \
     || { say "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a positive integer, not $V3C_WARM_JOBS"; exit 3; }

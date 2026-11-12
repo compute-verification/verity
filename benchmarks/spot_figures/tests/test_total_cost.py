@@ -340,7 +340,8 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     above the served bits, saying which term binds, a wider registration never above a narrower one, sampling more
     requests under a cap past them, and the patterns' form below the sets' wherever it doesn't reach the served bits;
     both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the captions name what each
-    rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
+    rests on and the lines the served bits bound at β = 1%; each two-stage point carries its second stage's coins and
+    Lean's bound on its refusing an honest run; and it renders.  It plans every
     configuration at four shares, about a minute on four workers, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
     served = out["scopes"][scope]["served_bits"]
@@ -384,6 +385,8 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     for name in ("tokens", "per_expert", "layer_of_token"):
         s = lines[name]
         assert all(0 < v < 1 for v in s["computed_proving"])
+        assert all(c["whole"] or (c["stages"] >= 1 and 0 < c["refusal"] == c["sample"] * c["sampled"] / 2.0 ** 64
+                                  and c["read"] > 64 * c["cells"]) for c in s["second_stage"])
         assert f"{t._share(s['computed_proving'][at])} of its sampled request's proving" in caps["exfiltration"]
     assert "everything the scope serves (" not in caps["infiltration"]
     assert "priced, not measured, a lower bound: the hashing alone" in caps["skipped_work"]

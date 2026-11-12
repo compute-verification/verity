@@ -47,7 +47,9 @@ Each configuration's two panels read one design, the one with the least exfiltra
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
 two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of a registration's sampled
 requests, its sessions padded to a public cap that every registration pays (`optimize.two_stage_statements`), each
-Definition taking whichever costs less.  `breakeven` gives each patterns'-form
+Definition taking whichever costs less.  Each two-stage point carries the coins its design's second stage reads first
+and Lean's bound on the chance it refuses an honest run on them (`second_stage`): the bound a point plots is for a
+deployment whose second stage has those coins, and on fewer it refuses every run.  `breakeven` gives each patterns'-form
 line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
 `lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
 Only that side is Lean's: Lean bounds a design's bits from above, so nothing certifies that a smaller β can't reach the
@@ -71,6 +73,7 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
+import second_stage
 from verity.protocols.spot import plancheck
 from verity.protocols.spot.optimize import Cell, leak_count, two_stage_design, two_stage_price
 
@@ -496,7 +499,8 @@ def _plan(row: dict | None) -> dict | None:
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
     exfiltration, which of the count and the served bits binds, the requests a registration samples and its cap (`REG`),
-    and the computed share of its design's proving.  A two-stage line's `form` and its registration's replay blocks
+    the computed share of its design's proving, and the coins its second stage reads with Lean's bound on the chance it
+    refuses an honest run (`second_stage.at_design`).  A two-stage line's `form` and its registration's replay blocks
     (`span`) come with it; with `lean`, Lean's check of each line's designs (`figure1.lean_check`, `figure1.lean_two`)."""
     name, m, g, budget, computed, form, span, lean = job
     served = f1.served_total(m)
@@ -524,7 +528,8 @@ def _point(job: tuple) -> dict:
     return {"exfiltration": {"y": min(count, served), "count": count,
                              "binds": "served" if served <= count else "count", "plan": _plan(row), **checked,
                              **{k: row[k] for k in REG},
-                             "computed_proving": computed_proving(list(g.cells), row, computed)},
+                             "computed_proving": computed_proving(list(g.cells), row, computed),
+                             "second_stage": second_stage.at_design(list(g.cells), row)},
             "infiltration": {"y": write_form(list(g.cells), row, g.replay_blocks, m.delta, g.footprint),
                              "plan": _plan(row)}}
 
@@ -760,7 +765,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             series[panel].append({"scope": s.name, "config": name, "beta": betas,
                                   "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
                                   **{k: [r[k] for r in rows]
-                                     for k in ("binds", "count", *REG, "computed_proving", "lean", "planner", "theta")
+                                     for k in ("binds", "count", *REG, "computed_proving", "second_stage", "lean",
+                                               "planner", "theta")
                                      if k in rows[0]},
                                   "plan": [r["plan"] for r in rows]})
     out_scopes = {s.name: {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
