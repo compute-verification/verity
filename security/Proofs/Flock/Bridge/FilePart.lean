@@ -205,8 +205,8 @@ theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
     (hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true) (n : ℕ)
     (rows : Fin ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)).N → Option RowAt)
-    (nl : ℕ) (ns : List ℕ) (r : Claims.Sampling.OneStage) (desc : Claims.Msg) (q : Claims.Sampling.Query)
-    (roots : List Claims.Msg)
+    (pub : Flock.Public) (nl : ℕ) (ns : List ℕ) (r : Claims.Sampling.OneStage) (desc : Claims.Msg)
+    (q : Claims.Sampling.Query) (roots : List Claims.Msg)
     (Xr : Fin ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)).N → Bool) (δ : ℝ) (x : Claims.Msg) :
     let Cc := (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
@@ -214,15 +214,16 @@ theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
     let P := (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
     let κ : Fin Cc.N → Option Bool := fun g => constsOf D.unroll hU n g
-    LayoutIs Cc rows D.unroll nl roots cd →
+    LayoutIs Cc rows D.unroll pub nl roots cd →
     cd.parse x = some (stmtOf P κ r desc q roots) →
     cd.partition (stmtOf P κ r desc q roots) = some (filePartOf D.unroll n ns) →
-    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep Cc rows D.unroll nl roots) δ (stmtOf P κ r desc q roots)
-      (partOf P κ ns) (witDep Cc (commitDep Cc rows D.unroll nl roots) Claims.Sampling.sha512Msg roots Xr) →
+    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep Cc rows D.unroll pub nl roots) δ
+      (stmtOf P κ r desc q roots) (partOf P κ ns)
+      (witDep Cc (commitDep Cc rows D.unroll pub nl roots) Claims.Sampling.sha512Msg roots Xr) →
     ¬ Claims.Sampling.R Claims.Sampling.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
-      (witDep Cc (commitDep Cc rows D.unroll nl roots) Claims.Sampling.sha512Msg roots Xr) := by
+      (witDep Cc (commitDep Cc rows D.unroll pub nl roots) Claims.Sampling.sha512Msg roots Xr) := by
   intro Cc P κ hL hx hpart hrel
-  exact hR F cd P rows D.unroll nl ns r κ desc q roots Xr δ x hL hx
+  exact hR F cd P rows D.unroll pub nl ns r κ desc q roots Xr δ x hL hx
     (hpart.trans (congrArg some (partOf_ofCircuit D hU hscope n ns).symm)) hrel
 
 /-- **The population check's verdict**: `why` finds nothing exactly where the strata, read stratum by stratum, are the

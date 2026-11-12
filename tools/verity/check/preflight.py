@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 GB = 1 << 30
 #: the warm floor where no check recorded here says more, on the tree's filesystem (the workspace's .venv, the verifier's build)
 #: and the cache's (the audit's scratch builds, uv's cache, the Flock checkout's target/): together 45 GB, the merge trains'
-#: launcher's floor, since a full check peaks at about 40 GB (TB2's and TO3's ran out of space with 31 and 36 GB free)
+#: launcher's floor, since a full check peaks at about 40 GB (checks with 31 and 36 GB free ran out of space)
 TREE_GB, CACHE_GB = 15, 30
 #: one Lean dependency tree unpacked from its bundle (8.0 to 10 GB for the three packages), besides the bundle itself
 DEPS_TREE_GB = 10

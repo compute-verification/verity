@@ -26,12 +26,15 @@ by the check it names, or nothing is timed at all.
 | `probes/collective.cu`, `collective_verdict.py` | REDUX (.SUM, .MIN, .XOR) and VOTE (.ANY's ballot, .ALL), alone and beside LOP3, and REDUX beside MATCH.ANY, for the opcode table's REDUX and VOTE rows; built for sm_120a or sm_90a (`PROBE_ARCH` picks the chain counts each ptxas lowers to). `collective_verdict.py` reads its rows and `match.cu`'s: whether MATCH.ANY and REDUX share one unit and VOTE spends at most 16 alu lanes (joint points, no census line) |
 | `probes/pipes.cu`, `pipes_verdict.py` | The lane opcodes the opcode table places on a pipe no run had placed them on: PLOP3, SGXT and BMSK alone and beside LOP3 (alu), the 32-bit conversion forms (I2F/F2I in u32, s32, s16, u16 and s8, FRND, I2I and I2IP) alone and beside MUFU.EX2 (sfu), the 64-bit ones (F2F.F64/F32, I2F/F2I to and from f64 and 64-bit integers, FRND.F64) alone and beside DFMA (f64) and MUFU.EX2, BAR.RED.OR beside LOP3 (and on a named barrier beside a LOP3 stream in other warps), and IADD.64 and IABS alone and beside LOP3; `pipes_verdict.py` holds each to its pipe's ρ (joint points, no census line) |
 | `probes/smem_side.cu` | LDS.128 (broadcast and line) beside a bulk unit that reads shared memory (4 KB UBLKCP, 512 B UBLKRED), for R6r's one read pool (facet_break; joint points, no census line) |
+| `probes/l2gather.cu` | The sustained rate of gathering rows from an L2-resident table at fresh random indices, the access pattern a cheater picks: 8, 16 or 32 bytes a lane through `ld.global.cg`, 4 through a texture fetch and 16 through `__ldg`, the table swept from 1 MB to 512 MB, each path alone and beside the honest step; `eps1.py l2gather` reads the bytes a SM a clock (no census line) |
 | `probes/honest.cuh`, `probes/power.cu` | The honest kernel (8 IMMA on random int8 operands, m16n8k32 or m16n8k16, then the duo fold of their words), and the clock kernels, which `power.sh` (`power_lease.sh` inside the lease) sustains at the node's lock and, given clock permission, at the default clocks |
 | `clock_ceiling.sh`, `clock_ceiling_lease.sh`, `clocks.py` | The clock-ceiling run: every clock and power knob the driver offers a prover with root (`-lgc` at and above the max, `-ac`, `-cc`, `-pl`, NVML's GPC and memory VF offsets and locked-clock limits through `clocks.py`, the vboost slider), each followed by power.cu's `--calib` launches (clock64 cycles over the host's steady_clock, a clock that reads no timer on the GPU), then the clock kernels sustained at the settings that clock highest; the node's lock, power limit, vboost and offsets put back on exit; `eps1.py ceiling` reads it |
+| `clock_calib.sh`, `clock_calib_lease.sh` | The clock-calibration run: power.cu's reference kernel of a known cycle count, launched `CALIB_REPS` times at each of several lengths under one lease and timed by the host's steady_clock, the chip's `%globaltimer` and clock64; `eps1.py jitter` reads the spread of the host-timed clock, which is what an auditor's own clock can say about the SM clock |
 | `sm89/clock.sh` | power.cu on the L40S: clocks reset (`sudo nvidia-smi -rgc`), every kernel sustained at the power limit as found and at the board's default limit, then `eps1.py clock` |
 | `sm89/scalar.cu`, `sm89/run.sh` | The sm_89 (L40S) census: every scalar pipe alone (IADD3, LOP3, SHF, PRMT, IMAD, IDP.4A, FFMA, HFMA2, IMNMX, SHFL, POPC, FLO), LDSM, LDS and STS.128, IMMA beside eight scalar classes (mixes and warp-specialized points), and the honest step at m16n8k32 and m16n8k16 with its MMAs alone; built for sm_89 by its own `run.sh`, census lines `since` sm89 |
+| `sm89/ji.py`, `sm89/ji.cuh`, `sm89/ji16.cu`, `sm89/ji32.cu` | facet_break's joint-issue schedule on the L40S: `ji.py emit 16` and `emit 32` write `ji16.cu` and `ji32.cu`, the grids of lane ops beside IMMA.16816 and IMMA.16832 that `ji.cuh` runs, with every loop opcode pinned from the unpinned build's gate; `SRC=ji16` or `SRC=ji32` `sm89/run.sh` times it, and `ji.py loads`, `worst` and `refit` read each program's load on every sm_89 row |
 | `sm89/census.py` | `machine_model/data/devices/sm_89/` from a `sm89/run.sh` run and a tensor_kinds `TK_ARCH=89` run: each pipe row at its pipe's rate (the loop's instructions on the pipe counted), the tensor pipe and joint issue row of every MMA form, and each MMA + X family's facets with every non-MMA loop instruction counted as X |
-| `eps1.py` | The readings: `facets` (the upper hull of frontier.cu's points with the 2% margin; `--prior` adds machine_model's K rows' vertices, `--emit` prints rows and census lines), `side` (words a clock alone and beside honest, MMA kept), `clock`, `ceiling` |
+| `eps1.py` | The readings: `facets` (the upper hull of frontier.cu's points with the 2% margin; `--prior` adds machine_model's K rows' vertices, `--emit` prints rows and census lines), `side` (words a clock alone and beside honest, MMA kept), `clock`, `ceiling`, `uniform` (uniform.cu's SMSP-cycles a uniform instruction), `l2gather` and `jitter` |
 
 ## Write a probe
 
@@ -123,5 +126,18 @@ over the block's `clock64` cycles from `OP_BEGIN` to `OP_END`; the median block,
 - `dsm_red_add64_self`: VF3h's ROW_ATOME64 form, `red.shared::cluster.add.u64` at the own rank.
   Every 64-bit ATOM.E but EXCH and CAS carries a QSPC + ATOMS.CAST.SPIN.64 fallback loop, so the gate refuses it by
   `loops`: 8 loops nested in the timed loop. ATOME64 is timed by its EXCH.64 and CAS.64 forms.
+
+## What other directories read
+
+The directory is no Python package, so a caller loads a module by its path.
+
+- `probe.cuh` is what a probe source includes, here and in `../dc/probes/`, `../facet_break/` and `../sass_census/`.
+- `probe.py` is the launcher their scripts start (`../dc/`'s, `../facet_break/run.sh`, `../sass_census/rates.sh`). A GPU
+  machine's own `python3` runs it, so it and `rows.py` read nothing outside the standard library, this directory and
+  `../gpu_kit/`'s gate.
+- `rows.py` is the census line, and `eps1.py` gives the frontier's points and facets to `sm89/census.py`,
+  `../dc/census.py` and `../facet_break/loads.py`. Each module's `__all__` lists what a caller may read.
+
+Nothing here writes a row for a probe the gate refused.
 
 The tests are `../tests/test_opcode_probe.py`.
