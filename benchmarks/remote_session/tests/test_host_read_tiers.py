@@ -24,7 +24,7 @@ EIGHT = "0,1,2,3,4,5,6,7"
 KNOBS = {"OUT", "DRY", "SIZES", "GIB", "GPUS", "CHUNK_BLOCKS", "LEASE_MIN", "GRANT_S", "MEM_GB", "CLEAR_MIB", "SIZE_MIN_S",
          "TAIL_S", "SAMPLE_MS", "SAMPLE_CPUS",
          "BUILD_S", "ARCH", "ARGS", "BASE_REV", "EXPECT_COMMIT", "SLOTS", "RESEARCH_SOURCE_SHA", "GPU_LEASE_TIMED",
-         "CUDA_VISIBLE_DEVICES", "GPU_LEASE_UUID"}
+         "CUDA_VISIBLE_DEVICES", "GPU_LEASE_UUID", "PYTORCH_CUDA_ALLOC_CONF"}
 
 BUILD = """echo "$BUILD_ONLY $ARCH $CUDA_HOME ${BASE_REV:-}" >> "$STUBS/build.calls"
 : > "$BUILD_DIR/session.so"; : > "$BUILD_DIR/kv.so"
@@ -33,6 +33,7 @@ exit "${BUILD_RC:-0}"
 """
 PYTHON = """#!/bin/bash
 echo "$CUDA_VISIBLE_DEVICES | $*" >> "$STUBS/driver.calls"
+echo "${PYTORCH_CUDA_ALLOC_CONF:-}" > "$STUBS/driver.alloc"
 while [ $# -gt 0 ]; do [ "$1" != --host-gib ] || size=$2; shift; done
 echo "    1.0s store: a host tier of $size GiB"
 echo "    2.0s chain: pass 1.00 ms"
@@ -137,6 +138,9 @@ def test_under_the_trees_gpu_lease_each_size_runs_in_turn_on_the_eight_cards(tmp
     assert calls["build"] == [f"1 120a {tmp_path / 'stubs/cuda'} abc"]
     assert sizes(calls) == ["8", "12", "16"] and all(c.startswith(EIGHT + " | ") for c in calls["driver"])
     assert all(f"--out {out}/host-{size} " in c for c, size in zip(calls["driver"], ["8", "12", "16"]))
+    # the driver allocates as it does under host_read.sh, which gates the rows it times
+    assert (tmp_path / "stubs/driver.alloc").read_text().strip() == "expandable_segments:True"
+    assert 'PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}' in (RS / "host_read.sh").read_text()
     account = (out / "tiers.txt").read_text().splitlines()
     assert account[-1] == p.stdout.splitlines()[-1] and "VERDICT host-read-tiers ok (exit 0): sizes run: 8 12 16 GiB" in account[-1]
     assert sum("chain: pass 1.00 ms" in line for line in account) == 3

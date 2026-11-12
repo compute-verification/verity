@@ -59,6 +59,7 @@ SAMPLE_MS=${SAMPLE_MS:-2000} SAMPLE_CPUS=${SAMPLE_CPUS:-88-95}
 ARCH=${ARCH:-120a} CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 PY=${PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
 GPU_LEASE=${GPU_LEASE:-/workspace/pouw/infra/bin/gpu-lease} SMI=${SMI:-nvidia-smi}
+PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}   # as host_read.sh runs host_read.py
 END=${END:?the time no lease is held at (date -d syntax, UTC)}
 set +a
 BUILD_S=${BUILD_S:-240}   # what the build is given before the lease is asked for
