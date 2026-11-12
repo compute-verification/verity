@@ -494,6 +494,18 @@ private def fast : Sheet :=
 private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := (64 <<< 30) + 1 }
 #guard refusal .remote [site ⟨[sheet], locs.take 3 ++ [over], []⟩] == some (0, .site .capacity)
 #guard refusal .onsite entries { auditor with key := fun _ => some "k1" } == some (0, .site .owner)
+-- an auditor's host: the auditor's own, at the site, with its key; a certifier in it registers as one at the site
+-- does; without the auditor's key for the host, or with the host under the prover's, the entry is refused
+private def vm0 : Loc :=
+  { id := "vm0", kind := .auditorHost, parent := some "site0", owner := .auditor, key := "k2", scheme := lms }
+private def inVm (host : Loc := vm0) : List (String → Entry) :=
+  [site ⟨[sheet], (locs.map fun x => if x.id == "cert0" then { x with parent := some "vm0" } else x) ++ [host], links⟩]
+private def withVm : Auditor :=
+  { auditor with key := fun i => if i == "vm0" then some "k2" else auditor.key i,
+                 scheme := fun i => if i == "vm0" then some lms else auditor.scheme i }
+#guard refusal .onsite inVm withVm == none
+#guard refusal .onsite inVm == some (0, .site .owner)
+#guard refusal .onsite (inVm { vm0 with parent := some "node0" }) withVm == some (0, .site .kind)
 -- the auditor's inventory, held of the Site the log folds to: a card it lists for the host and the log leaves out, and
 -- a memory leaf it has figures for and the log leaves out, are refused at the log's end; a leaf a later entry adds
 -- under the registered host passes, and the log before that entry is then refused at its end; a host that states no

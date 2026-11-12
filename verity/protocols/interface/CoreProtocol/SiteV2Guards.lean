@@ -190,6 +190,42 @@ private def keyed (drift : List (String × Figure)) (scheme : String := root2) :
 #guard (bare (some "a stand-in")).toJson.compress ==
   "{\"beta\":1000000000,\"ends\":[\"node0\",\"outside\"],\"id\":\"eth0\",\"latency\":0," ++
   "\"unmediated\":\"a stand-in\"}"
+-- an auditor's host: at the site, the auditor's own, with its key; a certifier or a challenger may be in it; it is
+-- under no host of the prover's, holds no device and no memory leaf, and no link ends at it
+private def vm (parent : String := "site0") : Loc :=
+  { id := "vm0", kind := .auditorHost, parent := some parent, owner := .auditor, key := "k1", scheme := root2 }
+private def inVm : Loc := { cert none with parent := some "vm0" }
+private def uplinks : List Link :=
+  [{ id := "up0", ends := ("node0", "cert0"), β := some 1, latency := 0 },
+   { id := "up1", ends := ("cert0", outside), β := some 1, latency := 0 }]
+#guard decide (Entry.Kinds empty { locs := [root, host, vm, inVm], links := uplinks })
+#guard decide (Entry.Kinds empty { locs := [root, host, vm, { inVm with kind := .challenger }] })
+#guard !decide (Entry.Kinds empty { locs := [root, host, vm "node0"] })
+#guard !decide (Entry.Kinds empty { locs := [root, host, { inVm with parent := some "node0" }], links := uplinks })
+#guard !decide (Entry.Kinds empty { locs := [root, vm, { gpu with parent := some "vm0" }] })
+#guard !decide (Entry.Kinds empty { locs := [root, vm, { dram none with parent := some "vm0" }] })
+private def toVm : Link := { id := "l0", ends := ("node0", "vm0"), β := some 1, latency := 0 }
+#guard !decide (Entry.Kinds empty { locs := [root, host, vm], links := [toVm] })
+private def vmKeyed : Registration.Auditor :=
+  { keyed [] with key := fun i => if i == "vm0" then some "k1" else (keyed []).key i,
+                  scheme := fun i => if i == "vm0" then some root2 else (keyed []).scheme i }
+#guard decide (Entry.Owners vmKeyed { locs := [root, vm, inVm] })
+#guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with owner := .prover }] })
+#guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with key := "k9" }] })
+#guard !decide (Entry.Owners (keyed []) { locs := [root, vm] })
+-- it states no on-chip bytes and no unit of time, and the auditor's inventory holds nothing of it
+#guard decide (Entry.Chips auditor { locs := [root, host, vm] })
+#guard !decide (Entry.Chips auditor { locs := [root, host, { vm with chip := some 1 }] })
+#guard decide (Registration.Complete D withDisk (node [dram (some 6554), disk (some 28), vm, inVm]))
+-- its JSON, and the views: it is no host of the prover's, a device in it is in none, and a challenger in it reaches
+-- the hosts its links end at
+#guard (Loc.ofJson vm.toJson).toOption == some vm
+#guard (vm.toJson.getObjValAs? String "kind").toOption == some "auditor-host"
+#guard (⟨[], [root, host, gpu, vm, inVm], uplinks⟩ : Site).host "cert0" == none
+#guard (⟨[], [root, host, gpu, vm, inVm], uplinks⟩ : Site).host "vm0" == none
+#guard (⟨[], [root, host, gpu, vm, inVm], uplinks⟩ : Site).host "gpu0" == some "node0"
+#guard (⟨[], [root, host, vm, { inVm with id := "chal0", kind := .challenger }],
+  [{ id := "mc0", ends := ("chal0", "node0"), β := some 1, latency := 0 }]⟩ : Site).reached.contains "node0"
 
 end Scratch
 
