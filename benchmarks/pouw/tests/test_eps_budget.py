@@ -122,7 +122,7 @@ def test_a_skip_at_another_vector_is_eps_budgets_number_there():
     assert seen >= 9
 
 
-def test_each_device_prices_its_own_floor_and_the_same_skippable_work():
+def test_each_device_prices_its_own_floor_and_the_same_free_compute():
     """♭ on each device's own Π (`prices`): SPEC's 19.049 and 19.183 on VF3q-16, the LI designs' 5.961 (H200) and 4.035
     (B200), and each variant's own, dither-2s-fill's with its 4.5 filler instructions a word. The peel's tail is Π's
     price of the checked kernels' instructions where that exceeds 1.57 of ♭'s MACs, as on the H200 and B200, whose
