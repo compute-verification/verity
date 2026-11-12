@@ -20,8 +20,8 @@ form allowed having none.
 
 What the run does not decide, each a named premise of `RunAcceptsPlay`:
 
-* `RoundTwo`: round 2's check, passing, gives the model's statement checks of each template (`codesOk`, and the interior
-  record's order); proved of `SecondStage.check` on its own;
+* `RoundTwo`: round 2's check, passing, gives the model's statement check (`stmtOk`) where the registration's clauses
+  and those on the session statements' own bytes hold; proved of `SecondStage.check` on its own;
 * `SessionsAccept`: each template's session statement, as the session statements' message states it, is the one round
   2 checked, is its reference statement but for the run's fields (`pinOk`), is in scope (`sessionOk`), has its
   reference statement's rounds, and its session is a run Flock's masked verifier accepts. `Run.run` reads the sessions'
@@ -92,23 +92,46 @@ def Fits (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) : Prop :=
 
 /-! ## Round 2: the hand-off -/
 
-/-- **What the verifier holds of the run is the model's**: `own` is `ownOf h st rec draw c₀` in every field `ownOf`
-sets; the fields it leaves at their defaults (the reported reads, the verified statements, the block's returns, the
-supplied and fixed values) may be anything. -/
-def OwnAt (h : Held) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) (own : Spot.SecondStage.Own) : Prop :=
+/-- **What the verifier holds of the run is the model's** (`OwnAgrees`): `own` is `ownOf h st rec draw c₀` in every
+field `ownOf` sets; the fields it leaves at their defaults (the reported reads, the verified statements, the block's
+returns, the supplied and fixed values) may be anything. -/
+def OwnAgrees (h : Held) (own : Spot.SecondStage.Own) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) :
+    Prop :=
   { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[] } =
     ownOf h st rec draw c₀
 
-/-- **Round 2's check gives the model's statement checks** (part 3): at every `own` that is the model's (`OwnAt`),
-statements `ss` on which round 2's check with the form allowed reports no code have the interior record's order
-(`interiorOrderOk`) and, for each template `t`, a statement at position `t` that reads (`Stmt.ofJson?`), names template
-`t` and passes the model's check against `t`'s part (`codesOk`). -/
+/-- **The session statements' message states `ss`**: `m₂` states one session statement a template, and template
+`t`'s decodes and reads as the statement round 2 holds at position `t` (`stmtJsonOf`). -/
+def StmtsAre (h : Held) (m₂ : Msg) (ss : Array Json) : Prop :=
+  ∃ xs, stmtsOf m₂ = some xs ∧ xs.length = h.ms.length ∧ ∀ t < h.ms.length, ∃ w,
+    FlockDeploy.decode (xs.getD t (h.xS₀ t)) = some w ∧
+      stmtJsonOf h t w = Spot.SecondStage.Stmt.ofJson? (ss.getD t .null)
+
+/-- **The registration's clauses hold at the run's statement**: `x` parses, and its partition and two-stage design
+evaluate (`parse`, `partition`, `two`); round 2 makes none of these checks. -/
+def RegHolds (h : Held) (x : Msg) : Prop :=
+  ∃ s, parse h x = some s ∧ (partition h s).isSome = true ∧ (two h s).isSome = true
+
+/-- **The clauses on each session statement's own bytes hold**: template `t`'s, as `m₂` states it, has `k₀ t` rounds, is
+in scope (`sessionOk`) and is its reference statement but for the run's fields (`pinOk`); round 2 never reads these
+bytes. -/
+def SessionsHeld (h : Held) (m₂ : Msg) : Prop :=
+  ∃ xs, stmtsOf m₂ = some xs ∧ ∀ t < h.ms.length,
+    (FlockDeploy.V true).k (xs.getD t (h.xS₀ t)) = k₀ h t ∧ sessionOk h t (xs.getD t (h.xS₀ t)) = true ∧
+      ∃ w, FlockDeploy.decode (xs.getD t (h.xS₀ t)) = some w ∧ pinOk h t w = true
+
+/-- **Round 2's check gives the model's statement check** (part 3, `stmtOk_of_check`'s statement): where what the
+verifier holds of the run is the model's (`OwnAgrees`), the session statements' message states the statements round 2
+checked (`StmtsAre`), the registration's clauses hold (`RegHolds`) and so do those on the session statements' own bytes
+(`SessionsHeld`), round 2's check with the form allowed reporting no code makes the model's statement check pass
+(`stmtOk`). -/
 def RoundTwo (h : Held) : Prop :=
-  ∀ (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) (own : Spot.SecondStage.Own) (ss : Array Json),
-    OwnAt h st rec draw c₀ own → (Spot.SecondStage.check true own (some ss)).codes = #[] →
-      Spot.SecondStage.interiorOrderOk (ownOf h st rec draw c₀) = true ∧
-      ∀ t < h.ms.length, ∃ S, Spot.SecondStage.Stmt.ofJson? (ss.getD t .null) = some S ∧
-        S.template = h.names.getD t "" ∧ codesOk h (ownOf h st rec draw c₀) t S = true
+  ∀ {own : Spot.SecondStage.Own} {ss : Array Json} {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    {st : Roots} {rec draw : Json},
+    decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw →
+    OwnAgrees h own st rec draw c₀ → StmtsAre h m₂ ss → RegHolds h x → SessionsHeld h m₂ →
+    (Spot.SecondStage.check true own (some ss)).codes = #[] →
+    stmtOk h x m₁ m₂ c₀ c₁ = true
 
 /-! ## The sessions -/
 
