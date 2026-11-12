@@ -26,8 +26,8 @@ run this command's `--loopback` left, that it was one.
 `--loopback` runs `remote_session/run.sh` with ROLE=both and the prover the driver's CPU reference over a small test
 store. No node is audited, so it certifies nothing, and its output says so.
 
-Beside the number it prints two references, each from its run in the store with the run's date and card: the share of
-a card's memory PoUS certified held, and the share a wipe left foreign at most. `references.json` names their runs;
+Beside the number it prints two references, each from its run in the store with the run's date and card: PoUS's state
+bound over a card's memory, and the share a wipe left foreign at most. `references.json` names their runs;
 a reference that can't be read prints its reason in place of a number. Under `research run` the printed document is
 also `$RESEARCH_RUN_DIR/out/memory.json`; a run that ran `--loopback` keeps a loopback's document there whatever it
 prints afterwards, since that document is how `--from` knows the run's session for a loopback.
@@ -297,7 +297,12 @@ def _gb(n: float) -> str:
 
 
 def pous(store, run: str) -> dict:
-    """The share of the card's memory a PoUS session certified held, from its run's summary."""
+    """A PoUS session's state bound over the card's memory, from its run's summary. `s_bits` is S₀ = ⌊ρ·|C|⌋, a
+    lower bound on the device's memory, its on-chip state and a round of side-channel traffic together: it is not
+    the device memory credited. PoUS's statement of the memory held over a monitoring period
+    (`security/Properties/Pous/`) credits S over a window of `len` ticks where S·len + S_chip + c ≤ S₀, c the side
+    channels' capacity over a round, and no credited figure is printed, since no record holds the window and no
+    card file a side channel's capacity."""
     a = store.attempt(run) or {}
     tree = store.files(run, ["out/summary.json"])
     if tree is None:
@@ -306,7 +311,9 @@ def pous(store, run: str) -> dict:
     if d["certificate"].get("certified") is not True:
         raise Unreadable(f"{run}'s record certifies nothing")
     held, total = d["certificate"]["s_bits"] / 8, d["held"]["total_bytes"]
-    return {"value": held / total, "unit": "share of the card's memory certified held",
+    return {"value": held / total, "unit": "PoUS's state bound over the card's memory: s_bits is S0 = floor(rho*|C|), "
+            "a lower bound on the device's memory, its on-chip state and a round of side-channel traffic together, "
+            "not the device memory credited",
             "detail": f"{_gb(held)} of {_gb(total)}",
             "card": d["held"].get("device") or (a.get("conditions") or {}).get("hw.sku")}
 
@@ -323,7 +330,7 @@ def wipe(store, run: str) -> dict:
             "detail": f"{_gb(bits / 8)} of {_gb(memory)}", "card": (a.get("conditions") or {}).get("hw.sku")}
 
 
-READERS = {"PoUS memory held": pous, "wipe residue": wipe}
+READERS = {"PoUS state bound": pous, "wipe residue": wipe}
 
 
 def beside(store_of: Callable[[], object]) -> list[dict]:
