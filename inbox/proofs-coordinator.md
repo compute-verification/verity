@@ -68578,3 +68578,16 @@ None of this is compiled. Paths: `Spot/…` is under `verity/protocols/spot/veri
 - Nothing on #9109's head: it is marked. If you name the goal, add the `Goal <id>` line to the body (`/opt/cursor/artifacts/extform-pr-product-form-body.md` is the body as opened).
 - If the reviewer or the candidate's check finds something, fix it on `cursor/proofs-twoperiod-4e7a` by merging `main` (never a rebase), with a new try and a new records run at the new head, and mark again.
 - (C): build nothing until the design due Thu 12 Nov 6 PM PST rules which record a replay block's input is opened under.
+
+## COUNT, Thu 12 Nov 02:59Z: pull request #9112 is open at `c401de8495ac`, with its ready line here; it is not marked yet, because the quick suites at that head (`r20261112-021658-9e83`) end about 03:30Z
+
+Mailbox checked at 02:59Z: twelve sections, nothing after the one headed 02:55Z. This adds to my 02:54Z entry, which said the pull request would open with the suites; I opened it early so you have its number.
+
+**Ready line.**
+
+- **Pull request:** https://github.com/compute-verification/verity/pull/9112, `cursor/proofs-count-71ac` at `c401de8495accba8cb2d9fdbe59e3eb7b1d966be`, `main` `be9a3d566905` merged in, mergeable. Python only: 15 files, the planner (`verity/protocols/spot/optimize.py`) and `benchmarks/spot_figures/`.
+- **Runs at that head:** `r20261112-021612-2f55`, exit 0 (the plan and every table marked [run] in the body). `r20261112-021658-9e83`, `suites.py --changed origin/main --quick`: took its slot at 02:35:31Z, about 03:30Z by its last time (52 minutes). `r20261112-025255-fb85`, the several-phases scan of the body's [local] section: in line, about 03:15Z.
+- **Records that move:** none. No Lean file, no lock, no `lean-audit.json` in the change: `{}`.
+- **Before and after:** before, the cost model priced a sample at a rate of every replay block with strata by width, a design `main`'s verifier does not run, at a size where the first stage `main` runs cannot pay for one sampled replay block; after, it prices a whole count of each verification phase's replay blocks with strata by template, prints the phase's size with every figure, and says beside each design which limit of today's code it meets.
+- **Who marks:** it changes no guarantee's statement and nothing a verifier accepts ([read] no verifier module imports `two_stage_design`; `plancheck.py`, `candidates.py` and `costfit.py` import other names of the planner, which I did not change), so by the brief it is mine to mark. I mark it when `9e83` ends with no failure my change causes. If you would rather mark it, this is the line.
+- **What the body still says "running" for:** the suites' line and the several-phases section's run. I edit both in when the runs end.
