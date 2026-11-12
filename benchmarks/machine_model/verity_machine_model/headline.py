@@ -28,6 +28,8 @@ from pathlib import Path
 from verity_machine_model.eps import Design, design, eps, machine, setup, threshold, uniform_issue_charged
 from verity_machine_model.model import DATA, device, model
 
+__all__ = ["CREDIT", "OPERANDS", "READINGS", "Row", "TERMS", "record", "row", "rows", "skip_at", "spec", "text"]
+
 TERMS = {"skip": "ε_skip", "mand": "ε_mand", "machine": "ε_machine", "luck": "ε_luck", "core": "ε", "gamma": "γ",
          "threshold": "q*₀"}
 READINGS = ("sheet", "measured")
@@ -50,8 +52,10 @@ def skip_at(d: Design, vector: str, data: Path) -> float:
 
 def _sibling(d: Design, p1: Design) -> None:
     """`p1` must be `d` with every filler at p = 1 and no luck: what else differs is its name and ε_skip."""
-    free = lambda x: replace(x, name="", title="", summary="", aliases=(), base="", skip={},
-                             filler=tuple(replace(f, p=1.0, luck="", source="") for f in x.filler))
+    def free(x: Design) -> Design:
+        return replace(x, name="", title="", summary="", aliases=(), base="", skip={},
+                       filler=tuple(replace(f, p=1.0, luck="", source="") for f in x.filler))
+
     if not d.filler or free(d) != free(p1) or any(f.p < 1 for f in p1.filler):
         raise SystemExit(f"{p1.name}: a family's p1 design is its design ({d.name}) with every filler at p = 1, no "
                          "luck; only its name, title, summary and ε_skip differ")
@@ -137,8 +141,8 @@ def text(readings: tuple[str, ...] = READINGS, data: Path = DATA) -> str:
         rs = rows(r, data)
         out += [f"## {rd['title']} (`{r}`): q* = {rd['q']:g}, operands {OPERANDS}, credit ♭", "",
                 *(f"- {c}" for c in (t["scope"], t["capacity"], *rd["conditions"])), "",
-                f"| GPU | design | Π | {T['skip']} | {T['mand']} | {T['machine']} | {T['luck']} | "
-                f"{T['core']} = their sum | {T['gamma']} | {T['threshold']} | cheater binds |",
+                (f"| GPU | design | Π | {T['skip']} | {T['mand']} | {T['machine']} | {T['luck']} | "
+                 f"{T['core']} = their sum | {T['gamma']} | {T['threshold']} | cheater binds |"),
                 "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|"]
         for x in rs:
             thr = "none ≤ 64" if x.threshold is None else f"{x.threshold:.3f}"

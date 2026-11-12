@@ -1,11 +1,11 @@
-"""A unit circuit and its layout without a Python object per gate, for `fast_stage`: the same rows, netlist text and values as
+"""A unit circuit and its layout without a Python object per gate, for `fast_stage`: the same rows, description text and values as
 `fast_stage.ands_layout` and `ir_lower.evaluate_layout`, in a few bytes of memory per AND.
 
     - `CompactCircuit` (`class_statement._UnitCircuit` under fast_stage) spools each AND's operand bits to disk as int32, in
       blocks of `FLUSH` entries, and keeps per gate its kind and its value on the all-zero instance, one byte each
     - `layout` finds the live gates in one pass over the blocks, last first (an AND only reads earlier gates, so a block's
       dead rows are those its later blocks and its own live rows never read), and numbers the live ANDs' columns
-    - a `CompactLayout`'s netlist is rendered from the spool a block at a time, with numpy, each time it is read: `fast_stage`
+    - a `CompactLayout`'s description is rendered from the spool a block at a time, with numpy, each time it is read: `fast_stage`
       hashes it once when `compose` asks for the unit's sha256, and writes it once with the circuit, never to a scratch copy
     - `evaluate` on the all-zero instance (`compose`'s dummy) reads the values kept per gate; any other instance runs the rows
       block by block, as `ir_lower.evaluate_layout` does
@@ -391,7 +391,7 @@ class CompactLayout(IL.LoweredUnit):
         return self._cache[1]
 
     def block_text(self, b: int) -> np.ndarray:
-        """Block ``b``'s netlist lines (``|A| A.. |B| B..``), as bytes."""
+        """Block ``b``'s lines of the description (``|A| A.. |B| B..``), as bytes."""
         cols, seg, cf = self._block(b)
         if not len(seg):
             return np.zeros(0, dtype=np.uint8)

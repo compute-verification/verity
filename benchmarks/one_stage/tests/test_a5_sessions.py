@@ -1,13 +1,15 @@
 """a5's sampled members' sessions run one at a time: outer proofs go through the ZK server one at a time (AGENTS.md), so
 ``--session-jobs`` takes only 1, kept so the commands that pass it still run, and the proof server an audit proves its
 members on behind the ZK server (`a5.proof_server`) verifies none ahead and starts every member's Lean session loop on
-the one environment its members agree on."""
+the one environment its members agree on. Its verifiers take their sessions' coin trees through the audit's relay where
+there is one."""
 
 from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -45,6 +47,23 @@ def test_behind_the_zk_server_the_proof_server_proves_one_session_at_a_time_on_t
     assert a5.proof_server(a, tmp_path, [dict(window), {**window, "statement": "verity/flock-circuit/tmpl"}]) is None
     assert a5.proof_server(a, tmp_path, []) is None
     assert a5.proof_server(args("loop", plain=True), tmp_path, [window]) is None
+
+
+@pytest.mark.parametrize("loop", ["loop", None], ids=["behind the ZK server", "with no ZK server"])
+def test_on_the_windows_challenger_session_the_proof_servers_verifiers_take_their_trees_through_the_relay(
+        tmp_path, monkeypatch, loop):
+    """With the audit's relay (`a5.window_trees`) the server starts no challenger of its own, where FLOCK_CHALLENGER=1
+    would give each verifier one, and verifies none ahead: a session's rounds are in the session's log before the next
+    session's first."""
+    monkeypatch.setenv("FLOCK_CHALLENGER", "1")
+    relay = SimpleNamespace(flags=["--tree-from", "127.0.0.1:2", "--tree-secret-file", "relay-secret"])
+    window = {"partition_file": tmp_path / "partition.json", "program_file": tmp_path / "program.json"}
+    server = a5.proof_server(args(loop), tmp_path, [dict(window)], relay)
+    assert server.tree_from == relay.flags and not server.challenger and server.verify_ahead == 0
+    server.close()
+    own = a5.proof_server(args(loop), tmp_path, [dict(window)])
+    assert own.challenger and own.tree_from == []
+    own.close()
 
 
 def test_with_no_zk_server_the_proof_server_is_spot_flocks(tmp_path):
