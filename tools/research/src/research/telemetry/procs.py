@@ -22,15 +22,15 @@ def _read(path: str, n: int = 65536) -> tuple[str | None, str | None]:
         return None, f"read error: {e.strerror or e}"
 
 
-def list_pids() -> list[int]:
+def list_pids(proc: str | os.PathLike[str] = "/proc") -> list[int]:
     try:
-        return sorted(int(x) for x in os.listdir("/proc") if x.isdigit())
+        return sorted(int(x) for x in os.listdir(proc) if x.isdigit())
     except OSError:
         return []
 
 
-def stat_fields(pid: int) -> dict[str, Any] | None:
-    raw, why = _read(f"/proc/{pid}/stat", 4096)
+def stat_fields(pid: int, proc: str | os.PathLike[str] = "/proc") -> dict[str, Any] | None:
+    raw, why = _read(f"{os.fspath(proc)}/{pid}/stat", 4096)
     if raw is None:
         return None
     try:
@@ -99,15 +99,27 @@ def oom_score(pid: int) -> int | None:
         return None
 
 
-def running(pid: int) -> bool:
+def running(pid: int, proc: str | os.PathLike[str] = "/proc") -> bool:
     """`pid` exists and has not exited (a zombie has)."""
-    st = stat_fields(pid)
+    st = stat_fields(pid, proc)
     return st is not None and st["state"] not in ("Z", "X")
 
 
-def live_group(pgid: int) -> list[dict[str, Any]]:
+def live_group(pgid: int, proc: str | os.PathLike[str] = "/proc") -> list[dict[str, Any]]:
     """The members of process group `pgid` that have not exited."""
-    return [st for pid in list_pids() if (st := stat_fields(pid)) and st["pgrp"] == pgid and st["state"] not in ("Z", "X")]
+    return [st for pid in list_pids(proc) if (st := stat_fields(pid, proc)) and st["pgrp"] == pgid and st["state"] not in ("Z", "X")]
+
+
+def gone(pid: Any, ticks: Any, proc: str | os.PathLike[str] = "/proc") -> bool:
+    """Whether a recorded process is known not to run: its pid has no /proc entry, or one started at another time (the pid was
+    reused).  No pid, or a stat without a start time, is not known gone: a pid alone never says its process exited."""
+    if not isinstance(pid, int) or isinstance(pid, bool):
+        return False
+    text, why = _read(f"{os.fspath(proc)}/{pid}/stat", 4096)
+    if text is None:
+        return why == "gone"
+    fields = text.rsplit(")", 1)[-1].split()
+    return isinstance(ticks, int) and len(fields) > 19 and fields[19].isdigit() and int(fields[19]) != ticks
 
 
 def descendants(root_pid: int, all_stats: dict[int, dict[str, Any]]) -> set[int]:
