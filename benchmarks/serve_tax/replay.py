@@ -4,11 +4,15 @@
               [--capture ID,... [--capture-template T]] --out DIR
 
 The window is the load's requests: its step trace's steps from the first one's arrival to the last one's finish, all of them
-the load's own (each load starts from an empty prefix cache and ends drained). The replay builds the served engine again
+the load's own (each load starts from an empty prefix cache and ends drained). A request's prompt ids are the plan's and
+its served ids the ones the corpus client kept (client.jsonl); a pass sent by vLLM's client, which keeps neither, is read
+from the ids the arm's own server kept (`served_ids`: ``prod-record``'s). The replay builds the served engine again
 in this process (``VLLM_ENABLE_V1_MULTIPROCESSING=0``) from the trace's header (its batch caps, chunked prefill, prefix
-caching, async scheduling, block size and block count), compiled unless ``--eager``, and adds each request, under its served
+caching, async scheduling, block size and block count, and where the header holds them the long-prefill threshold, the KV
+cache's format and the speculative decoding: `HEADER_ARGS`), compiled unless ``--eager``, and adds each request, under its served
 engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
-the scheduler's ``schedule``); the scheduler decides the rest as it did while serving. Its own step trace (`StepTrace`) is
+the scheduler's ``schedule``), and where it arrived after schedules that held every request back, after as many
+(``after_empty``); the scheduler decides the rest as it did while serving. Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
 differing requests (each one's lengths and first differing position) and the replay's wall time beside the served window's
@@ -36,19 +40,38 @@ from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/
 import serve_tax as S  # noqa: E402 (beside this file)
 
 
+def served_ids(arm_dir: Path, tag: str) -> dict[str, dict]:
+    """The lines an arm's server kept (`servetax_plugin.ServedIds`: a request's engine id, prompt ids and served ids) for
+    the requests whose ids hold ``tag``, by engine id; its files plain or gzipped, as its step traces are."""
+    kept = {}
+    for path in sorted((arm_dir / "server").glob("ids.*.jsonl*")):
+        with (gzip.open if path.suffix == ".gz" else open)(path, "rt", encoding="utf-8") as f:
+            for line in f:
+                if f"-{tag}-" in line.partition(",")[0]:      # a line opens with its request's id: no other pass's is parsed
+                    r = json.loads(line)
+                    kept[r["id"]] = r
+    return kept
+
+
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
-    """The load's served window: its requests (engine id, plan entry, client tokens), arrivals by step and steps, with
-    step indices from the window's first."""
-    meta = json.loads((arm_dir / load / f"rep-{rep}" / "meta.json").read_text())
-    tag = meta["tag"]
-    named = json.loads((arm_dir / "meta.json").read_text()).get("plan")
-    tried = [p for p in (Path(named) if named else None, arm_dir / "plan.jsonl", arm_dir.parent / "plan.jsonl") if p]
-    plan_file = next((p for p in tried if p.is_file()), None)
-    if plan_file is None:
-        raise SystemExit(f"no plan at {', '.join(map(str, tried))} (an evicted run's: `research data fetch` puts it back)")
-    plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
-    client = {r["id"]: r for r in (json.loads(x) for x in (arm_dir / load / f"rep-{rep}" / "client.jsonl").read_text().splitlines()
-                                   if x.strip())}
+    """The load's served window: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
+    step indices from the window's first. The ids are the plan's and the corpus client's (client.jsonl), or, for a
+    pass whose client kept none, the ones the arm's server kept (`served_ids`)."""
+    rep_dir = arm_dir / load / f"rep-{rep}"
+    tag = json.loads((rep_dir / "meta.json").read_text())["tag"]
+    kept = None if (rep_dir / "client.jsonl").is_file() else served_ids(arm_dir, tag)
+    if kept is None:
+        named = json.loads((arm_dir / "meta.json").read_text()).get("plan")
+        tried = [p for p in (Path(named) if named else None, arm_dir / "plan.jsonl", arm_dir.parent / "plan.jsonl") if p]
+        plan_file = next((p for p in tried if p.is_file()), None)
+        if plan_file is None:
+            raise SystemExit(f"no plan at {', '.join(map(str, tried))} (an evicted run's: `research data fetch` puts it back)")
+        plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
+        client = {r["id"]: r for r in (json.loads(x) for x in (rep_dir / "client.jsonl").read_text().splitlines() if x.strip())}
+    elif not kept:
+        raise SystemExit(f"{rep_dir} has no client.jsonl and {arm_dir / 'server'} kept no ids of load {load} rep {rep} "
+                         f"({tag}): a pass sent by vLLM's client is replayed from an arm whose server keeps each request's "
+                         "ids (prod-record)")
     (trace,) = S.step_traces(arm_dir)
     recs = S.trace_records(trace)
     mine = lambda rid: f"-{tag}-" in rid   # noqa: E731
@@ -66,14 +89,26 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     reqs = []
     for a in arrive:
         rid = a["request"]
-        http = rid.split("-", 1)[1].rsplit("-", 2)[0]       # cmpl-{X-Request-Id}-0-{8 hex}
-        c = client[http]
-        reqs.append({"engine_id": rid, "before_step": a["before_step"] - first, "prompt_ids": plan[c["i"]]["prompt_ids"],
-                     "max_tokens": a["sampling"].get("max_tokens"), "sampling": a["sampling"], "served": c["output_ids"]})
+        if kept is None:
+            c = client[rid.split("-", 1)[1].rsplit("-", 2)[0]]      # cmpl-{X-Request-Id}-0-{8 hex}
+            prompt, served = plan[c["i"]]["prompt_ids"], c["output_ids"]
+        elif rid in kept:
+            prompt, served = kept[rid]["prompt_ids"], kept[rid]["output_ids"]
+        else:
+            raise SystemExit(f"{rid} arrived in the window and the server kept no ids for it: it did not finish there")
+        reqs.append({"engine_id": rid, "before_step": a["before_step"] - first, "after_empty": a.get("after_empty", 0),
+                     "prompt_ids": prompt, "max_tokens": a["sampling"].get("max_tokens"), "sampling": a["sampling"],
+                     "served": served})
     for s in steps:
         s["step"] -= first
     return {"header": recs[0], "requests": reqs, "steps": steps, "tag": tag,
             "served_s": steps[-1]["t"] - arrive[0]["t"], "served_t0": arrive[0]["t"]}
+
+
+#: the engine argument for each entry of the header's config that is passed only where the header holds it: a header holds
+#: the KV cache's format and the speculative decoding only where the served engine left vLLM's defaults
+HEADER_ARGS = {"long_prefill_token_threshold": "long_prefill_token_threshold", "kv_cache_dtype": "kv_cache_dtype",
+               "speculative": "speculative_config"}
 
 
 def engine(checkpoint: Path, header: dict, eager: bool, tp: int = 1) -> Any:
@@ -86,7 +121,8 @@ def engine(checkpoint: Path, header: dict, eager: bool, tp: int = 1) -> Any:
                       max_model_len=cfg["max_model_len"], max_num_seqs=cfg["max_num_seqs"],
                       max_num_batched_tokens=cfg["max_num_batched_tokens"], enable_chunked_prefill=cfg["enable_chunked_prefill"],
                       enable_prefix_caching=cfg["enable_prefix_caching"], async_scheduling=cfg["async_scheduling"],
-                      block_size=cfg["block_size"], num_gpu_blocks_override=cfg["num_gpu_blocks"], disable_log_stats=True)
+                      block_size=cfg["block_size"], num_gpu_blocks_override=cfg["num_gpu_blocks"], disable_log_stats=True,
+                      **{arg: cfg[key] for key, arg in HEADER_ARGS.items() if key in cfg})
     return LLMEngine.from_engine_args(args)
 
 
@@ -116,8 +152,12 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: i
     tokens: dict[str, list[int]] = {}
     lps: dict[str, list[float]] = {}
 
-    def add_due() -> None:
-        while pending and pending[0]["before_step"] == trace.scheduled:
+    def add_due(scheduling: bool = False) -> None:
+        # a request goes back before the step it arrived before; right before a schedule, only after as many schedules
+        # that scheduled nothing as its arrival says, so that it runs with the requests the step in flight releases and
+        # not alone a schedule early (an idle engine makes no further schedule, so there the count is not asked)
+        while (pending and pending[0]["before_step"] == trace.scheduled
+               and (not scheduling or pending[0]["after_empty"] == trace.empty)):
             r = pending.pop(0)
             eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]}, params(r, logprobs))
         if pending and pending[0]["before_step"] < trace.scheduled:
@@ -125,7 +165,7 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: i
 
     def schedule(orig):
         def wrapped(*a, **kw):
-            add_due()
+            add_due(scheduling=True)
             return orig(*a, **kw)
         return wrapped
 

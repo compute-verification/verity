@@ -350,7 +350,7 @@ def test_counters_sum_each_over_its_label_sets_and_the_schedule_reads_them():
                  "accepted_tokens": 0.0}
     s = S.schedule_metrics(c)
     assert (s["steps"], s["tokens_per_step"], s["rows_per_step"], s["prompt_cached_share"]) == (50.0, 120.0, 24.0, 0.25)
-    assert "accepted_per_draft" not in s
+    assert "accepted_per_draft" not in s and "draft_accepted_share" not in s
     assert S.schedule_metrics(None) == {} == S.schedule_metrics(dict(c, steps=0.0))
     # an engine that drafts: its drafts, the tokens they proposed and the accepted ones, and not the per-position counter
     drafting = S.counters(METRICS + 'vllm:spec_decode_num_drafts_total{engine="0",model_name="m"} 400.0\n'
@@ -359,6 +359,7 @@ def test_counters_sum_each_over_its_label_sets_and_the_schedule_reads_them():
                           'vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",model_name="m",position="0"} 300.0\n')
     assert (drafting["drafts"], drafting["draft_tokens"], drafting["accepted_tokens"]) == (400.0, 2000.0, 700.0)
     assert S.schedule_metrics(drafting)["accepted_per_draft"] == 1.75
+    assert S.schedule_metrics(drafting)["draft_accepted_share"] == 0.35
 
 
 def test_the_table_carries_each_loads_schedule():
@@ -502,7 +503,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     # alone is started by it
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
-    assert [n for n, a in S.ARMS.items() if a.published] == ["published"]
+    assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 
@@ -1064,7 +1065,8 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
 def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():
     ds = S.LOADS["chat"].file
     assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
-    assert [n for n, load in S.LOADS.items() if load.file] == ["chat"] and list(S.LOADS) == ["chat", "long", "prefix"]
+    assert [n for n, load in S.LOADS.items() if load.file] == ["chat", "agentic", "agentic-full"]
+    assert list(S.LOADS) == ["chat", "long", "prefix", "agentic", "agentic-full"]
 
 
 def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path,

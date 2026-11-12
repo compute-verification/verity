@@ -29,8 +29,13 @@
 # four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost.
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
 # NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
-# rungs the load's own prompts can hold, and the same for every arm of a cost. After the table it prints the cost of
-# ARMS's last arm over compiled (serve_tax.py cost) and writes OUT/serving_cost.{json,txt} and the run's result.json (each
+# rungs the load's own prompts can hold, and the same for every arm of a cost. SAMPLED=1 has every request sampled at
+# the recipe's temperature and top-p in place of greedy, each under its user's seed, which the client sends
+# (serve_tax.user_seed): the same tokens in every arm, and a replay's. After the table it prints the cost of
+# ARMS's last arm over the stock arm it is made from, compiled or, for the arms at vLLM's recipe's settings, prod
+# (serve_tax.py cost, serve_tax.stock_of; --arms "prod prod-record prod-again" --loads agentic is that cost on an
+# agent's sessions, where a rung is the users and PASS_PROMPTS the turns each sends) and writes
+# OUT/serving_cost.{json,txt} and the run's result.json (each
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
 # JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
 # WITH="OUT_DIR ..." adds earlier jobs' arms to the cost: a load they served and this job didn't joins the number.
@@ -67,7 +72,9 @@
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
 # REPLAY then replays LOAD's first rep of the record arm (by default this job's) in each of REPLAY_MODES (replay.py)
 # into OUT/replay-<mode>; a mode listed again replays into OUT/replay-<mode>-<k>, its tokens compared with the first's too
-# (REPLAY_MODES="compiled compiled": does the replay agree with itself?). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
+# (REPLAY_MODES="compiled compiled": does the replay agree with itself?). A pass vLLM's client sent is named with its
+# rung (REPLAY=agentic@4) and replayed from an arm whose server kept each request's ids (REPLAY_FROM=$OUT/prod-record:
+# that client keeps none). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
 # checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
 # qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
 # pin, unless set.
@@ -189,6 +196,7 @@ if [ "${1:-}" = leased ]; then
     ${PUBLISHED_FRONTEND:+--published-frontend "$PUBLISHED_FRONTEND"})
   if [ "$CLIENT" = vllm-bench ]; then
     load=(--client vllm-bench --loads "$LOADS" ${PASS_PROMPTS:+--pass-prompts "$PASS_PROMPTS"})
+    [ "${SAMPLED:-0}" = 1 ] && load+=(--sampled)
     for f in ${DATASETS:-}; do load+=(--dataset "$f"); done
   else
     common+=(--c4 "$C4")
@@ -299,14 +307,16 @@ else
   fi
 fi
 [ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
-gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
+gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/ids.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
-# the cost of the last arm over compiled; a job that ends on stock has none: compiled alone (a calibration of its
-# rungs), or published, which is stock under other settings and no arm of ours. WITH: the out/ directories of earlier
-# jobs on this node whose arms served another load, which joins the number
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ]; then
+# the cost of the last arm over the stock arm it is made from (compiled, or prod); a job that ends on stock has
+# none: compiled alone (a calibration of its rungs), or published or prod, which are stock under other settings and
+# no arm of ours. WITH: the out/ directories of earlier jobs on this node whose arms served another load, which
+# joins the number
+if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
+    && [ "${ARMS##* }" != prod ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})
   "${cost[@]}" --out "$OUT" --result || rc=1
