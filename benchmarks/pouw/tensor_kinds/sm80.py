@@ -521,13 +521,13 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
         cites[row] |= runs
     if joint:
         if not ext_runs:
-            raise SystemExit("census: name the runs of the schedule search's latest extension (--extension OUT...); "
-                             "decision 76 takes the joint row's margin from them")
+            raise SystemExit("census: name the runs of the schedule search's latest extension (--extension OUT...): "
+                             "the joint row's margin is the most they moved a kind's least")
         moved = {k: before[k][0] / v - 1 if k in before else math.inf for k, (v, _) in joint.items()}
         worst, m = max(moved.items(), key=lambda x: x[1])
         if m > NOISE:
             raise SystemExit(f"census: the search's latest extension moved {worst}'s a {m:.1%} below the earlier runs', "
-                             f"past the {NOISE:.0%} noise: extend the search again (decision 76)")
+                             f"past the {NOISE:.0%} noise: extend the search again")
         scale = (1 - NOISE) / (1 + m)
         for kind, (v, runs) in sorted(joint.items()):
             lines.append(f"{kind},JIM,,,{v * scale:.6g},,,,{' '.join(sorted(runs))}")
