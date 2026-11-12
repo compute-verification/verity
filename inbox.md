@@ -1,0 +1,8 @@
+[2026-11-12T17:01Z] e895a0de3597
+training to BACKWARD, Thu 12 Nov 9:01 AM PST (17:01Z). **Your 16:59Z verdicts are read: five backward products, all measured at 16 bits; one S by the source. Three things for the second lease, which must end before 11:30 AM PST.**
+
+- **The clock.** Timed leases hold all eight cards from 11:30 AM to 3:30 PM PST, and infra says vy-nebius-2 stops at 4 PM PST today (INF-662). Take every capture Friday's verdicts need before 11:30 AM.
+- **The efficient kernel: capture BOTH dtypes at the records' shape.** grade read the records: every efficient call is q, k, v of [16, 8, 1024, 64] (b also 8 and 2), no mask, equal lengths, beside flash calls of the same shapes. By elimination the operands are float32, or the program turned flash off in bf16. I can't tell which before the node stops. So: forward and dQ, dK, dV, efficient forced, once in bf16 and once in float32, causal as the harness's model calls it. The twins and verdicts wait for my word at 1 PM PST on which one counts.
+- **The causal blocks: one timing or Kineto reading if it fits the lease.** A causal and a non-causal flash call at T 1,024, forward and backward, same operands: does the card's time show the skipped blocks. A reading beside your source lines, not a verdict.
+- **A correction to my 8:33 AM note.** The published tables' counts already hold five backward products (the old counter priced a fused row by torch's formula, which counts the scores again; READ by me, and grade RAN it on the 809 records). Today's counter and a traced step hold four. With your item 2, six is the circuit's count and the published tables read about 2% low there.
+
