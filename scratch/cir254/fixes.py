@@ -7,6 +7,10 @@
     commit-tag     `DsaButterflyTag_v1`'s builder commits the tag it returns
     last-use       no change to the circuit: ``wires`` records each word's last read, and the record gives what the lowering
                    would hold at most if it dropped a word after its last reader (``rec["last_use"]``)
+    free-words     no change to the circuit (the pin must be the one without): `ir_lower.lower_gates` drops a gate's word from
+                   ``wires`` once the last gate that reads it is lowered.  The last reader of every gate is read off the gates
+                   in one pass before the lowering (`_last_readers`); the words the caller reads after (the call's returns)
+                   stay.  What the change to `lower_gates` itself would be: that pass, and a `del` after each step.
 
 A commit is a row of the lowered unit and no gate of the Definition (`trace.TracingCircuit.commit` returns the word), so the
 Definition, its description and its id stay as they are, and the unit's circuit and pin change.
@@ -73,6 +77,76 @@ def _frontier(wires: _Recording, keep: set) -> dict:
             "peak_entries": peak_e, "peak_at_word": at, "never_read": sum(1 for k in wires if k not in wires.last and k not in keep)}
 
 
+def _last_readers(gates):
+    """For every gate of the circuit, the index of the last gate of ``gates`` that reads it (-1: none does), as a lowering by
+    `ir_lower.lower_gates` reads: a gate reads its operands, and a builder-lowered activation reads every leaf of its
+    parameters when it is lowered, whether or not a gate of its own does."""
+    import numpy as np
+    from verity_flock import ir_lower as IL
+
+    circ = gates.circuit
+    last = np.full(circ.size, -1, dtype=np.int64)
+    seen: set[tuple[int, int]] = set()
+    n = 0
+    for g in circ.gates(gates.lo, gates.hi):
+        n += 1
+        i = g.index
+        for o in g.operands:
+            last[o] = i
+        act = IL._boolean_activation(g)
+        if act is not None:
+            sc = act[0]
+            key = (sc.offset, id(sc.spec))
+            if key not in seen:
+                seen.add(key)
+                end = sc.offset + sc.spec.gates - 1
+                for pi, (_, t) in enumerate(sc.spec.signature()[0]):
+                    for j in range(t.leaves):
+                        o = IL.param_leaf(sc, pi, j)
+                        if last[o] < end:
+                            last[o] = end
+    return last, n, len(seen)
+
+
+class _Freeing(dict):
+    """``wires`` that drops a word once no gate still to be lowered reads it.  A word set at gate j says every gate below
+    the word set before it is lowered (gates are lowered in order, an activation's returns set after its builder has read
+    its parameters), so a word whose last reader is below that one is dropped then; ``keep`` never are."""
+
+    def __init__(self, base: dict, last, keep: set):
+        import heapq
+
+        super().__init__(base)
+        self.last, self.keep, self.push, self.pop = last, keep, heapq.heappush, heapq.heappop
+        self.heap = sorted((int(last[k]), k) for k in base)
+        self.prev = -1
+        self.dropped = self.most = 0
+
+    def _made(self, j: int) -> None:
+        self.push(self.heap, (int(self.last[j]), j))
+        h, prev, keep = self.heap, self.prev, self.keep
+        while h and h[0][0] < prev:
+            o = self.pop(h)[1]
+            if o not in keep and dict.pop(self, o, None) is not None:
+                self.dropped += 1
+        self.prev = j
+        if len(self) > self.most:
+            self.most = len(self)
+
+    def __setitem__(self, j, word):
+        new = j not in self
+        dict.__setitem__(self, j, word)
+        if new:
+            self._made(j)
+
+    def setdefault(self, j, word):
+        if j in self:
+            return dict.__getitem__(self, j)
+        dict.__setitem__(self, j, word)
+        self._made(j)
+        return word
+
+
 def apply(names: str, rec: dict) -> None:
     from verity.definitions.registry import boolean_dsa_topk_mask as BM
     from verity_flock import ir_lower as IL
@@ -102,5 +176,32 @@ def apply(names: str, rec: dict) -> None:
                 return wires
 
             IL.lower_gates = lower_gates
+        elif name == "free-words":
+            inner_f = IL.lower_gates
+            depth_f = [0]
+
+            def lower_gates_freeing(C, gates, wires, *a, **kw):
+                if depth_f[0] or "free_words" in rec or not hasattr(gates, "returns"):
+                    return inner_f(C, gates, wires, *a, **kw)
+                import time
+
+                t = time.time()
+                last, n, acts = _last_readers(gates)
+                rec["free_words"] = {"gates": n, "activations": acts, "last_readers_seconds": round(time.time() - t, 1),
+                                     "last_readers_bytes": int(last.nbytes)}
+                keep = set(gates.returns) | set(kw.get("reads", ()) or (a[1] if len(a) > 1 else ()))
+                fw = _Freeing(wires, last, keep)
+                depth_f[0] += 1
+                try:
+                    inner_f(C, gates, fw, *a, **kw)
+                finally:
+                    depth_f[0] -= 1
+                rec["free_words"].update({"words_set": fw.dropped + len(fw), "dropped": fw.dropped, "most_at_once": fw.most,
+                                          "left": len(fw)})
+                wires.clear()
+                wires.update(fw)
+                return wires
+
+            IL.lower_gates = lower_gates_freeing
         else:
             raise ValueError(f"--fix {name}?")
