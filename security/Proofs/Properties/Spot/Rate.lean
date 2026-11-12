@@ -10,7 +10,7 @@ import all Init.Data.Array.Basic
 import all Init.Data.Repr
 
 /-!
-# `RuleAtRate`: a parsed selection rule samples at least its rate
+# `RuleAtRate`: the count a parsed selection rule names is at least its rate
 
 * **What the parsers return** (`parseRate_bounds`, `parseStrataRate_bounds`): a rate design's `(NUM, DEN, T)` has
   `0 < NUM ≤ DEN` and `1 ≤ T`, and a stratified or work rate design's `(NUM, DEN)` has `0 < NUM ≤ DEN`, read off their
@@ -310,8 +310,9 @@ theorem ofJson_fixed (kind : String) (hk : kind = "subset" ∨ kind = "stratifie
 
 /-! ## The property and its witnesses -/
 
-/-- **`RuleAtRate`**: a parsed rule samples at least its rate over whatever the prover registers, a work rate design's
-table holds each stratum's floor at the rate, and a fixed count is refused. -/
+/-- **`RuleAtRate`**: the count a parsed rule names is at least its rate over whatever the prover registers, where the
+statement says so; a work rate design's table has, under each stratum's template, a floor at the rate; and a fixed
+count is refused. -/
 theorem ruleAtRate : RuleAtRate := by
   refine ⟨fun j rule n sizes r hj ho => ?_, fun t p query table out h => tableOver_cases h,
     ofJson_fixed "subset" (Or.inl rfl), ofJson_fixed "stratified" (Or.inr (Or.inl rfl)),

@@ -3,13 +3,14 @@ module
 public import Spot.Select
 
 /-!
-# A parsed selection rule samples at least its rate, whatever population the prover registers
+# The count a parsed selection rule names is at least its rate, whatever population the prover registers
 
 The population a selection rule samples is the registration's, which the prover sizes. A fixed count `K` of `N` units
 samples each unit with `K/N`, which falls as the prover pads `N`. So `Select.Rule.ofJson` parses a rule only when its
 design text is a rate (`Select.rate?`, `Select.replayLaw?`) and refuses a fixed count (`Select.FIXED`), and
 `Select.Rule.over` turns the rate into a count once the population is known. `RuleAtRate` says what that gives, against
-those functions, and takes no premise. It has three parts:
+those functions, and takes no premise. It is about the count a rule names, not the sample made from it. It has three
+parts:
 
 * a rule `Rule.ofJson` parses, over any `n` units in strata of any `sizes` where `Rule.over` gives a rule, is one of
   `AtRate`'s forms. Under `all` it stays `all`. Under a rate design `rate:NUM/DEN[:T]`, and under a two-stage rule's
@@ -18,19 +19,26 @@ those functions, and takes no premise. It has three parts:
   of the `n` units a count `k_s` with `NUM·s ≤ DEN·k_s`. Under `work-rate:NUM/DEN` it is `work:K` with `1 ≤ K ≤ n`. The
   one other text `Rule.ofJson` parses is `bernoulli:NUM/DEN`, which stays itself, a sampling design `Draw.bernoulli`
   marks;
-* the work table `Select.Rule.tableOver` writes for a work rate design names each stratum of the program under the query
-  once, in order, with the verifier's work and the floor `Rate.floor NUM DEN n_s f`, at which Flock's work rule
-  (`Flock.Draw.workK`) gives the stratum a count `k_s` with `NUM·n_s ≤ DEN·k_s` under any `K` and any population work
-  (`TableAtRate`);
+* the work table `Select.Rule.tableOver` writes for a work rate design has an entry under each stratum's template, over
+  the strata of the program under the query: some work and the floor `Rate.floor NUM DEN n_s f` at some `f`, at which
+  Flock's work rule (`Flock.Draw.workK`) gives the stratum a count `k_s` with `NUM·n_s ≤ DEN·k_s` under any `K` and any
+  population work (`TableAtRate`). That work and that `f` are only said to exist: the statement ties them to no table;
 * a rule object whose design text is a fixed count, `subset:K`, `stratified:K` or `work:K`, is refused with `FIXED`.
 
-Each bound is on the count a rule names, for every population and every strata, so the prover's choice of them moves
-none: it holds at a population the prover picks after seeing the coins of earlier windows too.
+So the count is at least the rate's share only where a part says so: of the `n` units under a rate design and under a
+two-stage rule's replay design, and of each stratum under a stratified rate design. Under a work rate design the rate
+is within the table's floors. Of `all` and of a Bernoulli text the property says only that each stays itself. Each
+bound holds for every population and every strata where `Rule.over` gives a rule, so the prover's choice of them moves
+none: it holds at a population the prover picks after seeing the coins of earlier windows too. Under a rate design, a
+stratified rate design and a work rate design, `Rule.over` gives no rule at `n = 0`; nor under `rate:NUM/DEN:T` where
+the count, a multiple of `T`, is more than `n` (`rate:1/1:2` over 3 units asks 4); nor under a stratified rate design
+with no strata. The property says nothing there.
 
 Not proved here, each the code's or another statement's:
 
 * that the stream's run calls these functions at the population and the strata it then samples, reads the table
-  `tableOver` wrote, and refuses a registration under a Bernoulli design;
+  `tableOver` wrote, and refuses a registration under a Bernoulli design, of whose text the property says only that it
+  stays itself, whatever its rate (`bernoulli:0/1` parses);
 * that the sample `Select.select` makes holds the rule's count of units of each stratum, which is the sampled audit's
   own statement;
 * anything of a two-stage rule's second stage, whose counts are fixed per cell;
@@ -95,11 +103,12 @@ floor `Rate.floor NUM DEN n f`, as `Select.Rule.tableOver` writes it. -/
 def floorEntry (num den n w f : Nat) : Json :=
   Json.mkObj [("work", Lean.toJson w), ("floor", Lean.toJson (Rate.floor num den n f))]
 
-/-- **A work rate design's table holds every stratum's floor at the rate**: where the design text `t` is the work rate
-design at `NUM/DEN`, the table `out` is an object with one entry for each stratum of the program under the query
-(`Partition.strata`), in their order, under the stratum's template: a work and the floor `Rate.floor NUM DEN n_s f` at
-the stratum's `n_s` units (`floorEntry`), at which Flock's work rule gives the stratum `k_s` with `NUM·n_s ≤ DEN·k_s`,
-under any `K` and any population work. -/
+/-- **A work rate design's table has, under each stratum's template, a floor at the rate**: where the design text `t`
+is the work rate design at `NUM/DEN`, the table `out` is the object with an entry under each stratum's template, over
+the strata of the program under the query (`Partition.strata`): some work and the floor `Rate.floor NUM DEN n_s f` at
+the stratum's `n_s` units and some `f` (`floorEntry`), at which Flock's work rule gives the stratum `k_s` with
+`NUM·n_s ≤ DEN·k_s`, under any `K` and any population work. The work and the `f` are only said to exist, each a
+function of the template: they are tied to no table the verifier was handed. -/
 def TableAtRate (t : String) (p : Program) (query : Json) (out : Option Json) : Prop :=
   ∀ num den, Select.parseStrataRate t = some (true, num, den) →
     ∃ (strata : Array (String × Array (Nat × Nat))) (work floor : String → Nat),
@@ -112,13 +121,16 @@ def TableAtRate (t : String) (p : Program) (query : Json) (out : Option Json) : 
 /-- A rule object as a Spec writes it under the design text `t`: `{rule: law, law: t}`. -/
 def ruleOfText (t : String) : Json := Json.mkObj [("rule", "law"), ("law", Json.str t)]
 
-/-- **A parsed rule samples at least its rate over whatever the prover registers.** For every rule object `j` that
-`Rule.ofJson` parses as `rule`, every `n` and every `sizes`, where `Rule.over` gives the rule `r` over `n` units in
-strata of `sizes` units, `r` is `AtRate`'s: the count it names is at least the rate's share of `n`, and of each
-stratum. For every design text, program, query and work table, where `Rule.tableOver` gives a table under the rule
-`law t`, that table is `TableAtRate`'s: each stratum's floor is at the rate. And a fixed count is refused: at every
-`K`, the rule object whose design text is `subset:K`, and likewise `stratified:K` and `work:K`, is refused with
-`FIXED`. -/
+/-- **The count a parsed rule names is at least its rate, over whatever the prover registers.** For every rule object
+`j` that `Rule.ofJson` parses as `rule`, every `n` and every `sizes`, where `Rule.over` gives the rule `r` over `n`
+units in strata of `sizes` units, `r` is `AtRate`'s. Under a rate design, and under a two-stage rule's replay design,
+the count it names is at least the rate's share of `n`. Under a stratified rate design each stratum's count is at
+least the rate's share of the stratum, and of its `K` only `1 ≤ K ≤ n` is said. Under a work rate design only
+`1 ≤ K ≤ n` is said: the rate is within the table's floors. Of `all` and of a Bernoulli text only that each stays
+itself. For every design text, program, query and work table, where `Rule.tableOver` gives a table under the rule
+`law t`, that table is `TableAtRate`'s: the floor under each stratum's template is at the rate. And a fixed count is
+refused: at every `K`, the rule object whose design text is `subset:K`, and likewise `stratified:K` and `work:K`, is
+refused with `FIXED`. -/
 def RuleAtRate : Prop :=
   (∀ (j : Json) (rule : Select.Rule) (n : Nat) (sizes : List Nat) (r : Select.Rule),
     Select.Rule.ofJson j = .ok rule → rule.over n sizes = some r → AtRate rule r n sizes) ∧
