@@ -437,6 +437,7 @@ def decide(s: Snapshot) -> list[Action]:
                                             f"{base[:12]}, main's chain's top now: its other members are built again"))
             kept.remove(passed[0])
             kept += _restack(s, ready, chain, [passed[0]], landed | ejected | out, main, acts, kept)
+            base, room = chain[-1].sha if chain else main, len(chain) < s.depth
         pool = _pool(ready, landed | ejected | {m for c in chain for m in c.members}, kept)
         members, why = _next(s, pool, outcomes := _outcomes(s, acts), chain, built)
         if kept and _aside(members, ready, outcomes):
