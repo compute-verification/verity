@@ -86416,3 +86416,148 @@ Which is which: 4, 2 and 3 are below, from reading, [derived] where I say so; no
 **ρ when none is stated.** As in the 11:32Z entry: the field is `none`, a credited time is 0 and a charged time has no bound (`ticksCredited`, `ticksCharged`, `r20261112-112912-9df9`). No interim figure.
 
 **Not established.** Whether any check today is given the configuration's hash for a certifier's or a challenger's key (I read the message's code, not its callers). Whether the Lean that proves `signs` reads the deployment value's meaning or only its bytes. Nothing here is compiled.
+
+## FINDER, Thu 12 Nov 11:44Z: NET-329's asks 1 to 3 and your item 4, all four read; nothing built, no run. Ask 1 yes, at a trace; ask 2 has no instance to be met at; ask 3 the count is the statement's, and padding is not what is missing; item 4 is one term, and tables cost one bit a doubling.
+
+**In plain words.**
+
+- **Ask 1: yes.** The one-stage bound can be stated once at any trace, with the two masses that depend on the trace taken as hypotheses. Ours, the per-tape one and network's are then instances. `main` already has this lemma at two stages and has the same 45 lines three times at one stage; network's would be the fourth. It is about 55 new lines under `security/Proofs/`, takes about 100 away, changes no file under `security/Definitions/`, so no guarantee's statement and no lock record moves. I would state it at a trace, not at a list of openings: the list form puts the network certifier's definitions under Flock's sampling proofs, and with the trace form network keeps its trace in its own file and its 60 lines become about 12.
+- **Ask 2: there is no instance to meet them at.** #9097 is on `main` (merged 09:30Z) and the cost form is two lemmas there. `main` has no compiled instance of a scan's verifier: a scan's audit is one Flock session a member, put together in Python, and the Lean verifier's form for several members refuses everything until its guarantee is in the lock. So at a scan every hypothesis is "not known". Of network's three: a class of gates opened whole is met with no proof if each gate is its own class, at the price of counting gates; the opening checks' count follows from a count of what a witness reveals and is proved at one member; the budget is a hypothesis on the prover, not on the verifier. What is missing is the instance and its sessions' contract, which the square-root form needs as well.
+- **Ask 3: not the same in general, and padding is not what is missing.** The round count is a function of the statement alone: how many tables the session has, and for each table its circuit and its instance count rounded up to a power of two. At one statement it does not move with the sample. Across a period it is the same when every phase has the same template and the same sample size, and can differ when they do not. But one-stage v2's verifier is one verifier a statement (any other statement it refuses in one round), so network's hypothesis of one verifier with one count at every statement of a period fails there whatever the counts. Their proof uses the hypothesis only to give every phase one type of coins.
+- **Item 4: one term, `8·T·e_s·K_m/2^256`**: the prover's calls, times the runs one session's extraction takes (`1 + k`, and `k` grows with the tables in a session), times the classes of gates the sample's sessions need. It is 99.96% of the hash part at the theorem's numbers. Tables cost one bit a doubling: 4, 6 and 7.6 bits at 16, 64 and 200. A node's year (2^-118 a phase) is a change of parameter. The world's year (2^-144 a phase) is not: it needs a change of proof, and the cheapest I see is in the pooled statement, not in a phase's bound, because the term is linear in the prover's calls. The fork term is the second limit there: summed over the world's year it is within 2^-100 only up to 2^14.1 sessions a sample at one table. SHA-512's 512 bits exclude neither target; what they fix is that a finder that waits gets only the linear bound, which is tight.
+
+**What I read.** [run] `origin/main` at `33866d93e66e` (11:43Z); every file cited below is unchanged from `5a6330f1a429`, where I read it (`git diff --quiet` over them, exit 0). [run] `gh pr view 9097`: MERGED, 2026-11-12T09:30:06Z. [read] NET-329's three comments; network's plan note and its scratch file as they stood in the notes when I read them this turn (`lanes/network-accounting/tools/net363/ScratchPooledRegX.lean`); I did not build it. Branch `cursor/proofs-finder-7c1e` at `328c0e6fb2ca` (#9149) for the one-wait form.
+
+### Ask 1. One lemma at a trace
+
+- [read] `ksRegX_of_sessionKS` (`security/Proofs/Flock/SamplingGeneric/RegX.lean:171-222`). Its body: an accepted run with a sampled proof block in `FregX` has that block's session not extracted at its first slot, or its extractions disagree with themselves, or they open a gate off the trace (`trace_split` at `L.regValX H P x`, `:205`); then the sessions' bound (`pr_unfound_le`, `:210`), the two masses (`pr_inConfX_le` `:113`, `ex_offRegX_le` `:150`), the sum, and the second half by `miss_of_event`. Only the two masses and the unfolding of `FregX` know which trace it is.
+- [read] `trace_split` (`Reg.lean:306-317`) already takes any `tr : ℕ → Option Bool`. Its docstring: "The trace is the reader's: the committed trace at the run's tape (`reg_split`), or one read at the statement."
+- [read] The same body stands at `ksReg_of_sessionKS` (`Reg.lean:595-646`, the per-tape trace) and at `pr_regHit_le_canon_on` (`RegCanon.lean:117`): three copies at one stage.
+- [read] Two stages has it factored already: `eventTwo_le_of_off` (`TwoRegFirstHit.lean:862-873`), "at a boundary trace that may read the tape", the masses as hypotheses `hI`, `hB`, `hN`; `eventTwoX_le_of_off` (`:905`) is it at `regValX`.
+- [read] `compilerKSRegX_of` (`RegX.lean:227-229`) is three lines over `ksRegX_of_sessionKS` and would not change.
+- [read] Network's copy is `ksRegR_of_masses` (scratch `:501-575`) at `regValR H L P x (ops s)`. What it changes: the trace, and a case split (`:560-568`) that turns "opens a gate off the trace" into "off the trace read at the statement" or "off a registered opening" (`OffOps`). `CertifierRegisters`' first clause (`security/Definitions/NetworkCertifier/TapRows.lean:79-88`) is what it reads for the second.
+- **The statement** [guess: that it elaborates as written; not built]:
+
+```lean
+open Classical in
+/-- The proof blocks that no values agreeing with the trace `tr` on the program's gates make correct. -/
+noncomputable def Compiled.wrongAt (L : Compiled Coin A) (x : Msg) (tr : ℕ → Option Bool) : Finset ℕ :=
+  match L.parse x with
+  | none => ∅
+  | some s => (Finset.range (L.part s).blocks.length).filter fun v =>
+      ¬ ∃ b, (L.part s).blocks[v]? = some b ∧ ∃ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+        (∀ g < s.prog.gates.length, val g = tr g) ∧ s.prog.Correct (s.prog.refIn b val ι) b
+
+theorem Compiled.event_le_of_off {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (hSK : L.SessionKS H)
+    {x : Msg} {s : AuditStatement} {Pt : Sampling.Partition} (hs : L.parse x = some s)
+    (hPt : L.partition s = some Pt) (hin : InScope Pt s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (tr : Ω → ℕ → Option Bool) {bI bO : ℝ}
+    (hI : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) ≤ bI)
+    (hO : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (run H P L.V x q.1 q.2.1).out = .acc ∧
+      ∃ g < L.nG x, ∃ b, L.opensAt H P x q.1 q.2.1 q.2.2 g = some b ∧ tr q.1 g ≠ some b) ≤ bO) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.wrongAt x (tr p.1)) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + bI + bO
+```
+
+- [derived from the bodies] **The instances.** Ours: `tr := fun _ => L.regValX H P x`, `bI` by `pr_inConfX_le`, `bO` by `ex_offRegX_le`; `FregX` is `wrongAt` there ([guess] by `rfl`). The per-tape one: `tr ω := L.regVal H P x ω`. Network's: `tr := fun _ => regValR H L P x (ops s)`, `bO` the sum of the two masses its case split gives. The cost form is the same lemma with `bI` by `bconfX_le_at` and `bO` by `pr_offRegX_le_cls_at`.
+- [read] **Why a trace and not a list.** A lemma that names the list would read `NetTiming.certifierVal` (`TapRows.lean:66-67`) from `security/Proofs/Flock/SamplingGeneric/`, or need that definition moved into `Claims`. The trace form reads neither; "a trace with a list of registered openings" is then network's `regValR`, in network's file.
+- [run: `rg` and the lock] **What it would touch.** `Reg.lean` or a new file beside it (a new file rebuilds less: `Reg.lean` has 9 importers, `RegX.lean` 2), `RegX.lean`, and `RegCanon.lean` if the third copy folds. `tools/verity/lean/unread-caps.json` counts `Proofs/Flock` at 267 modules and 2,141 declarations: 3 or 4 more declarations, one more module if a new file. No file under `security/Definitions/` changes. The lock's `reads` has no entry for `Proofs.Flock.SamplingGeneric.Reg*`, and `ksRegX_of_sessionKS`, `trace_split` and `OffRegX` appear nowhere in `security/lean-audit.json`. So no record moves and no guarantee's statement changes: `Claims.SamplingGeneric.compilerKSRegX : CompilerKSRegX` keeps its type.
+- [derived] **Size.** About 55 lines for the definition and the lemma. The three copies become about 10 lines each, so about 100 lines fewer on `main`. Network's 60 become about 12.
+- [read] One more thing it gives: `main` has no theorem that puts #9097's two lemmas into a bound on the one-stage event; network's `ksRegR_of_costs` (scratch `:876-903`) is the only one. With the lemma it is about 15 lines ([guess]).
+
+### Ask 2. The cost form's hypotheses at a scan
+
+- [run] #9097 has landed. The cost form on `main` is `Compiled.pr_offRegX_le_cls_at` (`security/Proofs/Flock/SamplingGeneric/TwoOffClassAt.lean:68-80`: a run's extractions open a gate off the trace read at the statement with probability at most `2·firstHitCost/2^256`) and `Compiled.bconfX_le_at` (`TwoFirstHitAt.lean:521-527`: `Pr[B_conf,X] ≤ 2·runCost/2^256`).
+- [run: `rg`] **No instance.** Nothing outside `Proofs/Flock/SamplingGeneric/` and `Proofs/Flock/SpotFlock/` uses either lemma or the trace read at the statement. `security/Properties/NetworkScan.lean` (`:112`, `:131`) is over any `D : Claims.SamplingGeneric.Compiled`; none is given.
+- [read] What a scan's audit is (`benchmarks/network_traces/scan_zk.py:1234-1416`): one sample over the Program's units, then for each member with a unit in the sample one Flock `--zk` session held by `flock-verify verify --zk … --registered` (`:1348`), the verdicts put together by Python (`:1364`). Members are `first`, `ingress-w`, `last`, `egress-w` (`members_of`, `:330-355`): 2G + 2 at G link-windows.
+- [read] The Lean verifier's form for several members accepts nothing "until the guarantee for one sample over several members' statements is in the lock" (`verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean:56-58`; `MULTI_REFUSED` `:772`, `checkMembersAt_refuses` `:1262`).
+
+| | hypothesis | at a scan | where |
+|---|---|---|---|
+| 1 | `hbind`: the commitment binds | met at any instance over `deployOf` | [read] `commit_binds`, `Claims/Sampling/Deployed.lean:126`, no premise |
+| 2 | `hS : L.CostContract H` | not known. It follows from `Sessions` (`Efficient.lean:555`), which a compiled instance has under its code's clauses (`sessions_compiled`, `SamplingGeneric/Deployed.lean:392`). One-stage v2's verifier supplies them at one member, one session, one table (`ks_record`, `Proofs/Properties/Verity/Sampled/Record/KS.lean:50-63`; `tables _ := 1`, `sessions _ := 1`, `Record.lean:241`, `:243`). No code is stated for several members | [read] |
+| 3 | `hopen : L.OpenCallsLe H` (`Definitions/Claims/SamplingGeneric.lean:549-551`) | not known. It follows from a count of what a witness reveals (`openCallsLe_deployOf`, `Claims/Sampling/Deployed.lean:250`; `openCallsLe_compiled`, `SamplingGeneric/Deployed.lean:376`), proved at one-stage v2 (`revealsLe`, `Record/Opens.lean:112`) and at SPOT's two-stage code (`SpotFlock/RevealsLe.lean:34`). The lock has it on its `open` list (LEAN-186, due 2026-11-30) | [read] |
+| 4 | `hs`: the statement parses | the instance's scope | [read] |
+| 5 | `needs`, `hpos`: every opening a witness reveals at a unit is at a position `needs` lists | not known; proved at SPOT's two-stage code only (`code_hpos`, `SpotFlock/FirstHitClassAt.lean:40`) | [read] |
+| 6 | `cls`, `hallX`: a run's extractions open a class of gates whole or not at all | met with no proof at one class a gate (`cls := id`), and then `K_s` and `K_m` count gates. At coarser classes proved only at SPOT's two-stage code, under `Built` and `Addresses` (`code_opens_cls`, `SpotFlock/OffClassAt.lean:68`); at one stage not known | [read]; [derived] at `id`, `cls g = cls g'` is `g = g'` |
+| 7 | `T`, `hT`: every run calls SHA-512 at most `T` times, both parties' calls | not a property of the verifier. It bounds the prover, with the verifier's own calls in the same count (`runCalls_le`, `TwoOffClassAt.lean:52`). The verifier's calls in a scan's run: not read | [read] |
+| 8 | `hNs`, `hKs`, `hKm`: the expected sessions in a sample, classes of gates the sample needs, and the same counted session by session | any numbers above the three expectations do; a scan's are stated nowhere. Sessions are at most 2G + 2 | [derived] from `members_of` |
+| 9 | `hX`, `hB`: the linear bound (`ExpectedCR`) at the finder by class at every `K` and at `B_conf,X` | an assumption on SHA-512. `Claims.ExpectedCR` is in the lock's `trust.base` and on its `open` list (LEAN-186) | [read] `security/lean-audit.json` |
+
+- [read] Network's three are lines 6, 3 and 7.
+- [read] **What the cost form asks that the square-root form does not**: lines 3, 5, 6, 8, and line 9 in place of a `Pr[B_conf,X]` left as it is. Lines 1, 2 and 4 both take: `CompilerKSRegX` reads `A.KS H`, `L.commit.Binds H` and `L.Sessions H` (`Definitions/Claims/SamplingGenericX.lean:128-130`). So at a scan the square-root form is conditional on the same missing instance.
+- [read] What `main` has for one sample over several members is the game form, `JointAuditV5` and `JointHorizonV5` (`security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean:185-201`, `:400`; guarantees in the lock, not in `deployed`). Its binding term for a member, `δ_link = Q_s/(1 − ρ)·(2t′(1 + k)/2^256 + 1/(eM) + k/(eR_w))` (`:172-177`), is already linear in the calls, with one wait, counted by position. I did not evaluate it at a scan's numbers.
+
+### Ask 3. The round count
+
+- [read] `Claims.Verifier.k : Msg → ℕ` (`security/Definitions/Core/Interaction.lean:109-111`): a function of the statement, never of the coins or the prover.
+- [read] Flock's verifier (`FlockDeploy.V`, `security/Proofs/Flock/Claims/Deploy.lean:311-316`): `2 + Σ over the session's tables of 2·repRounds`, and 1 at a statement that does not set up. Masked, `repRounds` (`:293-304`) is `(m + (kLog − 6)) + (3 + points·regions) + (k0 + 7 + 11·(levels − 1)) + 4`, with `m = kLog + nbl` and `nbl = max 3 ⌈log2 ⌈n/g⌉⌉` (`verity/protocols/flock/verifier/Flock/Statement.lean:238-240`), `k0` and `levels` from `Zk.schedule m` (`Flock/Zk.lean:50`), `points = 2` (`Flock/Record.lean:26`).
+- [derived from those] **What it depends on**: the number of tables in the session; for each table, its circuit (`kLog`, `g`, its regions) and its instance count `n`, through `⌈log2 ⌈n/g⌉⌉` only. Not the values, not the coins, not which units the sample named, only how many.
+- [read] One-stage v2's verifier (`security/Proofs/Properties/Verity/Sampled/Record.lean:153-155`): `1024 + 1 + kS A o` rounds at its own statement, 1 at any other, where it refuses. `kS` (`:125`) is Flock's count at the reference sample file's session, one table of `A.kd` instances (`RefOk`, `:108-110`). A sample file whose session has other numbers is refused (`numsOk` `:122`, in `drawOk` `:134-135`). So at one statement the count is one number whatever the sample.
+- [derived] **Across a period**: two phases' counts are equal when their statements have the same template and the same `⌈log2 ⌈kd/g⌉⌉`. One registered workload and one sample size for the period gives one count; a period that mixes templates or sample sizes gives several.
+- [read] **Why padding does not help by itself.** `V A o` is a verifier for one statement. Network's `hk : ∀ z ω i, D.V.k (x z ω i) = kV` is at one `D`; at one-stage v2 two phases' statements differ, so one of them is refused in one round and `hk` fails even where the two counts are equal. What is missing is one `D` over a period's statements: a verifier that takes the statement, or a family of them.
+- [read] Their proof uses `hk` only to give the phases one type of coins (scratch `:325`, `:335-353`).
+- [guess] So no padding of the protocol is needed. In the proof, either each phase keeps its own type of coins and the period's space is the product of them, or `hk` weakens to `≤ kV` with the coins past a phase's count ignored, which is padding in the model and none in the verifier's code. 15 to 25 lines on their side; not built.
+- [read] A scan (`scan_zk.py:1337-1339`): a member with no unit in the sample runs no session. With every unit sampled every phase runs the same sessions; sampled in part, which sessions run moves with the coins, and a compiled verifier's count would be the most, a function of the statement. `JointAuditV5`'s `hcls` (`Joint/V5/Statement.lean:199`) fixes each member's shape by refusing at registration.
+
+### Item 4. The term that holds the per-phase error
+
+- [read] **The bound** (`εclsOneWait`, `security/Proofs/Flock/SamplingGeneric/TwoOneWaitAt.lean:64-68` on `cursor/proofs-finder-7c1e`; `εoneWaitAt`, `SpotFlock/OneWaitTwo.lean:64-76`), two stages, one wait, written out:
+
+  `3·κ_s + 2·√(k(x)·γ_s·Pr[B]) + [12·T·(1 + e_s·N_s) + 8·T·K_s + 8·T·e_s·K_m + (12 + 8·K_s)·c] / 2^256`
+
+  `T`: one run's calls of SHA-512, both parties'. `e_s = 1 + k`, `k = ⌈4·N₀/e⌉` (Euler's e), `N₀` the level-0 symbols of the session's tables summed, at most `tables·2^23`. `N_s`: expected sessions in a sample. `K_s`: expected classes of gates the sample needs. `K_m`: the same counted session by session. `c = n_PU·openCalls`, the opening checks' own calls. The first two terms are the sessions' knowledge error and the fork term.
+- [read] On `main` the brackets are `[6·T·(1 + e_s·N_s) + 4·T·K_s + 4·T·e_s·K_m + (6 + 4·K_s)·c]` at two stages (`CompiledTwo.εclsAt`, `TwoFirstHitClassAt.lean:44`) and, as the two lemmas of ask 2 sum, `[4·T·(1 + e_s·N_s) + 2·T·K_s + 2·T·e_s·K_m + (4 + 2·K_s)·c]` at one stage, both with `e_s = 1 + 210·k` (`waits := 210`, `Claims/Numbers.lean:29`) and the first two terms once.
+- [derived: `finder-net329-item4.py` §2, the Lean's expression in exact arithmetic at `εoneWaitAt_le_513`'s numbers] **Which term.** `8·T·e_s·K_m/2^256` is 2^-102.44 and 99.96% of the sum; `12·T·e_s·N_s` is 2^-113.85; `8·T·K_s` and `8·K_s·c` 2^-126.0 each; the rest 2^-162. Its factors: 8 = 2^3, `T` = 2^89.0 (2^80 calls charged 513 each), `e_s` = 2^23.56, `K_m` = 2^38. So the hash part is about `T·tables·K_m·2^-229.44` in the one-wait form, `T·tables·K_m·2^-223.73` at one stage on `main` and `·2^-222.73` at two.
+- [derived] In words: the finder waits once for each class of gates until a second run opens it, and each wait extracts again the sessions that need the class. A session's extraction is `e_s` runs, and it is of the whole session, every table of it.
+- [derived: script §1] **The hash part of one phase by tables in a session**, log2, at `N_s` = 2^26, `K_s = K_m` = 2^38, `c = T`:
+
+| form | T | 1 table | 16 | 64 | 200 |
+|---|---|---|---|---|---|
+| two stages, one wait (branch) | 2^80 | −111.44 | −107.44 | −105.44 | −103.80 |
+| | 513·2^80 | −102.44 | −98.44 | −96.44 | −94.80 |
+| one stage, `main` | 2^80 | −105.73 | −101.73 | −99.73 | −98.08 |
+| | 513·2^80 | −96.72 | −92.72 | −90.72 | −89.08 |
+| two stages, `main` | 2^80 | −104.73 | −100.73 | −98.73 | −97.08 |
+| | 513·2^80 | −95.73 | −91.73 | −89.73 | −88.08 |
+
+- [read] What a theorem states of that table: `εoneWaitAt_le_513` (branch, `OneWaitTwo.lean:83-105`), at most 2^-102 at one table and 513·2^80. On `main`, at two stages, `N_s` ≤ 2^30, 2^39 classes and 513·2^80: at most 2^-94, 2^-93, 2^-90 and 2^-87 at 1, 2, 16 and 200 tables (`TwoFirstHitClassNumbersTables.lean:85-102`). Every other cell is arithmetic on the expressions and no theorem states it. And [read] the two-stage code holds a template's session to one table (`SpotFlock.ref_one_table`, `SpotFlock/Accepting.lean:83`), as does one-stage v2 (`Record.lean:108-110`): "no instance here says a verifier accepts a session of more" (`TwoFirstHitClassNumbersTables.lean:33`). Flock's masked scope takes 1 to 200 (`ref_numbers`, `Accepting.lean:53`).
+- [read] **Where tables enter.** `k = ⌈4·N₀/e⌉` (`Definitions/Claims.lean:314`) with `N₀` summed over the session's tables (`Claims/DeployCode.lean:516`): 12,343,986 at one table, 197,503,772 at 16, 2,468,797,139 at 200 (`k_le_tables16`, `k_le_tables200`, `TwoFirstHitClassNumbersTables.lean:52-64`); 790,015,085 at 64 by the same ceiling [derived]. Also the fork term, through the session's rounds and weight: [derived: script §5] it grows with the tables too, 2^-150.45, −146.45, −144.45, −142.80 at 1, 16, 64, 200 tables, one session a sample, `T` = 2^80. And Flock's knowledge error, 2^-203.0 to 2^-195.4, which limits nothing here.
+- [derived] At a fixed number of tables in all, where a class of gates is needed by the session that holds its table, splitting the tables into more sessions leaves `K_m` and `e_s·N_s` as they were and divides `e_s·K_m` by the tables a session. So one table a session is the best this bound gives, and every doubling of tables a session is one bit.
+
+**To reach 2^-118 a phase (a node's year) at a prover of 2^80 calls: a change of parameter.**
+
+- [derived: script §3] The most classes of gates (`K_s = K_m`, `N_s` the smaller of it and 2^26) at which the hash part is within 2^-118, log2, at 1, 16, 64, 200 tables: one wait (branch) 31.39, 26.28, 24.12, 22.48; one stage on `main` 24.14, 20.14, 18.14, 16.50; two stages on `main` 23.41, 19.41, 17.41, 15.76. With a call charged 513: 21.12, 17.12, 15.12, 13.47 for one wait.
+- [derived: script §12] Or shorter tables at 2^38 classes: the term is 2^-118.44 at one table of 2^16 symbols, 2^-114.44 at 2^20, 2^-111.44 at 2^23 (one wait, `T` = 2^80).
+- [read] The fork term is within it: at most 2^-128 at `4 + 4402·2^30` rounds, a session's `γ` at most 2^51 and a finder of 2·2^80 calls (`sqrt_term_le_strict`, `Claims/NumbersFinder.lean:159-164`), under the birthday bound at `B`.
+
+**To reach 2^-144 a phase (the world's year): not by parameters; a change of proof.**
+
+- [derived: script §4] The least the hash part can be, at one session and one class of gates and `c = 0`, `T` = 2^80, at 1, 16, 64, 200 tables: 2^-142.14, −138.14, −136.14, −134.50 at one stage on `main`; 2^-148.12, −144.12, −142.12, −140.48 with one wait. So `main`'s form misses 2^-144 at every size, and one wait reaches it only at 17 classes of gates a sample at one table (2^4.09, script §3).
+- [derived] The arithmetic: under the linear bound an error of 2^-144 leaves the finder 2^112 expected calls, 2^32 runs of 2^80. Today's finder costs `8·e_s·K_m` = 2^(3 + 23.56 + 38) = 2^64.6 runs. 2^-118 leaves 2^58 runs.
+- [derived: script §10, §11] The fork term is the second limit. At 2^26 sessions a sample and one table it is 2^-137.45 a phase, above 2^-144; it is within 2^-144 only at 2^12.9 sessions a sample or fewer at one table, 2^4.9 at 16 tables, 2^0.9 at 64, none at 200. It is the square root of a birthday bound at a finder of two runs, so it is linear in `T` as well, but its count of calls is a worst case and does not pool as below. Summed over the world's year's phases at 2^80 calls each it is within 2^-100 up to 2^14.1 sessions a sample at one table, 2^12.1 where the bound has the term twice (from `2^-150.45·√S` a phase and 2^43.39 phases); a scan's 2G + 2 sessions are far under that.
+- [guess] **The change of proof I would look at first is in the pooled statement.** A phase needs 2^-144 only because the period's bound adds up a phase's error that charges the prover's whole 2^80 calls in every phase. The term that dominates is linear in the calls. If the period's sum charged the calls once (a phase's bound at the expected calls the prover makes in that phase, or one finder for the period), that term would be 2^-111.44 at one table over any period, the world's year included, and 2^-107.44, −105.44, −103.80 at 16, 64, 200 tables ([derived] from the table above; no theorem states it). It needs `hT` as an expectation in place of a worst case under `ex_calls_le_at_cls`, and a pooled statement that takes it. The terms in `c` stay one a phase: `8·K_s·c/2^256` over the world's year is within 2^-101 while `c` is at most 2^70.6 a phase at `K_s` = 2^38 (script §12); `c` at the served sizes I did not read.
+- [guess] Two changes inside a phase's bound, neither sized: an extraction of the one table that holds the gate, not of the session, which takes the tables' factor out of `e_s`; and a finder that does not extract again for each class, which no argument I know gives without the square root.
+
+**What SHA-512's 512 bits exclude, by any proof.**
+
+- [derived] No bound under 2^-353 can be had: a prover of 2^80 calls finds a collision by birthday with probability about (2^80)²/2^513 = 2^-353, and a collision opens a commitment two ways. Both targets are far above it, so the 512 bits exclude neither.
+- [derived] A finder that waits has an expected cost and no worst case, and for such finders the linear bound `E[calls]/2^256` is the best any assumption can say: a finder that makes 2^257 calls with probability `p` and none otherwise has `E[calls] = p·2^257` and finds a collision with probability about `0.86·p = 0.43·E[calls]/2^256` (birthday at 2^257 calls: `1 − e^-2`). So through a waiting finder SHA-512 gives 256 bits, and every factor of the finder's expected cost is paid bit for bit. That is where the tables, the classes of gates and the calls each cost their bits. It excludes 2^-144 for any waiting finder of more than 2^32 runs of 2^80.
+- [derived: script §5] The fork term cannot be had from the linear bound at all: there the bound is 2^-62.45 at best, at one table and one session (`√(k(x)·γ_s·2T/2^256)`, `B`'s two runs of 2^80). It needs the birthday bound at `B`, a finder of two runs with a worst case, which the lock has (`Claims.StrictBirthday`, in `trust.base` and on the `open` list).
+- [guess] **Is the trade between tables in a session and binding error fundamental? Not to SHA-512.** It is the cost of reading one session whole by rewinding (`k` runs to collect the summed tables' symbols), paid once for each class of gates. The birthday floor has no tables in it. It is fundamental to this way of proving, a wait a class and an extraction a session, and the two ways out are the two above.
+
+**A period, over all compute** [derived: script §8, §9, §11; the phases a period are relayed from network's plan note: a node 4,725, 20,250 and 246,375 a week, month and year; a datacenter 5.91e7, 2.53e8, 3.08e9; the world 2.21e11, 9.49e11, 1.155e13]. One table, `T` = 2^80, `N_s` = 2^26, 2^38 classes, log2, week, month, year:
+
+| | a node | a datacenter | the world |
+|---|---|---|---|
+| a phase's error for 2^-100 a period | −112.21, −114.31, −117.91 | −125.82, −127.91, −131.52 | −137.69, −139.79, −143.39 |
+| hash part, one wait (branch), 2^80 calls in every phase | −99.24, −97.14, −93.53 | −85.63, −83.53, −79.92 | −73.76, −71.65, −68.05 |
+| hash part, one stage `main`, the same | −93.52, −91.42, −87.82 | −79.91, −77.81, −74.21 | −68.04, −65.94, −62.33 |
+| hash part, one wait, the calls charged once a period, without the terms in `c` (no theorem) | −111.44 | −111.44 | −111.44 |
+| fork term, 2^26 sessions a sample | −125.24, −123.14, −119.54 | −111.63, −109.53, −105.93 | −99.76, −97.66, −94.05 |
+| fork term, 4 sessions a sample | −137.24, −135.14, −131.54 | −123.63, −121.53, −117.93 | −111.76, −109.66, −106.05 |
+
+At 16, 64 and 200 tables every line is 4, 6 and 7.64 bits worse. The one-wait bound has the fork term twice (one bit worse). The first hash line is a theorem's expression at numbers no theorem takes, times the phases; I state none of these as reached.
+
+**Not done, not known.** I built nothing and ran no Lean; ask 1's text is unelaborated. `N_s`, `K_s`, `K_m` and `c` at the served sizes or at a scan are not read: 2^26 and 2^38 are the theorem's hypotheses. The fork term's figures take a session's most rounds (`2 + 4400·tables`) and weight (`tables·2^33`) and sessions of one shape. I do not know which session sizes the cost model wants, so the tables are at the four you named. The script and its output are in the notes: `lanes/proofs/tools/net329/finder-net329-item4.py` and `.txt`.
