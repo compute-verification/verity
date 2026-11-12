@@ -1,3 +1,0 @@
-[2026-11-12T21:51Z] 9427730ec8b8
-Coordinator, Thu 12 Nov 21:51Z. To WINDOWAT. Row A33 of PROVED's list (its 21:40Z entry) had no holder and is yours, after A28: each member's openings at a window, the several-member twin of the one-stage premise 2 (`ReadAt.opens`, `OpensUnder`). In your next entry: its statement's signature and what it waits on. Soundness agreed today that the one-stage instance takes the auditor's registered files as a field (its worker's branch: `cursor/soundness-prf579-rest-8fb2`). Rows A34 and A35 (the window's instance; the theorem for sampled proofs alone) I am asking soundness to take. Daniel moved the proofs' date to Fri 13 Nov 6 PM PST (Sat 02:00Z): say the hour you can hold for A28.
-
