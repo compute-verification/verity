@@ -22,9 +22,11 @@ records the refusal), at the addresses NVIDIA's open kernel modules give at the 
   for every chip from GA102 on, Hopper's and Blackwell's among them: `kmemsysReadUsableFbSize_GA102`);
 - `NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE`, the MMU's local memory range, magnitude `<<` scale in MiB, on the chips whose
   header defines it at the tag: Blackwell's GB1xx (`blackwell/gb100/dev_fb.h`; `kern_mem_sys_gb100.c` decodes it).
-  No header at the tag defines it for GH100 or for GB2xx, so on those it is read only at an address the caller gives
-  (`--range-at 0x001FA3E0` is GB100's, in the block GH100's own `NV_PFB_PRI_MMU_WPR1_ADDR_LO`, 0x001FA81C, sits in),
-  and the output says the address is the caller's.
+  No header at the tag defines it for GH100 or for GB2xx, so on those it is read only at each address the caller
+  gives, and the output says the address is the caller's and decodes the value both ways the tag has. The two
+  addresses the tag has for it are `--range-at 0x001FA3E0`, GB100's, in the block GH100's own
+  `NV_PFB_PRI_MMU_WPR1_ADDR_LO`, 0x001FA81C, sits in, and `--range-at 0x00100CE0`, Pascal's
+  (`pascal/gp102/dev_fb.h`), which the driver reads up to GA100 (`kmemsysReadUsableFbSize_GP102`).
 
 `--regs must` exits 3 unless every card was read; the default records a refusal and goes on. Outputs under `$OUT`
 (`--out`): `net.txt`, `net.json`, `regs.json`, `nvidia-smi.txt`.
@@ -56,6 +58,15 @@ ARCHITECTURES = {0x17: "Ampere", 0x18: "Hopper", 0x19: "Ada", 0x1A: "Blackwell G
 of Ampere, every chip but GA100, implementation 0, which reads the range register at Pascal's address)."""
 
 MAP = 0x200000
+
+
+def ranges(value: int) -> dict:
+    """A local memory range register's value under each layout the tag has: GB100's (magnitude in bits 27:4) and
+    GP102's (magnitude in bits 9:4, and fifteen sixteenths of it with ECC, bit 30), each `<<` the scale of bits 3:0."""
+    scale = value & 0xF
+    gp102 = ((value >> 4) & 0x3F) << scale
+    return {"raw": f"{value:#010x}", "scale": scale, "MiB_gb100": ((value >> 4) & 0xFFFFFF) << scale,
+            "MiB_gp102": gp102 * 15 // 16 if value >> 30 & 1 else gp102}
 
 
 def run(*cmd: str) -> str:
@@ -120,7 +131,7 @@ def cards() -> list[Path]:
     return out
 
 
-def card(path: Path, range_at: int | None) -> dict:
+def card(path: Path, range_at: list[int]) -> dict:
     """One card's registers over its BAR0, mapped read-only."""
     row: dict = {"bdf": path.name, "device": read(path / "device")}
     start, end, _ = ((path / "resource").read_text().splitlines()[0]).split()
@@ -147,24 +158,24 @@ def card(path: Path, range_at: int | None) -> dict:
                                               "MiB": usable}
         else:
             row["NV_USABLE_FB_SIZE_IN_MB"] = {"refused": "the driver reads no usable size there for this chip"}
-        at, whose = (NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GB100, f"blackwell/gb100/dev_fb.h at {TAG}") if arch == 0x1A \
-            else (range_at, "the caller's: no header at the tag defines it for this chip")
-        if at is None:
+        if arch == 0x1A:
+            row["NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE"] = [
+                {"at": f"{NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GB100:#010x}", "address": f"blackwell/gb100/dev_fb.h at {TAG}"}
+                | ranges(words[NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GB100 // 4])]
+        elif range_at:
+            row["NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE"] = [
+                {"at": f"{at:#010x}", "address": "the caller's: no header at the tag defines it for this chip"}
+                | ranges(words[at // 4]) for at in range_at]
+        else:
             row["NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE"] = {
                 "refused": "no header at the tag defines it for this chip, and no --range-at was given"}
-        else:
-            value = words[at // 4]
-            row["NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE"] = {
-                "at": f"{at:#010x}", "address": whose, "raw": f"{value:#010x}",
-                "magnitude": (value >> 4) & 0xFFFFFF, "scale": value & 0xF,
-                "MiB": ((value >> 4) & 0xFFFFFF) << (value & 0xF)}
     finally:
         words.release()
         bar.close()
     return row
 
 
-def registers(range_at: int | None) -> dict:
+def registers(range_at: list[int]) -> dict:
     """Every card's registers, read here as root or through `sudo -n`, or the refusal."""
     found = cards()
     out: dict = {"tag": TAG, "driver": read(Path("/sys/module/nvidia/version")), "cards": []}
@@ -172,7 +183,7 @@ def registers(range_at: int | None) -> dict:
         return out
     if os.geteuid() != 0:
         again = ["sudo", "-n", sys.executable, os.path.abspath(__file__), "--regs-json"]
-        again += ["--range-at", hex(range_at)] if range_at is not None else []
+        again += [arg for at in range_at for arg in ("--range-at", hex(at))]
         done = subprocess.run(again, capture_output=True, text=True, check=False)
         if done.returncode:
             return out | {"refused": f"not root, and sudo -n: {(done.stderr or done.stdout).strip()[:200]}"}
@@ -189,11 +200,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", default=os.environ.get("OUT") or os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "out"))
     ap.add_argument("--regs", choices=("try", "must", "no"), default="try")
-    ap.add_argument("--range-at", type=lambda s: int(s, 16),
+    ap.add_argument("--range-at", type=lambda s: int(s, 16), action="append", default=[],
                     help="read the MMU's local memory range at this address on a chip whose header defines none")
     ap.add_argument("--regs-json", action="store_true", help="print the registers as JSON and nothing else")
     args = ap.parse_args()
-    if args.range_at is not None and (args.range_at % 4 or not 0 <= args.range_at < MAP):
+    if any(at % 4 or not 0 <= at < MAP for at in args.range_at):
         ap.error("--range-at is a 32-bit register's address in BAR0's first 2 MiB")
     if args.regs_json:
         print(json.dumps(registers(args.range_at)))
