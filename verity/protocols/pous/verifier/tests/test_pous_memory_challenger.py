@@ -9,14 +9,15 @@ import hashlib
 import os
 import tempfile
 
-import pytest
-
 import pous_test_signer as ts
+import pytest
 from pous_fakes import Clock
+
 from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import schemes
+from verity.protocols.pous.verifier.schemes import p2
 
 BLOCKS, K, BLOCK_BYTES, LIMIT = 1 << 10, 12, 64, 854_000
 SOURCE, SESSION = b"challenger secret", hashlib.sha512(b"session").digest()[:32]
@@ -358,8 +359,6 @@ def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monke
 
 
 def test_the_certificate_covers_p2_v4_at_the_cap():
-    from verity.protocols.pous.verifier.schemes import p2
-
     scheme = schemes.get("p2-16448/v4")
     limit = 500_000 + p2.RTT_ALLOWANCE_CAP_NS
     assert limit == 854_000 < p2.ROOT_CALL_NS
@@ -375,18 +374,18 @@ class _SparseTree:
     """A deployed key's tree for leaf 0 alone: its path's siblings arbitrary, its root the one they give, so a test signs
     once at `lms.DEPLOYED` without its 2^20-leaf keygen."""
 
-    def __init__(self, I: bytes, seed: bytes) -> None:
+    def __init__(self, identifier: bytes, seed: bytes) -> None:
         self.root = b""
-        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")  # type: ignore[arg-type]
-        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
+        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, identifier, seed, self), 0, b"probe")  # type: ignore[arg-type]
+        self.root = lms.root_of(lms.DEPLOYED, identifier, b"probe", probe)
 
     def __getitem__(self, r: int) -> bytes:
         return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
 
 
 def deployed_signer(tmp_path) -> mc.LmsSigner:
-    I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
-    key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
+    identifier, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
+    key = lms.PrivateKey(lms.DEPLOYED, identifier, seed, _SparseTree(identifier, seed))  # type: ignore[arg-type]
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
     return mc.LmsSigner(key, tmp_path / "state")
 

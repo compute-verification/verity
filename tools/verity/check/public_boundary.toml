@@ -31,10 +31,12 @@ spot = [
     "verity/protocols/spot/{candidates.py,costfit.py,device,optimize.py,plancheck.py}",
     "verity/protocols/spot/verifier/lean",
 ]
-# C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
+# C-Flock: its prover, its Lean verifier and ZK server with the base packages it requires, and its security analysis
 flock = [
     "verity/protocols/flock",
     "verity/protocols/flock/verifier",
+    "verity/circuits/{base,lean}",
+    "verity/commitments/lean",
     "security/Proofs/Properties/Flock{,.lean}",
     "security/*/Flock{,.lean}",
     "security/Definitions/Assumptions/Flock.lean",
@@ -335,6 +337,11 @@ from = ["certifier"]
 why = "the identity hash's properties' proofs, which the network certifier's checks' proofs read"
 paths = ["security/Proofs/Properties/Hash"]
 from = ["certifier"]
+
+[[needed]]
+why = "the ZK server's record as its Lean code runs it, stated and proved, which the recursive session's stop count is proved from"
+paths = ["security/{Properties,Proofs/Properties}/Firewall.lean"]
+from = ["flock"]
 
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`

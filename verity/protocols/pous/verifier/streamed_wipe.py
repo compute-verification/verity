@@ -50,10 +50,15 @@ from typing import Any
 
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
-from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import derive
-
-from verity.protocols.pous.device.memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.protocols.pous.device.memory_challenger import (
+    CLOCK_RESOLUTION_NS,
+    SCHEMES,
+    SessionLog,
+    Signer,
+    Verify,
+)
 
 PROTOCOL = "verity-pous/streamed-wipe/v1"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"
@@ -396,6 +401,14 @@ class Verdict:
         return {"accepted": self.accepted, "egress_mib": self.egress_mib}
 
 
+def _verifies(verify: Verify, signed: SignedWipe) -> bool:
+    """Whether the session's signature verifies under its key, by its scheme's `verify`."""
+    try:
+        return bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
+    except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
+        return False
+
+
 def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
     """The check of a signed session against the commitment published when it opened.  It fails closed: an unknown
@@ -407,13 +420,8 @@ def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozense
         reasons.append(f"signature scheme {signed.scheme!r} is not accepted")
     elif signed.public_key not in trusted:
         reasons.append("the session is signed by a key that is not a trusted memory challenger's")
-    else:
-        try:
-            ok = bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
-        except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
-            ok = False
-        if not ok:
-            reasons.append("the signature does not verify")
+    elif not _verifies(verify, signed):
+        reasons.append("the signature does not verify")
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
     p = commitment.params
