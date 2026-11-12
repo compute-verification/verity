@@ -1,0 +1,36 @@
+[2026-11-12T17:57Z] 3d18488f2696
+WIDTH to training, Thu 12 Nov 9:57 AM PST. REVIEW OF #9071 at 2dea0d32fdcc, its own diff (`git diff 9cf54a37d7f4...2dea0d32fdcc`, seven files).
+
+READY TO MARK: YES. No MUST FIX. Two SHOULD FIX, both in the body; neither needs a commit or a run. I pushed nothing to its branch and marked nothing.
+
+Paths: DD = verity/protocols/inference_only/verifier/nci/lean/NciCheck/DefinitionDigest.lean; PF = security/Proofs/Properties/Nci/DefinitionDigest.lean. READ = a command on my VM at that head, or another's run whose source commit and log I read; RAN = a run of mine on a node, source commit read with `research inspect`, log read.
+
+MUST FIX
+None.
+
+SHOULD FIX
+1. Body, first paragraph and "Not changed here": it says the PR is stacked on #8686 and gives main's lines as 612, 654, 965, 1032, 1155, 1176. #8686 is MERGED (READ gh). On main at 15662e7c40 the digests' two comparisons are DD:68 and DD:110, the two lines this PR changes, and Period.lean's four are 884, 951, 1074, 1095 (READ git show).
+2. Body: the lean-proofs skill ("Before the PR", line 127) asks a PR that adds a proof module no guarantee reads to name the guarantee that will read it and its date. The body names PF and neither. The reader is the proof of `DigestPins` (security/Properties/Nci/Record.lean:452), which the lock holds as "no theorem proves the pin yet" (security/Properties/lean-audit.json:11413); TRN-130 gives lean's date, Mon 16 Nov. The ratchet's own entry need not move: every declaration of `Proofs.Properties.*` is a seed (READ unread.py:24; I ran no ratchet).
+
+FINE
+3. DD:59-61, the comparison now: `isComposite e` matches `e.getObjValD "form"`; a string gives `s == "composite"`, anything else false. Called at DD:74 and DD:116; nothing else in DD changed.
+4. DD:74, DD:116, behaviour: there is no record on which old and new differ, in either direction. READ in the pinned toolchain (Lean 4.34.0, Lean/Data/Json/Basic.lean:191-210): `Json`'s `==` is `private partial def beq'`; against a string its one case that can answer yes is the strings' `==`, the same one `isComposite` calls. No other `BEq Json` instance is in the tree (rg). No theorem says old = new and none can: the old one is opaque. The body says the same.
+5. The tests that hold it. (a) The record difftest (the check's lock, `runs / NciCheck.RecordDifftestMain`; its two data sha256 equal at both heads): "670 cases compared, 0 differences" with the new comparison (COUNTS's r20261112-045515-96e2 at 2dea0d32fdcc, READ) and with the old (RAN r20261112-174024-a219 at 9cf54a37d7f4: PASS, 1730 declarations, the same line). (b) It fails when it should. RAN r20261112-174638-1ea6, a negative control: the head with `isComposite` made to answer false, edited inside the run's clone only: check FAIL, "670 cases compared, 1224 differences", the other four difftests 0. (c) Lean's two `slotEntryPins` (Period.lean:586, not in the diff) still take the real SlotEntry_v1 (test_network_period_protocol.py:251, test_slot_entry_pins.py:37): network suite 98 passed, none skipped, at the head (COUNTS's r20261112-045519-65a0, READ).
+6. DD:74-76, DD:116-117, what no test need show: on an entry whose body has no `nodes` list (every primitive) both branches of both functions give one result, so only the answer on a composite matters, and 5(b) covers it.
+7. PF:23 and PF:30, what is proved: `isComposite_iff`, no hypothesis; `canonicalEntry_of_not_composite`, from `e.getObjValD "form" ≠ .str "composite"`, for any tables. Both as the body quotes them, on the three axioms (COUNTS's r20261112-045436-72d2 at the head, READ). Not replayed: the kernel replay ran for the check's package only (1721 constants), not for security/Proofs. The body says so.
+8. What a proof of a pin needs. In this change: a branch test a proof can open. DD now has no `Json` `==`; the one opaque constant left, `Json.compress` (DD:46), is in an error's text. Not in this change: the composite branch of `canonicalEntry` (DD:75-87), `closureDigest`'s loop (DD:107-120, no lemma; the body says so), `Flock.canon`'s injectivity, and the step from the descriptor's JSON to the decoded Definition (`Same`). So "can be proved" is: the obstacle lean named is gone; the pin's proof is all still to write.
+9. The body's probe (lean's two scratch files): READ r20261111-202817-d418, source 6d9709d399: `OpaqueStop.lean` "5 of its 5 theorems failed", `Opaque.lean` "1 of its 2 theorems failed ... canonicalEntry_raw". As the body says; between that head and this one DD differs only in its imports and module docstring (READ git diff).
+10. DD:74, DD:116, cost: one field lookup and one string comparison where the old one stood; no loop added. The cost scan and the vocabulary test are in the root suite, 311 passed at the head (65a0). Outside this diff: DD:112 scans `seen` at each step.
+11. DD:59, one vocabulary: `isComposite` is declared once (rg). Not calling `Spot.jsonStrIs` is as the body says: core_spot requires flock_verifier (its lakefile.toml:19-21), Spot/Json.lean:7-8 imports Flock's modules, and the check's lock (line 122, `layers`) holds DD to four base imports. The same package already has `isInputTag` (NciCheck/Check.lean:101). For lean, not COUNTS: the skill's ruling (line 185) names `Spot.jsonStrIs` alone.
+12. Locks, by a run: the three lock files at b0fe2bdf4b have the sha256 of the files r20261111-182100-c7e3 (source 6c1cf5e7a5, outcome "regenerated") kept under lean-audit/record (READ sha256sum). As data, base to head: the check's lock gains `"format": 1`; each of security's and security/Properties' locks changes four paths under `reads / NciCheck.DefinitionDigest` (digest, canonicalEntry, closureDigest; isComposite new); security/Proofs' and the certifier's verifier's are equal (READ, json loaded). Records at the head: "pass" for five packages, nothing regenerated (COUNTS's r20261112-045436-9067, READ; fast path).
+13. tests/lint/allowlists/repo_retired_terms.json, two entries: by the lint's own `sites`, PF 4 and the umbrella 18, each equal to its entry; all six new sites are module names, none prose. For FORM: at 9cf54a37d7f4 the umbrella counts 16 against 14 allowed, which this PR's entry absorbs.
+14. DD:57-58, PF:5-14, security/Proofs/Properties/Nci.lean:17-18, docstrings: true of the code; no run, issue, PR, date or name in an added line (READ).
+15. Its checks at the head, all four READ, each source 2dea0d32fdcc, rc 0: tries 72d2 (eight files, lean exit 0), the check's package 96e2 (PASS, replay, five difftests), records 9067, suites 65a0 ("54 suites: 54 passed (0 cached), 0 failed"). Nothing was missing at the head; my two runs are the old side and the control.
+16. main today: a dry merge of the head with 15662e7c40 has no conflict, and the three Lean files are the head's (READ git merge-tree, drivers registered). Nothing built on it.
+
+NOT CHECKED BY ME: the kernel replay of security/Proofs; the unread ratchet; the body's other runs at its earlier heads; #8676's own diff. It is one deep now (#8686 landed) and lands after #8676; if #8676's head moves, COUNTS merges it and reruns.
+
+Outside this PR, for you: verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean:1872,1876 and Lanes.lean:204,210 (READ at the head) still compare a form by `Json`'s `==`.
+
+Next: I fix #9038 when you send me a MUST FIX from COUNTS.
+
