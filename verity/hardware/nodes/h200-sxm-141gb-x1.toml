@@ -1,9 +1,8 @@
 # An H200 node: one h200-sxm-141gb card in a VM of a two-socket Xeon Platinum 8468 server. This file holds what the
 # node's registration states that no card does (verity/hardware/README.md): the cards it names, how many GPUs it
-# carries, and the host's own memory, one table a leaf. Each number is { value, unit, mark, source }, as in a card.
+# carries, the host's own memory, one table a leaf, and the node's ways out: the interfaces that carry traffic off
+# it, one table each, and the storage path. Each number is { value, unit, mark, source }, as in a card.
 # A GPU's memory is its card's store.dram, whole, and every clock and peak of a card is its card's: none is here.
-# No run has read the interfaces that carry traffic off a node of this kind, so the file has no interface table and
-# the node's entry registers no link.
 
 node = "h200-sxm-141gb-x1"
 name = "An H200 node: one card in a VM of a two-socket Xeon Platinum 8468 server"
@@ -44,3 +43,21 @@ rate = { value = 661661538462, unit = "B/s", mark = "ceiling", source = "the hos
 tier = "disk"
 bytes = { value = 499289948160, unit = "B", mark = "measurement", source = "infra's read, by hand, on a VM of this kind 19 s after its boot: lsblk -b, vdc, the data disk, 465 GiB (art:260d54fc36b1)" }
 rate = { value = 661661538462, unit = "B/s", mark = "ceiling", source = "the host card's disk.read_max (xeon-platinum-8468-2s), the PCI Express lanes and the chipset link into the server's sockets: the disk is a virtio_blk device, one the hypervisor gives the VM (the read of its bytes lists it as vdc, the name that driver gives: art:260d54fc36b1), and nothing on record states an interface of the disk's own, so its bytes are bounded only where they enter the server. A limit the provider sets on a disk of its kind and size is a setting and no ceiling" }
+
+# The node's own way out: the interfaces a route of the node sends packets out of. There is one, eth0, and it reads
+# no line rate: it is the hypervisor's virtio_net device, with no adapter of its own in the VM. So its table names it
+# with what was read of it and states no rate. A figure the provider sets for a VM of this size is a setting, and a
+# measured throughput is a lower bound: neither is a rate, and none is written. An interface with no rate registers
+# no link, and no network certifier is registered on it.
+[interface.eth0]
+driver = "virtio_net"
+source = "the node's own report on a VM of this kind (art:b77a7a7a93b1): eth0, a device of the virtio_net driver, is up and is the one interface a route of the node's main tables names, the default route among them. /sys/class/net/eth0/speed reads -1 and ethtool 'Speed: Unknown!', so the interface states no line rate. The others are the loopback and a bridge with no device behind it, which is down, and the node has no InfiniBand device. The provider's page of its VM types says of this platform 'Network adapter: BlueField-3 200 Gbps': that is the server's adapter, not this interface, and it bounds nothing here"
+
+# The storage path: the node's way out that is no interface. Every disk of the node is the provider's network disk,
+# so what is written to one has left the server past every interface of the VM's, where no network certifier can
+# split it. It is stated once, naming the disk leaves that ride it, and it states no rate: its rate is the one that
+# bounds the node's disks together, the host card's disk.read_max, which nodes.leaves gives and nodes.ways_out
+# reads. A server whose drives are all its own has no such table.
+[storage]
+leaves = ["vda", "vdb", "vdc"]
+source = "each disk is a virtio_blk device the hypervisor gives the VM (the read of their bytes lists them as vda, vdb and vdc, the names that driver gives: art:260d54fc36b1), the provider's network disk: such a disk can be attached to another machine or copied through the provider, and neither passes an interface of the VM's, so a byte written to one may have left the node"
