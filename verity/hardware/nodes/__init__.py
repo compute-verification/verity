@@ -32,8 +32,8 @@ site.units                          # ('node0/gpu0', ..., 'node0/gpu7')
 site.tiers("node0")                 # {'hbm': 824633720832, 'dram': 1872605741056, 'disk': 6266358333440}
 [(k.id, k.beta) for k in site.boundary("node0")]   # [('node0/eth0', 400)], bits a nanosecond
 each, tier = nodes.leaves(node, "node0")
-[(leaf.id, leaf.bw) for leaf in each]   # [('node0/dram', 9011200000000), ('node0/vda', 5545353846160), ...], bit/s
-tier                                # {'dram': 9011200000000, 'disk': 5545353846160}, each tier's leaves together
+[(leaf.id, leaf.bw) for leaf in each]   # [('node0/dram', 9011200000000), ('node0/vda', 5584738461544), ...], bit/s
+tier                                # {'dram': 9011200000000, 'disk': 5584738461544}, each tier's leaves together
 ~~~
 """
 

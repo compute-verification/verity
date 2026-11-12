@@ -147,9 +147,9 @@ def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
 def test_derived_host_numbers(sku: str) -> None:
     """A host's ops are its cores' AMX MACs at their clocks, two ops a MAC; its DRAM's bandwidth is its channels'
     transfers, which bound its reads and are its write ceiling; the second reading of the three, at the fastest memory
-    the processor takes, is a ceiling at or above the first; its lanes' bandwidth is every lane into its sockets and
-    its chipset link at their rates less the coding, in whole bytes, which is its disks' read at most; and its on-chip
-    bytes are its caches and allowances."""
+    the processor takes, is a ceiling at or above the first; its lanes' bandwidth is every lane into its sockets, and
+    what a socket takes apart from them, at their rates less the coding, in whole bytes, which is its disks' read at
+    most; and its on-chip bytes are its caches and allowances."""
     card = load(sku)
     sockets, cores, priority = (value(card, f"cpu.{k}") for k in ("sockets", "cores", "priority_cores"))
     hz = priority * value(card, "clock.priority_turbo") + (cores - priority) * value(card, "clock.turbo")
@@ -162,7 +162,7 @@ def test_derived_host_numbers(sku: str) -> None:
     assert most == channels * value(card, "memory.speed_max") == value(card, "memory.write_max")
     assert value(card, "memory.speed") <= value(card, "memory.speed_max") and bandwidth <= most
     assert {card["memory"][k]["mark"] for k in ("speed_max", "bandwidth_max", "write_max")} == {"ceiling"}
-    transfers = sockets * (value(card, "pcie.lanes") * value(card, "pcie.speed") + value(card, "pcie.dmi")) * 10 ** 9
+    transfers = sockets * (value(card, "pcie.lanes") * value(card, "pcie.speed") + value(card, "pcie.other")) * 10 ** 9
     assert value(card, "pcie.bandwidth") == math.ceil(transfers * Fraction(128, 130) / 8)
     assert value(card, "disk.read_max") == value(card, "pcie.bandwidth")
     assert {e["mark"] for e in card["pcie"].values()} | {card["disk"]["read_max"]["mark"]} == {"ceiling"}
@@ -243,10 +243,11 @@ def test_the_second_readings() -> None:
 
 
 def test_the_lanes_into_the_sockets() -> None:
-    """Each host's PCI Express lanes, their rate, its chipset link and the bytes a second they carry together, which
+    """Each host's PCI Express lanes, their rate, what a socket takes apart from them (four USB ports of its own at
+    most on the one with no chipset, the chipset link on the other) and the bytes a second they carry together, which
     is the most its disks are read back at, pinned so that a change to one is deliberate."""
-    lanes = ("pcie.lanes", "pcie.speed", "pcie.dmi", "pcie.bandwidth", "disk.read_max")
-    assert [value(load("xeon-6776p-2s"), k) for k in lanes] == [88, 32, 0, 693_169_230_770, 693_169_230_770]
+    lanes = ("pcie.lanes", "pcie.speed", "pcie.other", "pcie.bandwidth", "disk.read_max")
+    assert [value(load("xeon-6776p-2s"), k) for k in lanes] == [88, 32, 20, 698_092_307_693, 698_092_307_693]
     assert [value(load("xeon-platinum-8468-2s"), k) for k in lanes] == [80, 32, 128, 661_661_538_462, 661_661_538_462]
 
 

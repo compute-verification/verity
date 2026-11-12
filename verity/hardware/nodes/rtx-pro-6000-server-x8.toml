@@ -31,17 +31,17 @@ rate = { value = 1.1264e12, unit = "B/s", mark = "ceiling", source = "the host c
 [memory.vda]
 tier = "disk"
 bytes = { value = 274877906944, unit = "B", mark = "measurement", source = "lsblk -b on the node's VM: vda, the boot disk, 256 GiB (art:ad5919199280)" }
-rate = { value = 693169230770, unit = "B/s", mark = "ceiling", source = "the host card's disk.read_max (xeon-6776p-2s), the PCI Express lanes into the server's sockets: the disk is a virtio_blk device, one the hypervisor gives the VM, with no model and no transport of its own (art:bb5d32c3c5ee), so no interface of the disk's is on record and its bytes are bounded only where they enter the server. The provider's limit for a disk of its kind and size, 120 MiB/s, is a setting and no ceiling: a run read 0.224 GB/s from it (art:53c2656f4c56)" }
+rate = { value = 698092307693, unit = "B/s", mark = "ceiling", source = "the host card's disk.read_max (xeon-6776p-2s), the PCI Express lanes into the server's sockets and the USB ports counted with them: the disk is a virtio_blk device, one the hypervisor gives the VM, with no model and no transport of its own (art:bb5d32c3c5ee), so no interface of the disk's is on record and its bytes are bounded only where they enter the server. The provider's limit for a disk of its kind and size, 120 MiB/s, is a setting and no ceiling: a run read 0.224 GB/s from it (art:53c2656f4c56)" }
 
 [memory.vdb]
 tier = "disk"
 bytes = { value = 1048576, unit = "B", mark = "measurement", source = "lsblk -b on the node's VM: vdb, 1 MiB, not mounted (art:ad5919199280)" }
-rate = { value = 693169230770, unit = "B/s", mark = "ceiling", source = "the host card's disk.read_max (xeon-6776p-2s), the PCI Express lanes into the server's sockets: as memory.vda, a virtio_blk device with no model and no transport of its own (art:bb5d32c3c5ee). No limit of the provider's is on record for its megabyte, which a run read over and over at 1.523 GB/s (art:53c2656f4c56)" }
+rate = { value = 698092307693, unit = "B/s", mark = "ceiling", source = "the host card's disk.read_max (xeon-6776p-2s), the PCI Express lanes into the server's sockets and the USB ports counted with them: as memory.vda, a virtio_blk device with no model and no transport of its own (art:bb5d32c3c5ee). No limit of the provider's is on record for its megabyte, which a run read over and over at 1.523 GB/s (art:53c2656f4c56)" }
 
 [memory.vdc]
 tier = "disk"
 bytes = { value = 5991479377920, unit = "B", mark = "measurement", source = "lsblk -b on the node's VM: vdc, the data disk, 5,580 GiB (art:ad5919199280); the same VM's was 5,392,331,440,128 B when its disks' read was measured (art:53c2656f4c56), and the larger stands" }
-rate = { value = 693169230770, unit = "B/s", mark = "ceiling", source = "the host card's disk.read_max (xeon-6776p-2s), the PCI Express lanes into the server's sockets: as memory.vda, a virtio_blk device with no model and no transport of its own; the link its PCI device reports, 2.5 GT/s on one lane, is the hypervisor's emulation and bounds nothing (art:bb5d32c3c5ee). The provider's limit for a disk of its kind and size, 2 GiB/s, is a setting and no ceiling: a run read 2.564 GB/s from it (art:53c2656f4c56), about ten times what that link would carry" }
+rate = { value = 698092307693, unit = "B/s", mark = "ceiling", source = "the host card's disk.read_max (xeon-6776p-2s), the PCI Express lanes into the server's sockets and the USB ports counted with them: as memory.vda, a virtio_blk device with no model and no transport of its own; the link its PCI device reports, 2.5 GT/s on one lane, is the hypervisor's emulation and bounds nothing (art:bb5d32c3c5ee). The provider's limit for a disk of its kind and size, 2 GiB/s, is a setting and no ceiling: a run read 2.564 GB/s from it (art:53c2656f4c56), about ten times what that link would carry" }
 
 # The node's own way out: the interfaces a route of the node sends packets out of, each at its line rate, each way.
 # None of the auditor's hardware sits on one, so each registers as a boundary link that no certifier splits.

@@ -36,8 +36,9 @@ number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycl
 `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling, and `speed_max`, `bandwidth_max` and
 `write_max`, a second reading of the speed, the bandwidth and the write ceiling: the channels at the fastest memory
 the processor takes, whatever DIMMs the server has), `pcie` (the PCI Express lanes into the sockets: `lanes` a
-socket and their `speed`, from the part's page; `dmi`, the chipset link a socket has apart from them, 0 where the part
-has no chipset; and `bandwidth`, the bytes a second all of them carry each way, less the coding), `disk` (`read_max`,
+socket and their `speed`, from the part's page; `other`, what a socket takes from devices apart from them, its
+chipset link, or where the part has no chipset the USB ports that may be its own; and `bandwidth`, the bytes a second
+all of them carry each way, less the coding), `disk` (`read_max`,
 the most the host's disks are read back at, all of them together: the lanes' `bandwidth`, since a disk's bytes are
 outside the sockets and enter them over a lane, whatever the disk is; and, only where a run read its node's disks,
 `read`, the bytes a second the disks of the node's VM read back: like `vm_cores` a measurement of our node, so the RTX

@@ -256,21 +256,22 @@ def test_every_leaf_states_a_ceiling_on_its_read(kind: str) -> None:
 def test_the_quoted_leaf_rates() -> None:
     """Each node's leaves as `nodes.leaves` gives them, in the file's order, and the rate of each tier's leaves
     together, in whole bits a second, so a changed entry is a changed number here. Each disk states its host's lanes:
-    2 x 88 lanes at 32 GT/s on the eight-card node's host, and 2 x (80 lanes at 32 GT/s and a chipset link of 8 at
-    16 GT/s) on the H200 node's, less the coding, rounded up to a whole byte a second."""
+    2 x (88 lanes at 32 GT/s and four USB ports at 5 GT/s) on the eight-card node's host, and 2 x (80 lanes at
+    32 GT/s and a chipset link of 8 at 16 GT/s) on the H200 node's, less the coding, rounded up to a whole byte a
+    second."""
     assert nodes.leaves(nodes.load("rtx-pro-6000-server-x8"), HOST) == ((
         nodes.Leaf(f"{HOST}/dram", "dram", 1_872_605_741_056, 9_011_200_000_000),
-        nodes.Leaf(f"{HOST}/vda", "disk", 274_877_906_944, 5_545_353_846_160),
-        nodes.Leaf(f"{HOST}/vdb", "disk", 1_048_576, 5_545_353_846_160),
-        nodes.Leaf(f"{HOST}/vdc", "disk", 5_991_479_377_920, 5_545_353_846_160),
-    ), {"dram": 9_011_200_000_000, "disk": 5_545_353_846_160})
+        nodes.Leaf(f"{HOST}/vda", "disk", 274_877_906_944, 5_584_738_461_544),
+        nodes.Leaf(f"{HOST}/vdb", "disk", 1_048_576, 5_584_738_461_544),
+        nodes.Leaf(f"{HOST}/vdc", "disk", 5_991_479_377_920, 5_584_738_461_544),
+    ), {"dram": 9_011_200_000_000, "disk": 5_584_738_461_544})
     assert nodes.leaves(nodes.load("h200-sxm-141gb-x1"), HOST) == ((
         nodes.Leaf(f"{HOST}/dram", "dram", 214_748_364_800, 4_915_200_000_000),
         nodes.Leaf(f"{HOST}/vda", "disk", 274_877_906_944, 5_293_292_307_696),
         nodes.Leaf(f"{HOST}/vdb", "disk", 1_048_576, 5_293_292_307_696),
         nodes.Leaf(f"{HOST}/vdc", "disk", 499_289_948_160, 5_293_292_307_696),
     ), {"dram": 4_915_200_000_000, "disk": 5_293_292_307_696})
-    assert 5_545_353_846_160 == 8 * math.ceil(2 * 88 * 32 * 10 ** 9 * 128 / 130 / 8)
+    assert 5_584_738_461_544 == 8 * math.ceil(2 * (88 * 32 + 4 * 5) * 10 ** 9 * 128 / 130 / 8)
     assert 5_293_292_307_696 == 8 * math.ceil(2 * (80 * 32 + 8 * 16) * 10 ** 9 * 128 / 130 / 8)
 
 
