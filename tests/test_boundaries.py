@@ -986,8 +986,8 @@ def _path_loads(nodes: Iterable[ast.AST], reaches: Callable[[ast.AST], bool], lo
 
 
 def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str, list[str]]:
-    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` (and ``archive/``, which has rules of its
-    own) that imports a module of ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
+    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` that imports a module of
+    ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
     files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
@@ -998,7 +998,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
     quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.startswith(("benchmarks/", "archive/"))}
+    ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
     constants: set[str] = set()
 
