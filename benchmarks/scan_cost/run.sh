@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# The scan's cost (README.md): one scan of the synthetic run at the benchmark's identity (the class w63k4, every block
+# proved, the job on 21 cores, the Lean verifier on one), by benchmarks/network_traces/scan_zk.sh, then its result
+# (result.py write): the two numbers with their stages, written where the guard holds. From a clone, in one slot of
+# the network pool, as a job of at most 180 minutes:
+#   research run --on NODE --project verity --source . --cwd clone --pool network --as LANE --mem-gb 128 \
+#     --timeout 10800 -- bash benchmarks/scan_cost/run.sh
+# env: SC_GROUP=G (scan_zk.sh's: G execution phases in one registration; a setting, in the result beside the identity)
+#      SC_CORES=N (21, the least a slot of the network pool gives: the job is pinned to the first N cores it has, and
+#      a job with fewer is refused; another N is another identity, which compares with no result at 21)
+#      SC_CLASS (w63k4, the benchmark's; `test`, the certifier tests' class, rehearses this runner, and its result
+#      compares with no w63k4 one)  SC_MEM_GB (128)  SC_CACHE  SC_PORT (scan_zk.sh's)
+# Whatever else scan_zk.sh reads that changes what is proved (SC_DRAW, SC_DRY, SC_WARDEN_RUN, SC_REHEARSE,
+# SC_CHALLENGER) is unset: the identity is not the caller's to change.
+# Exit: 0, the guard holds and the result is written; the scan's own exit where it failed; 1, the guard does not hold
+# or the result could not be written; 2, the job cannot run at the identity. The scan's kept files stay under $OUT
+# whatever the exit.
+set -uo pipefail
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+cd "$ROOT" || exit 2
+: "${RESEARCH_RUN_DIR:?run.sh is the command of a research run (its header)}"
+N=${SC_CORES:-21}
+case $N in ''|*[!0-9]*|0*) echo "scan_cost: SC_CORES=$N is not a count of cores" >&2; exit 2;; esac
+HAVE=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))') || exit 2
+PIN=$(echo "$HAVE" | cut -d, -f1-"$N")
+GOT=$(echo "$PIN" | tr , '\n' | grep -c .)
+if [ "$GOT" -lt "$N" ]; then
+  echo "scan_cost: this job has $GOT cores and the benchmark's identity is $N: run it in a slot that gives $N or" \
+    "more (each of the network pool's does); SC_CORES=$GOT runs here, at an identity of its own" >&2
+  exit 2
+fi
+echo "scan_cost: pinned to $N cores ($PIN) of the $(echo "$HAVE" | tr , '\n' | grep -c .) this job has"
+env -u SC_DRAW -u SC_DRY -u SC_WARDEN_RUN -u SC_REHEARSE -u SC_CHALLENGER \
+  SC_CLASS="${SC_CLASS:-w63k4}" SC_MEM_GB="${SC_MEM_GB:-128}" SC_RSS=1 SC_LEAN_ONE=1 \
+  taskset -c "$PIN" bash benchmarks/network_traces/scan_zk.sh
+rc=$?
+echo "scan_cost: the scan exited $rc"
+export PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/verity/configuration/config
+PY=(python3)   # the result's writer is the harness kit's, which this job's python3 may be too old to import
+python3 -c 'import verity_bench.kit' 2>/dev/null || PY=(uv run -q --no-project --python 3.12 python)
+PATH=$PATH:$HOME/.local/bin:$HOME/.cargo/bin "${PY[@]}" benchmarks/scan_cost/result.py write "$RESEARCH_RUN_DIR" --scan-exit "$rc"
+wrote=$?
+[ "$rc" -ne 0 ] && exit "$rc"
+exit "$wrote"
