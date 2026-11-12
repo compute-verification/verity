@@ -51,6 +51,14 @@ def left_out(empty: Any) -> pytest.MarkDecorator:
     return pytest.mark.parametrize("stated", [ABSENT, None, empty], ids=["absent", "null", "empty"])
 
 
+def nothing_stated(empty: Any) -> pytest.MarkDecorator:
+    """`left_out`'s three and every other value that tests false, for a reader that takes a field by its truth: a reader that took
+    only an absent or a null field as nothing stated would answer these differently."""
+    others = {"zero": 0, "no-text": "", "false": False, "no-item": [], "no-key": {}}
+    names = [name for name, value in others.items() if type(value) is not type(empty)]
+    return pytest.mark.parametrize("stated", [ABSENT, None, empty, *(others[name] for name in names)], ids=["absent", "null", "empty", *names])
+
+
 def begins(problems: list[str], heads: list[str]) -> bool:
     """Whether the problems are as many as `heads` and each starts with its own (a whole problem starts with itself)."""
     return len(problems) == len(heads) and all(p.startswith(h) for p, h in zip(problems, heads))

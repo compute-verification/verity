@@ -2,9 +2,9 @@
 
 `MatchOracle` reads four files of a Match record: the capture's snapshots, its log and its tokens, and the fold's
 instances.  Each test takes the complete record of `tests/check/test_oracle_compare.py`, leaves one field out of one
-file (absent, null, or empty) and states what the oracle then answers: which requests, steps and ids it knows, and what
-it says of a member it cannot read.  A workload and a required manifest's row, which a caller hands in, are held the
-same way.
+file (absent, null, empty, or any other value that tests false: `nothing_stated`) and states what the oracle then
+answers: which requests, steps and ids it knows, and what it says of a member it cannot read.  A workload and a
+required manifest's row, which a caller hands in, are held the same way.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from tests.check.test_absent_commit_fields import put
-from tests.check.test_absent_link_fields import left_out
+from tests.check.test_absent_link_fields import nothing_stated
 from tests.check.test_oracle_compare import U0, U1, H, make_match
 from verity_vllm.check import match_oracle as MO
 
@@ -61,7 +61,7 @@ def without_view(key: str, stated: Any) -> Callable[[list[dict[str, Any]]], None
 
 # ------------------------------------------------------------------------------------------------------------ the snapshots
 
-@left_out([])
+@nothing_stated([])
 def test_a_record_whose_snapshots_name_no_step_has_no_step_to_read(tmp_path, stated):
     o = oracle(tmp_path, "snapshots", lambda doc: put(doc, ("steps",), stated))
     assert o.snapshot_steps == set()
@@ -69,7 +69,7 @@ def test_a_record_whose_snapshots_name_no_step_has_no_step_to_read(tmp_path, sta
     assert o.provenance()["snapshot_steps"] == []
 
 
-@left_out([])
+@nothing_stated([])
 def test_a_record_whose_snapshots_hold_no_entry_names_the_bytes_it_does_not_have(tmp_path, stated):
     o = oracle(tmp_path, "snapshots", lambda doc: put(doc, ("entries",), stated))
     assert o.snapshot_steps == {0}
@@ -78,7 +78,7 @@ def test_a_record_whose_snapshots_hold_no_entry_names_the_bytes_it_does_not_have
 
 # ------------------------------------------------------------------------------------------------------------ the fold's instances
 
-@left_out([])
+@nothing_stated([])
 def test_a_fold_header_that_names_no_request_knows_no_request_by_its_label(tmp_path, stated):
     o = oracle(tmp_path, "instances", lambda lines: put(lines[0], ("requests",), stated))
     assert o.requests == {} and o.request_index == {}
@@ -88,7 +88,7 @@ def test_a_fold_header_that_names_no_request_knows_no_request_by_its_label(tmp_p
     assert o.workload_check(DECLARED)["problems"] == []                # the tokens file names both requests
 
 
-@left_out([])
+@nothing_stated([])
 @pytest.mark.parametrize(("key", "member", "other"), [("operand_views", "in", "out"), ("output_views", "out", "in")])
 def test_an_instance_that_states_no_view_has_no_bytes_for_the_member_that_reads_it(tmp_path, stated, key, member, other):
     o = oracle(tmp_path, "instances", without_view(key, stated))
@@ -97,7 +97,7 @@ def test_an_instance_that_states_no_view_has_no_bytes_for_the_member_that_reads_
     assert o.member_bytes(0, NORM, "0", "r0")[1:] == (None, 5)
 
 
-@left_out([])
+@nothing_stated([])
 @pytest.mark.parametrize("key", ["operand_views", "output_views"])
 def test_every_instance_the_oracle_indexes_states_both_lists_of_views(tmp_path, stated, key):
     o = oracle(tmp_path, "instances", without_view(key, stated))
@@ -107,7 +107,7 @@ def test_every_instance_the_oracle_indexes_states_both_lists_of_views(tmp_path, 
     assert [m[key] for m in o._inst[(0, EMBED)]] == [[]] * 8
 
 
-@left_out([])
+@nothing_stated([])
 def test_an_instance_without_an_output_view_is_no_producers_output_at_its_step(tmp_path, stated):
     o = oracle(tmp_path, "instances", without_view("output_views", stated))
     assert sorted(o._step_outputs(0)) == [12, 13, 14]                  # the embedding's allocation 11 is not among them
@@ -115,7 +115,7 @@ def test_an_instance_without_an_output_view_is_no_producers_output_at_its_step(t
     assert o.member_bytes(0, EMBED, "in", "r0", producer={"spec": "X_v1"})[1:] == (None, 5)
 
 
-@left_out([])
+@nothing_stated([])
 def test_a_promoted_member_whose_consumers_read_no_view_finds_no_producer(tmp_path, stated):
     o = oracle(tmp_path, "instances", without_view("operand_views", stated))
     producer = {"promoted": True, "spec": "X_v1", "consumers": [EMBED]}
@@ -130,7 +130,7 @@ def two_producers_a_row(stated: Any) -> Callable[[list[dict[str, Any]]], None]:
     return change
 
 
-@left_out([])
+@nothing_stated([])
 def test_of_two_producers_a_row_one_without_an_output_view_is_fed_by_nothing_and_spans_no_bytes(tmp_path, stated):
     o = oracle(tmp_path, "instances", two_producers_a_row(stated))
     group = o._inst[(0, EMBED)]
@@ -152,7 +152,7 @@ def test_an_op_the_fold_has_no_instance_of_at_a_step_has_no_bytes(tmp_path):
 
 # ------------------------------------------------------------------------------------------------------------ a view
 
-@left_out([])
+@nothing_stated([])
 def test_a_view_that_states_no_stride_is_read_as_one_run_of_bytes(tmp_path, stated):
     whole = oracle(tmp_path / "whole").member_bytes(0, EMBED, "out", "r0")
     o = oracle(tmp_path / "left_out", "instances", lambda lines: [put(m["output_views"][0], ("strides",), stated) for m in embed_instances(lines)])
@@ -160,14 +160,14 @@ def test_a_view_that_states_no_stride_is_read_as_one_run_of_bytes(tmp_path, stat
     assert o.member_bytes(0, EMBED, "out", "r0") == whole
 
 
-@left_out([])
+@nothing_stated([])
 def test_the_range_of_a_view_that_states_no_shape_is_one_element(stated):
     view = {"alloc": 1, "offset": 2, "dtype": "bfloat16", "shape": [3, 2], "strides": [4, 1]}
     assert MO.MatchOracle._view_bytes_range(view) == (1, 4, 24)        # as stated: strided, a span of 10 elements
     assert MO.MatchOracle._view_bytes_range(put(view, ("shape",), stated)) == (1, 4, 6)
 
 
-@left_out([])
+@nothing_stated([])
 def test_the_range_of_a_view_that_states_no_stride_is_its_whole_shape(stated):
     view = {"alloc": 1, "offset": 2, "dtype": "bfloat16", "shape": [3, 2], "strides": [4, 1]}
     assert MO.MatchOracle._view_bytes_range(put(view, ("strides",), stated)) == (1, 4, 16)
@@ -175,7 +175,7 @@ def test_the_range_of_a_view_that_states_no_stride_is_its_whole_shape(stated):
 
 # ------------------------------------------------------------------------------------------------------------ the capture's log
 
-@left_out([])
+@nothing_stated([])
 def test_a_step_whose_start_names_no_row_schedules_no_request(tmp_path, stated):
     o = oracle(tmp_path, "log", lambda lines: put(lines[STEP_START], ("rows",), stated))
     assert o.step_requests == {0: [], 1: [U1, U0]} and o.step_rows[0] == [] and o.n_steps == 2
@@ -184,7 +184,7 @@ def test_a_step_whose_start_names_no_row_schedules_no_request(tmp_path, stated):
     assert o.sampled_id(1, "r0") == (2, None)
 
 
-@left_out([])
+@nothing_stated([])
 def test_a_sample_end_that_carries_no_id_has_none_for_a_request(tmp_path, stated):
     o = oracle(tmp_path, "log", lambda lines: put(lines[SAMPLE_END], ("sampled_token_ids",), stated))
     assert o.sampled == {0: [], 1: [1, 2]}
@@ -192,7 +192,7 @@ def test_a_sample_end_that_carries_no_id_has_none_for_a_request(tmp_path, stated
     assert o.sampled_id(1, "r1") == (1, None)
 
 
-@left_out({})
+@nothing_stated({})
 def test_a_run_header_that_states_no_profile_names_no_vllm_version(tmp_path, stated):
     assert oracle(tmp_path / "whole").header["vllm"] == "t"
     o = oracle(tmp_path / "left_out", "log", lambda lines: put(lines[RUN_HEADER], ("profile",), stated))
@@ -202,7 +202,7 @@ def test_a_run_header_that_states_no_profile_names_no_vllm_version(tmp_path, sta
 
 # ------------------------------------------------------------------------------------------------------------ the capture's tokens
 
-@left_out([])
+@nothing_stated([])
 def test_a_tokens_file_that_names_no_request_has_no_ids(tmp_path, stated):
     o = oracle(tmp_path, "tokens", lambda doc: put(doc, ("requests",), stated))
     assert o.tokens == {}
@@ -210,7 +210,7 @@ def test_a_tokens_file_that_names_no_request_has_no_ids(tmp_path, stated):
     assert o.workload_check(DECLARED) == {"ok": True, "problems": [], "compared": 2, "oracle_requests": 2, "run_requests": 2}
 
 
-@left_out([])
+@nothing_stated([])
 def test_a_request_whose_tokens_state_no_prompt_id_has_its_generated_ids_alone(tmp_path, stated):
     o = oracle(tmp_path, "tokens", lambda doc: put(doc["requests"][1], ("prompt_token_ids",), stated))
     assert o.tokens[U0] == ([], [555]) and o.tokens[U1] == ([100, 101, 102], [777])
@@ -219,7 +219,7 @@ def test_a_request_whose_tokens_state_no_prompt_id_has_its_generated_ids_alone(t
     assert o.workload_check(DECLARED)["problems"] == ["request r0: oracle prompt has 0 ids != declared prompt_len 5"]
 
 
-@left_out([])
+@nothing_stated([])
 def test_a_request_whose_tokens_state_no_generated_id_has_its_prompt_alone(tmp_path, stated):
     o = oracle(tmp_path, "tokens", lambda doc: put(doc["requests"][1], ("generated_token_ids",), stated))
     assert o.tokens[U0] == ([103, 104, 105, 106, 107], [])
@@ -230,13 +230,13 @@ def test_a_request_whose_tokens_state_no_generated_id_has_its_prompt_alone(tmp_p
 
 # ------------------------------------------------------------------------------------------------------------ what a caller hands in
 
-@left_out([])
+@nothing_stated([])
 def test_a_workload_that_declares_no_request_is_not_checked(tmp_path, stated):
     workload = put({"name": "w", "requests": [{"request_id": U0}]}, ("requests",), stated)
     assert oracle(tmp_path).workload_check(workload) == {"ok": None, "problems": ["workload declares no requests: oracle identity not checked"], "compared": 0}
 
 
-@left_out([])
+@nothing_stated([])
 def test_a_promoted_member_whose_row_names_no_consumer_is_not_resolvable(tmp_path, stated):
     producer = put({"promoted": True, "spec": "X_v1", "consumers": [EMBED]}, ("consumers",), stated)
     assert oracle(tmp_path).member_bytes(0, NORM, "out", "r0", producer=producer) == (
