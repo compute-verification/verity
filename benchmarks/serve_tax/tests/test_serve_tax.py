@@ -1867,7 +1867,7 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
     # an earlier job's arms join the cost, after this job's table is made of this job's arms alone
     assert sh.index('table "${dirs[@]}"') < sh.index('for o in ${WITH:-}; do for d in "$o"/*/') < sh.index('cost "${dirs[@]}"')
     assert 'ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}' in sh
-    # six reps give the cost its interval, a Commit window shorter than a pass puts the commits inside the passes, and
+    # six reps give the cost its interval, a Commit period shorter than a pass puts the commits inside the passes, and
     # the cost is written as the run's result
     assert 'REPS=${REPS:-6}; WINDOW_S=${WINDOW_S:-30}' in sh and '"${cost[@]}" --out "$OUT" --result' in sh
     # a budget's time left is shared equally by the arms still to serve: the measured arm is served last, and a cost

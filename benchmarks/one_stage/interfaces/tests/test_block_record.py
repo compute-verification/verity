@@ -179,6 +179,25 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
     assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
 
 
+def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:
+    """PoUS's quantity is written as `S0`, the verifier's `s_bits`, in a record built here as in the fixtures, and no
+    other quantity has that symbol. The same record under `S_cert`, the quantity's older name, fits the schema and
+    checks clean, and a symbol the schema doesn't list is refused."""
+    row = {"answer": {}, "quantity": {"s_bits": 7, "certified": True, "eps": "1/8"}}
+    assert R._quantity("pous", row) == ({"symbol": "S0", "value": 7, "unit": "bits", "certified": True},
+                                        Fraction(1, 8), "quantity.eps")
+    report, wipe = _accepting_report()
+    built = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    validator = jsonschema.Draft202012Validator(SCHEMA)
+    for written in (built, _load("block-record-r2-period0"), _load("block-record-b71a-w30")):
+        text, new = json.dumps(written), '"symbol": "S0"'
+        assert text.count(new) == 1 and "S_cert" not in text
+        older = json.loads(text.replace(new, '"symbol": "S_cert"'))
+        validator.validate(older)
+        assert R.check(older) == {}
+        assert not validator.is_valid(json.loads(text.replace(new, '"symbol": "S"')))
+
+
 def test_six_accepting_legs_on_one_server_are_undecided_until_the_lean_check_answers() -> None:
     report, wipe = _accepting_report()
     rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})

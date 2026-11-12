@@ -25,7 +25,10 @@
     source          --source <git dir> ships `git archive HEAD` of a CLEAN checkout to <root>/src/<identity>/ (the run's cwd, tree_sha);
                     the identity is the commit sha.  A dirty tree is refused rather than mislabeled.  Untracked inputs go with --send.
                     Shipped as git objects (`ship_source`), the tree is a checkout: a clone of <root>/git/verity.git sharing its objects,
-                    detached at the commit, so what asks git there gets a checkout's answers.  The archive stream ships no .git.
+                    detached at the commit, so what asks git there gets a checkout's answers.  The archive stream ships no .git;
+                    every launch that finds such a tree (its own fallback, an earlier launch's, another launcher's that won the race)
+                    gives it .git in place once the commit can be pushed to the machine.  Where it can't, a command that needs git
+                    (NEEDS_GIT: suites.py, check.py, lean_changed.py) is refused at launch, before it waits for any slot.
                     The ship is VERIFIED before it may execute (r20 incident: a stalled transfer left a half-tree that later runs used):
                     the archive lands in <root>/src/<identity>.partial-<nonce>/, is sha256'd on the machine and compared with the
                     launcher's, its extracted file set is compared with the archive's manifest, and only then is the directory
@@ -48,8 +51,8 @@
                     in the run's own `git clone --shared` of the tree at <root>/scratch/<run-id>/tree, checked to be the shipped commit
                     and removed when the workload exits (research/clone.py), so nothing one run does there reaches another's; its
                     PYTHONPATH entries under the tree, and the tree's shim, move into the clone too (cli._clone_imports); job.json
-                    records run.cwd and run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree shipped
-                    without git or a package that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not
+                    records run.cwd and run.cwd_basis (and run.cwd_clone).  The launcher refuses `--cwd clone` for a tree git can't
+                    reach or a package that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not
                     into the tree; a clone's goes beside the clone.  A tree whose own research package predates this runs its workloads
                     in the tree; the launcher says so (remote.json workload_cwd).
     claim           `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the claim, then starts the detached
@@ -86,6 +89,10 @@
     auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
                     that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
                     vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
+    tool rules      a shipped research package without a fix the machine requires (pods/nebius/tool_rules.py: one that predates #7656
+                    prints each process's command line in its stall dumps) is refused before anything starts: by launch-request, the
+                    machine's deployed tool_rules.py judging the package that answers, and by the launcher before it ships a --source
+                    tree's package.  A package that predates the consult and comes from a launcher that does too is not caught.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -175,6 +182,8 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 #: the machine's own slot_only.py (deploy.toml installs it beside the marker, and vy-slot-only.timer runs it): when present it, not
 #: the shipped tree's package, says which commands pass, so a lane's branch older than a rule change is judged by the deployed rule
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
+#: the machine's own tool_rules.py (deploy.toml): what a shipped research package must do before it runs here, judged as above
+NODE_TOOL_RULES_FILE = "/usr/local/lib/vy-monitoring/tool_rules.py"
 AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
@@ -497,21 +506,38 @@ def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
 
-def node_slot_only() -> Any:
-    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
-    package's `pods.nebius.slot_only`."""
-    p = Path(os.environ.get("NODE_SLOT_ONLY_FILE") or NODE_SLOT_ONLY_FILE)
+def _node_module(var: str, default: str, name: str) -> Any | None:
+    """The machine's deployed copy of a rule (stdlib, one file) at $VAR, else `default`; None when it has none."""
+    p = Path(os.environ.get(var) or default)
     if p.is_file():
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location("vy_node_slot_only", p)
+        spec = importlib.util.spec_from_file_location(name, p)
         if spec is not None and spec.loader is not None:
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod
+    return None
+
+
+def node_slot_only() -> Any:
+    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
+    package's `pods.nebius.slot_only`."""
+    if (mod := _node_module("NODE_SLOT_ONLY_FILE", NODE_SLOT_ONLY_FILE, "vy_node_slot_only")) is not None:
+        return mod
     from .pods.nebius import slot_only
 
     return slot_only
+
+
+def node_tool_rules() -> Any:
+    """What this machine requires of a shipped research package: its deployed NODE_TOOL_RULES_FILE when it has one, else this
+    package's `pods.nebius.tool_rules`."""
+    if (mod := _node_module("NODE_TOOL_RULES_FILE", NODE_TOOL_RULES_FILE, "vy_node_tool_rules")) is not None:
+        return mod
+    from .pods.nebius import tool_rules
+
+    return tool_rules
 
 
 def source_tool_package(source: Path | None) -> Path | None:
@@ -964,6 +990,22 @@ _RC_NO_GIT = 69                                # the machine has no git: the arc
 _RC_TREE = 76                                  # the pushed commit's tree on the machine is not the launcher's
 
 
+def _stream_forced() -> bool:
+    """Whether SHIP_ENV asks for the archive stream alone: no git ship, and no .git added to a tree."""
+    return os.environ.get(SHIP_ENV, "").strip().lower() == "stream"
+
+#: the programs of a shipped tree that refuse a tree without .git (suites are keyed from git's view of the tree, check runs them,
+#: lean_changed.py reads its commits): a command naming one is refused at launch from a tree git can't reach (`needs_git`), not
+#: after it has waited for a slot.  A list of the known ones, not a test of what a command does
+NEEDS_GIT = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/lean/lean_changed.py", "verity check")
+
+
+def needs_git(command: list[str]) -> str | None:
+    """The NEEDS_GIT program `command` names (inside a `bash -c` string or a slot.py wrapper too), or None."""
+    words = " ".join(command)
+    return next((p for p in NEEDS_GIT if p in words), None)
+
+
 def _ext_escape(arg: str) -> str:
     return arg.replace("%", "%%").replace(" ", "% ")
 
@@ -1032,26 +1074,28 @@ def _push_commit(ssh: list[str], repo: str, git_dir: Path, sha: str, size: int) 
     return None
 
 
-def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, man: dict[str, Any], dest: str) -> tuple[str | None, str | None]:
+def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, man: dict[str, Any],
+              dest: str) -> tuple[str | None, str | None, bool]:
     """Ship commit `sha` as git objects: `git push` into <root>/git/verity.git over `ssh` (only the objects the machine lacks travel),
     then check it out and verify it on the machine (tree hash, per-file sha256 against the launcher's archive manifest).  Returns
-    (partial dir ready to be marked, None) or (None, why the archive stream must ship instead).  Never raises for the transport:
-    every failure falls back, and nothing is marked READY by a failed git ship."""
+    (partial dir ready to be marked, None, True) or (None, why the archive stream must ship instead, whether the commit reached the
+    machine's bare repository).  Never raises for the transport: every failure falls back, and nothing is marked READY by a failed
+    git ship."""
     repo = f"{root}/{POD_GIT_REPO}"
     if not tree:
-        return None, "no tree hash for HEAD"
+        return None, "no tree hash for HEAD", False
     if why := _push_commit(ssh, repo, git_dir, sha, man["size"]):
-        return None, why
+        return None, why, False
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     try:
         r = ssh_run(ssh, ["sh", "-c", _git_ship_script(root, repo, partial, sha), "sh", tree], timeout=ship_timeout(man["size"]))
     except subprocess.TimeoutExpired:
         _rm_rf(ssh, partial)
-        return None, "extraction on the machine timed out"
+        return None, "extraction on the machine timed out", True
     if r.returncode != 0:
         _rm_rf(ssh, partial)
         why = "the pushed commit's tree is not the launcher's" if r.returncode == _RC_TREE else r.stderr.decode(errors="replace")[-200:].strip()
-        return None, f"extraction failed (rc {r.returncode}): {why}"
+        return None, f"extraction failed (rc {r.returncode}): {why}", True
     lines = r.stdout.decode(errors="replace").splitlines()
     have = _sha_lines("\n".join(lines[1:]))
     want = man["files"]
@@ -1059,18 +1103,19 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
         _rm_rf(ssh, partial)
         bad = [f"missing {p}" for p in sorted(set(want) - set(have))] + [f"extra {p}" for p in sorted(set(have) - set(want))]
         bad += [f"differs {p}" for p in sorted(set(want) & set(have)) if want[p] != have[p]]
-        return None, f"extracted tree does not match the archive manifest ({len(bad)}: {'; '.join(bad[:3])})"
+        return None, f"extracted tree does not match the archive manifest ({len(bad)}: {'; '.join(bad[:3])})", True
     man["pod_archive_sha256"] = lines[0].strip() if lines else None
-    return partial, None
+    return partial, None, True
 
 
 _RC_DIRT = 77                                  # _add_git: the tree's tracked files are not the commit's (its .git stays, so the probe sees dirt)
 
 
 def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> str | None:
-    """Make the READY tree `dest`, shipped by the archive stream, a checkout of `sha` in place, for a `--cwd clone` run (which clones
-    it): the commit is pushed as `_ship_git` pushes it, and a `--no-checkout` shared clone's .git, detached at `sha` with its index,
-    is renamed into the tree, so runs of the commit sharing it are never moved.  Its tracked files must then be the commit's
+    """Make the READY tree `dest`, shipped by the archive stream, a checkout of `sha` in place, so every later run of the commit finds
+    one (a `--cwd clone` run clones it; `suites.py` keys from git's view of it): the commit is pushed as `_ship_git` pushes it, and a
+    `--no-checkout` shared clone's .git, detached at `sha` with its index, is renamed into the tree whole, so runs of the commit
+    sharing it are never moved and no file of theirs is written.  Its tracked files must then be the commit's
     (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree whose
     files differ keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
     else why not."""
@@ -1104,6 +1149,15 @@ def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | Non
     return None
 
 
+def _give_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """`_add_git` on the READY tree `dest` whose READY.json is `doc`, then (state, doc) as `_probe_source` reads it; when git can't
+    be added, one line saying why and ("ready", `doc`)."""
+    if why := _add_git(ssh, root, git_dir, sha, tree, dest, doc):
+        print(f"research: could not make {dest} a checkout ({why})", file=sys.stderr)
+        return "ready", doc
+    return _probe_source(ssh, dest)
+
+
 def _mark_ready(ssh: list[str], partial: str, dest: str, sha: str, doc: dict[str, Any]) -> dict[str, Any]:
     """READY.json into the verified partial, one rename into place, the marker read back (step 3 of `ship_source`)."""
     q = shlex.quote(partial)
@@ -1130,7 +1184,7 @@ def _quarantine(ssh: list[str], root: str, dest: str, sha: str, why: str) -> Non
     print(f"research: {dest} is {why}; moved to {quarantine}, shipping afresh", file=sys.stderr)
 
 
-def ship_source(ssh: list[str], root: str, git_dir: Path, *, checkout: bool = False) -> tuple[str, str, dict[str, Any]]:
+def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dict[str, Any]]:
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
@@ -1144,15 +1198,19 @@ def ship_source(ssh: list[str], root: str, git_dir: Path, *, checkout: bool = Fa
          tree becomes a checkout of it (`_git_ship_script`: a shared clone of the bare repo, detached, READY.json excluded), so code
          there asks git what it asks in the launcher's checkout, and every file's sha256 must equal the launcher's archive manifest
          (`verified: git-push+tree+file-sha256`, `transport: git`, `checkout: true`).  A machine without git, or any failure of that
-         path, prints one line and falls through to the archive stream below, a tree without .git; `RESEARCH_SHIP=stream` goes
-         straight there.  A READY tree shipped before checkouts is reused as it is, except that `checkout` (a `--cwd clone` run,
-         which clones the tree) makes one the archive stream shipped a checkout in place first (`_add_git`);
+         path, prints one line and falls through to the archive stream below; `RESEARCH_SHIP=stream` goes straight there;
       2'. the archive stream into <root>/src/<identity>.partial-<nonce>/: the tar is staged as a file, sha256'd on the machine, extracted, and the
          extracted regular-file set listed back; the machine's archive sha256 must equal the launcher's and the file set must equal the
          archive's manifest.  The launcher streams it (`archive_manifest_git`, then `_archive_feed` through `ssh_stream`): its memory
          does not grow with the tree.  A short stream (a launcher killed mid-ship) makes the machine remove the partial itself;
       3. READY.json is written INTO the partial directory and the directory renamed into place (one rename, so a reader sees either
-         nothing or a complete tree with its marker); the marker is read back and its identity checked.
+         nothing or a complete tree with its marker); the marker is read back and its identity checked;
+      4. every READY tree that isn't a checkout (one the archive stream shipped, now or before, a legacy tree just adopted, or another
+         launcher's stream ship that won the rename into place) is made one in place (`_add_git`) whenever the commit can reach the
+         machine's bare repo, so later runs of the commit never find the shared tree without .git: a run already in it keeps every
+         file where it was and gains .git whole by one rename.  Where git can't reach the machine (no git there, a push that failed,
+         which this launch doesn't try again, `RESEARCH_SHIP=stream`) the tree stays without .git, after one line saying why, and
+         `launch` refuses a command that needs git (`needs_git`).
     Any failure (transport rc != 0, the launcher's timeout, digest or manifest mismatch) removes the partial directory and raises
     SourceNotReady; `<identity>/` is never created by a failed ship.  The machine side (`launch_request`) enforces `require_ready_source`."""
     st = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=git_dir, capture_output=True, text=True)
@@ -1164,16 +1222,24 @@ def ship_source(ssh: list[str], root: str, git_dir: Path, *, checkout: bool = Fa
     tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=git_dir, capture_output=True, text=True).stdout.strip() or None
     dest = f"{root}/src/{sha}"
     state, doc = _probe_source(ssh, dest)
-    stream_only = os.environ.get(SHIP_ENV, "").strip().lower() == "stream"
-    if state == "ready" and checkout and not doc.get("checkout") and doc.get("identity") == sha and not stream_only:
-        if why := _add_git(ssh, root, git_dir, sha, tree, dest, doc):
-            print(f"research: could not make {dest} a checkout ({why})", file=sys.stderr)
-        else:
-            state, doc = _probe_source(ssh, dest)
+    push = not _stream_forced()
+    if state == "ready" and not doc.get("checkout") and doc.get("identity") == sha and push:
+        state, doc = _give_git(ssh, root, git_dir, sha, tree, dest, doc)
     if state == "ready":
         if doc.get("identity") != sha or doc.get("schema") != READY_SCHEMA:
             raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
         return sha, dest, doc
+
+    def checked_out(have: dict[str, Any], push: bool) -> tuple[str, str, dict[str, Any]]:
+        """The tree just marked READY (ours, or another launcher's that won the rename into place), made a checkout when `push`."""
+        if have.get("checkout") or not push:
+            return sha, dest, have
+        state, have = _give_git(ssh, root, git_dir, sha, tree, dest, have)
+        if state != "ready":
+            raise SourceNotReady(f"{dest}'s tracked files are not {sha}'s ({', '.join(have.get('dirt', [])[:3])}): a run edited the "
+                                 f"shared tree; relaunch, and the ship sets it aside and ships the commit afresh")
+        return sha, dest, have
+
     man = archive_manifest_git(git_dir)
     if state == "dirty":
         if doc.get("identity") != sha or doc.get("schema") != READY_SCHEMA:
@@ -1184,14 +1250,14 @@ def ship_source(ssh: list[str], root: str, git_dir: Path, *, checkout: bool = Fa
         if not bad:
             doc = _ready_doc(sha, tree, man, "legacy-sha256-per-file")
             _write_ready(ssh, dest, doc)
-            return sha, dest, doc
+            return checked_out(doc, push)
         _quarantine(ssh, root, dest, sha, f"an unverified tree that did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])})")
-    if not stream_only:
-        gpartial, why = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
+    if push:
+        gpartial, why, push = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
         if gpartial is not None:
             doc = {**_ready_doc(sha, tree, man, "git-push+tree+file-sha256"), "transport": "git", "checkout": True,
                    "pod_archive_sha256": man.get("pod_archive_sha256")}
-            return sha, dest, _mark_ready(ssh, gpartial, dest, sha, doc)
+            return checked_out(_mark_ready(ssh, gpartial, dest, sha, doc), push)
         print(f"research: git ship to {dest} not used ({why}); shipping the archive stream", file=sys.stderr)
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     q = shlex.quote(partial)
@@ -1236,7 +1302,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path, *, checkout: bool = Fa
         raise SourceNotReady(f"source tree manifest mismatch after extraction: {len(missing)} missing, {len(extra)} extra "
                              f"(e.g. {(missing or extra)[:3]}); nothing is READY")
     doc = {**_ready_doc(sha, tree, man, "archive-sha256+file-manifest"), "transport": "stream"}
-    return sha, dest, _mark_ready(ssh, partial, dest, sha, doc)
+    return checked_out(_mark_ready(ssh, partial, dest, sha, doc), push)
 
 
 def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any], sends: list[Path],
@@ -1548,6 +1614,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
                 from .pods.nebius import slot_only as rule
             if not rule.auditor_allows(req["command"], marker):
                 raise Refused(rule.auditor_refusal(marker))
+        if why := node_tool_rules().refusal(Path(__file__).resolve().parent):
+            raise Refused(why)
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))
@@ -2050,6 +2118,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
                           f"for a directory named clone in the shared tree.  Commit a tree that has it, or pass --cwd source")
+        from .pods.nebius import tool_rules
+
+        if tool_pkg is not None and (why := tool_rules.refusal(tool_pkg)):
+            raise Refused(why)
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)
@@ -2065,7 +2137,13 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         ready: dict[str, Any] = {}
         remote_cwd = cwd
         if source is not None:
-            tree_sha, src_dir, ready = ship_source(ssh, m["root"], source, checkout=cwd_clone)
+            tree_sha, src_dir, ready = ship_source(ssh, m["root"], source)
+            if not ready.get("checkout") and (prog := needs_git(command)):
+                why = f"{SHIP_ENV}=stream" if _stream_forced() else "the line above says why"
+                raise Refused(f"{src_dir} has no .git, as git couldn't reach {machine_name} ({why}), and {prog} needs a git checkout: "
+                              f"the run would wait for its slot, then fail.  Relaunch once a git push reaches {machine_name} ({SHIP_ENV} "
+                              f"unset, git installed there): the launch then makes the shared tree a checkout in place, which --cwd "
+                              f"clone needs too")
             if cwd_clone and not ready.get("checkout"):
                 raise Refused(f"--cwd clone: {src_dir} was shipped without git (transport {ready.get('transport') or 'unrecorded'}), so it "
                               f"has no .git to clone.  Pass --cwd source to run in it as it is, shared with other runs of the commit")
@@ -2286,7 +2364,9 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     if everything:
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; tar -cf - .{TAR_CHANGED_OK}"]
     else:
-        names = " ".join(shlex.quote(n) for n in (*SMALL_FILES, *also))
+        # each name once: tar stores a second copy of a name as a hard link, which `extract` can't read off a stream, and the
+        # files after it never arrive
+        names = " ".join(shlex.quote(n) for n in dict.fromkeys((*SMALL_FILES, *also)))
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; ls {names} 2>/dev/null | tar -cf - -T -{TAR_CHANGED_OK}"]
 
     def extract(stream: IO[bytes]) -> None:           # member by member off the ssh pipe: a big run is never in the launcher's memory

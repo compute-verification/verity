@@ -25,6 +25,8 @@ verity-bench overhead points|run|table  # the front door for γ at a card's oper
                                         # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
 verity-bench prove --system S --workload W  # a proof system's prover on a workload, a block type a row, from the store's
                                             # labelled records (`verity bench prove`, benchmarks/prove/README.md)
+verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on one kept proof, as the record `prove`
+                                                # reads (`verity bench prove lean-verify`, the same README)
 ~~~
 
 ## Specs

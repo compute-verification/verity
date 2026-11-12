@@ -119,10 +119,10 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   every request. No target or verdict is of it: the model's target is of GPU time at equal tokens, and the SLO
   (`Model.slo`) is the benchmark's own constant. An arm that meets the SLO for no request at any rung has no finite
   cost within it.
-- **The Commit window** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
-  so that a pass holds the commits of the requests it finishes. At a window longer than a pass the commits would fall
-  between passes, where no request waits on them, and the cost would leave them out. A short window counts a window's
-  fixed work more often than a long one does, so the cost errs high; the commitment's line names the window.
+- **The Commit period** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
+  so that a pass holds the commits of the requests it finishes. At a period longer than a pass the commits would fall
+  between passes, where no request waits on them, and the cost would leave them out. A short period counts a period's
+  fixed work more often than a long one does, so the cost errs high; the commitment's line names the period.
 - **The number** is the larger of the two loads' costs, each load's cost printed beside it. Where only one load has
   run, the first line names it (`load chat alone`) and a later line says the number waits for the other: one load's
   cost is not the number. Its loads repeat no prefix, so it is labelled `no repeated prefix` and is never given
@@ -135,7 +135,7 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   limit of 131,072 tokens, each sent again with another ending, so half of the prompt tokens repeat, all of them on
   the second and fourth request. The client's `timed_trace` dataset sends them from a file of lengths and block ids
   that the arm writes (`<arm>/prefix.trace.jsonl`; a block is 64 tokens, and two prompts share the tokens of the
-  blocks whose ids they share), each prompt as the synthetic token ids the client draws for its blocks, in the
+  blocks whose ids they share), each prompt as the synthetic token ids the client generates for its blocks, in the
   file's order with one request in flight, so each repeat follows the request it repeats (`--loads` takes no rungs
   for it). The row is labelled `scaled down` while the load is those four requests alone: half of their prompt
   tokens repeat, which is this load's share and no serve's, where such pairs arrive among requests that repeat

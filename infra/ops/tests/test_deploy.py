@@ -512,6 +512,19 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
 
 
+def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
+    """vy-nebius-cpu-14 to -17 get what a live node of their kind runs, so a staged one's first install, the hour it exists, is
+    one cpu-12 has already run: cpu-12's entries, its managed patterns and its record."""
+    nodes = deploy.load()
+    twin = nodes["vy-nebius-cpu-12"]
+    want = sorted(twin.entries, key=lambda e: e.path)
+    assert want
+    for n in range(14, 18):
+        node = nodes[f"vy-nebius-cpu-{n}"]
+        assert sorted(node.entries, key=lambda e: e.path) == want, node.name
+        assert (node.managed, node.record, node.admin, node.quiet) == (twin.managed, twin.record, twin.admin, twin.quiet), node.name
+
+
 def test_every_switched_unit_is_one_deploy_installs_on_its_node():
     """The lock-out switches each tmux loop to its unit: every unit it starts, and every file of its own, is one deploy.toml installs."""
     import importlib.util
