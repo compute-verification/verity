@@ -103,8 +103,10 @@ LmsUnforgeable remote only. Nothing else is introduced.
    `members : MemberForm.Accepted x.log` (the log is the read of lines `membersTreeReason` accepts) in place of
    `order` and `specs`, which are theorems (`Accepted.opensLast`, `Accepted.specs`). The several-member path still
    refuses (`checkMembersAt_refuses`, `MULTI_REFUSED`).
-3. **A `coin-tree` line is not ordered.** `membersOrder` reads `tree-open` lines only; member k+1's `coin-tree`
-   line before member k's closing round is accepted, and `OpensInOrder` says nothing of it.
+3. **Every line of a member is ordered, at the log's lines.** `membersOrder` reads a tree's `coin-tree` line and its
+   `tree-open` lines (`memberLine`), and refuses one of member k+1 before member k's closing round
+   (`membersOrder_before_closing`, `memberLine_hello`). `OpensInOrder`, over the read's frames, still speaks of
+   openings only: the same order on the read's `hello` frames is not stated.
 4. **The roots term's form.** `ecrBound` at `rootsFinderL` (the one-statement leg's), not a `FinderSpec` through
    `finderPr_le_crBound`: `Verity.sha512Msg` and `Claims.Sampling.sha512Msg` have no proved equality.
 5. **The window's own class** (`row-table` roots and `registered` values): refused in the per-member form; the

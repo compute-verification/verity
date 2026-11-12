@@ -73,8 +73,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   last opening is its closing round (`Challenger.memberTreeReason`): one more `session` round, of no coins, opened after
   the SHA-512 of the session's evidence (`sessionEvidence`: its record's bytes, then each rep file's name and bytes,
   each under an 8-byte length, `evidenceBytes`, which `evidenceParts` decodes), so the files the verdict reads are
-  fixed before the next member's coins; and the log opens the trees one after another in the sessions' order, no round
-  of a tree before the closing round of the one before it or after its own (`Challenger.membersOrder`). Then each
+  fixed before the next member's coins; and the log holds the trees one after another in the sessions' order, no line
+  of a tree, the one that samples it or one opening a round of it, before the closing round of the one before it or
+  after its own (`Challenger.membersOrder`). Then each
   statement's session is verified as the one statement's is, on its member's own files (`Member.statement`,
   `runMembers`), after the statements before it, so no coin tree serves two statements: its circuit's units a proof
   block must be the ones the parameters name, and its verdict holds only where its strata are the registration's, each
@@ -1209,7 +1210,7 @@ def sessionEvidence (bs : Core.Blobs) (s : RunFiles) : V ByteArray := do
 with its member: each session's record on the blobs, refused as `treesHeld` refuses it, at its tables with the
 `root_B` lengths its statement fixes on its member's own files (`rootBTables`) and the SHA-512 of its evidence
 (`sessionEvidence`), then `Challenger.membersTreeReason`: each session's coins one tree's, the tree closed after that
-digest, and the trees opened one after another in the sessions' order. -/
+digest, and the trees' lines, each tree's own and its rounds', one tree after another in the sessions' order. -/
 def membersTreesHeld (ts : Array Challenger.LoggedTree) (log : List String) (sts : Array (StatementFiles × Member))
     (bs : Core.Blobs) : V Unit := do
   let mut named : Array (String × Array (String × Option Nat) × Json × String) := #[]
