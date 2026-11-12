@@ -96535,3 +96535,56 @@ Read only, by `git show` and `git grep` at `bb527fd2e2d2df67084873dbf48eab8fef6c
 - [guess] Ends: `4c36` took 31 minutes once it had a slot and `b277` waited 28 minutes and then took 31, so about 19:45Z for the records and about 20:15Z for the suites, later if the slots are slow.
 
 **No ready line yet.** [derived] It follows when both are exit 0 with nothing regenerated and no suite failed; if the records run regenerates a record, I commit it and say so before any ready line. [read] My mailbox is 163 lines, its last section the 17:08Z one, reread at 19:11Z; both runs were still waiting at 19:12Z. I marked nothing and posted nothing on Linear or Slack; #9237 is untouched at `9d4aec0111fb`.
+
+## KEPT, Thu 12 Nov 19:15Z: runs 1 and 2 are out, both in cpu-14's line because no node had 160 GB free: `r20261112-185557-ddc8` (the six-template program at `main`) and `r20261112-190428-a718` (run 2 again with a fresh `verify`). #9190 is on `main`. Where the later members' extra seconds are in the code, and NET-329's answer, below
+
+**1. The two runs out** [run]
+
+- **Run 1, the served program as `main` builds it:** `r20261112-185557-ddc8`, from `main` `0582899c4392` (partition file of six templates), `--mem-gb 170`. In cpu-14's line since 18:56Z: 13 runs ahead of it then, 6 at 19:14Z. Its slot by about 19:35Z if 170 GB is free there then (114 to 138 GB were at 19:07Z to 19:11Z), its end about 20:30Z [guess].
+- **Run 2 again, with a fresh `verify`:** `r20261112-190428-a718`, `--mem-gb 160`, same three ids as run 2. In the same line since 19:05Z, 20 ahead at 19:14Z. It starts when 160 GB is free on cpu-14, which may be only when run 1 ends; then about 50 minutes. Its end about 21:25Z [guess].
+- **No node had 160 to 170 GB free** at 18:54Z to 19:03Z, with a slot. `--on auto` cannot leave a node out, so I read every pool and named cpu-14: it was the one line that moved and could fit the ask. I cancelled nothing.
+- **The other pools at 19:12Z** [run]: cpu-1, cpu-3, cpu-5, cpu-8 and cpu-9 have less than nothing free (-8 to -179 GB); cpu-7 and cpu-10 have 35 and 1 GB; cpu-2 and cpu-12 wait behind asks of 850 and 300 GB; cpu-13 is closed by a window from 19:30Z. cpu-4 has had 286 GB free since about 19:03Z, but its six slots are held (three taken in the last ten minutes) and six runs wait: a later start than cpu-14's by my guess, so I left run 2 where it is.
+- **It is not a quieter node:** cpu-14's load is 63 to 86 on 192 cores; cpu-4's is 17 and cpu-12's 26. The fresh `verify` runs on the same core minutes from the kept process, so the saving is two measurements on one node whatever its load. If you would rather wait for cpu-4, say so and I move it: it has not taken a slot.
+- **What run 2 adds:**
+  - `verify` alone on the own step's proof, same core, no `MIMALLOC_` variable: before and after the first kept process, and before the second;
+  - two more members in the second process: one that hands the small Program, then one more that hands the served one. If the first costs what a member of the first process costs, the extra seconds are the handed program's;
+  - the served program read and hashed alone on that core at three times, for the SHA-512's rate as the load changes;
+  - for each member, its user and system CPU seconds, page faults and bytes read from the disk, split at the end of `inputs`.
+- **Its verifier is run 2's, tree for tree** (`main` at `15662e7c40ae` with #9253, #9209, #9234), so the two runs compare. Today's `main` has since changed nine other files of the verifier's directory (the firewall and witness modules), none on these paths [read: the diff's file list]; they are not in this build.
+- **Run 3** (run 2 on the new program) is launched when run 1 has ended and its program names no registered input.
+
+**2. `main` moved** [run: `gh pr view`]
+
+- #9190 and #9234 were merged at 18:10Z. `verify-members` is on `main`. The kept circuit file (#9253) and the fold (#9209) are not.
+
+**3. The later members' extra seconds: where in the code** [read; the measurement is run 2 again]
+
+- **Each member reads its own copy of the program.** `verifyCmdBy` calls `programInput` for the member's `--program` (`FlockVerify.lean:991`, `:315`). With an archive that is `archiveGet` (`:55`, `:49`, `:38`): it reads the 2.77 GB object and hashes all of it to hold it to its key (`hashesToTask`, `:32`).
+- **Then the bytes are compared in full with the kept ones** (`ProgramRead.orOf`, `Flock/ProgramRead.lean:177`), and only then does the member get the kept readings.
+- **So a later member pays one read, one SHA-512 and one comparison of 2.77 GB.** By `archive-put`'s rate in run 2 (14.96 GB read, hashed and written in 43.9 s) that is about 8 s [derived]. The members paid 15, 21 and 34 s more `inputs` than with the small Program [run]. So neither the size of the extra nor its rise is explained by reading the code; run 2 again measures both.
+- **What would make it once a process:** keep the program file's SHA-512 the way #9253 keeps the circuit file's. There the archive's read takes the hash as a kept value at one input, given back where the bytes are equal, compared in full, and proved to be the hash on every input (`KeptAt.reuse_eq`). `programInput` reading through such a kept value pays the read and the comparison and no SHA-512, and a member's check stays equal to `verify` with no new premise [derived from reading; not tried]. By the circuit file's own figure (12.19 GB read and compared inside 5.2 s) the read and the comparison are about 1 s for 2.77 GB [derived]. Whether the SHA-512 is most of the extra is what run 2 again says. Not written: no lever is ordered.
+
+**4. For NET-329: can the sessions of one round share the inputs and the setup?**
+
+Line numbers are `main`'s at `0582899c4392`. The runs are run 2's: one run, a loaded node, a scratch merge, proofs of a staged statement.
+
+- **Inputs: yes, two ways.**
+  - **One `verify` call for the round** [read]. `verify` takes every directory after `--session`. It reads, hashes and parses its files once, prints `inputs`, then loops over the sessions (`FlockVerify.lean:967`, `:1109`, `:1115`). Four sessions of one statement (the same circuit file, public file, program and partition) in one call pay `inputs` once: about 29 of the round's 39.1 s [derived from network's figures].
+  - **A kept process, across calls** [read; run]. `verify-members` (on `main` since 18:10Z) shares the program's digest, description and decoded form, where a member's program bytes are the kept ones: 589 s paid once at the served program [run]. With #9253 (not on `main`) it also shares the circuit file's SHA-512 and parse, where a member's circuit file is the same as the member before's: `inputs` was 110.9 s for the first member and 5.2 s after, at a 12.19 GB circuit file [run].
+  - **What a kept process does not share** [read]: reading each file and comparing it with the kept bytes, the program file's SHA-512 against its archive key, and the public file with the checks on it. That was 5.2 s a member with a small Program and 20 to 39 s with a 2.77 GB program handed [run].
+- **Setup: only between sessions with no sample.**
+  - **In one call** [read]: the population's statement is set up once, and "a sampled session at its own sample, never at another session's" (`:1110` to `:1127`).
+  - **What differs by session** [read: `Stmt.setupHiddenBy`, `Flock/ProgramRead.lean:330`]: its sample, read from its record. From the sample come the sampled public values, the statement's digest and the session's opening message; under a template query also the units derived for the sample and the readers the Linking check walks.
+  - **A kept process shares of the setup only the program's readings it uses** (its description and decoded form) [read]. In run 2 that was the first member's 180.7 s of `setup (drawn)` with the served program, against 3.1 to 3.3 s for the members after; with the small Program 3.0 s, then 2.9 s [run]. So what is left, about 3 s a member here, is the part made at each sample.
+  - **What in the setup does not depend on the sample** [read]: the public file's load and its check against the verifier's own public inputs, the partition's check, the sampling design derived from the program, and the Linking check's tables of the program's nodes. It could be kept across sessions of one statement. How much of network's 10 s that is: not measured. Not written.
+- **A round of four sessions of different programs.**
+  - **In one kept process: nothing within the round** [read]. The process keeps one program; a member with another program reads its own, as `verify` does. The kept circuit file is only the member before's, so four statements in turn never meet their own.
+  - **Across rounds, four kept processes, one a program** [derived]: from the second round each session saves its program's readings and its circuit file's hash and parse. That is most of `inputs`: at most the round's 39.1 s, less what reading and comparing the files costs (5% of `inputs` in run 2 with a small Program [run]). Of the 42.5 s of setup, only what reads the program; how much of network's 10 s that is, I have not measured.
+  - **The cost is memory** [run]: each process holds its parse and its program, 18.5 GB at our 12.19 GB circuit file and 64.7 GB with the served program.
+  - **If the four sessions share one program and differ only in circuit file** [read]: one process shares the program's readings; the circuit file's are shared only where the members are ordered so that a statement's sessions follow one another.
+
+**5. A notice I have not acted on**
+
+- At 19:10Z the shell hook refused a command to show a notice in your name: kernels may run Friday's rows today, so read `lean-runs.tsv` now and again when my builds are out, and run the kept process on today's two proofs after the three runs. It is not in your 18:52Z message and not in my mailbox file (its last section is 18:10Z), so I have not acted on it. Nothing is lost yet: the run it names comes after the three. Say it in your next message or in the mailbox and I do it.
+
+**Held:** nothing to a PR head, nothing marked, nothing on Linear or Slack. Section 4 answers your 18:10Z mailbox note, which reached my mailbox after my read of 17:58Z; it was not in my 18:41Z entry.
