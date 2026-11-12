@@ -115,20 +115,20 @@ theorem choose_sub_le (n k : ℕ) (hk : k ≤ n) (f : ℕ) :
     rw [e, pow_succ, ← mul_assoc]
     exact (choose_pred_le (n - f) k n (Nat.sub_le n f) hk).trans (mul_le_mul_of_nonneg_right ih h0)
 
-theorem pr_disjoint_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (draw : Ω → Finset (Fin n)) (k : ℕ)
-    (hcard : ∀ x, (draw x).card = k)
-    (hfib : ∀ S : Finset (Fin n), S.card = k → (univ.filter fun x => draw x = S).card * n.choose k = Fintype.card Ω)
+theorem pr_disjoint_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (sample : Ω → Finset (Fin n)) (k : ℕ)
+    (hcard : ∀ x, (sample x).card = k)
+    (hfib : ∀ S : Finset (Fin n), S.card = k → (univ.filter fun x => sample x = S).card * n.choose k = Fintype.card Ω)
     (W : Finset (Fin n)) {q : ℝ} (hq : q * n ≤ k) :
-    Pr (fun x => Disjoint (draw x) W) ≤ (1 - q) ^ W.card := by
+    Pr (fun x => Disjoint (sample x) W) ≤ (1 - q) ^ W.card := by
   classical
   have hΩ : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast Fintype.card_pos
   have hk : k ≤ n := by
-    have := Finset.card_le_univ (draw (Classical.arbitrary Ω))
+    have := Finset.card_le_univ (sample (Classical.arbitrary Ω))
     rwa [hcard, Fintype.card_fin] at this
   have hC : (0 : ℝ) < n.choose k := by exact_mod_cast Nat.choose_pos hk
-  have hsum : (univ.filter fun x => Disjoint (draw x) W).card =
-      ∑ S ∈ powersetCard k (univ \ W), (univ.filter fun x => draw x = S).card := by
-    rw [Finset.card_eq_sum_card_fiberwise (f := draw) (t := powersetCard k (univ \ W))]
+  have hsum : (univ.filter fun x => Disjoint (sample x) W).card =
+      ∑ S ∈ powersetCard k (univ \ W), (univ.filter fun x => sample x = S).card := by
+    rw [Finset.card_eq_sum_card_fiberwise (f := sample) (t := powersetCard k (univ \ W))]
     · refine Finset.sum_congr rfl fun S hS => ?_
       rw [Finset.filter_filter]
       congr 1
@@ -140,12 +140,12 @@ theorem pr_disjoint_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (draw : 
       rw [Finset.mem_coe, Finset.mem_filter] at hx
       rw [Finset.mem_coe, Finset.mem_powersetCard]
       exact ⟨fun u hu => Finset.mem_sdiff.2 ⟨Finset.mem_univ u, Finset.disjoint_left.1 hx.2 hu⟩, hcard x⟩
-  have hnat : (univ.filter fun x => Disjoint (draw x) W).card * n.choose k =
+  have hnat : (univ.filter fun x => Disjoint (sample x) W).card * n.choose k =
       (n - W.card).choose k * Fintype.card Ω := by
     rw [hsum, Finset.sum_mul, Finset.sum_congr rfl fun S hS => hfib S (Finset.mem_powersetCard.1 hS).2,
       Finset.sum_const, Finset.card_powersetCard, Finset.card_sdiff_of_subset (Finset.subset_univ W), Finset.card_univ,
       Fintype.card_fin, smul_eq_mul]
-  have hpr : Pr (fun x => Disjoint (draw x) W) = ((n - W.card).choose k : ℝ) / n.choose k := by
+  have hpr : Pr (fun x => Disjoint (sample x) W) = ((n - W.card).choose k : ℝ) / n.choose k := by
     rw [Pr_eq_sum, Finset.sum_boole, div_eq_div_iff hΩ.ne' hC.ne']
     exact_mod_cast hnat
   rw [hpr, div_le_iff₀ hC]
@@ -210,19 +210,19 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
 
 /-- **The incorrect proof blocks over a monitoring period**: `Guarantees.PooledIncorrectBlocksLe`. -/
 theorem pooledIncorrectBlocks : Guarantees.PooledIncorrectBlocksLe := by
-  intro m Ω _ _ n k draw hcard hunif W hW acc ε hsound q hq0 hq1 hq F
+  intro m Ω _ _ n k sample hcard hunif W hW acc ε hsound q hq0 hq1 hq F
   refine ⟨?_, fun δ hδ hlog => ?_⟩
   · classical
     have hmiss := pr_adaptive_le (Ω := Ω) (r := 1 - q) (by linarith) (by linarith) m
-      (fun i ω x => Disjoint (draw i x) (W i ω)) (fun i ω => (W i ω).card)
+      (fun i ω x => Disjoint (sample i x) (W i ω)) (fun i ω => (W i ω).card)
       (fun i ω ω' h => by simp only [hW i ω ω' h]) (fun i ω ω' h => by simp only [hW i ω ω' h])
-      (fun i ω => pr_disjoint_le (draw i) (k i) (hcard i) (hunif i) (W i ω) (hq i)) F
+      (fun i ω => pr_disjoint_le (sample i) (k i) (hcard i) (hunif i) (W i ω) (hq i)) F
     calc Pr (fun ω => (∀ i, acc i ω) ∧ F ≤ ∑ i, (W i ω).card)
-        ≤ Pr (fun ω => ((∀ i, Disjoint (draw i (ω i)) (W i ω)) ∧ F ≤ ∑ i, (W i ω).card) ∨
-            ∃ i ∈ (univ : Finset (Fin m)), acc i ω ∧ ¬Disjoint (draw i (ω i)) (W i ω)) := by
+        ≤ Pr (fun ω => ((∀ i, Disjoint (sample i (ω i)) (W i ω)) ∧ F ≤ ∑ i, (W i ω).card) ∨
+            ∃ i ∈ (univ : Finset (Fin m)), acc i ω ∧ ¬Disjoint (sample i (ω i)) (W i ω)) := by
           refine Pr_mono fun ω h => ?_
           obtain ⟨hacc, hF⟩ := h
-          by_cases hd : ∀ i, Disjoint (draw i (ω i)) (W i ω)
+          by_cases hd : ∀ i, Disjoint (sample i (ω i)) (W i ω)
           · exact Or.inl ⟨hd, hF⟩
           · push Not at hd
             obtain ⟨i, hi⟩ := hd
