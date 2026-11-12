@@ -50,7 +50,7 @@ import dataclasses
 import hashlib
 import importlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -60,12 +60,12 @@ from verity_vllm.engine import hooks
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
 
-__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "WHAT", "Composition", "Context", "Installed", "Option", "Refused", "Target",
+__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target",
            "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
-           "parse", "refusals", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS", "circuit_registry",
-           "traced_as"]
+           "parse", "refusals", "refused", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS",
+           "circuit_registry", "traced_as"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
@@ -82,10 +82,13 @@ SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 #: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
 CIRCUITS = {"pouw": "verity.protocols.pouw.prover.circuit"}
 RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
-#: what a refusal of this package says refused (`errors.Refused`'s ``what``): "protocol options refused: <reasons>"
-WHAT = "protocol options"
 
 parse = config.parse_protocols
+
+
+def refused(reasons: str | Sequence[str]) -> Refused:
+    """The refusal of a set, for a caller to raise: `errors.Refused` reading "protocol options refused: <reasons>"."""
+    return Refused(reasons, "protocol options")
 
 
 def _imported(name: str, module: str, what: str) -> ModuleType:
@@ -94,14 +97,14 @@ def _imported(name: str, module: str, what: str) -> ModuleType:
     except ModuleNotFoundError as e:
         here = e.name is not None and e.name.startswith(f"{__name__}.") and f"{module}.".startswith(f"{e.name}.")
         why = "is not on this tree" if here else f"needs {e.name}, which is not installed"
-        raise Refused([f"{name}: its {what} {module} {why}"], WHAT) from e
+        raise refused([f"{name}: its {what} {module} {why}"]) from e
 
 
 def adapter(name: str) -> ModuleType:
     """The adapter module of protocol ``name``; `Refused` when the protocol is unknown or its adapter cannot be imported
     on this tree (not landed yet, or its protocol package missing)."""
     if name not in ADAPTERS:
-        raise Refused([f"unknown protocol {name!r} (known: {', '.join(ADAPTERS)})"], WHAT)
+        raise refused([f"unknown protocol {name!r} (known: {', '.join(ADAPTERS)})"])
     return _imported(name, f"{__name__}.{ADAPTERS[name]}", "adapter")
 
 
@@ -109,7 +112,7 @@ def driver(name: str, part: str) -> ModuleType:
     """Module ``part`` of protocol ``name``'s driver (`DRIVERS`); `Refused` when the protocol has none or the module cannot
     be imported on this tree."""
     if name not in DRIVERS:
-        raise Refused([f"no driver of protocol {name!r} (known: {', '.join(DRIVERS)})"], WHAT)
+        raise refused([f"no driver of protocol {name!r} (known: {', '.join(DRIVERS)})"])
     return _imported(name, f"{__name__}.{DRIVERS[name]}.{part}", "driver")
 
 
@@ -132,7 +135,7 @@ def circuit_registry(name: str) -> ModuleType | None:
     try:
         return importlib.import_module(module)
     except ModuleNotFoundError as e:
-        raise Refused([f"{name}: its circuit registry {module} is not installed ({e.name})"], WHAT) from e
+        raise refused([f"{name}: its circuit registry {module} is not installed ({e.name})"]) from e
 
 
 def traced_as(entry: str, m: int, k: int, n: int) -> Any:
@@ -191,7 +194,7 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
         if got:
             settings[name] = {**settings.get(name, {}), **got}
     if bad:
-        raise Refused(bad, WHAT)
+        raise refused(bad)
     return dataclasses.replace(ctx, settings=settings, filled={})
 
 
@@ -329,10 +332,10 @@ def install(model: Any, ctx: Context, *, rank: int = 0) -> Composition:
     the error propagates."""
     bad = refusals(ctx)
     if bad:
-        raise Refused(bad, WHAT)
+        raise refused(bad)
     stray = undeclared(ctx.enabled)
     if stray:
-        raise Refused([f"options installed outside this composition are live: {list(stray)}"], WHAT)
+        raise refused([f"options installed outside this composition are live: {list(stray)}"])
     comp = Composition(ctx)
     target = Target(model, ctx, rank)
     comp.weight_commitments = target.weight_commitments
@@ -406,7 +409,7 @@ def commit_context(profile: Any, *, world: int = 1, settings: Any = None) -> Con
                   enforce_eager=getattr(profile, "compilation", None) is None, settings=load_settings(settings))
     bad = refusals(ctx)
     if bad:
-        raise Refused(bad, WHAT)
+        raise refused(bad)
     return ctx
 
 
@@ -417,16 +420,16 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
     a knob that contradicts the target, and every refusal of the set at the Commit (a TP row, an adapter not on this tree)."""
     enabled, declared = parse(knob), parse((config.RowEngine.of(workload).target or {}).get("protocols"))
     if enabled and declared and enabled != declared:
-        raise Refused([f"PROTOCOLS {list(enabled)} contradicts the workload target's protocols {list(declared)}"], WHAT)
+        raise refused([f"PROTOCOLS {list(enabled)} contradicts the workload target's protocols {list(declared)}"])
     enabled = enabled or declared
     if not enabled or enabled == config.DEFAULT_ROW_PROTOCOLS:
         return None
     if not any(e.startswith("sampled-proofs:") for e in enabled):
-        raise Refused([(f"{list(enabled)}: a row is a sampled-proofs run, so its set names sampled-proofs:<scheme> "
-                        "(serve without it through verity_vllm.LLM)")], WHAT)
+        raise refused([(f"{list(enabled)}: a row is a sampled-proofs run, so its set names sampled-proofs:<scheme> "
+                        "(serve without it through verity_vllm.LLM)")])
     bad = refusals(Context(stage="commit", enabled=enabled, world=int(world), settings=load_settings(workload.get("protocols_config"))))
     if bad:
-        raise Refused(bad, WHAT)
+        raise refused(bad)
     return enabled
 
 
@@ -447,11 +450,11 @@ def commit_guard(profile: Any, *, world: int = 1, installs: bool = True, setting
     try:
         ctx = commit_context(profile, world=world, settings=settings)
         if ctx is not None and not installs:
-            raise Refused(["this Commit (TP) installs no protocol options yet"], WHAT)
+            raise refused(["this Commit (TP) installs no protocol options yet"])
         declared = ctx.scheme("sampled-proofs") if ctx is not None else None
         if commit_scheme is not None and declared is not None and declared != commit_scheme:
-            raise Refused([(f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
-                            f"commits under {commit_scheme}: run it with --commit-scheme {declared}")], WHAT)
+            raise refused([(f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
+                            f"commits under {commit_scheme}: run it with --commit-scheme {declared}")])
     except Refused as e:
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None
@@ -469,7 +472,7 @@ def capture_context(profile: Any, *, settings: Any = None) -> Context | None:
                   settings={k: v for k, v in load_settings(settings).items() if k != "sampled-proofs"})
     bad = refusals(ctx)
     if bad:
-        raise Refused(bad, WHAT)
+        raise refused(bad)
     return ctx
 
 
