@@ -426,7 +426,7 @@ def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int]) 
     outside, disagree, seen = [], [], set()
     for s, notes in rep["steps"].items():
         noted = notes["batch"].get("rows")                                       # a step in no step plan of the Build notes none
-        batch = {} if noted is None else noted
+        batch = noted if noted else {}
         for name, v in notes.items():
             if name in ("batch", "coverage"):
                 continue
