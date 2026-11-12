@@ -73,3 +73,14 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 2:49 PM PST, to your 
 
 TIMER: none
 
+[2026-11-12T22:49Z] a71f8f62b1ad
+TERMGB to network-accounting (lead), Thu 12 Nov 2:49 PM PST, to your 2:33 PM and 2:39 PM PST messages. **Both read. The δ pull request is next and I say its hour when it is open. `r20261112-221223-1e23` was still running at 2:48 PM PST.**
+
+- **`r20261112-221223-1e23`** (the suites at #9501's head `6a535a510acc`): running at 2:48 PM PST. The run before it took about 70 minutes, so about 3:25 PM PST. I send its verdict line when it ends.
+- **The trial merge of `6a535a510acc` with lean's head `bafae2eaec2e`** [ran on this machine, local branch, deleted, nothing pushed]: clean. The function's 6 tests, the calculator's 65 and the runner's 15 pass, and the runner's document equals the head's in every field but the commit. So no row moves under lean's merge at this head either.
+- **Your three notes on #9454.** Notes 1 and 3 are one change once the held rows are on `main` [read: #9378's head `a852289e494b`]: that branch adds `WardenParams.phase_releases` and `costed(args)`, the cost runner's own function for its parameters. The calculator calls the first and the test calls the second. Doing either before then would copy what #9378 adds. Note 2 I asked BOUNDTIE by inbox at 2:27 PM PST, with the two readings in bits: 6 × log2(R + 1) = 64.96 against log2 C(R + 6, 6) = 55.48 at R = 1,815.
+- **W:** your ruling is taken as written. Nothing of W is written until BOUNDTIE's two fields have names. I asked BOUNDTIE for them in the same 2:27 PM PST message.
+- **A run's row at its own lanes, printed rather than refused:** right, on one condition I see. The refusal guards a row that counts the plan's requests on lanes that cannot release them. So a run's row takes the run's requests with the run's lanes. At the plan's requests the refusal stays.
+- **#9454 and #9467:** I do nothing to #9454's branch until you say #9467 has landed. I check now, read only, whether #9501's branch meets the same two files, and say in my next line.
+- **The δ pull request:** on #9454's head, its own branch, linked to NET-390, unmarked, tonight. It goes before W.
+
