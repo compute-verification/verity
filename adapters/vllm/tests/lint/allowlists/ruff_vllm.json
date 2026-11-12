@@ -688,8 +688,6 @@
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "I001", "symbol": "main", "detail": "Import block is un-sorted or un-formatted", "count": 2},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "UP037", "symbol": "_Stream.__enter__", "detail": "Remove quotes from type annotation"},
-    {"file": "verity_vllm/engine/run_facts.py", "kind": "I001", "symbol": "profile_manifest", "detail": "Import block is un-sorted or un-formatted", "count": 2},
-    {"file": "verity_vllm/engine/run_facts.py", "kind": "ISC002", "symbol": "profile_manifest", "detail": "Implicitly concatenated string literals over multiple lines", "count": 2},
     {"file": "verity_vllm/engine/stock_kernels.py", "kind": "I001", "symbol": "per_token_group_quant_fp8", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/engine/stock_kernels.py", "kind": "I001", "symbol": "triton_scaled_mm", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/glue.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},

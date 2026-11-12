@@ -28,6 +28,7 @@ from verity_vllm.engine.build import (
 )
 from verity_vllm.engine.code_identity import generated_kernels_of_this_process
 from verity_vllm.engine.profiles.cases import ACCEPTED
+from verity_vllm.records.schema_ids import PROFILE_FALLBACK_SCHEMA
 
 __all__ = ["model_config_subset", "profile_manifest"]
 
@@ -95,13 +96,16 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             from verity_vllm.program.frontend.target_profile import int8_exact_of
             manifest["backends"]["int8_exact"] = int8_exact_of(engine.model)
             if "attention" in engine.target.int8_parts:
-                from verity_vllm.program.frontend.kernel_readback import int8_k_scales_of
+                from verity_vllm.program.frontend.kernel_readback import (
+                    int8_k_scales_of,
+                )
                 manifest["backends"]["int8_k_scales"] = int8_k_scales_of(engine.model)
         # the MoE gates' cuteDSL ll_bf16_gemm tier (M <= 16), which leaves no torch op behind: written only when a gate took it, so
         # every record without such a gate keeps its profile id
         if moe_gate_ll_bf16_gemm_of(engine.model):
             manifest["backends"]["moe_gate_ll_bf16_gemm"] = True
-        manifest["engine_kwargs"]["kernel_config"] = dict(engine.kwargs.get("kernel_config") or {})
+        kernel_config = engine.kwargs.get("kernel_config")
+        manifest["engine_kwargs"]["kernel_config"] = dict(kernel_config) if kernel_config else {}
         if engine.target is not None:
             manifest["target"] = engine.target.to_json()
             manifest["engine_kwargs"].update({k: v for k, v in engine.target.engine_args().items()})
@@ -136,13 +140,13 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
                 manifest["compilation"]["generated_kernels"]["error"] = gk["error"]
             notes["generated_kernels"] = {k: gk.get(k) for k in ("inductor_cache_dir", "per_process_cache_dir", "pieces", "kernels", "error")}
         pid = prof.profile_id_of(manifest)
-        notes["profile_id_method"] = "profile.profile_id_of(profile.build_manifest(...)) as production.py; differs from the accepted " \
-                                     "record's id by construction: gpu.pod, gpu.driver, adapter.revision, sampling.logprobs=None (D62), " \
-                                     "engine_kwargs.enable_prefix_caching/max_num_seqs, generated_kernels placeholders"
+        notes["profile_id_method"] = ("profile.profile_id_of(profile.build_manifest(...)) as production.py; differs from the accepted "
+                                      "record's id by construction: gpu.pod, gpu.driver, adapter.revision, sampling.logprobs=None (D62), "
+                                      "engine_kwargs.enable_prefix_caching/max_num_seqs, generated_kernels placeholders")
     except Exception as e:  # noqa: BLE001
-        import vllm
         import triton
-        manifest = {"schema": "verity-capture/profile-fallback/v1", "case": case, "engine_kwargs": {k: v for k, v in engine.kwargs.items()
+        import vllm
+        manifest = {"schema": PROFILE_FALLBACK_SCHEMA, "case": case, "engine_kwargs": {k: v for k, v in engine.kwargs.items()
                     if k not in ("model", "tokenizer")}, "engine_flags": dict(engine.env_flags),
                     "python": {"torch": torch.__version__, "cuda": torch.version.cuda, "triton": triton.__version__},
                     "vllm": {"version": vllm.__version__, "wheel_sha256": wheel_sha256, "commit": vllm_commit},
