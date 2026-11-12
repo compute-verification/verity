@@ -456,14 +456,19 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     recipe's own tokenizer mode, under the variable that starts it, and no other arm's server has it."""
     glm = S.MODELS["glm53"]
     context = S.published_context("published", "glm53", None)
-    assert context == glm.published_context == S.AUTO == "auto"
-    assert [S.published_context("published", "glm53", n) for n in (131072, 262144, "auto")] == [131072, 262144, "auto"]
+    assert context == glm.published_context == 262144 and S.AUTO == "auto"
+    assert [S.published_context("published", "glm53", n) for n in (131072, 492672, "auto")] == [131072, 492672, "auto"]
     stock = S.server_argv(S.ARMS["compiled"], glm, Path("/ck"), 8000, max_model_len=context)
     argv = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context)
     seqs = stock.index("--max-num-seqs")
     at = stock.index("--max-model-len")
     assert argv == [*stock[:at], *glm.published, "--tokenizer-mode", "auto", *stock[at:seqs], *stock[seqs + 2:]]
-    assert argv.count("--max-model-len") == 1 and argv[argv.index("--max-model-len") + 1] == "auto"
+    assert argv.count("--max-model-len") == 1 and argv[argv.index("--max-model-len") + 1] == "262144"
+    # a job that names vLLM's auto gets it on the line in the number's place, and nothing else changes
+    named = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000,
+                          max_model_len=S.published_context("published", "glm53", S.AUTO))
+    limit = argv.index("--max-model-len") + 1
+    assert named == [*argv[:limit], "auto", *argv[limit + 1:]]
     # the recipe's command for the cards, flag for flag, with the front end's fallback for a build without it
     for flag, value in (("--served-model-name", "glm-5.3"), ("--tensor-parallel-size", "8"), ("--tokenizer-mode", "auto"),
                         ("--kv-cache-dtype", "fp8"), ("--speculative-config.method", "mtp"),
@@ -485,8 +490,9 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     assert "VLLM_USE_RUST_FRONTEND" not in env
     assert S.server_env(S.ARMS["published"], tmp_path, tmp_path, None, 1.0, 1.0, front=S.RUST)["VLLM_USE_RUST_FRONTEND"] == "1"
     assert S.base_args(without=S.UNPUBLISHED) == ("--max-model-len", "4096", "--seed", "0", "--disable-uvicorn-access-log")
-    # auto is the engine's to resolve: no load is checked against it, and a number still is
+    # auto is the engine's to resolve: no load is checked against it, and a number still is, the recipe's among them
     assert S.context_of({"long": (1,)}, "auto") == "auto" and S.context_arg("auto") == "auto" and S.context_arg("4096") == 4096
+    assert S.context_of({"long": (1,)}, context) == 262144
     with pytest.raises(ValueError):
         S.context_arg("automatic")
     with pytest.raises(SystemExit, match="need a context of 16384"):

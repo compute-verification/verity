@@ -56,11 +56,13 @@ that command in two things, each with the recipe's own alternative:
   the front end it served behind (`front_end`). Every other arm serves behind the Python one, whatever the job says.
 - **The context limit.** The command names none, so vLLM takes the model's own, 1,048,576 tokens, and by the recipe's
   own note refuses to start on eight H200s, whose KV cache does not hold one request of that length. The arm serves
-  at `--max-model-len auto`, vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves
-  when it starts and prints in its log. The recipe's command builder sets 262,144 for these cards instead; a job that
-  wants that, or any other limit, names it (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by
-  their flags alone. The runner checks no load against `auto`: a request past the limit the engine resolved is
-  refused by the server and counted as failed.
+  at 262,144 tokens, the limit the recipe's command builder sets for these cards. A job that wants another limit
+  names it (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by their flags alone.
+  `MAX_MODEL_LEN=auto` is vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves
+  when it starts and prints in its log. At the integration's pin the engine then builds the model at its own limit
+  and fits the cache after, so the sparse attention's table of a step is sized by the model's limit and not by the
+  one resolved. The runner checks no load against `auto`: a request past the limit the engine resolved is refused by
+  the server and counted as failed.
 
 The values a recipe leaves to the operator (the requests at once, the cards' share of memory, the tokens a step) are
 vLLM's own defaults on the arm's line. A job that sets any of them adds the flags to that line alone with

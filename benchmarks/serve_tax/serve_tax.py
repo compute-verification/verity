@@ -374,12 +374,12 @@ MODELS = {
                    # the FP8 checkpoint, tensor parallel, an FP8 KV cache, five draft tokens a step from the model's
                    # own draft layer. The command's tokenizer mode is its Rust front end's, and the recipe names the
                    # other for a build without it. The command names no context limit and the model's own does not
-                   # fit these cards' KV cache, so the limit is the longest that does (`AUTO`); the recipe's command
-                   # builder sets 262,144 for these cards, which a job that wants it names
+                   # fit these cards' KV cache, so the limit is the one the recipe's command builder sets for these
+                   # cards; a job that wants the longest the cache holds names `AUTO`
                    published=("--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
                               "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
                               "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
-                   published_context=AUTO, published_tokenizer={PYTHON: "auto", RUST: "glm5_next"}),
+                   published_context=262144, published_tokenizer={PYTHON: "auto", RUST: "glm5_next"}),
 }
 
 
